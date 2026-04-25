@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
+from urllib.request import Request, urlopen
 
 from ._utils import now_iso
+from .providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from .providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams
 
 
@@ -17,8 +20,12 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
     request = args["request"]
     measured_at = now_iso()
     if config.get("provider") == "anthropic":
-        estimate = _estimate_request_tokens(request)
-        return {"inputTokens": estimate, "baseInputTokens": estimate, "source": "legacy_estimate", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"]}
+        try:
+            input_tokens = await _measure_anthropic_count_tokens(config, request, float(args.get("timeoutSeconds") or 30))
+            return {"inputTokens": input_tokens, "source": "anthropic_count", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"]}
+        except Exception:
+            estimate = _estimate_request_tokens(request)
+            return {"inputTokens": estimate, "baseInputTokens": estimate, "source": "legacy_estimate", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"]}
     mode = config.get("openaiApiMode", "responses")
     base = _estimate_openai_request_tokens(request, mode)
     margin = _compute_codex_safety_margin(args.get("session", {})) if mode == "codex" else 0
@@ -62,6 +69,28 @@ def _estimate_request_tokens(request: dict[str, Any]) -> int:
     if request.get("tools"):
         total += _estimate_text_tokens(json.dumps(request["tools"], ensure_ascii=False))
     return total
+
+
+async def _measure_anthropic_count_tokens(config: dict[str, Any], request: dict[str, Any], timeout_seconds: float) -> int:
+    payload = buildAnthropicCountTokensPayload(request)
+
+    def send() -> int:
+        req = Request(
+            resolveAnthropicCountTokensUrl(config.get("anthropicBaseUrl")),
+            data=json.dumps(payload).encode("utf-8"),
+            headers=buildAnthropicHeaders(config),
+            method="POST",
+        )
+        with urlopen(req, timeout=timeout_seconds) as response:
+            if response.status < 200 or response.status >= 300:
+                raise RuntimeError(f"Anthropic count_tokens failed with status {response.status}")
+            parsed = json.loads(response.read().decode("utf-8"))
+        input_tokens = parsed.get("input_tokens")
+        if not isinstance(input_tokens, int):
+            raise RuntimeError("Anthropic count_tokens returned no input_tokens value.")
+        return input_tokens
+
+    return await asyncio.to_thread(send)
 
 
 def _estimate_openai_request_tokens(request: dict[str, Any], mode: str) -> int:

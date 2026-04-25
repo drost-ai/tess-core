@@ -17,6 +17,8 @@ from ..provider_errors import (
 
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 DEFAULT_CODEX_INSTRUCTIONS = "You are a helpful and reliable assistant."
+OPENAI_REQUEST_START_TIMEOUT_MS = 120_000
+OPENAI_STREAM_IDLE_TIMEOUT_MS = 60_000
 
 
 async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -45,15 +47,38 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         pending_by_item_id: dict[str, dict[str, str]] = {}
         item_to_call_id: dict[str, str] = {}
         runtime = args.get("runtime") or {}
+        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
+        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
         try:
             client = _create_openai_client(args, base_url)
             responses = get_value(client, "responses")
             if not responses:
                 raise RuntimeError("OpenAI Responses client is unavailable.")
             params = buildResponsesCreateParams({"isCodexBackend": mode == "codex", "request": args["request"]})
-            response = await maybe_await(get_value(responses, "create")(params))
+            response = await _race_openai_activity(
+                maybe_await(get_value(responses, "create")(params)),
+                timeout_ms=request_start_timeout_ms,
+                provider_label=provider_label,
+                phase=phase,
+                attempt=attempt,
+                had_output=had_output,
+                had_tool_use=had_tool_use,
+            )
             phase = "stream_open"
-            async for event in to_async_iter(response):
+            iterator = to_async_iter(response).__aiter__()
+            while True:
+                try:
+                    event = await _race_openai_activity(
+                        iterator.__anext__(),
+                        timeout_ms=stream_idle_timeout_ms,
+                        provider_label=provider_label,
+                        phase=phase,
+                        attempt=attempt,
+                        had_output=had_output,
+                        had_tool_use=had_tool_use,
+                    )
+                except StopAsyncIteration:
+                    break
                 phase = "stream_read"
                 typ = str(get_value(event, "type", "") or "")
                 if runtime.get("streamProviderMessages"):
@@ -212,6 +237,8 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         pending_tool_calls: dict[int, dict[str, str]] = {}
         reasoning_content = ""
         runtime = args.get("runtime") or {}
+        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
+        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
         try:
             client = _create_openai_client(args, base_url)
             chat = get_value(client, "chat")
@@ -219,9 +246,30 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             if not completions:
                 raise RuntimeError("OpenAI Chat Completions client is unavailable.")
             params = buildChatCompletionsCreateParams(args["request"], {"includeReasoningEffort": supportsOpenAiChatCompletionsReasoningEffort(base_url)})
-            response = await maybe_await(get_value(completions, "create")(params))
+            response = await _race_openai_activity(
+                maybe_await(get_value(completions, "create")(params)),
+                timeout_ms=request_start_timeout_ms,
+                provider_label=provider_label,
+                phase=phase,
+                attempt=attempt,
+                had_output=had_output,
+                had_tool_use=had_tool_use,
+            )
             phase = "stream_open"
-            async for chunk in to_async_iter(response):
+            iterator = to_async_iter(response).__aiter__()
+            while True:
+                try:
+                    chunk = await _race_openai_activity(
+                        iterator.__anext__(),
+                        timeout_ms=stream_idle_timeout_ms,
+                        provider_label=provider_label,
+                        phase=phase,
+                        attempt=attempt,
+                        had_output=had_output,
+                        had_tool_use=had_tool_use,
+                    )
+                except StopAsyncIteration:
+                    break
                 phase = "stream_read"
                 _apply_chat_completion_usage(usage, get_value(chunk, "usage"))
                 for choice in get_value(chunk, "choices", []) or []:
@@ -417,6 +465,34 @@ def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
     if base_url:
         options["baseURL"] = base_url
     return factory(options)
+
+
+async def _race_openai_activity(
+    awaitable: Any,
+    *,
+    timeout_ms: int,
+    provider_label: str,
+    phase: str,
+    attempt: int,
+    had_output: bool,
+    had_tool_use: bool,
+) -> Any:
+    try:
+        return await asyncio.wait_for(awaitable, timeout=max(1, timeout_ms) / 1000)
+    except asyncio.TimeoutError as exc:
+        raise createProviderRequestError(
+            createProviderFailureRecord(
+                provider="openai",
+                providerLabel=provider_label,
+                phase=phase,
+                category="timeout",
+                retryable=not had_output and not had_tool_use,
+                attempt=attempt,
+                hadAssistantOutput=had_output,
+                hadToolUse=had_tool_use,
+                rawMessage=f"OpenAI request timed out after {timeout_ms}ms while waiting for provider activity.",
+            )
+        ) from exc
 
 
 def _resolve_instructions(system: str, is_codex: bool) -> str:

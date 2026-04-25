@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
-from urllib.parse import urljoin
 from urllib.request import Request, urlopen
+
+from ..provider_errors import createProviderFailureRecord, createProviderRequestError
 
 
 MESSAGES_API_URL = "https://api.anthropic.com/v1/messages?beta=true"
 MESSAGES_COUNT_TOKENS_API_URL = "https://api.anthropic.com/v1/messages/count_tokens"
+ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS = 120_000
 
 
 def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
@@ -171,15 +174,11 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
     config = args["config"]
     request = args["request"]
     payload = buildAnthropicMessagesPayload(request)
-    req = Request(
-        resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
-        data=json.dumps(payload).encode("utf-8"),
-        headers=buildAnthropicHeaders(config),
-        method="POST",
+    timeout_ms = int(args.get("jsonResponseTimeoutMs") or args.get("requestStartTimeoutMs") or ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS)
+    raw, content_type = await _race_anthropic_activity(
+        asyncio.to_thread(_send_anthropic_messages_sync, config, payload, timeout_ms),
+        timeout_ms=timeout_ms,
     )
-    with urlopen(req, timeout=120) as response:
-        raw = response.read().decode("utf-8")
-        content_type = response.headers.get("content-type", "")
     if "text/event-stream" in content_type:
         return normalizeAnthropicSseResponse(raw, request, args.get("runtime") or {})
     parsed = json.loads(raw)
@@ -194,6 +193,38 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         "model": parsed.get("model") or request["model"],
         "stopReason": parsed.get("stop_reason"),
     }
+
+
+def _send_anthropic_messages_sync(config: dict[str, Any], payload: dict[str, Any], timeout_ms: int) -> tuple[str, str]:
+    req = Request(
+        resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
+        data=json.dumps(payload).encode("utf-8"),
+        headers=buildAnthropicHeaders(config),
+        method="POST",
+    )
+    with urlopen(req, timeout=max(1, timeout_ms) / 1000) as response:
+        raw = response.read().decode("utf-8")
+        content_type = response.headers.get("content-type", "")
+    return raw, content_type
+
+
+async def _race_anthropic_activity(awaitable: Any, *, timeout_ms: int) -> Any:
+    try:
+        return await asyncio.wait_for(awaitable, timeout=max(1, timeout_ms) / 1000)
+    except asyncio.TimeoutError as exc:
+        raise createProviderRequestError(
+            createProviderFailureRecord(
+                provider="anthropic",
+                providerLabel="Anthropic",
+                phase="request_start",
+                category="timeout",
+                retryable=True,
+                attempt=1,
+                hadAssistantOutput=False,
+                hadToolUse=False,
+                rawMessage=f"Anthropic request timed out after {timeout_ms}ms while waiting for provider activity.",
+            )
+        ) from exc
 
 
 def _build_anthropic_beta_header(config: dict[str, Any]) -> str:

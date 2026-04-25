@@ -18,6 +18,7 @@ from types import SimpleNamespace
 
 import agent_core as core
 from agent_core import testing
+import agent_core.providers.anthropic as anthropic_module
 import agent_core.tools as tools_module
 
 
@@ -343,6 +344,123 @@ class AgentCoreTests(unittest.TestCase):
 
         run(testing.sendOpenAiResponsesRequest({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "mode": "responses", "request": {"model": "m", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": response_factory}))
         self.assertEqual(captured["base"], "http://127.0.0.1:8000/v1")
+
+    def test_anthropic_count_tokens_measurement_and_fallback(self):
+        root, home, workspace, previous = self.temp_context()
+        calls = {"count": 0}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                calls["count"] += 1
+                length = int(self.headers.get("content-length") or 0)
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                assert self.path == "/v1/messages/count_tokens"
+                assert payload["model"] == "claude-sonnet-4-6"
+                if calls["count"] == 1:
+                    body = json.dumps({"input_tokens": 77}).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                self.send_response(500)
+                self.end_headers()
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "hello"}], "tools": []}
+            config = {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}}
+            measured = run(core.measureRequestInputTokens({"config": config, "request": request, "session": {}, "timeoutSeconds": 2}))
+            self.assertEqual(measured["inputTokens"], 77)
+            self.assertEqual(measured["source"], "anthropic_count")
+            fallback = run(core.measureRequestInputTokens({"config": config, "request": request, "session": {}, "timeoutSeconds": 2}))
+            self.assertEqual(fallback["source"], "legacy_estimate")
+            self.assertGreater(fallback["inputTokens"], 0)
+        finally:
+            server.shutdown()
+            server.server_close()
+            self.restore_home(root, previous)
+
+    def test_openai_chat_request_start_timeout(self):
+        async def create_slow(_params):
+            await asyncio.sleep(0.05)
+            return AsyncChunks([])
+
+        with self.assertRaises(core.ProviderRequestError) as ctx:
+            run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "test",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {},
+                        "maxAttempts": 1,
+                        "requestStartTimeoutMs": 1,
+                        "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_slow))),
+                    }
+                )
+            )
+        self.assertEqual(ctx.exception.record["category"], "timeout")
+        self.assertEqual(ctx.exception.record["phase"], "request_start")
+        self.assertTrue(ctx.exception.record["retryable"])
+
+    def test_openai_chat_stream_idle_timeout(self):
+        class SlowStream:
+            async def __aiter__(self):
+                await asyncio.sleep(0.05)
+                yield {"choices": [{"delta": {"content": "late"}, "finish_reason": "stop"}]}
+
+        async def create_stream(_params):
+            return SlowStream()
+
+        with self.assertRaises(core.ProviderRequestError) as ctx:
+            run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "test",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {},
+                        "maxAttempts": 1,
+                        "requestStartTimeoutMs": 1000,
+                        "streamIdleTimeoutMs": 1,
+                        "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_stream))),
+                    }
+                )
+            )
+        self.assertEqual(ctx.exception.record["category"], "timeout")
+        self.assertEqual(ctx.exception.record["phase"], "stream_open")
+        self.assertTrue(ctx.exception.record["retryable"])
+
+    def test_anthropic_messages_request_timeout(self):
+        original_send = anthropic_module._send_anthropic_messages_sync
+
+        def slow_send(*_args):
+            time.sleep(0.05)
+            return "{}", "application/json"
+
+        anthropic_module._send_anthropic_messages_sync = slow_send
+        try:
+            with self.assertRaises(core.ProviderRequestError) as ctx:
+                run(
+                    core.sendAnthropicMessagesRequest(
+                        {
+                            "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
+                            "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                            "runtime": {},
+                            "jsonResponseTimeoutMs": 1,
+                        }
+                    )
+                )
+            self.assertEqual(ctx.exception.record["category"], "timeout")
+            self.assertEqual(ctx.exception.record["phase"], "request_start")
+            self.assertTrue(ctx.exception.record["retryable"])
+        finally:
+            anthropic_module._send_anthropic_messages_sync = original_send
 
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:
