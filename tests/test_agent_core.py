@@ -917,6 +917,120 @@ class AgentCoreTests(unittest.TestCase):
             agent_module.runCompaction = original_run_compaction
             self.restore_home(root, previous)
 
+    def test_continuation_relief_modes_match_reference_policy(self):
+        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+        session["updatedAt"] = "2026-01-01T00:00:00Z"
+        messages = []
+        for index in range(18):
+            tool_id = f"read-{index}"
+            messages.extend(
+                [
+                    {"role": "user", "content": f"inspect file {index}"},
+                    {"role": "assistant", "content": [{"type": "tool_use", "id": tool_id, "name": "Read", "input": {"file_path": f"/tmp/workspace/file{index % 2}.py", "offset": 1}}]},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tool_id,
+                                "content": json.dumps({"file": {"filePath": f"/tmp/workspace/file{index % 2}.py", "content": "x" * 4000, "startLine": 1, "totalLines": 400, "numLines": 80}}),
+                            }
+                        ],
+                    },
+                ]
+            )
+        messages.append({"role": "user", "content": "continue from latest file inspection"})
+
+        pressure = core.classifyContextPressure({"session": session, "messages": messages})
+        self.assertGreaterEqual(pressure["categories"]["currentTurnToolPayloadTokens"], core.RELIEF_PRESSURE_API_MICROCOMPACT_TOKENS)
+        self.assertGreater(pressure["categories"]["repeatedFileContentTokens"], 0)
+
+        idle_relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
+        self.assertIn("time_based_microcompact", idle_relief["summary"]["plannedModes"])
+
+        session["updatedAt"] = "2999-01-01T00:00:00Z"
+        relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
+        summary = relief["summary"]
+        self.assertIn("api_microcompact", summary["plannedModes"])
+        self.assertIn("api_microcompact", summary["appliedModes"])
+        self.assertGreater(summary["tokensSavedEstimate"], 0)
+        prompt = core.renderContextReliefPrompt(summary)
+        self.assertIn("<context_relief>", prompt)
+        self.assertIn("planned_mode=api_microcompact", prompt)
+
+    def test_continuation_session_memory_reinjection_and_partial_summary(self):
+        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+        messages = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"message {index} about /tmp/workspace/app.py and command pytest"} for index in range(44)]
+        retrieved = {
+            "records": [
+                {"kind": "workflow", "source": "compaction", "text": "Use pytest for focused parity validation."},
+                {"kind": "repo_fact", "source": "compaction", "text": "Continuation lives in agent_core/continuation.py."},
+                {"kind": "constraint", "source": "compaction", "text": "Preserve active plan and todo state."},
+                {"kind": "environment", "source": "manual", "text": "Workspace uses AGENT_CORE_HOME for test isolation."},
+            ],
+            "tokenEstimate": 650,
+        }
+
+        relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "recover", "messages": messages, "retrievedMemory": retrieved, "reactiveAttempt": 2})
+        summary = relief["summary"]
+        self.assertIn("session_memory_compaction", summary["plannedModes"])
+        self.assertIn("session_memory_compaction", summary["appliedModes"])
+        self.assertTrue(any("durable memory:" in line for line in summary["reinjectionLines"]))
+        self.assertLess(len(relief["messages"]), len(messages))
+
+        partial = core.applyPartialCompaction(messages, 1)
+        self.assertTrue(partial["applied"])
+        self.assertEqual(partial["messages"][0]["role"], "user")
+        self.assertIn("Partial continuation summary", partial["messages"][0]["content"])
+
+    def test_agent_prompt_retries_context_window_failure_with_reactive_relief(self):
+        import agent_core.agent as agent_module
+
+        root, home, workspace, previous = self.temp_context()
+        original_measure = agent_module.measureRequestInputTokens
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["messages"] = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"older context {index}"} for index in range(22)]
+            provider_requests = []
+            events = []
+
+            async def fake_measure(_args):
+                return {"inputTokens": 1_000, "source": "fake"}
+
+            async def send(request):
+                provider_requests.append(request)
+                if len(provider_requests) == 1:
+                    raise core.createProviderRequestError(
+                        core.createProviderFailureRecord(
+                            {
+                                "provider": "openai",
+                                "providerLabel": "OpenAI",
+                                "phase": "request_start",
+                                "category": "client_request",
+                                "retryable": False,
+                                "attempt": 1,
+                                "hadAssistantOutput": False,
+                                "hadToolUse": False,
+                                "rawMessage": "maximum context length exceeded",
+                            }
+                        )
+                    )
+                return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
+
+            agent_module.measureRequestInputTokens = fake_measure
+            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}, prompt="continue", providerOverride={"send": send}))
+
+            self.assertEqual(result["text"], "recovered")
+            self.assertEqual(len(provider_requests), 2)
+            self.assertIn("<context_relief>", provider_requests[1]["system"])
+            self.assertTrue(any(event == "context_relief.applied" and data["reactive_attempt"] == 1 for event, data in events))
+            self.assertFalse(any(event == "provider.failed" for event, _ in events))
+            self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefReactiveAttempt"], 1)
+        finally:
+            agent_module.measureRequestInputTokens = original_measure
+            self.restore_home(root, previous)
+
     def test_background_task_supervisor_and_task_output(self):
         root, home, workspace, previous = self.temp_context()
         try:
