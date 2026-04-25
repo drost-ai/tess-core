@@ -1906,6 +1906,72 @@ class AgentCoreTests(unittest.TestCase):
                 run(supervisor["close"]())
             self.restore_home(root, previous)
 
+    def test_background_subagent_worker_runs_and_finalizes_metadata(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child["messages"].append({"role": "user", "content": "finish without tools"})
+            child["metadata"]["parentSessionId"] = parent["id"]
+            child["metadata"]["agentId"] = "agent-worker"
+            child["metadata"]["agentName"] = "Worker"
+            run(core.saveSession(child))
+            run(
+                core.saveChildAgent(
+                    {
+                        "agentId": "agent-worker",
+                        "sessionId": child["id"],
+                        "parentSessionId": parent["id"],
+                        "name": "Worker",
+                        "provider": config["provider"],
+                        "model": config["model"],
+                        "mode": "bypassPermissions",
+                        "runInBackground": True,
+                        "status": "queued",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "owner": "daemon",
+                        "attachableSessionId": child["id"],
+                    }
+                )
+            )
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            started = run(supervisor["startSubagentTask"]({"parentSessionId": parent["id"], "sessionId": child["id"], "agentId": "agent-worker", "cwd": str(workspace), "label": "Worker"}))
+            task_id = started["taskId"]
+            for _ in range(100):
+                meta = run(core.readTaskMeta(task_id))
+                if meta and meta.get("status") == "completed":
+                    break
+                time.sleep(0.05)
+            meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(meta["type"], "subagent")
+            self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["agent_id"], "agent-worker")
+            self.assertEqual(meta["session_id"], child["id"])
+            self.assertEqual(meta["completionReason"], "worker_completed")
+            child_record = run(core.loadChildAgent("agent-worker"))
+            self.assertEqual(child_record["status"], "completed")
+            self.assertEqual(child_record["taskId"], task_id)
+            self.assertFalse(child_record["stoppable"])
+            self.assertEqual(child_record["completionReason"], "worker_completed")
+            output = run(supervisor["readTaskOutput"](task_id, 12000))
+            self.assertIn('"ok": true', output["output"])
+            self.assertIn("No credential is configured", output["output"])
+            task_record = None
+            for _ in range(40):
+                task_record = run(supervisor["inspectTask"](task_id))
+                if task_record and task_record.get("status") == "completed":
+                    break
+                time.sleep(0.05)
+            self.assertEqual(task_record["kind"], "subagent")
+            self.assertEqual(task_record["status"], "completed")
+            self.assertEqual(task_record["metadata"]["agent_id"], "agent-worker")
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
     def test_worktree_tools_update_workspace_metadata_and_execution_descriptors(self):
         root, home, workspace, previous = self.temp_context()
         try:

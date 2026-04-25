@@ -5,6 +5,7 @@ import contextlib
 import os
 import signal
 import subprocess
+import sys
 import threading
 import uuid
 from pathlib import Path
@@ -95,8 +96,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         started_at = now_iso()
-        command = "printf 'Background subagent execution requires the product CLI runner.\\n'"
-        proc = _spawn_shell(command, task_cwd, output_file)
+        command = f"{sys.executable} -m agent_core.background_subagent_runner --session-id {session_id} --agent-id {agent_id} --task-id {task_id}"
+        proc = _spawn_subagent_worker(task_id, session_id, agent_id, task_cwd, output_file)
         _PROCESS_REGISTRY[task_id] = proc
         meta = {
             "type": "subagent",
@@ -338,6 +339,43 @@ def _spawn_shell(command: str, cwd: str, output_file: str) -> subprocess.Popen[A
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             shell=True,
+            **kwargs,
+        )
+    finally:
+        handle.close()
+
+
+def _spawn_subagent_worker(task_id: str, session_id: str, agent_id: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
+    handle = open(output_file, "ab")
+    kwargs: dict[str, Any] = {}
+    if hasattr(os, "setsid"):
+        kwargs["preexec_fn"] = os.setsid
+    env = {
+        **os.environ,
+        "TESS_CHILD_AGENT_ID": agent_id,
+        "TESS_CHILD_TASK_ID": task_id,
+        "TESS_CHILD_SESSION_ID": session_id,
+    }
+    package_root = str(Path(__file__).resolve().parents[1])
+    env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
+    try:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "agent_core.background_subagent_runner",
+                "--session-id",
+                session_id,
+                "--agent-id",
+                agent_id,
+                "--task-id",
+                task_id,
+            ],
+            cwd=cwd,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            env=env,
             **kwargs,
         )
     finally:
