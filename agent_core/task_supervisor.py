@@ -302,29 +302,48 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
 
     async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
+        session_id = task_args.get("sessionId") or task_args.get("session_id")
         task_id = str(uuid.uuid4())
         now = now_iso()
+        interval_ms = max(250, int(task_args.get("intervalMs") or task_args.get("interval_ms") or 10000))
+        timeout_ms = max(1000, int(task_args.get("timeoutMs") or task_args.get("timeout_ms") or 10000))
+        max_interval_ms = max(250, int(task_args.get("maxIntervalMs") or task_args.get("max_interval_ms") or interval_ms * 4))
         record = {
             "type": "health_check",
             "taskId": task_id,
             "id": task_id,
-            "sessionId": task_args.get("sessionId") or task_args.get("session_id"),
+            "sessionId": session_id,
             "cwd": os.path.abspath(str(task_args.get("cwd") or cwd)),
             "title": _require_string(task_args.get("title"), "title"),
             "mode": task_args.get("mode") or ("command" if task_args.get("command") else "http"),
             "command": task_args.get("command"),
             "url": task_args.get("url"),
-            "intervalMs": int(task_args.get("intervalMs") or task_args.get("interval_ms") or 30000),
-            "timeoutMs": int(task_args.get("timeoutMs") or task_args.get("timeout_ms") or 5000),
-            "status": "running",
+            "intervalMs": interval_ms,
+            "currentIntervalMs": interval_ms,
+            "timeoutMs": timeout_ms,
+            "backoffMultiplier": max(1, float(task_args.get("backoffMultiplier") or task_args.get("backoff_multiplier") or 2)),
+            "maxIntervalMs": max(interval_ms, max_interval_ms),
+            "failureThreshold": max(1, int(task_args.get("failureThreshold") or task_args.get("failure_threshold") or 2)),
+            "expectedStatusCodes": task_args.get("expectedStatusCodes") or task_args.get("expected_status_codes"),
+            "expectedBodySubstring": task_args.get("expectedBodySubstring") or task_args.get("expected_body_substring"),
+            "status": "active",
+            "createdAt": now,
             "startedAt": now,
             "updatedAt": now,
             "lastRunAt": None,
             "lastResult": None,
+            "consecutiveFailures": 0,
+            "outputFile": taskOutputPath(task_id),
         }
         await saveHealthCheckTask(record)
         await writeTaskMeta(task_id, record)
         await saveTaskRecord(_build_task_record(record, "Health check is running."))
+        if isinstance(session_id, str) and session_id:
+            session = await loadSession(session_id)
+            if session:
+                metadata = session.setdefault("metadata", {})
+                metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
+                await saveSession(session)
         watcher = asyncio.create_task(_run_health_check(record, emit))
         _WATCHERS.add(watcher)
         watcher.add_done_callback(_WATCHERS.discard)
@@ -548,18 +567,52 @@ async def _run_health_check(record: dict[str, Any], emit: Callable[[str, dict[st
     task_id = record["taskId"]
     while True:
         current = await loadHealthCheckTask(task_id)
-        if not current or current.get("status") != "running":
+        if not current or current.get("status") not in {"active", "unhealthy", "running"}:
             return
+        previous_status = current.get("status")
         result = await _execute_health_check(current)
         now = now_iso()
-        current.update({"lastRunAt": now, "lastResult": result, "updatedAt": now, "status": "running" if result.get("ok") else "failed"})
+        failure_threshold = max(1, int(current.get("failureThreshold") or 2))
+        consecutive_failures = 0 if result.get("ok") else int(current.get("consecutiveFailures") or 0) + 1
+        next_status = "active" if result.get("ok") else "failed" if consecutive_failures >= failure_threshold else "unhealthy"
+        current.update(
+            {
+                "lastRunAt": now,
+                "lastResult": result,
+                "updatedAt": now,
+                "status": next_status,
+                "consecutiveFailures": consecutive_failures,
+                "currentIntervalMs": int(current.get("intervalMs") or 10000) if result.get("ok") else _next_backoff_interval_ms(current, consecutive_failures),
+                "lastSuccessAt": now if result.get("ok") else current.get("lastSuccessAt"),
+                "lastFailureAt": current.get("lastFailureAt") if result.get("ok") else now,
+                "lastError": None if result.get("ok") else result.get("error") or result.get("summary"),
+                "lastExitCode": result.get("exitCode", current.get("lastExitCode")),
+                "lastStatusCode": result.get("status", current.get("lastStatusCode")),
+                "lastResponseSnippet": result.get("snippet", current.get("lastResponseSnippet")),
+            }
+        )
+        output_file = current.get("outputFile") or taskOutputPath(task_id)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        with open(output_file, "a", encoding="utf-8") as handle:
+            handle.write(f"[{now}] {result.get('output') or result.get('summary') or ''}\n")
+        current["outputFile"] = output_file
         await saveHealthCheckTask(current)
         await writeTaskMeta(task_id, current)
         await saveTaskRecord(_build_task_record(current, result.get("summary")))
-        await maybe_await(emit("task.updated" if result.get("ok") else "task.failed", _task_event_payload(current), current.get("sessionId")))
-        if not result.get("ok"):
+        if next_status == "unhealthy":
+            await maybe_await(
+                emit(
+                    "health_check.unhealthy",
+                    {"task_id": task_id, "title": current.get("title"), "failures": consecutive_failures, "error": current.get("lastError")},
+                    current.get("sessionId"),
+                )
+            )
+        elif previous_status != "active" and next_status == "active":
+            await maybe_await(emit("health_check.recovered", {"task_id": task_id, "title": current.get("title")}, current.get("sessionId")))
+        await maybe_await(emit("task.failed" if next_status == "failed" else "task.updated", _task_event_payload(current), current.get("sessionId")))
+        if next_status == "failed":
             return
-        await asyncio.sleep(max(1, int(current.get("intervalMs") or 30000) / 1000))
+        await asyncio.sleep(max(0.25, int(current.get("currentIntervalMs") or current.get("intervalMs") or 10000) / 1000))
 
 
 async def _execute_health_check(record: dict[str, Any]) -> dict[str, Any]:
@@ -578,30 +631,51 @@ async def _execute_health_check(record: dict[str, Any]) -> dict[str, Any]:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout)
         except asyncio.TimeoutError:
             proc.kill()
-            return {"ok": False, "summary": "Health check timed out."}
+            await proc.wait()
+            return {"ok": False, "summary": "Health check timed out.", "output": "Health check timed out.", "error": "Health check timed out."}
         output = (stdout + stderr).decode("utf-8", errors="replace").strip()
-        return {"ok": proc.returncode == 0, "summary": output[-500:] if output else f"exit {proc.returncode}", "exitCode": proc.returncode}
+        expected_body = record.get("expectedBodySubstring")
+        body_ok = expected_body in output if expected_body else True
+        ok = proc.returncode == 0 and body_ok
+        error = None if ok else f"Health check exited with code {proc.returncode}" if proc.returncode != 0 else f"Command output did not contain expected text: {expected_body}"
+        return {
+            "ok": ok,
+            "summary": output[-500:] if output else f"exit {proc.returncode}",
+            "output": output,
+            "snippet": output[:500],
+            "exitCode": proc.returncode,
+            "error": error,
+        }
     import urllib.request
+    import urllib.error
 
     url = record.get("url")
     if not url:
-        return {"ok": False, "summary": "No health-check URL configured."}
+        return {"ok": False, "summary": "No health-check URL configured.", "error": "No health-check URL configured."}
 
     def fetch() -> dict[str, Any]:
-        with urllib.request.urlopen(str(url), timeout=timeout) as response:
-            body = response.read(4096).decode("utf-8", errors="replace")
-            return {"status": response.status, "body": body}
+        try:
+            with urllib.request.urlopen(str(url), timeout=timeout) as response:
+                body = response.read(4096).decode("utf-8", errors="replace")
+                return {"status": response.status, "body": body}
+        except urllib.error.HTTPError as exc:
+            body = exc.read(4096).decode("utf-8", errors="replace")
+            return {"status": exc.code, "body": body}
 
     try:
         response = await asyncio.to_thread(fetch)
     except Exception as exc:
-        return {"ok": False, "summary": str(exc)}
+        return {"ok": False, "summary": str(exc), "output": str(exc), "error": str(exc)}
     expected = record.get("expectedStatusCodes") or [200]
     ok = response["status"] in expected
     expected_body = record.get("expectedBodySubstring")
     if expected_body:
         ok = ok and expected_body in response["body"]
-    return {"ok": ok, "summary": f"HTTP {response['status']}", "status": response["status"]}
+    error = None
+    if not ok:
+        error = f"Unexpected status code {response['status']}" if response["status"] not in expected else f"Response body did not contain expected text: {expected_body}"
+    output = f"HTTP {response['status']}{chr(10) + response['body'][:500] if response.get('body') else ''}"
+    return {"ok": ok, "summary": f"HTTP {response['status']}", "output": output, "status": response["status"], "snippet": response.get("body", "")[:500], "error": error}
 
 
 async def _reconcile_persisted_tasks(
@@ -888,6 +962,10 @@ def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _map_status(value: Any) -> str:
+    if value == "active":
+        return "running"
+    if value == "unhealthy":
+        return "degraded"
     if value in ("running", "completed", "failed", "stopped", "queued", "awaiting_input", "reconciling", "degraded"):
         return str(value)
     if value in ("terminated", "cancelled"):
@@ -942,6 +1020,13 @@ def _terminate_process(pid: int | None) -> bool:
 def _summarize_command(command: Any) -> str:
     text = str(command or "task").strip()
     return text if len(text) <= 80 else f"{text[:77]}..."
+
+
+def _next_backoff_interval_ms(record: dict[str, Any], failure_count: int) -> int:
+    base = max(250, int(record.get("intervalMs") or 10000))
+    multiplier = max(1, float(record.get("backoffMultiplier") or 2))
+    max_interval = max(base, int(record.get("maxIntervalMs") or base * 4))
+    return min(max_interval, round(base * (multiplier ** max(0, failure_count - 1))))
 
 
 def _dedupe(values: list[Any]) -> list[Any]:

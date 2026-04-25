@@ -649,6 +649,11 @@ def _task_health_check_start_tool() -> ToolDefinition:
                 "url": input.get("url"),
                 "intervalMs": input.get("interval_ms") or input.get("intervalMs"),
                 "timeoutMs": input.get("timeout_ms") or input.get("timeoutMs"),
+                "expectedStatusCodes": input.get("expected_status_codes") or input.get("expectedStatusCodes"),
+                "expectedBodySubstring": input.get("expected_body_substring") or input.get("expectedBodySubstring"),
+                "backoffMultiplier": input.get("backoff_multiplier") or input.get("backoffMultiplier"),
+                "maxIntervalMs": input.get("max_interval_ms") or input.get("maxIntervalMs"),
+                "failureThreshold": input.get("failure_threshold") or input.get("failureThreshold"),
             }
         )
         task_id = started.get("taskId") or started.get("task_id")

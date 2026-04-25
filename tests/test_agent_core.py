@@ -1715,6 +1715,79 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_health_check_threshold_backoff_and_recovery(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                config = await core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
+                session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+                await core.saveSession(session)
+                counter = workspace / "health-count.txt"
+                script = textwrap.dedent(
+                    f"""
+                    from pathlib import Path
+                    p = Path({str(counter)!r})
+                    n = int(p.read_text()) if p.exists() else 0
+                    p.write_text(str(n + 1))
+                    print(f"health-attempt-{{n + 1}}")
+                    raise SystemExit(1 if n < 2 else 0)
+                    """
+                )
+                command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+                events = []
+                supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
+                try:
+                    started = await supervisor["startHealthCheck"](
+                        {
+                            "sessionId": session["id"],
+                            "cwd": str(workspace),
+                            "title": "health threshold",
+                            "mode": "command",
+                            "command": command,
+                            "intervalMs": 250,
+                            "timeoutMs": 1000,
+                            "failureThreshold": 3,
+                            "backoffMultiplier": 2,
+                            "maxIntervalMs": 1000,
+                        }
+                    )
+                    task_id = started["taskId"]
+                    health = None
+                    for _ in range(120):
+                        health = await core.loadHealthCheckTask(task_id)
+                        if health and health.get("status") == "active" and health.get("lastSuccessAt"):
+                            break
+                        await asyncio.sleep(0.05)
+                    output = await supervisor["readTaskOutput"](task_id, 12000)
+                    task_record = await supervisor["inspectTask"](task_id)
+                    persisted = await core.loadSession(session["id"])
+                    await supervisor["stopTask"](task_id)
+                    return {"health": health, "events": events, "output": output, "taskRecord": task_record, "persisted": persisted, "taskId": task_id}
+                finally:
+                    await supervisor["close"]()
+
+            result = run(scenario())
+            health = result["health"]
+            task_id = result["taskId"]
+            self.assertEqual(health["status"], "active")
+            self.assertEqual(health["consecutiveFailures"], 0)
+            self.assertEqual(health["currentIntervalMs"], 250)
+            self.assertEqual(health["lastExitCode"], 0)
+            self.assertIn(task_id, result["persisted"]["metadata"]["taskIds"])
+            unhealthy_failures = [event["data"]["failures"] for event in result["events"] if event["event"] == "health_check.unhealthy"]
+            self.assertEqual(unhealthy_failures[:2], [1, 2])
+            self.assertTrue(any(event["event"] == "health_check.recovered" and event["data"]["task_id"] == task_id for event in result["events"]))
+            output = result["output"]
+            self.assertIn("health-attempt-1", output["output"])
+            self.assertIn("health-attempt-2", output["output"])
+            self.assertIn("health-attempt-3", output["output"])
+            task_record = result["taskRecord"]
+            self.assertEqual(task_record["kind"], "health_check")
+            self.assertEqual(task_record["taskFamily"], "health_check")
+            self.assertEqual(task_record["status"], "running")
+        finally:
+            self.restore_home(root, previous)
+
     def test_tool_permission_modes_for_edits_and_interactive_switch(self):
         root, home, workspace, previous = self.temp_context()
         try:
