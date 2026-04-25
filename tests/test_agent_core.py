@@ -1633,6 +1633,114 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_reconcile_recovers_completed_subagent_metadata_after_restart(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            task_id = "subagent-recovered-task"
+            agent_id = "subagent-recovered-agent"
+            child_session_id = "subagent-recovered-session"
+            parent_session_id = "parent-recovered-session"
+            output_file = core.taskOutputPath(task_id)
+            proc = subprocess.Popen([sys.executable, "-c", ""], cwd=str(workspace), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc.wait(timeout=2)
+            completed_at = "2026-01-01T00:00:03Z"
+            run(
+                core.saveChildAgent(
+                    {
+                        "agentId": agent_id,
+                        "sessionId": child_session_id,
+                        "parentSessionId": parent_session_id,
+                        "name": "Recovered worker",
+                        "provider": "openai",
+                        "model": "gpt-5.4",
+                        "mode": "bypassPermissions",
+                        "runInBackground": True,
+                        "status": "completed",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "completedAt": completed_at,
+                        "latestResultAt": completed_at,
+                        "lastUpdatedAt": completed_at,
+                        "completionReason": "worker_completed",
+                        "resultSummary": "Recovered result",
+                        "lastSummary": "Recovered result",
+                        "attachableSessionId": child_session_id,
+                        "owner": "daemon",
+                        "retryable": False,
+                        "stoppable": False,
+                    }
+                )
+            )
+            meta = {
+                "type": "subagent",
+                "taskId": task_id,
+                "id": task_id,
+                "task_id": task_id,
+                "agent_id": agent_id,
+                "sessionId": child_session_id,
+                "session_id": child_session_id,
+                "parent_session_id": parent_session_id,
+                "cwd": str(workspace),
+                "pid": proc.pid,
+                "startedAt": "2026-01-01T00:00:00Z",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "status": "running",
+                "outputFile": output_file,
+                "title": "Recovered worker",
+                "attachableSessionId": child_session_id,
+                "detailStatus": "worker_running",
+                "owner": "daemon",
+                "supervisorId": "previous-supervisor",
+            }
+            run(core.writeTaskMeta(task_id, meta))
+            run(
+                core.saveTaskRecord(
+                    {
+                        "id": task_id,
+                        "sessionId": parent_session_id,
+                        "sourceId": agent_id,
+                        "kind": "subagent",
+                        "status": "running",
+                        "title": "Recovered worker",
+                        "summary": "Background subagent is running under daemon supervision.",
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "cwd": str(workspace),
+                        "outputFile": output_file,
+                        "foregroundMode": "background",
+                        "taskFamily": "subagent",
+                        "detailStatus": "worker_running",
+                        "retrieveOnly": False,
+                        "attachableSessionId": child_session_id,
+                        "relatedChildSessionIds": [child_session_id],
+                        "owner": "daemon",
+                        "supervisorId": "previous-supervisor",
+                        "metadata": {"agent_id": agent_id, "child_session_id": child_session_id, "pid": proc.pid},
+                    }
+                )
+            )
+            events = []
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            record = run(supervisor["inspectTask"](task_id))
+            self.assertEqual(record["status"], "completed")
+            self.assertEqual(record["summary"], "Recovered result")
+            self.assertEqual(record["detailStatus"], "worker_completed")
+            self.assertEqual(record["metadata"]["recovery_state"], "completed_while_detached")
+            next_meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(next_meta["status"], "completed")
+            self.assertEqual(next_meta["completionReason"], "worker_completed")
+            self.assertEqual(next_meta["resultSummary"], "Recovered result")
+            child = run(core.loadChildAgent(agent_id))
+            self.assertEqual(child["recoveryState"], "completed_while_detached")
+            self.assertTrue(any(event["event"] == "task.completed" and event["data"]["task_id"] == task_id for event in events))
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
     def test_task_stop_terminates_background_command(self):
         root, home, workspace, previous = self.temp_context()
         try:

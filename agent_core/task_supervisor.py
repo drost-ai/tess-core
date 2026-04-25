@@ -23,6 +23,7 @@ from .storage import (
     loadTaskRecord,
     readTaskMeta,
     saveHealthCheckTask,
+    saveChildAgent,
     saveSession,
     saveTaskRecord,
     taskOutputPath,
@@ -746,6 +747,11 @@ async def _mark_recovered_process(
     }
     await writeTaskMeta(task_id, next_meta)
     await saveTaskRecord(next_record)
+    if record.get("kind") == "subagent":
+        agent_id = meta.get("agent_id") or metadata.get("agent_id") or record.get("sourceId")
+        child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+        if child:
+            await saveChildAgent({**child, "recoveryState": "recovered_after_daemon_restart", "lastUpdatedAt": now})
     await maybe_await(emit("task.updated", _task_record_event_payload(next_record), record.get("sessionId")))
     watcher = asyncio.create_task(_watch_recovered_process(task_id, pid, record.get("sessionId"), emit))
     _WATCHERS.add(watcher)
@@ -759,6 +765,8 @@ async def _mark_lost_process(
     supervisor_id: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
 ) -> None:
+    if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
+        return
     now = now_iso()
     summary = (
         "Daemon restarted while this worker was active and the worker process is no longer running."
@@ -800,6 +808,8 @@ async def _watch_recovered_process(
     while _is_process_alive(pid):
         await asyncio.sleep(1)
     existing = await loadTaskRecord(task_id)
+    if existing and existing.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, existing, emit, session_id):
+        return
     now = now_iso()
     summary = "Recovered daemon-owned task exited after restart. Final completion details were unavailable."
     next_record = {
@@ -813,6 +823,82 @@ async def _watch_recovered_process(
     meta = await readTaskMeta(task_id) or {}
     await writeTaskMeta(task_id, {**meta, "status": "terminated", "updatedAt": now, "finishedAt": now})
     await maybe_await(emit("task.updated", _task_record_event_payload(next_record), session_id))
+
+
+async def _recover_completed_subagent_task(
+    task_id: str,
+    record: dict[str, Any],
+    emit: Callable[[str, dict[str, Any], str | None], Any],
+    session_id: str | None,
+) -> bool:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    agent_id = metadata.get("agent_id") or record.get("sourceId")
+    child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+    if not child or _is_active_child_agent_status(child.get("status")):
+        return False
+    next_record = _build_recovered_subagent_task_record(record, child)
+    await saveTaskRecord(next_record)
+    meta = await readTaskMeta(task_id) or {}
+    await writeTaskMeta(
+        task_id,
+        {
+            **meta,
+            "type": "subagent",
+            "task_id": task_id,
+            "agent_id": child.get("agentId") or agent_id,
+            "session_id": child.get("sessionId"),
+            "status": next_record.get("status"),
+            "updatedAt": next_record.get("updatedAt"),
+            "finishedAt": next_record.get("completedAt"),
+            "summary": next_record.get("summary"),
+            "resultSummary": next_record.get("resultSummary"),
+            "completionReason": child.get("completionReason"),
+            "waitingReason": child.get("waitingReason"),
+            "attachableSessionId": child.get("attachableSessionId") or child.get("sessionId"),
+            "retryable": child.get("retryable"),
+            "stoppable": child.get("stoppable"),
+            "owner": "daemon",
+        },
+    )
+    updated_at = next_record.get("updatedAt") or now_iso()
+    await saveChildAgent({**child, "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at})
+    await maybe_await(emit(_event_name_for_task_status(next_record.get("status")), _task_record_event_payload(next_record), session_id or next_record.get("sessionId")))
+    return True
+
+
+def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
+    status = _map_child_agent_status_to_task_status(child.get("status"))
+    updated_at = child.get("lastUpdatedAt") or child.get("latestResultAt") or child.get("completedAt") or now_iso()
+    result_summary = child.get("resultSummary") or child.get("lastSummary") or child.get("error") or child.get("waitingReason") or child.get("stopReason")
+    metadata = dict(record.get("metadata") or {})
+    metadata.update(
+        {
+            "agent_id": child.get("agentId"),
+            "child_session_id": child.get("sessionId"),
+            "waiting_reason": child.get("waitingReason"),
+            "completion_reason": child.get("completionReason"),
+            "recovery_state": "completed_while_detached",
+            "retryable": child.get("retryable"),
+            "stoppable": child.get("stoppable"),
+        }
+    )
+    return {
+        **record,
+        "status": status,
+        "title": child.get("name") or child.get("agentType") or child.get("agentId"),
+        "summary": _summarize_recovered_subagent(child, result_summary),
+        "updatedAt": updated_at,
+        "completedAt": child.get("completedAt") or child.get("latestResultAt") or updated_at if status in {"completed", "failed", "stopped"} else None,
+        "parentTaskId": child.get("parentTaskId") or record.get("parentTaskId"),
+        "relatedChildSessionIds": [child.get("sessionId")] if child.get("sessionId") else [],
+        "owner": child.get("owner") or record.get("owner"),
+        "taskFamily": "subagent",
+        "detailStatus": child.get("completionReason") or child.get("waitingReason") or child.get("status"),
+        "attachableSessionId": child.get("attachableSessionId") or child.get("sessionId"),
+        "retrieveOnly": False,
+        "resultSummary": result_summary,
+        "metadata": metadata,
+    }
 
 
 def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, Any]:
@@ -971,6 +1057,42 @@ def _map_status(value: Any) -> str:
     if value in ("terminated", "cancelled"):
         return "stopped"
     return "running"
+
+
+def _is_active_child_agent_status(status: Any) -> bool:
+    return status in {"queued", "running", "backgrounded"}
+
+
+def _map_child_agent_status_to_task_status(status: Any) -> str:
+    if status in {"queued", "running", "backgrounded", "completed", "failed"}:
+        return str(status)
+    if status in {"awaiting_input", "awaiting_plan_approval"}:
+        return "awaiting_input"
+    if status in {"cancelled", "stopped"}:
+        return "stopped"
+    if status == "truncated":
+        return "failed"
+    return "idle"
+
+
+def _summarize_recovered_subagent(child: dict[str, Any], result_summary: Any) -> str:
+    if child.get("waitingReason"):
+        return str(child["waitingReason"])
+    if result_summary:
+        return str(result_summary)
+    if child.get("status") == "completed":
+        return "Subagent completed while the daemon was detached from the worker process."
+    if child.get("status") in {"failed", "truncated"}:
+        return "Subagent ended with a failure while the daemon was detached from the worker process."
+    return "Subagent state was recovered after the daemon reattached to persisted worker records."
+
+
+def _event_name_for_task_status(status: Any) -> str:
+    if status == "completed":
+        return "task.completed"
+    if status in {"failed", "stopped"}:
+        return "task.failed"
+    return "task.updated"
 
 
 def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:
