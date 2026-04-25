@@ -659,6 +659,78 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_daemon_bootstrap_snapshots_attachment_counts_and_event_replay(self):
+        root, home, workspace, previous = self.temp_context()
+        unsubscribe = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
+            script = 'print("bootstrap replay")'
+            command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+            started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "bootstrap replay"}))
+            task_id = started["taskId"]
+            for _ in range(60):
+                meta = run(core.readTaskMeta(task_id))
+                if meta and meta.get("status") == "completed":
+                    break
+                time.sleep(0.05)
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch replay"})
+            run(core.saveMonitor(monitor))
+
+            bootstrap = run(client["getBootstrap"](session["id"]))
+            self.assertGreaterEqual(bootstrap["taskSnapshot"]["total"], 1)
+            self.assertTrue(any(task.get("id") == task_id for task in bootstrap["taskSnapshot"]["tasks"]))
+            self.assertEqual(bootstrap["monitorSnapshot"]["total"], 1)
+            self.assertEqual(bootstrap["collaborationSnapshot"]["workers"], [])
+
+            persisted_events = run(core.loadDaemonEvents())
+            self.assertTrue(all(isinstance(event.get("cursor"), int) for event in persisted_events))
+            self.assertEqual([event["cursor"] for event in persisted_events], sorted(event["cursor"] for event in persisted_events))
+
+            events = []
+            unsubscribe = client["subscribe"](events.append, {"sessionId": session["id"], "afterCursor": 0})
+            for _ in range(60):
+                if any(event.get("event") == "task.snapshot" for event in events) and any(event.get("event") == "task.completed" and event.get("taskId") == task_id for event in events):
+                    break
+                time.sleep(0.05)
+            self.assertTrue(any(event.get("event") == "task.snapshot" for event in events))
+            self.assertTrue(any(event.get("event") == "monitor.snapshot" for event in events))
+            self.assertTrue(any(event.get("event") == "task.completed" and event.get("taskId") == task_id for event in events))
+            for _ in range(40):
+                state = run(core.getTaskSupervisorDaemonState())
+                if state and state.get("attachedClients") == 1:
+                    break
+                time.sleep(0.05)
+            self.assertEqual(run(core.getTaskSupervisorDaemonState())["attachedClients"], 1)
+            unsubscribe()
+            unsubscribe = None
+            for _ in range(40):
+                state = run(core.getTaskSupervisorDaemonState())
+                if state and state.get("attachedClients") == 0:
+                    break
+                time.sleep(0.05)
+            self.assertEqual(run(core.getTaskSupervisorDaemonState())["attachedClients"], 0)
+        finally:
+            if unsubscribe:
+                unsubscribe()
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_daemon_connection_cleans_stale_state_and_socket(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            run(core.ensureBaseLayout(str(workspace)))
+            socket_path = core.daemonSocketPath()
+            Path(socket_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(socket_path).write_text("stale", encoding="utf-8")
+            run(core.saveDaemonState({"pid": 999999999, "socketPath": socket_path, "status": "running"}))
+            self.assertIsNone(run(core.connectTaskSupervisorDaemonClient()))
+            self.assertFalse(Path(socket_path).exists())
+            self.assertIsNone(run(core.loadDaemonState()))
+        finally:
+            self.restore_home(root, previous)
+
     def test_daemon_reconciles_persisted_running_task_after_restart(self):
         root, home, workspace, previous = self.temp_context()
         proc = None

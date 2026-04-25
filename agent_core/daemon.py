@@ -22,6 +22,7 @@ from .storage import (
     daemonSocketPath,
     ensureBaseLayout,
     getStateRoot,
+    loadDaemonEvents,
     loadDaemonState,
     saveDaemonState,
 )
@@ -35,17 +36,61 @@ _DAEMON_PROCESS: subprocess.Popen[Any] | None = None
 async def runTaskSupervisorDaemon(cwd: str) -> None:
     await ensureBaseLayout(cwd)
     socket_path = daemonSocketPath()
+    await _cleanup_stale_daemon_artifacts()
     try:
         os.remove(socket_path)
     except FileNotFoundError:
         pass
 
     subscribers: dict[str, dict[str, Any]] = {}
+    cursor = _last_daemon_event_cursor(await loadDaemonEvents())
+    daemon_epoch = str(uuid.uuid4())
+    daemon_started_at = now_iso()
+    daemon_phase = "recovering"
+    supervisor: dict[str, Any] | None = None
+
+    async def write_daemon_state(phase: str | None = None) -> None:
+        nonlocal daemon_phase
+        if phase:
+            daemon_phase = phase
+        supervisor_state = supervisor["getState"]() if supervisor else {}
+        await saveDaemonState(
+            {
+                "instanceId": "local-daemon",
+                "phase": daemon_phase,
+                "epoch": daemon_epoch,
+                "pid": os.getpid(),
+                "cwd": cwd,
+                "socketPath": socket_path,
+                "startedAt": daemon_started_at,
+                "updatedAt": now_iso(),
+                "mode": "detached_python",
+                "status": "running" if daemon_phase == "running" else daemon_phase,
+                "supervisorId": supervisor_state.get("supervisorId"),
+                "attachedClients": supervisor_state.get("attachedClients", 0),
+                "watchedSessions": supervisor_state.get("watchedSessions", 0),
+                "activeTasks": supervisor_state.get("activeTasks", 0),
+            }
+        )
+
+    def next_event_cursor() -> int:
+        nonlocal cursor
+        cursor += 1
+        return cursor
 
     async def on_event(event: dict[str, Any]) -> None:
-        payload = {"createdAt": now_iso(), **event}
+        nonlocal cursor
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        cursor = next_event_cursor()
+        payload = {
+            "cursor": cursor,
+            "createdAt": now_iso(),
+            "taskId": data.get("task_id") if isinstance(data.get("task_id"), str) else None,
+            **event,
+        }
         await appendDaemonEvent(payload)
         await _publish_daemon_event(subscribers, payload)
+        await write_daemon_state()
 
     supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
     shutdown = asyncio.Event()
@@ -67,15 +112,21 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
                 if _normalise_daemon_method(request.get("method")) == "subscribe":
                     params = request.get("params") or {}
                     subscriber_id = str(request.get("id") or uuid.uuid4())
+                    session_id = params.get("sessionId") or params.get("session_id")
+                    release_attachment = supervisor["addAttachment"](session_id)
                     subscribers[subscriber_id] = {
                         "writer": writer,
-                        "sessionId": params.get("sessionId") or params.get("session_id"),
+                        "sessionId": session_id,
+                        "releaseAttachment": release_attachment,
                     }
                     writer.write(
                         json.dumps({"id": request.get("id"), "ok": True, "result": {"subscribed": True}}, ensure_ascii=False).encode("utf-8")
                         + b"\n"
                     )
                     await writer.drain()
+                    await _replay_daemon_events(writer, session_id, int(params.get("afterCursor") or params.get("after_cursor") or 0))
+                    await _send_bootstrap_snapshots(writer, supervisor, session_id, next_event_cursor)
+                    await write_daemon_state()
                     await _wait_for_subscription_close(reader, shutdown)
                     break
 
@@ -86,28 +137,30 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
                     break
         finally:
             if subscriber_id:
-                subscribers.pop(subscriber_id, None)
+                subscriber = subscribers.pop(subscriber_id, None)
+                release = subscriber.get("releaseAttachment") if subscriber else None
+                if callable(release):
+                    release()
+                await write_daemon_state()
             writer.close()
             await writer.wait_closed()
 
     server = await asyncio.start_unix_server(handle_client, path=socket_path)
-    await saveDaemonState(
-        {
-            "pid": os.getpid(),
-            "cwd": cwd,
-            "socketPath": socket_path,
-            "startedAt": now_iso(),
-            "mode": "detached_python",
-            "status": "running",
-        }
-    )
+    await _record_daemon_lifecycle_event("daemon.recovering", {"phase": daemon_phase, "epoch": daemon_epoch}, next_event_cursor)
+    await write_daemon_state("recovering")
+    await write_daemon_state("running")
+    await _record_daemon_lifecycle_event("daemon.recovered", {"phase": daemon_phase, "epoch": daemon_epoch}, next_event_cursor)
     try:
         async with server:
             await shutdown.wait()
     finally:
+        await write_daemon_state("shutting_down")
         server.close()
         await server.wait_closed()
         for subscriber in list(subscribers.values()):
+            release = subscriber.get("releaseAttachment")
+            if callable(release):
+                release()
             writer = subscriber.get("writer")
             if writer:
                 writer.close()
@@ -118,7 +171,14 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
 async def connectTaskSupervisorDaemonClient(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
     args = {**(args or {}), **kwargs}
     socket_path = args.get("socketPath") or daemonSocketPath()
+    state = await loadDaemonState()
+    pid = state.get("pid") if state else None
+    if isinstance(pid, int) and not _is_process_alive(pid):
+        await _cleanup_stale_daemon_artifacts()
+        return _SUPERVISOR if _SUPERVISOR and not _SUPERVISOR.get("_daemonClient") else None
     if not os.path.exists(socket_path):
+        if state:
+            await _cleanup_stale_daemon_artifacts()
         return _SUPERVISOR if _SUPERVISOR and not _SUPERVISOR.get("_daemonClient") else None
     try:
         client = _create_daemon_client(socket_path)
@@ -135,6 +195,7 @@ async def ensureTaskSupervisorDaemon(args: dict[str, Any] | None = None, **kwarg
     if args.get("inProcess"):
         return await _ensure_in_process_supervisor(cwd)
 
+    await _cleanup_stale_daemon_artifacts()
     existing = await connectTaskSupervisorDaemonClient()
     if existing is not None:
         _SUPERVISOR = existing
@@ -284,14 +345,14 @@ def _create_daemon_client(socket_path: str) -> dict[str, Any]:
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
         return await request("getBootstrap", {"sessionId": session_id})
 
-    def subscribe(listener: Callable[[dict[str, Any]], Any], sessionId: str | dict[str, Any] | None = None):
-        session_id = _subscription_session_id(sessionId)
+    def subscribe(*args: Any, **kwargs: Any):
+        listener, session_id, after_cursor = _normalise_subscribe_args(args, kwargs)
         stop_event = threading.Event()
         ready_event = threading.Event()
         socket_ref: dict[str, socket.socket] = {}
         thread = threading.Thread(
             target=_subscription_worker,
-            args=(socket_path, listener, session_id, stop_event, ready_event, socket_ref),
+            args=(socket_path, listener, session_id, after_cursor, stop_event, ready_event, socket_ref),
             daemon=True,
         )
         thread.start()
@@ -320,6 +381,7 @@ def _create_daemon_client(socket_path: str) -> dict[str, Any]:
         "close": close,
         "addAttachment": lambda _session_id=None: (lambda: None),
         "getBootstrap": get_bootstrap,
+        "getStatus": lambda: request("getStatus", {}),
         "listTasks": list_tasks,
         "inspectTask": inspect_task,
         "readTaskOutput": read_task_output,
@@ -343,6 +405,8 @@ async def _handle_daemon_request(supervisor: dict[str, Any], shutdown: asyncio.E
         result: Any
         if method == "getState":
             result = supervisor["getState"]()
+        elif method == "getStatus":
+            result = await loadDaemonState()
         elif method == "getBootstrap":
             result = await supervisor["getBootstrap"](params.get("sessionId"))
         elif method == "listTasks":
@@ -375,7 +439,6 @@ async def _handle_daemon_request(supervisor: dict[str, Any], shutdown: asyncio.E
 
 
 async def _publish_daemon_event(subscribers: dict[str, dict[str, Any]], payload: dict[str, Any]) -> None:
-    encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8") + b"\n"
     stale: list[str] = []
     for subscriber_id, subscriber in list(subscribers.items()):
         if not _event_matches_session(payload, subscriber.get("sessionId")):
@@ -385,8 +448,7 @@ async def _publish_daemon_event(subscribers: dict[str, dict[str, Any]], payload:
             stale.append(subscriber_id)
             continue
         try:
-            writer.write(encoded)
-            await writer.drain()
+            await _write_daemon_event(writer, payload)
         except Exception:
             stale.append(subscriber_id)
     for subscriber_id in stale:
@@ -394,6 +456,103 @@ async def _publish_daemon_event(subscribers: dict[str, dict[str, Any]], payload:
         writer = subscriber.get("writer") if subscriber else None
         if writer:
             writer.close()
+
+
+async def _write_daemon_event(writer: asyncio.StreamWriter, record: dict[str, Any]) -> None:
+    writer.write(json.dumps({"type": "event", "record": record}, ensure_ascii=False).encode("utf-8") + b"\n")
+    await writer.drain()
+
+
+async def _replay_daemon_events(writer: asyncio.StreamWriter, session_id: str | None, after_cursor: int) -> None:
+    for record in await loadDaemonEvents():
+        cursor = record.get("cursor")
+        if not isinstance(cursor, int) or cursor <= after_cursor:
+            continue
+        if not _event_matches_session(record, session_id):
+            continue
+        await _write_daemon_event(writer, record)
+
+
+async def _send_bootstrap_snapshots(
+    writer: asyncio.StreamWriter,
+    supervisor: dict[str, Any],
+    session_id: str | None,
+    next_cursor: Callable[[], int],
+) -> None:
+    if not session_id:
+        return
+    bootstrap = await supervisor["getBootstrap"](session_id)
+    task_snapshot = bootstrap.get("taskSnapshot") if isinstance(bootstrap, dict) else None
+    monitor_snapshot = bootstrap.get("monitorSnapshot") if isinstance(bootstrap, dict) else None
+    collaboration_snapshot = bootstrap.get("collaborationSnapshot") if isinstance(bootstrap, dict) else None
+    if task_snapshot:
+        await _write_daemon_event(writer, _make_snapshot_record(next_cursor(), session_id, "task.snapshot", _task_snapshot_payload(session_id, task_snapshot)))
+    if monitor_snapshot:
+        await _write_daemon_event(writer, _make_snapshot_record(next_cursor(), session_id, "monitor.snapshot", _monitor_snapshot_payload(session_id, monitor_snapshot)))
+    if collaboration_snapshot:
+        await _write_daemon_event(writer, _make_snapshot_record(next_cursor(), session_id, "collaboration.snapshot", _collaboration_snapshot_payload(collaboration_snapshot)))
+
+
+def _make_snapshot_record(cursor: int, session_id: str, event: str, data: dict[str, Any]) -> dict[str, Any]:
+    return {"cursor": cursor, "createdAt": now_iso(), "sessionId": session_id, "event": event, "data": data}
+
+
+def _task_snapshot_payload(session_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": session_id,
+        "total": snapshot.get("total", 0),
+        "active": snapshot.get("active", 0),
+        "backgrounded": snapshot.get("backgrounded", 0),
+        "awaiting_input": snapshot.get("awaitingInput", snapshot.get("awaiting_input", 0)),
+        "failed": snapshot.get("failed", 0),
+        "labels": snapshot.get("labels", []),
+        "tasks": [_task_snapshot_record(task) for task in snapshot.get("tasks", []) if isinstance(task, dict)],
+    }
+
+
+def _task_snapshot_record(task: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": task.get("id"),
+        "kind": task.get("kind"),
+        "status": task.get("status"),
+        "title": task.get("title"),
+        "summary": task.get("summary"),
+        "updated_at": task.get("updatedAt"),
+        "session_id": task.get("sessionId"),
+        "foreground_mode": task.get("foregroundMode"),
+        "task_family": task.get("taskFamily"),
+        "detail_status": task.get("detailStatus"),
+        "attachable_session_id": task.get("attachableSessionId"),
+        "retrieve_only": task.get("retrieveOnly"),
+        "result_summary": task.get("resultSummary"),
+    }
+
+
+def _monitor_snapshot_payload(session_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": session_id,
+        "total": snapshot.get("total", 0),
+        "active": snapshot.get("active", 0),
+        "failed": snapshot.get("failed", 0),
+        "stopped": snapshot.get("stopped", 0),
+        "muted": snapshot.get("muted", 0),
+        "labels": snapshot.get("labels", []),
+        "next_check_in_ms": snapshot.get("nextCheckInMs") or snapshot.get("next_check_in_ms"),
+    }
+
+
+def _collaboration_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "workers": snapshot.get("workers", []),
+        "active_count": snapshot.get("activeCount", snapshot.get("active_count", 0)),
+        "awaiting_input_count": snapshot.get("awaitingInputCount", snapshot.get("awaiting_input_count", 0)),
+        "background_count": snapshot.get("backgroundCount", snapshot.get("background_count", 0)),
+        "remote_status": snapshot.get("remoteStatus"),
+        "remote_title": snapshot.get("remoteTitle"),
+        "bridge_status": snapshot.get("bridgeStatus"),
+        "pending_bridge_messages": snapshot.get("pendingBridgeMessages"),
+        "labels": snapshot.get("labels", []),
+    }
 
 
 async def _wait_for_subscription_close(reader: asyncio.StreamReader, shutdown: asyncio.Event) -> None:
@@ -412,6 +571,7 @@ def _subscription_worker(
     socket_path: str,
     listener: Callable[[dict[str, Any]], Any],
     session_id: str | None,
+    after_cursor: int | None,
     stop_event: threading.Event,
     ready_event: threading.Event,
     socket_ref: dict[str, socket.socket],
@@ -424,7 +584,12 @@ def _subscription_worker(
         socket_ref["socket"] = sock
         sock.connect(socket_path)
         sock.settimeout(0.2)
-        request = {"id": str(uuid.uuid4()), "method": "subscribe", "params": {"sessionId": session_id} if session_id else {}}
+        params: dict[str, Any] = {}
+        if session_id:
+            params["sessionId"] = session_id
+        if isinstance(after_cursor, int):
+            params["afterCursor"] = after_cursor
+        request = {"id": str(uuid.uuid4()), "method": "subscribe", "params": params}
         sock.sendall(json.dumps(request, ensure_ascii=False).encode("utf-8") + b"\n")
         while not stop_event.is_set():
             try:
@@ -447,7 +612,8 @@ def _subscription_worker(
                     continue
                 saw_ack = True
                 ready_event.set()
-                _invoke_subscription_listener(listener, payload)
+                record = payload.get("record") if payload.get("type") == "event" and isinstance(payload.get("record"), dict) else payload
+                _invoke_subscription_listener(listener, record)
     except Exception:
         ready_event.set()
     finally:
@@ -476,6 +642,24 @@ def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:
     return None
 
 
+def _normalise_subscribe_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[Callable[[dict[str, Any]], Any], str | None, int | None]:
+    listener: Any = kwargs.get("listener")
+    session_ref: Any = kwargs.get("sessionId") or kwargs.get("session_id")
+    if args and callable(args[0]):
+        listener = args[0]
+        if len(args) > 1:
+            session_ref = args[1]
+    elif len(args) >= 2 and callable(args[1]):
+        session_ref = args[0]
+        listener = args[1]
+    if not callable(listener):
+        raise TypeError("subscribe requires a listener callback")
+    after_cursor = kwargs.get("afterCursor") or kwargs.get("after_cursor")
+    if isinstance(session_ref, dict):
+        after_cursor = session_ref.get("afterCursor") or session_ref.get("after_cursor") or after_cursor
+    return listener, _subscription_session_id(session_ref), int(after_cursor) if isinstance(after_cursor, (int, float, str)) and str(after_cursor).isdigit() else None
+
+
 def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> bool:
     if not session_id:
         return True
@@ -486,6 +670,7 @@ def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> b
 def _normalise_daemon_method(method: Any) -> str | None:
     aliases = {
         "daemon.status": "getState",
+        "daemon.getStatus": "getStatus",
         "daemon.getState": "getState",
         "daemon.getBootstrap": "getBootstrap",
         "daemon.listTasks": "listTasks",
@@ -499,8 +684,39 @@ def _normalise_daemon_method(method: Any) -> str | None:
         "daemon.startHealthCheck": "startHealthCheck",
         "daemon.subscribe": "subscribe",
         "daemon.shutdown": "shutdown",
+        "tasks.list": "listTasks",
+        "tasks.inspect": "inspectTask",
+        "tasks.read_output": "readTaskOutput",
+        "tasks.stop": "stopTask",
+        "tasks.retry": "retryTask",
+        "tasks.start_background_command": "startBackgroundCommand",
+        "tasks.start_main_session": "startMainSessionTask",
+        "tasks.start_subagent": "startSubagentTask",
+        "tasks.start_health_check": "startHealthCheck",
     }
     return aliases.get(method, method if isinstance(method, str) else None)
+
+
+def _last_daemon_event_cursor(events: list[dict[str, Any]]) -> int:
+    cursors = [event.get("cursor") for event in events if isinstance(event.get("cursor"), int)]
+    return max(cursors, default=0)
+
+
+async def _record_daemon_lifecycle_event(event: str, data: dict[str, Any], next_cursor: Callable[[], int]) -> None:
+    await appendDaemonEvent({"cursor": next_cursor(), "createdAt": now_iso(), "event": event, "data": data})
+
+
+async def _cleanup_stale_daemon_artifacts() -> None:
+    state = await loadDaemonState()
+    if state:
+        pid = state.get("pid")
+        if not isinstance(pid, int) or not _is_process_alive(pid):
+            await clearDaemonState()
+            return
+    socket_path = daemonSocketPath()
+    if os.path.exists(socket_path) and not state:
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(socket_path)
 
 
 async def _wait_for_process_exit(pid: int, timeout_seconds: float) -> None:

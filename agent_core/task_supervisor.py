@@ -14,6 +14,8 @@ from ._utils import maybe_await, now_iso
 from .storage import (
     ensureBaseLayout,
     listTaskRecords,
+    listSessionMonitors,
+    listSessionTaskRecords,
     loadHealthCheckTask,
     loadTaskRecord,
     readTaskMeta,
@@ -35,6 +37,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     await ensureBaseLayout(cwd)
     supervisor_id = str(uuid.uuid4())
     subscribers: set[Callable[[dict[str, Any]], Any]] = set()
+    attached_all_count = 0
+    attached_sessions: dict[str, int] = {}
 
     async def emit(event: str, data: dict[str, Any], session_id: str | None = None) -> None:
         payload = {"event": event, "data": data, "sessionId": session_id}
@@ -196,6 +200,27 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
 
         return unsubscribe
 
+    def add_attachment(sessionId: str | dict[str, Any] | None = None):
+        nonlocal attached_all_count
+        session_id = _subscription_session_id(sessionId)
+        if session_id:
+            attached_sessions[session_id] = attached_sessions.get(session_id, 0) + 1
+        else:
+            attached_all_count += 1
+
+        def release() -> None:
+            nonlocal attached_all_count
+            if session_id:
+                next_count = attached_sessions.get(session_id, 1) - 1
+                if next_count <= 0:
+                    attached_sessions.pop(session_id, None)
+                else:
+                    attached_sessions[session_id] = next_count
+            else:
+                attached_all_count = max(0, attached_all_count - 1)
+
+        return release
+
     async def close() -> None:
         for proc in list(_PROCESS_REGISTRY.values()):
             if proc.poll() is None:
@@ -213,19 +238,23 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     def get_state() -> dict[str, Any]:
         return {
             "supervisorId": supervisor_id,
-            "watchedSessions": 0,
+            "watchedSessions": len(attached_sessions),
             "activeTasks": sum(1 for proc in _PROCESS_REGISTRY.values() if proc.poll() is None),
-            "attachedClients": len(subscribers),
+            "attachedClients": attached_all_count + sum(attached_sessions.values()),
         }
 
-    async def get_bootstrap(_session_id: str) -> dict[str, Any]:
-        return {"taskSnapshot": None, "monitorSnapshot": None, "collaborationSnapshot": None}
+    async def get_bootstrap(session_id: str) -> dict[str, Any]:
+        return {
+            "taskSnapshot": _task_snapshot(await listSessionTaskRecords(session_id)),
+            "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)),
+            "collaborationSnapshot": _empty_collaboration_snapshot(),
+        }
 
     await _reconcile_persisted_tasks(supervisor_id, emit)
 
     return {
         "close": close,
-        "addAttachment": lambda _session_id=None: (lambda: None),
+        "addAttachment": add_attachment,
         "getBootstrap": get_bootstrap,
         "listTasks": list_tasks,
         "inspectTask": inspect_task,
@@ -541,6 +570,80 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
         "supervisorId": meta.get("supervisorId"),
         "metadata": metadata,
     }
+
+
+def _task_snapshot(records: list[dict[str, Any]]) -> dict[str, Any]:
+    tasks = records[:16]
+    return {
+        "total": len(records),
+        "active": sum(1 for record in records if _is_active_task_status(record.get("status"))),
+        "backgrounded": sum(1 for record in records if record.get("status") == "backgrounded"),
+        "awaitingInput": sum(1 for record in records if record.get("status") == "awaiting_input"),
+        "failed": sum(1 for record in records if record.get("status") == "failed"),
+        "labels": [record.get("title") for record in tasks if _is_active_task_status(record.get("status")) and record.get("title")][:6],
+        "tasks": tasks,
+    }
+
+
+def _monitor_snapshot(records: list[dict[str, Any]]) -> dict[str, Any]:
+    active = [record for record in records if record.get("status") == "active"]
+    next_check_in_ms = None
+    if active:
+        import datetime
+
+        now = datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000
+        candidates = []
+        for record in active:
+            last_check = _parse_iso_ms(record.get("lastCheckAt") or record.get("lastRunAt")) or 0
+            candidates.append(max(0, last_check + int(record.get("checkIntervalMs") or 5000) - now))
+        next_check_in_ms = _bucket_ms(min(candidates))
+    return {
+        "total": len(records),
+        "active": len(active),
+        "failed": sum(1 for record in records if record.get("status") == "failed"),
+        "stopped": sum(1 for record in records if record.get("status") == "stopped"),
+        "muted": sum(1 for record in records if record.get("status") == "muted"),
+        "nextCheckInMs": next_check_in_ms,
+        "labels": [_summarize_goal(record.get("goal", "")) for record in active[:3]],
+    }
+
+
+def _empty_collaboration_snapshot() -> dict[str, Any]:
+    return {
+        "workers": [],
+        "activeCount": 0,
+        "awaitingInputCount": 0,
+        "backgroundCount": 0,
+        "labels": [],
+    }
+
+
+def _is_active_task_status(status: Any) -> bool:
+    return status in {"running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
+
+
+def _parse_iso_ms(value: Any) -> float | None:
+    if not isinstance(value, str) or not value:
+        return None
+    import datetime
+
+    try:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000
+    except Exception:
+        return None
+
+
+def _bucket_ms(value: float) -> int:
+    import math
+
+    if value <= 5000:
+        return int(math.ceil(value / 1000) * 1000)
+    return int(math.ceil(value / 5000) * 5000)
+
+
+def _summarize_goal(goal: Any) -> str:
+    text = str(goal or "").strip()
+    return text if len(text) <= 48 else f"{text[:45].rstrip()}..."
 
 
 def _task_event_payload(meta: dict[str, Any]) -> dict[str, Any]:
