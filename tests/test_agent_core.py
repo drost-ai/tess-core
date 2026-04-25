@@ -696,6 +696,86 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["tasks"]["activeCount"], 0)
         self.assertEqual(state["tasks"]["tasks"][0]["status"], "completed")
 
+    def test_collaboration_runtime_projects_workers_and_bridge_state(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child = {
+                "agentId": "agent-collab",
+                "sessionId": "child-session",
+                "parentSessionId": session["id"],
+                "name": "Delegate",
+                "provider": "openai",
+                "model": "gpt-5.4",
+                "mode": "bypassPermissions",
+                "runInBackground": True,
+                "status": "backgrounded",
+                "startedAt": "2026-01-01T00:00:00Z",
+                "taskId": "task-subagent",
+                "owner": "daemon",
+                "attachableSessionId": "child-session",
+                "lastUpdatedAt": "2026-01-01T00:00:01Z",
+                "lastSummary": "Running in the background.",
+                "stoppable": True,
+            }
+            run(core.saveChildAgent(child))
+            session["metadata"]["childAgentIds"] = [child["agentId"]]
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch tests"})
+            monitor["lastAssistantUpdateSummary"] = "Tests are still running."
+            run(core.saveMonitor(monitor))
+            remote = run(core.createRemoteSession({"session": session, "description": "Remote QA", "channelServers": ["local"]}))
+            session["metadata"]["remoteSessionId"] = remote["id"]
+            bridge_events = []
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "emit": lambda event, data: bridge_events.append((event, data))}))
+            session["metadata"]["bridgeId"] = bridge_runtime["bridge"]["id"]
+            message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please review", "source": "remote"}))
+            self.assertEqual(message["source"], "remote")
+            bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            self.assertEqual(bridge["pendingMessages"], 1)
+            self.assertEqual(bridge["lastEventName"], "bridge.message.queued")
+            remote_after_message = run(core.loadRemoteSession(remote["id"]))
+            self.assertEqual(remote_after_message["status"], "awaiting_input")
+            self.assertEqual(remote_after_message["unreadBridgeMessages"], 1)
+            self.assertIn("bridge.message.queued", run(core.formatBridgeTail(bridge["id"])))
+
+            events = []
+            runtime = run(core.createCollaborationRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data))}))
+            snapshot = runtime["getSnapshot"]()
+            self.assertEqual(snapshot["activeCount"], 2)
+            self.assertEqual(snapshot["awaitingInputCount"], 1)
+            self.assertEqual(snapshot["backgroundCount"], 2)
+            self.assertEqual(snapshot["pendingBridgeMessages"], 1)
+            self.assertIn("Delegate", snapshot["labels"])
+            workers = {worker["kind"]: worker for worker in snapshot["workers"]}
+            self.assertEqual(workers["subagent"]["status"], "backgrounded")
+            self.assertEqual(workers["subagent"]["taskId"], "task-subagent")
+            self.assertEqual(workers["remote"]["status"], "awaiting_input")
+            self.assertTrue(any(event == "collaboration.snapshot" and data["pending_bridge_messages"] == 1 for event, data in events))
+            self.assertTrue(any(event == "subagent.status_changed" and data["agent_id"] == child["agentId"] for event, data in events))
+            self.assertTrue(any(event == "monitor.status_changed" and data["monitor_id"] == monitor["id"] for event, data in events))
+            self.assertTrue(any(event == "remote.status_changed" and data["remote_session_id"] == remote["id"] for event, data in events))
+            self.assertTrue(any(event == "bridge.status_changed" and data["pending_messages"] == 1 for event, data in events))
+
+            state = core.createInitialRuntimeState(session)
+            for event, data in events:
+                state = core.reduceRuntimeState(state, {"type": event, "createdAt": "2026-01-01T00:00:02Z", "data": data})
+            self.assertEqual(state["collaboration"]["backgroundCount"], 2)
+            self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
+            self.assertTrue(state["collaboration"]["recentEvents"])
+
+            boot = run(core.bootstrapRuntime({"session": session, "config": config}))
+            self.assertTrue(boot["collaborationRuntime"])
+            self.assertTrue(any(tool.name == "Agent" for tool in boot["tools"]))
+            self.assertGreaterEqual(boot["stateStore"]["getState"]()["collaboration"]["activeCount"], 2)
+            run(boot["close"]())
+            run(runtime["close"]())
+            run(bridge_runtime["close"]())
+            closed = run(core.loadBridge(bridge["id"]))
+            self.assertEqual(closed["status"], "closed")
+        finally:
+            self.restore_home(root, previous)
+
     def test_codex_spark_compaction_uses_codex_transport(self):
         root, home, workspace, previous = self.temp_context()
         try:

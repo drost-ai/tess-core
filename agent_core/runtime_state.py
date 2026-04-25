@@ -114,6 +114,15 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
     elif typ == "monitor.assistant_update":
         updates = [{"monitorId": data.get("monitor_id") or data.get("monitorId"), "taskId": data.get("task_id") or data.get("taskId"), "status": data.get("status"), "text": data.get("text") or data.get("message") or "", "timestamp": timestamp}, *next_state.get("monitors", {}).get("recentAssistantUpdates", [])]
         next_state["monitors"] = {**next_state.get("monitors", {}), "recentAssistantUpdates": updates[:10]}
+    elif typ == "collaboration.snapshot":
+        next_state["collaboration"] = {"workers": data.get("workers") or [], "activeCount": data.get("active_count") or data.get("activeCount") or 0, "awaitingInputCount": data.get("awaiting_input_count") or data.get("awaitingInputCount") or 0, "backgroundCount": data.get("background_count") or data.get("backgroundCount") or 0, "remoteStatus": data.get("remote_status") or data.get("remoteStatus"), "remoteTitle": data.get("remote_title") or data.get("remoteTitle"), "bridgeStatus": data.get("bridge_status") or data.get("bridgeStatus"), "pendingBridgeMessages": data.get("pending_bridge_messages") if data.get("pending_bridge_messages") is not None else data.get("pendingBridgeMessages"), "labels": data.get("labels") or [], "updatedAt": timestamp}
+    elif typ in ("subagent.status_changed", "monitor.status_changed", "remote.status_changed", "bridge.status_changed"):
+        collab = copy.deepcopy(next_state.get("collaboration") or {})
+        events = [{"type": typ, "data": data, "updatedAt": timestamp}, *collab.get("recentEvents", [])]
+        collab["recentEvents"] = events[:12]
+        if data.get("status"):
+            collab["lastStatus"] = {"kind": data.get("kind") or typ.split(".")[0], "id": data.get("id") or data.get("agent_id") or data.get("monitor_id") or data.get("remote_session_id") or data.get("bridge_id"), "status": data.get("status"), "label": data.get("label"), "summary": data.get("summary"), "updatedAt": timestamp}
+        next_state["collaboration"] = collab
     elif typ == "bridge.message":
         next_state["bridge"] = {**next_state.get("bridge", {}), "attached": True, "bridgeId": data.get("bridgeId") or data.get("bridge_id"), "remoteSessionId": data.get("remoteSessionId") or data.get("remote_session_id"), "lastMessageText": data.get("text") or data.get("message"), "lastMessageAt": timestamp}
     elif typ in ("bridge.event", "remote.event"):

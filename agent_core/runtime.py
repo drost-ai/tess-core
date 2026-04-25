@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .collaboration import createCollaborationRuntime
 from .daemon import ensureTaskSupervisorDaemon
 from .mcp import createMcpRuntime
 from .runtime_state import createRuntimeStateStore
@@ -44,6 +45,10 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     workspace_controller = args.get("workspaceController")
     if workspace_controller is None and args.get("session"):
         workspace_controller = createWorkspaceController({"session": args["session"], "config": config})
+    collaboration_runtime = args.get("collaborationRuntime")
+    if collaboration_runtime is None and args.get("session"):
+        collaboration_runtime = await createCollaborationRuntime({"session": args["session"], "config": config, "emit": emit})
+        owned_closers.append(collaboration_runtime["close"])
     tool_options = {**args, "mcpRuntime": mcp_runtime, "workspaceController": workspace_controller}
     tools = createBuiltinTools(tool_options)
     if mcp_runtime:
@@ -55,4 +60,4 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             if hasattr(result, "__await__"):
                 await result
 
-    return {"tools": tools, "mcpRuntime": mcp_runtime, "daemon": daemon, "emitEvent": emit, "subscribe": subscribe, "stateStore": state_store, "close": close}
+    return {"tools": tools, "mcpRuntime": mcp_runtime, "daemon": daemon, "collaborationRuntime": collaboration_runtime, "emitEvent": emit, "subscribe": subscribe, "stateStore": state_store, "close": close}
