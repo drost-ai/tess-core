@@ -84,6 +84,54 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         watcher.start()
         return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
 
+    async def start_subagent_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
+        task_args = {**(task_args or {}), **task_kwargs}
+        parent_session_id = _require_string(task_args.get("parentSessionId") or task_args.get("parent_session_id"), "parentSessionId")
+        session_id = _require_string(task_args.get("sessionId") or task_args.get("session_id"), "sessionId")
+        agent_id = _require_string(task_args.get("agentId") or task_args.get("agent_id"), "agentId")
+        task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
+        title = task_args.get("label") or task_args.get("title") or agent_id
+        task_id = str(uuid.uuid4())
+        output_file = taskOutputPath(task_id)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        started_at = now_iso()
+        command = "printf 'Background subagent execution requires the product CLI runner.\\n'"
+        proc = _spawn_shell(command, task_cwd, output_file)
+        _PROCESS_REGISTRY[task_id] = proc
+        meta = {
+            "type": "subagent",
+            "taskId": task_id,
+            "id": task_id,
+            "agent_id": agent_id,
+            "sessionId": session_id,
+            "session_id": session_id,
+            "parent_session_id": parent_session_id,
+            "parent_task_id": task_args.get("parentTaskId") or task_args.get("parent_task_id"),
+            "command": command,
+            "cwd": task_cwd,
+            "pid": proc.pid,
+            "startedAt": started_at,
+            "updatedAt": started_at,
+            "status": "running",
+            "outputFile": output_file,
+            "title": title,
+            "description": title,
+            "attachableSessionId": session_id,
+            "retryable": False,
+            "stoppable": True,
+            "detailStatus": "worker_running",
+            "owner": "daemon",
+            "supervisorId": supervisor_id,
+        }
+        await writeTaskMeta(task_id, meta)
+        record = _build_task_record(meta, "Background subagent is running under daemon supervision.")
+        await saveTaskRecord(record)
+        await emit("task.updated", _task_record_event_payload(record), parent_session_id)
+        watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
+        _WATCHERS.add(watcher)
+        watcher.start()
+        return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
+
     async def read_task_output(task_id: str, tailBytes: int | None = None) -> dict[str, Any]:
         meta = await readTaskMeta(task_id)
         output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
@@ -270,15 +318,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                 "title": (task_args or {}).get("title") or task_kwargs.get("title") or "Detached main-session task",
             }
         ),
-        "startSubagentTask": lambda task_args=None, **task_kwargs: start_background_command(
-            {
-                **(task_args or {}),
-                **task_kwargs,
-                "sessionId": (task_args or {}).get("parentSessionId") or task_kwargs.get("parentSessionId"),
-                "command": "printf 'Background subagent execution requires the product CLI runner.\\n'",
-                "title": (task_args or {}).get("label") or task_kwargs.get("label") or (task_args or {}).get("agentId") or task_kwargs.get("agentId") or "subagent",
-            }
-        ),
+        "startSubagentTask": start_subagent_task,
         "startHealthCheck": start_health_check,
         "subscribe": subscribe,
         "getState": get_state,
@@ -337,7 +377,8 @@ def _watch_process_thread(
     }
     asyncio.run(writeTaskMeta(task_id, meta))
     asyncio.run(saveTaskRecord(_build_task_record(meta, f"Command exited with code {code}.")))
-    asyncio.run(maybe_await(emit("task.completed" if status == "completed" else "task.failed", _task_event_payload(meta), meta.get("sessionId"))))
+    event_session_id = meta.get("parent_session_id") if meta.get("type") == "subagent" else meta.get("sessionId")
+    asyncio.run(maybe_await(emit("task.completed" if status == "completed" else "task.failed", _task_event_payload(meta), event_session_id)))
     _WATCHERS.discard(threading.current_thread())
 
 
@@ -544,12 +585,22 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
     output_file = meta.get("outputFile") or taskOutputPath(task_id)
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
     status = _map_status(meta.get("status"))
+    is_subagent = meta.get("type") == "subagent"
     metadata = dict(meta.get("metadata") or {})
     metadata.update({"pid": meta.get("pid"), "exitCode": meta.get("exitCode"), "lastResult": meta.get("lastResult")})
+    if is_subagent:
+        metadata.update(
+            {
+                "agent_id": meta.get("agent_id"),
+                "child_session_id": meta.get("session_id") or meta.get("sessionId"),
+                "parent_session_id": meta.get("parent_session_id"),
+                "parent_task_id": meta.get("parent_task_id"),
+            }
+        )
     return {
         "id": task_id,
-        "sessionId": meta.get("sessionId"),
-        "sourceId": task_id,
+        "sessionId": meta.get("parent_session_id") if is_subagent else meta.get("sessionId"),
+        "sourceId": meta.get("agent_id") if is_subagent else task_id,
         "kind": "health_check" if meta.get("type") == "health_check" else meta.get("type") or "background_command",
         "status": status,
         "title": meta.get("title") or meta.get("description") or _summarize_command(meta.get("command")),
@@ -563,9 +614,12 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
         "outputFile": output_file,
         "outputCursor": output_cursor,
         "foregroundMode": "background",
-        "taskFamily": "health_check" if meta.get("type") == "health_check" else "shell",
+        "taskFamily": "health_check" if meta.get("type") == "health_check" else "subagent" if is_subagent else "shell",
         "detailStatus": meta.get("detailStatus") or status,
-        "retrieveOnly": True,
+        "retrieveOnly": False if is_subagent else True,
+        "attachableSessionId": meta.get("attachableSessionId") if is_subagent else None,
+        "parentTaskId": meta.get("parent_task_id") if is_subagent else None,
+        "relatedChildSessionIds": [meta.get("session_id") or meta.get("sessionId")] if is_subagent and (meta.get("session_id") or meta.get("sessionId")) else [],
         "owner": meta.get("owner") or "daemon",
         "supervisorId": meta.get("supervisorId"),
         "metadata": metadata,

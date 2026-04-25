@@ -1570,6 +1570,108 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_agent_tool_foreground_prepares_child_session_and_record(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
+            config["agents"] = {"researcher": {"prompt": "Research only.", "model": "gpt-mini"}}
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
+            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            self.assertEqual(agent.inputSchema["required"], ["description", "prompt"])
+            self.assertIn("subagent_type", agent.inputSchema["properties"])
+            events = []
+            persisted = {"count": 0}
+            captured = {}
+
+            async def run_subagent(args, _context):
+                captured.update(args)
+                return {"text": "child done", "usage": {"input_tokens": 1}, "toolCount": 2, "stopReason": "end_turn"}
+
+            result = run(
+                agent.handler(
+                    {"description": "Investigate", "prompt": "Find the issue", "subagent_type": "researcher", "mode": "plan", "team_name": "alpha"},
+                    {
+                        "session": parent,
+                        "config": config,
+                        "interactive": False,
+                        "askQuestion": lambda *_: "",
+                        "outputJson": lambda event, data: events.append((event, data)),
+                        "cwd": str(workspace),
+                        "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1),
+                        "runSubagent": run_subagent,
+                    },
+                )
+            )
+            payload = json.loads(result["content"])
+            self.assertEqual(payload["status"], "completed")
+            self.assertEqual(payload["content"], "child done")
+            self.assertEqual(payload["agent_type"], "researcher")
+            self.assertEqual(persisted["count"], 1)
+            self.assertEqual(parent["metadata"]["childAgentIds"], [payload["agent_id"]])
+            self.assertEqual(parent["metadata"]["childSessionIds"], [payload["session_id"]])
+            self.assertEqual(captured["childSession"]["messages"], [{"role": "user", "content": "Find the issue"}])
+            self.assertEqual(captured["childSession"]["permissionMode"], "acceptEdits")
+            self.assertEqual(captured["childSession"]["metadata"]["depth"], 1)
+            self.assertEqual(captured["childSession"]["metadata"]["parentSessionId"], parent["id"])
+            self.assertEqual(captured["childConfig"]["agent"], "researcher")
+            self.assertEqual(captured["childConfig"]["model"], "gpt-5-mini-2025-08-07")
+            self.assertIn("# Agent Instructions\nResearch only.", captured["childConfig"]["systemPrompt"])
+            child_record = run(core.loadChildAgent(payload["agent_id"]))
+            self.assertEqual(child_record["status"], "completed")
+            self.assertEqual(child_record["teamName"], "alpha")
+            self.assertEqual(child_record["resultSummary"], "child done")
+            saved_child = run(core.loadSession(payload["session_id"]))
+            self.assertEqual(saved_child["metadata"]["agentId"], payload["agent_id"])
+            self.assertTrue(any(event == "subagent.started" for event, _ in events))
+            self.assertTrue(any(event == "subagent.completed" and data["status"] == "completed" for event, data in events))
+
+            unknown = run(agent.handler({"description": "Nope", "prompt": "x", "subagent_type": "missing"}, {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            self.assertTrue(unknown["isError"])
+            self.assertIn("Unknown subagent type", unknown["content"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_agent_tool_background_registers_subagent_task_metadata(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            events = []
+            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            result = run(
+                agent.handler(
+                    {"description": "Run async", "prompt": "Work in the background", "run_in_background": True, "name": "Async worker"},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
+                )
+            )
+            payload = json.loads(result["content"])
+            task_id = payload["task_id"]
+            self.assertEqual(payload["status"], "running")
+            self.assertEqual(parent["metadata"]["backgroundSessionIds"], [payload["session_id"]])
+            self.assertEqual(parent["metadata"]["childAgentIds"], [payload["agent_id"]])
+            child_record = run(core.loadChildAgent(payload["agent_id"]))
+            self.assertEqual(child_record["status"], "backgrounded")
+            self.assertEqual(child_record["taskId"], task_id)
+            self.assertTrue(child_record["stoppable"])
+            meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(meta["type"], "subagent")
+            self.assertEqual(meta["agent_id"], payload["agent_id"])
+            self.assertEqual(meta["session_id"], payload["session_id"])
+            self.assertEqual(meta["parent_session_id"], parent["id"])
+            task_record = run(supervisor["inspectTask"](task_id))
+            self.assertEqual(task_record["kind"], "subagent")
+            self.assertEqual(task_record["sessionId"], parent["id"])
+            self.assertEqual(task_record["sourceId"], payload["agent_id"])
+            self.assertEqual(task_record["attachableSessionId"], payload["session_id"])
+            self.assertEqual(task_record["taskFamily"], "subagent")
+            self.assertTrue(any(event == "subagent.backgrounded" and data["task_id"] == task_id for event, data in events))
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
     def test_worktree_tools_update_workspace_metadata_and_execution_descriptors(self):
         root, home, workspace, previous = self.temp_context()
         try:

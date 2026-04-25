@@ -374,35 +374,51 @@ def _agent_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         description = _require_string(input.get("description"), "description")
         prompt = _require_string(input.get("prompt"), "prompt")
-        if callable(context.get("runSubagent")):
-            result = await maybe_await(context["runSubagent"](input, context))
-            return {"content": pretty_json(result) if not isinstance(result, str) else result}
-        if input.get("run_in_background"):
-            supervisor = context.get("daemon") or context.get("taskSupervisor") or await ensureTaskSupervisorDaemon({"cwd": context["session"]["cwd"]})
-            child_session_id = input.get("session_id") or str(uuid.uuid4())
-            started = await supervisor["startSubagentTask"](
-                {
-                    "parentSessionId": context["session"]["id"],
-                    "sessionId": child_session_id,
-                    "agentId": input.get("subagent_type") or input.get("name") or "default",
-                    "cwd": context["session"]["cwd"],
-                    "label": description,
-                }
-            )
-            return {"content": pretty_json({"task_id": started.get("taskId") or started.get("task_id"), "session_id": child_session_id, "description": description})}
-        return {
-            "content": pretty_json(
-                {
-                    "description": description,
-                    "prompt": prompt,
-                    "status": "requires_runtime",
-                    "message": "Foreground subagent execution requires a runSubagent callback from the product runtime.",
-                }
-            ),
-            "isError": True,
-        }
+        if int(context["session"].get("metadata", {}).get("depth") or 0) >= 2:
+            return {"content": "Delegation depth limit reached.", "isError": True}
+        agent_type = input.get("subagent_type").strip() if isinstance(input.get("subagent_type"), str) else None
+        if agent_type and agent_type not in context["config"].get("agents", {}):
+            return {"content": f"Unknown subagent type: {agent_type}", "isError": True}
+        if input.get("isolation") == "worktree":
+            await _ensure_tool_permission(context, "Agent", "worktree", f"Spawn subagent with isolated worktree\n{description}")
+        from .subagents import runForegroundSubagent, startBackgroundSubagent
 
-    return ToolDefinition("Agent", "Spawn a delegated subagent to work on a focused task.", {"type": "object"}, handler)
+        agent_args = {
+            "context": context,
+            "description": description,
+            "prompt": prompt,
+            "agentType": agent_type,
+            "model": input.get("model") if isinstance(input.get("model"), str) else None,
+            "runInBackground": bool(input.get("run_in_background")),
+            "name": input.get("name") if isinstance(input.get("name"), str) else None,
+            "teamName": input.get("team_name") if isinstance(input.get("team_name"), str) else None,
+            "mode": input.get("mode") if isinstance(input.get("mode"), str) else None,
+            "isolation": "worktree" if input.get("isolation") == "worktree" else None,
+        }
+        if input.get("run_in_background"):
+            return await startBackgroundSubagent(agent_args)
+        return await runForegroundSubagent(agent_args)
+
+    return ToolDefinition(
+        "Agent",
+        "Spawn a delegated subagent to work on a focused task.",
+        {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string"},
+                "prompt": {"type": "string"},
+                "subagent_type": {"type": "string"},
+                "model": {"type": "string"},
+                "run_in_background": {"type": "boolean"},
+                "name": {"type": "string"},
+                "team_name": {"type": "string"},
+                "mode": {"type": "string", "enum": ["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"]},
+                "isolation": {"type": "string"},
+            },
+            "required": ["description", "prompt"],
+        },
+        handler,
+    )
 
 
 def _ask_user_question_tool() -> ToolDefinition:
