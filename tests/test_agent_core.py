@@ -587,6 +587,161 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_compaction_checkpoint_v2_artifacts_memory_and_context_bridge(self):
+        root, home, workspace, previous = self.temp_context()
+
+        class FakeCompactionClient:
+            def __init__(self):
+                self.calls = []
+
+            async def complete(self, args):
+                self.calls.append(args)
+                if len(self.calls) == 1:
+                    payload = {
+                        "shouldCheckpoint": True,
+                        "quality": {"classification": "rich", "reason": "captures current work"},
+                        "workingContext": self.working_context("Run full Slice 4 compaction", "Persist checkpoint artifacts"),
+                    }
+                else:
+                    payload = {"verdict": "accept", "confidence": "high", "reason": "checkpoint preserves current state", "issues": [], "notes": ["verified"]}
+                return {"text": json.dumps(payload), "usage": {"input_tokens": 11, "output_tokens": 7}, "model": args["model"]}
+
+            def working_context(self, goal, next_step):
+                return {
+                    "project": {
+                        "description": "Python port of agent-core",
+                        "facts": {"primaryLanguage": "Python", "languages": ["Python"], "ecosystem": "unittest", "packageManager": None, "evidence": ["tests/test_agent_core.py"]},
+                        "keyFiles": [{"path": "agent_core/compaction.py", "role": "modified", "note": "checkpoint-v2 pipeline"}],
+                    },
+                    "goals": {"active": [goal], "recentRequests": ["Slice 4 compaction"], "constraints": ["Perform exactly like TypeScript"], "preferences": ["Detailed commits"]},
+                    "currentState": {"completed": ["Committed and pushed previous slice"], "inProgress": ["Implementing checkpoint-v2 compaction"], "blocked": []},
+                    "decisions": ["Use fixed Codex Spark compaction model selection"],
+                    "discoveries": ["Python compaction scaffold was placeholder-only"],
+                    "activity": {"commands": ["python3 -m unittest discover -s tests -v"], "searches": ["grep compaction.ts"], "web": [], "failures": []},
+                    "nextSteps": [next_step],
+                    "criticalContext": ["Verification must accept before artifacts are persisted"],
+                }
+
+        try:
+            session = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+            for index in range(34):
+                role = "user" if index % 2 == 0 else "assistant"
+                session["messages"].append({"role": role, "content": f"{role} message {index}"})
+            session["todos"] = [{"content": "Finish compaction", "activeForm": "Implementing compaction", "status": "in_progress"}]
+            client = FakeCompactionClient()
+
+            result = run(core.runCompaction({"session": session, "config": {}, "trigger": "manual", "force": True, "modelClient": client}))
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["qualityClassification"], "rich")
+            self.assertEqual(len(client.calls), 2)
+            self.assertIn("Compacted transcript evidence:", client.calls[0]["prompt"])
+            self.assertIn("Candidate checkpoint:", client.calls[1]["prompt"])
+            self.assertTrue(os.path.exists(result["artifacts"]["summary"]))
+            self.assertTrue(os.path.exists(result["artifacts"]["workingContext"]))
+            working = json.loads(Path(result["artifacts"]["workingContext"]).read_text())
+            self.assertEqual(working["version"], "v2")
+            self.assertEqual(working["compaction"]["model"], "gpt-5.3-codex-spark")
+            self.assertEqual(working["sourceRanges"][0]["start"], 0)
+            self.assertGreater(working["sourceRanges"][0]["end"], 0)
+            self.assertEqual(session["metadata"]["compactions"], 1)
+            self.assertEqual(session["metadata"]["usage"]["inputTokens"], 22)
+            prompt_context = run(core.buildCompactionSystemPromptContext(session))
+            self.assertIn("Archived working context", prompt_context)
+            self.assertIn("active_goals:", prompt_context)
+            memory = run(core.loadProjectMemoryRecords(str(workspace)))
+            self.assertTrue(any(record["source"] == "compaction" and "Use fixed Codex Spark" in record["text"] for record in memory))
+
+            bridged = dict(session)
+            bridged["metadata"] = {"compactionState": {"compactedThroughMessageIndex": 13}}
+            bridged_messages = core.buildMessagesForWorkingContext(bridged)
+            self.assertEqual(bridged_messages[0]["content"], core.CONTINUATION_BRIDGE_MESSAGE)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_compaction_checkpoint_v2_repair_path_persists_repaired_checkpoint(self):
+        root, home, workspace, previous = self.temp_context()
+
+        def checkpoint(next_step):
+            return {
+                "project": {"description": "Python port", "facts": {"primaryLanguage": "Python", "languages": ["Python"], "ecosystem": "unittest", "packageManager": None, "evidence": []}, "keyFiles": []},
+                "goals": {"active": ["Complete Slice 4"], "recentRequests": [], "constraints": [], "preferences": []},
+                "currentState": {"completed": [], "inProgress": ["Compaction implementation"], "blocked": []},
+                "decisions": [],
+                "discoveries": [],
+                "activity": {"commands": [], "searches": [], "web": [], "failures": []},
+                "nextSteps": [next_step],
+                "criticalContext": [],
+            }
+
+        class RepairClient:
+            def __init__(self):
+                self.calls = []
+
+            async def complete(self, args):
+                self.calls.append(args)
+                if len(self.calls) == 1:
+                    payload = {
+                        "shouldCheckpoint": True,
+                        "quality": {"classification": "usable", "reason": "needs correction"},
+                        "workingContext": checkpoint("stale next step"),
+                    }
+                elif len(self.calls) == 2:
+                    payload = {
+                        "verdict": "repair",
+                        "confidence": "medium",
+                        "reason": "next step was stale",
+                        "issues": ["stale next step"],
+                        "notes": [],
+                        "repairedCheckpoint": {"quality": {"classification": "usable", "reason": "repaired"}, "workingContext": checkpoint("run focused compaction tests")},
+                    }
+                else:
+                    payload = {"verdict": "accept", "confidence": "high", "reason": "repair is accurate", "issues": [], "notes": ["repair accepted"]}
+                return {"text": json.dumps(payload), "usage": {"input_tokens": 3, "output_tokens": 2}, "model": args["model"]}
+
+        try:
+            session = core.createEmptySession(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+            for index in range(34):
+                session["messages"].append({"role": "user" if index % 2 == 0 else "assistant", "content": f"message {index}"})
+            client = RepairClient()
+
+            result = run(core.runCompaction({"session": session, "config": {}, "trigger": "manual", "force": True, "modelClient": client}))
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(len(client.calls), 3)
+            working = json.loads(Path(result["artifacts"]["workingContext"]).read_text())
+            self.assertEqual(working["nextSteps"], ["run focused compaction tests"])
+            state = json.loads(Path(result["artifacts"]["state"]).read_text())
+            self.assertEqual(state["verification"]["repairCount"], 1)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_compaction_retrigger_policy_and_safe_tool_boundaries(self):
+        session = {"messages": [{"role": "user", "content": str(index)} for index in range(110)], "metadata": {"compactionState": {"archiveMessageCount": 100, "workingContextTokenEstimate": 150_000}}}
+        suppressed = core.shouldAutoCompact(session, currentInputTokens=160_000)
+        self.assertFalse(suppressed["shouldCompact"])
+        hard = core.shouldAutoCompact(session, currentInputTokens=181_000)
+        self.assertTrue(hard["shouldCompact"])
+        self.assertEqual(hard["trigger"], "auto_hard_limit")
+        session["messages"].extend({"role": "user", "content": str(index)} for index in range(20))
+        soft = core.shouldAutoCompact(session, currentInputTokens=160_000)
+        self.assertTrue(soft["shouldCompact"])
+        self.assertEqual(soft["trigger"], "auto_soft_limit")
+
+        messages = [
+            {"role": "user", "content": "start"},
+            {"role": "assistant", "content": "ok"},
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Read", "input": {"file": "a.py"}}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "{\"file\":{\"filePath\":\"/tmp/a.py\",\"content\":\"x\"}}"}]},
+            {"role": "user", "content": "safe restart"},
+        ]
+        self.assertFalse(core.isSafeWorkingSetStart(messages, 2))
+        self.assertFalse(core.isSafeWorkingSetStart(messages, 3))
+        self.assertTrue(core.isSafeWorkingSetStart(messages, 4))
+        evidence = core.buildCompactionEvidence({"sourceMessages": messages[2:4], "sourceStart": 2, "cwd": "/tmp", "tokenBudget": 10_000})
+        self.assertIn("assistant tool_use Read", evidence["transcript"])
+        self.assertIn("user tool_result Read", evidence["transcript"])
+
     def test_background_task_supervisor_and_task_output(self):
         root, home, workspace, previous = self.temp_context()
         try:
