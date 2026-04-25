@@ -6,11 +6,13 @@ import json
 import os
 import queue
 import re
+import socket
 import subprocess
 import threading
 import uuid
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 from ._utils import now_iso, pretty_json
@@ -141,13 +143,151 @@ class HttpMcpClient(JsonRpcClient):
         headers = {"content-type": "application/json", "accept": "application/json, text/event-stream", **(self.config.get("headers") or {})}
         req = Request(self.config["commandOrUrl"], data=body, headers=headers, method="POST")
         with urlopen(req, timeout=30) as response:
+            if response.status in (202, 204):
+                return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id"))
             raw = response.read().decode("utf-8", errors="replace")
-            content_type = response.headers.get("content-type", "")
-            if "text/event-stream" in content_type:
-                return _parse_sse_rpc_response(raw, request.get("id"))
-            if not raw.strip():
-                return {"jsonrpc": "2.0", "id": request.get("id"), "result": {}}
-            return json.loads(raw)
+            return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id"))
+
+
+class SseMcpClient(JsonRpcClient):
+    def __init__(self, config: dict[str, Any], cwd: str, on_notification: Callable[[dict[str, Any]], Any] | None = None):
+        super().__init__(config, cwd, on_notification)
+        self.post_url = config["commandOrUrl"]
+        self.pending: dict[int, queue.Queue[dict[str, Any] | BaseException]] = {}
+        self.stop_event = threading.Event()
+        self.endpoint_ready = threading.Event()
+        self.stream_thread: threading.Thread | None = None
+        self.stream_response: Any = None
+        self.post_lock = threading.Lock()
+
+    async def initialize(self) -> None:
+        await asyncio.to_thread(self._start_event_stream)
+        await super().initialize()
+
+    async def close(self) -> None:
+        self.stop_event.set()
+        if self.stream_response:
+            _close_http_response_socket(self.stream_response)
+        if self.stream_thread and self.stream_thread.is_alive():
+            await asyncio.to_thread(self.stream_thread.join, 1)
+        for response_queue in self.pending.values():
+            response_queue.put(RuntimeError(f"MCP SSE server closed: {self.config.get('name')}"))
+        self.pending.clear()
+
+    async def _send(self, request: dict[str, Any]) -> dict[str, Any]:
+        request_id = request.get("id")
+        response_queue: queue.Queue[dict[str, Any] | BaseException] | None = None
+        if isinstance(request_id, int):
+            response_queue = queue.Queue(maxsize=1)
+            self.pending[request_id] = response_queue
+        try:
+            response, empty_ack = await asyncio.to_thread(self._post_sync, request)
+            if not empty_ack or not response_queue:
+                if isinstance(request_id, int):
+                    self.pending.pop(request_id, None)
+                return response
+            try:
+                queued = await asyncio.to_thread(response_queue.get, True, float(self.config.get("requestTimeoutSeconds") or 30))
+            except queue.Empty as exc:
+                raise TimeoutError(f"Timed out waiting for MCP SSE response {request_id}") from exc
+            if isinstance(queued, BaseException):
+                raise queued
+            return queued
+        except Exception:
+            if isinstance(request_id, int):
+                self.pending.pop(request_id, None)
+            raise
+
+    def _post_sync(self, request: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        body = json.dumps(request).encode("utf-8")
+        headers = {"content-type": "application/json", "accept": "application/json, text/event-stream", **(self.config.get("headers") or {})}
+        with self.post_lock:
+            post_url = self.post_url
+        req = Request(post_url, data=body, headers=headers, method="POST")
+        with urlopen(req, timeout=30) as response:
+            if response.status in (202, 204):
+                return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id")), True
+            raw = response.read().decode("utf-8", errors="replace")
+            empty_ack = response.status in (202, 204) or not raw.strip()
+            return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id")), empty_ack
+
+    def _start_event_stream(self) -> None:
+        if self.stream_thread and self.stream_thread.is_alive():
+            return
+        self.stream_thread = threading.Thread(target=self._event_stream_loop, daemon=True)
+        self.stream_thread.start()
+        self.endpoint_ready.wait(timeout=float(self.config.get("startupTimeoutSeconds") or 2))
+
+    def _event_stream_loop(self) -> None:
+        event_name: str | None = None
+        data_parts: list[str] = []
+        try:
+            headers = {"accept": "text/event-stream", **(self.config.get("headers") or {})}
+            req = Request(self.config["commandOrUrl"], headers=headers, method="GET")
+            with urlopen(req, timeout=30) as response:
+                self.stream_response = response
+                while not self.stop_event.is_set():
+                    raw_line = response.readline()
+                    if not raw_line:
+                        break
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+                    if not line:
+                        self._handle_sse_event(event_name, data_parts)
+                        event_name = None
+                        data_parts = []
+                        continue
+                    if line.startswith(":"):
+                        continue
+                    if line.startswith("event:"):
+                        event_name = line[6:].strip()
+                    elif line.startswith("data:"):
+                        data_parts.append(line[5:].lstrip())
+                if data_parts:
+                    self._handle_sse_event(event_name, data_parts)
+        except Exception as exc:
+            if not self.stop_event.is_set():
+                for response_queue in list(self.pending.values()):
+                    response_queue.put(exc)
+        finally:
+            self.endpoint_ready.set()
+            self.stream_response = None
+
+    def _handle_sse_event(self, event_name: str | None, data_parts: list[str]) -> None:
+        if not data_parts:
+            return
+        data = "\n".join(data_parts)
+        try:
+            payload = json.loads(data)
+        except Exception:
+            return
+        if event_name == "endpoint":
+            endpoint = payload if isinstance(payload, dict) else {}
+            next_url = endpoint.get("url") if isinstance(endpoint.get("url"), str) else endpoint.get("endpoint") if isinstance(endpoint.get("endpoint"), str) else None
+            if next_url:
+                with self.post_lock:
+                    self.post_url = urljoin(self.config["commandOrUrl"], next_url)
+                self.endpoint_ready.set()
+            return
+        message = payload if isinstance(payload, dict) else {}
+        request_id = message.get("id")
+        method = message.get("method")
+        if method and request_id is None:
+            if self.on_notification:
+                self.on_notification({"method": method, "params": message.get("params")})
+            return
+        if isinstance(request_id, int):
+            response_queue = self.pending.pop(request_id, None)
+            if response_queue:
+                response_queue.put(message)
+
+
+def _close_http_response_socket(response: Any) -> None:
+    with contextlib_suppress():
+        sock = response.fp.raw._sock
+        sock.shutdown(socket.SHUT_RDWR)
+        sock.close()
+    with contextlib_suppress():
+        response.close()
 
 
 class StdioMcpClient(JsonRpcClient):
@@ -302,6 +442,11 @@ def _create_state(config: dict[str, Any]) -> dict[str, Any]:
 
 async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> None:
     state.update({"state": "connecting", "error": None})
+    if state.get("client"):
+        try:
+            await state["client"].close()
+        except Exception:
+            pass
     try:
         client = _create_client(state["config"], cwd, on_event)
         await client.initialize()
@@ -320,6 +465,8 @@ def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any
 
     if config.get("transport") == "stdio":
         return StdioMcpClient(config, cwd, notification)
+    if config.get("transport") == "sse":
+        return SseMcpClient(config, cwd, notification)
     return HttpMcpClient(config, cwd, notification)
 
 
@@ -503,11 +650,17 @@ def _unwrap_json_rpc_response(response: dict[str, Any]) -> Any:
     return response.get("result") or {}
 
 
+def _parse_http_rpc_response(status: int, raw: str, content_type: str, request_id: int | None) -> dict[str, Any]:
+    if status in (202, 204) or not raw.strip():
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+    if "text/event-stream" in content_type:
+        return _parse_sse_rpc_response(raw, request_id)
+    return json.loads(raw)
+
+
 def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
-    for line in raw.splitlines():
-        if not line.startswith("data:"):
-            continue
-        data = line[5:].strip()
+    for event in _parse_sse_events(raw):
+        data = event.get("data")
         if not data:
             continue
         try:
@@ -517,3 +670,25 @@ def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
         if request_id is None or payload.get("id") == request_id:
             return payload
     return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+
+
+def _parse_sse_events(raw: str) -> list[dict[str, str]]:
+    events: list[dict[str, str]] = []
+    normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
+    for raw_event in normalized.split("\n\n"):
+        if not raw_event.strip():
+            continue
+        event_name: str | None = None
+        data_parts: list[str] = []
+        for line in raw_event.split("\n"):
+            if line.startswith("event:"):
+                event_name = line[6:].strip()
+            elif line.startswith("data:"):
+                data_parts.append(line[5:].lstrip())
+        event: dict[str, str] = {}
+        if event_name:
+            event["event"] = event_name
+        if data_parts:
+            event["data"] = "\n".join(data_parts)
+        events.append(event)
+    return events
