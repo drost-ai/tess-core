@@ -776,6 +776,90 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_slash_command_registry_and_core_handlers(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session["todos"] = [{"content": "ship shell slice", "status": "in_progress"}]
+            infos = []
+            errors = []
+            counters = {"persist": 0, "refresh": 0, "clear": 0}
+            hooks = {
+                "info": lambda title, message: infos.append((title, message)),
+                "error": lambda message: errors.append(message),
+                "persist": lambda: counters.__setitem__("persist", counters["persist"] + 1),
+                "refresh": lambda: counters.__setitem__("refresh", counters["refresh"] + 1),
+                "clear": lambda: counters.__setitem__("clear", counters["clear"] + 1),
+                "getTheme": lambda: "tess",
+                "setTheme": lambda _theme: None,
+            }
+
+            runtime_commands = [{"name": "hello", "usage": "/hello", "description": "Say hello", "handler": lambda _args: "hello from plugin"}]
+            commands = core.listSlashCommands({"includeTheme": True, "runtimeCommands": runtime_commands})
+            names = [command["name"] for command in commands]
+            self.assertIn("provider", names)
+            self.assertIn("tasks", names)
+            self.assertIn("theme", names)
+            self.assertIn("hello", names)
+
+            help_result = run(core.handleSlashCommand({"command": "/help", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))
+            self.assertEqual(help_result["outcome"], "handled")
+            self.assertIn("/provider [name]", help_result["message"])
+            self.assertIn("/hello", help_result["message"])
+
+            self.assertEqual(run(core.handleSlashCommand({"command": "plain text"}))["outcome"], "pass")
+            self.assertEqual(run(core.handleSlashCommand({"command": "/hello", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))["message"], "hello from plugin")
+            run(core.handleSlashCommand({"command": "/clear", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(counters["clear"], 1)
+
+            status = run(core.handleSlashCommand({"command": "/status", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("session", status["message"])
+            self.assertEqual(infos[-1][0], "Status")
+
+            run(core.handleSlashCommand({"command": "/model openai:gpt", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(session["provider"], "openai")
+            self.assertEqual(session["model"], "gpt-5.4")
+            run(core.handleSlashCommand({"command": "/effort xhigh", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(session["effort"], "xhigh")
+            run(core.handleSlashCommand({"command": "/permissions auto", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(session["permissionMode"], "auto")
+            self.assertGreaterEqual(counters["persist"], 3)
+            self.assertGreaterEqual(counters["refresh"], 3)
+
+            provider_result = run(core.handleSlashCommand({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("anthropic-console", provider_result["message"])
+            self.assertEqual(session["provider"], "anthropic")
+            self.assertEqual(config["providerProfileName"], "anthropic-console")
+            bad_provider = run(core.handleSlashCommand({"command": "/provider missing-profile", "session": session, "config": config, "hooks": hooks}))
+            self.assertTrue(bad_provider["isError"])
+            self.assertIn("Unknown provider profile", errors[-1])
+
+            todos = run(core.handleSlashCommand({"command": "/todos", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("ship shell slice", todos["message"])
+            usage = run(core.handleSlashCommand({"command": "/cost", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("inputTokens", usage["message"])
+
+            run(core.saveChildAgent({"agentId": "agent-shell", "sessionId": "child-shell", "parentSessionId": session["id"], "name": "Shell worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "backgrounded", "startedAt": "2026-01-01T00:00:00Z", "lastSummary": "working"}))
+            session["metadata"]["childAgentIds"] = ["agent-shell"]
+            agents = run(core.handleSlashCommand({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("agent-shell", agents["message"])
+
+            run(core.saveTaskRecord({"id": "task-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Shell task", "updatedAt": "2026-01-01T00:00:00Z"}))
+            tasks = run(core.handleSlashCommand({"command": "/tasks", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("task-shell", tasks["message"])
+            inspected = run(core.handleSlashCommand({"command": "/tasks inspect task-shell", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn('"kind": "background_command"', inspected["message"])
+
+            run(core.saveDaemonState({"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
+            daemon = run(core.handleSlashCommand({"command": "/daemon", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("running", daemon["message"])
+
+            exit_result = run(core.handleSlashCommand({"command": "/quit", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(exit_result["outcome"], "exit")
+        finally:
+            self.restore_home(root, previous)
+
     def test_codex_spark_compaction_uses_codex_transport(self):
         root, home, workspace, previous = self.temp_context()
         try:

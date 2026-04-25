@@ -16,6 +16,7 @@ from .runtime_events import *
 from .runtime_state import *
 from .session import *
 from .session_runtime import *
+from .shell import *
 from .storage import *
 from .subagents import *
 from .task_runtime import *
