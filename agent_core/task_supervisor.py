@@ -210,6 +210,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         if meta:
             now = now_iso()
             meta.update({"status": "stopped", "updatedAt": now, "stoppedAt": now, "detailStatus": "stopped"})
+            if meta.get("type") == "subagent":
+                meta.update({"completionReason": "cancelled", "resultSummary": "Stopped by request.", "retryable": True, "stoppable": False})
+                await _mark_subagent_cancelled_from_stop(meta, task_id, now)
             await writeTaskMeta(task_id, meta)
             await saveTaskRecord(_build_task_record(meta, "Task stopped by request."))
         if proc and proc.poll() is None:
@@ -864,6 +867,31 @@ async def _recover_completed_subagent_task(
     await saveChildAgent({**child, "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at})
     await maybe_await(emit(_event_name_for_task_status(next_record.get("status")), _task_record_event_payload(next_record), session_id or next_record.get("sessionId")))
     return True
+
+
+async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str, stopped_at: str) -> None:
+    agent_id = meta.get("agent_id")
+    child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+    if not child:
+        return
+    summary = "Stopped by request."
+    await saveChildAgent(
+        {
+            **child,
+            "status": "cancelled",
+            "completedAt": stopped_at,
+            "taskId": task_id,
+            "error": summary,
+            "completionReason": "cancelled",
+            "resultSummary": summary,
+            "latestResultAt": stopped_at,
+            "retryable": True,
+            "stoppable": False,
+            "recoveryState": None,
+            "lastUpdatedAt": stopped_at,
+            "lastSummary": summary,
+        }
+    )
 
 
 def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:

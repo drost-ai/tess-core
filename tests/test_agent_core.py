@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import http.server
 import json
 import os
@@ -1739,6 +1740,110 @@ class AgentCoreTests(unittest.TestCase):
             if supervisor:
                 run(supervisor["close"]())
             run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_stop_task_marks_subagent_child_cancelled(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        proc = None
+        try:
+            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            task_id = "subagent-stop-task"
+            agent_id = "subagent-stop-agent"
+            child_session_id = "subagent-stop-session"
+            parent_session_id = "parent-stop-session"
+            output_file = core.taskOutputPath(task_id)
+            kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "cwd": str(workspace)}
+            if hasattr(os, "setsid"):
+                kwargs["preexec_fn"] = os.setsid
+            proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"], **kwargs)
+            run(
+                core.saveChildAgent(
+                    {
+                        "agentId": agent_id,
+                        "sessionId": child_session_id,
+                        "parentSessionId": parent_session_id,
+                        "name": "Stopped worker",
+                        "provider": "openai",
+                        "model": "gpt-5.4",
+                        "mode": "bypassPermissions",
+                        "runInBackground": True,
+                        "status": "backgrounded",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "taskId": task_id,
+                        "attachableSessionId": child_session_id,
+                        "owner": "daemon",
+                        "retryable": False,
+                        "stoppable": True,
+                    }
+                )
+            )
+            meta = {
+                "type": "subagent",
+                "taskId": task_id,
+                "id": task_id,
+                "task_id": task_id,
+                "agent_id": agent_id,
+                "sessionId": child_session_id,
+                "session_id": child_session_id,
+                "parent_session_id": parent_session_id,
+                "cwd": str(workspace),
+                "pid": proc.pid,
+                "startedAt": "2026-01-01T00:00:00Z",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "status": "running",
+                "outputFile": output_file,
+                "title": "Stopped worker",
+                "attachableSessionId": child_session_id,
+                "detailStatus": "worker_running",
+                "owner": "daemon",
+            }
+            run(core.writeTaskMeta(task_id, meta))
+            run(
+                core.saveTaskRecord(
+                    {
+                        "id": task_id,
+                        "sessionId": parent_session_id,
+                        "sourceId": agent_id,
+                        "kind": "subagent",
+                        "status": "running",
+                        "title": "Stopped worker",
+                        "summary": "Background subagent is running under daemon supervision.",
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "cwd": str(workspace),
+                        "outputFile": output_file,
+                        "foregroundMode": "background",
+                        "taskFamily": "subagent",
+                        "detailStatus": "worker_running",
+                        "retrieveOnly": False,
+                        "attachableSessionId": child_session_id,
+                        "relatedChildSessionIds": [child_session_id],
+                        "owner": "daemon",
+                        "metadata": {"agent_id": agent_id, "child_session_id": child_session_id, "pid": proc.pid},
+                    }
+                )
+            )
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            self.assertTrue(run(supervisor["stopTask"](task_id)))
+            child = run(core.loadChildAgent(agent_id))
+            self.assertEqual(child["status"], "cancelled")
+            self.assertEqual(child["completionReason"], "cancelled")
+            self.assertFalse(child["stoppable"])
+            self.assertTrue(child["retryable"])
+            meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(meta["status"], "stopped")
+            self.assertEqual(meta["completionReason"], "cancelled")
+            record = run(supervisor["inspectTask"](task_id))
+            self.assertEqual(record["status"], "stopped")
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            if proc and proc.poll() is None:
+                proc.terminate()
+                with contextlib.suppress(Exception):
+                    proc.wait(timeout=2)
             self.restore_home(root, previous)
 
     def test_task_stop_terminates_background_command(self):
