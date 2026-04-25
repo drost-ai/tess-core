@@ -31,7 +31,7 @@ from .storage import (
     writePlanFile,
     writeTaskMeta,
 )
-from .daemon import ensureTaskSupervisorDaemon
+from .daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon
 from .tool_payloads import (
     filterDefaultIgnoredGlobMatches,
     shapeGlobPayload,
@@ -420,7 +420,7 @@ def _task_output_tool() -> ToolDefinition:
         if not meta:
             return {"content": f"Task not found: {task_id}", "isError": True}
         output_result = None
-        supervisor = context.get("daemon") or context.get("taskSupervisor")
+        supervisor = context.get("daemon") or context.get("taskSupervisor") or await connectTaskSupervisorDaemonClient()
         if supervisor:
             try:
                 output_result = await supervisor["readTaskOutput"](task_id)
@@ -437,7 +437,7 @@ def _task_output_tool() -> ToolDefinition:
 def _task_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         task_id = _require_string(input.get("task_id"), "task_id")
-        supervisor = context.get("daemon") or context.get("taskSupervisor")
+        supervisor = context.get("daemon") or context.get("taskSupervisor") or await connectTaskSupervisorDaemonClient()
         await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id}")
         if supervisor:
             stopped = await supervisor["stopTask"](task_id)

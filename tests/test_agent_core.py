@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import shlex
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -475,6 +476,11 @@ class AgentCoreTests(unittest.TestCase):
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
             task_id = json.loads(result["content"])["task_id"]
+            daemon_state = run(core.getTaskSupervisorDaemonState())
+            self.assertEqual(daemon_state["mode"], "detached_python")
+            self.assertNotEqual(daemon_state["pid"], os.getpid())
+            self.assertTrue(Path(daemon_state["socketPath"]).exists())
+            self.assertTrue(run(core.connectTaskSupervisorDaemonClient())["_daemonClient"])
             for _ in range(40):
                 meta = run(core.readTaskMeta(task_id))
                 if meta and meta.get("status") == "completed":
@@ -487,6 +493,112 @@ class AgentCoreTests(unittest.TestCase):
             payload = json.loads(output["content"])
             self.assertIn("hello from background", payload["output"])
         finally:
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_daemon_live_subscription_receives_task_events(self):
+        root, home, workspace, previous = self.temp_context()
+        unsubscribe = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
+            events = []
+            unsubscribe = client["subscribe"](lambda event: events.append(event), session["id"])
+            script = 'import time; print("subscription event"); time.sleep(0.2)'
+            command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+            started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace)}))
+            task_id = started["taskId"]
+            for _ in range(80):
+                if any(event.get("event") == "task.completed" and event.get("data", {}).get("task_id") == task_id for event in events):
+                    break
+                time.sleep(0.05)
+            task_events = [event for event in events if event.get("data", {}).get("task_id") == task_id]
+            self.assertTrue(any(event.get("event") == "task.updated" for event in task_events))
+            self.assertTrue(any(event.get("event") == "task.completed" for event in task_events))
+            self.assertTrue(all(event.get("sessionId") == session["id"] for event in task_events))
+        finally:
+            if unsubscribe:
+                unsubscribe()
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_daemon_reconciles_persisted_running_task_after_restart(self):
+        root, home, workspace, previous = self.temp_context()
+        proc = None
+        try:
+            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            task_id = "task-recovery"
+            output_file = core.taskOutputPath(task_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("still running\n", encoding="utf-8")
+            proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"], cwd=str(workspace), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            created_at = "2026-01-01T00:00:00Z"
+            meta = {
+                "type": "background_command",
+                "taskId": task_id,
+                "id": task_id,
+                "sessionId": "session-recovery",
+                "command": "sleep",
+                "cwd": str(workspace),
+                "startedAt": created_at,
+                "updatedAt": created_at,
+                "status": "running",
+                "outputFile": output_file,
+                "pid": proc.pid,
+                "detailStatus": "running",
+                "owner": "daemon",
+                "supervisorId": "previous-supervisor",
+            }
+            run(core.writeTaskMeta(task_id, meta))
+            run(
+                core.saveTaskRecord(
+                    {
+                        "id": task_id,
+                        "sessionId": "session-recovery",
+                        "sourceId": task_id,
+                        "kind": "background_command",
+                        "status": "running",
+                        "title": "sleep",
+                        "summary": "Background command is running.",
+                        "createdAt": created_at,
+                        "updatedAt": created_at,
+                        "startedAt": created_at,
+                        "cwd": str(workspace),
+                        "command": "sleep",
+                        "outputFile": output_file,
+                        "outputCursor": len("still running\n"),
+                        "foregroundMode": "background",
+                        "taskFamily": "shell",
+                        "detailStatus": "running",
+                        "retrieveOnly": True,
+                        "owner": "daemon",
+                        "supervisorId": "previous-supervisor",
+                        "metadata": {"pid": proc.pid},
+                    }
+                )
+            )
+            client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
+            record = None
+            for _ in range(40):
+                record = run(client["inspectTask"](task_id))
+                if record and record.get("detailStatus") == "recovered_after_daemon_restart":
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(record)
+            self.assertEqual(record["status"], "degraded")
+            self.assertEqual(record["detailStatus"], "recovered_after_daemon_restart")
+            self.assertEqual(record["metadata"]["recovery_state"], "recovered_after_daemon_restart")
+            next_meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(next_meta["status"], "reconciling")
+            self.assertEqual(next_meta["detailStatus"], "recovered_after_daemon_restart")
+        finally:
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
