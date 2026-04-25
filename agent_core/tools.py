@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from ._utils import maybe_await, now_iso, pretty_json
+from .execution_descriptors import createWorkspaceExecutionDescriptor
 from .storage import (
     loadAutoMode,
     loadMonitor,
@@ -40,6 +41,7 @@ from .tool_payloads import (
     shapeReadPayload,
     shapeTextToolResult,
 )
+from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata
 
 
 @dataclass
@@ -578,30 +580,70 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         requested_name = input.get("name") if isinstance(input.get("name"), str) and input.get("name").strip() else f"tess-{int(__import__('time').time())}"
         await _ensure_tool_permission(context, "EnterWorktree", "worktree", f"Create git worktree for {requested_name}")
-        if controller and callable(getattr(controller, "createWorktree", None)):
-            result = await maybe_await(controller.createWorktree(requested_name))
+        metadata = context["session"].setdefault("metadata", {})
+        original = metadata.setdefault("originalCwd", context["session"].get("cwd") or context["config"].get("cwd"))
+        create_worktree = _controller_method(controller, "createWorktree")
+        if callable(create_worktree):
+            result = await maybe_await(create_worktree(requested_name))
             worktree = result.get("worktree") if isinstance(result, dict) else None
         else:
             worktree = await _create_git_worktree(context["session"]["cwd"], requested_name)
             result = {"worktree": worktree, "snapshot": None}
         if not worktree:
-            return {"content": "Unable to create git worktree.", "isError": True}
-        context["session"].setdefault("metadata", {})["worktreePath"] = worktree["targetPath"]
-        await maybe_await(context.get("updateCwd", lambda next_cwd: context["session"].__setitem__("cwd", next_cwd))(worktree["targetPath"]))
-        return {"content": pretty_json({"cwd": worktree["targetPath"], "branch": worktree["branchName"], "created": True, "workspace": result.get("snapshot")})}
+            return {"content": "Workspace controller unavailable.", "isError": True}
+        target_path = worktree["targetPath"]
+        branch_name = worktree["branchName"]
+        metadata["worktreePath"] = target_path
+        await maybe_await(context.get("updateCwd", lambda next_cwd: context["session"].__setitem__("cwd", next_cwd))(target_path))
+        context["session"]["cwd"] = target_path
+        context["cwd"] = target_path
+        snapshot = result.get("snapshot") if isinstance(result, dict) else None
+        if not snapshot:
+            snapshot = await captureWorkspaceSnapshot(target_path, {"originalCwd": original, "worktreePath": target_path})
+            await hydrateSessionWorkspaceMetadata(context["session"], {"originalCwd": original, "worktreePath": target_path})
+        else:
+            _apply_workspace_snapshot_metadata(context["session"], snapshot)
+        execution = createWorkspaceExecutionDescriptor({"action": "enter", "workspace": snapshot, "branch": branch_name, "created": True}) if snapshot else None
+        payload = {"cwd": target_path, "branch": branch_name, "created": True, "workspace": snapshot, "execution": execution}
+        return {"content": pretty_json(payload), "meta": {"execution": execution} if execution else None}
 
     return ToolDefinition("EnterWorktree", "Enter a git worktree.", {"type": "object"}, handler)
 
 
 def _exit_worktree_tool(controller: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        original = context["session"].get("metadata", {}).get("originalCwd") or context["config"].get("cwd") or context["session"]["cwd"]
-        snapshot = await maybe_await(controller.exitWorktree()) if controller and callable(getattr(controller, "exitWorktree", None)) else None
+        metadata = context["session"].setdefault("metadata", {})
+        original = metadata.get("originalCwd") or context["config"].get("cwd") or context["session"]["cwd"]
         await maybe_await(context.get("updateCwd", lambda next_cwd: context["session"].__setitem__("cwd", next_cwd))(original))
-        context["session"].setdefault("metadata", {}).pop("worktreePath", None)
-        return {"content": pretty_json({"cwd": original, "workspace": snapshot})}
+        context["session"]["cwd"] = original
+        context["cwd"] = original
+        exit_worktree = _controller_method(controller, "exitWorktree")
+        snapshot = await maybe_await(exit_worktree()) if callable(exit_worktree) else None
+        if not snapshot:
+            snapshot = await captureWorkspaceSnapshot(original, {"originalCwd": original, "worktreePath": metadata.get("worktreePath")})
+            await hydrateSessionWorkspaceMetadata(context["session"], {"originalCwd": original, "worktreePath": metadata.get("worktreePath")})
+        else:
+            _apply_workspace_snapshot_metadata(context["session"], snapshot)
+        execution = createWorkspaceExecutionDescriptor({"action": "exit", "workspace": snapshot}) if snapshot else None
+        payload = {"cwd": original, "workspace": snapshot, "execution": execution}
+        return {"content": pretty_json(payload), "meta": {"execution": execution} if execution else None}
 
     return ToolDefinition("ExitWorktree", "Exit a git worktree.", {"type": "object"}, handler)
+
+
+def _controller_method(controller: Any, name: str) -> Any:
+    if not controller:
+        return None
+    if isinstance(controller, dict):
+        return controller.get(name)
+    return getattr(controller, name, None)
+
+
+def _apply_workspace_snapshot_metadata(session: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    metadata = session.setdefault("metadata", {})
+    for key in ("workspaceId", "workspaceName", "workspaceRoot", "gitRoot", "gitBranch", "prNumber", "prUrl"):
+        metadata[key] = snapshot.get(key)
+    metadata["workspaceMode"] = snapshot.get("mode")
 
 
 def parseAllowedPrompts(value: Any) -> list[dict[str, str]]:

@@ -834,6 +834,100 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_worktree_tools_update_workspace_metadata_and_execution_descriptors(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            worktree = Path(root.name) / "workspace-slice-5"
+            worktree.mkdir()
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+
+            enter_snapshot = {
+                "workspaceId": "workspace_slice_5",
+                "workspaceName": "workspace-slice-5",
+                "workspaceRoot": str(worktree),
+                "cwd": str(worktree),
+                "mode": "worktree",
+                "gitRoot": str(workspace),
+                "gitBranch": "tess/slice-5",
+                "worktreePath": str(worktree),
+            }
+            exit_snapshot = {
+                "workspaceId": "workspace",
+                "workspaceName": "workspace",
+                "workspaceRoot": str(workspace),
+                "cwd": str(workspace),
+                "mode": "repo",
+                "gitRoot": str(workspace),
+                "gitBranch": "main",
+                "worktreePath": str(worktree),
+            }
+
+            class WorktreeController:
+                async def createWorktree(self, requested_name):
+                    return {
+                        "worktree": {
+                            "gitRoot": str(workspace),
+                            "targetPath": str(worktree),
+                            "branchName": "tess/slice-5",
+                            "requestedName": requested_name,
+                        },
+                        "snapshot": enter_snapshot,
+                    }
+
+                async def exitWorktree(self):
+                    return exit_snapshot
+
+            tools = core.createBuiltinTools({"workspaceController": WorktreeController()})
+            enter = next(tool for tool in tools if tool.name == "EnterWorktree")
+            exit_tool = next(tool for tool in tools if tool.name == "ExitWorktree")
+            cwd_updates = []
+
+            def update_cwd(next_cwd):
+                cwd_updates.append(next_cwd)
+                session["cwd"] = next_cwd
+
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "updateCwd": update_cwd}
+            entered = run(enter.handler({"name": "slice-5"}, context))
+            entered_payload = json.loads(entered["content"])
+            self.assertEqual(entered_payload["cwd"], str(worktree))
+            self.assertEqual(entered_payload["workspace"]["mode"], "worktree")
+            self.assertEqual(entered_payload["execution"]["id"], "workspace_slice_5:enter")
+            self.assertEqual(entered["meta"]["execution"]["metadata"]["worktree_path"], str(worktree))
+            self.assertEqual(session["cwd"], str(worktree))
+            self.assertEqual(session["metadata"]["originalCwd"], str(workspace))
+            self.assertEqual(session["metadata"]["worktreePath"], str(worktree))
+            self.assertEqual(session["metadata"]["workspaceMode"], "worktree")
+
+            exited = run(exit_tool.handler({}, context))
+            exited_payload = json.loads(exited["content"])
+            self.assertEqual(exited_payload["cwd"], str(workspace))
+            self.assertEqual(exited_payload["workspace"]["mode"], "repo")
+            self.assertEqual(exited_payload["execution"]["id"], "workspace:exit")
+            self.assertEqual(exited["meta"]["execution"]["title"], "Returned to workspace workspace")
+            self.assertEqual(session["cwd"], str(workspace))
+            self.assertEqual(session["metadata"]["worktreePath"], str(worktree))
+            self.assertEqual(session["metadata"]["workspaceMode"], "repo")
+            self.assertEqual(cwd_updates, [str(worktree), str(workspace)])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_workspace_snapshot_detects_worktree_mode_from_metadata(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            worktree = Path(root.name) / "workspace-slice-5"
+            worktree.mkdir()
+            snapshot = run(core.captureWorkspaceSnapshot(str(worktree), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
+            self.assertEqual(snapshot["mode"], "worktree")
+            self.assertEqual(snapshot["worktreePath"], str(worktree))
+            self.assertEqual(snapshot["workspaceId"], str(worktree).replace("/", "_").replace("-", "_").strip("_").lower())
+
+            exited = run(core.captureWorkspaceSnapshot(str(workspace), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
+            self.assertEqual(exited["mode"], "directory")
+            self.assertEqual(exited["worktreePath"], str(worktree))
+        finally:
+            self.restore_home(root, previous)
+
     def test_notebook_edit_replace_insert_delete(self):
         root, home, workspace, previous = self.temp_context()
         try:

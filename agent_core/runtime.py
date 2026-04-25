@@ -6,6 +6,7 @@ from .daemon import ensureTaskSupervisorDaemon
 from .mcp import createMcpRuntime
 from .runtime_state import createRuntimeStateStore
 from .tools import createBuiltinTools
+from .workspace import createWorkspaceController
 
 
 async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -40,7 +41,10 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     daemon = args.get("daemon")
     if daemon is None and args.get("daemonEnabled"):
         daemon = await ensureTaskSupervisorDaemon({"cwd": cwd})
-    tool_options = {**args, "mcpRuntime": mcp_runtime}
+    workspace_controller = args.get("workspaceController")
+    if workspace_controller is None and args.get("session"):
+        workspace_controller = createWorkspaceController({"session": args["session"], "config": config})
+    tool_options = {**args, "mcpRuntime": mcp_runtime, "workspaceController": workspace_controller}
     tools = createBuiltinTools(tool_options)
     if mcp_runtime:
         tools.extend(mcp_runtime["createToolDefinitions"]())
