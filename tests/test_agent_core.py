@@ -745,6 +745,95 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_tool_permission_modes_for_edits_and_interactive_switch(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
+
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            with self.assertRaises(PermissionError):
+                run(write.handler({"file_path": str(workspace / "blocked.txt"), "content": "blocked"}, context))
+
+            session["permissionMode"] = "plan"
+            config["permissionMode"] = "plan"
+            with self.assertRaises(PermissionError) as plan_ctx:
+                run(write.handler({"file_path": str(workspace / "plan.txt"), "content": "blocked"}, context))
+            self.assertIn("plan mode", str(plan_ctx.exception))
+
+            session["permissionMode"] = "acceptEdits"
+            config["permissionMode"] = "acceptEdits"
+            run(write.handler({"file_path": str(workspace / "accepted.txt"), "content": "ok"}, context))
+            self.assertEqual((workspace / "accepted.txt").read_text(), "ok")
+
+            events = []
+            persisted = {"count": 0}
+            session["permissionMode"] = "default"
+            config["permissionMode"] = "default"
+            interactive_context = {
+                **context,
+                "interactive": True,
+                "askQuestion": lambda _prompt, options=None: "Switch to acceptEdits",
+                "outputJson": lambda event, data: events.append((event, data)),
+                "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1),
+            }
+            run(write.handler({"file_path": str(workspace / "switched.txt"), "content": "yes"}, interactive_context))
+            self.assertEqual(session["permissionMode"], "acceptEdits")
+            self.assertEqual(config["permissionMode"], "acceptEdits")
+            self.assertEqual(persisted["count"], 1)
+            self.assertTrue(any(event == "permission.requested" for event, _ in events))
+            self.assertTrue(any(data.get("source") == "prompt-switch" for event, data in events if event == "permission.decided"))
+            self.assertEqual((workspace / "switched.txt").read_text(), "yes")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_auto_mode_shell_policy_allows_and_denies_commands(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "auto"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
+            run(core.saveAutoMode(str(workspace), {"allow": ["echo"], "deny": [sys.executable], "environment": {}}))
+            bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+            events = []
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+
+            allowed = run(bash.handler({"command": "echo auto-ok"}, context))
+            allowed_payload = json.loads(allowed["content"])
+            self.assertEqual(allowed_payload["exitCode"], 0)
+            self.assertIn("auto-ok", allowed_payload["stdout"])
+            self.assertTrue(any(data.get("source") == "auto-mode" and data.get("decision") == "allow" for event, data in events if event == "permission.decided"))
+
+            with self.assertRaises(PermissionError) as deny_ctx:
+                run(bash.handler({"command": f"{shlex.quote(sys.executable)} -c {shlex.quote('print(1)')}"}, context))
+            self.assertIn("deny policy", str(deny_ctx.exception))
+            self.assertTrue(any(data.get("source") == "auto-mode" and data.get("decision") == "deny" for event, data in events if event == "permission.decided"))
+
+            with self.assertRaises(PermissionError) as unknown_ctx:
+                run(bash.handler({"command": "uname -a"}, context))
+            self.assertIn("not in the allow policy", str(unknown_ctx.exception))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_child_session_inherits_interactive_parent_permission_mode(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            child.setdefault("metadata", {})["parentSessionId"] = parent["id"]
+            run(core.saveSession(parent))
+            write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
+            persisted = {"count": 0}
+            context = {"session": child, "config": config, "interactive": True, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
+            run(write.handler({"file_path": str(workspace / "inherited.txt"), "content": "ok"}, context))
+            self.assertEqual(child["permissionMode"], "bypassPermissions")
+            self.assertEqual(config["permissionMode"], "bypassPermissions")
+            self.assertEqual(persisted["count"], 1)
+            self.assertEqual((workspace / "inherited.txt").read_text(), "ok")
+        finally:
+            self.restore_home(root, previous)
+
     def test_notebook_edit_replace_insert_delete(self):
         root, home, workspace, previous = self.temp_context()
         try:
