@@ -13,6 +13,7 @@ from .config import (
     resolveConfig,
     resolveFallbackProviderProfileName,
 )
+from .compaction import runCompaction, shouldAutoCompact
 from .continuation import buildContinuationContext
 from .provider_errors import fallbackEligibleProviderFailure, isProviderRequestError
 from .providers.anthropic import sendAnthropicMessagesRequest
@@ -84,20 +85,55 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     usage_totals["turns"] += 1
 
     while True:
-        request_context = await buildContinuationContext({"session": session, "config": config, "prompt": prompt})
-        system = _apply_plan_mode_overlay(base_system_prompt, session)
-        if request_context.get("systemContext"):
-            system = f"{system}\n\n{request_context['systemContext']}"
-        request = {
-            "model": active_model,
-            "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
-            "system": system,
-            "messages": request_context["messages"],
-            "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
-        }
-        measurement = await measureRequestInputTokens({"config": config, "request": request, "session": session})
-        recordPreflightTokenMeasurement(session, measurement)
-        _safe_emit(runtime, "provider.input_tokens", {"session_id": session["id"], "model": request["model"], "provider": config["provider"], "input_tokens": measurement["inputTokens"], "source": measurement["source"]})
+        request = None
+        measurement = None
+        request_context = None
+        for _compaction_attempt in range(4):
+            request_context = await buildContinuationContext({"session": session, "config": config, "prompt": prompt})
+            system = _apply_plan_mode_overlay(base_system_prompt, session)
+            if request_context.get("systemContext"):
+                system = f"{system}\n\n{request_context['systemContext']}"
+            request = {
+                "model": active_model,
+                "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
+                "system": system,
+                "messages": request_context["messages"],
+                "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
+            }
+            measurement = await measureRequestInputTokens({"config": config, "request": request, "session": session, "abortSignal": runtime.get("abortSignal")})
+            compacted = await maybeAutoCompactSession(
+                {
+                    "session": session,
+                    "config": config,
+                    "runtime": runtime,
+                    "currentInputTokens": measurement["inputTokens"],
+                    "currentInputTokensSource": measurement.get("source"),
+                }
+            )
+            if compacted:
+                continue
+            recordPreflightTokenMeasurement(session, measurement)
+            _safe_emit(
+                runtime,
+                "provider.input_tokens",
+                {
+                    "session_id": session["id"],
+                    "model": request["model"],
+                    "provider": config["provider"],
+                    "input_tokens": measurement["inputTokens"],
+                    "source": measurement["source"],
+                    "base_input_tokens": measurement.get("baseInputTokens"),
+                    "safety_margin_tokens": measurement.get("safetyMarginTokens"),
+                    "continuity_pressure": request_context.get("pressure") if request_context else None,
+                    "continuity_relief": request_context.get("relief") if request_context else None,
+                    "retrieved_memory_count": len(request_context.get("retrievedMemory", {}).get("records", [])) if request_context else 0,
+                    "retrieved_memory_tokens": request_context.get("retrievedMemory", {}).get("tokenEstimate") if request_context else None,
+                },
+            )
+            await persistSession(session, config)
+            break
+        if request is None:
+            raise RuntimeError("Unable to prepare provider request.")
 
         try:
             response = await maybe_await(provider["send"](request))
@@ -285,6 +321,134 @@ def _resolve_pricing(model: str):
 
 def _round_usd(value: float) -> float:
     return round(value, 6)
+
+
+async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None:
+    session = args["session"]
+    config = args["config"]
+    runtime = args["runtime"]
+    current_input_tokens = args.get("currentInputTokens")
+    current_input_tokens_source = args.get("currentInputTokensSource")
+    decision = shouldAutoCompact(session, current_input_tokens)
+    if not decision.get("shouldCompact") or not decision.get("trigger"):
+        return None
+
+    _safe_emit(
+        runtime,
+        "compaction.started",
+        {
+            "session_id": session["id"],
+            "trigger": decision["trigger"],
+            "current_token_estimate": decision["currentTokenEstimate"],
+            "current_token_source": current_input_tokens_source,
+        },
+    )
+
+    try:
+        outcome = await runCompaction({"session": session, "config": config, "trigger": decision["trigger"]})
+    except Exception as error:
+        provider_failure = error.record if isProviderRequestError(error) else None
+        normalized_error = provider_failure.get("message") if provider_failure else str(error)
+        _safe_emit(
+            runtime,
+            "compaction.failed",
+            {
+                "session_id": session["id"],
+                "trigger": decision["trigger"],
+                "current_token_estimate": decision["currentTokenEstimate"],
+                "current_token_source": current_input_tokens_source,
+                "error": normalized_error,
+                "provider": (provider_failure or {}).get("provider"),
+                "provider_label": (provider_failure or {}).get("providerLabel"),
+                "category": (provider_failure or {}).get("category"),
+                "phase": (provider_failure or {}).get("phase"),
+                "retryable": (provider_failure or {}).get("retryable"),
+                "attempt": (provider_failure or {}).get("attempt"),
+                "status": (provider_failure or {}).get("status"),
+                "code": (provider_failure or {}).get("code"),
+                "error_type": (provider_failure or {}).get("errorType"),
+                "raw_error": (provider_failure or {}).get("rawMessage"),
+            },
+        )
+        if provider_failure:
+            await persistProviderFailure(session, config, provider_failure)
+        if decision["trigger"] == "auto_soft_limit":
+            return None
+        raise
+
+    if not outcome or outcome.get("status") == "skipped":
+        _safe_emit(
+            runtime,
+            "compaction.skipped",
+            {
+                "session_id": session["id"],
+                "trigger": decision["trigger"],
+                "current_token_estimate": decision["currentTokenEstimate"],
+                "current_token_source": current_input_tokens_source,
+                "reason": (outcome or {}).get("reason"),
+                "detail": (outcome or {}).get("detail"),
+                "previous_cutoff": (outcome or {}).get("previousCutoff"),
+                "candidate_cutoff": (outcome or {}).get("candidateCutoff"),
+                "quality_score": (outcome or {}).get("qualityScore"),
+                "quality_classification": (outcome or {}).get("qualityClassification"),
+            },
+        )
+        return None
+
+    result = outcome
+    metadata = session.setdefault("metadata", {})
+    metadata["runtimeRestore"] = {
+        **(
+            metadata.get("runtimeRestore")
+            or {
+                "savedAt": _now(),
+                "activeTasks": [],
+                "restoredTaskCount": len(metadata.get("taskIds") or []),
+            }
+        ),
+        "savedAt": _now(),
+        "lastCompactionMode": "full_checkpoint_compaction",
+        "lastContextReliefMode": "full_checkpoint_compaction",
+        "lastContextReliefPressureLevel": "critical",
+        "lastContextReliefReactiveAttempt": None,
+        "lastContextReliefDetail": "full checkpoint compaction replaced older context with working-context artifacts",
+        "lastContextReliefReinjectionSummary": "working context, decisions, todos, and recent raw tail were preserved after full checkpoint compaction",
+    }
+    if metadata.get("compactionState"):
+        metadata["compactionState"]["lastContextReliefMode"] = "full_checkpoint_compaction"
+        metadata["compactionState"]["lastReliefModes"] = ["full_checkpoint_compaction"]
+        metadata["compactionState"]["lastContextReliefPressureLevel"] = "critical"
+        metadata["compactionState"]["lastReliefReactiveAttempt"] = None
+        metadata["compactionState"]["lastReliefDetail"] = "full checkpoint compaction replaced older context with working-context artifacts"
+        metadata["compactionState"]["lastReinjectionSummary"] = "working context, decisions, todos, and recent raw tail were preserved after full checkpoint compaction"
+    _safe_emit(
+        runtime,
+        "compaction.completed",
+        {
+            "session_id": session["id"],
+            "generation": result.get("generation"),
+            "trigger": result.get("trigger"),
+            "compacted_through_message_index": result.get("compactedThroughMessageIndex"),
+            "compacted_message_count": result.get("compactedMessageCount"),
+            "recent_message_count": result.get("recentMessageCount"),
+            "raw_token_estimate": result.get("rawTokenEstimate"),
+            "working_context_token_estimate": result.get("workingContextTokenEstimate"),
+            "working_context_token_source": (result.get("workingContextTokenMeasurement") or {}).get("source") if result.get("workingContextTokenMeasurement") else None,
+            "quality_classification": result.get("qualityClassification"),
+            "compaction_provider": (result.get("compactionModel") or {}).get("provider"),
+            "compaction_model": (result.get("compactionModel") or {}).get("model"),
+            "verification_provider": (result.get("verificationModel") or {}).get("provider"),
+            "verification_model": (result.get("verificationModel") or {}).get("model"),
+            "verification_verdict": (result.get("verification") or {}).get("verdict"),
+            "verification_confidence": (result.get("verification") or {}).get("confidence"),
+            "summary_path": (result.get("artifacts") or {}).get("summary"),
+            "state_path": (result.get("artifacts") or {}).get("state"),
+            "working_context_path": (result.get("artifacts") or {}).get("workingContext"),
+            "checkpoint_path": (result.get("artifacts") or {}).get("checkpoint"),
+        },
+    )
+    await persistSession(session, config)
+    return result
 
 
 def _safe_emit(runtime: dict[str, Any], event: str, data: dict[str, Any]) -> None:

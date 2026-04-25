@@ -13,6 +13,8 @@ from .storage import loadCodexAuthToken
 FIXED_COMPACTION_PROVIDER = "openai"
 FIXED_COMPACTION_MODEL = "gpt-5.3-codex-spark"
 FIXED_COMPACTION_EFFORT = "high"
+COMPACTION_SYNTHESIS_TIMEOUT_MS = 45_000
+COMPACTION_VERIFICATION_TIMEOUT_MS = 30_000
 
 
 class CompactionModelClient:
@@ -35,20 +37,32 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
         if model["provider"] == "openai":
             transport = await _resolve_compaction_openai_transport(config, model)
             sender = options.get("openAiRequestSender") or sendOpenAiRequest
-            response = await sender(
-                {
-                    "token": transport["token"],
-                    "baseUrl": transport.get("baseUrl"),
-                    "headers": transport.get("headers"),
-                    "mode": transport["mode"],
-                    "request": {"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []},
-                    "runtime": {"abortSignal": args.get("abortSignal")},
-                }
+            response = await _run_compaction_request_with_timeout(
+                provider="openai",
+                providerLabel=getOpenAiProviderLabel(transport["mode"], transport.get("baseUrl")),
+                attempt=1,
+                timeoutMs=COMPACTION_SYNTHESIS_TIMEOUT_MS if model.get("purpose") == "synthesis" else COMPACTION_VERIFICATION_TIMEOUT_MS,
+                run=lambda: sender(
+                    {
+                        "token": transport["token"],
+                        "baseUrl": transport.get("baseUrl"),
+                        "headers": transport.get("headers"),
+                        "mode": transport["mode"],
+                        "request": {"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []},
+                        "runtime": {"abortSignal": args.get("abortSignal")},
+                    }
+                ),
             )
             return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
         if not config.get("authToken") and not config.get("apiKey"):
             raise RuntimeError("Anthropic credential is required for Anthropic-backed compaction.")
-        response = await sendAnthropicMessagesRequest(config=config, request={"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime={"abortSignal": args.get("abortSignal")})
+        response = await _run_compaction_request_with_timeout(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            attempt=1,
+            timeoutMs=COMPACTION_SYNTHESIS_TIMEOUT_MS if model.get("purpose") == "synthesis" else COMPACTION_VERIFICATION_TIMEOUT_MS,
+            run=lambda: sendAnthropicMessagesRequest(config=config, request={"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime={"abortSignal": args.get("abortSignal")}),
+        )
         return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
 
     return CompactionModelClient(complete)
@@ -94,3 +108,24 @@ async def _resolve_codex_compaction_token(config: dict[str, Any]) -> str | None:
 
 def _extract_text(blocks: list[dict[str, Any]]) -> str:
     return "".join(block.get("text", "") for block in blocks if block.get("type") == "text")
+
+
+async def _run_compaction_request_with_timeout(provider: str, providerLabel: str, attempt: int, timeoutMs: int, run) -> Any:
+    try:
+        return await asyncio.wait_for(run(), timeout=timeoutMs / 1000)
+    except asyncio.TimeoutError:
+        raise createProviderRequestError(
+            createProviderFailureRecord(
+                {
+                    "provider": provider,
+                    "providerLabel": providerLabel,
+                    "phase": "response_complete",
+                    "category": "timeout",
+                    "retryable": True,
+                    "attempt": attempt,
+                    "hadAssistantOutput": False,
+                    "hadToolUse": False,
+                    "rawMessage": f"Compaction request timed out after {timeoutMs}ms.",
+                }
+            )
+        )

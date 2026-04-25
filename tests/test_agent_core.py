@@ -5,6 +5,7 @@ import http.server
 import json
 import os
 import queue
+import re
 import shlex
 import subprocess
 import sys
@@ -587,6 +588,19 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_compaction_model_client_timeout_uses_provider_failure(self):
+        import agent_core.compaction_models as compaction_models
+
+        async def slow_request():
+            await asyncio.sleep(0.05)
+            return {}
+
+        with self.assertRaises(core.ProviderRequestError) as raised:
+            run(compaction_models._run_compaction_request_with_timeout(provider="openai", providerLabel="OpenAI", attempt=1, timeoutMs=1, run=slow_request))
+        self.assertEqual(raised.exception.record["category"], "timeout")
+        self.assertTrue(raised.exception.record["retryable"])
+        self.assertEqual(raised.exception.record["phase"], "response_complete")
+
     def test_compaction_checkpoint_v2_artifacts_memory_and_context_bridge(self):
         root, home, workspace, previous = self.temp_context()
 
@@ -741,6 +755,167 @@ class AgentCoreTests(unittest.TestCase):
         evidence = core.buildCompactionEvidence({"sourceMessages": messages[2:4], "sourceStart": 2, "cwd": "/tmp", "tokenBudget": 10_000})
         self.assertIn("assistant tool_use Read", evidence["transcript"])
         self.assertIn("user tool_result Read", evidence["transcript"])
+        malformed = core.buildCompactionEvidence({"sourceMessages": [{"role": "assistant", "content": {"unexpected": True}}], "sourceStart": 0, "cwd": "/tmp", "tokenBudget": 10_000})
+        self.assertEqual(malformed["entryCount"], 0)
+        self.assertEqual(malformed["transcript"], "")
+        self.assertEqual(core.parseMaybeJson('"scalar"'), '"scalar"')
+        self.assertEqual(core.parseMaybeJson('{"ok":true}'), {"ok": True})
+
+    def test_compaction_fallback_retry_matches_provider_failure_policy(self):
+        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+        source_messages = [{"role": "user", "content": "compact this"}]
+
+        class FatalClient:
+            def __init__(self):
+                self.calls = 0
+
+            async def complete(self, _args):
+                self.calls += 1
+                raise RuntimeError("fatal local parser error")
+
+        fatal = FatalClient()
+        with self.assertRaises(RuntimeError):
+            run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": fatal, "previousWorkingContext": None, "latestPlan": None, "sourceMessages": source_messages, "sourceStart": 0}))
+        self.assertEqual(fatal.calls, 1)
+
+        class ContextLimitClient:
+            def __init__(self):
+                self.calls = 0
+
+            async def complete(self, args):
+                self.calls += 1
+                if self.calls == 1:
+                    raise core.createProviderRequestError(
+                        core.createProviderFailureRecord(
+                            {
+                                "provider": "openai",
+                                "providerLabel": "OpenAI",
+                                "phase": "request",
+                                "category": "client_request",
+                                "retryable": False,
+                                "attempt": 1,
+                                "hadAssistantOutput": False,
+                                "hadToolUse": False,
+                                "rawMessage": "input token context_length exceeded",
+                            }
+                        )
+                    )
+                payload = {
+                    "shouldCheckpoint": True,
+                    "quality": {"classification": "usable", "reason": "ok after smaller budget"},
+                    "workingContext": {
+                        "project": {"description": "Python port", "facts": None, "keyFiles": []},
+                        "goals": {"active": ["Continue"], "recentRequests": [], "constraints": [], "preferences": []},
+                        "currentState": {"completed": [], "inProgress": [], "blocked": []},
+                        "decisions": [],
+                        "discoveries": [],
+                        "activity": {"commands": [], "searches": [], "web": [], "failures": []},
+                        "nextSteps": [],
+                        "criticalContext": [],
+                    },
+                }
+                return {"text": json.dumps(payload), "usage": {}, "model": args["model"]}
+
+        context_limit = ContextLimitClient()
+        result = run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": context_limit, "previousWorkingContext": None, "latestPlan": None, "sourceMessages": source_messages, "sourceStart": 0}))
+        self.assertEqual(result["qualityClassification"], "usable")
+        self.assertEqual(context_limit.calls, 2)
+
+    def test_durable_memory_matches_compaction_record_policy(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            memory_file = workspace / ".tess" / "project" / "memory.md"
+            memory_file.parent.mkdir(parents=True)
+            memory_file.write_text("Prefer focused parity tests")
+            session = core.createEmptySession(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+            working = {
+                "project": {"description": "Python port of agent-core", "facts": {"evidence": ["agent_core/compaction.py"]}, "keyFiles": [{"path": "agent_core/compaction.py"}]},
+                "goals": {"active": ["Complete Slice 4"], "constraints": ["Match TypeScript behavior"], "preferences": ["Detailed commits"]},
+                "decisions": ["Use fixed Codex Spark compaction model selection"],
+                "discoveries": ["Checkpoint-v2 needs verifier repair"],
+                "criticalContext": ["Compaction artifacts drive future prompt context"],
+            }
+
+            first = run(core.updateDurableMemoryFromWorkingContext(session, working))
+            second = run(core.updateDurableMemoryFromWorkingContext(session, working))
+
+            self.assertEqual(first[0]["id"], "manual-project-memory")
+            self.assertEqual(first[0]["kind"], "user_preference")
+            workflow = next(record for record in second if record.get("kind") == "workflow")
+            expected_id = core.durableMemoryId("workflow", "Use fixed Codex Spark compaction model selection")
+            self.assertEqual(workflow["id"], expected_id)
+            self.assertEqual(sum(1 for record in second if record["id"] == expected_id), 1)
+            retrieved = run(core.retrieveRelevantDurableMemory({"session": session, "prompt": "Codex Spark compaction"}))
+            prompt = core.renderRetrievedMemoryPrompt(retrieved)
+            self.assertIn("<retrieved_memory>", prompt)
+            self.assertIn("[workflow | compaction | agent_core/compaction.py]", prompt)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_agent_prompt_auto_compacts_and_rebuilds_request_before_provider_send(self):
+        import agent_core.agent as agent_module
+
+        root, home, workspace, previous = self.temp_context()
+        original_measure = agent_module.measureRequestInputTokens
+        original_run_compaction = agent_module.runCompaction
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["messages"] = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"old message {index}"} for index in range(30)]
+            measure_calls = {"count": 0}
+            compaction_calls = []
+            provider_requests = []
+            events = []
+
+            async def fake_measure(_args):
+                measure_calls["count"] += 1
+                return {"inputTokens": 181_000 if measure_calls["count"] == 1 else 1_000, "source": "fake"}
+
+            async def fake_run_compaction(args):
+                compaction_calls.append(args)
+                args["session"].setdefault("metadata", {})["compactionState"] = {
+                    "compactedThroughMessageIndex": 11,
+                    "compactedContextTokenEstimate": 200,
+                    "workingContextTokenEstimate": 1_000,
+                    "archiveMessageCount": len(args["session"].get("messages", [])),
+                    "artifacts": {},
+                }
+                return {
+                    "status": "completed",
+                    "generation": 1,
+                    "trigger": args["trigger"],
+                    "compactedThroughMessageIndex": 11,
+                    "compactedMessageCount": 11,
+                    "recentMessageCount": len(args["session"].get("messages", [])) - 11,
+                    "rawTokenEstimate": 181_000,
+                    "workingContextTokenEstimate": 1_000,
+                    "qualityClassification": "usable",
+                    "compactionModel": {"provider": "openai", "model": "gpt-5.3-codex-spark"},
+                    "verificationModel": {"provider": "openai", "model": "gpt-5.3-codex-spark"},
+                    "verification": {"verdict": "accept", "confidence": "high", "reason": "ok", "issues": [], "notes": []},
+                    "artifacts": {"summary": "summary.md", "state": "state.json", "workingContext": "working-context.json", "checkpoint": "checkpoint.json"},
+                }
+
+            async def send(request):
+                provider_requests.append(request)
+                return {"model": request["model"], "content": [{"type": "text", "text": "done"}], "usage": {}, "stopReason": "end"}
+
+            agent_module.measureRequestInputTokens = fake_measure
+            agent_module.runCompaction = fake_run_compaction
+            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}, prompt="continue", providerOverride={"send": send}))
+
+            self.assertEqual(result["text"], "done")
+            self.assertEqual(len(compaction_calls), 1)
+            self.assertEqual(compaction_calls[0]["trigger"], "auto_hard_limit")
+            self.assertEqual(measure_calls["count"], 2)
+            self.assertEqual(provider_requests[0]["messages"][0]["content"], core.CONTINUATION_BRIDGE_MESSAGE)
+            self.assertTrue(any(event == "compaction.completed" for event, _ in events))
+            self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 1_000 for event, data in events))
+            self.assertEqual(session["metadata"]["runtimeRestore"]["lastCompactionMode"], "full_checkpoint_compaction")
+        finally:
+            agent_module.measureRequestInputTokens = original_measure
+            agent_module.runCompaction = original_run_compaction
+            self.restore_home(root, previous)
 
     def test_background_task_supervisor_and_task_output(self):
         root, home, workspace, previous = self.temp_context()
@@ -1222,7 +1397,7 @@ class AgentCoreTests(unittest.TestCase):
             snapshot = run(core.captureWorkspaceSnapshot(str(worktree), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
             self.assertEqual(snapshot["mode"], "worktree")
             self.assertEqual(snapshot["worktreePath"], str(worktree))
-            self.assertEqual(snapshot["workspaceId"], str(worktree).replace("/", "_").replace("-", "_").strip("_").lower())
+            self.assertEqual(snapshot["workspaceId"], re.sub(r"[^a-zA-Z0-9]+", "_", str(worktree)).strip("_").lower())
 
             exited = run(core.captureWorkspaceSnapshot(str(workspace), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
             self.assertEqual(exited["mode"], "directory")

@@ -9,6 +9,7 @@ from typing import Any
 from ._utils import now_iso
 from .compaction_models import createDefaultCompactionModelClient, resolveCompactionModelCandidates
 from .durable_memory import updateDurableMemoryFromWorkingContext
+from .provider_errors import fallbackEligibleProviderFailure, isProviderRequestError
 from .storage import (
     compactionCheckpointPath,
     compactionManifestPath,
@@ -69,7 +70,10 @@ Output rules:
 JSON shape:
 {
   "shouldCheckpoint": true,
-  "quality": {"classification": "thin|usable|rich", "reason": "short explanation"},
+  "quality": {
+    "classification": "thin|usable|rich",
+    "reason": "short explanation"
+  },
   "workingContext": {
     "project": {
       "description": "string or null",
@@ -80,13 +84,29 @@ JSON shape:
         "packageManager": "string or null",
         "evidence": ["..."]
       },
-      "keyFiles": [{"path": "repo-relative-or-absolute-path", "role": "read|modified", "note": "optional short note"}]
+      "keyFiles": [
+        { "path": "repo-relative-or-absolute-path", "role": "read|modified", "note": "optional short note" }
+      ]
     },
-    "goals": {"active": ["..."], "recentRequests": ["..."], "constraints": ["..."], "preferences": ["..."]},
-    "currentState": {"completed": ["..."], "inProgress": ["..."], "blocked": ["..."]},
+    "goals": {
+      "active": ["..."],
+      "recentRequests": ["..."],
+      "constraints": ["..."],
+      "preferences": ["..."]
+    },
+    "currentState": {
+      "completed": ["..."],
+      "inProgress": ["..."],
+      "blocked": ["..."]
+    },
     "decisions": ["..."],
     "discoveries": ["..."],
-    "activity": {"commands": ["..."], "searches": ["..."], "web": ["..."], "failures": ["..."]},
+    "activity": {
+      "commands": ["..."],
+      "searches": ["..."],
+      "web": ["..."],
+      "failures": ["..."]
+    },
     "nextSteps": ["..."],
     "criticalContext": ["..."]
   }
@@ -112,7 +132,10 @@ JSON shape:
   "issues": ["..."],
   "notes": ["..."],
   "repairedCheckpoint": {
-    "quality": {"classification": "thin|usable|rich", "reason": "short explanation"},
+    "quality": {
+      "classification": "thin|usable|rich",
+      "reason": "short explanation"
+    },
     "workingContext": {
       "project": {
         "description": "string or null",
@@ -123,13 +146,29 @@ JSON shape:
           "packageManager": "string or null",
           "evidence": ["..."]
         },
-        "keyFiles": [{"path": "repo-relative-or-absolute-path", "role": "read|modified", "note": "optional short note"}]
+        "keyFiles": [
+          { "path": "repo-relative-or-absolute-path", "role": "read|modified", "note": "optional short note" }
+        ]
       },
-      "goals": {"active": ["..."], "recentRequests": ["..."], "constraints": ["..."], "preferences": ["..."]},
-      "currentState": {"completed": ["..."], "inProgress": ["..."], "blocked": ["..."]},
+      "goals": {
+        "active": ["..."],
+        "recentRequests": ["..."],
+        "constraints": ["..."],
+        "preferences": ["..."]
+      },
+      "currentState": {
+        "completed": ["..."],
+        "inProgress": ["..."],
+        "blocked": ["..."]
+      },
       "decisions": ["..."],
       "discoveries": ["..."],
-      "activity": {"commands": ["..."], "searches": ["..."], "web": ["..."], "failures": ["..."]},
+      "activity": {
+        "commands": ["..."],
+        "searches": ["..."],
+        "web": ["..."],
+        "failures": ["..."]
+      },
       "nextSteps": ["..."],
       "criticalContext": ["..."]
     }
@@ -516,11 +555,13 @@ async def runModelBackedCompactionSynthesisWithFallback(args: dict[str, Any] | N
     candidates = resolveCompactionModelCandidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "synthesis"})
     attempts = buildCompactionAttemptStrategies(candidates)
     last_error: Exception | None = None
-    for attempt in attempts:
+    for index, attempt in enumerate(attempts):
         try:
             return await runModelBackedCompactionSynthesis({**args, "model": attempt["model"], "evidenceTokenBudget": attempt["evidenceTokenBudget"]})
         except Exception as exc:
             last_error = exc
+            if not shouldRetryCompactionAttempt(exc, index < len(attempts) - 1):
+                raise
     raise last_error or RuntimeError("Compaction synthesis failed.")
 
 
@@ -572,11 +613,13 @@ async def runCompactionCheckpointVerificationWithFallback(args: dict[str, Any] |
     candidates = resolveCompactionModelCandidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "verification"})
     attempts = buildCompactionAttemptStrategies(candidates)
     last_error: Exception | None = None
-    for attempt in attempts:
+    for index, attempt in enumerate(attempts):
         try:
             return await runCompactionCheckpointVerification({**args, "model": attempt["model"], "evidenceTokenBudget": attempt["evidenceTokenBudget"]})
         except Exception as exc:
             last_error = exc
+            if not shouldRetryCompactionAttempt(exc, index < len(attempts) - 1):
+                raise
     raise last_error or RuntimeError("Compaction verification failed.")
 
 
@@ -651,6 +694,7 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
                 "compactionEffort": model.get("effort"),
             },
             indent=2,
+            ensure_ascii=False,
         ),
         "",
         f"Compacted source range: messages {args['sourceStart']}-{max(args['sourceEnd'] - 1, args['sourceStart'])}",
@@ -662,13 +706,13 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
         f"Evidence truncated: {str(evidence['truncated']).lower()}",
         "",
         "Exact current todo snapshot:",
-        json.dumps(todo_snapshot, indent=2),
+        json.dumps(todo_snapshot, indent=2, ensure_ascii=False),
         "",
         "Latest saved plan state:",
-        json.dumps(args.get("latestPlan"), indent=2),
+        json.dumps(args.get("latestPlan"), indent=2, ensure_ascii=False),
         "",
         "Previous working context:",
-        json.dumps(args.get("previousWorkingContext"), indent=2),
+        json.dumps(args.get("previousWorkingContext"), indent=2, ensure_ascii=False),
         "",
         "Compacted transcript evidence:",
         evidence["transcript"],
@@ -707,6 +751,7 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
                 "repairAttempt": args.get("repairAttempt", 0),
             },
             indent=2,
+            ensure_ascii=False,
         ),
         "",
         f"Compacted source range: messages {args['sourceStart']}-{max(args['sourceEnd'] - 1, args['sourceStart'])}",
@@ -718,10 +763,10 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
         f"Evidence truncated: {str(evidence['truncated']).lower()}",
         "",
         "Latest saved plan state:",
-        json.dumps(args.get("latestPlan"), indent=2),
+        json.dumps(args.get("latestPlan"), indent=2, ensure_ascii=False),
         "",
         "Previous working context:",
-        json.dumps(args.get("previousWorkingContext"), indent=2),
+        json.dumps(args.get("previousWorkingContext"), indent=2, ensure_ascii=False),
         "",
         "Candidate checkpoint:",
         json.dumps(
@@ -730,6 +775,7 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
                 "workingContext": candidate.get("workingContext"),
             },
             indent=2,
+            ensure_ascii=False,
         ),
         "",
         "Compacted transcript evidence:",
@@ -996,7 +1042,7 @@ def buildEvidenceEntriesForMessage(message: dict[str, Any], messageIndex: int, t
     if isinstance(content, str):
         return [buildTextEvidenceEntry({"messageIndex": messageIndex, "role": role, "label": "user_message" if role == "user" else "assistant_text", "text": content})]
     if not isinstance(content, list):
-        return [buildTextEvidenceEntry({"messageIndex": messageIndex, "role": role, "label": "message", "text": json.dumps(content)})]
+        return []
 
     entries: list[dict[str, str]] = []
     text_blocks = "\n\n".join(str(block.get("text", "")) for block in content if block.get("type") == "text").strip()
@@ -1051,9 +1097,9 @@ def summarizeToolResultForCompaction(content: str, cwd: str, limit: int) -> str:
         preview = buildFilePreview(file_record["content"])
         parts = [
             f"file={file_path}",
-            f"start_line={file_record['startLine']}" if isinstance(file_record.get("startLine"), int) else None,
-            f"total_lines={file_record['totalLines']}" if isinstance(file_record.get("totalLines"), int) else None,
-            f"num_lines={file_record['numLines']}" if isinstance(file_record.get("numLines"), int) else None,
+            f"start_line={file_record['startLine']}" if isinstance(file_record.get("startLine"), (int, float)) and file_record.get("startLine") else None,
+            f"total_lines={file_record['totalLines']}" if isinstance(file_record.get("totalLines"), (int, float)) and file_record.get("totalLines") else None,
+            f"num_lines={file_record['numLines']}" if isinstance(file_record.get("numLines"), (int, float)) and file_record.get("numLines") else None,
             f"preview={preview}" if preview else None,
         ]
         return truncate("\n".join(part for part in parts if part), limit)
@@ -1062,7 +1108,7 @@ def summarizeToolResultForCompaction(content: str, cwd: str, limit: int) -> str:
         parts = [
             f"command={collapseWhitespace(record['command'])}" if isinstance(record.get("command"), str) else None,
             f"cwd={record['cwd']}" if isinstance(record.get("cwd"), str) else None,
-            f"exit_code={record['exitCode']}" if isinstance(record.get("exitCode"), int) else None,
+            f"exit_code={record['exitCode']}" if isinstance(record.get("exitCode"), (int, float)) and not isinstance(record.get("exitCode"), bool) else None,
             f"timed_out={record['timedOut']}" if isinstance(record.get("timedOut"), bool) else None,
             f"stdout={truncate(collapseWhitespace(record['stdout']), COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)}" if isinstance(record.get("stdout"), str) else None,
             f"stderr={truncate(collapseWhitespace(record['stderr']), COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)}" if isinstance(record.get("stderr"), str) else None,
@@ -1070,7 +1116,7 @@ def summarizeToolResultForCompaction(content: str, cwd: str, limit: int) -> str:
         return truncate("\n".join(part for part in parts if part), limit)
 
     if isinstance(record.get("matches"), list):
-        matches = [trimPathEvidence(str(value), cwd) for value in record["matches"][:COMPACTION_MATCH_PREVIEW_LIMIT]]
+        matches = [trimPathEvidence(value, cwd) for value in record["matches"] if isinstance(value, str)][:COMPACTION_MATCH_PREVIEW_LIMIT]
         parts = [
             f"type={record['type']}" if isinstance(record.get("type"), str) else None,
             f"pattern={record['pattern']}" if isinstance(record.get("pattern"), str) else None,
@@ -1090,7 +1136,7 @@ def compactStructuredRecord(record: dict[str, Any], cwd: str) -> dict[str, Any]:
         value = record.get(key)
         if isinstance(value, str):
             next_record[key] = trimPathEvidence(value, cwd) if "path" in key.lower() else truncate(value, 400)
-        elif isinstance(value, (int, bool)):
+        elif isinstance(value, (int, float, bool)):
             next_record[key] = value
     if isinstance(record.get("matches"), list):
         next_record["matches"] = record["matches"][:COMPACTION_MATCH_PREVIEW_LIMIT]
@@ -1101,7 +1147,7 @@ def compactStructuredRecord(record: dict[str, Any], cwd: str) -> dict[str, Any]:
 
 
 def buildFilePreview(content: str) -> str:
-    lines = content.splitlines()
+    lines = content.split("\n")
     if len(lines) <= COMPACTION_FILE_PREVIEW_LINES * 2:
         return truncate(collapseWhitespace(content), COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)
     head = " ".join(lines[:COMPACTION_FILE_PREVIEW_LINES]).strip()
@@ -1169,10 +1215,10 @@ def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, 
         index = fallback_index
 
     for cursor in range(index, 0, -1):
-        if cursor > previousCutoff and isSafeWorkingSetStart(messages, cursor):
+        if isSafeWorkingSetStart(messages, cursor):
             return cursor
     for cursor in range(fallback_index, 0, -1):
-        if cursor > previousCutoff and isSafeWorkingSetStart(messages, cursor):
+        if isSafeWorkingSetStart(messages, cursor):
             return cursor
     return None
 
@@ -1244,9 +1290,11 @@ async def resolveLatestPlan(session: dict[str, Any]) -> dict[str, Any] | None:
     content = _read_text(file_path) if file_path else ""
     if not current_plan_state and not latest_approval and not file_path:
         return None
+    request_id = (current_plan_state or {}).get("requestId") if isinstance(current_plan_state, dict) and "requestId" in current_plan_state else (latest_approval or {}).get("requestId")
+    status = (current_plan_state or {}).get("state") if isinstance(current_plan_state, dict) and current_plan_state.get("state") is not None else (latest_approval or {}).get("status")
     return {
-        "requestId": current_plan_state.get("requestId") if isinstance(current_plan_state, dict) else (latest_approval or {}).get("requestId"),
-        "status": current_plan_state.get("state") if isinstance(current_plan_state, dict) else (latest_approval or {}).get("status"),
+        "requestId": request_id,
+        "status": status,
         "filePath": file_path,
         "exists": bool(file_path and content),
         "content": content or None,
@@ -1446,17 +1494,37 @@ def coerceWorkingContextDocument(value: Any) -> dict[str, Any] | None:
     activity = asRecord(record.get("activity")) or {}
     plan = asRecord(record.get("plan"))
     compaction = asRecord(record.get("compaction"))
+    compaction_record = None
+    if compaction and compaction.get("provider") == "openai" and isinstance(compaction.get("model"), str):
+        compaction_record = {"provider": "openai", "model": compaction["model"]}
+        if isinstance(compaction.get("effort"), str):
+            compaction_record["effort"] = compaction["effort"]
+    source_ranges = []
+    if isinstance(record.get("sourceRanges"), list):
+        for entry in record["sourceRanges"]:
+            source = asRecord(entry)
+            if not source:
+                continue
+            source_ranges.append(
+                {
+                    "generation": source.get("generation") if isinstance(source.get("generation"), int) else 1,
+                    "start": source.get("start") if isinstance(source.get("start"), int) else 0,
+                    "end": source.get("end") if isinstance(source.get("end"), int) else 0,
+                    "messageCount": source.get("messageCount") if isinstance(source.get("messageCount"), int) else 0,
+                    "createdAt": source.get("createdAt") if isinstance(source.get("createdAt"), str) else now_iso(),
+                }
+            )
     return {
         "version": "v2",
         "sessionId": record["sessionId"],
         "generatedAt": record.get("generatedAt") if isinstance(record.get("generatedAt"), str) else now_iso(),
         "updatedAt": record.get("updatedAt") if isinstance(record.get("updatedAt"), str) else now_iso(),
         "generation": record.get("generation") if isinstance(record.get("generation"), int) else 1,
-        "compaction": compaction if compaction and isinstance(compaction.get("model"), str) else None,
-        "sourceRanges": [entry for entry in record.get("sourceRanges", []) if isinstance(entry, dict)] if isinstance(record.get("sourceRanges"), list) else [],
+        "compaction": compaction_record,
+        "sourceRanges": source_ranges,
         "session": {
             "cwd": session["cwd"],
-            "provider": session.get("provider") if isinstance(session.get("provider"), str) else "openai",
+            "provider": "openai" if session.get("provider") == "openai" else "anthropic",
             "model": session["model"],
             "effort": session.get("effort") if isinstance(session.get("effort"), str) else None,
             "permissionMode": session.get("permissionMode") if isinstance(session.get("permissionMode"), str) else "default",
@@ -1578,13 +1646,32 @@ def normalizeVerificationConfidence(value: Any) -> str:
     return value if value in {"low", "medium", "high"} else "medium"
 
 
+def shouldRetryCompactionAttempt(error: BaseException, hasMoreAttempts: bool) -> bool:
+    if not hasMoreAttempts:
+        return False
+    return fallbackEligibleProviderFailure(error) or isCompactionContextSizeFailure(error)
+
+
+def isCompactionContextSizeFailure(error: BaseException) -> bool:
+    if not isProviderRequestError(error):
+        return False
+    record = getattr(error, "record", {})
+    if record.get("category") not in {"client_request", "protocol"}:
+        return False
+    detail = f"{record.get('rawMessage') or ''} {record.get('rawBody') or ''} {error}".lower()
+    return bool(re.search(r"context|input token|prompt token|max token|too large|too long|context_length|request exceeds|input is too long", detail))
+
+
 def parseMaybeJson(value: Any) -> Any:
     if not isinstance(value, str):
         return value
+    trimmed = value.strip()
+    if not trimmed or (not trimmed.startswith("{") and not trimmed.startswith("[")):
+        return value
     try:
-        return json.loads(value)
+        return json.loads(trimmed)
     except Exception:
-        return None
+        return value
 
 
 def estimateMessageTokens(messages: list[dict[str, Any]]) -> int:
@@ -1593,7 +1680,7 @@ def estimateMessageTokens(messages: list[dict[str, Any]]) -> int:
 
 def estimateSingleMessageTokens(message: dict[str, Any]) -> int:
     content = message.get("content")
-    value = f"{message.get('role')}:{content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)}"
+    value = f"{message.get('role')}:{content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, separators=(',', ':'))}"
     return estimateTextTokens(value)
 
 
@@ -1624,7 +1711,7 @@ def collapseWhitespace(value: Any) -> str:
 def truncate(value: str, limit: int) -> str:
     if len(value) <= limit:
         return value
-    return value[: max(0, limit - 1)].rstrip() + "..."
+    return value[: max(0, limit - 1)].rstrip() + "…"
 
 
 def trimPathEvidence(filePath: str, cwd: str) -> str:
@@ -1685,7 +1772,7 @@ def appendRelevantFilesSection(lines: list[str], files: list[dict[str, Any]]) ->
         return
     lines.extend(["", "## Relevant Files", ""])
     for file_record in files:
-        note = f" - {file_record['note']}" if file_record.get("note") else ""
+        note = f" — {file_record['note']}" if file_record.get("note") else ""
         lines.append(f"- `{file_record.get('path')}`{note}")
 
 
