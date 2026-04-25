@@ -20,6 +20,7 @@ from types import SimpleNamespace
 import agent_core as core
 from agent_core import testing
 import agent_core.providers.anthropic as anthropic_module
+import agent_core.providers.openai as openai_module
 import agent_core.tools as tools_module
 
 
@@ -239,7 +240,7 @@ class AgentCoreTests(unittest.TestCase):
                 {
                     "token": "test-token",
                     "request": {"model": "gpt-5.4", "effort": "high", "system": "s", "messages": [{"role": "user", "content": "Write"}], "tools": []},
-                    "runtime": {"includePartialMessages": True, "emitEvent": lambda event, data: emitted.append({"event": event, "data": data})},
+                    "runtime": {"includePartialMessages": True, "streamProviderMessages": True, "emitEvent": lambda event, data: emitted.append({"event": event, "data": data})},
                     "maxAttempts": 1,
                     "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))),
                 }
@@ -249,6 +250,8 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(response["content"][1]["input"], {"path": "a.txt"})
         self.assertEqual(response["usage"], {"input_tokens": 42, "output_tokens": 7})
         self.assertTrue(any(item["event"] == "message.assistant.partial" for item in emitted))
+        self.assertTrue(any(item["event"] == "provider.request_started" and item["data"]["attempt"] == 1 for item in emitted))
+        self.assertTrue(any(item["event"] == "provider.stream_event" and item["data"]["stream_event"] == "chat.completion.chunk" for item in emitted))
 
     def test_openai_reasoning_and_base_url(self):
         response = run(
@@ -324,6 +327,12 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(normalized["content"][1], {"type": "tool_use", "id": "toolu_1", "name": "Read", "input": {"file_path": "a.txt"}})
         self.assertEqual(normalized["usage"], {"input_tokens": 10, "output_tokens": 3})
         self.assertTrue(any(event == "message.assistant.partial" for event, _ in emitted))
+        self.assertNotIn("stream", testing.buildAnthropicMessagesPayload({**request, "effort": None}))
+
+        with self.assertRaises(core.ProviderRequestError) as ctx:
+            testing.normalizeAnthropicSseResponse('event: error\ndata: {"type":"error","error":{"type":"rate_limit_error","message":"rate limit"}}', request)
+        self.assertEqual(ctx.exception.record["category"], "rate_limit")
+        self.assertTrue(ctx.exception.record["retryable"])
 
     def test_responses_auth_failure_and_base_url(self):
         async def create_error(_params):
@@ -345,6 +354,65 @@ class AgentCoreTests(unittest.TestCase):
 
         run(testing.sendOpenAiResponsesRequest({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "mode": "responses", "request": {"model": "m", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": response_factory}))
         self.assertEqual(captured["base"], "http://127.0.0.1:8000/v1")
+
+    def test_openai_retry_events_for_responses_and_chat(self):
+        original_delay = openai_module.providerRetryDelayMs
+        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        try:
+            response_attempts = {"count": 0}
+            response_events = []
+
+            async def create_response(_params):
+                response_attempts["count"] += 1
+                if response_attempts["count"] == 1:
+                    raise RuntimeError("socket hang up")
+                return AsyncChunks([{"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}]}}])
+
+            response = run(
+                testing.sendOpenAiResponsesRequest(
+                    {
+                        "token": "test",
+                        "mode": "responses",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"emitEvent": lambda event, data: response_events.append((event, data))},
+                        "maxAttempts": 2,
+                        "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_response)),
+                    }
+                )
+            )
+            self.assertEqual(response["content"], [{"type": "text", "text": "ok"}])
+            self.assertEqual(response_attempts["count"], 2)
+            self.assertEqual([data["attempt"] for event, data in response_events if event == "provider.request_started"], [1, 2])
+            self.assertTrue(any(event == "provider.retrying" and data["category"] == "transport" and data["next_attempt"] == 2 for event, data in response_events))
+            self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 and data["category"] == "transport" for event, data in response_events))
+
+            chat_attempts = {"count": 0}
+            chat_events = []
+
+            async def create_chat(_params):
+                chat_attempts["count"] += 1
+                if chat_attempts["count"] == 1:
+                    raise RuntimeError("ECONNRESET")
+                return AsyncChunks([{"choices": [{"delta": {"content": "chat-ok"}, "finish_reason": "stop"}]}])
+
+            chat_response = run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "test",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"streamProviderMessages": True, "emitEvent": lambda event, data: chat_events.append((event, data))},
+                        "maxAttempts": 2,
+                        "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_chat))),
+                    }
+                )
+            )
+            self.assertEqual(chat_response["content"], [{"type": "text", "text": "chat-ok"}])
+            self.assertEqual(chat_attempts["count"], 2)
+            self.assertTrue(any(event == "provider.retrying" and data["category"] == "transport" for event, data in chat_events))
+            self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in chat_events))
+            self.assertTrue(any(event == "provider.stream_event" and data["stream_event"] == "chat.completion.chunk" for event, data in chat_events))
+        finally:
+            openai_module.providerRetryDelayMs = original_delay
 
     def test_anthropic_count_tokens_measurement_and_fallback(self):
         root, home, workspace, previous = self.temp_context()
@@ -462,6 +530,83 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(ctx.exception.record["retryable"])
         finally:
             anthropic_module._send_anthropic_messages_sync = original_send
+
+    def test_anthropic_http_retry_and_non_retry_classification(self):
+        original_delay = anthropic_module.providerRetryDelayMs
+        anthropic_module.providerRetryDelayMs = lambda _attempt: 0
+        retry_calls = {"count": 0, "accept": None, "payload": None}
+
+        class RetryHandler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                retry_calls["count"] += 1
+                retry_calls["accept"] = self.headers.get("accept")
+                length = int(self.headers.get("content-length") or 0)
+                retry_calls["payload"] = json.loads(self.rfile.read(length).decode("utf-8"))
+                if retry_calls["count"] == 1:
+                    body = json.dumps({"error": {"type": "overloaded_error", "message": "temporary"}}).encode("utf-8")
+                    self.send_response(500)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                body = json.dumps({"model": "claude-sonnet-4-6", "content": [{"type": "text", "text": "ok"}], "usage": {"input_tokens": 5, "output_tokens": 1}, "stop_reason": "end_turn"}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        retry_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), RetryHandler)
+        retry_thread = threading.Thread(target=retry_server.serve_forever, daemon=True)
+        retry_thread.start()
+        try:
+            events = []
+            request = {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "hello"}], "tools": []}
+            config = {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{retry_server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}}
+            response = run(core.sendAnthropicMessagesRequest({"config": config, "request": request, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}, "maxAttempts": 2}))
+            self.assertEqual(response["content"], [{"type": "text", "text": "ok"}])
+            self.assertEqual(retry_calls["count"], 2)
+            self.assertEqual(retry_calls["accept"], "application/json")
+            self.assertNotIn("stream", retry_calls["payload"])
+            self.assertTrue(any(event == "provider.retrying" and data["category"] == "server" for event, data in events))
+            self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in events))
+        finally:
+            retry_server.shutdown()
+            retry_server.server_close()
+
+        auth_calls = {"count": 0}
+
+        class AuthHandler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                auth_calls["count"] += 1
+                body = json.dumps({"error": {"type": "authentication_error", "message": "bad key"}}).encode("utf-8")
+                self.send_response(401)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        auth_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), AuthHandler)
+        auth_thread = threading.Thread(target=auth_server.serve_forever, daemon=True)
+        auth_thread.start()
+        try:
+            request = {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "hello"}], "tools": []}
+            config = {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{auth_server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}}
+            with self.assertRaises(core.ProviderRequestError) as auth_ctx:
+                run(core.sendAnthropicMessagesRequest({"config": config, "request": request, "runtime": {}, "maxAttempts": 2}))
+            self.assertEqual(auth_ctx.exception.record["category"], "auth")
+            self.assertEqual(auth_calls["count"], 1)
+        finally:
+            auth_server.shutdown()
+            auth_server.server_close()
+            anthropic_module.providerRetryDelayMs = original_delay
 
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:

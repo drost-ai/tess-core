@@ -49,6 +49,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         runtime = args.get("runtime") or {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
+        _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
         try:
             client = _create_openai_client(args, base_url)
             responses = get_value(client, "responses")
@@ -200,6 +201,8 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                             streamEventType=typ,
                         )
                     )
+            if attempt > 1:
+                _emit(runtime, "provider.recovered", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
             return {"content": blocks, "usage": usage, "model": args["request"]["model"], "stopReason": stop_reason}
         except Exception as exc:
             failure = normalizeUnknownProviderFailure(
@@ -213,7 +216,9 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
             )
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
-                await asyncio.sleep(providerRetryDelayMs(attempt) / 1000)
+                delay_ms = providerRetryDelayMs(attempt)
+                _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
+                await asyncio.sleep(delay_ms / 1000)
                 continue
             raise failure
     raise last_failure or RuntimeError("OpenAI request failed unexpectedly.")
@@ -239,6 +244,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         runtime = args.get("runtime") or {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
+        _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
         try:
             client = _create_openai_client(args, base_url)
             chat = get_value(client, "chat")
@@ -271,6 +277,8 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 except StopAsyncIteration:
                     break
                 phase = "stream_read"
+                if runtime.get("streamProviderMessages"):
+                    _emit(runtime, "provider.stream_event", {"stream_event": "chat.completion.chunk", "model": args["request"]["model"], "payload": chunk})
                 _apply_chat_completion_usage(usage, get_value(chunk, "usage"))
                 for choice in get_value(chunk, "choices", []) or []:
                     delta = get_value(choice, "delta", {}) or {}
@@ -301,6 +309,8 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     elif finish:
                         stop_reason = finish
             had_tool_use = _emit_pending_chat_tool_calls(blocks, pending_tool_calls, emitted_tool_ids, reasoning_content) or had_tool_use
+            if attempt > 1:
+                _emit(runtime, "provider.recovered", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
             return {"content": blocks, "usage": usage, "model": args["request"]["model"], "stopReason": stop_reason}
         except Exception as exc:
             failure = normalizeUnknownProviderFailure(
@@ -314,7 +324,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             )
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
-                await asyncio.sleep(providerRetryDelayMs(attempt) / 1000)
+                delay_ms = providerRetryDelayMs(attempt)
+                _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
+                await asyncio.sleep(delay_ms / 1000)
                 continue
             raise failure
     raise last_failure or RuntimeError("OpenAI Chat Completions request failed unexpectedly.")
