@@ -93,8 +93,63 @@ def createWorkspaceExecutionDescriptor(args: dict[str, Any] | None = None, **kwa
 
 
 def createPluginActivityDescriptors(plugins: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{"kind": "plugin", "status": "ok", "summary": plugin.get("manifest", {}).get("id", "plugin")} for plugin in plugins]
+    descriptors = []
+    for plugin in plugins:
+        plugin_id = plugin.get("id") or plugin.get("manifest", {}).get("id") or "plugin"
+        diagnostics = plugin.get("diagnostics") if isinstance(plugin.get("diagnostics"), list) else []
+        status = "error" if any(diagnostic.get("severity") == "error" for diagnostic in diagnostics if isinstance(diagnostic, dict)) else "warn" if diagnostics else "ok"
+        tools = plugin.get("tools") if isinstance(plugin.get("tools"), list) else []
+        commands = plugin.get("commands") if isinstance(plugin.get("commands"), list) else []
+        mcp_servers = plugin.get("mcpServers") if isinstance(plugin.get("mcpServers"), list) else plugin.get("mcp_servers") if isinstance(plugin.get("mcp_servers"), list) else []
+        descriptors.append(
+            _without_none(
+                {
+                    "kind": "plugin",
+                    "status": status,
+                    "summary": f"{plugin_id} provides {len(tools)} tools, {len(commands)} commands, and {len(mcp_servers)} MCP servers",
+                    "subjectId": plugin_id,
+                    "metadata": _without_none({"source": plugin.get("source"), "capabilities": plugin.get("capabilities")}),
+                }
+            )
+        )
+    return descriptors
 
 
 def createMcpActivityDescriptors(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{"kind": "mcp", "status": "ok" if server.get("state") == "connected" else "warn", "summary": server.get("name", "mcp")} for server in servers]
+    descriptors = []
+    for server in servers:
+        name = server.get("name") or "mcp"
+        state = server.get("state") or "disconnected"
+        connected = bool(server.get("connected"))
+        status = "ok" if connected else "warn" if state == "degraded" else "error"
+        tools = _count_descriptor_items(server.get("tools"))
+        resources = _count_descriptor_items(server.get("resources"))
+        descriptors.append(
+            _without_none(
+                {
+                    "kind": "mcp",
+                    "status": status,
+                    "summary": f"{name} is {state} with {tools} tools and {resources} resources",
+                    "subjectId": name,
+                    "metadata": _without_none(
+                        {
+                            "transport": server.get("transport"),
+                            "error": server.get("error"),
+                            "capabilities": server.get("capabilities"),
+                            "channel_registration": server.get("channelRegistration") or server.get("channel_registration"),
+                        }
+                    ),
+                }
+            )
+        )
+    return descriptors
+
+
+def _count_descriptor_items(value: Any) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, list):
+        return len(value)
+    if isinstance(value, dict):
+        return len(value)
+    return 0

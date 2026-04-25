@@ -593,10 +593,22 @@ class AgentCoreTests(unittest.TestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+            foreground = run(bash.handler({"command": "printf foreground-ok"}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            foreground_payload = json.loads(foreground["content"])
+            self.assertEqual(foreground_payload["exitCode"], 0)
+            self.assertEqual(foreground["meta"]["execution"]["kind"], "tool")
+            self.assertEqual(foreground["meta"]["execution"]["status"], "completed")
+            self.assertEqual(foreground["meta"]["execution"]["metadata"]["exit_code"], 0)
+
             script = 'print("hello from background")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
-            task_id = json.loads(result["content"])["task_id"]
+            start_payload = json.loads(result["content"])
+            task_id = start_payload["task_id"]
+            self.assertEqual(start_payload["execution"]["kind"], "task")
+            self.assertEqual(start_payload["execution"]["id"], task_id)
+            self.assertEqual(result["meta"]["execution"]["activities"][0]["subjectId"], task_id)
+            self.assertIn(task_id, session["metadata"]["taskIds"])
             daemon_state = run(core.getTaskSupervisorDaemonState())
             self.assertEqual(daemon_state["mode"], "detached_python")
             self.assertNotEqual(daemon_state["pid"], os.getpid())
@@ -613,6 +625,9 @@ class AgentCoreTests(unittest.TestCase):
             output = run(task_output.handler({"task_id": task_id, "block": True, "timeout": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(output["content"])
             self.assertIn("hello from background", payload["output"])
+            self.assertEqual(payload["execution"]["id"], task_id)
+            self.assertGreater(payload["execution"]["output"]["bytes"], 0)
+            self.assertEqual(output["meta"]["execution"]["metadata"]["output_file"], payload["output_file"])
         finally:
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
@@ -735,6 +750,9 @@ class AgentCoreTests(unittest.TestCase):
             stopper = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskStop")
             stopped = run(stopper.handler({"task_id": task_id}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             self.assertFalse(stopped.get("isError"))
+            stopped_payload = json.loads(stopped["content"])
+            self.assertEqual(stopped_payload["execution"]["title"], f"Stopped background task {task_id}")
+            self.assertEqual(stopped["meta"]["execution"]["status"], "terminated")
             for _ in range(20):
                 meta = run(core.readTaskMeta(task_id))
                 if meta and meta.get("status") == "stopped":
@@ -743,6 +761,63 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(run(core.readTaskMeta(task_id))["status"], "stopped")
         finally:
             run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_task_monitor_and_activity_descriptors_match_reference_shape(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            task_id = "monitor-task"
+            output_file = core.taskOutputPath(task_id)
+            run(
+                core.writeTaskMeta(
+                    task_id,
+                    {
+                        "type": "background_command",
+                        "taskId": task_id,
+                        "id": task_id,
+                        "sessionId": session["id"],
+                        "command": "python -m server",
+                        "cwd": str(workspace),
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "status": "running",
+                        "outputFile": output_file,
+                    },
+                )
+            )
+            monitor = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskMonitorStart")
+            created = run(monitor.handler({"task_id": task_id, "goal": "watch server", "summary_style": "brief", "check_interval_ms": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            payload = json.loads(created["content"])
+            self.assertEqual(payload["task_id"], task_id)
+            self.assertEqual(payload["execution"]["title"], f"Monitoring task {task_id}")
+            self.assertEqual(payload["execution"]["metadata"]["summary_style"], "brief")
+            self.assertIn(payload["monitor_id"], session["metadata"]["monitorIds"])
+
+            plugin_descriptors = core.createPluginActivityDescriptors(
+                [
+                    {"id": "alpha", "diagnostics": [], "tools": [1, 2], "commands": [1], "mcpServers": [], "source": "local", "capabilities": {"tools": True}},
+                    {"id": "beta", "diagnostics": [{"severity": "warning"}], "tools": [], "commands": [], "mcpServers": [1]},
+                    {"id": "gamma", "diagnostics": [{"severity": "error"}], "tools": [], "commands": [], "mcpServers": []},
+                ]
+            )
+            self.assertEqual(plugin_descriptors[0]["status"], "ok")
+            self.assertEqual(plugin_descriptors[0]["summary"], "alpha provides 2 tools, 1 commands, and 0 MCP servers")
+            self.assertEqual(plugin_descriptors[1]["status"], "warn")
+            self.assertEqual(plugin_descriptors[2]["status"], "error")
+
+            mcp_descriptors = core.createMcpActivityDescriptors(
+                [
+                    {"name": "stdio", "connected": True, "state": "connected", "tools": 2, "resources": 1, "transport": "stdio"},
+                    {"name": "sse", "connected": False, "state": "degraded", "tools": [], "resources": [], "error": "lost"},
+                    {"name": "http", "connected": False, "state": "disconnected", "tools": [], "resources": []},
+                ]
+            )
+            self.assertEqual([item["status"] for item in mcp_descriptors], ["ok", "warn", "error"])
+            self.assertEqual(mcp_descriptors[0]["summary"], "stdio is connected with 2 tools and 1 resources")
+            self.assertEqual(mcp_descriptors[1]["metadata"]["error"], "lost")
+        finally:
             self.restore_home(root, previous)
 
     def test_tool_permission_modes_for_edits_and_interactive_switch(self):

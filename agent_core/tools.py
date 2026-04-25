@@ -19,8 +19,10 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from ._utils import maybe_await, now_iso, pretty_json
-from .execution_descriptors import createWorkspaceExecutionDescriptor
+from .execution_descriptors import createTaskExecutionDescriptor, createWorkspaceExecutionDescriptor, summarizeOutputManifest
+from .monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from .storage import (
+    listSessionMonitors,
     loadAutoMode,
     loadMonitor,
     loadSession,
@@ -221,19 +223,66 @@ def _bash_tool() -> ToolDefinition:
         await _ensure_tool_permission(context, "Bash", "shell", f"Run shell command\n{command}", always_ask=bool(input.get("run_in_background")), command=command)
         if input.get("run_in_background"):
             supervisor = context.get("daemon") or context.get("taskSupervisor") or await ensureTaskSupervisorDaemon({"cwd": context["session"]["cwd"]})
+            title = input.get("description") or input.get("title")
             started = await supervisor["startBackgroundCommand"](
                 {
                     "sessionId": context["session"]["id"],
                     "command": command,
                     "cwd": context["session"]["cwd"],
-                    "title": input.get("description") or input.get("title"),
+                    "title": title,
                 }
             )
             task_id = started.get("taskId") or started.get("task_id")
             output_path = started.get("outputFile") or started.get("output_file") or taskOutputPath(task_id)
-            context["session"].setdefault("metadata", {}).setdefault("taskIds", []).append(task_id)
+            task_record = await readTaskMeta(task_id) or {
+                "taskId": task_id,
+                "id": task_id,
+                "sessionId": context["session"]["id"],
+                "command": command,
+                "cwd": context["session"]["cwd"],
+                "startedAt": now_iso(),
+                "status": "running",
+                "outputFile": output_path,
+                "title": title,
+                "description": title,
+            }
+            _append_unique_metadata_list(context["session"], "taskIds", task_id)
             await maybe_await(context.get("persistSession", lambda: None)())
-            return {"content": pretty_json({"task_id": task_id, "status": "running", "output_file": output_path})}
+            context.get("outputJson", lambda *_: None)(
+                "task.registered",
+                {
+                    "session_id": context["session"]["id"],
+                    "task_id": task_id,
+                    "kind": "background_command",
+                    "status": "backgrounded",
+                    "title": task_record.get("title") or task_record.get("description") or command,
+                    "owner": task_record.get("owner") or ("daemon" if supervisor else "client"),
+                },
+            )
+            execution = createTaskExecutionDescriptor(
+                task_record,
+                "",
+                [
+                    {
+                        "kind": "task",
+                        "status": "info",
+                        "summary": "Background task launched. Call TaskMonitorStart if the assistant should keep watching it proactively.",
+                        "subjectId": task_id,
+                    }
+                ],
+            )
+            return {
+                "content": pretty_json(
+                    {
+                        "task_id": task_id,
+                        "status": "running",
+                        "output_file": output_path,
+                        "execution": execution,
+                        "next_step": "If you need to proactively keep watching this task and update the user without another prompt, call TaskMonitorStart with this task_id.",
+                    }
+                ),
+                "meta": {"execution": execution},
+            }
         proc = await asyncio.create_subprocess_shell(command, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         timed_out = False
         try:
@@ -244,7 +293,21 @@ def _bash_tool() -> ToolDefinition:
             stdout, stderr = await proc.communicate()
         shaped_stdout = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="Bash", family="bash", text=stdout.decode(errors="replace"), strategy="head_tail")
         shaped_stderr = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="Bash", family="bash", text=stderr.decode(errors="replace"), strategy="head_tail")
-        return {"content": pretty_json({"command": command, "cwd": context["session"]["cwd"], "exitCode": proc.returncode, "timedOut": timed_out, "stdout": shaped_stdout["text"], "stderr": shaped_stderr["text"], "stdout_manifest": shaped_stdout["view"], "stderr_manifest": shaped_stderr["view"]}), "isError": bool(timed_out or proc.returncode)}
+        execution = {
+            "id": f"{context['session']['id']}:bash",
+            "kind": "tool",
+            "title": "Shell command completed",
+            "status": "failed" if timed_out or proc.returncode else "completed",
+            "cwd": context["session"]["cwd"],
+            "command": command,
+            "output": summarizeOutputManifest(f"{stdout.decode(errors='replace')}{stderr.decode(errors='replace')}"),
+            "metadata": {"exit_code": proc.returncode, "timed_out": timed_out},
+        }
+        return {
+            "content": pretty_json({"command": command, "cwd": context["session"]["cwd"], "exitCode": proc.returncode, "timedOut": timed_out, "stdout": shaped_stdout["text"], "stderr": shaped_stderr["text"], "stdout_manifest": shaped_stdout["view"], "stderr_manifest": shaped_stderr["view"]}),
+            "isError": bool(timed_out or proc.returncode),
+            "meta": {"execution": execution},
+        }
 
     return ToolDefinition("Bash", "Run shell commands in the current workspace.", {"type": "object"}, handler)
 
@@ -432,7 +495,8 @@ def _task_output_tool() -> ToolDefinition:
         output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
         text = output_result.get("output") if output_result else Path(output_file).read_text(encoding="utf-8", errors="replace") if Path(output_file).exists() else ""
         shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="TaskOutput", family="bash", text=text, taskId=task_id, strategy="tail")
-        return {"content": pretty_json({**meta, "task_id": task_id, "output": shaped["text"], "output_file": output_file, "output_truncated": bool(output_result and output_result.get("truncated")), "output_manifest": shaped["view"]})}
+        execution = createTaskExecutionDescriptor({**meta, "outputFile": output_file}, text)
+        return {"content": pretty_json({**meta, "task_id": task_id, "output": shaped["text"], "output_file": output_file, "output_truncated": bool(output_result and output_result.get("truncated")), "output_manifest": shaped["view"], "execution": execution}), "meta": {"execution": execution}}
 
     return ToolDefinition("TaskOutput", "Read background task output.", {"type": "object"}, handler)
 
@@ -443,8 +507,23 @@ def _task_stop_tool() -> ToolDefinition:
         supervisor = context.get("daemon") or context.get("taskSupervisor") or await connectTaskSupervisorDaemonClient()
         await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id}")
         if supervisor:
+            meta_before = await readTaskMeta(task_id)
             stopped = await supervisor["stopTask"](task_id)
-            return {"content": pretty_json({"task_id": task_id, "status": "terminated" if stopped else "not_found", "stopped": stopped}), "isError": not stopped}
+            if not stopped:
+                return {"content": pretty_json({"task_id": task_id, "status": "not_found", "stopped": False}), "isError": True}
+            meta_after = await readTaskMeta(task_id) or meta_before or {"taskId": task_id, "id": task_id, "status": "terminated"}
+            execution = _stopped_task_execution_descriptor(task_id, meta_after)
+            context.get("outputJson", lambda *_: None)(
+                "task.failed",
+                {
+                    "session_id": context["session"]["id"],
+                    "task_id": task_id,
+                    "kind": meta_after.get("type") or "background_command",
+                    "title": meta_after.get("title") or meta_after.get("description") or meta_after.get("command"),
+                    "summary": "Task terminated by user request.",
+                },
+            )
+            return {"content": pretty_json({"task_id": task_id, "status": "terminated", "stopped": True, "execution": execution}), "meta": {"execution": execution}}
         meta = await readTaskMeta(task_id)
         if not meta:
             return {"content": f"Task not found: {task_id}", "isError": True}
@@ -457,7 +536,18 @@ def _task_stop_tool() -> ToolDefinition:
             pass
         meta.update({"status": "stopped", "stoppedAt": now_iso(), "updatedAt": now_iso()})
         await writeTaskMeta(task_id, meta)
-        return {"content": pretty_json({"task_id": task_id, "status": "terminated", "stopped": True})}
+        execution = _stopped_task_execution_descriptor(task_id, meta)
+        context.get("outputJson", lambda *_: None)(
+            "task.failed",
+            {
+                "session_id": context["session"]["id"],
+                "task_id": task_id,
+                "kind": meta.get("type") or "background_command",
+                "title": meta.get("title") or meta.get("description") or meta.get("command"),
+                "summary": "Task terminated by user request.",
+            },
+        )
+        return {"content": pretty_json({"task_id": task_id, "status": "terminated", "stopped": True, "execution": execution}), "meta": {"execution": execution}}
 
     return ToolDefinition("TaskStop", "Stop a task.", {"type": "object"}, handler)
 
@@ -465,14 +555,54 @@ def _task_stop_tool() -> ToolDefinition:
 def _task_monitor_start_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         task_id = _require_string(input.get("task_id"), "task_id")
-        if not await readTaskMeta(task_id):
+        goal = _require_string(input.get("goal"), "goal")
+        task = await readTaskMeta(task_id)
+        if not task:
             return {"content": f"Task not found: {task_id}", "isError": True}
-        monitor_id = str(uuid.uuid4())
-        record = {"id": monitor_id, "sessionId": context["session"]["id"], "taskId": task_id, "createdAt": now_iso(), "updatedAt": now_iso(), "status": "active", "goal": input.get("goal") or "", "checkIntervalMs": int(input.get("check_interval_ms") or 5000), "heartbeatIntervalMs": int(input.get("heartbeat_interval_ms") or 30000)}
+        existing = next((monitor for monitor in await listSessionMonitors(context["session"]["id"]) if monitor.get("taskId") == task_id and monitor.get("status") == "active"), None)
+        if existing:
+            return {"content": pretty_json({"monitor_id": existing.get("id"), "task_id": existing.get("taskId"), "status": existing.get("status"), "goal": existing.get("goal"), "note": "Monitor already active for this task."})}
+        summary_style = input.get("summary_style") if isinstance(input.get("summary_style"), str) and input.get("summary_style").strip() else None
+        record = createMonitorRecord(
+            {
+                "sessionId": context["session"]["id"],
+                "taskId": task_id,
+                "goal": goal,
+                "summaryStyle": summary_style.strip() if isinstance(summary_style, str) else None,
+                "checkIntervalMs": defaultMonitorCheckIntervalMs(input.get("check_interval_ms")),
+                "heartbeatIntervalMs": defaultMonitorHeartbeatIntervalMs(input.get("heartbeat_interval_ms")),
+            }
+        )
+        if summary_style:
+            record["summaryStyle"] = summary_style.strip()
         await saveMonitor(record)
-        context["session"].setdefault("metadata", {}).setdefault("monitorIds", []).append(monitor_id)
+        _append_unique_metadata_list(context["session"], "monitorIds", record["id"])
         await maybe_await(context.get("persistSession", lambda: None)())
-        return {"content": pretty_json(record)}
+        context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": f"monitor:{record['id']}", "kind": "monitor", "status": "running", "title": f"Monitor {goal}"})
+        context.get("outputJson", lambda *_: None)("monitor.created", {"session_id": context["session"]["id"], "monitor_id": record["id"], "task_id": task_id, "goal": goal, "status": record["status"]})
+        execution = {
+            "id": record["id"],
+            "kind": "task",
+            "title": f"Monitoring task {task_id}",
+            "status": "running",
+            "cwd": task.get("cwd"),
+            "command": task.get("command"),
+            "startedAt": record.get("createdAt"),
+            "metadata": _without_none_values({"monitor_id": record["id"], "summary_style": record.get("summaryStyle")}),
+        }
+        return {
+            "content": pretty_json(
+                {
+                    "monitor_id": record["id"],
+                    "task_id": task_id,
+                    "status": record["status"],
+                    "goal": goal,
+                    "check_interval_ms": record["checkIntervalMs"],
+                    "heartbeat_interval_ms": record["heartbeatIntervalMs"],
+                    "execution": execution,
+                }
+            )
+        }
 
     return ToolDefinition("TaskMonitorStart", "Start monitoring a task.", {"type": "object"}, handler)
 
@@ -506,8 +636,9 @@ def _task_health_check_start_tool() -> ToolDefinition:
             }
         )
         task_id = started.get("taskId") or started.get("task_id")
-        context["session"].setdefault("metadata", {}).setdefault("taskIds", []).append(task_id)
+        _append_unique_metadata_list(context["session"], "taskIds", task_id)
         await maybe_await(context.get("persistSession", lambda: None)())
+        context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": input.get("title"), "owner": "daemon"})
         return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": input.get("title")})}
 
     return ToolDefinition("TaskHealthCheckStart", "Start a periodic health check.", {"type": "object"}, handler)
@@ -637,6 +768,35 @@ def _controller_method(controller: Any, name: str) -> Any:
     if isinstance(controller, dict):
         return controller.get(name)
     return getattr(controller, name, None)
+
+
+def _append_unique_metadata_list(session: dict[str, Any], key: str, value: Any) -> None:
+    if value is None:
+        return
+    values = list(session.setdefault("metadata", {}).get(key) or [])
+    if value not in values:
+        values.append(value)
+    session.setdefault("metadata", {})[key] = values
+
+
+def _stopped_task_execution_descriptor(task_id: str, meta: dict[str, Any]) -> dict[str, Any]:
+    return _without_none_values(
+        {
+            "id": task_id,
+            "kind": "task",
+            "title": f"Stopped background task {task_id}",
+            "status": "terminated",
+            "cwd": meta.get("cwd"),
+            "command": meta.get("command"),
+            "startedAt": meta.get("startedAt"),
+            "finishedAt": meta.get("finishedAt") or meta.get("stoppedAt") or now_iso(),
+            "metadata": _without_none_values({"pid": meta.get("pid")}),
+        }
+    )
+
+
+def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _apply_workspace_snapshot_metadata(session: dict[str, Any], snapshot: dict[str, Any]) -> None:
