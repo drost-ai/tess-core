@@ -860,6 +860,76 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_platform_detection_tmux_ide_chrome_and_doctor(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            calls = []
+
+            def which(command):
+                return {"tmux": "/usr/bin/tmux", "code": "/usr/local/bin/code", "google-chrome": "/usr/bin/google-chrome"}.get(command)
+
+            def exec_text(command, args):
+                calls.append(("execText", command, tuple(args)))
+                return "tmux 3.4\n" if args == ["-V"] else ""
+
+            def exec_cmd(command, args, cwd=None):
+                calls.append(("exec", command, tuple(args), cwd))
+                return ""
+
+            def spawn_detached(command, args, cwd=None):
+                calls.append(("spawn", command, tuple(args), cwd))
+                return 4321
+
+            runner = {"which": which, "execText": exec_text, "exec": exec_cmd, "spawnDetached": spawn_detached}
+            tmux = run(core.detectTmuxAvailability({"runner": runner}))
+            self.assertTrue(tmux["available"])
+            self.assertEqual(tmux["version"], "tmux 3.4")
+
+            handoff = run(
+                core.maybeExecIntoTmux(
+                    {
+                        "options": {"tmux": True},
+                        "launch": {"cwd": str(workspace), "originalCwd": str(workspace), "worktreePath": str(workspace / "wt")},
+                        "argv": ["--tmux", "--foo"],
+                        "runner": runner,
+                        "env": {},
+                    }
+                )
+            )
+            self.assertTrue(handoff["handled"])
+            self.assertEqual(handoff["event"]["event"], "platform.tmux_attached")
+            self.assertTrue(any(call[0] == "exec" and call[2][0] == "new-session" for call in calls))
+            self.assertEqual(core.resolveTmuxLaunchContextFromEnv({"TESS_LAUNCH_CWD": "/w", "TESS_LAUNCH_ORIGINAL_CWD": "/o", "TESS_LAUNCH_WORKTREE_PATH": "/wt", "TESS_TMUX_SESSION_NAME": "s"})["tmuxSessionName"], "s")
+            self.assertIn("requires `--worktree`", run(core.maybeExecIntoTmux({"options": {"tmux": True}, "launch": {"cwd": str(workspace)}, "runner": runner, "env": {}}))["error"])
+
+            ide_targets = run(core.detectIdeTargets({"runner": runner, "env": {}}))
+            self.assertEqual(ide_targets[0]["id"], "vscode")
+            ide_connect = run(core.maybeAutoConnectIde(str(workspace), {"runner": runner, "env": {}}))
+            self.assertEqual(ide_connect["status"], "connected")
+            self.assertTrue(any(call[0] == "spawn" and call[2] == ("-r", str(workspace)) for call in calls))
+            env_ide = run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"TERM_PROGRAM": "vscode", "CURSOR_TRACE_ID": "1"}}))
+            self.assertEqual(env_ide[0]["id"], "cursor")
+            self.assertEqual(run(core.maybeAutoConnectIde(str(workspace), {"runner": {"which": lambda _command: None}, "env": {}}))["status"], "skipped")
+
+            chrome = run(core.detectChromeCompanionStatus({"runner": runner, "platform": "linux"}))
+            self.assertTrue(chrome["supported"])
+            self.assertEqual(chrome["browserBinary"], "/usr/bin/google-chrome")
+            self.assertTrue(run(core.resolveChromeCompanionServer({"runner": runner, "platform": "linux"}))["available"])
+
+            install = run(core.inspectInstallState({"runner": runner}))
+            self.assertTrue(install["installed"])
+            self.assertEqual(install["mode"], "repo-only")
+            self.assertEqual(run(core.runRepoInstall({"runner": runner}))["steps"][0]["status"], "skipped")
+            self.assertEqual(run(core.runRepoUpdate({"runner": runner}))["upstreamStatus"], "skipped")
+
+            report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))
+            self.assertTrue(report["healthy"])
+            check_ids = {check["id"] for check in report["checks"]}
+            self.assertTrue({"auth", "package", "tmux", "ide", "chrome", "git", "workspace", "extensions"}.issubset(check_ids))
+            self.assertEqual(next(check for check in report["checks"] if check["id"] == "tmux")["status"], "pass")
+        finally:
+            self.restore_home(root, previous)
+
     def test_codex_spark_compaction_uses_codex_transport(self):
         root, home, workspace, previous = self.temp_context()
         try:
