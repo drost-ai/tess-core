@@ -17,10 +17,13 @@ from .storage import (
     listTaskRecords,
     listSessionMonitors,
     listSessionTaskRecords,
+    loadChildAgent,
     loadHealthCheckTask,
+    loadSession,
     loadTaskRecord,
     readTaskMeta,
     saveHealthCheckTask,
+    saveSession,
     saveTaskRecord,
     taskOutputPath,
     writeTaskMeta,
@@ -80,6 +83,54 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         await writeTaskMeta(task_id, meta)
         await saveTaskRecord(_build_task_record(meta, "Background command is running."))
         await emit("task.updated", _task_event_payload(meta), session_id)
+        watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
+        _WATCHERS.add(watcher)
+        watcher.start()
+        return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
+
+    async def start_main_session_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
+        task_args = {**(task_args or {}), **task_kwargs}
+        session_id = _require_string(task_args.get("sessionId") or task_args.get("session_id"), "sessionId")
+        prompt = _require_string(task_args.get("prompt"), "prompt")
+        task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
+        title = task_args.get("title") or "Detached main-session task"
+        session = await loadSession(session_id)
+        if not session:
+            raise RuntimeError(f"Session not found: {session_id}")
+        task_id = str(uuid.uuid4())
+        output_file = taskOutputPath(task_id)
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        started_at = now_iso()
+        metadata = session.setdefault("metadata", {})
+        metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
+        metadata["backgroundSessionIds"] = _dedupe([*(metadata.get("backgroundSessionIds") or []), session_id])
+        await saveSession(session)
+        command = prompt
+        proc = _spawn_main_session_worker(task_id, session_id, prompt, task_cwd, output_file)
+        _PROCESS_REGISTRY[task_id] = proc
+        meta = {
+            "type": "main_session",
+            "taskId": task_id,
+            "id": task_id,
+            "sessionId": session_id,
+            "command": command,
+            "cwd": task_cwd,
+            "startedAt": started_at,
+            "updatedAt": started_at,
+            "status": "running",
+            "outputFile": output_file,
+            "title": title,
+            "description": prompt[:180],
+            "pid": proc.pid,
+            "attachableSessionId": session_id,
+            "detailStatus": "session_starting",
+            "owner": "daemon",
+            "supervisorId": supervisor_id,
+        }
+        await writeTaskMeta(task_id, meta)
+        record = _build_task_record(meta, "Detached main-session work is running in the daemon.")
+        await saveTaskRecord(record)
+        await emit("task.updated", _task_record_event_payload(record), session_id)
         watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
         _WATCHERS.add(watcher)
         watcher.start()
@@ -193,17 +244,61 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return records
 
     async def retry_task(task_id: str) -> dict[str, Any]:
+        record = await loadTaskRecord(task_id)
         meta = await readTaskMeta(task_id)
-        if not meta or not meta.get("command"):
+        if not record and (not meta or not meta.get("command")):
             raise RuntimeError(f"Task is not retryable: {task_id}")
-        return await start_background_command(
-            {
-                "sessionId": meta.get("sessionId"),
-                "command": meta.get("command"),
-                "cwd": meta.get("cwd") or cwd,
-                "title": meta.get("title"),
-            }
-        )
+        kind = (record or {}).get("kind") or (meta or {}).get("type")
+        source = record or meta or {}
+        if kind == "background_command":
+            command = source.get("command")
+            if not command:
+                raise RuntimeError("Background command task is missing retry metadata.")
+            return await start_background_command(
+                {
+                    "sessionId": source.get("sessionId"),
+                    "command": command,
+                    "cwd": source.get("cwd") or cwd,
+                    "title": source.get("title"),
+                }
+            )
+        if kind == "main_session":
+            prompt = source.get("command")
+            if not prompt:
+                raise RuntimeError("Main-session task is missing retry metadata.")
+            return await start_main_session_task(
+                {
+                    "sessionId": source.get("sessionId"),
+                    "prompt": prompt,
+                    "cwd": source.get("cwd") or cwd,
+                    "title": source.get("title"),
+                }
+            )
+        if kind == "health_check":
+            health = await loadHealthCheckTask(task_id)
+            if not health:
+                raise RuntimeError(f"Health check metadata not found: {task_id}")
+            return await start_health_check(health)
+        if kind == "subagent":
+            metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+            agent_id = metadata.get("agent_id") or source.get("sourceId") or (meta or {}).get("agent_id")
+            child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+            if not child:
+                raise RuntimeError(f"Subagent metadata not found for task: {task_id}")
+            child_session = await loadSession(child["sessionId"])
+            if not child_session:
+                raise RuntimeError(f"Subagent session not found: {child['sessionId']}")
+            return await start_subagent_task(
+                {
+                    "parentSessionId": child.get("parentSessionId"),
+                    "sessionId": child.get("sessionId"),
+                    "agentId": child.get("agentId"),
+                    "cwd": child_session.get("cwd") or cwd,
+                    "label": child.get("name") or child.get("agentType") or child.get("agentId"),
+                    "parentTaskId": child.get("parentTaskId"),
+                }
+            )
+        raise RuntimeError(f"Retry is not supported for task kind: {kind}")
 
     async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
@@ -311,14 +406,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         "stopTask": stop_task,
         "retryTask": retry_task,
         "startBackgroundCommand": start_background_command,
-        "startMainSessionTask": lambda task_args=None, **task_kwargs: start_background_command(
-            {
-                **(task_args or {}),
-                **task_kwargs,
-                "command": (task_args or {}).get("prompt") or task_kwargs.get("prompt") or "",
-                "title": (task_args or {}).get("title") or task_kwargs.get("title") or "Detached main-session task",
-            }
-        ),
+        "startMainSessionTask": start_main_session_task,
         "startSubagentTask": start_subagent_task,
         "startHealthCheck": start_health_check,
         "subscribe": subscribe,
@@ -345,19 +433,48 @@ def _spawn_shell(command: str, cwd: str, output_file: str) -> subprocess.Popen[A
         handle.close()
 
 
+def _spawn_main_session_worker(task_id: str, session_id: str, prompt: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
+    handle = open(output_file, "ab")
+    kwargs: dict[str, Any] = {}
+    if hasattr(os, "setsid"):
+        kwargs["preexec_fn"] = os.setsid
+    env = _worker_env()
+    try:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "agent_core.background_main_session_runner",
+                "--session-id",
+                session_id,
+                "--task-id",
+                task_id,
+                "--prompt",
+                prompt,
+            ],
+            cwd=cwd,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            env=env,
+            **kwargs,
+        )
+    finally:
+        handle.close()
+
+
 def _spawn_subagent_worker(task_id: str, session_id: str, agent_id: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
     handle = open(output_file, "ab")
     kwargs: dict[str, Any] = {}
     if hasattr(os, "setsid"):
         kwargs["preexec_fn"] = os.setsid
-    env = {
-        **os.environ,
-        "TESS_CHILD_AGENT_ID": agent_id,
-        "TESS_CHILD_TASK_ID": task_id,
-        "TESS_CHILD_SESSION_ID": session_id,
-    }
-    package_root = str(Path(__file__).resolve().parents[1])
-    env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
+    env = _worker_env(
+        {
+            "TESS_CHILD_AGENT_ID": agent_id,
+            "TESS_CHILD_TASK_ID": task_id,
+            "TESS_CHILD_SESSION_ID": session_id,
+        }
+    )
     try:
         return subprocess.Popen(
             [
@@ -380,6 +497,13 @@ def _spawn_subagent_worker(task_id: str, session_id: str, agent_id: str, cwd: st
         )
     finally:
         handle.close()
+
+
+def _worker_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    env = {**os.environ, **(extra or {})}
+    package_root = str(Path(__file__).resolve().parents[1])
+    env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
+    return env
 
 
 def _watch_process_thread(
@@ -624,6 +748,7 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
     status = _map_status(meta.get("status"))
     is_subagent = meta.get("type") == "subagent"
+    is_main_session = meta.get("type") == "main_session"
     metadata = dict(meta.get("metadata") or {})
     metadata.update({"pid": meta.get("pid"), "exitCode": meta.get("exitCode"), "lastResult": meta.get("lastResult")})
     if is_subagent:
@@ -635,6 +760,13 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
                 "parent_task_id": meta.get("parent_task_id"),
             }
         )
+    task_family = "shell"
+    if meta.get("type") == "health_check":
+        task_family = "health_check"
+    elif is_subagent:
+        task_family = "subagent"
+    elif is_main_session:
+        task_family = "detached_session"
     return {
         "id": task_id,
         "sessionId": meta.get("parent_session_id") if is_subagent else meta.get("sessionId"),
@@ -652,10 +784,10 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
         "outputFile": output_file,
         "outputCursor": output_cursor,
         "foregroundMode": "background",
-        "taskFamily": "health_check" if meta.get("type") == "health_check" else "subagent" if is_subagent else "shell",
+        "taskFamily": task_family,
         "detailStatus": meta.get("detailStatus") or status,
-        "retrieveOnly": False if is_subagent else True,
-        "attachableSessionId": meta.get("attachableSessionId") if is_subagent else None,
+        "retrieveOnly": False if is_subagent or is_main_session else True,
+        "attachableSessionId": meta.get("attachableSessionId") if is_subagent or is_main_session else None,
         "parentTaskId": meta.get("parent_task_id") if is_subagent else None,
         "relatedChildSessionIds": [meta.get("session_id") or meta.get("sessionId")] if is_subagent and (meta.get("session_id") or meta.get("sessionId")) else [],
         "owner": meta.get("owner") or "daemon",
@@ -810,6 +942,17 @@ def _terminate_process(pid: int | None) -> bool:
 def _summarize_command(command: Any) -> str:
     text = str(command or "task").strip()
     return text if len(text) <= 80 else f"{text[:77]}..."
+
+
+def _dedupe(values: list[Any]) -> list[Any]:
+    seen = set()
+    result = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _require_string(value: Any, field: str) -> str:

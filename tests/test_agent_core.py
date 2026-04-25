@@ -1972,6 +1972,60 @@ class AgentCoreTests(unittest.TestCase):
                 run(supervisor["close"]())
             self.restore_home(root, previous)
 
+    def test_detached_main_session_task_runs_worker_and_retries_as_main_session(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            prompt = "finish detached main-session work"
+            started = run(supervisor["startMainSessionTask"]({"sessionId": session["id"], "cwd": str(workspace), "prompt": prompt, "title": "Detached check"}))
+            task_id = started["taskId"]
+            for _ in range(100):
+                meta = run(core.readTaskMeta(task_id))
+                if meta and meta.get("status") == "completed":
+                    break
+                time.sleep(0.05)
+            meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(meta["type"], "main_session")
+            self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["sessionId"], session["id"])
+            self.assertEqual(meta["command"], prompt)
+            output = run(supervisor["readTaskOutput"](task_id, 12000))
+            self.assertIn('"ok": true', output["output"])
+            self.assertIn("No credential is configured", output["output"])
+            task_record = None
+            for _ in range(40):
+                task_record = run(supervisor["inspectTask"](task_id))
+                if task_record and task_record.get("status") == "completed":
+                    break
+                time.sleep(0.05)
+            self.assertEqual(task_record["kind"], "main_session")
+            self.assertEqual(task_record["taskFamily"], "detached_session")
+            self.assertFalse(task_record["retrieveOnly"])
+            self.assertEqual(task_record["attachableSessionId"], session["id"])
+            persisted = run(core.loadSession(session["id"]))
+            self.assertIn(task_id, persisted["metadata"]["taskIds"])
+            self.assertIn(session["id"], persisted["metadata"]["backgroundSessionIds"])
+            self.assertTrue(any(message.get("role") == "user" and message.get("content") == prompt for message in persisted["messages"]))
+            retried = run(supervisor["retryTask"](task_id))
+            retry_id = retried["taskId"]
+            self.assertNotEqual(retry_id, task_id)
+            for _ in range(100):
+                retry_meta = run(core.readTaskMeta(retry_id))
+                if retry_meta and retry_meta.get("status") == "completed":
+                    break
+                time.sleep(0.05)
+            retry_record = run(supervisor["inspectTask"](retry_id))
+            self.assertEqual(retry_record["kind"], "main_session")
+            self.assertEqual(retry_record["command"], prompt)
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
     def test_worktree_tools_update_workspace_metadata_and_execution_descriptors(self):
         root, home, workspace, previous = self.temp_context()
         try:
