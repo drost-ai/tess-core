@@ -86,13 +86,14 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "supervisorId": supervisor_id,
         }
         await writeTaskMeta(task_id, meta)
-        await saveTaskRecord(_build_task_record(meta, "Background command is running."))
+        record = _build_task_record(meta, "Background command is running.")
+        await saveTaskRecord(record)
         session = await loadSession(session_id)
         if session:
             metadata = session.setdefault("metadata", {})
             metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
             await saveSession(session)
-        await emit("task.updated", _task_event_payload(meta), session_id)
+        await emit("task.updated", _task_record_event_payload(record), session_id)
         watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
         _WATCHERS.add(watcher)
         watcher.start()
@@ -194,7 +195,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         watcher.start()
         return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
 
-    async def read_task_output(task_id: str, tailBytes: int | None = None) -> dict[str, Any]:
+    async def read_task_output(task_id: str, tailBytes: int | None = 12000) -> dict[str, Any]:
         meta = await readTaskMeta(task_id)
         output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
         path = Path(output_file)
@@ -202,8 +203,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             return {"taskId": task_id, "output": "", "truncated": False, "outputFile": output_file}
         data = path.read_bytes()
         truncated = False
-        if tailBytes and tailBytes > 0 and len(data) > tailBytes:
-            data = data[-tailBytes:]
+        effective_tail_bytes = 12000 if tailBytes is None else tailBytes
+        if effective_tail_bytes and effective_tail_bytes > 0 and len(data) > effective_tail_bytes:
+            data = data[-effective_tail_bytes:]
             truncated = True
         return {
             "taskId": task_id,
@@ -424,7 +426,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return {
             "taskSnapshot": _task_snapshot(records),
             "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)),
-            "collaborationSnapshot": _empty_collaboration_snapshot(),
+            "collaborationSnapshot": await _collaboration_snapshot(session_id),
         }
 
     await _reconcile_persisted_tasks(supervisor_id, emit)
@@ -454,12 +456,11 @@ def _spawn_shell(command: str, cwd: str, output_file: str) -> subprocess.Popen[A
         kwargs["preexec_fn"] = os.setsid
     try:
         return subprocess.Popen(
-            command,
+            [_resolve_shell(), "-lc", command],
             cwd=cwd,
             stdout=handle,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            shell=True,
             **kwargs,
         )
     finally:
@@ -573,9 +574,10 @@ def _watch_process_thread(
         "detailStatus": status,
     }
     asyncio.run(writeTaskMeta(task_id, meta))
-    asyncio.run(saveTaskRecord(_build_task_record(meta, _process_exit_summary(status, code))))
+    record = _build_task_record(meta, _process_exit_summary(status, code))
+    asyncio.run(saveTaskRecord(record))
     event_session_id = meta.get("parent_session_id") if meta.get("type") == "subagent" else meta.get("sessionId")
-    asyncio.run(maybe_await(emit("task.completed" if status == "completed" else "task.failed", _task_event_payload(meta), event_session_id)))
+    asyncio.run(maybe_await(emit("task.completed" if status == "completed" else "task.failed", _task_record_event_payload(record), event_session_id)))
     _WATCHERS.discard(threading.current_thread())
 
 
@@ -738,7 +740,11 @@ async def _project_session_task_records(session_id: str) -> list[dict[str, Any]]
     for task_id in _dedupe([item for item in task_ids if isinstance(item, str) and item]):
         meta = await readTaskMeta(task_id)
         if meta:
-            records_by_id[task_id] = _build_task_record(meta, _summary_for_projected_meta(meta, session))
+            record = _build_task_record(meta, None, session)
+            related_monitor_ids = [monitor.get("id") for monitor in monitors if monitor.get("taskId") == task_id and monitor.get("id")]
+            if related_monitor_ids:
+                record["relatedMonitorIds"] = related_monitor_ids
+            records_by_id[task_id] = record
 
     for monitor in monitors:
         monitor_id = monitor.get("id")
@@ -1022,34 +1028,6 @@ def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[st
     }
 
 
-def _summary_for_projected_meta(meta: dict[str, Any], session: dict[str, Any]) -> str | None:
-    status = _map_status(meta.get("status"))
-    if meta.get("type") == "main_session":
-        assistant = _summarize_latest_message(session, "assistant")
-        user = _summarize_latest_message(session, "user")
-        if status in {"backgrounded", "running"}:
-            if assistant:
-                return f"This session is continuing in the background. Latest assistant state: {assistant}"
-            if user:
-                return f"This session is continuing in the background. Current work: {user}"
-            return "This session is continuing in the background."
-        if status == "completed":
-            return f"Detached session completed. Latest assistant result: {assistant}" if assistant else "Detached session completed."
-        if status == "stopped":
-            return f"Detached session stopped. Latest assistant state: {assistant}" if assistant else "Detached session stopped."
-        if status == "failed":
-            return f"Detached session failed. Latest assistant state: {assistant}" if assistant else "Detached session failed."
-    if meta.get("type") == "health_check":
-        if meta.get("lastError"):
-            return f"{'Check unhealthy' if meta.get('status') == 'unhealthy' else 'Last check failed'}: {meta.get('lastError')}"
-        if isinstance(meta.get("lastStatusCode"), int):
-            return f"Last HTTP status {meta.get('lastStatusCode')}"
-        if isinstance(meta.get("lastExitCode"), int):
-            return f"Last exit code {meta.get('lastExitCode')}"
-        return "Scheduled health check active."
-    return None
-
-
 def _build_monitor_task_record(session: dict[str, Any], monitor: dict[str, Any]) -> dict[str, Any]:
     task_id = monitor.get("taskId")
     output_file = taskOutputPath(task_id) if isinstance(task_id, str) else None
@@ -1163,19 +1141,57 @@ def _build_remote_task_record(session: dict[str, Any], remote: dict[str, Any], b
     }
 
 
-def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, Any]:
+def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[str, Any] | None = None) -> dict[str, Any]:
     now = now_iso()
-    task_id = meta.get("taskId") or meta.get("id")
+    task_id = meta.get("taskId") or meta.get("task_id") or meta.get("id")
     output_file = meta.get("outputFile") or taskOutputPath(task_id)
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
-    status = _map_status(meta.get("status"))
+    output_preview = _read_output_preview(output_file)
+    task_type = meta.get("type") or "background_command"
+    status = _status_for_task_meta(meta)
     is_subagent = meta.get("type") == "subagent"
     is_main_session = meta.get("type") == "main_session"
-    is_background_process = meta.get("type") in {"background_command", "main_session", "subagent"}
-    if status == "running" and is_background_process and not meta.get("finishedAt") and not meta.get("stoppedAt"):
-        status = "backgrounded"
+    is_health_check = meta.get("type") == "health_check"
+    session_data = session or {}
+    latest_assistant = _summarize_latest_message(session_data, "assistant") if is_main_session else None
+    latest_user = _summarize_latest_message(session_data, "user") if is_main_session else None
+    if summary is None:
+        summary = _summary_for_task_meta(meta, status, output_cursor, output_preview, latest_assistant, latest_user)
     metadata = dict(meta.get("metadata") or {})
-    metadata.update({"pid": meta.get("pid"), "exitCode": meta.get("exitCode"), "lastResult": meta.get("lastResult")})
+    metadata.update({"pid": meta.get("pid"), "exitCode": meta.get("exitCode"), "exit_code": meta.get("exitCode"), "lastResult": meta.get("lastResult")})
+    if not is_health_check:
+        metadata.update(
+            {
+                "runner_pid": meta.get("runnerPid"),
+                "detached_type": "main_session" if is_main_session else "background_command" if not is_subagent else None,
+                "output_preview": output_preview,
+                "recovery_state": "recovered_after_daemon_restart" if meta.get("status") == "reconciling" else metadata.get("recovery_state"),
+            }
+        )
+    if is_health_check:
+        metadata.update(
+            {
+                "mode": meta.get("mode"),
+                "interval_ms": meta.get("intervalMs"),
+                "current_interval_ms": meta.get("currentIntervalMs") or meta.get("intervalMs"),
+                "timeout_ms": meta.get("timeoutMs"),
+                "backoff_multiplier": meta.get("backoffMultiplier"),
+                "max_interval_ms": meta.get("maxIntervalMs"),
+                "failure_threshold": meta.get("failureThreshold"),
+                "consecutive_failures": meta.get("consecutiveFailures") or 0,
+                "last_status_code": meta.get("lastStatusCode"),
+                "last_exit_code": meta.get("lastExitCode"),
+                "expected_body_substring": meta.get("expectedBodySubstring"),
+            }
+        )
+    if is_main_session:
+        metadata.update(
+            {
+                "latest_assistant_summary": latest_assistant,
+                "latest_user_prompt": latest_user,
+                "session_updated_at": session_data.get("updatedAt"),
+            }
+        )
     if is_subagent:
         metadata.update(
             {
@@ -1185,40 +1201,255 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
                 "parent_task_id": meta.get("parent_task_id"),
             }
         )
-    task_family = "shell"
-    if meta.get("type") == "health_check":
-        task_family = "health_check"
-    elif is_subagent:
-        task_family = "subagent"
-    elif is_main_session:
-        task_family = "detached_session"
+    task_family = "health_check" if is_health_check else "subagent" if is_subagent else "detached_session" if is_main_session else "shell"
+    kind = "health_check" if is_health_check else "subagent" if is_subagent else "main_session" if is_main_session else "background_command"
+    session_id = meta.get("parent_session_id") if is_subagent else meta.get("sessionId") or session_data.get("id")
+    updated_at = meta.get("updatedAt") or meta.get("finishedAt") or meta.get("startedAt") or now
+    if is_main_session:
+        updated_at = _latest_timestamp(session_data.get("updatedAt"), updated_at)
     return {
         "id": task_id,
-        "sessionId": meta.get("parent_session_id") if is_subagent else meta.get("sessionId"),
+        "sessionId": session_id,
         "sourceId": meta.get("agent_id") if is_subagent else task_id,
-        "kind": "health_check" if meta.get("type") == "health_check" else meta.get("type") or "background_command",
+        "kind": kind,
         "status": status,
-        "title": meta.get("title") or meta.get("description") or _summarize_command(meta.get("command")),
+        "title": _first_text(meta.get("title"), meta.get("description"), _summarize_command(meta.get("command")), task_id),
         "summary": summary or meta.get("error") or meta.get("detailStatus") or status,
-        "createdAt": meta.get("startedAt") or now,
-        "updatedAt": meta.get("updatedAt") or meta.get("finishedAt") or now,
-        "startedAt": meta.get("startedAt"),
-        "completedAt": meta.get("finishedAt") or meta.get("stoppedAt"),
+        "createdAt": meta.get("createdAt") or meta.get("startedAt") or now,
+        "updatedAt": updated_at,
+        "startedAt": meta.get("startedAt") or meta.get("createdAt"),
+        "completedAt": meta.get("updatedAt") if is_health_check and meta.get("status") == "stopped" else meta.get("finishedAt") or meta.get("stoppedAt"),
+        "foregroundable": False if is_health_check else True,
+        "restorable": True,
         "cwd": meta.get("cwd"),
-        "command": meta.get("command"),
+        "command": meta.get("command") or meta.get("url") if is_health_check else meta.get("command"),
         "outputFile": output_file,
         "outputCursor": output_cursor,
+        "relatedMonitorIds": meta.get("relatedMonitorIds") or [],
         "foregroundMode": "background",
         "taskFamily": task_family,
-        "detailStatus": meta.get("detailStatus") or status,
+        "detailStatus": _detail_status_for_task_meta(meta, status, output_preview, latest_assistant),
         "retrieveOnly": False if is_subagent or is_main_session else True,
-        "attachableSessionId": meta.get("attachableSessionId") if is_subagent or is_main_session else None,
+        "attachableSessionId": (meta.get("attachableSessionId") or session_data.get("id")) if is_main_session else meta.get("attachableSessionId") if is_subagent else None,
         "parentTaskId": meta.get("parent_task_id") if is_subagent else None,
         "relatedChildSessionIds": [meta.get("session_id") or meta.get("sessionId")] if is_subagent and (meta.get("session_id") or meta.get("sessionId")) else [],
         "owner": meta.get("owner") or "daemon",
         "supervisorId": meta.get("supervisorId"),
+        "resultSummary": _result_summary_for_task_meta(meta, status, output_preview, latest_assistant, latest_user),
         "metadata": metadata,
     }
+
+
+def _status_for_task_meta(meta: dict[str, Any]) -> str:
+    task_type = meta.get("type")
+    if task_type == "health_check":
+        status = meta.get("status")
+        if status == "active":
+            return "running"
+        if status == "unhealthy":
+            return "degraded"
+        if status == "stopped":
+            return "stopped"
+        return "failed"
+    status = _map_status(meta.get("status"))
+    if task_type in {"background_command", "main_session", "subagent"} and status == "running" and not meta.get("finishedAt") and not meta.get("stoppedAt"):
+        return "backgrounded"
+    return status
+
+
+def _summary_for_task_meta(
+    meta: dict[str, Any],
+    status: str,
+    output_cursor: int,
+    output_preview: str | None,
+    latest_assistant: str | None,
+    latest_user: str | None,
+) -> str | None:
+    task_type = meta.get("type")
+    if task_type == "health_check":
+        return _summarize_health_check_task(meta)
+    if task_type == "main_session":
+        return _summarize_detached_main_session_task(status, latest_assistant, latest_user, output_preview)
+    if task_type == "subagent":
+        return meta.get("summary") or meta.get("error") or meta.get("detailStatus") or status
+    return meta.get("error") or _summarize_background_command_task(meta, status, output_cursor, output_preview)
+
+
+def _detail_status_for_task_meta(meta: dict[str, Any], status: str, output_preview: str | None, latest_assistant: str | None) -> str:
+    task_type = meta.get("type")
+    if task_type == "health_check":
+        return "unhealthy" if meta.get("status") == "unhealthy" else str(meta.get("status") or status)
+    if task_type == "main_session":
+        return _describe_detached_main_session_detail_status(status, latest_assistant)
+    if task_type == "subagent":
+        return str(meta.get("detailStatus") or meta.get("completionReason") or meta.get("waitingReason") or status)
+    return _describe_background_command_detail_status(meta, status, output_preview)
+
+
+def _result_summary_for_task_meta(
+    meta: dict[str, Any],
+    status: str,
+    output_preview: str | None,
+    latest_assistant: str | None,
+    latest_user: str | None,
+) -> str | None:
+    task_type = meta.get("type")
+    if task_type == "health_check":
+        return _first_text(meta.get("lastError"), meta.get("lastResponseSnippet"))
+    if task_type == "main_session":
+        return _build_detached_main_session_result_summary(status, latest_assistant, latest_user)
+    if task_type == "subagent":
+        return _first_text(meta.get("resultSummary"), meta.get("summary"), meta.get("error"), meta.get("waitingReason"), meta.get("stopReason"))
+    return _build_background_command_result_summary(meta, output_preview)
+
+
+def _summarize_health_check_task(meta: dict[str, Any]) -> str:
+    if meta.get("lastError"):
+        return f"{'Check unhealthy' if meta.get('status') == 'unhealthy' else 'Last check failed'}: {meta.get('lastError')}"
+    if isinstance(meta.get("lastStatusCode"), int):
+        return f"Last HTTP status {meta.get('lastStatusCode')}"
+    if isinstance(meta.get("lastExitCode"), int):
+        return f"Last exit code {meta.get('lastExitCode')}"
+    return "Scheduled health check active."
+
+
+def _summarize_background_command_task(meta: dict[str, Any], status: str, output_cursor: int, output_preview: str | None) -> str | None:
+    if meta.get("status") == "reconciling" or status == "reconciling":
+        return "Recovered after daemon restart. Process still appears alive, but lifecycle tracking is degraded."
+    if status in {"backgrounded", "running"}:
+        return f"Background command is active. Latest output: {output_preview}" if output_preview else f"{_format_relative_path(str(meta.get('cwd') or ''))} · {output_cursor} bytes output"
+    if status == "completed":
+        return f"Background command completed successfully. Latest output: {output_preview}" if output_preview else "Background command completed successfully."
+    if status == "stopped":
+        return f"Background command was stopped. Latest output: {output_preview}" if output_preview else "Background command was stopped."
+    if meta.get("error"):
+        return str(meta.get("error"))
+    if isinstance(meta.get("exitCode"), int):
+        return f"Background command failed with exit code {meta.get('exitCode')}."
+    return output_preview
+
+
+def _build_background_command_result_summary(meta: dict[str, Any], output_preview: str | None) -> str | None:
+    for value in (meta.get("resultSummary"), meta.get("error"), output_preview):
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    if isinstance(meta.get("exitCode"), int):
+        return f"Exited with code {meta.get('exitCode')}."
+    return None
+
+
+def _describe_background_command_detail_status(meta: dict[str, Any], status: str, output_preview: str | None) -> str:
+    if meta.get("status") == "reconciling" or status == "reconciling":
+        return "recovered_after_daemon_restart"
+    if status in {"backgrounded", "running"}:
+        return "streaming_output" if output_preview else "launching"
+    if status == "completed":
+        return "result_ready"
+    if status == "stopped":
+        return "stopped"
+    if status == "failed":
+        return "failed"
+    return status
+
+
+def _summarize_detached_main_session_task(
+    status: str,
+    latest_assistant: str | None,
+    latest_user: str | None,
+    output_preview: str | None,
+) -> str | None:
+    if status == "reconciling":
+        return "Recovered after daemon restart. The detached session is still alive, but lifecycle tracking is degraded."
+    if status in {"backgrounded", "running"}:
+        if latest_assistant:
+            return f"This session is continuing in the background. Latest assistant state: {latest_assistant}"
+        if latest_user:
+            return f"This session is continuing in the background. Current work: {latest_user}"
+        return f"This session is continuing in the background. Runtime output: {output_preview}" if output_preview else "This session is continuing in the background."
+    if status == "completed":
+        return f"Detached session completed. Latest assistant result: {latest_assistant}" if latest_assistant else "Detached session completed."
+    if status == "stopped":
+        return f"Detached session stopped. Latest assistant state: {latest_assistant}" if latest_assistant else "Detached session stopped."
+    if status == "failed":
+        return f"Detached session failed. Latest assistant state: {latest_assistant}" if latest_assistant else "Detached session failed."
+    return latest_assistant or latest_user or output_preview
+
+
+def _build_detached_main_session_result_summary(status: str, latest_assistant: str | None, latest_user: str | None) -> str | None:
+    if latest_assistant:
+        return latest_assistant
+    if status in {"backgrounded", "running"} and latest_user:
+        return f"Continuing work on: {latest_user}"
+    return None
+
+
+def _describe_detached_main_session_detail_status(status: str, latest_assistant: str | None) -> str:
+    if status == "reconciling":
+        return "recovered_after_daemon_restart"
+    if status in {"backgrounded", "running"}:
+        return "continuing_session" if latest_assistant else "session_starting"
+    if status == "completed":
+        return "result_ready"
+    if status == "stopped":
+        return "stopped"
+    if status == "failed":
+        return "failed"
+    return status
+
+
+def _read_output_preview(output_file: str | None, tail_bytes: int = 512) -> str | None:
+    if not output_file:
+        return None
+    try:
+        path = Path(output_file)
+        size = path.stat().st_size
+        if size <= 0:
+            return None
+        bytes_to_read = min(size, max(64, tail_bytes))
+        with path.open("rb") as handle:
+            handle.seek(max(0, size - bytes_to_read))
+            data = handle.read(bytes_to_read)
+        lines = [_collapse_whitespace(line) for line in data.decode("utf-8", errors="replace").splitlines()]
+        preview = next((line for line in reversed(lines) if line), None)
+        return _truncate(preview, 180) if preview else None
+    except Exception:
+        return None
+
+
+def _latest_timestamp(left: Any, right: Any) -> str:
+    if not isinstance(left, str) or not left:
+        return str(right or now_iso())
+    if not isinstance(right, str) or not right:
+        return left
+    left_ms = _parse_iso_ms(left)
+    right_ms = _parse_iso_ms(right)
+    if left_ms is None or right_ms is None:
+        return left if left >= right else right
+    return left if left_ms >= right_ms else right
+
+
+def _format_relative_path(value: str) -> str:
+    home = os.environ.get("HOME")
+    if home and value.startswith(home):
+        return f"~{os.sep}{os.path.relpath(value, home)}"
+    return value
+
+
+def _first_text(*values: Any) -> str | None:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _collapse_whitespace(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _truncate(value: str, max_length: int) -> str:
+    if len(value) <= max_length:
+        return value
+    return f"{value[: max(0, max_length - 3)].rstrip()}..."
 
 
 def _task_snapshot(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1267,8 +1498,31 @@ def _empty_collaboration_snapshot() -> dict[str, Any]:
     }
 
 
+async def _collaboration_snapshot(session_id: str) -> dict[str, Any]:
+    session = await loadSession(session_id)
+    if not session:
+        return _empty_collaboration_snapshot()
+    metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
+    remote_id = metadata.get("remoteSessionId")
+    remote = await loadRemoteSession(remote_id) if isinstance(remote_id, str) and remote_id else None
+    bridge_id = metadata.get("bridgeId") or (remote or {}).get("bridgeId")
+    bridge = await loadBridge(bridge_id) if isinstance(bridge_id, str) and bridge_id else None
+    from .collaboration import buildCollaborationWorkers, createCollaborationSnapshot
+
+    workers = buildCollaborationWorkers(
+        {
+            "session": session,
+            "childAgents": await listChildAgents(),
+            "monitors": await listSessionMonitors(session_id),
+            "remote": remote,
+            "bridge": bridge,
+        }
+    )
+    return createCollaborationSnapshot(workers, remote, bridge)
+
+
 def _is_active_task_status(status: Any) -> bool:
-    return status in {"running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
+    return status in {"queued", "running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
 
 
 def _restore_without_saved_at(value: dict[str, Any]) -> dict[str, Any]:
@@ -1333,7 +1587,7 @@ def _map_status(value: Any) -> str:
         return str(value)
     if value in ("terminated", "cancelled"):
         return "stopped"
-    return "running"
+    return "idle"
 
 
 def _map_monitor_status(status: Any) -> str:
@@ -1394,7 +1648,7 @@ def _summarize_monitor(monitor: dict[str, Any]) -> str:
         parts.append(f"task {monitor.get('lastObservedTaskStatus')}")
     if monitor.get("lastObservedOutputSize") is not None:
         parts.append(f"{monitor.get('lastObservedOutputSize')} bytes observed")
-    return " | ".join(parts) if parts else str(monitor.get("goal") or "")
+    return " · ".join(parts) if parts else str(monitor.get("goal") or "")
 
 
 def _summarize_child_agent_task(child: dict[str, Any], latest_assistant: str | None, latest_user: str | None, result_summary: Any) -> str | None:
@@ -1432,12 +1686,13 @@ def _is_related_child_agent(session: dict[str, Any], child: dict[str, Any]) -> b
 
 
 def _summarize_latest_message(session: dict[str, Any], role: str) -> str | None:
+    max_length = 220 if role == "assistant" else 180
     for message in reversed(session.get("messages") or []):
         if message.get("role") != role:
             continue
         text = _message_text(message.get("content")).strip()
         if text:
-            return text if len(text) <= 180 else f"{text[:177].rstrip()}..."
+            return _truncate(text, max_length)
     return None
 
 
@@ -1514,7 +1769,14 @@ def _terminate_process(pid: int | None) -> bool:
 
 def _summarize_command(command: Any) -> str:
     text = str(command or "task").strip()
-    return text if len(text) <= 80 else f"{text[:77]}..."
+    return text if len(text) <= 72 else f"{text[:71].rstrip()}..."
+
+
+def _resolve_shell() -> str:
+    shell = os.environ.get("SHELL")
+    if shell:
+        return shell
+    return "/bin/bash" if Path("/bin/bash").exists() else "/bin/sh"
 
 
 def _process_exit_summary(status: str, code: int | None) -> str:

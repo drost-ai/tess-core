@@ -1997,7 +1997,7 @@ class AgentCoreTests(unittest.TestCase):
             self.assertNotEqual(daemon_state["pid"], os.getpid())
             self.assertTrue(Path(daemon_state["socketPath"]).exists())
             self.assertTrue(run(core.connectTaskSupervisorDaemonClient())["_daemonClient"])
-            for _ in range(40):
+            for _ in range(80):
                 meta = run(core.readTaskMeta(task_id))
                 if meta and meta.get("status") == "completed":
                     break
@@ -2038,7 +2038,7 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(all(event.get("sessionId") == session["id"] for event in task_events))
             completed = next(event for event in task_events if event.get("event") == "task.completed")
             self.assertEqual(completed["data"]["task_family"], "shell")
-            self.assertEqual(completed["data"]["detail_status"], "completed")
+            self.assertEqual(completed["data"]["detail_status"], "result_ready")
             self.assertEqual(completed["data"]["foreground_mode"], "background")
             self.assertTrue(completed["data"]["retrieve_only"])
             self.assertIn("result_summary", completed["data"])
@@ -2071,7 +2071,9 @@ class AgentCoreTests(unittest.TestCase):
             self.assertGreaterEqual(bootstrap["taskSnapshot"]["total"], 1)
             self.assertTrue(any(task.get("id") == task_id for task in bootstrap["taskSnapshot"]["tasks"]))
             self.assertEqual(bootstrap["monitorSnapshot"]["total"], 1)
-            self.assertEqual(bootstrap["collaborationSnapshot"]["workers"], [])
+            self.assertEqual(len(bootstrap["collaborationSnapshot"]["workers"]), 1)
+            self.assertEqual(bootstrap["collaborationSnapshot"]["workers"][0]["kind"], "monitor")
+            self.assertEqual(bootstrap["collaborationSnapshot"]["workers"][0]["monitorId"], monitor["id"])
 
             persisted_events = run(core.loadDaemonEvents())
             self.assertTrue(all(isinstance(event.get("cursor"), int) for event in persisted_events))
@@ -2164,6 +2166,150 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("bootstrap-child-task", restored_ids)
             self.assertIn(f"remote:{remote['id']}", restored_ids)
             self.assertEqual(restored["restoredTaskCount"], bootstrap["taskSnapshot"]["total"])
+            collaboration = bootstrap["collaborationSnapshot"]
+            self.assertEqual(len(collaboration["workers"]), 3)
+            self.assertEqual(collaboration["activeCount"], 2)
+            self.assertEqual(collaboration["awaitingInputCount"], 1)
+            self.assertEqual(collaboration["backgroundCount"], 2)
+            self.assertEqual(collaboration["remoteStatus"], "awaiting_input")
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
+    def test_task_runtime_emits_restored_registered_output_delta_and_restore_metadata(self):
+        root, home, workspace, previous = self.temp_context()
+        runtime = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            task_id = "runtime-task-family"
+            output_file = core.taskOutputPath(task_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("first\n", encoding="utf-8")
+            session["metadata"]["taskIds"] = [task_id]
+            run(core.saveSession(session))
+            run(
+                core.writeTaskMeta(
+                    task_id,
+                    {
+                        "type": "background_command",
+                        "taskId": task_id,
+                        "id": task_id,
+                        "sessionId": session["id"],
+                        "command": "pytest",
+                        "cwd": str(workspace),
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "status": "running",
+                        "outputFile": output_file,
+                        "title": "Runtime family",
+                        "detailStatus": "running",
+                        "owner": "daemon",
+                    },
+                )
+            )
+            events = []
+            runtime = run(core.createTaskRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
+            task_events = [event for event, data in events if data.get("task_id") == task_id]
+            self.assertEqual(task_events[:2], ["task.restored", "task.registered"])
+            self.assertTrue(any(event == "task.snapshot" and data["tasks"][0]["task_family"] == "shell" for event, data in events))
+            restored = run(core.loadSession(session["id"]))["metadata"]["runtimeRestore"]
+            self.assertEqual(restored["activeTasks"][0]["id"], task_id)
+            self.assertEqual(restored["restoredTaskCount"], 1)
+
+            Path(output_file).write_text("first\nsecond\n", encoding="utf-8")
+            for _ in range(40):
+                if any(event == "task.output_delta" and data.get("task_id") == task_id for event, data in events):
+                    break
+                time.sleep(0.05)
+            delta = next(data for event, data in events if event == "task.output_delta" and data.get("task_id") == task_id)
+            self.assertGreater(delta["bytes_delta"], 0)
+
+            meta = run(core.readTaskMeta(task_id))
+            meta.update({"status": "completed", "finishedAt": "2026-01-01T00:00:03Z", "updatedAt": "2026-01-01T00:00:03Z"})
+            run(core.writeTaskMeta(task_id, meta))
+            for _ in range(40):
+                if any(event == "task.completed" and data.get("task_id") == task_id for event, data in events):
+                    break
+                time.sleep(0.05)
+            self.assertTrue(any(event == "task.completed" and data.get("task_id") == task_id for event, data in events))
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            self.restore_home(root, previous)
+
+    def test_task_supervisor_projection_matches_reference_task_family_details(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["updatedAt"] = "2026-01-01T00:00:05Z"
+            session["messages"].append({"role": "user", "content": "Build the parity slice."})
+            session["messages"].append({"role": "assistant", "content": "The detached worker is synthesizing the result."})
+            background_id = "projection-background"
+            main_id = "projection-main"
+            health_id = "projection-health"
+            session["metadata"]["taskIds"] = [background_id, main_id, health_id]
+            run(core.saveSession(session))
+            background_output = core.taskOutputPath(background_id)
+            main_output = core.taskOutputPath(main_id)
+            health_output = core.taskOutputPath(health_id)
+            for output_file, text in [(background_output, "old line\nlatest output line\n"), (main_output, ""), (health_output, "timeout\n")]:
+                Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(output_file).write_text(text, encoding="utf-8")
+            run(core.writeTaskMeta(background_id, {"type": "background_command", "taskId": background_id, "sessionId": session["id"], "command": "python -m tests", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": background_output, "pid": 12345, "owner": "daemon"}))
+            run(core.writeTaskMeta(main_id, {"type": "main_session", "taskId": main_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": main_output, "attachableSessionId": session["id"], "owner": "daemon"}))
+            run(core.writeTaskMeta(health_id, {"type": "health_check", "taskId": health_id, "sessionId": session["id"], "cwd": str(workspace), "title": "API health", "url": "http://localhost:9", "intervalMs": 5000, "timeoutMs": 1000, "backoffMultiplier": 2, "maxIntervalMs": 20000, "failureThreshold": 2, "status": "unhealthy", "createdAt": "2026-01-01T00:00:00Z", "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:02Z", "lastError": "timeout", "lastStatusCode": 503, "consecutiveFailures": 1, "outputFile": health_output}))
+
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            bootstrap = run(supervisor["getBootstrap"](session["id"]))
+            tasks = {task["id"]: task for task in bootstrap["taskSnapshot"]["tasks"]}
+            background = tasks[background_id]
+            self.assertEqual(background["status"], "backgrounded")
+            self.assertEqual(background["summary"], "Background command is active. Latest output: latest output line")
+            self.assertEqual(background["detailStatus"], "streaming_output")
+            self.assertEqual(background["resultSummary"], "latest output line")
+            self.assertEqual(background["metadata"]["output_preview"], "latest output line")
+            self.assertEqual(background["metadata"]["detached_type"], "background_command")
+            detached = tasks[main_id]
+            self.assertEqual(detached["taskFamily"], "detached_session")
+            self.assertEqual(detached["summary"], "This session is continuing in the background. Latest assistant state: The detached worker is synthesizing the result.")
+            self.assertEqual(detached["detailStatus"], "continuing_session")
+            self.assertEqual(detached["resultSummary"], "The detached worker is synthesizing the result.")
+            self.assertFalse(detached["retrieveOnly"])
+            health = tasks[health_id]
+            self.assertEqual(health["status"], "degraded")
+            self.assertEqual(health["summary"], "Check unhealthy: timeout")
+            self.assertFalse(health["foregroundable"])
+            self.assertEqual(health["detailStatus"], "unhealthy")
+            self.assertEqual(health["resultSummary"], "timeout")
+            self.assertEqual(health["metadata"]["current_interval_ms"], 5000)
+            restored = run(core.loadSession(session["id"]))["metadata"]["runtimeRestore"]
+            self.assertEqual(restored["restoredTaskCount"], 3)
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
+    def test_task_supervisor_read_output_defaults_to_reference_tail_size(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            task_id = "tail-default-task"
+            output_file = core.taskOutputPath(task_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("a" * 13000, encoding="utf-8")
+            run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": "tail-session", "command": "long-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": output_file}))
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            default_tail = run(supervisor["readTaskOutput"](task_id))
+            self.assertTrue(default_tail["truncated"])
+            self.assertEqual(len(default_tail["output"]), 12000)
+            explicit_full = run(supervisor["readTaskOutput"](task_id, 0))
+            self.assertFalse(explicit_full["truncated"])
+            self.assertEqual(len(explicit_full["output"]), 13000)
         finally:
             if supervisor:
                 run(supervisor["close"]())
