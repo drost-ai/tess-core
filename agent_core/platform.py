@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .storage import getProjectRoot, getStateRoot, loadAuth, loadMcpServers, loadPlugins
+from .storage import getProjectRoot, getStateRoot, loadAuth, loadDaemonState, loadMcpServers, loadPlugins
 from .workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
 
 
@@ -210,6 +210,7 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
     tmux = await detectTmuxAvailability(args)
     ide_targets = await detectIdeTargets(args)
     chrome = await detectChromeCompanionStatus(args)
+    daemon = await loadDaemonState()
     workspace = await captureWorkspaceSnapshot(cwd)
     capabilities = summarizeWorkspaceCapabilities(workspace)
     mcp_records = []
@@ -223,11 +224,43 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
         _doctor_check("tmux", "pass" if tmux.get("available") else "warn", "tmux is available." if tmux.get("available") else "tmux is not available on PATH.", "Install tmux to use tmux startup flows.", {"binaryPath": tmux.get("binaryPath"), "version": tmux.get("version")}),
         _doctor_check("ide", "pass" if len(ide_targets) == 1 else "warn", f"Exactly one IDE target is available: {ide_targets[0]['displayName']}." if len(ide_targets) == 1 else "No supported IDE targets were detected." if not ide_targets else f"Multiple IDE targets are available: {', '.join(target['displayName'] for target in ide_targets)}.", "Expose exactly one supported IDE CLI on PATH for predictable IDE auto-connect.", {"targets": ide_targets}),
         _doctor_check("chrome", "pass" if chrome.get("supported") else "warn", "Chrome companion mode is supported on this platform." if chrome.get("supported") else "Chrome companion mode is not supported on this platform.", "Use Chrome companion mode only on supported platforms.", chrome),
+        _doctor_check("daemon", _daemon_check_status(daemon), _daemon_check_message(daemon), "Start the task supervisor daemon when background task, monitor, or bridge features are needed.", {"phase": (daemon or {}).get("phase"), "pid": (daemon or {}).get("pid"), "socketPath": (daemon or {}).get("socketPath"), "updatedAt": (daemon or {}).get("updatedAt")}),
         _doctor_check("git", "pass" if capabilities.get("hasGit") else "warn", "A git project root is available." if capabilities.get("hasGit") else "This directory is not inside a git repository.", "Run inside a git repository for worktree and PR-aware flows.", {"projectRoot": project_root}),
         _doctor_check("workspace", "pass" if capabilities.get("hasGit") or workspace.get("mode") else "warn", f"Workspace {workspace.get('workspaceName')} is running in {workspace.get('mode')} mode.", "Use worktree mode when isolated execution is required.", {"workspaceId": workspace.get("workspaceId"), "workspaceRoot": workspace.get("workspaceRoot"), "mode": workspace.get("mode")}),
         _doctor_check("extensions", "pass", f"Loaded config includes {len(mcp_records)} MCP server declarations and {len(plugin_records)} plugin records.", details={"mcpCount": len(mcp_records), "enabledPluginCount": len([record for record in plugin_records if record.get('enabled')]), "totalPluginCount": len(plugin_records)}),
     ]
     return {"healthy": all(check["status"] != "fail" for check in checks), "ok": all(check["status"] != "fail" for check in checks), "cwd": cwd, "projectRoot": project_root, "stateRoot": state_root, "install": install, "checks": checks}
+
+
+def _daemon_check_status(daemon: dict[str, Any] | None) -> str:
+    if not daemon:
+        return "warn"
+    pid = daemon.get("pid")
+    if isinstance(pid, int) and not _is_pid_alive(pid):
+        return "warn"
+    return "pass" if daemon.get("phase") in {"running", "recovering"} or daemon.get("status") == "running" else "warn"
+
+
+def _daemon_check_message(daemon: dict[str, Any] | None) -> str:
+    if not daemon:
+        return "Task supervisor daemon is not currently running."
+    pid = daemon.get("pid")
+    if isinstance(pid, int) and not _is_pid_alive(pid):
+        return f"Task supervisor daemon state references stale pid {pid}."
+    phase = daemon.get("phase") or daemon.get("status") or "unknown"
+    return f"Task supervisor daemon state is {phase}."
+
+
+def _is_pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
 
 
 async def _runner_which(runner: dict[str, Any], command: str) -> str | None:

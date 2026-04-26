@@ -1228,8 +1228,12 @@ class AgentCoreTests(unittest.TestCase):
             report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))
             self.assertTrue(report["healthy"])
             check_ids = {check["id"] for check in report["checks"]}
-            self.assertTrue({"auth", "package", "tmux", "ide", "chrome", "git", "workspace", "extensions"}.issubset(check_ids))
+            self.assertTrue({"auth", "package", "tmux", "ide", "chrome", "daemon", "git", "workspace", "extensions"}.issubset(check_ids))
             self.assertEqual(next(check for check in report["checks"] if check["id"] == "tmux")["status"], "pass")
+            self.assertEqual(next(check for check in report["checks"] if check["id"] == "daemon")["status"], "warn")
+            run(core.saveDaemonState({"phase": "running", "pid": os.getpid(), "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
+            daemon_report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))
+            self.assertEqual(next(check for check in daemon_report["checks"] if check["id"] == "daemon")["status"], "pass")
         finally:
             self.restore_home(root, previous)
 
