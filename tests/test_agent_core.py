@@ -1396,6 +1396,53 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(install["mode"], "repo-only")
             self.assertEqual(run(core.runRepoInstall({"runner": runner}))["steps"][0]["status"], "skipped")
             self.assertEqual(run(core.runRepoUpdate({"runner": runner}))["upstreamStatus"], "skipped")
+            with self.assertRaises(RuntimeError):
+                run(core.runRepoInstall({"runner": runner, "target": "nightly"}))
+
+            fake_repo = workspace / "platform-repo"
+            (fake_repo / "agent_core").mkdir(parents=True)
+            (fake_repo / "pyproject.toml").write_text('[project]\nversion = "1.2.3"\n', encoding="utf-8")
+            git_calls = []
+            git_state = {"head": "aaa", "dirty": "", "has_upstream": True}
+
+            def git_which(command):
+                return "/usr/bin/git" if command == "git" else None
+
+            def git_exec(command, args, cwd=None):
+                git_calls.append((command, tuple(args), cwd))
+                if args == ["rev-parse", "--show-toplevel"]:
+                    return str(fake_repo)
+                if args == ["status", "--porcelain"]:
+                    return git_state["dirty"]
+                if args == ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]:
+                    if not git_state["has_upstream"]:
+                        raise RuntimeError("no upstream")
+                    return "origin/main\n"
+                if args == ["rev-parse", "HEAD"]:
+                    return f"{git_state['head']}\n"
+                if args == ["pull", "--ff-only"]:
+                    git_state["head"] = "bbb"
+                    return "updated\n"
+                return ""
+
+            update = run(core.runRepoUpdate({"runner": {"which": git_which, "exec": git_exec}, "repoRoot": str(fake_repo)}))
+            self.assertEqual(update["upstreamStatus"], "updated")
+            self.assertEqual(update["steps"][0]["step"], "git_pull")
+            self.assertTrue(any(call[1] == ("pull", "--ff-only") for call in git_calls))
+            self.assertEqual(update["installStateAfter"]["repoVersion"], "1.2.3")
+
+            git_state["head"] = "bbb"
+            git_calls.clear()
+            up_to_date = run(core.runRepoUpdate({"runner": {"which": git_which, "exec": git_exec}, "repoRoot": str(fake_repo)}))
+            self.assertEqual(up_to_date["upstreamStatus"], "up-to-date")
+            self.assertTrue(any(call[1] == ("pull", "--ff-only") for call in git_calls))
+
+            git_state["dirty"] = " M file.py\n"
+            git_calls.clear()
+            dirty = run(core.runRepoUpdate({"runner": {"which": git_which, "exec": git_exec}, "repoRoot": str(fake_repo)}))
+            self.assertEqual(dirty["upstreamStatus"], "skipped")
+            self.assertIn("dirty", dirty["upstreamDetail"])
+            self.assertFalse(any(call[1] == ("pull", "--ff-only") for call in git_calls))
 
             report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))
             self.assertTrue(report["healthy"])

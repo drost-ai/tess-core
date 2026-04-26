@@ -257,22 +257,66 @@ async def handleChromeCompanionRpcPayload(payload: str) -> dict[str, Any] | None
 async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     runner = args.get("runner") or {}
-    pyproject = REPO_ROOT / "pyproject.toml"
+    repo_root = Path(args.get("repoRoot") or REPO_ROOT)
+    pyproject = repo_root / "pyproject.toml"
     version = _read_pyproject_version(pyproject)
-    package_dir = REPO_ROOT / "agent_core"
+    package_dir = repo_root / "agent_core"
     global_bin = await _runner_which(runner, "agent-core") or await _runner_which(runner, "tess")
+    repo_real = _safe_realpath(repo_root)
+    global_package_path = args.get("globalPackagePath")
+    global_package_real = _safe_realpath(global_package_path) if global_package_path else None
     mode = "repo-only" if package_dir.exists() else "uninstalled"
-    return {"repoRoot": str(REPO_ROOT), "repoVersion": version, "distExists": package_dir.exists(), "distStale": False, "globalBinPath": global_bin, "mode": mode, "installed": package_dir.exists(), "python": True}
+    if global_package_real and repo_real and os.path.normcase(global_package_real) == os.path.normcase(repo_real):
+        mode = "linked-global"
+    elif global_package_path:
+        mode = "global-copy"
+    return {"repoRoot": str(repo_root), "repoVersion": version, "distExists": package_dir.exists(), "distStale": False, "globalPackagePath": global_package_path, "globalPackageRealPath": global_package_real, "globalBinPath": global_bin, "mode": mode, "installed": package_dir.exists(), "python": True}
 
 
 async def runRepoInstall(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    state = await inspectInstallState(args, **kwargs)
-    return {"ok": True, "installState": state, "steps": [{"step": "python_package", "status": "skipped", "detail": "Python package is used directly from this checkout."}], "actions": []}
+    args = {**(args or {}), **kwargs}
+    target = args.get("target") or "latest"
+    if target not in {"latest", "stable", "0.1.0"}:
+        raise RuntimeError(f'This repo-backed install flow does not support target "{target}". Use "latest" or "stable".')
+    state = await inspectInstallState(args)
+    detail = "Python package is used directly from this checkout."
+    if args.get("force"):
+        detail = "Python package checkout was re-inspected after a forced install request."
+    return {"ok": True, "installState": state, "steps": [{"step": "python_package", "status": "skipped", "detail": detail}], "actions": []}
 
 
 async def runRepoUpdate(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    state = await inspectInstallState(args, **kwargs)
-    return {"ok": True, "installStateBefore": state, "installStateAfter": state, "steps": [{"step": "git_pull", "status": "skipped", "detail": "Automatic update is not run by the Python platform layer."}], "upstreamStatus": "skipped", "actions": []}
+    args = {**(args or {}), **kwargs}
+    runner = args.get("runner") or {}
+    repo_root = str(Path(args.get("repoRoot") or REPO_ROOT))
+    state_before = await inspectInstallState(args)
+    steps = []
+    upstream_status = "skipped"
+    upstream_detail = "No upstream git update was attempted."
+    git_binary = await _runner_which(runner, "git")
+    if git_binary and await _is_git_repo(runner, git_binary, repo_root):
+        dirty = await _git_is_dirty(runner, git_binary, repo_root)
+        if dirty:
+            upstream_detail = "Working tree is dirty, so `git pull --ff-only` was skipped."
+        elif await _has_git_upstream(runner, git_binary, repo_root):
+            before_head = (await _runner_exec(runner, git_binary, ["rev-parse", "HEAD"], repo_root)).strip()
+            await _runner_exec(runner, git_binary, ["pull", "--ff-only"], repo_root)
+            after_head = (await _runner_exec(runner, git_binary, ["rev-parse", "HEAD"], repo_root)).strip()
+            if before_head == after_head:
+                upstream_status = "up-to-date"
+                upstream_detail = "Git upstream was already up to date."
+            else:
+                upstream_status = "updated"
+                upstream_detail = "Pulled the latest fast-forward changes from git upstream."
+                steps.append({"step": "git_pull", "status": "run", "detail": upstream_detail})
+        else:
+            upstream_detail = "No git upstream is configured for this checkout."
+    else:
+        upstream_detail = "This checkout is not a git repo with an available git binary."
+    install = await runRepoInstall({**args, "force": False, "target": "latest"})
+    steps.extend(install.get("steps") or [])
+    state_after = await inspectInstallState(args)
+    return {"ok": True, "installStateBefore": state_before, "installStateAfter": state_after, "steps": steps, "upstreamStatus": upstream_status, "upstreamDetail": upstream_detail, "actions": []}
 
 
 async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -375,6 +419,36 @@ async def _runner_spawn_detached(runner: dict[str, Any], command: str, args: lis
             result = await result
         return int(result or 0)
     return await spawnDetached(command, args, cwd)
+
+
+def _safe_realpath(path: str | Path | None) -> str | None:
+    if not path:
+        return None
+    try:
+        return os.path.realpath(str(path))
+    except Exception:
+        return str(path)
+
+
+async def _is_git_repo(runner: dict[str, Any], git_binary: str, cwd: str) -> bool:
+    try:
+        await _runner_exec(runner, git_binary, ["rev-parse", "--show-toplevel"], cwd)
+        return True
+    except Exception:
+        return False
+
+
+async def _has_git_upstream(runner: dict[str, Any], git_binary: str, cwd: str) -> bool:
+    try:
+        await _runner_exec(runner, git_binary, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], cwd)
+        return True
+    except Exception:
+        return False
+
+
+async def _git_is_dirty(runner: dict[str, Any], git_binary: str, cwd: str) -> bool:
+    porcelain = await _runner_exec(runner, git_binary, ["status", "--porcelain"], cwd)
+    return bool(str(porcelain).strip())
 
 
 def _read_stream_chunk(stream: Any) -> bytes:
