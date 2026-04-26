@@ -1022,6 +1022,97 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_shell_commands_memory_monitor_resume_compact_review_and_tui(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            infos = []
+            errors = []
+            events = []
+            resumed = []
+            prompts = []
+            compaction_calls = []
+            tui_state = {"statusline": True, "theme": "tess", "mouse": "selection", "screen": "auto", "persist": 0, "refresh": 0}
+
+            def fake_compaction(payload):
+                compaction_calls.append(payload)
+                return {"status": "skipped", "reason": "below_threshold", "detail": "not enough transcript"}
+
+            def fake_run_prompt(payload):
+                prompts.append(payload)
+                return {"text": "review queued", "stopReason": "stop"}
+
+            hooks = {
+                "info": lambda title, message: infos.append((title, message)),
+                "error": lambda message: errors.append(message),
+                "persist": lambda: tui_state.__setitem__("persist", tui_state["persist"] + 1),
+                "refresh": lambda: tui_state.__setitem__("refresh", tui_state["refresh"] + 1),
+                "emitRuntimeEvent": lambda event, data: events.append((event, data)),
+                "getExtensionsReport": lambda: "mcp: ok",
+                "requestResume": lambda next_session: resumed.append(next_session["id"]),
+                "runCompaction": fake_compaction,
+                "runPrompt": fake_run_prompt,
+                "getStatusLineVisible": lambda: tui_state["statusline"],
+                "setStatusLineVisible": lambda visible: tui_state.__setitem__("statusline", visible),
+                "getTheme": lambda: tui_state["theme"],
+                "setTheme": lambda theme: tui_state.__setitem__("theme", theme),
+                "getMouseMode": lambda: tui_state["mouse"],
+                "setMouseMode": lambda mode: tui_state.__setitem__("mouse", mode),
+                "getScreenMode": lambda: tui_state["screen"],
+                "setScreenMode": lambda mode: tui_state.__setitem__("screen", mode),
+            }
+
+            memory = run(core.handleSlashCommand({"command": "/memory set Prefer shell parity tests", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Replaced project memory", memory["message"])
+            run(core.handleSlashCommand({"command": "/memory append Keep handlers deterministic", "session": session, "config": config, "hooks": hooks}))
+            memory_show = run(core.handleSlashCommand({"command": "/memory", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Prefer shell parity tests", memory_show["message"])
+            self.assertTrue(any(record["id"] == "manual-project-memory" for record in run(core.loadProjectMemoryRecords(str(workspace)))))
+
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-shell-monitor", "goal": "Watch shell parity"})
+            run(core.saveMonitor(monitor))
+            monitors = run(core.handleSlashCommand({"command": "/monitors", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Watch shell parity", monitors["message"])
+            run(core.handleSlashCommand({"command": f"/monitor stop {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(run(core.loadMonitor(monitor["id"]))["status"], "stopped")
+            run(core.handleSlashCommand({"command": f"/monitor resume {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(run(core.loadMonitor(monitor["id"]))["status"], "active")
+
+            other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            other["messages"] = [{"role": "user", "content": "resume target session"}]
+            run(core.saveSession(other))
+            resume_list = run(core.handleSlashCommand({"command": "/resume", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("resume target session", resume_list["message"])
+            run(core.handleSlashCommand({"command": f"/resume {other['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(resumed, [other["id"]])
+
+            compact = run(core.handleSlashCommand({"command": "/compact", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Checkpoint not created", compact["message"])
+            self.assertEqual(compaction_calls[0]["trigger"], "manual")
+            self.assertTrue(any(event == "compaction.started" for event, _ in events))
+            self.assertTrue(any(event == "compaction.skipped" for event, _ in events))
+
+            review = run(core.handleSlashCommand({"command": "/review providers", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(review["message"], "review queued")
+            self.assertEqual(prompts[0]["agentName"], "reviewer")
+            self.assertIn("providers", prompts[0]["prompt"])
+
+            extensions = run(core.handleSlashCommand({"command": "/extensions", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("mcp: ok", extensions["message"])
+            run(core.handleSlashCommand({"command": "/statusline off", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/theme next", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/mouse toggle", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/screen inline", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(tui_state["statusline"], False)
+            self.assertEqual(tui_state["theme"], "copper")
+            self.assertEqual(tui_state["mouse"], "capture")
+            self.assertEqual(tui_state["screen"], "inline")
+            self.assertGreaterEqual(tui_state["persist"], 3)
+            self.assertGreaterEqual(tui_state["refresh"], 2)
+        finally:
+            self.restore_home(root, previous)
+
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:

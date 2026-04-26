@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
+from ._utils import now_iso
+from .compaction import runCompaction
 from .config import (
     getDefaultEffortForProvider,
     listModelsForProvider,
@@ -15,14 +18,19 @@ from .config import (
     normalizeProviderProfileName,
     resolveFallbackProviderProfileName,
 )
+from .durable_memory import synchronizeManualProjectMemory
 from .remote import formatBridgeTail, formatRemoteSessionCandidate
 from .storage import (
+    getProjectMemoryPath,
     listChildAgents,
     listPlanApprovals,
     listRemoteSessions,
+    listSessionMonitors,
     listSessionTaskRecords,
+    listSessions,
     loadDaemonState,
     loadTaskRecord,
+    saveMonitor,
 )
 from .transcript import buildTranscriptSnapshot
 
@@ -124,6 +132,10 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return await _handle_permissions(arg_text, session, config, hooks)
     if command == "todos":
         return _info(hooks, "Todos", buildTodosReport(session))
+    if command == "memory":
+        return await _handle_memory(arg_text, session, hooks)
+    if command == "extensions":
+        return _handle_extensions(hooks)
     if command == "cost":
         return _info(hooks, "Usage", formatUsageBreakdown(session.get("metadata", {}).get("usage")))
     if command == "plans":
@@ -136,6 +148,24 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return _info(hooks, "Daemon", await buildDaemonReport())
     if command == "remote":
         return _info(hooks, "Remote", await buildRemoteReport(session))
+    if command == "monitors":
+        return _info(hooks, "Monitors", await buildMonitorsReport(session))
+    if command == "monitor":
+        return await _handle_monitor(arg_text, session, hooks)
+    if command == "resume":
+        return await _handle_resume(arg_text, session, hooks)
+    if command == "compact":
+        return await _handle_compact(arg_text, session, config, hooks, args)
+    if command == "review":
+        return await _handle_review(arg_text, hooks)
+    if command == "statusline":
+        return _handle_statusline(arg_text, hooks)
+    if command == "theme":
+        return _handle_theme(arg_text, hooks)
+    if command == "mouse":
+        return _handle_mouse(arg_text, hooks)
+    if command == "screen":
+        return _handle_screen(arg_text, hooks)
     if command == "transcript":
         entries = buildTranscriptSnapshot(session)
         return {"outcome": "handled", "entries": entries, "message": json.dumps(entries, indent=2)}
@@ -254,6 +284,278 @@ async def buildRemoteReport(session: dict[str, Any]) -> str:
     if bridge_id:
         lines.extend(["", "Bridge events:", await formatBridgeTail(bridge_id, 8)])
     return "\n".join(lines)
+
+
+async def buildMonitorsReport(session: dict[str, Any]) -> str:
+    monitors = await listSessionMonitors(session.get("id"))
+    if not monitors:
+        return "No background monitors are active for this session."
+    return "\n\n".join(formatMonitorRecord(monitor) for monitor in monitors[:12])
+
+
+async def _handle_memory(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    cwd = session.get("cwd") or os.getcwd()
+    memory_path = getProjectMemoryPath(cwd)
+    command, payload = _split_subcommand(arg_text)
+    if not command or command == "show":
+        records = await synchronizeManualProjectMemory(cwd)
+        try:
+            with open(memory_path, "r", encoding="utf-8") as handle:
+                content = handle.read().strip()
+        except FileNotFoundError:
+            content = ""
+        return _info(hooks, "Memory", "\n".join([f"path     {memory_path}", f"records  {len(records)}", "", content or "No memory stored for this project yet."]))
+    if command == "clear":
+        try:
+            os.remove(memory_path)
+        except FileNotFoundError:
+            pass
+        records = await synchronizeManualProjectMemory(cwd)
+        return _info(hooks, "Memory", f"Cleared project memory at {memory_path}\nrecords  {len(records)}")
+    if command not in {"set", "append"} or not payload:
+        return _error(hooks, "Usage: /memory [show|append TEXT|set TEXT|clear]")
+    os.makedirs(os.path.dirname(memory_path), exist_ok=True)
+    if command == "set":
+        next_content = f"{payload}\n"
+    else:
+        try:
+            with open(memory_path, "r", encoding="utf-8") as handle:
+                previous = handle.read().strip()
+        except FileNotFoundError:
+            previous = ""
+        next_content = f"{previous}\n{payload}\n" if previous else f"{payload}\n"
+    with open(memory_path, "w", encoding="utf-8") as handle:
+        handle.write(next_content)
+    records = await synchronizeManualProjectMemory(cwd)
+    verb = "Replaced" if command == "set" else "Appended to"
+    return _info(hooks, "Memory", f"{verb} project memory at {memory_path}\nrecords  {len(records)}")
+
+
+def _handle_extensions(hooks: dict[str, Any]) -> dict[str, Any]:
+    report = _call_value(hooks, "getExtensionsReport")
+    if report is None:
+        return _error(hooks, "/extensions is not available in this runtime.")
+    return _info(hooks, "Extensions", str(report))
+
+
+async def _handle_monitor(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    parts = arg_text.split(None, 1)
+    if len(parts) != 2 or parts[0] not in {"stop", "resume"}:
+        return _error(hooks, "Usage: /monitor <stop|resume> <monitor-id>")
+    monitors = await listSessionMonitors(session.get("id"))
+    monitor = _resolve_monitor(monitors, parts[1])
+    if not monitor:
+        return _error(hooks, f"No monitor matched: {parts[1]}")
+    now = now_iso()
+    monitor = {**monitor, "status": "stopped" if parts[0] == "stop" else "active", "updatedAt": now}
+    if parts[0] == "stop":
+        monitor["stoppedAt"] = now
+    else:
+        monitor.pop("stoppedAt", None)
+    await saveMonitor(monitor)
+    _call(hooks, "refresh")
+    await _persist(hooks)
+    return _info(hooks, "Monitor", f"{'Stopped' if parts[0] == 'stop' else 'Resumed'} monitor {monitor['id']}")
+
+
+async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    candidates = [candidate for candidate in await listSessions() if candidate.get("cwd") == session.get("cwd") and candidate.get("id") != session.get("id")]
+    if not arg_text:
+        if not candidates:
+            return _info(hooks, "Resume", "No other saved sessions found for this workspace.")
+        return _info(hooks, "Resume", "\n".join(formatSessionCandidate(candidate) for candidate in candidates[:10]))
+    matches = [candidate for candidate in candidates if _session_matches(candidate, arg_text)]
+    if not matches:
+        return _error(hooks, f"No saved session in this workspace matched: {arg_text}")
+    if len(matches) > 1:
+        return _info(hooks, "Resume", "\n".join(formatSessionCandidate(candidate) for candidate in matches[:10]))
+    request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
+    if not callable(request_resume):
+        return _error(hooks, "/resume switching is only available in the full-screen TUI.")
+    await _persist(hooks)
+    request_resume(matches[0])
+    return _handled(f"resuming {matches[0].get('id')}")
+
+
+async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    if _call_value(hooks, "isCompacting"):
+        return _info(hooks, "Compact", "Compaction is already running.")
+    _emit_runtime(hooks, "compaction.started", {"session_id": session.get("id"), "trigger": "manual", "current_token_estimate": ((session.get("metadata") or {}).get("compactionState") or {}).get("workingContextTokenEstimate")})
+    runner = hooks.get("runCompaction") if isinstance(hooks, dict) else None
+    runner = runner if callable(runner) else runCompaction
+    payload = {"session": session, "config": config, "trigger": "manual", "force": True}
+    if args.get("modelClient") is not None:
+        payload["modelClient"] = args["modelClient"]
+    try:
+        outcome = runner(payload)
+        if hasattr(outcome, "__await__"):
+            outcome = await outcome
+    except Exception as exc:
+        _emit_runtime(hooks, "compaction.failed", {"session_id": session.get("id"), "trigger": "manual", "error": str(exc)})
+        return _error(hooks, str(exc))
+    if outcome.get("status") == "skipped":
+        _emit_runtime(hooks, "compaction.skipped", {"session_id": session.get("id"), "trigger": "manual", "reason": outcome.get("reason"), "detail": outcome.get("detail")})
+        return _info(hooks, "Compact", "\n".join(["Checkpoint not created.", f"reason      {outcome.get('reason')}", f"detail      {outcome.get('detail')}"]))
+    _call(hooks, "refresh")
+    await _persist(hooks)
+    _emit_runtime(hooks, "compaction.completed", {"session_id": session.get("id"), "trigger": outcome.get("trigger"), "generation": outcome.get("generation"), "compacted_through_message_index": outcome.get("compactedThroughMessageIndex")})
+    artifacts = outcome.get("artifacts") or {}
+    return _info(hooks, "Compact", "\n".join(["Compacted working context.", f"generation  {outcome.get('generation')}", f"summary     {artifacts.get('summary', 'n/a')}", f"checkpoint  {artifacts.get('checkpoint', 'n/a')}"]))
+
+
+async def _handle_review(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
+    run_prompt = hooks.get("runPrompt") if isinstance(hooks, dict) else None
+    if not callable(run_prompt):
+        return _error(hooks, "/review is only available in an interactive runtime.")
+    result = run_prompt({"prompt": buildReviewPrompt(arg_text), "agentName": "reviewer"})
+    if hasattr(result, "__await__"):
+        result = await result
+    return _handled((result or {}).get("text") if isinstance(result, dict) else result or "")
+
+
+def _handle_statusline(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
+    get_visible = hooks.get("getStatusLineVisible") if isinstance(hooks, dict) else None
+    set_visible = hooks.get("setStatusLineVisible") if isinstance(hooks, dict) else None
+    if not callable(get_visible) or not callable(set_visible):
+        return _error(hooks, "/statusline is only available in the interactive TUI.")
+    if not arg_text:
+        return _info(hooks, "Statusline", f"Status line is {'on' if get_visible() else 'off'}.")
+    if arg_text not in {"on", "off"}:
+        return _error(hooks, "Usage: /statusline [on|off]")
+    set_visible(arg_text == "on")
+    return _info(hooks, "Statusline", f"Status line {arg_text}.")
+
+
+def _handle_theme(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
+    get_theme = hooks.get("getTheme") if isinstance(hooks, dict) else None
+    set_theme = hooks.get("setTheme") if isinstance(hooks, dict) else None
+    if not callable(get_theme) or not callable(set_theme):
+        return _error(hooks, "/theme is only available in the interactive TUI.")
+    if not arg_text:
+        return _info(hooks, "Theme", f"Current theme: {get_theme()}\nAvailable: {', '.join(AVAILABLE_TUI_THEMES)}")
+    if arg_text == "next":
+        current = get_theme()
+        index = AVAILABLE_TUI_THEMES.index(current) if current in AVAILABLE_TUI_THEMES else 0
+        theme = AVAILABLE_TUI_THEMES[(index + 1) % len(AVAILABLE_TUI_THEMES)]
+    else:
+        theme = "tess" if arg_text.strip().lower() == "claude" else arg_text.strip().lower()
+        if theme not in AVAILABLE_TUI_THEMES:
+            return _error(hooks, f"Unknown theme: {arg_text}. Expected: {', '.join(AVAILABLE_TUI_THEMES)}")
+    set_theme(theme)
+    return _info(hooks, "Theme", f"Theme set to {theme}")
+
+
+def _handle_mouse(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
+    get_mode = hooks.get("getMouseMode") if isinstance(hooks, dict) else None
+    set_mode = hooks.get("setMouseMode") if isinstance(hooks, dict) else None
+    if not callable(get_mode) or not callable(set_mode):
+        return _error(hooks, "/mouse is only available in the interactive TUI.")
+    if not arg_text:
+        return _info(hooks, "Mouse", f"Mouse mode is {get_mode()}.")
+    if arg_text not in {"on", "off", "toggle", "capture", "selection"}:
+        return _error(hooks, "Usage: /mouse [on|off|toggle]")
+    current = get_mode()
+    next_mode = "selection" if arg_text == "toggle" and current == "capture" else "capture" if arg_text in {"toggle", "on", "capture"} else "selection"
+    set_mode(next_mode)
+    return _info(hooks, "Mouse", f"Mouse mode set to {next_mode}.")
+
+
+def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
+    get_mode = hooks.get("getScreenMode") if isinstance(hooks, dict) else None
+    set_mode = hooks.get("setScreenMode") if isinstance(hooks, dict) else None
+    if not callable(get_mode) or not callable(set_mode):
+        return _error(hooks, "/screen is only available in the interactive TUI.")
+    if not arg_text:
+        return _info(hooks, "Screen", f"Screen mode is {get_mode()}.\nAvailable: auto, fullscreen, inline")
+    if arg_text not in {"auto", "fullscreen", "inline"}:
+        return _error(hooks, "Usage: /screen [auto|fullscreen|inline]")
+    set_mode(arg_text)
+    return _info(hooks, "Screen", f"Screen mode set to {arg_text}.")
+
+
+def formatMonitorRecord(record: dict[str, Any]) -> str:
+    lines = [
+        f"{_short_id(record.get('id', ''))}  {record.get('status')}  task {_short_id(record.get('taskId', ''))}",
+        f"goal         {truncate(collapseWhitespace(record.get('goal', '')), 160)}",
+        f"created      {str(record.get('createdAt', ''))[:19]}",
+        f"interval     {record.get('checkIntervalMs')}ms check - {record.get('heartbeatIntervalMs')}ms heartbeat",
+    ]
+    if record.get("lastAssistantUpdateAt"):
+        lines.append(f"last update  {str(record.get('lastAssistantUpdateAt'))[:19]}")
+    if record.get("lastObservedTaskStatus"):
+        lines.append(f"task status  {record.get('lastObservedTaskStatus')}")
+    if record.get("failureReason"):
+        lines.append(f"reason       {truncate(collapseWhitespace(record.get('failureReason')), 160)}")
+    return "\n".join(lines)
+
+
+def formatSessionCandidate(session: dict[str, Any]) -> str:
+    name = session.get("name") or _first_user_text(session) or "untitled"
+    return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncate(collapseWhitespace(name), 90)}"
+
+
+def buildReviewPrompt(arg_text: str) -> str:
+    base = [
+        "Review the current workspace and implementation context like a strict code reviewer.",
+        "Focus on bugs, regressions, risky assumptions, behavioral mismatches, and missing tests.",
+        "Return findings first with file references when possible.",
+    ]
+    if arg_text.strip():
+        base.extend(["", f"Additional review scope: {arg_text.strip()}"])
+    return "\n".join(base)
+
+
+def _split_subcommand(arg_text: str) -> tuple[str, str]:
+    parts = arg_text.split(None, 1)
+    return (parts[0].lower(), parts[1].strip() if len(parts) > 1 else "") if parts else ("", "")
+
+
+def _call_value(hooks: dict[str, Any], name: str) -> Any:
+    fn = hooks.get(name) if isinstance(hooks, dict) else None
+    return fn() if callable(fn) else None
+
+
+def _emit_runtime(hooks: dict[str, Any], event: str, data: dict[str, Any]) -> None:
+    fn = hooks.get("emitRuntimeEvent") if isinstance(hooks, dict) else None
+    if callable(fn):
+        fn(event, data)
+
+
+def _resolve_monitor(monitors: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
+    normalized = query.strip().lower()
+    return next((monitor for monitor in monitors if str(monitor.get("id", "")).lower() == normalized), None) or next((monitor for monitor in monitors if normalized in str(monitor.get("id", "")).lower()), None)
+
+
+def _session_matches(session: dict[str, Any], query: str) -> bool:
+    normalized = query.strip().lower()
+    values = [session.get("id"), session.get("name"), session.get("cwd"), session.get("model"), _first_user_text(session)]
+    return any(normalized in str(value).lower() for value in values if value)
+
+
+def _first_user_text(session: dict[str, Any]) -> str:
+    for message in session.get("messages") or []:
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text = " ".join(str(block.get("text", "")) for block in content if isinstance(block, dict) and block.get("type") == "text")
+            if text.strip():
+                return text
+    return ""
+
+
+def _short_id(value: str) -> str:
+    return value[:12] if len(value) > 12 else value
+
+
+def collapseWhitespace(value: Any) -> str:
+    return str(value or "").replace("\n", " ").replace("\t", " ").strip()
+
+
+def truncate(value: str, limit: int) -> str:
+    return value if len(value) <= limit else f"{value[: max(0, limit - 1)]}..."
 
 
 async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
