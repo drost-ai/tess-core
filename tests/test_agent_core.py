@@ -18,6 +18,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import agent_core as core
 from agent_core import testing
@@ -1405,6 +1406,109 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(remote_after_queue["lastEventSummary"].endswith("\u2026"))
             self.assertEqual(len(remote_after_queue["lastEventSummary"]), 96)
             run(bridge_runtime["close"]())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_remote_teleport_interactive_selection_matches_reference_flow(self):
+        class TtyBuffer(io.StringIO):
+            def isatty(self):
+                return True
+
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="bypassPermissions",
+            )
+            alpha = run(core.createRemoteSession({"session": session, "description": "Alpha remote", "channelServers": ["local"]}))
+            beta = run(core.createRemoteSession({"session": session, "description": "Beta remote", "channelServers": ["local"]}))
+            alpha["updatedAt"] = "2026-01-01T00:00:01Z"
+            beta["updatedAt"] = "2026-01-01T00:00:02Z"
+            run(core.saveRemoteSession(alpha))
+            run(core.saveRemoteSession(beta))
+
+            stdout = TtyBuffer()
+            with mock.patch.object(sys, "stdin", TtyBuffer()), mock.patch.object(sys, "stdout", stdout), mock.patch(
+                "builtins.input",
+                return_value="2",
+            ):
+                selected = run(core.resolveTeleportSession({"teleport": True, "options": {}}))
+            self.assertEqual(selected["remote"]["id"], alpha["id"])
+            self.assertEqual(selected["sessionId"], alpha["sessionId"])
+            self.assertIn("Select a remote session to resume:", stdout.getvalue())
+            self.assertIn(core.formatRemoteSessionCandidate(beta), stdout.getvalue())
+
+            with mock.patch.object(sys, "stdin", TtyBuffer()), mock.patch.object(sys, "stdout", TtyBuffer()), mock.patch(
+                "builtins.input",
+                return_value="Beta",
+            ):
+                selected_by_query = run(core.resolveTeleportSession({"teleport": "remote", "options": {}}))
+            self.assertEqual(selected_by_query["remote"]["id"], beta["id"])
+
+            with self.assertRaisesRegex(RuntimeError, 'Multiple remote sessions matched "remote"'):
+                run(core.resolveTeleportSession({"teleport": "remote", "options": {"print": True}}))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_collaboration_set_session_refreshes_runtime_snapshot(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session_a = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="bypassPermissions",
+            )
+            session_b = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="bypassPermissions",
+            )
+            remote = run(core.createRemoteSession({"session": session_b, "description": "Set-session remote", "channelServers": ["local"]}))
+            remote = run(core.updateRemoteSession(remote["id"], {"status": "active", "lastEventSummary": "Remote attached"}))
+            session_b["metadata"]["remoteSessionId"] = remote["id"]
+
+            events = []
+            runtime = run(
+                core.createCollaborationRuntime(
+                    {
+                        "session": session_a,
+                        "config": config,
+                        "startTicker": False,
+                        "emit": lambda event, data: events.append((event, data)),
+                    }
+                )
+            )
+            self.assertEqual(runtime["getSnapshot"]()["workers"], [])
+            runtime["setSession"](session_b, config)
+            for _ in range(40):
+                if runtime["getSnapshot"]().get("remoteStatus") == "active":
+                    break
+                time.sleep(0.05)
+            snapshot = runtime["getSnapshot"]()
+            self.assertEqual(snapshot["remoteStatus"], "active")
+            self.assertEqual(snapshot["workers"][0]["remoteSessionId"], remote["id"])
+            self.assertTrue(
+                any(event == "collaboration.snapshot" and data["remote_status"] == "active" for event, data in events)
+            )
+            self.assertTrue(
+                any(event == "remote.status_changed" and data["remote_session_id"] == remote["id"] for event, data in events)
+            )
+            run(runtime["close"]())
         finally:
             self.restore_home(root, previous)
 

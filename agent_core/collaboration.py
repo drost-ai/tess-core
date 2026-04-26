@@ -88,6 +88,8 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
         nonlocal session_ref, config_ref
         session_ref = session
         config_ref = config or config_ref
+        if not state["closed"]:
+            threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
 
     async def close() -> None:
         state["closed"] = True

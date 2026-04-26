@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import sys
 import threading
 import uuid
 from typing import Any
@@ -45,19 +46,27 @@ async def updateRemoteSession(remoteSessionId: str, updates: dict[str, Any]) -> 
 async def resolveTeleportSession(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
     args = {**(args or {}), **kwargs}
     teleport = args.get("teleport")
+    options = args.get("options") or {}
     if not teleport:
         return None
     sessions = await listRemoteSessions()
     if not sessions:
         raise RuntimeError("No remote sessions are available for teleport.")
     if isinstance(teleport, bool):
-        raise RuntimeError("`--teleport` without a value requires an interactive terminal or an explicit session ID.")
+        if not canPromptForSelection(options):
+            raise RuntimeError(
+                "`--teleport` without a value requires an interactive terminal or an explicit session ID."
+            )
+        selected = await promptToPickRemoteSession(sessions, "Select a remote session to resume:")
+        if not selected:
+            raise RuntimeError("No remote session was selected.")
+        return {"remote": selected, "sessionId": selected.get("sessionId")}
     matches = findMatchingRemoteSessions(sessions, str(teleport))
     if not matches:
         raise RuntimeError(f"No remote session matched: {teleport}")
-    if len(matches) > 1:
-        raise RuntimeError("\n".join([f'Multiple remote sessions matched "{teleport}".', *[f"  {formatRemoteSessionCandidate(remote)}" for remote in matches[:10]]]))
-    selected = matches[0]
+    selected = await resolveRemoteSelection(matches, str(teleport), options)
+    if not selected:
+        raise RuntimeError("No remote session was selected.")
     return {"remote": selected, "sessionId": selected.get("sessionId")}
 
 
@@ -217,6 +226,61 @@ def findMatchingRemoteSessions(sessions: list[dict[str, Any]], query: str) -> li
 def formatRemoteSessionCandidate(remote: dict[str, Any]) -> str:
     workspace = remote.get("workspaceName") or os.path.basename(remote.get("cwd") or "")
     return "  ".join([remote.get("id", "")[:8], str(workspace).ljust(18), str(remote.get("gitBranch") or "").ljust(18), str(remote.get("status", "")).ljust(10), _truncate_remote_summary(str(remote.get("title") or "")).ljust(34), str(remote.get("updatedAt", ""))[:19].replace("T", " ")])
+
+
+def canPromptForSelection(options: dict[str, Any] | None = None) -> bool:
+    options = options or {}
+    return not options.get("print") and bool(sys.stdin.isatty() and sys.stdout.isatty())
+
+
+async def resolveRemoteSelection(
+    matches: list[dict[str, Any]],
+    query: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if len(matches) == 1:
+        return matches[0]
+    if not canPromptForSelection(options):
+        raise RuntimeError(
+            "\n".join(
+                [
+                    f'Multiple remote sessions matched "{query}".',
+                    *[f"  {formatRemoteSessionCandidate(remote)}" for remote in matches[:10]],
+                ]
+            )
+        )
+    return await promptToPickRemoteSession(matches, f'Select a remote session matching "{query}":')
+
+
+async def promptToPickRemoteSession(
+    remoteSessions: list[dict[str, Any]],
+    prompt: str,
+) -> dict[str, Any] | None:
+    sys.stdout.write(f"\n{prompt}\n")
+    for index, remote in enumerate(remoteSessions[:12]):
+        sys.stdout.write(f"  {index + 1}. {formatRemoteSessionCandidate(remote)}\n")
+    answer = input("choice> ").strip()
+    if not answer:
+        return None
+    try:
+        numeric = int(answer)
+    except ValueError:
+        numeric = None
+    if numeric is not None and 1 <= numeric <= len(remoteSessions):
+        return remoteSessions[numeric - 1]
+    matches = findMatchingRemoteSessions(remoteSessions, answer)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise RuntimeError(
+            "\n".join(
+                [
+                    f'Multiple remote sessions still matched "{answer}".',
+                    *[f"  {formatRemoteSessionCandidate(remote)}" for remote in matches[:10]],
+                ]
+            )
+        )
+    raise RuntimeError(f'No remote session matched "{answer}".')
 
 
 def _truncate_remote_summary(value: str, limit: int = 96) -> str:
