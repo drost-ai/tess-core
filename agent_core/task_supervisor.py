@@ -83,6 +83,11 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         }
         await writeTaskMeta(task_id, meta)
         await saveTaskRecord(_build_task_record(meta, "Background command is running."))
+        session = await loadSession(session_id)
+        if session:
+            metadata = session.setdefault("metadata", {})
+            metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
+            await saveSession(session)
         await emit("task.updated", _task_event_payload(meta), session_id)
         watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
         _WATCHERS.add(watcher)
@@ -939,6 +944,9 @@ def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, A
     status = _map_status(meta.get("status"))
     is_subagent = meta.get("type") == "subagent"
     is_main_session = meta.get("type") == "main_session"
+    is_background_process = meta.get("type") in {"background_command", "main_session", "subagent"}
+    if status == "running" and is_background_process and not meta.get("finishedAt") and not meta.get("stoppedAt"):
+        status = "backgrounded"
     metadata = dict(meta.get("metadata") or {})
     metadata.update({"pid": meta.get("pid"), "exitCode": meta.get("exitCode"), "lastResult": meta.get("lastResult")})
     if is_subagent:

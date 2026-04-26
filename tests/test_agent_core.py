@@ -858,6 +858,55 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["tasks"]["activeCount"], 0)
         self.assertEqual(state["tasks"]["tasks"][0]["status"], "completed")
 
+    def test_runtime_state_matches_typed_event_projection_edges(self):
+        state = core.createInitialRuntimeState()
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "task.registered", "createdAt": "t1", "data": {"task_id": "health-1", "kind": "health_check", "status": "running", "title": "API health"}}))
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "health_check.unhealthy", "createdAt": "t2", "data": {"task_id": "health-1", "title": "API health", "error": "500"}}))
+        self.assertEqual(state["tasks"]["tasks"][0]["status"], "degraded")
+        self.assertEqual(state["tasks"]["failedCount"], 1)
+        self.assertIn("500", state["tasks"]["tasks"][0]["summary"])
+
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "health_check.recovered", "createdAt": "t3", "data": {"task_id": "health-1", "title": "API health"}}))
+        self.assertEqual(state["tasks"]["tasks"][0]["status"], "running")
+        self.assertEqual(state["tasks"]["failedCount"], 0)
+
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "collaboration.assistant_update", "createdAt": "t4", "data": {"source_kind": "monitor", "source_id": "health-1", "status": "running", "label": "API health", "text": "API recovered."}}))
+        self.assertEqual(state["collaboration"]["recentAssistantUpdates"][0]["sourceKind"], "monitor")
+        self.assertEqual(state["collaboration"]["recentAssistantUpdates"][0]["text"], "API recovered.")
+
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "bridge.message", "createdAt": "t5", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1", "text": "continue"}}))
+        self.assertTrue(state["bridge"]["attached"])
+        self.assertEqual(state["bridge"]["lastEventName"], "bridge.message")
+        self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
+
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "bridge.closed", "createdAt": "t6", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1"}}))
+        self.assertFalse(state["bridge"]["attached"])
+        self.assertEqual(state["bridge"]["lastEventName"], "bridge.closed")
+        self.assertEqual(state["collaboration"]["bridgeStatus"], "closed")
+
+    def test_bootstrap_runtime_exposes_typed_event_and_turn_lifecycle_surface(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            boot = run(core.bootstrapRuntime({"session": session, "config": config}))
+            self.assertEqual(boot["getState"]()["session"]["activeSessionId"], session["id"])
+            envelopes = []
+            unsubscribe = boot["subscribeEvents"](envelopes.append)
+            boot["startTurn"]({"prompt": "build", "agentName": "main"})
+            self.assertEqual(boot["getState"]()["turn"]["status"], "running")
+            self.assertEqual(envelopes[-1]["typedEvent"]["kind"], "turn.started")
+            boot["finishTurn"]({"kind": "completed", "stopReason": "stop", "message": "done"})
+            self.assertEqual(boot["getState"]()["turn"]["lastOutcome"]["message"], "done")
+            other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="acceptEdits")
+            boot["setActiveSession"](other, {**config, "permissionMode": "acceptEdits"})
+            self.assertEqual(boot["getState"]()["session"]["activeSessionId"], other["id"])
+            self.assertEqual(envelopes[-1]["typedEvent"]["kind"], "session.activated")
+            unsubscribe()
+            run(boot["close"]())
+        finally:
+            self.restore_home(root, previous)
+
     def test_collaboration_runtime_projects_workers_and_bridge_state(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -1853,6 +1902,32 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_task_supervisor_launch_records_backgrounded_task_and_session_metadata(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            events = []
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(0.4)')}"
+            started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "background parity"}))
+            task_id = started["taskId"]
+            record = run(supervisor["inspectTask"](task_id))
+            self.assertEqual(record["status"], "backgrounded")
+            self.assertEqual(record["taskFamily"], "shell")
+            self.assertTrue(record["retrieveOnly"])
+            persisted = run(core.loadSession(session["id"]))
+            self.assertIn(task_id, persisted["metadata"]["taskIds"])
+            start_event = next(event for event in events if event["event"] == "task.updated" and event["data"]["task_id"] == task_id)
+            self.assertEqual(start_event["data"]["status"], "backgrounded")
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
     def test_daemon_connection_cleans_stale_state_and_socket(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -2238,6 +2313,37 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(mcp_descriptors[0]["summary"], "stdio is connected with 2 tools and 1 resources")
             self.assertEqual(mcp_descriptors[1]["metadata"]["error"], "lost")
         finally:
+            self.restore_home(root, previous)
+
+    def test_monitor_runtime_emits_snapshot_status_and_assistant_update(self):
+        root, home, workspace, previous = self.temp_context()
+        runtime = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            task_id = "monitor-runtime-task"
+            output_file = core.taskOutputPath(task_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("starting\n", encoding="utf-8")
+            run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "python worker.py", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch runtime monitor", "checkIntervalMs": 2000})
+            run(core.saveMonitor(monitor))
+            events = []
+            runtime = run(core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
+            self.assertEqual(runtime["getSnapshot"]()["active"], 1)
+            self.assertTrue(any(event == "monitor.snapshot" for event, _ in events))
+            self.assertTrue(any(event == "monitor.status_changed" and data["task_id"] == task_id for event, data in events))
+            update = next(data for event, data in events if event == "monitor.assistant_update")
+            self.assertEqual(update["reason"], "start")
+            self.assertIn("watch runtime monitor", update["text"])
+            self.assertIn("watch runtime monitor", session["messages"][-1]["content"])
+            saved = run(core.loadMonitor(monitor["id"]))
+            self.assertEqual(saved["lastAssistantUpdateSummary"], update["text"])
+            self.assertIn(monitor["id"], session["metadata"]["monitorIds"])
+        finally:
+            if runtime:
+                run(runtime["close"]())
             self.restore_home(root, previous)
 
     def test_health_check_threshold_backoff_and_recovery(self):
@@ -2956,6 +3062,76 @@ class AgentCoreTests(unittest.TestCase):
                 run(runtime["close"]())
             server.shutdown()
             server.server_close()
+            self.restore_home(root, previous)
+
+    def test_mcp_discovery_only_swallows_method_not_found(self):
+        root, home, workspace, previous = self.temp_context()
+        mode = {"tools": "method_not_found"}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                request = json.loads(self.rfile.read(length).decode("utf-8"))
+                method = request.get("method")
+                if method == "initialize":
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "result": {"serverInfo": {"name": "edge"}}}
+                elif method == "tools/list" and mode["tools"] == "method_not_found":
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "error": {"code": -32601, "message": "Method not found"}}
+                elif method == "tools/list":
+                    self.send_response(500)
+                    self.end_headers()
+                    self.wfile.write(b"discovery failed")
+                    return
+                elif method == "resources/list":
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "error": {"code": -32601, "message": "Method not found"}}
+                else:
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "result": {}}
+                raw = json.dumps(payload).encode()
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        runtime = None
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
+            events = []
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}], "registeredChannels": ["edge"], "sessionId": "session-1", "onRuntimeEvent": lambda event, data: events.append((event, data))}))
+            status = runtime["listServerStatus"]()[0]
+            self.assertTrue(status["connected"])
+            self.assertEqual(status["tools"], 0)
+            self.assertTrue(status["capabilities"]["channelsSupported"])
+            self.assertTrue(any(event == "mcp.channel_registered" and data["server"] == "edge" for event, data in events))
+            run(runtime["close"]())
+            mode["tools"] = "server_error"
+            events = []
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}], "onRuntimeEvent": lambda event, data: events.append((event, data))}))
+            status = runtime["listServerStatus"]()[0]
+            self.assertFalse(status["connected"])
+            self.assertEqual(status["state"], "disconnected")
+            self.assertTrue(any(event == "mcp.server_connection_failed" for event, _ in events))
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            server.shutdown()
+            server.server_close()
+            self.restore_home(root, previous)
+
+    def test_mcp_channel_registration_failure_events_and_capability_status(self):
+        root, home, workspace, previous = self.temp_context()
+        events = []
+        try:
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [], "registeredChannels": ["missing"], "sessionId": "session-1", "onRuntimeEvent": lambda event, data: events.append((event, data))}))
+            self.assertTrue(any(event == "mcp.channel_registration_failed" and data["server"] == "missing" for event, data in events))
+            run(runtime["close"]())
+        finally:
             self.restore_home(root, previous)
 
 
