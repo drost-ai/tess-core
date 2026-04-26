@@ -938,7 +938,7 @@ class AgentCoreTests(unittest.TestCase):
             remote = run(core.createRemoteSession({"session": session, "description": "Remote QA", "channelServers": ["local"]}))
             session["metadata"]["remoteSessionId"] = remote["id"]
             bridge_events = []
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "emit": lambda event, data: bridge_events.append((event, data))}))
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: bridge_events.append((event, data))}))
             session["metadata"]["bridgeId"] = bridge_runtime["bridge"]["id"]
             message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please review", "source": "remote"}))
             self.assertEqual(message["source"], "remote")
@@ -984,6 +984,75 @@ class AgentCoreTests(unittest.TestCase):
             run(bridge_runtime["close"]())
             closed = run(core.loadBridge(bridge["id"]))
             self.assertEqual(closed["status"], "closed")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bridge_runtime_polls_inbox_and_records_received_event(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            remote = run(core.createRemoteSession({"session": session, "description": "Remote inbox QA", "channelServers": ["local"]}))
+            bridge_events = []
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: bridge_events.append((event, data))}))
+            message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please replay", "source": "remote"}))
+
+            delivered = run(bridge_runtime["pollInbox"]())
+            self.assertEqual([item["id"] for item in delivered], [message["id"]])
+            self.assertTrue(any(event == "bridge.message" and data["message_id"] == message["id"] and data["text"] == "please replay" for event, data in bridge_events))
+            bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            self.assertEqual(bridge["pendingMessages"], 0)
+            self.assertEqual(bridge["messageCount"], 1)
+            self.assertEqual(bridge["lastEventName"], "bridge.message.received")
+            remote_after_receive = run(core.loadRemoteSession(remote["id"]))
+            self.assertEqual(remote_after_receive["lastEventName"], "bridge.message.received")
+            self.assertIn("Bridge message: please replay", remote_after_receive["lastEventSummary"])
+            self.assertIn("bridge.message.received", run(core.formatBridgeTail(bridge["id"])))
+
+            self.assertEqual(run(bridge_runtime["pollInbox"]()), [])
+            bridge_after_repoll = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            self.assertEqual(bridge_after_repoll["messageCount"], 1)
+            run(bridge_runtime["close"]())
+            closed_remote = run(core.loadRemoteSession(remote["id"]))
+            self.assertEqual(closed_remote["bridgeStatus"], "closed")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_collaboration_runtime_authors_deterministic_assistant_update(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["messages"].append({"role": "user", "content": "Track the delegated work."})
+            child = {
+                "agentId": "agent-collab-update",
+                "sessionId": "child-update-session",
+                "parentSessionId": session["id"],
+                "name": "Delegate",
+                "provider": "openai",
+                "model": "gpt-5.4",
+                "mode": "bypassPermissions",
+                "runInBackground": True,
+                "status": "completed",
+                "startedAt": "2026-01-01T00:00:00Z",
+                "completedAt": "2026-01-01T00:00:02Z",
+                "lastUpdatedAt": "2026-01-01T00:00:02Z",
+                "resultSummary": "Collected the evidence.",
+            }
+            run(core.saveChildAgent(child))
+            session["metadata"]["childAgentIds"] = [child["agentId"]]
+            events = []
+            runtime = run(core.createCollaborationRuntime({"session": session, "config": config, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
+            update = next(data for event, data in events if event == "collaboration.assistant_update")
+            self.assertEqual(update["source_kind"], "subagent")
+            self.assertEqual(update["source_id"], child["agentId"])
+            self.assertIn("finished its background work", update["text"])
+            self.assertIn("Collected the evidence.", update["text"])
+            self.assertEqual(session["messages"][-1]["role"], "assistant")
+            self.assertEqual(session["messages"][-1]["content"], update["text"])
+            persisted = run(core.loadSession(session["id"]))
+            self.assertEqual(persisted["messages"][-1]["content"], update["text"])
+            run(runtime["close"]())
         finally:
             self.restore_home(root, previous)
 

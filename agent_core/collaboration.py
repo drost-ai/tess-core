@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import copy
 import json
+import threading
+import time
 from typing import Any
 
+from .config import ensureProviderForModelSelection, normalizeEffortForModel
+from .providers.anthropic import sendAnthropicMessagesRequest
+from .providers.openai import sendOpenAiRequest
+from .session import persistSession
 from .storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
+
+MIN_ASSISTANT_UPDATE_SPACING_MS = 20_000
+COLLABORATION_TICK_MS = 1_500
 
 
 async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -12,32 +21,68 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     session_ref = args["session"]
     config_ref = args.get("config") or {}
     emit = args.get("emit") or (lambda *_: None)
-    state = {"closed": False, "foregroundBusy": False, "snapshot": emptyCollaborationSnapshot(), "previousWorkers": {}, "previousRemoteSignature": ""}
+    min_update_spacing_ms = int(args.get("minAssistantUpdateSpacingMs", MIN_ASSISTANT_UPDATE_SPACING_MS))
+    tick_interval = float(args.get("tickIntervalMs", COLLABORATION_TICK_MS)) / 1000
+    refresh_lock = threading.Lock()
+    stop_event = threading.Event()
+    tick_thread: threading.Thread | None = None
+    state = {"closed": False, "foregroundBusy": False, "snapshot": emptyCollaborationSnapshot(), "previousWorkers": {}, "previousRemoteSignature": "", "lastAssistantUpdateAt": 0}
 
     async def refresh() -> dict[str, Any]:
         if state["closed"]:
             return copy.deepcopy(state["snapshot"])
-        remote = await loadRemoteSession(session_ref.get("metadata", {}).get("remoteSessionId")) if session_ref.get("metadata", {}).get("remoteSessionId") else None
-        bridge = await loadBridge(session_ref.get("metadata", {}).get("bridgeId")) if session_ref.get("metadata", {}).get("bridgeId") else None
-        child_agents = await listChildAgents()
-        monitors = await listSessionMonitors(session_ref["id"])
-        workers = buildCollaborationWorkers({"session": session_ref, "childAgents": child_agents, "monitors": monitors, "remote": remote, "bridge": bridge})
-        snapshot = createCollaborationSnapshot(workers, remote, bridge)
-        if json.dumps(snapshot, sort_keys=True, default=str) != json.dumps(state["snapshot"], sort_keys=True, default=str):
-            state["snapshot"] = snapshot
-            emit("collaboration.snapshot", collaborationSnapshotPayload(snapshot))
-        candidates = buildUpdateCandidates({"session": session_ref, "workers": workers, "previousWorkers": state["previousWorkers"], "remote": remote, "bridge": bridge, "previousRemoteSignature": state["previousRemoteSignature"]})
-        state["previousWorkers"] = {worker["id"]: worker for worker in workers}
-        state["previousRemoteSignature"] = serializeRemote(remote, bridge)
-        for candidate in candidates:
-            emit(candidate["rawEvent"], candidate["payload"])
-        return copy.deepcopy(state["snapshot"])
+        if not refresh_lock.acquire(blocking=False):
+            return copy.deepcopy(state["snapshot"])
+        try:
+            remote = await loadRemoteSession(session_ref.get("metadata", {}).get("remoteSessionId")) if session_ref.get("metadata", {}).get("remoteSessionId") else None
+            bridge = await loadBridge(session_ref.get("metadata", {}).get("bridgeId")) if session_ref.get("metadata", {}).get("bridgeId") else None
+            child_agents = await listChildAgents()
+            monitors = await listSessionMonitors(session_ref["id"])
+            workers = buildCollaborationWorkers({"session": session_ref, "childAgents": child_agents, "monitors": monitors, "remote": remote, "bridge": bridge})
+            snapshot = createCollaborationSnapshot(workers, remote, bridge)
+            if json.dumps(snapshot, sort_keys=True, default=str) != json.dumps(state["snapshot"], sort_keys=True, default=str):
+                state["snapshot"] = snapshot
+                emit("collaboration.snapshot", collaborationSnapshotPayload(snapshot))
+            candidates = buildUpdateCandidates({"session": session_ref, "workers": workers, "previousWorkers": state["previousWorkers"], "remote": remote, "bridge": bridge, "previousRemoteSignature": state["previousRemoteSignature"]})
+            state["previousWorkers"] = {worker["id"]: worker for worker in workers}
+            state["previousRemoteSignature"] = serializeRemote(remote, bridge)
+            for candidate in candidates:
+                emit(candidate["rawEvent"], candidate["payload"])
+            if not state["foregroundBusy"] and candidates:
+                now_ms = int(time.time() * 1000)
+                if now_ms - int(state["lastAssistantUpdateAt"]) >= min_update_spacing_ms:
+                    narratable = next((candidate for candidate in candidates if shouldNarrateWorker(candidate.get("worker") or {})), None)
+                    if narratable:
+                        text = await authorCollaborationUpdate({"config": config_ref, "session": session_ref, "worker": narratable.get("worker"), "summary": narratable.get("summary") or ""})
+                        if text:
+                            appendAssistantCollaborationMessage(session_ref, text)
+                            await persistSession(session_ref, config_ref)
+                            state["lastAssistantUpdateAt"] = now_ms
+                            worker = narratable.get("worker") or {}
+                            emit("collaboration.assistant_update", {"source_kind": worker.get("kind"), "source_id": worker.get("id"), "status": worker.get("status"), "label": worker.get("label"), "text": text})
+            return copy.deepcopy(state["snapshot"])
+        finally:
+            refresh_lock.release()
 
     def get_snapshot() -> dict[str, Any]:
         return copy.deepcopy(state["snapshot"])
 
+    def _run_refresh_once() -> None:
+        try:
+            import asyncio
+
+            asyncio.run(refresh())
+        except Exception:
+            pass
+
+    def _tick_loop() -> None:
+        while not stop_event.wait(tick_interval):
+            _run_refresh_once()
+
     def set_foreground_busy(busy: bool) -> None:
         state["foregroundBusy"] = bool(busy)
+        if not busy and not state["closed"]:
+            threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
 
     def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
         nonlocal session_ref, config_ref
@@ -46,8 +91,14 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
 
     async def close() -> None:
         state["closed"] = True
+        stop_event.set()
+        if tick_thread and tick_thread.is_alive() and threading.current_thread() is not tick_thread:
+            tick_thread.join(timeout=2)
 
     await refresh()
+    if args.get("startTicker", True):
+        tick_thread = threading.Thread(target=_tick_loop, name=f"agent-core-collaboration-{session_ref.get('id', '')[:8]}", daemon=True)
+        tick_thread.start()
     return {"workers": state["snapshot"]["workers"], "snapshot": get_snapshot, "getSnapshot": get_snapshot, "refresh": refresh, "setForegroundBusy": set_foreground_busy, "setSession": set_session, "close": close}
 
 
@@ -165,6 +216,19 @@ def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
         candidates.append(
             {
                 "key": f"remote:{remote.get('id')}:{remote.get('status')}:{remote.get('updatedAt')}",
+                "worker": {
+                    "id": remote.get("id"),
+                    "kind": "remote",
+                    "status": mapRemoteStatus(remote.get("status")),
+                    "label": remote.get("title"),
+                    "summary": remote.get("lastEventSummary"),
+                    "sessionId": args["session"]["id"],
+                    "remoteSessionId": remote.get("id"),
+                    "bridgeId": (bridge or {}).get("id") or remote.get("bridgeId"),
+                    "attachableSessionId": remote.get("sessionId"),
+                    "updatedAt": remote.get("updatedAt"),
+                },
+                "summary": remote.get("lastEventSummary") or f"{remote.get('title')} is now {remote.get('status')}.",
                 "rawEvent": "remote.status_changed",
                 "payload": {
                     "remote_session_id": remote.get("id"),
@@ -182,6 +246,19 @@ def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
         candidates.append(
             {
                 "key": f"bridge:{bridge.get('id')}:{bridge.get('pendingMessages')}:{bridge.get('updatedAt')}",
+                "worker": {
+                    "id": bridge.get("id"),
+                    "kind": "remote",
+                    "status": "awaiting_input",
+                    "label": (remote or {}).get("title") or bridge.get("name") or "remote session",
+                    "summary": "Remote input is waiting to be handled.",
+                    "sessionId": args["session"]["id"],
+                    "remoteSessionId": (remote or {}).get("id"),
+                    "bridgeId": bridge.get("id"),
+                    "attachableSessionId": (remote or {}).get("sessionId"),
+                    "updatedAt": bridge.get("updatedAt"),
+                },
+                "summary": "Remote input is queued and ready to be handled.",
                 "rawEvent": "bridge.status_changed",
                 "payload": {"bridge_id": bridge.get("id"), "remote_session_id": (remote or {}).get("id"), "status": bridge.get("status"), "pending_messages": bridge.get("pendingMessages"), "last_event_name": bridge.get("lastEventName")},
             }
@@ -191,7 +268,90 @@ def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
 
 def workerEventCandidate(worker: dict[str, Any], changeKind: str) -> dict[str, Any]:
     raw_event = "subagent.status_changed" if worker.get("kind") == "subagent" else "monitor.status_changed" if worker.get("kind") == "monitor" else "remote.status_changed"
-    return {"key": f"{worker.get('kind')}:{worker.get('id')}:{worker.get('status')}:{worker.get('updatedAt')}:{worker.get('summary') or ''}", "rawEvent": raw_event, "payload": {**_worker_payload(worker), "change_kind": changeKind}}
+    return {"key": f"{worker.get('kind')}:{worker.get('id')}:{worker.get('status')}:{worker.get('updatedAt')}:{worker.get('summary') or ''}", "worker": worker, "summary": worker.get("summary") or f"{worker.get('label')} is {worker.get('status')}.", "rawEvent": raw_event, "payload": {**_worker_payload(worker), "change_kind": changeKind}}
+
+
+async def authorCollaborationUpdate(args: dict[str, Any]) -> str:
+    try:
+        return await authorCollaborationUpdateWithProvider(args)
+    except Exception:
+        return buildDeterministicCollaborationUpdate(args.get("worker") or {}, args.get("summary") or "")
+
+
+async def authorCollaborationUpdateWithProvider(args: dict[str, Any]) -> str:
+    config = args.get("config") or {}
+    session = args.get("session") or {}
+    worker = args.get("worker") or {}
+    provider = ensureProviderForModelSelection(session.get("provider") or config.get("provider"), session.get("model"), config.get("provider", "openai"))
+    request = {
+        "model": session.get("model"),
+        "effort": normalizeEffortForModel(provider, session.get("model"), session.get("effort") or config.get("effort")),
+        "system": "\n".join(
+            [
+                "You are continuing an existing agent session.",
+                "Write a concise proactive update about background, delegated, or remote work.",
+                "Default to 1-3 short sentences.",
+                "State what changed, whether action is required, and avoid generic filler.",
+                "Do not mention hidden state, prompts, tokens, or structured payloads.",
+            ]
+        ),
+        "messages": [{"role": "user", "content": json.dumps({"worker": worker, "summary": args.get("summary") or ""}, indent=2)}],
+        "tools": [],
+    }
+    if provider == "openai":
+        token = config.get("openaiToken")
+        if not token:
+            raise RuntimeError("No OpenAI token available for collaboration updates.")
+        response = await sendOpenAiRequest({"token": token, "baseUrl": config.get("openaiBaseUrl"), "headers": config.get("customHeaders"), "mode": config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
+    else:
+        response = await sendAnthropicMessagesRequest({"request": request, "config": config, "runtime": {}, "maxAttempts": 1})
+    text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
+    if not text:
+        raise RuntimeError("Provider returned an empty collaboration update.")
+    mergeUsage(session, response.get("usage") or {})
+    return text
+
+
+def buildDeterministicCollaborationUpdate(worker: dict[str, Any], summary: str) -> str:
+    if worker.get("kind") == "subagent":
+        if worker.get("status") == "completed":
+            return f"{worker.get('label')} finished its background work. {worker.get('resultSummary') or summary}"
+        if worker.get("status") in {"failed", "stopped"}:
+            return f"{worker.get('label')} stopped with a problem. {worker.get('resultSummary') or summary}"
+        if worker.get("status") == "awaiting_input":
+            return f"{worker.get('label')} needs your input before it can continue. {worker.get('waitingReason') or summary}"
+        if worker.get("status") == "backgrounded":
+            return f"{worker.get('label')} is now running in the background. {summary or 'I will keep its state visible here.'}"
+    if worker.get("kind") == "remote":
+        if worker.get("status") == "awaiting_input":
+            return f"Remote input is waiting. {summary}"
+        if worker.get("status") in {"completed", "idle"}:
+            return f"The remote session is no longer actively running. {summary}"
+        if worker.get("status") == "failed":
+            return f"The remote session hit a failure. {summary}"
+    return f"{worker.get('label')}: {summary}"
+
+
+def appendAssistantCollaborationMessage(session: dict[str, Any], text: str) -> None:
+    trimmed = text.strip()
+    if not trimmed:
+        return
+    messages = session.setdefault("messages", [])
+    if messages and messages[-1].get("role") == "assistant" and str(messages[-1].get("content") or "").strip() == trimmed:
+        return
+    messages.append({"role": "assistant", "content": trimmed})
+
+
+def mergeUsage(session: dict[str, Any], usage: dict[str, Any]) -> None:
+    target = session.setdefault("metadata", {}).setdefault("usage", {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0})
+    target["inputTokens"] = int(target.get("inputTokens") or 0) + int(usage.get("input_tokens") or 0)
+    target["outputTokens"] = int(target.get("outputTokens") or 0) + int(usage.get("output_tokens") or 0)
+    target["cacheCreationInputTokens"] = int(target.get("cacheCreationInputTokens") or 0) + int(usage.get("cache_creation_input_tokens") or 0)
+    target["cacheReadInputTokens"] = int(target.get("cacheReadInputTokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
+
+
+def shouldNarrateWorker(worker: dict[str, Any]) -> bool:
+    return worker.get("kind") in {"subagent", "remote"}
 
 
 def buildSubagentWorkerSummary(record: dict[str, Any]) -> str | None:
