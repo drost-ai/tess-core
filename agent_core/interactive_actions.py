@@ -110,12 +110,6 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return _handled("")
 
     runtime_command = _find_runtime_command(command, runtime_commands)
-    if runtime_command:
-        result = runtime_command["handler"]({"args": arg_text, "session": session, "config": config, "hooks": hooks})
-        if hasattr(result, "__await__"):
-            result = await result
-        return _handled(result or "")
-
     if command == "help":
         return _info(hooks, "Commands", buildSlashHelp({"hooks": hooks, "runtimeCommands": runtime_commands}))
     if command in {"exit", "quit"}:
@@ -176,6 +170,15 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return {"outcome": "handled", "entries": entries, "message": json.dumps(entries, indent=2)}
     if command == "bug":
         return _info(hooks, "Bug", "Open an issue with the current debug bundle and reproduction details.")
+    if runtime_command:
+        result = runtime_command["handler"]({"argText": arg_text, "args": arg_text, "session": session, "config": config, "hooks": hooks})
+        if hasattr(result, "__await__"):
+            result = await result
+        if isinstance(result, dict):
+            return result
+        if result in {"handled", "exit", "pass"}:
+            return {"outcome": result}
+        return _handled(result or "")
     return {"outcome": "pass"}
 
 

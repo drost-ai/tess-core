@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import threading
 import uuid
 from typing import Any
@@ -183,7 +184,15 @@ async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:
     events = await loadBridgeEvents(bridgeId)
     if not events:
         return "No bridge events recorded."
-    return "\n".join(f"{item.get('createdAt')}  {item.get('event')}  {_truncate_remote_summary(str((item.get('data') or {}).get('text') or (item.get('data') or {}).get('summary') or item.get('data')))}" for item in events[-limit:])
+    lines = []
+    for item in events[-limit:]:
+        data = item.get("data") or {}
+        if isinstance(data, dict) and isinstance(data.get("text"), str):
+            summary = _truncate_remote_summary(data["text"])
+        else:
+            summary = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        lines.append(f"{item.get('createdAt')}  {item.get('event')}  {summary}")
+    return "\n".join(lines)
 
 
 async def listActiveBridgeRows() -> list[str]:
@@ -211,7 +220,7 @@ def formatRemoteSessionCandidate(remote: dict[str, Any]) -> str:
 
 
 def _truncate_remote_summary(value: str, limit: int = 96) -> str:
-    return value if len(value) <= limit else f"{value[:limit - 1]}..."
+    return value if len(value) <= limit else f"{value[:limit - 1]}…"
 
 
 def _build_bridge_event_summary(event: str, data: dict[str, Any]) -> str:

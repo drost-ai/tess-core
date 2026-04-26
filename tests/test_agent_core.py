@@ -21,6 +21,7 @@ from types import SimpleNamespace
 
 import agent_core as core
 from agent_core import testing
+import agent_core.monitors as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
 import agent_core.tools as tools_module
@@ -1050,6 +1051,26 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_bridge_tail_and_truncation_match_reference_shape(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            remote = run(core.createRemoteSession({"session": session, "description": "Remote diagnostics QA", "channelServers": ["local"]}))
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda *_: None}))
+            run(bridge_runtime["recordEvent"]("bridge.diagnostic", {"summary": "diagnostic", "count": 2}))
+            tail = run(core.formatBridgeTail(bridge_runtime["bridge"]["id"]))
+            self.assertIn('bridge.diagnostic  {"summary":"diagnostic","count":2}', tail)
+
+            long_text = "x" * 120
+            run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": long_text, "source": "remote"}))
+            remote_after_queue = run(core.loadRemoteSession(remote["id"]))
+            self.assertTrue(remote_after_queue["lastEventSummary"].endswith("\u2026"))
+            self.assertEqual(len(remote_after_queue["lastEventSummary"]), 96)
+            run(bridge_runtime["close"]())
+        finally:
+            self.restore_home(root, previous)
+
     def test_collaboration_runtime_authors_deterministic_assistant_update(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -1107,7 +1128,17 @@ class AgentCoreTests(unittest.TestCase):
                 "setTheme": lambda _theme: None,
             }
 
-            runtime_commands = [{"name": "hello", "usage": "/hello", "description": "Say hello", "handler": lambda _args: "hello from plugin"}]
+            runtime_seen = {}
+
+            def hello_handler(payload):
+                runtime_seen["hello"] = payload
+                return "hello from plugin"
+
+            def status_override(payload):
+                runtime_seen["status_override"] = payload
+                return "plugin status"
+
+            runtime_commands = [{"name": "hello", "usage": "/hello", "description": "Say hello", "handler": hello_handler}, {"name": "status", "usage": "/status", "description": "Should not override builtin", "handler": status_override}]
             commands = core.listSlashCommands({"includeTheme": True, "runtimeCommands": runtime_commands})
             names = [command["name"] for command in commands]
             self.assertIn("provider", names)
@@ -1121,12 +1152,15 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("/hello", help_result["message"])
 
             self.assertEqual(run(core.handleSlashCommand({"command": "plain text"}))["outcome"], "pass")
-            self.assertEqual(run(core.handleSlashCommand({"command": "/hello", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))["message"], "hello from plugin")
+            self.assertEqual(run(core.handleSlashCommand({"command": "/hello plugin args", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))["message"], "hello from plugin")
+            self.assertEqual(runtime_seen["hello"]["argText"], "plugin args")
+            self.assertEqual(runtime_seen["hello"]["args"], "plugin args")
             run(core.handleSlashCommand({"command": "/clear", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(counters["clear"], 1)
 
             status = run(core.handleSlashCommand({"command": "/status", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("session", status["message"])
+            self.assertNotIn("status_override", runtime_seen)
             self.assertEqual(infos[-1][0], "Status")
             providers_report = run(core.handleSlashCommand({"command": "/providers", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("openai  (active)", providers_report["message"])
@@ -2512,6 +2546,53 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(saved["lastAssistantUpdateSummary"], update["text"])
             self.assertIn(monitor["id"], session["metadata"]["monitorIds"])
         finally:
+            if runtime:
+                run(runtime["close"]())
+            self.restore_home(root, previous)
+
+    def test_monitor_runtime_uses_provider_authored_update_and_usage(self):
+        root, home, workspace, previous = self.temp_context()
+        runtime = None
+        original_send = monitors_module.sendOpenAiRequest
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config["openaiToken"] = "test-token"
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["messages"].append({"role": "user", "content": "Please monitor the build."})
+            run(core.saveSession(session))
+            task_id = "monitor-provider-task"
+            output_file = core.taskOutputPath(task_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("pytest started\n", encoding="utf-8")
+            run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "pytest", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch provider monitor", "summaryStyle": "brief", "checkIntervalMs": 2000})
+            run(core.saveMonitor(monitor))
+            calls = {}
+
+            async def fake_send(args):
+                calls["args"] = args
+                return {"content": [{"type": "text", "text": "Provider says the build monitor is live."}], "usage": {"input_tokens": 7, "output_tokens": 3, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 1}}
+
+            monitors_module.sendOpenAiRequest = fake_send
+            events = []
+            runtime = run(core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
+            update = next(data for event, data in events if event == "monitor.assistant_update")
+            self.assertEqual(update["text"], "Provider says the build monitor is live.")
+            request = calls["args"]["request"]
+            self.assertEqual(request["tools"], [])
+            payload = json.loads(request["messages"][0]["content"])
+            self.assertEqual(payload["reason"], "start")
+            self.assertEqual(payload["goal"], "watch provider monitor")
+            self.assertEqual(payload["summary_style"], "brief")
+            self.assertEqual(payload["new_output_excerpt"], "pytest started")
+            self.assertEqual(session["metadata"]["usage"]["inputTokens"], 7)
+            self.assertEqual(session["metadata"]["usage"]["outputTokens"], 3)
+            self.assertEqual(session["metadata"]["usage"]["cacheCreationInputTokens"], 2)
+            self.assertEqual(session["metadata"]["usage"]["cacheReadInputTokens"], 1)
+            saved_session = run(core.loadSession(session["id"]))
+            self.assertEqual(saved_session["messages"][-1]["content"], "Provider says the build monitor is live.")
+        finally:
+            monitors_module.sendOpenAiRequest = original_send
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)

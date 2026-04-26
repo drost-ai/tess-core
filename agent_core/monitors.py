@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import uuid
 from pathlib import Path
 from typing import Any, Callable
 
 from ._utils import now_iso
-from .storage import listSessionMonitors, readTaskMeta, saveMonitor, saveSession, taskOutputPath, writeTaskMeta
+from .config import ensureProviderForModelSelection, normalizeEffortForModel
+from .providers.anthropic import sendAnthropicMessagesRequest
+from .providers.openai import sendOpenAiRequest
+from .session import persistSession
+from .storage import listSessionMonitors, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 
 
 MONITOR_TICK_MS = 1500
@@ -95,7 +100,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
             if elapsed < MIN_NARRATION_SPACING_MS:
                 return
         excerpt = _read_output_excerpt(monitor.get("taskId"), int(next_monitor.get("lastNarratedOutputSize") or 0), output_size, MAX_OUTPUT_EXCERPT_CHARS)
-        text = _build_deterministic_monitor_update(next_monitor, task, reason, excerpt["text"], excerpt["omittedBytes"])
+        text = await _author_monitor_update(config_ref, session_ref, next_monitor, task, reason, excerpt["text"], excerpt["omittedBytes"])
         if not text:
             return
         _append_assistant_monitor_message(session_ref, text)
@@ -112,7 +117,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         await saveMonitor(next_monitor)
         _sync_session_monitor_metadata(session_ref, await listSessionMonitors(session_ref["id"]))
         with _suppress():
-            await saveSession(session_ref)
+            await persistSession(session_ref, config_ref)
         emit(
             "monitor.assistant_update",
             {
@@ -147,11 +152,20 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     def set_foreground_busy(busy: bool) -> None:
         nonlocal foreground_busy
         foreground_busy = busy
+        if not busy:
+            _schedule_tick()
 
     def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
         nonlocal session_ref, config_ref
         session_ref = session
         config_ref = config or config_ref
+        _schedule_tick()
+
+    def _schedule_tick() -> None:
+        with _suppress():
+            loop = loop_task.get_loop()
+            if loop.is_running() and not loop.is_closed():
+                loop.call_soon_threadsafe(lambda: asyncio.create_task(tick()))
 
     return {"close": close, "setForegroundBusy": set_foreground_busy, "getSnapshot": lambda: snapshot, "setSession": set_session}
 
@@ -292,6 +306,74 @@ def _monitor_update_reason(monitor: dict[str, Any], final_status: str, output_ch
     return None
 
 
+async def _author_monitor_update(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
+    try:
+        return await _author_monitor_update_with_provider(config, session, monitor, task, reason, output_excerpt, omitted_bytes)
+    except Exception:
+        return _build_deterministic_monitor_update(monitor, task, reason, output_excerpt, omitted_bytes)
+
+
+async def _author_monitor_update_with_provider(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
+    provider = ensureProviderForModelSelection(session.get("provider") or config.get("provider"), session.get("model") or config.get("model"), config.get("provider", "openai"))
+    model = session.get("model") or config.get("model")
+    request = {
+        "model": model,
+        "effort": normalizeEffortForModel(provider, model, session.get("effort") or config.get("effort")) if model else None,
+        "system": "\n".join(
+            [
+                "You are continuing an existing agent session.",
+                "Write a concise proactive update for the user about a monitored background task.",
+                "Default to 1-3 short sentences.",
+                "Be concrete, state what changed, and mention completion or failure clearly.",
+                "Do not mention tokens, prompts, or that you are summarizing structured data.",
+                "Do not ask the user to poll again. You are the one proactively updating them.",
+            ]
+        ),
+        "messages": [
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "reason": reason,
+                        "goal": monitor.get("goal"),
+                        "summary_style": monitor.get("summaryStyle"),
+                        "task": {
+                            "status": (task or {}).get("status") or "unknown",
+                            "exit_code": (task or {}).get("exitCode"),
+                            "command": (task or {}).get("command"),
+                            "cwd": (task or {}).get("cwd"),
+                            "finished_at": (task or {}).get("finishedAt"),
+                            "error": (task or {}).get("error"),
+                        },
+                        "monitor": {
+                            "status": monitor.get("status"),
+                            "created_at": monitor.get("createdAt"),
+                            "last_assistant_update_at": monitor.get("lastAssistantUpdateAt"),
+                            "last_assistant_update_summary": monitor.get("lastAssistantUpdateSummary"),
+                            "omitted_output_bytes": omitted_bytes,
+                        },
+                        "new_output_excerpt": output_excerpt or "",
+                    },
+                    indent=2,
+                ),
+            }
+        ],
+        "tools": [],
+    }
+    if provider == "openai":
+        token = config.get("openaiToken")
+        if not token:
+            raise RuntimeError("No OpenAI token available for monitor updates.")
+        response = await sendOpenAiRequest({"token": token, "baseUrl": config.get("openaiBaseUrl"), "headers": config.get("customHeaders"), "mode": config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
+    else:
+        response = await sendAnthropicMessagesRequest({"request": request, "config": config, "runtime": {}, "maxAttempts": 1})
+    text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
+    if not text:
+        raise RuntimeError("Provider returned an empty monitor update.")
+    _merge_usage(session, response.get("usage") or {})
+    return text
+
+
 def _build_deterministic_monitor_update(monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
     label = monitor.get("goal") or f"task {str(monitor.get('taskId') or '')[:8]}"
     if reason == "start":
@@ -325,6 +407,14 @@ def _append_assistant_monitor_message(session: dict[str, Any], text: str) -> Non
     if isinstance(last, dict) and last.get("role") == "assistant" and str(last.get("content") or "").strip() == trimmed:
         return
     messages.append({"role": "assistant", "content": trimmed})
+
+
+def _merge_usage(session: dict[str, Any], usage: dict[str, Any]) -> None:
+    target = session.setdefault("metadata", {}).setdefault("usage", {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0})
+    target["inputTokens"] = int(target.get("inputTokens") or 0) + int(usage.get("input_tokens") or 0)
+    target["outputTokens"] = int(target.get("outputTokens") or 0) + int(usage.get("output_tokens") or 0)
+    target["cacheCreationInputTokens"] = int(target.get("cacheCreationInputTokens") or 0) + int(usage.get("cache_creation_input_tokens") or 0)
+    target["cacheReadInputTokens"] = int(target.get("cacheReadInputTokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
 
 
 def _sync_session_monitor_metadata(session: dict[str, Any], monitors: list[dict[str, Any]]) -> None:
