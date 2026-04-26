@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 from urllib.parse import urlparse
@@ -19,6 +20,7 @@ DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 DEFAULT_CODEX_INSTRUCTIONS = "You are a helpful and reliable assistant."
 OPENAI_REQUEST_START_TIMEOUT_MS = 120_000
 OPENAI_STREAM_IDLE_TIMEOUT_MS = 60_000
+OPENAI_ABORT_POLL_INTERVAL_MS = 50
 
 
 async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -502,23 +504,52 @@ async def _race_openai_activity(
     had_tool_use: bool,
     abort_signal: Any = None,
 ) -> Any:
-    try:
-        return await asyncio.wait_for(awaitable, timeout=max(1, timeout_ms) / 1000)
-    except asyncio.TimeoutError as exc:
-        _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
-        raise createProviderRequestError(
-            createProviderFailureRecord(
-                provider="openai",
-                providerLabel=provider_label,
-                phase=phase,
-                category="timeout",
-                retryable=not had_output and not had_tool_use,
-                attempt=attempt,
-                hadAssistantOutput=had_output,
-                hadToolUse=had_tool_use,
-                rawMessage=f"OpenAI request timed out after {timeout_ms}ms while waiting for provider activity.",
-            )
-        ) from exc
+    _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
+    task = asyncio.ensure_future(awaitable)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + (max(1, timeout_ms) / 1000)
+    poll_seconds = OPENAI_ABORT_POLL_INTERVAL_MS / 1000
+    while True:
+        if task.done():
+            return task.result()
+        if _signal_aborted(abort_signal):
+            await _cancel_openai_activity_task(task)
+            _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            await _cancel_openai_activity_task(task)
+            _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
+            raise _create_openai_timeout(provider_label, phase, attempt, had_output, had_tool_use, timeout_ms)
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout=min(poll_seconds, remaining))
+        except asyncio.TimeoutError:
+            if task.done():
+                return task.result()
+            continue
+
+
+def _create_openai_timeout(provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool, timeout_ms: int) -> Any:
+    return createProviderRequestError(
+        createProviderFailureRecord(
+            provider="openai",
+            providerLabel=provider_label,
+            phase=phase,
+            category="timeout",
+            retryable=not had_output and not had_tool_use,
+            attempt=attempt,
+            hadAssistantOutput=had_output,
+            hadToolUse=had_tool_use,
+            rawMessage=f"OpenAI request timed out after {timeout_ms}ms while waiting for provider activity.",
+        )
+    )
+
+
+async def _cancel_openai_activity_task(task: asyncio.Future[Any]) -> None:
+    if task.done():
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await task
 
 
 def _raise_openai_cancelled(runtime: dict[str, Any], provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool) -> None:

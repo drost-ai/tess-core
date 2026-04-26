@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 from typing import Any
@@ -22,6 +23,7 @@ MESSAGES_COUNT_TOKENS_API_URL = "https://api.anthropic.com/v1/messages/count_tok
 ANTHROPIC_REQUEST_START_TIMEOUT_MS = 120_000
 ANTHROPIC_STREAM_IDLE_TIMEOUT_MS = 60_000
 ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS = 120_000
+ANTHROPIC_ABORT_POLL_INTERVAL_MS = 50
 
 
 def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
@@ -337,23 +339,52 @@ async def _race_anthropic_activity(
     hadToolUse: bool = False,
     abortSignal: Any = None,
 ) -> Any:
-    try:
-        return await asyncio.wait_for(awaitable, timeout=max(1, timeout_ms) / 1000)
-    except asyncio.TimeoutError as exc:
-        _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
-        raise createProviderRequestError(
-            createProviderFailureRecord(
-                provider="anthropic",
-                providerLabel="Anthropic",
-                phase=phase,
-                category="timeout",
-                retryable=not hadAssistantOutput and not hadToolUse,
-                attempt=attempt,
-                hadAssistantOutput=hadAssistantOutput,
-                hadToolUse=hadToolUse,
-                rawMessage=f"Anthropic request timed out after {timeout_ms}ms while waiting for provider activity.",
-            )
-        ) from exc
+    _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
+    task = asyncio.ensure_future(awaitable)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + (max(1, timeout_ms) / 1000)
+    poll_seconds = ANTHROPIC_ABORT_POLL_INTERVAL_MS / 1000
+    while True:
+        if task.done():
+            return task.result()
+        if _signal_aborted(abortSignal):
+            await _cancel_anthropic_activity_task(task)
+            _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            await _cancel_anthropic_activity_task(task)
+            _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
+            raise _create_anthropic_timeout(phase, attempt, hadAssistantOutput, hadToolUse, timeout_ms)
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout=min(poll_seconds, remaining))
+        except asyncio.TimeoutError:
+            if task.done():
+                return task.result()
+            continue
+
+
+def _create_anthropic_timeout(phase: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, timeout_ms: int) -> Any:
+    return createProviderRequestError(
+        createProviderFailureRecord(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            phase=phase,
+            category="timeout",
+            retryable=not hadAssistantOutput and not hadToolUse,
+            attempt=attempt,
+            hadAssistantOutput=hadAssistantOutput,
+            hadToolUse=hadToolUse,
+            rawMessage=f"Anthropic request timed out after {timeout_ms}ms while waiting for provider activity.",
+        )
+    )
+
+
+async def _cancel_anthropic_activity_task(task: asyncio.Future[Any]) -> None:
+    if task.done():
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await task
 
 
 def _raise_anthropic_cancelled(runtime: dict[str, Any], phase: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool) -> None:
