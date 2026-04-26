@@ -38,7 +38,6 @@ def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str
             "labels": [],
             "recentAssistantUpdates": [],
         },
-        "status": None,
     }
 
 
@@ -56,7 +55,7 @@ def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[
             return
         state = next_state
         for subscriber in list(subscribers):
-            subscriber(get_state())
+            subscriber()
 
     def subscribe(fn):
         subscribers.append(fn)
@@ -130,7 +129,7 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             **next_state.get("turn", {}),
             "status": "failed",
             "liveStatus": None,
-            "lastOutcome": {"kind": "failed", "message": _field(data, "message") or "Turn failed. Review the error above.", "updatedAt": timestamp},
+            "lastOutcome": {"kind": "failed", "message": "Turn failed. Review the error above.", "updatedAt": timestamp},
         }
     elif typ == "turn.cancelled":
         next_state["turn"] = {
@@ -147,10 +146,10 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
         }
         next_state["provider"] = {**next_state.get("provider", {}), "phase": "idle"}
     elif typ == "status.updated":
-        next_state["status"] = data
+        next_state.pop("status", None)
         next_state["turn"] = {**next_state.get("turn", {}), "liveStatus": {"message": _field(data, "message"), "detail": _field(data, "detail"), "source": "model", "updatedAt": timestamp}}
     elif typ == "status.cleared":
-        next_state["status"] = None
+        next_state.pop("status", None)
         next_state["turn"] = {**next_state.get("turn", {}), "liveStatus": None}
     elif typ == "provider.retrying":
         next_attempt = _field(data, "nextAttempt", "next_attempt")

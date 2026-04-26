@@ -1094,6 +1094,23 @@ class AgentCoreTests(unittest.TestCase):
 
     def test_runtime_state_matches_typed_event_projection_edges(self):
         state = core.createInitialRuntimeState()
+        self.assertNotIn("status", state)
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))
+        self.assertNotIn("status", state)
+        self.assertEqual(state["turn"]["liveStatus"]["message"], "Working")
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.cleared", "createdAt": "t0b", "data": {}}))
+        self.assertNotIn("status", state)
+        self.assertIsNone(state["turn"]["liveStatus"])
+        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "turn.failed", "createdAt": "t0c", "data": {"message": "custom failure"}}))
+        self.assertEqual(state["turn"]["lastOutcome"]["message"], "Turn failed. Review the error above.")
+
+        store = core.createRuntimeStateStore(core.createInitialRuntimeState())
+        subscriber_calls = []
+        unsubscribe = store["subscribe"](lambda: subscriber_calls.append(store["getState"]()["turn"]["status"]))
+        store["dispatch"](core.createRuntimeEvent({"event": "turn.started", "createdAt": "t0d", "data": {"prompt": "go"}}))
+        unsubscribe()
+        self.assertEqual(subscriber_calls, ["running"])
+
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "task.registered", "createdAt": "t1", "data": {"task_id": "health-1", "kind": "health_check", "status": "running", "title": "API health"}}))
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "health_check.unhealthy", "createdAt": "t2", "data": {"task_id": "health-1", "title": "API health", "error": "500"}}))
         self.assertEqual(state["tasks"]["tasks"][0]["status"], "degraded")
