@@ -1140,6 +1140,89 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_bootstrap_runtime_composes_local_runtimes_bridge_and_dynamic_tools(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            default_tools = core.getDefaultToolList()
+            config["tools"] = list(default_tools)
+            config["allowedTools"] = list(default_tools)
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            remote = run(core.createRemoteSession({"session": session, "description": "Bridge parity", "channelServers": ["local"]}))
+            session["metadata"]["remoteControlEnabled"] = True
+            session["metadata"]["remoteSessionId"] = remote["id"]
+            dynamic_tool = SimpleNamespace(name="RemoteEcho")
+            mcp_runtime = {"createToolDefinitions": lambda: [dynamic_tool], "close": lambda: None}
+
+            boot = run(core.bootstrapRuntime({"session": session, "config": config, "mcpRuntime": mcp_runtime, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))
+            tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
+            self.assertIn("RemoteEcho", tool_names)
+            self.assertIn("RemoteEcho", config["tools"])
+            self.assertIn("RemoteEcho", config["allowedTools"])
+            self.assertTrue(boot["monitors"])
+            self.assertTrue(boot["tasks"])
+            self.assertTrue(boot["collaboration"])
+            self.assertTrue(boot["bridge"])
+            state = boot["getState"]()
+            self.assertTrue(state["bridge"]["attached"])
+            self.assertEqual(state["bridge"]["bridgeId"], boot["bridge"]["bridge"]["id"])
+            self.assertEqual(boot["getMonitorSnapshot"](), state["monitors"]["snapshot"])
+            self.assertEqual(boot["getTaskSnapshot"]()["total"], state["tasks"]["total"])
+            run(boot["close"]())
+            closed_bridge = run(core.loadBridge(boot["bridge"]["bridge"]["id"]))
+            self.assertEqual(closed_bridge["status"], "closed")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bootstrap_runtime_daemon_mode_subscribes_and_rebinds_sessions(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            subscriptions = []
+            unsubscriptions = []
+            closed = []
+
+            def subscribe(session_id, listener):
+                subscriptions.append((session_id, listener))
+                return lambda: unsubscriptions.append(session_id)
+
+            async def get_status():
+                return {"phase": "running", "epoch": "epoch-1", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "attachedClients": 1, "watchedSessions": 1, "activeTasks": 0, "updatedAt": "2026-01-01T00:00:00Z"}
+
+            async def close():
+                closed.append(True)
+
+            daemon = {"subscribe": subscribe, "getStatus": get_status, "close": close}
+            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonClient": daemon}))
+            self.assertIsNone(boot["monitors"])
+            self.assertIsNone(boot["tasks"])
+            self.assertIsNone(boot["collaboration"])
+            self.assertEqual(boot["getState"]()["daemon"]["phase"], "running")
+            self.assertEqual(boot["getState"]()["daemon"]["activeTasks"], 0)
+            self.assertEqual(subscriptions[0][0], session["id"])
+
+            envelopes = []
+            unsubscribe_events = boot["subscribeEvents"](envelopes.append)
+            subscriptions[-1][1]({"event": "task.snapshot", "data": {"session_id": session["id"], "total": 1, "active": 1, "backgrounded": 1, "awaiting_input": 0, "failed": 0, "labels": ["Build"], "tasks": [{"id": "task-daemon", "kind": "background_command", "status": "backgrounded", "title": "Build"}]}})
+            self.assertEqual(envelopes[-1]["typedEvent"]["kind"], "task.snapshot")
+            self.assertEqual(boot["getTaskSnapshot"]()["total"], 1)
+
+            other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            boot["setActiveSession"](other, config)
+            for _ in range(20):
+                if len(subscriptions) >= 2:
+                    break
+                time.sleep(0.05)
+            self.assertIn(session["id"], unsubscriptions)
+            self.assertEqual(subscriptions[-1][0], other["id"])
+            unsubscribe_events()
+            run(boot["close"]())
+            self.assertIn(other["id"], unsubscriptions)
+            self.assertEqual(closed, [True])
+        finally:
+            self.restore_home(root, previous)
+
     def test_collaboration_runtime_projects_workers_and_bridge_state(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -1168,6 +1251,23 @@ class AgentCoreTests(unittest.TestCase):
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch tests"})
             monitor["lastAssistantUpdateSummary"] = "Tests are still running."
             run(core.saveMonitor(monitor))
+            run(
+                core.writeTaskMeta(
+                    "task-monitor",
+                    {
+                        "type": "background_command",
+                        "taskId": "task-monitor",
+                        "id": "task-monitor",
+                        "sessionId": session["id"],
+                        "command": "pytest",
+                        "cwd": str(workspace),
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:01Z",
+                        "status": "running",
+                        "outputFile": core.taskOutputPath("task-monitor"),
+                    },
+                )
+            )
             remote = run(core.createRemoteSession({"session": session, "description": "Remote QA", "channelServers": ["local"]}))
             session["metadata"]["remoteSessionId"] = remote["id"]
             bridge_events = []

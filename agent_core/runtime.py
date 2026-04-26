@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from ._utils import maybe_await
 from .collaboration import createCollaborationRuntime
 from .daemon import ensureTaskSupervisorDaemon
 from .mcp import createMcpRuntime
+from .monitors import createMonitorRuntime
 from .plugins import loadPluginRuntime
+from .remote import createBridgeRuntime
 from .runtime_events import createRuntimeEvent
 from .runtime_state import createInitialRuntimeState, createRuntimeStateStore
 from .session_runtime import createSessionRuntimeController
+from .storage import configureRuntimeHome
+from .task_runtime import createTaskRuntime
 from .tools import createBuiltinTools
 from .workspace import createWorkspaceController
+from .config import getDefaultToolList
 
 
 async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -20,9 +26,12 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     owned_closers = []
     session = args.get("session")
     config = args.get("config") or {}
+    if config.get("runtimeHome"):
+        configureRuntimeHome(config["runtimeHome"])
     cwd = args.get("cwd") or config.get("cwd") or (session or {}).get("cwd")
     state_store = createRuntimeStateStore(createInitialRuntimeState(session) if session else None)
     session_runtime: dict[str, Any] | None = None
+    daemon_unsubscribe = None
 
     def emit_runtime_event(event: str, data: dict[str, Any] | None = None):
         active_session = session_runtime["getActiveSession"]() if session_runtime else session
@@ -72,37 +81,84 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     if daemon is None and args.get("daemonEnabled"):
         daemon = await ensureTaskSupervisorDaemon({"cwd": cwd})
 
+    bridge_runtime = args.get("bridgeRuntime") or args.get("bridge")
+    session_metadata = (session or {}).get("metadata") if isinstance((session or {}).get("metadata"), dict) else {}
+    if bridge_runtime is None and session and (args.get("enableBridge") or session_metadata.get("remoteControlEnabled")):
+        bridge_runtime = await createBridgeRuntime(
+            {
+                "session": session,
+                "remoteSessionId": session_metadata.get("remoteSessionId"),
+                "name": args.get("bridgeName"),
+                "emit": emit_runtime_event,
+                **({"startPolling": args["bridgeStartPolling"]} if "bridgeStartPolling" in args else {}),
+            }
+        )
+        owned_closers.append(bridge_runtime["close"])
+
+    monitor_runtime = args.get("monitorRuntime") or args.get("monitors")
+    if monitor_runtime is None and session and not daemon:
+        monitor_runtime = await createMonitorRuntime({"session": session, "config": config, "emit": emit_runtime_event})
+        owned_closers.append(monitor_runtime["close"])
+
+    task_runtime = args.get("taskRuntime") or args.get("tasks")
+    if task_runtime is None and session and not daemon:
+        task_runtime = await createTaskRuntime({"session": session, "config": config, "emit": emit_runtime_event})
+        owned_closers.append(task_runtime["close"])
+
     collaboration_runtime = args.get("collaborationRuntime")
-    if collaboration_runtime is None and session:
+    if collaboration_runtime is None and session and not daemon:
         collaboration_runtime = await createCollaborationRuntime({"session": session, "config": config, "emit": emit_runtime_event})
         owned_closers.append(collaboration_runtime["close"])
+
+    if daemon and session and daemon.get("subscribe"):
+        daemon_unsubscribe = await maybe_await(daemon["subscribe"](session["id"], lambda record: emit_runtime_event(record.get("event"), record.get("data") or {})))
+        if daemon.get("getStatus"):
+            daemon_status = await _call_runtime_method(daemon, "getStatus")
+            if daemon_status:
+                emit_runtime_event("daemon.snapshot", _daemon_snapshot_payload(daemon_status))
 
     tool_options = {**args, "mcpRuntime": mcp_runtime, "workspaceController": workspace_controller}
     tools = _dedupe_tools([*createBuiltinTools(tool_options), *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []), *(plugins.get("tools") or [])])
     slash_commands = _dedupe_slash_commands(plugins.get("commands") or [])
+    _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
 
     def set_foreground_busy(busy: bool) -> None:
+        if monitor_runtime and monitor_runtime.get("setForegroundBusy"):
+            monitor_runtime["setForegroundBusy"](busy)
+        if task_runtime and task_runtime.get("setForegroundBusy"):
+            task_runtime["setForegroundBusy"](busy)
         if collaboration_runtime and collaboration_runtime.get("setForegroundBusy"):
             collaboration_runtime["setForegroundBusy"](busy)
 
     def set_active_session(next_session: dict[str, Any], next_config: dict[str, Any]) -> None:
-        nonlocal session, config
+        nonlocal session, config, daemon_unsubscribe
         session = next_session
         config = next_config
         if session_runtime:
             session_runtime["setActiveSession"](next_session, next_config)
         if workspace_controller and hasattr(workspace_controller, "setSession"):
             workspace_controller.setSession(next_session)
+        if monitor_runtime and monitor_runtime.get("setSession"):
+            monitor_runtime["setSession"](next_session, next_config)
+        if task_runtime and task_runtime.get("setSession"):
+            task_runtime["setSession"](next_session, next_config)
         if collaboration_runtime and collaboration_runtime.get("setSession"):
             collaboration_runtime["setSession"](next_session, next_config)
+        if daemon and daemon.get("subscribe"):
+            if daemon_unsubscribe:
+                daemon_unsubscribe()
+            async def subscribe_next() -> None:
+                nonlocal daemon_unsubscribe
+                daemon_unsubscribe = await maybe_await(daemon["subscribe"](next_session["id"], lambda record: emit_runtime_event(record.get("event"), record.get("data") or {})))
+            _run_background(subscribe_next())
 
     async def close():
+        if daemon_unsubscribe:
+            daemon_unsubscribe()
+        if daemon and daemon.get("close"):
+            await maybe_await(daemon["close"]())
         for closer in owned_closers:
             result = closer()
-            if hasattr(result, "__await__"):
-                await result
-        if daemon and args.get("closeDaemonOnRuntimeClose") and daemon.get("close"):
-            result = daemon["close"]()
             if hasattr(result, "__await__"):
                 await result
 
@@ -112,8 +168,14 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         "mcpRuntime": mcp_runtime,
         "mcp": mcp_runtime,
         "daemon": daemon,
+        "monitorRuntime": monitor_runtime,
+        "monitors": monitor_runtime,
+        "taskRuntime": task_runtime,
+        "tasks": task_runtime,
         "collaborationRuntime": collaboration_runtime,
         "collaboration": collaboration_runtime,
+        "bridgeRuntime": bridge_runtime,
+        "bridge": bridge_runtime,
         "workspace": workspace_controller,
         "plugins": plugins,
         "emitEvent": emit_runtime_event,
@@ -124,6 +186,8 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         "getState": state_store["getState"],
         "stateStore": state_store,
         "setForegroundBusy": set_foreground_busy,
+        "getMonitorSnapshot": lambda: state_store["getState"]().get("monitors", {}).get("snapshot"),
+        "getTaskSnapshot": lambda: task_runtime["getSnapshot"]() if task_runtime and task_runtime.get("getSnapshot") else _task_snapshot_from_state(state_store["getState"]),
         "getCollaborationSnapshot": lambda: state_store["getState"]().get("collaboration"),
         "setActiveSession": set_active_session,
         "startTurn": session_runtime["startTurn"] if session_runtime else lambda *_args, **_kwargs: None,
@@ -156,3 +220,69 @@ def _dedupe_slash_commands(commands: list[dict[str, Any]]) -> list[dict[str, Any
         seen.add(name)
         out.append(command)
     return out
+
+
+def _tool_name(tool: Any) -> str | None:
+    return getattr(tool, "name", None) or (tool.get("name") if isinstance(tool, dict) else None)
+
+
+def _augment_config_tools(config: dict[str, Any], runtime_tool_names: list[str]) -> None:
+    tools = config.setdefault("tools", [])
+    allowed = config.setdefault("allowedTools", [])
+    default_tools = set(getDefaultToolList())
+    default_allow_list = len(tools) == len(default_tools) and len(allowed) == len(default_tools) and all(tool in default_tools for tool in tools) and all(tool in default_tools for tool in allowed)
+    for name in runtime_tool_names:
+        if name not in tools:
+            tools.append(name)
+        if default_allow_list and name not in allowed:
+            allowed.append(name)
+
+
+def _task_snapshot_from_state(get_state: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    tasks = get_state().get("tasks", {})
+    return {
+        "total": tasks.get("total", 0),
+        "active": tasks.get("activeCount", 0),
+        "backgrounded": tasks.get("backgroundedCount", 0),
+        "awaitingInput": tasks.get("awaitingInputCount", 0),
+        "failed": tasks.get("failedCount", 0),
+        "labels": tasks.get("labels", []),
+        "tasks": tasks.get("tasks", []),
+    }
+
+
+def _daemon_snapshot_payload(status: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "phase": _first_present(status, "phase"),
+        "epoch": _first_present(status, "epoch"),
+        "pid": _first_present(status, "pid"),
+        "socket_path": _first_present(status, "socketPath", "socket_path"),
+        "supervisor_id": _first_present(status, "supervisorId", "supervisor_id"),
+        "attached_clients": _first_present(status, "attachedClients", "attached_clients"),
+        "watched_sessions": _first_present(status, "watchedSessions", "watched_sessions"),
+        "active_tasks": _first_present(status, "activeTasks", "active_tasks"),
+        "updated_at": _first_present(status, "updatedAt", "updated_at"),
+    }
+
+
+def _first_present(data: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in data:
+            return data.get(key)
+    return None
+
+
+async def _call_runtime_method(runtime: dict[str, Any], name: str, *args: Any) -> Any:
+    return await maybe_await(runtime[name](*args))
+
+
+def _run_background(coro: Any) -> None:
+    import asyncio
+    import threading
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        threading.Thread(target=lambda: asyncio.run(coro), daemon=True).start()
+        return
+    loop.create_task(coro)
