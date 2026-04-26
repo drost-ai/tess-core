@@ -2106,6 +2106,69 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_task_supervisor_bootstrap_projects_long_lived_task_families(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["messages"].append({"role": "user", "content": "Coordinate the long lived work."})
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "bootstrap-monitor-task", "goal": "watch bootstrap families"})
+            session["metadata"]["monitorIds"] = [monitor["id"]]
+            session["metadata"]["childAgentIds"] = ["bootstrap-agent"]
+            run(core.saveSession(session))
+            run(core.saveMonitor(monitor))
+            run(
+                core.saveChildAgent(
+                    {
+                        "agentId": "bootstrap-agent",
+                        "sessionId": "bootstrap-child-session",
+                        "parentSessionId": session["id"],
+                        "taskId": "bootstrap-child-task",
+                        "name": "Bootstrap child",
+                        "provider": "openai",
+                        "model": "gpt-5.4",
+                        "mode": "bypassPermissions",
+                        "runInBackground": True,
+                        "status": "backgrounded",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "lastUpdatedAt": "2026-01-01T00:00:02Z",
+                        "lastSummary": "Working from child session",
+                        "attachableSessionId": "bootstrap-child-session",
+                        "owner": "daemon",
+                        "retryable": False,
+                        "stoppable": True,
+                    }
+                )
+            )
+            remote = run(core.createRemoteSession({"session": session, "description": "Bootstrap remote", "channelServers": ["local"]}))
+            remote = run(core.updateRemoteSession(remote["id"], {"status": "awaiting_input", "lastEventSummary": "Remote wants input"}))
+            session["metadata"]["remoteSessionId"] = remote["id"]
+            run(core.saveSession(session))
+
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            bootstrap = run(supervisor["getBootstrap"](session["id"]))
+            tasks = {task["id"]: task for task in bootstrap["taskSnapshot"]["tasks"]}
+            self.assertEqual(tasks[f"monitor:{monitor['id']}"]["kind"], "monitor")
+            self.assertEqual(tasks[f"monitor:{monitor['id']}"]["taskFamily"], "monitor")
+            self.assertEqual(tasks["bootstrap-child-task"]["kind"], "subagent")
+            self.assertEqual(tasks["bootstrap-child-task"]["status"], "backgrounded")
+            self.assertEqual(tasks["bootstrap-child-task"]["metadata"]["agent_id"], "bootstrap-agent")
+            self.assertEqual(tasks[f"remote:{remote['id']}"]["kind"], "remote")
+            self.assertEqual(tasks[f"remote:{remote['id']}"]["status"], "awaiting_input")
+            self.assertEqual(bootstrap["taskSnapshot"]["awaitingInput"], 1)
+            self.assertGreaterEqual(bootstrap["taskSnapshot"]["active"], 3)
+            restored = run(core.loadSession(session["id"]))["metadata"]["runtimeRestore"]
+            restored_ids = {task["id"] for task in restored["activeTasks"]}
+            self.assertIn(f"monitor:{monitor['id']}", restored_ids)
+            self.assertIn("bootstrap-child-task", restored_ids)
+            self.assertIn(f"remote:{remote['id']}", restored_ids)
+            self.assertEqual(restored["restoredTaskCount"], bootstrap["taskSnapshot"]["total"])
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
     def test_task_supervisor_launch_records_backgrounded_task_and_session_metadata(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None

@@ -15,10 +15,14 @@ from ._utils import maybe_await, now_iso
 from .storage import (
     ensureBaseLayout,
     listTaskRecords,
+    listChildAgents,
+    listHealthCheckTasks,
     listSessionMonitors,
     listSessionTaskRecords,
+    loadBridge,
     loadChildAgent,
     loadHealthCheckTask,
+    loadRemoteSession,
     loadSession,
     loadTaskRecord,
     readTaskMeta,
@@ -416,8 +420,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         }
 
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
+        records = await _project_session_task_records(session_id)
         return {
-            "taskSnapshot": _task_snapshot(await listSessionTaskRecords(session_id)),
+            "taskSnapshot": _task_snapshot(records),
             "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)),
             "collaborationSnapshot": _empty_collaboration_snapshot(),
         }
@@ -717,6 +722,87 @@ async def _reconcile_persisted_tasks(
             await _mark_lost_process(task_id, record, meta, supervisor_id, emit)
 
 
+async def _project_session_task_records(session_id: str) -> list[dict[str, Any]]:
+    session = await loadSession(session_id) or {"id": session_id, "metadata": {}}
+    metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
+    records_by_id: dict[str, dict[str, Any]] = {}
+
+    for record in await listSessionTaskRecords(session_id):
+        if record.get("id"):
+            records_by_id[str(record["id"])] = record
+
+    monitors = await listSessionMonitors(session_id)
+    task_ids = list(metadata.get("taskIds") or [])
+    task_ids.extend(monitor.get("taskId") for monitor in monitors if monitor.get("taskId"))
+    task_ids.extend(task.get("taskId") for task in await listHealthCheckTasks() if task.get("sessionId") == session_id and task.get("taskId"))
+    for task_id in _dedupe([item for item in task_ids if isinstance(item, str) and item]):
+        meta = await readTaskMeta(task_id)
+        if meta:
+            records_by_id[task_id] = _build_task_record(meta, _summary_for_projected_meta(meta, session))
+
+    for monitor in monitors:
+        monitor_id = monitor.get("id")
+        if monitor_id:
+            records_by_id[f"monitor:{monitor_id}"] = _build_monitor_task_record(session, monitor)
+
+    for child in await listChildAgents():
+        if _is_related_child_agent(session, child):
+            child_record = await _build_child_agent_task_record(session, child)
+            if child_record.get("id"):
+                records_by_id[str(child_record["id"])] = child_record
+
+    remote_id = metadata.get("remoteSessionId")
+    remote = await loadRemoteSession(remote_id) if isinstance(remote_id, str) and remote_id else None
+    if remote:
+        bridge = await loadBridge(remote.get("bridgeId")) if isinstance(remote.get("bridgeId"), str) else None
+        records_by_id[f"remote:{remote['id']}"] = _build_remote_task_record(session, remote, (bridge or {}).get("status"))
+
+    records = sorted(records_by_id.values(), key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
+    await _sync_projected_task_metadata(session, records)
+    return records
+
+
+async def _sync_projected_task_metadata(session: dict[str, Any], records: list[dict[str, Any]]) -> None:
+    if not session.get("id"):
+        return
+    metadata = session.setdefault("metadata", {})
+    task_ids = [
+        record.get("id")
+        for record in records
+        if record.get("kind") in {"background_command", "main_session", "health_check"} and record.get("id")
+    ]
+    restore = {
+        "savedAt": now_iso(),
+        "activeTasks": [
+            {
+                "id": record.get("id"),
+                "kind": record.get("kind"),
+                "status": record.get("status"),
+                "title": record.get("title"),
+                "summary": record.get("summary"),
+                "updatedAt": record.get("updatedAt"),
+                "foregroundMode": record.get("foregroundMode"),
+                "taskFamily": record.get("taskFamily"),
+                "detailStatus": record.get("detailStatus"),
+                "attachableSessionId": record.get("attachableSessionId"),
+                "retrieveOnly": record.get("retrieveOnly"),
+                "resultSummary": record.get("resultSummary"),
+            }
+            for record in records
+            if _is_active_task_status(record.get("status"))
+        ][:12],
+        "restoredTaskCount": sum(1 for record in records if record.get("restorable")),
+        "lastTaskEventAt": records[0].get("updatedAt") if records else None,
+    }
+    previous_task_ids = list(metadata.get("taskIds") or [])
+    previous_restore = metadata.get("runtimeRestore") or {}
+    if previous_task_ids == task_ids and _restore_without_saved_at(previous_restore) == _restore_without_saved_at(restore):
+        return
+    metadata["taskIds"] = task_ids
+    metadata["runtimeRestore"] = restore
+    await saveSession(session)
+
+
 async def _mark_recovered_process(
     task_id: str,
     pid: int,
@@ -936,6 +1022,147 @@ def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[st
     }
 
 
+def _summary_for_projected_meta(meta: dict[str, Any], session: dict[str, Any]) -> str | None:
+    status = _map_status(meta.get("status"))
+    if meta.get("type") == "main_session":
+        assistant = _summarize_latest_message(session, "assistant")
+        user = _summarize_latest_message(session, "user")
+        if status in {"backgrounded", "running"}:
+            if assistant:
+                return f"This session is continuing in the background. Latest assistant state: {assistant}"
+            if user:
+                return f"This session is continuing in the background. Current work: {user}"
+            return "This session is continuing in the background."
+        if status == "completed":
+            return f"Detached session completed. Latest assistant result: {assistant}" if assistant else "Detached session completed."
+        if status == "stopped":
+            return f"Detached session stopped. Latest assistant state: {assistant}" if assistant else "Detached session stopped."
+        if status == "failed":
+            return f"Detached session failed. Latest assistant state: {assistant}" if assistant else "Detached session failed."
+    if meta.get("type") == "health_check":
+        if meta.get("lastError"):
+            return f"{'Check unhealthy' if meta.get('status') == 'unhealthy' else 'Last check failed'}: {meta.get('lastError')}"
+        if isinstance(meta.get("lastStatusCode"), int):
+            return f"Last HTTP status {meta.get('lastStatusCode')}"
+        if isinstance(meta.get("lastExitCode"), int):
+            return f"Last exit code {meta.get('lastExitCode')}"
+        return "Scheduled health check active."
+    return None
+
+
+def _build_monitor_task_record(session: dict[str, Any], monitor: dict[str, Any]) -> dict[str, Any]:
+    task_id = monitor.get("taskId")
+    output_file = taskOutputPath(task_id) if isinstance(task_id, str) else None
+    output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
+    return {
+        "id": f"monitor:{monitor.get('id')}",
+        "sessionId": session.get("id"),
+        "sourceId": monitor.get("id"),
+        "kind": "monitor",
+        "status": _map_monitor_status(monitor.get("status")),
+        "title": f"Monitor {monitor.get('goal')}",
+        "summary": monitor.get("lastAssistantUpdateSummary") or _summarize_monitor(monitor),
+        "createdAt": monitor.get("createdAt"),
+        "updatedAt": monitor.get("updatedAt") or monitor.get("createdAt"),
+        "startedAt": monitor.get("createdAt"),
+        "completedAt": monitor.get("completedAt") or monitor.get("stoppedAt"),
+        "foregroundable": False,
+        "restorable": True,
+        "outputCursor": output_cursor,
+        "relatedMonitorIds": [monitor.get("id")] if monitor.get("id") else [],
+        "taskFamily": "monitor",
+        "detailStatus": monitor.get("status"),
+        "retrieveOnly": True,
+        "resultSummary": monitor.get("lastAssistantUpdateSummary"),
+        "metadata": {
+            "task_id": monitor.get("taskId"),
+            "goal": monitor.get("goal"),
+            "last_task_status": monitor.get("lastObservedTaskStatus"),
+            "muted": monitor.get("muted"),
+        },
+    }
+
+
+async def _build_child_agent_task_record(session: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
+    task_id = child.get("taskId")
+    task_meta = await readTaskMeta(task_id) if isinstance(task_id, str) and task_id else None
+    child_session = await loadSession(child.get("sessionId")) if isinstance(child.get("sessionId"), str) else None
+    latest_assistant = _summarize_latest_message(child_session or {}, "assistant")
+    latest_user = _summarize_latest_message(child_session or {}, "user")
+    result_summary = child.get("resultSummary") or child.get("lastSummary") or latest_assistant or child.get("error") or child.get("waitingReason")
+    owner = child.get("owner") or ((task_meta or {}).get("owner") if (task_meta or {}).get("owner") in {"daemon", "client"} else None)
+    return {
+        "id": task_id or child.get("agentId"),
+        "sessionId": session.get("id"),
+        "sourceId": child.get("agentId"),
+        "kind": "subagent",
+        "status": _map_child_agent_status_to_task_status(child.get("status")),
+        "title": child.get("name") or child.get("agentType") or child.get("agentId"),
+        "summary": _summarize_child_agent_task(child, latest_assistant, latest_user, result_summary),
+        "createdAt": child.get("startedAt"),
+        "updatedAt": child.get("lastUpdatedAt") or child.get("completedAt") or child.get("startedAt"),
+        "startedAt": child.get("startedAt"),
+        "completedAt": child.get("completedAt"),
+        "foregroundable": True,
+        "restorable": True,
+        "outputCursor": _output_size(taskOutputPath(task_id)) if isinstance(task_id, str) else None,
+        "outputFile": taskOutputPath(task_id) if isinstance(task_id, str) else None,
+        "parentTaskId": child.get("parentTaskId"),
+        "relatedChildSessionIds": [child.get("sessionId")] if child.get("sessionId") else [],
+        "owner": owner,
+        "foregroundMode": "background" if child.get("runInBackground") else "foreground",
+        "taskFamily": "subagent",
+        "detailStatus": _describe_child_agent_detail_status(child),
+        "attachableSessionId": child.get("attachableSessionId") or child.get("sessionId"),
+        "retrieveOnly": False,
+        "resultSummary": result_summary,
+        "metadata": {
+            "agent_id": child.get("agentId"),
+            "child_session_id": child.get("sessionId"),
+            "task_id": task_id,
+            "worktree_path": child.get("worktreePath"),
+            "pid": child.get("pid"),
+            "waiting_reason": child.get("waitingReason"),
+            "completion_reason": child.get("completionReason"),
+            "retryable": child.get("retryable"),
+            "stoppable": child.get("stoppable"),
+            "owner": owner,
+            "recovery_state": child.get("recoveryState"),
+            "daemon_status": (task_meta or {}).get("status") if isinstance((task_meta or {}).get("status"), str) else None,
+        },
+    }
+
+
+def _build_remote_task_record(session: dict[str, Any], remote: dict[str, Any], bridge_status: Any = None) -> dict[str, Any]:
+    return {
+        "id": f"remote:{remote.get('id')}",
+        "sessionId": session.get("id"),
+        "sourceId": remote.get("id"),
+        "kind": "remote",
+        "status": _map_remote_status(remote.get("status")),
+        "title": remote.get("title"),
+        "summary": remote.get("lastEventSummary"),
+        "createdAt": remote.get("createdAt"),
+        "updatedAt": remote.get("updatedAt"),
+        "startedAt": remote.get("createdAt"),
+        "completedAt": remote.get("updatedAt") if remote.get("status") in {"completed", "failed", "closed"} else None,
+        "foregroundable": True,
+        "restorable": True,
+        "foregroundMode": "foreground" if remote.get("status") == "active" else "background",
+        "taskFamily": "remote",
+        "detailStatus": remote.get("status"),
+        "attachableSessionId": remote.get("foregroundSessionId") or remote.get("sessionId"),
+        "retrieveOnly": False,
+        "resultSummary": remote.get("lastEventSummary"),
+        "metadata": {
+            "remote_session_id": remote.get("id"),
+            "bridge_id": remote.get("bridgeId"),
+            "bridge_status": bridge_status,
+            "foreground_session_id": remote.get("foregroundSessionId"),
+        },
+    }
+
+
 def _build_task_record(meta: dict[str, Any], summary: str | None) -> dict[str, Any]:
     now = now_iso()
     task_id = meta.get("taskId") or meta.get("id")
@@ -1044,6 +1271,12 @@ def _is_active_task_status(status: Any) -> bool:
     return status in {"running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
 
 
+def _restore_without_saved_at(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {key: item for key, item in value.items() if key != "savedAt"}
+
+
 def _parse_iso_ms(value: Any) -> float | None:
     if not isinstance(value, str) or not value:
         return None
@@ -1103,6 +1336,30 @@ def _map_status(value: Any) -> str:
     return "running"
 
 
+def _map_monitor_status(status: Any) -> str:
+    if status == "active":
+        return "running"
+    if status in {"completed", "failed"}:
+        return str(status)
+    if status in {"stopped", "muted"}:
+        return "stopped"
+    return "idle"
+
+
+def _map_remote_status(status: Any) -> str:
+    if status in {"created", "active"}:
+        return "running"
+    if status == "idle":
+        return "idle"
+    if status == "awaiting_input":
+        return "awaiting_input"
+    if status == "completed":
+        return "completed"
+    if status in {"failed", "closed"}:
+        return "failed"
+    return "idle"
+
+
 def _is_active_child_agent_status(status: Any) -> bool:
     return status in {"queued", "running", "backgrounded"}
 
@@ -1129,6 +1386,74 @@ def _summarize_recovered_subagent(child: dict[str, Any], result_summary: Any) ->
     if child.get("status") in {"failed", "truncated"}:
         return "Subagent ended with a failure while the daemon was detached from the worker process."
     return "Subagent state was recovered after the daemon reattached to persisted worker records."
+
+
+def _summarize_monitor(monitor: dict[str, Any]) -> str:
+    parts = []
+    if monitor.get("lastObservedTaskStatus"):
+        parts.append(f"task {monitor.get('lastObservedTaskStatus')}")
+    if monitor.get("lastObservedOutputSize") is not None:
+        parts.append(f"{monitor.get('lastObservedOutputSize')} bytes observed")
+    return " | ".join(parts) if parts else str(monitor.get("goal") or "")
+
+
+def _summarize_child_agent_task(child: dict[str, Any], latest_assistant: str | None, latest_user: str | None, result_summary: Any) -> str | None:
+    if child.get("waitingReason"):
+        return str(child["waitingReason"])
+    if child.get("status") in {"backgrounded", "running"} and latest_assistant:
+        return f"Worker is active. Latest state: {latest_assistant}"
+    if child.get("status") in {"backgrounded", "running"} and latest_user:
+        return f"Worker is active on: {latest_user}"
+    if child.get("status") == "completed" and result_summary:
+        return f"Worker completed. {result_summary}"
+    if child.get("status") in {"failed", "truncated"} and result_summary:
+        return f"Worker ended with a problem. {result_summary}"
+    if child.get("status") in {"cancelled", "stopped"} and result_summary:
+        return f"Worker stopped. {result_summary}"
+    return result_summary or child.get("lastSummary") or child.get("error") or child.get("stopReason")
+
+
+def _describe_child_agent_detail_status(child: dict[str, Any]) -> str | None:
+    if child.get("recoveryState") == "recovered_after_daemon_restart":
+        return "recovered_after_daemon_restart"
+    if child.get("recoveryState") == "completed_while_detached":
+        return "completed_while_detached"
+    return child.get("status") if child.get("waitingReason") else child.get("completionReason") or child.get("status")
+
+
+def _is_related_child_agent(session: dict[str, Any], child: dict[str, Any]) -> bool:
+    if child.get("parentSessionId") == session.get("id") or child.get("sessionId") == session.get("id"):
+        return True
+    metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
+    child_sessions = set(metadata.get("childSessionIds") or [])
+    background_sessions = set(metadata.get("backgroundSessionIds") or [])
+    child_agents = set(metadata.get("childAgentIds") or [])
+    return child.get("sessionId") in child_sessions or child.get("sessionId") in background_sessions or child.get("agentId") in child_agents
+
+
+def _summarize_latest_message(session: dict[str, Any], role: str) -> str | None:
+    for message in reversed(session.get("messages") or []):
+        if message.get("role") != role:
+            continue
+        text = _message_text(message.get("content")).strip()
+        if text:
+            return text if len(text) <= 180 else f"{text[:177].rstrip()}..."
+    return None
+
+
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return " ".join(content.split())
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text":
+                    parts.append(str(block.get("text") or ""))
+                elif isinstance(block.get("content"), str):
+                    parts.append(block["content"])
+        return " ".join(" ".join(parts).split())
+    return ""
 
 
 def _event_name_for_task_status(status: Any) -> str:
@@ -1163,6 +1488,10 @@ def _is_process_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+
+
+def _output_size(output_file: str | None) -> int:
+    return Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
 
 
 def _terminate_process(pid: int | None) -> bool:
