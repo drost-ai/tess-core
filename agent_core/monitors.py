@@ -210,7 +210,7 @@ def formatMonitorSummary(monitors: list[dict[str, Any]]) -> str:
         parts = [f"{str(monitor.get('id') or '')[:8]}  {monitor.get('status')}", f"task {str(monitor.get('taskId') or '')[:8]}", str(monitor.get("goal") or "")]
         if monitor.get("lastAssistantUpdateAt"):
             parts.append(f"last update {monitor.get('lastAssistantUpdateAt')}")
-        lines.append(" | ".join(part for part in parts if part))
+        lines.append(" · ".join(part for part in parts if part))
     return "\n".join(lines)
 
 

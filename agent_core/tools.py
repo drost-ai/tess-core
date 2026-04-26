@@ -37,7 +37,6 @@ from .storage import (
     writePlanFile,
     writeTaskMeta,
 )
-from .daemon import connectTaskSupervisorDaemonClient
 from .tool_payloads import (
     applyDefaultGlobExcludes,
     filterDefaultIgnoredGlobMatches,
@@ -46,7 +45,6 @@ from .tool_payloads import (
     shapeReadPayload,
     shapeTextToolResult,
 )
-from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata
 
 
 @dataclass
@@ -350,6 +348,7 @@ def _bash_tool() -> ToolDefinition:
         command = _require_string(input.get("command"), "command")
         timeout = _normalize_bash_timeout(command, input.get("timeout"))
         run_in_background = bool(input.get("run_in_background"))
+        _throw_if_tool_cancelled(context)
         await _ensure_tool_permission(
             context,
             "Bash",
@@ -462,28 +461,25 @@ def _bash_tool() -> ToolDefinition:
                 "meta": {"execution": execution},
             }
         proc = await asyncio.create_subprocess_shell(command, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        timed_out = False
-        try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout / 1000)
-        except asyncio.TimeoutError:
-            timed_out = True
-            proc.terminate()
-            stdout, stderr = await proc.communicate()
+        stdout, stderr, timed_out = await _communicate_shell_process(proc, timeout, context)
+        if _signal_aborted(context.get("abortSignal")):
+            raise _create_tool_abort_error()
+        exit_code = None if timed_out or (isinstance(proc.returncode, int) and proc.returncode < 0) else proc.returncode
         shaped_stdout = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="Bash", family="bash", text=stdout.decode(errors="replace"), strategy="head_tail")
         shaped_stderr = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="Bash", family="bash", text=stderr.decode(errors="replace"), strategy="head_tail")
         execution = {
             "id": f"{context['session']['id']}:bash",
             "kind": "tool",
             "title": "Shell command completed",
-            "status": "failed" if timed_out or proc.returncode else "completed",
+            "status": "failed" if timed_out or exit_code else "completed",
             "cwd": context["session"]["cwd"],
             "command": command,
             "output": summarizeOutputManifest(f"{stdout.decode(errors='replace')}{stderr.decode(errors='replace')}"),
-            "metadata": {"exit_code": proc.returncode, "timed_out": timed_out},
+            "metadata": {"exit_code": exit_code, "timed_out": timed_out},
         }
         return {
-            "content": pretty_json({"command": command, "cwd": context["session"]["cwd"], "exitCode": proc.returncode, "timedOut": timed_out, "stdout": shaped_stdout["text"], "stderr": shaped_stderr["text"], "stdout_manifest": shaped_stdout["view"], "stderr_manifest": shaped_stderr["view"]}),
-            "isError": bool(timed_out or proc.returncode),
+            "content": pretty_json({"command": command, "cwd": context["session"]["cwd"], "exitCode": exit_code, "timedOut": timed_out, "stdout": shaped_stdout["text"], "stderr": shaped_stderr["text"], "stdout_manifest": shaped_stdout["view"], "stderr_manifest": shaped_stderr["view"]}),
+            "isError": bool(timed_out or exit_code),
             "meta": {"execution": execution},
         }
 
@@ -736,6 +732,7 @@ def _task_output_tool() -> ToolDefinition:
             started = asyncio.get_running_loop().time()
             timeout = float(input.get("timeout") or 30000) / 1000
             while asyncio.get_running_loop().time() - started < timeout:
+                _throw_if_tool_cancelled(context)
                 meta = await readTaskMeta(task_id)
                 if not meta or meta.get("status") not in ("running", "reconciling"):
                     break
@@ -744,17 +741,16 @@ def _task_output_tool() -> ToolDefinition:
         if not meta:
             return {"content": f"Task not found: {task_id}", "isError": True}
         output_result = None
-        supervisor = context.get("daemon") or context.get("taskSupervisor") or await connectTaskSupervisorDaemonClient()
-        if supervisor:
+        daemon = context.get("daemon")
+        if daemon:
             try:
-                output_result = await supervisor["readTaskOutput"](task_id)
+                output_result = await daemon["readTaskOutput"](task_id)
             except Exception:
                 output_result = None
-        output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
-        text = output_result.get("output") if output_result else Path(output_file).read_text(encoding="utf-8", errors="replace") if Path(output_file).exists() else ""
+        text = output_result.get("output") if output_result else Path(taskOutputPath(task_id)).read_text(encoding="utf-8", errors="replace") if Path(taskOutputPath(task_id)).exists() else ""
         shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="TaskOutput", family="bash", text=text, taskId=task_id, strategy="tail")
-        execution = createTaskExecutionDescriptor({**meta, "outputFile": output_file}, text)
-        return {"content": pretty_json({**meta, "task_id": task_id, "output": shaped["text"], "output_file": output_file, "output_truncated": bool(output_result and output_result.get("truncated")), "output_manifest": shaped["view"], "execution": execution}), "meta": {"execution": execution}}
+        execution = createTaskExecutionDescriptor(meta, text)
+        return {"content": pretty_json({**meta, "output": shaped["text"], "output_truncated": bool(output_result and output_result.get("truncated")), "output_manifest": shaped["view"], "execution": execution}), "meta": {"execution": execution}}
 
     return ToolDefinition("TaskOutput", _tool_description("TaskOutput"), _tool_schema("TaskOutput"), handler)
 
@@ -1021,14 +1017,14 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
         context["session"]["cwd"] = target_path
         context["cwd"] = target_path
         snapshot = result.get("snapshot") if isinstance(result, dict) else None
-        if not snapshot:
-            snapshot = await captureWorkspaceSnapshot(target_path, {"originalCwd": original, "worktreePath": target_path})
-            await hydrateSessionWorkspaceMetadata(context["session"], {"originalCwd": original, "worktreePath": target_path})
-        else:
+        if snapshot:
             _apply_workspace_snapshot_metadata(context["session"], snapshot)
         execution = createWorkspaceExecutionDescriptor({"action": "enter", "workspace": snapshot, "branch": branch_name, "created": True}) if snapshot else None
-        payload = {"cwd": target_path, "branch": branch_name, "created": True, "workspace": snapshot, "execution": execution}
-        return {"content": pretty_json(payload), "meta": {"execution": execution} if execution else None}
+        result_payload = _without_none_values({"cwd": target_path, "branch": branch_name, "created": True, "workspace": snapshot, "execution": execution})
+        result = {"content": pretty_json(result_payload)}
+        if execution:
+            result["meta"] = {"execution": execution}
+        return result
 
     return ToolDefinition("EnterWorktree", _tool_description("EnterWorktree"), _tool_schema("EnterWorktree"), handler)
 
@@ -1042,14 +1038,14 @@ def _exit_worktree_tool(controller: Any) -> ToolDefinition:
         context["cwd"] = original
         exit_worktree = _controller_method(controller, "exitWorktree")
         snapshot = await maybe_await(exit_worktree()) if callable(exit_worktree) else None
-        if not snapshot:
-            snapshot = await captureWorkspaceSnapshot(original, {"originalCwd": original, "worktreePath": metadata.get("worktreePath")})
-            await hydrateSessionWorkspaceMetadata(context["session"], {"originalCwd": original, "worktreePath": metadata.get("worktreePath")})
-        else:
+        if snapshot:
             _apply_workspace_snapshot_metadata(context["session"], snapshot)
         execution = createWorkspaceExecutionDescriptor({"action": "exit", "workspace": snapshot}) if snapshot else None
-        payload = {"cwd": original, "workspace": snapshot, "execution": execution}
-        return {"content": pretty_json(payload), "meta": {"execution": execution} if execution else None}
+        result_payload = _without_none_values({"cwd": original, "workspace": snapshot, "execution": execution})
+        result = {"content": pretty_json(result_payload)}
+        if execution:
+            result["meta"] = {"execution": execution}
+        return result
 
     return ToolDefinition("ExitWorktree", _tool_description("ExitWorktree"), _tool_schema("ExitWorktree"), handler)
 
@@ -1121,6 +1117,66 @@ def _background_runner_env() -> dict[str, str]:
 def _track_background_runner(runner: subprocess.Popen[Any]) -> None:
     _BACKGROUND_RUNNERS[:] = [process for process in _BACKGROUND_RUNNERS if process.poll() is None]
     _BACKGROUND_RUNNERS.append(runner)
+
+
+async def _communicate_shell_process(proc: asyncio.subprocess.Process, timeout_ms: int, context: dict[str, Any]) -> tuple[bytes, bytes, bool]:
+    communicate = asyncio.create_task(proc.communicate())
+    deadline = asyncio.get_running_loop().time() + (timeout_ms / 1000)
+    timed_out = False
+    while not communicate.done():
+        if _signal_aborted(context.get("abortSignal")):
+            _terminate_asyncio_process(proc)
+            await _finish_terminated_process(proc, communicate)
+            raise _create_tool_abort_error()
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            timed_out = True
+            _terminate_asyncio_process(proc)
+            break
+        await asyncio.wait({communicate}, timeout=min(0.05, remaining))
+    stdout, stderr = await _finish_terminated_process(proc, communicate)
+    return stdout, stderr, timed_out
+
+
+async def _finish_terminated_process(proc: asyncio.subprocess.Process, communicate: asyncio.Task[tuple[bytes, bytes]]) -> tuple[bytes, bytes]:
+    try:
+        return await asyncio.wait_for(asyncio.shield(communicate), 2)
+    except asyncio.TimeoutError:
+        _kill_asyncio_process(proc)
+        return await communicate
+
+
+def _terminate_asyncio_process(proc: asyncio.subprocess.Process) -> None:
+    try:
+        proc.terminate()
+    except ProcessLookupError:
+        pass
+
+
+def _kill_asyncio_process(proc: asyncio.subprocess.Process) -> None:
+    try:
+        proc.kill()
+    except ProcessLookupError:
+        pass
+
+
+def _throw_if_tool_cancelled(context: dict[str, Any]) -> None:
+    if _signal_aborted(context.get("abortSignal")):
+        raise _create_tool_abort_error()
+
+
+def _create_tool_abort_error() -> RuntimeError:
+    error = RuntimeError("Tool execution cancelled")
+    error.name = "AbortError"  # type: ignore[attr-defined]
+    return error
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
 
 
 def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
@@ -1517,11 +1573,11 @@ def _normalize_shell_command(command: str) -> str:
 
 
 def _normalize_bash_timeout(command: str, value: Any) -> int:
-    raw = 120000 if value is None else int(value)
+    raw = 120000 if value is None else float(value)
     timeout = raw * 1000 if 0 < raw <= 600 else raw
     if re.search(r"\b(?:npm|pnpm|yarn|bun)\s+install\b", command) and timeout < 300000:
         timeout = 300000
-    return min(timeout, 600000)
+    return int(min(timeout, 600000))
 
 
 async def _create_git_worktree(cwd: str, requested_name: str) -> dict[str, str] | None:

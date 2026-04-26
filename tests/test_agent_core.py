@@ -2176,12 +2176,29 @@ class AgentCoreTests(unittest.TestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
-            foreground = run(bash.handler({"command": "printf foreground-ok"}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            foreground = run(bash.handler({"command": "printf foreground-ok"}, base_context))
             foreground_payload = json.loads(foreground["content"])
             self.assertEqual(foreground_payload["exitCode"], 0)
             self.assertEqual(foreground["meta"]["execution"]["kind"], "tool")
             self.assertEqual(foreground["meta"]["execution"]["status"], "completed")
             self.assertEqual(foreground["meta"]["execution"]["metadata"]["exit_code"], 0)
+
+            timeout_command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(1)')}"
+            timed = run(bash.handler({"command": timeout_command, "timeout": 0.05}, base_context))
+            timed_payload = json.loads(timed["content"])
+            self.assertTrue(timed["isError"])
+            self.assertTrue(timed_payload["timedOut"])
+            self.assertIsNone(timed_payload["exitCode"])
+            self.assertEqual(timed["meta"]["execution"]["status"], "failed")
+            self.assertEqual(timed["meta"]["execution"]["metadata"], {"exit_code": None, "timed_out": True})
+
+            abort_events = []
+            with self.assertRaises(RuntimeError) as abort_ctx:
+                run(bash.handler({"command": "printf should-not-run"}, {**base_context, "abortSignal": {"aborted": True}, "outputJson": lambda event, data: abort_events.append((event, data))}))
+            self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")
+            self.assertEqual(str(abort_ctx.exception), "Tool execution cancelled")
+            self.assertEqual(abort_events, [])
 
             script = 'print("hello from background")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
@@ -2213,7 +2230,32 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("hello from background", payload["output"])
             self.assertEqual(payload["execution"]["id"], task_id)
             self.assertGreater(payload["execution"]["output"]["bytes"], 0)
-            self.assertEqual(output["meta"]["execution"]["metadata"]["output_file"], payload["output_file"])
+            self.assertEqual(output["meta"]["execution"]["metadata"]["output_file"], payload["outputFile"])
+            self.assertNotIn("output_file", payload)
+            self.assertNotIn("task_id", payload)
+
+            daemon_task_id = "task-output-daemon"
+            daemon_output = core.taskOutputPath(daemon_task_id)
+            Path(daemon_output).parent.mkdir(parents=True, exist_ok=True)
+            Path(daemon_output).write_text("file output\n", encoding="utf-8")
+            run(core.writeTaskMeta(daemon_task_id, {"taskId": daemon_task_id, "id": daemon_task_id, "sessionId": session["id"], "command": "daemon-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": daemon_output}))
+
+            async def read_daemon_output(_task_id):
+                return {"output": "daemon output\n", "truncated": True}
+
+            daemon_result = run(task_output.handler({"task_id": daemon_task_id, "block": False, "timeout": 1000}, {**base_context, "daemon": {"readTaskOutput": read_daemon_output}}))
+            daemon_payload = json.loads(daemon_result["content"])
+            self.assertEqual(daemon_payload["output"], "daemon output\n")
+            self.assertTrue(daemon_payload["output_truncated"])
+
+            supervisor_only = run(task_output.handler({"task_id": daemon_task_id, "block": False, "timeout": 1000}, {**base_context, "taskSupervisor": {"readTaskOutput": read_daemon_output}}))
+            supervisor_payload = json.loads(supervisor_only["content"])
+            self.assertEqual(supervisor_payload["output"], "file output\n")
+            self.assertFalse(supervisor_payload["output_truncated"])
+
+            with self.assertRaises(RuntimeError) as output_abort_ctx:
+                run(task_output.handler({"task_id": daemon_task_id, "block": True, "timeout": 1000}, {**base_context, "abortSignal": {"aborted": True}}))
+            self.assertEqual(getattr(output_abort_ctx.exception, "name", None), "AbortError")
         finally:
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
@@ -2953,6 +2995,10 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(payload["execution"]["title"], f"Monitoring task {task_id}")
             self.assertEqual(payload["execution"]["metadata"]["summary_style"], "brief")
             self.assertIn(payload["monitor_id"], session["metadata"]["monitorIds"])
+            self.assertEqual(
+                core.formatMonitorSummary([{"id": "monitor-123456", "status": "active", "taskId": task_id, "goal": "watch server", "lastAssistantUpdateAt": "2026-01-01T00:00:00Z"}]),
+                "monitor-  active · task monitor- · watch server · last update 2026-01-01T00:00:00Z",
+            )
 
             plugin_descriptors = core.createPluginActivityDescriptors(
                 [
@@ -3686,6 +3732,39 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(session["metadata"]["worktreePath"], str(worktree))
             self.assertEqual(session["metadata"]["workspaceMode"], "repo")
             self.assertEqual(cwd_updates, [str(worktree), str(workspace)])
+
+            bare_worktree = Path(root.name) / "workspace-no-snapshot"
+            bare_worktree.mkdir()
+
+            class BareWorktreeController:
+                async def createWorktree(self, requested_name):
+                    return {
+                        "worktree": {
+                            "gitRoot": str(workspace),
+                            "targetPath": str(bare_worktree),
+                            "branchName": f"tess/{requested_name}",
+                            "requestedName": requested_name,
+                        }
+                    }
+
+                async def exitWorktree(self):
+                    return None
+
+            bare_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            bare_tools = core.createBuiltinTools({"workspaceController": BareWorktreeController()})
+            bare_enter = next(tool for tool in bare_tools if tool.name == "EnterWorktree")
+            bare_exit = next(tool for tool in bare_tools if tool.name == "ExitWorktree")
+            bare_context = {"session": bare_session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "updateCwd": lambda next_cwd: bare_session.__setitem__("cwd", next_cwd)}
+
+            bare_entered = run(bare_enter.handler({"name": "no-snapshot"}, bare_context))
+            bare_entered_payload = json.loads(bare_entered["content"])
+            self.assertEqual(bare_entered_payload, {"cwd": str(bare_worktree), "branch": "tess/no-snapshot", "created": True})
+            self.assertNotIn("meta", bare_entered)
+
+            bare_exited = run(bare_exit.handler({}, bare_context))
+            bare_exited_payload = json.loads(bare_exited["content"])
+            self.assertEqual(bare_exited_payload, {"cwd": str(workspace)})
+            self.assertNotIn("meta", bare_exited)
         finally:
             self.restore_home(root, previous)
 
