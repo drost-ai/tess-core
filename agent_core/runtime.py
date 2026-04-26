@@ -140,14 +140,18 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         config = next_config
         if session_runtime:
             session_runtime["setActiveSession"](next_session, next_config)
-        if workspace_controller and hasattr(workspace_controller, "setSession"):
-            workspace_controller.setSession(next_session)
         if monitor_runtime and monitor_runtime.get("setSession"):
             monitor_runtime["setSession"](next_session, next_config)
         if task_runtime and task_runtime.get("setSession"):
             task_runtime["setSession"](next_session, next_config)
         if collaboration_runtime and collaboration_runtime.get("setSession"):
             collaboration_runtime["setSession"](next_session, next_config)
+        if workspace_controller and hasattr(workspace_controller, "setSession"):
+            workspace_controller.setSession(next_session)
+        if workspace_controller and hasattr(workspace_controller, "refresh"):
+            refresh_result = workspace_controller.refresh()
+            if hasattr(refresh_result, "__await__"):
+                _run_background(refresh_result)
         if daemon and daemon.get("subscribe"):
             if daemon_unsubscribe:
                 daemon_unsubscribe()

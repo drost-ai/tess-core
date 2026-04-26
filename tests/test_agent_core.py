@@ -1333,6 +1333,66 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_bootstrap_runtime_rebinds_active_session_in_reference_order(self):
+        class FakeWorkspace:
+            def __init__(self, order):
+                self.order = order
+
+            def setSession(self, _session):
+                self.order.append("workspace")
+
+            def refresh(self):
+                self.order.append("workspace.refresh")
+
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            other = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            order = []
+
+            def runtime_for(name):
+                return {"setSession": lambda *_args: order.append(name), "setForegroundBusy": lambda _busy: None}
+
+            boot = run(
+                core.bootstrapRuntime(
+                    {
+                        "session": session,
+                        "config": config,
+                        "workspaceController": FakeWorkspace(order),
+                        "monitorRuntime": runtime_for("monitors"),
+                        "taskRuntime": runtime_for("tasks"),
+                        "collaborationRuntime": runtime_for("collaboration"),
+                    }
+                )
+            )
+            unsubscribe = boot["subscribeEvents"](
+                lambda envelope: order.append("session.activated") if envelope["event"] == "session.activated" else None
+            )
+            boot["setActiveSession"](other, config)
+            unsubscribe()
+            run(boot["close"]())
+
+            self.assertEqual(order, ["session.activated", "monitors", "tasks", "collaboration", "workspace", "workspace.refresh"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_bootstrap_runtime_daemon_mode_subscribes_and_rebinds_sessions(self):
         root, home, workspace, previous = self.temp_context()
         try:
