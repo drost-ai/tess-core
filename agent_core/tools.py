@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import copy
 import difflib
 import glob as glob_lib
 import html
@@ -56,6 +57,114 @@ class ToolDefinition:
     @property
     def input_schema(self) -> dict[str, Any]:
         return self.inputSchema
+
+
+BUILTIN_TOOL_ORDER = [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Bash",
+    "TodoWrite",
+    "WebFetch",
+    "WebSearch",
+    "SetStatus",
+    "Agent",
+    "AskUserQuestion",
+    "Config",
+    "ExitPlanMode",
+    "NotebookEdit",
+    "TaskOutput",
+    "TaskStop",
+    "TaskMonitorStart",
+    "TaskMonitorStop",
+    "TaskHealthCheckStart",
+    "TaskHealthCheckStop",
+    "Mcp",
+    "ListMcpResources",
+    "ReadMcpResource",
+    "EnterWorktree",
+    "ExitWorktree",
+]
+
+
+BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
+    "Read": "Read files from disk, including partial line ranges for large text files.",
+    "Write": "Write full file contents to disk, creating parent directories when needed.",
+    "Edit": "Apply exact string replacements inside a file.",
+    "Glob": "List files that match a glob pattern.",
+    "Grep": "Search file contents with ripgrep.",
+    "Bash": "Run shell commands in the current workspace. When you launch a long-running background task and promise to keep watching it, call TaskMonitorStart immediately afterward.",
+    "TodoWrite": "Update the session todo list.",
+    "WebFetch": "Fetch a URL and return a text snapshot of its contents.",
+    "WebSearch": "Perform a lightweight web search and return ranked results.",
+    "SetStatus": "Update the assistant's live status line with a short progress message. Use this when changing phases or starting meaningful work. Keep messages brief and concrete, such as 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",
+    "Agent": "Spawn a delegated subagent to work on a focused task.",
+    "AskUserQuestion": "Ask the interactive user one or more multiple-choice questions.",
+    "Config": "Return the active runtime configuration snapshot.",
+    "ExitPlanMode": "Request approval to exit plan mode and continue with implementation.",
+    "NotebookEdit": "Edit Jupyter notebook cells by ID.",
+    "TaskOutput": "Read output from a background task. This is a pull-based inspection tool, not proactive monitoring.",
+    "TaskStop": "Stop a running background task.",
+    "TaskMonitorStart": "Start proactive monitoring for a background task so the assistant can keep watching it and update the user without another prompt.",
+    "TaskMonitorStop": "Stop proactive monitoring for a background task without stopping the underlying task itself.",
+    "TaskHealthCheckStart": "Start a daemon-backed periodic health check for a URL or shell command.",
+    "TaskHealthCheckStop": "Stop a daemon-backed health check task.",
+    "Mcp": "Inspect the connected MCP runtime and discovered capabilities.",
+    "ListMcpResources": "List resources published by connected MCP servers.",
+    "ReadMcpResource": "Read a resource published by a connected MCP server.",
+    "EnterWorktree": "Create and enter a git worktree for isolated work.",
+    "ExitWorktree": "Return to the original workspace and optionally leave the worktree intact.",
+}
+
+
+BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "Read": {"type": "object", "properties": {"file_path": {"type": "string"}, "offset": {"type": "number"}, "limit": {"type": "number"}, "pages": {"type": "string"}}, "required": ["file_path"]},
+    "Write": {"type": "object", "properties": {"file_path": {"type": "string"}, "content": {"type": "string"}}, "required": ["file_path", "content"]},
+    "Edit": {"type": "object", "properties": {"file_path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}, "replace_all": {"type": "boolean"}}, "required": ["file_path", "old_string", "new_string"]},
+    "Glob": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}, "required": ["pattern"]},
+    "Grep": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}, "glob": {"type": "string"}, "output_mode": {"type": "string"}, "-A": {"type": "number"}, "-B": {"type": "number"}, "-C": {"type": "number"}, "context": {"type": "number"}, "-n": {"type": "boolean"}, "-i": {"type": "boolean"}, "type": {"type": "string"}, "head_limit": {"type": "number"}, "offset": {"type": "number"}, "multiline": {"type": "boolean"}}, "required": ["pattern"]},
+    "Bash": {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number"}, "description": {"type": "string"}, "run_in_background": {"type": "boolean"}, "dangerouslyDisableSandbox": {"type": "boolean"}}, "required": ["command"]},
+    "TodoWrite": {"type": "object", "properties": {"todos": {"type": "array", "items": {"type": "object", "properties": {"content": {"type": "string"}, "status": {"type": "string"}, "activeForm": {"type": "string"}}, "required": ["content", "status", "activeForm"]}}}, "required": ["todos"]},
+    "WebFetch": {"type": "object", "properties": {"url": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["url", "prompt"]},
+    "WebSearch": {"type": "object", "properties": {"query": {"type": "string"}, "allowed_domains": {"type": "array", "items": {"type": "string"}}, "blocked_domains": {"type": "array", "items": {"type": "string"}}}, "required": ["query"]},
+    "SetStatus": {"type": "object", "properties": {"message": {"type": "string"}, "detail": {"type": "string"}}, "required": ["message"], "additionalProperties": False},
+    "Agent": {"type": "object", "properties": {"description": {"type": "string"}, "prompt": {"type": "string"}, "subagent_type": {"type": "string"}, "model": {"type": "string"}, "run_in_background": {"type": "boolean"}, "name": {"type": "string"}, "team_name": {"type": "string"}, "mode": {"type": "string", "enum": ["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"]}, "isolation": {"type": "string"}}, "required": ["description", "prompt"]},
+    "AskUserQuestion": {"type": "object", "properties": {"questions": {"type": "array", "minItems": 1, "maxItems": 4}}, "required": ["questions"]},
+    "Config": {"type": "object", "additionalProperties": True},
+    "ExitPlanMode": {"type": "object", "properties": {"allowedPrompts": {"type": "array"}}, "additionalProperties": True},
+    "NotebookEdit": {"type": "object", "properties": {"notebook_path": {"type": "string"}, "cell_id": {"type": "string"}, "new_source": {"type": "string"}, "cell_type": {"type": "string"}, "edit_mode": {"type": "string"}}, "required": ["notebook_path", "new_source"]},
+    "TaskOutput": {"type": "object", "properties": {"task_id": {"type": "string"}, "block": {"type": "boolean"}, "timeout": {"type": "number"}}, "required": ["task_id", "block", "timeout"]},
+    "TaskStop": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]},
+    "TaskMonitorStart": {"type": "object", "properties": {"task_id": {"type": "string"}, "goal": {"type": "string"}, "summary_style": {"type": "string"}, "check_interval_ms": {"type": "number"}, "heartbeat_interval_ms": {"type": "number"}}, "required": ["task_id", "goal"]},
+    "TaskMonitorStop": {"type": "object", "properties": {"monitor_id": {"type": "string"}}, "required": ["monitor_id"]},
+    "TaskHealthCheckStart": {"type": "object", "properties": {"title": {"type": "string"}, "mode": {"type": "string", "enum": ["http", "command"]}, "url": {"type": "string"}, "command": {"type": "string"}, "interval_ms": {"type": "number"}, "timeout_ms": {"type": "number"}, "failure_threshold": {"type": "number"}, "backoff_multiplier": {"type": "number"}, "max_interval_ms": {"type": "number"}, "expected_status_codes": {"type": "array", "items": {"type": "number"}}, "expected_body_substring": {"type": "string"}}, "required": ["title", "mode"]},
+    "TaskHealthCheckStop": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]},
+    "Mcp": {"type": "object", "additionalProperties": True},
+    "ListMcpResources": {"type": "object", "properties": {"server": {"type": "string"}}},
+    "ReadMcpResource": {"type": "object", "properties": {"server": {"type": "string"}, "uri": {"type": "string"}}, "required": ["server", "uri"]},
+    "EnterWorktree": {"type": "object", "properties": {"name": {"type": "string"}}},
+    "ExitWorktree": {"type": "object", "additionalProperties": True},
+}
+
+
+def _tool_description(name: str) -> str:
+    return BUILTIN_TOOL_DESCRIPTIONS[name]
+
+
+def _tool_schema(name: str) -> dict[str, Any]:
+    return copy.deepcopy(BUILTIN_TOOL_INPUT_SCHEMAS[name])
+
+
+def createBuiltinToolContractSnapshot(options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    return [
+        {"name": tool.name, "description": tool.description, "inputSchema": tool.inputSchema}
+        for tool in createBuiltinTools(options)
+    ]
+
+
+create_builtin_tool_contract_snapshot = createBuiltinToolContractSnapshot
 
 
 class FetchResponse:
@@ -134,7 +243,7 @@ def _read_tool() -> ToolDefinition:
         )
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Read", "Read files from disk, including partial line ranges for large text files.", {"type": "object"}, handler)
+    return ToolDefinition("Read", _tool_description("Read"), _tool_schema("Read"), handler)
 
 
 def _write_tool() -> ToolDefinition:
@@ -147,7 +256,7 @@ def _write_tool() -> ToolDefinition:
         Path(file_path).write_text(content, encoding="utf-8")
         return {"content": pretty_json(_file_change_payload("Write", file_path, previous, content))}
 
-    return ToolDefinition("Write", "Write full file contents to disk, creating parent directories when needed.", {"type": "object"}, handler)
+    return ToolDefinition("Write", _tool_description("Write"), _tool_schema("Write"), handler)
 
 
 def _edit_tool() -> ToolDefinition:
@@ -164,7 +273,7 @@ def _edit_tool() -> ToolDefinition:
         Path(file_path).write_text(updated, encoding="utf-8")
         return {"content": pretty_json(_file_change_payload("Edit", file_path, original, updated, {"note": "Replaced all occurrences." if replace_all else "Replaced the first matching occurrence."}))}
 
-    return ToolDefinition("Edit", "Apply exact string replacements inside a file.", {"type": "object"}, handler)
+    return ToolDefinition("Edit", _tool_description("Edit"), _tool_schema("Edit"), handler)
 
 
 def _glob_tool() -> ToolDefinition:
@@ -177,7 +286,7 @@ def _glob_tool() -> ToolDefinition:
         payload = await shapeGlobPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, matches=rel, ignoredDefaultsApplied=True)
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Glob", "List files that match a glob pattern.", {"type": "object"}, handler)
+    return ToolDefinition("Glob", _tool_description("Glob"), _tool_schema("Glob"), handler)
 
 
 def _grep_tool() -> ToolDefinition:
@@ -213,7 +322,7 @@ def _grep_tool() -> ToolDefinition:
         payload = await shapeGrepPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, outputMode=output_mode, matches=matches, offset=int(input.get("offset") or 0), requestedHeadLimit=input.get("head_limit"))
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Grep", "Search file contents.", {"type": "object"}, handler)
+    return ToolDefinition("Grep", _tool_description("Grep"), _tool_schema("Grep"), handler)
 
 
 def _bash_tool() -> ToolDefinition:
@@ -309,7 +418,7 @@ def _bash_tool() -> ToolDefinition:
             "meta": {"execution": execution},
         }
 
-    return ToolDefinition("Bash", "Run shell commands in the current workspace.", {"type": "object"}, handler)
+    return ToolDefinition("Bash", _tool_description("Bash"), _tool_schema("Bash"), handler)
 
 
 def _todo_tool() -> ToolDefinition:
@@ -321,7 +430,7 @@ def _todo_tool() -> ToolDefinition:
         await maybe_await(context.get("persistSession", lambda: None)())
         return {"content": pretty_json({"updated": len(todos), "todos": todos})}
 
-    return ToolDefinition("TodoWrite", "Update the session todo list.", {"type": "object"}, handler)
+    return ToolDefinition("TodoWrite", _tool_description("TodoWrite"), _tool_schema("TodoWrite"), handler)
 
 
 def _web_fetch_tool() -> ToolDefinition:
@@ -335,7 +444,7 @@ def _web_fetch_tool() -> ToolDefinition:
         shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="WebFetch", family="web", text=_strip_html(raw), strategy="head")
         return {"content": pretty_json({"url": url, "prompt": prompt, "content": shaped["text"], "content_manifest": shaped["view"]})}
 
-    return ToolDefinition("WebFetch", "Fetch a URL and return a text snapshot of its contents.", {"type": "object"}, handler)
+    return ToolDefinition("WebFetch", _tool_description("WebFetch"), _tool_schema("WebFetch"), handler)
 
 
 def _web_search_tool() -> ToolDefinition:
@@ -357,7 +466,7 @@ def _web_search_tool() -> ToolDefinition:
                 break
         return {"content": pretty_json({"query": query, "results": results})}
 
-    return ToolDefinition("WebSearch", "Perform a lightweight web search and return ranked results.", {"type": "object"}, handler)
+    return ToolDefinition("WebSearch", _tool_description("WebSearch"), _tool_schema("WebSearch"), handler)
 
 
 def _set_status_tool() -> ToolDefinition:
@@ -367,7 +476,7 @@ def _set_status_tool() -> ToolDefinition:
         context.get("outputJson", lambda *_: None)("status.updated", {"message": message, "detail": detail, "session_id": context["session"]["id"]})
         return {"content": pretty_json({"message": message, "detail": detail})}
 
-    return ToolDefinition("SetStatus", "Update the assistant's live status line.", {"type": "object"}, handler)
+    return ToolDefinition("SetStatus", _tool_description("SetStatus"), _tool_schema("SetStatus"), handler)
 
 
 def _agent_tool() -> ToolDefinition:
@@ -399,26 +508,7 @@ def _agent_tool() -> ToolDefinition:
             return await startBackgroundSubagent(agent_args)
         return await runForegroundSubagent(agent_args)
 
-    return ToolDefinition(
-        "Agent",
-        "Spawn a delegated subagent to work on a focused task.",
-        {
-            "type": "object",
-            "properties": {
-                "description": {"type": "string"},
-                "prompt": {"type": "string"},
-                "subagent_type": {"type": "string"},
-                "model": {"type": "string"},
-                "run_in_background": {"type": "boolean"},
-                "name": {"type": "string"},
-                "team_name": {"type": "string"},
-                "mode": {"type": "string", "enum": ["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"]},
-                "isolation": {"type": "string"},
-            },
-            "required": ["description", "prompt"],
-        },
-        handler,
-    )
+    return ToolDefinition("Agent", _tool_description("Agent"), _tool_schema("Agent"), handler)
 
 
 def _ask_user_question_tool() -> ToolDefinition:
@@ -428,7 +518,7 @@ def _ask_user_question_tool() -> ToolDefinition:
         answer = await maybe_await(context.get("askQuestion", lambda *_: "")(prompt, options))
         return {"content": pretty_json({"answer": answer})}
 
-    return ToolDefinition("AskUserQuestion", "Ask the user a question.", {"type": "object"}, handler)
+    return ToolDefinition("AskUserQuestion", _tool_description("AskUserQuestion"), _tool_schema("AskUserQuestion"), handler)
 
 
 def _config_tool() -> ToolDefinition:
@@ -437,7 +527,7 @@ def _config_tool() -> ToolDefinition:
         public = {key: config.get(key) for key in ("provider", "providerProfileName", "model", "effort", "permissionMode", "cwd")}
         return {"content": pretty_json(public)}
 
-    return ToolDefinition("Config", "Inspect current runtime configuration.", {"type": "object"}, handler)
+    return ToolDefinition("Config", _tool_description("Config"), _tool_schema("Config"), handler)
 
 
 def _exit_plan_mode_tool() -> ToolDefinition:
@@ -452,7 +542,7 @@ def _exit_plan_mode_tool() -> ToolDefinition:
         await maybe_await(context.get("persistSession", lambda: None)())
         return {"content": pretty_json({"request_id": request_id, "status": "pending", "file_path": file_path}), "pause": "approval"}
 
-    return ToolDefinition("ExitPlanMode", "Submit a plan for approval and pause before implementation.", {"type": "object"}, handler)
+    return ToolDefinition("ExitPlanMode", _tool_description("ExitPlanMode"), _tool_schema("ExitPlanMode"), handler)
 
 
 def _notebook_edit_tool() -> ToolDefinition:
@@ -484,7 +574,7 @@ def _notebook_edit_tool() -> ToolDefinition:
         Path(notebook_path).write_text(f"{json.dumps(notebook, indent=2, ensure_ascii=False)}\n", encoding="utf-8")
         return {"content": f"Updated notebook {notebook_path}"}
 
-    return ToolDefinition("NotebookEdit", "Edit notebook cells.", {"type": "object"}, handler)
+    return ToolDefinition("NotebookEdit", _tool_description("NotebookEdit"), _tool_schema("NotebookEdit"), handler)
 
 
 def _task_output_tool() -> ToolDefinition:
@@ -514,7 +604,7 @@ def _task_output_tool() -> ToolDefinition:
         execution = createTaskExecutionDescriptor({**meta, "outputFile": output_file}, text)
         return {"content": pretty_json({**meta, "task_id": task_id, "output": shaped["text"], "output_file": output_file, "output_truncated": bool(output_result and output_result.get("truncated")), "output_manifest": shaped["view"], "execution": execution}), "meta": {"execution": execution}}
 
-    return ToolDefinition("TaskOutput", "Read background task output.", {"type": "object"}, handler)
+    return ToolDefinition("TaskOutput", _tool_description("TaskOutput"), _tool_schema("TaskOutput"), handler)
 
 
 def _task_stop_tool() -> ToolDefinition:
@@ -565,7 +655,7 @@ def _task_stop_tool() -> ToolDefinition:
         )
         return {"content": pretty_json({"task_id": task_id, "status": "terminated", "stopped": True, "execution": execution}), "meta": {"execution": execution}}
 
-    return ToolDefinition("TaskStop", "Stop a task.", {"type": "object"}, handler)
+    return ToolDefinition("TaskStop", _tool_description("TaskStop"), _tool_schema("TaskStop"), handler)
 
 
 def _task_monitor_start_tool() -> ToolDefinition:
@@ -620,7 +710,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
             )
         }
 
-    return ToolDefinition("TaskMonitorStart", "Start monitoring a task.", {"type": "object"}, handler)
+    return ToolDefinition("TaskMonitorStart", _tool_description("TaskMonitorStart"), _tool_schema("TaskMonitorStart"), handler)
 
 
 def _task_monitor_stop_tool() -> ToolDefinition:
@@ -633,7 +723,7 @@ def _task_monitor_stop_tool() -> ToolDefinition:
         await saveMonitor(monitor)
         return {"content": pretty_json({"monitor_id": monitor_id, "task_id": monitor.get("taskId"), "status": "stopped", "stopped": True})}
 
-    return ToolDefinition("TaskMonitorStop", "Stop monitoring a task.", {"type": "object"}, handler)
+    return ToolDefinition("TaskMonitorStop", _tool_description("TaskMonitorStop"), _tool_schema("TaskMonitorStop"), handler)
 
 
 def _task_health_check_start_tool() -> ToolDefinition:
@@ -662,7 +752,7 @@ def _task_health_check_start_tool() -> ToolDefinition:
         context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": input.get("title"), "owner": "daemon"})
         return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": input.get("title")})}
 
-    return ToolDefinition("TaskHealthCheckStart", "Start a periodic health check.", {"type": "object"}, handler)
+    return ToolDefinition("TaskHealthCheckStart", _tool_description("TaskHealthCheckStart"), _tool_schema("TaskHealthCheckStart"), handler)
 
 
 def _task_health_check_stop_tool() -> ToolDefinition:
@@ -672,7 +762,7 @@ def _task_health_check_stop_tool() -> ToolDefinition:
         stopped = await supervisor["stopTask"](task_id)
         return {"content": pretty_json({"task_id": task_id, "stopped": stopped}), "isError": not stopped}
 
-    return ToolDefinition("TaskHealthCheckStop", "Stop a health check.", {"type": "object"}, handler)
+    return ToolDefinition("TaskHealthCheckStop", _tool_description("TaskHealthCheckStop"), _tool_schema("TaskHealthCheckStop"), handler)
 
 
 def _mcp_tool(runtime: Any) -> ToolDefinition:
@@ -695,7 +785,7 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
         diagnostics = runtime["getDiagnostics"]() if callable(runtime.get("getDiagnostics")) else runtime.get("diagnostics", {})
         return {"content": pretty_json({"diagnostics": diagnostics, "servers": runtime["listServerStatus"](), "tools": runtime["listTools"]()})}
 
-    return ToolDefinition("Mcp", "Call an MCP tool.", {"type": "object"}, handler)
+    return ToolDefinition("Mcp", _tool_description("Mcp"), _tool_schema("Mcp"), handler)
 
 
 def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
@@ -706,7 +796,7 @@ def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
         configs = context["config"].get("mcpConfig", [])
         return {"content": pretty_json([{"server": item.get("name"), "name": item.get("name"), "uri": item.get("commandOrUrl"), "description": f"{item.get('transport')} server (not connected)"} for item in configs if not server or item.get("name") == server])}
 
-    return ToolDefinition("ListMcpResources", "List MCP resources.", {"type": "object"}, handler)
+    return ToolDefinition("ListMcpResources", _tool_description("ListMcpResources"), _tool_schema("ListMcpResources"), handler)
 
 
 def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
@@ -725,7 +815,7 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             return {"content": pretty_json({"contents": [{"uri": uri, "text": shaped["text"], "manifest": shaped["view"]}]})}
         return {"content": f"MCP runtime is not connected for server: {server}", "isError": True}
 
-    return ToolDefinition("ReadMcpResource", "Read an MCP resource.", {"type": "object"}, handler)
+    return ToolDefinition("ReadMcpResource", _tool_description("ReadMcpResource"), _tool_schema("ReadMcpResource"), handler)
 
 
 def _enter_worktree_tool(controller: Any) -> ToolDefinition:
@@ -759,7 +849,7 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
         payload = {"cwd": target_path, "branch": branch_name, "created": True, "workspace": snapshot, "execution": execution}
         return {"content": pretty_json(payload), "meta": {"execution": execution} if execution else None}
 
-    return ToolDefinition("EnterWorktree", "Enter a git worktree.", {"type": "object"}, handler)
+    return ToolDefinition("EnterWorktree", _tool_description("EnterWorktree"), _tool_schema("EnterWorktree"), handler)
 
 
 def _exit_worktree_tool(controller: Any) -> ToolDefinition:
@@ -780,7 +870,7 @@ def _exit_worktree_tool(controller: Any) -> ToolDefinition:
         payload = {"cwd": original, "workspace": snapshot, "execution": execution}
         return {"content": pretty_json(payload), "meta": {"execution": execution} if execution else None}
 
-    return ToolDefinition("ExitWorktree", "Exit a git worktree.", {"type": "object"}, handler)
+    return ToolDefinition("ExitWorktree", _tool_description("ExitWorktree"), _tool_schema("ExitWorktree"), handler)
 
 
 def _controller_method(controller: Any, name: str) -> Any:

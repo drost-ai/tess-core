@@ -75,6 +75,21 @@ class AgentCoreTests(unittest.TestCase):
         self.assertTrue(callable(core.createEmptySession))
         self.assertTrue(callable(core.ensureTaskSupervisorDaemon))
 
+    def test_builtin_tool_contract_snapshot_matches_reference_fixture(self):
+        fixture_path = Path(__file__).parent / "fixtures" / "tool_contracts" / "builtin_tools.json"
+        expected = json.loads(fixture_path.read_text(encoding="utf-8"))
+        snapshot = core.createBuiltinToolContractSnapshot()
+        self.assertEqual(snapshot, expected)
+        self.assertEqual([item["name"] for item in snapshot], core.BUILTIN_TOOL_ORDER)
+        self.assertEqual([tool.name for tool in core.createBuiltinTools()], core.BUILTIN_TOOL_ORDER)
+
+    def test_builtin_tool_schemas_are_cloned_per_definition(self):
+        first_read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+        first_read.inputSchema["properties"]["file_path"]["type"] = "mutated"
+        second_read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+        self.assertEqual(second_read.inputSchema["properties"]["file_path"]["type"], "string")
+        self.assertEqual(core.BUILTIN_TOOL_INPUT_SCHEMAS["Read"]["properties"]["file_path"]["type"], "string")
+
     def test_built_in_provider_profiles(self):
         profiles = core.resolveProviderProfiles(None)
         self.assertEqual(core.listProviderProfiles(profiles), ["anthropic-claude-code", "anthropic-console", "codex", "openai"])
