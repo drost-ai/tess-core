@@ -2185,18 +2185,18 @@ class AgentCoreTests(unittest.TestCase):
 
             script = 'print("hello from background")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
-            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            events = []
+            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}))
             start_payload = json.loads(result["content"])
             task_id = start_payload["task_id"]
             self.assertEqual(start_payload["execution"]["kind"], "task")
             self.assertEqual(start_payload["execution"]["id"], task_id)
             self.assertEqual(result["meta"]["execution"]["activities"][0]["subjectId"], task_id)
             self.assertIn(task_id, session["metadata"]["taskIds"])
-            daemon_state = run(core.getTaskSupervisorDaemonState())
-            self.assertEqual(daemon_state["mode"], "detached_python")
-            self.assertNotEqual(daemon_state["pid"], os.getpid())
-            self.assertTrue(Path(daemon_state["socketPath"]).exists())
-            self.assertTrue(run(core.connectTaskSupervisorDaemonClient())["_daemonClient"])
+            self.assertEqual(events[-1][0], "task.registered")
+            self.assertEqual(events[-1][1]["owner"], "client")
+            self.assertEqual(events[-1][1]["task_id"], task_id)
+            self.assertIsNone(run(core.getTaskSupervisorDaemonState()))
             for _ in range(80):
                 meta = run(core.readTaskMeta(task_id))
                 if meta and meta.get("status") == "completed":
@@ -2204,6 +2204,9 @@ class AgentCoreTests(unittest.TestCase):
                 time.sleep(0.05)
             meta = run(core.readTaskMeta(task_id))
             self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["owner"], "client")
+            self.assertIsInstance(meta["runnerPid"], int)
+            self.assertIsInstance(meta["pid"], int)
             task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
             output = run(task_output.handler({"task_id": task_id, "block": True, "timeout": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(output["content"])
@@ -2853,22 +2856,70 @@ class AgentCoreTests(unittest.TestCase):
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
-            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            events = []
+            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}))
             task_id = json.loads(result["content"])["task_id"]
+            for _ in range(40):
+                meta = run(core.readTaskMeta(task_id))
+                if meta and isinstance(meta.get("pid"), int):
+                    break
+                time.sleep(0.05)
+            self.assertEqual(events[0][1]["summary"], f"Run shell command in background\n{command}")
             stopper = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskStop")
-            stopped = run(stopper.handler({"task_id": task_id}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
+            stopped = run(stopper.handler({"task_id": task_id}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace)}))
             self.assertFalse(stopped.get("isError"))
             stopped_payload = json.loads(stopped["content"])
+            self.assertEqual(stopped_payload["status"], "terminated")
+            self.assertNotIn("stopped", stopped_payload)
             self.assertEqual(stopped_payload["execution"]["title"], f"Stopped background task {task_id}")
             self.assertEqual(stopped["meta"]["execution"]["status"], "terminated")
             for _ in range(20):
                 meta = run(core.readTaskMeta(task_id))
-                if meta and meta.get("status") == "stopped":
+                if meta and meta.get("status") == "terminated":
                     break
                 time.sleep(0.05)
-            self.assertEqual(run(core.readTaskMeta(task_id))["status"], "stopped")
+            self.assertEqual(run(core.readTaskMeta(task_id))["status"], "terminated")
+            stop_permission = next(data for event, data in events if event == "permission.decided" and data["tool"] == "TaskStop")
+            self.assertRegex(stop_permission["summary"], rf"^Stop background task {re.escape(task_id)} \(pid \d+\)$")
+            self.assertEqual(events[-1][0], "task.failed")
+            self.assertEqual(events[-1][1]["summary"], "Task terminated by user request.")
         finally:
             run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_task_stop_daemon_result_shape_matches_reference(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            stopper = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskStop")
+
+            async def stop_missing(_task_id):
+                return False
+
+            missing = run(
+                stopper.handler(
+                    {"task_id": "missing-task"},
+                    {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "daemon": {"stopTask": stop_missing}},
+                )
+            )
+            self.assertTrue(missing["isError"])
+            self.assertEqual(missing["content"], "Task not found or not stoppable: missing-task")
+
+            async def stop_found(_task_id):
+                return True
+
+            events = []
+            stopped = run(
+                stopper.handler(
+                    {"task_id": "daemon-task"},
+                    {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "daemon": {"stopTask": stop_found}},
+                )
+            )
+            self.assertEqual(json.loads(stopped["content"]), {"task_id": "daemon-task", "status": "terminated"})
+            self.assertNotIn("meta", stopped)
+            self.assertEqual(events[-1], ("task.failed", {"session_id": session["id"], "task_id": "daemon-task", "summary": "Task terminated by user request."}))
+        finally:
             self.restore_home(root, previous)
 
     def test_task_monitor_and_activity_descriptors_match_reference_shape(self):
@@ -3101,6 +3152,23 @@ class AgentCoreTests(unittest.TestCase):
             run(write.handler({"file_path": str(workspace / "accepted.txt"), "content": "ok"}, context))
             self.assertEqual((workspace / "accepted.txt").read_text(), "ok")
 
+            yes_events = []
+            yes_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            yes_config = {**config, "permissionMode": "default"}
+            yes_context = {
+                **context,
+                "session": yes_session,
+                "config": yes_config,
+                "interactive": True,
+                "askQuestion": lambda _prompt, options=None: "yes",
+                "outputJson": lambda event, data: yes_events.append((event, data)),
+            }
+            with self.assertRaises(PermissionError) as yes_ctx:
+                run(write.handler({"file_path": str(workspace / "yes-is-not-label.txt"), "content": "nope"}, yes_context))
+            self.assertIn("Permission denied for Write", str(yes_ctx.exception))
+            self.assertFalse((workspace / "yes-is-not-label.txt").exists())
+            self.assertTrue(any(data.get("source") == "prompt" and data.get("decision") == "deny" for event, data in yes_events if event == "permission.decided"))
+
             events = []
             persisted = {"count": 0}
             session["permissionMode"] = "default"
@@ -3119,6 +3187,34 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(any(event == "permission.requested" for event, _ in events))
             self.assertTrue(any(data.get("source") == "prompt-switch" for event, data in events if event == "permission.decided"))
             self.assertEqual((workspace / "switched.txt").read_text(), "yes")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_permission_resolution_matrix_matches_reference_edges(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            context = {"session": session, "config": config, "interactive": False, "cwd": str(workspace)}
+            run(core.saveAutoMode(str(workspace), {"allow": ["echo"], "deny": ["rm -rf"], "environment": {}}))
+
+            cases = [
+                ("Write", "edit", "bypassPermissions", False, None, {"decision": "allow", "source": "mode"}),
+                ("Bash", "shell", "plan", False, "git status", {"decision": "deny", "source": "mode", "reason": "Bash is blocked in plan mode. Switch to /permissions default or /permissions acceptEdits to execute changes."}),
+                ("Write", "edit", "default", False, None, {"decision": "ask", "source": "mode", "switchMode": "acceptEdits", "reason": "This tool changes files on disk."}),
+                ("EnterWorktree", "worktree", "auto", False, None, {"decision": "deny", "source": "mode", "reason": "Worktree creation is blocked in non-interactive permission modes."}),
+                ("TaskStop", "process", "dontAsk", False, None, {"decision": "deny", "source": "mode", "reason": "Stopping processes is blocked in non-interactive permission modes."}),
+                ("Bash", "shell", "default", False, "git status --short", {"decision": "allow", "source": "heuristic"}),
+                ("Bash", "shell", "default", False, f"{shlex.quote(sys.executable)} -c {shlex.quote('print(1)')}", {"decision": "ask", "source": "mode", "switchMode": "bypassPermissions", "reason": "This shell command can modify the environment or repository."}),
+                ("Bash", "shell", "auto", False, "echo ok", {"decision": "allow", "source": "auto-mode"}),
+                ("Bash", "shell", "auto", False, "rm -rf build", {"decision": "deny", "source": "auto-mode", "reason": "Command matched the deny policy for auto mode."}),
+                ("Bash", "shell", "auto", False, "uname -a", {"decision": "deny", "source": "auto-mode", "reason": "Command is not in the allow policy for auto mode."}),
+                ("Bash", "shell", "auto", True, "echo ok", {"decision": "deny", "source": "auto-mode", "reason": "Command is not in the allow policy for auto mode."}),
+            ]
+
+            for tool_name, category, mode, always_ask, command, expected in cases:
+                with self.subTest(tool=tool_name, category=category, mode=mode, command=command, always_ask=always_ask):
+                    self.assertEqual(run(tools_module._resolve_tool_permission(context, tool_name, category, mode, always_ask, command)), expected)
         finally:
             self.restore_home(root, previous)
 

@@ -37,7 +37,7 @@ from .storage import (
     writePlanFile,
     writeTaskMeta,
 )
-from .daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon
+from .daemon import connectTaskSupervisorDaemonClient
 from .tool_payloads import (
     applyDefaultGlobExcludes,
     filterDefaultIgnoredGlobMatches,
@@ -89,6 +89,9 @@ BUILTIN_TOOL_ORDER = [
     "EnterWorktree",
     "ExitWorktree",
 ]
+
+
+_BACKGROUND_RUNNERS: list[subprocess.Popen[Any]] = []
 
 
 BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -346,31 +349,80 @@ def _bash_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         command = _require_string(input.get("command"), "command")
         timeout = _normalize_bash_timeout(command, input.get("timeout"))
-        await _ensure_tool_permission(context, "Bash", "shell", f"Run shell command\n{command}", always_ask=bool(input.get("run_in_background")), command=command)
-        if input.get("run_in_background"):
-            supervisor = context.get("daemon") or context.get("taskSupervisor") or await ensureTaskSupervisorDaemon({"cwd": context["session"]["cwd"]})
+        run_in_background = bool(input.get("run_in_background"))
+        await _ensure_tool_permission(
+            context,
+            "Bash",
+            "shell",
+            f"{'Run shell command in background' if run_in_background else 'Run shell command'}\n{command}",
+            always_ask=run_in_background,
+            command=command,
+        )
+        if run_in_background:
+            supervisor = context.get("daemon") or context.get("taskSupervisor")
             title = input.get("description") or input.get("title")
-            started = await supervisor["startBackgroundCommand"](
-                {
+            if supervisor:
+                started = await supervisor["startBackgroundCommand"](
+                    {
+                        "sessionId": context["session"]["id"],
+                        "command": command,
+                        "cwd": context["session"]["cwd"],
+                        "title": title,
+                    }
+                )
+                task_id = started.get("taskId") or started.get("task_id")
+                output_path = started.get("outputFile") or started.get("output_file") or taskOutputPath(task_id)
+                task_record = await readTaskMeta(task_id) or {
+                    "taskId": task_id,
+                    "id": task_id,
                     "sessionId": context["session"]["id"],
                     "command": command,
                     "cwd": context["session"]["cwd"],
+                    "startedAt": now_iso(),
+                    "status": "running",
+                    "outputFile": output_path,
                     "title": title,
+                    "description": title,
                 }
-            )
-            task_id = started.get("taskId") or started.get("task_id")
-            output_path = started.get("outputFile") or started.get("output_file") or taskOutputPath(task_id)
-            task_record = await readTaskMeta(task_id) or {
+            else:
+                task_id = str(uuid.uuid4())
+                output_path = taskOutputPath(task_id)
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                started_at = now_iso()
+                task_record = {
+                    "taskId": task_id,
+                    "id": task_id,
+                    "sessionId": context["session"]["id"],
+                    "command": command,
+                    "cwd": context["session"]["cwd"],
+                    "startedAt": started_at,
+                    "updatedAt": started_at,
+                    "status": "running",
+                    "outputFile": output_path,
+                    "title": title,
+                    "description": title,
+                    "owner": "client",
+                }
+                runner = _spawn_background_task_runner(task_id, command, context["session"]["cwd"], output_path)
+                _track_background_runner(runner)
+                task_record["runnerPid"] = runner.pid
+                await writeTaskMeta(task_id, task_record)
+            task_record = {
+                **{
+                    "taskId": task_id,
+                    "id": task_id,
+                    "sessionId": context["session"]["id"],
+                    "command": command,
+                    "cwd": context["session"]["cwd"],
+                    "startedAt": now_iso(),
+                    "status": "running",
+                    "outputFile": output_path,
+                    "title": title,
+                    "description": title,
+                },
+                **task_record,
                 "taskId": task_id,
-                "id": task_id,
-                "sessionId": context["session"]["id"],
-                "command": command,
-                "cwd": context["session"]["cwd"],
-                "startedAt": now_iso(),
-                "status": "running",
                 "outputFile": output_path,
-                "title": title,
-                "description": title,
             }
             _append_unique_metadata_list(context["session"], "taskIds", task_id)
             await maybe_await(context.get("persistSession", lambda: None)())
@@ -382,7 +434,7 @@ def _bash_tool() -> ToolDefinition:
                     "kind": "background_command",
                     "status": "backgrounded",
                     "title": task_record.get("title") or task_record.get("description") or command,
-                    "owner": task_record.get("owner") or ("daemon" if supervisor else "client"),
+                    "owner": "daemon" if context.get("daemon") or context.get("taskSupervisor") else "client",
                 },
             )
             execution = createTaskExecutionDescriptor(
@@ -710,37 +762,33 @@ def _task_output_tool() -> ToolDefinition:
 def _task_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         task_id = _require_string(input.get("task_id"), "task_id")
-        supervisor = context.get("daemon") or context.get("taskSupervisor") or await connectTaskSupervisorDaemonClient()
-        await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id}")
+        supervisor = context.get("daemon") or context.get("taskSupervisor")
         if supervisor:
-            meta_before = await readTaskMeta(task_id)
+            await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id}")
             stopped = await supervisor["stopTask"](task_id)
             if not stopped:
-                return {"content": pretty_json({"task_id": task_id, "status": "not_found", "stopped": False}), "isError": True}
-            meta_after = await readTaskMeta(task_id) or meta_before or {"taskId": task_id, "id": task_id, "status": "terminated"}
-            execution = _stopped_task_execution_descriptor(task_id, meta_after)
+                return {"content": f"Task not found or not stoppable: {task_id}", "isError": True}
             context.get("outputJson", lambda *_: None)(
                 "task.failed",
                 {
                     "session_id": context["session"]["id"],
                     "task_id": task_id,
-                    "kind": meta_after.get("type") or "background_command",
-                    "title": meta_after.get("title") or meta_after.get("description") or meta_after.get("command"),
                     "summary": "Task terminated by user request.",
                 },
             )
-            return {"content": pretty_json({"task_id": task_id, "status": "terminated", "stopped": True, "execution": execution}), "meta": {"execution": execution}}
+            return {"content": pretty_json({"task_id": task_id, "status": "terminated"})}
         meta = await readTaskMeta(task_id)
         if not meta:
             return {"content": f"Task not found: {task_id}", "isError": True}
         pid = meta.get("pid")
         if not isinstance(pid, int):
             return {"content": f"Task {task_id} has no PID", "isError": True}
+        await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id} (pid {pid})")
         try:
             os.kill(pid, 15)
         except ProcessLookupError:
             pass
-        meta.update({"status": "stopped", "stoppedAt": now_iso(), "updatedAt": now_iso()})
+        meta.update({"status": "terminated", "stoppedAt": now_iso(), "updatedAt": now_iso()})
         await writeTaskMeta(task_id, meta)
         execution = _stopped_task_execution_descriptor(task_id, meta)
         context.get("outputJson", lambda *_: None)(
@@ -753,7 +801,7 @@ def _task_stop_tool() -> ToolDefinition:
                 "summary": "Task terminated by user request.",
             },
         )
-        return {"content": pretty_json({"task_id": task_id, "status": "terminated", "stopped": True, "execution": execution}), "meta": {"execution": execution}}
+        return {"content": pretty_json({"task_id": task_id, "status": "terminated", "execution": execution}), "meta": {"execution": execution}}
 
     return ToolDefinition("TaskStop", _tool_description("TaskStop"), _tool_schema("TaskStop"), handler)
 
@@ -1037,6 +1085,42 @@ def _stopped_task_execution_descriptor(task_id: str, meta: dict[str, Any]) -> di
             "metadata": _without_none_values({"pid": meta.get("pid")}),
         }
     )
+
+
+def _spawn_background_task_runner(task_id: str, command: str, cwd: str, output_path: str) -> subprocess.Popen[Any]:
+    return subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "agent_core.background_task_runner",
+            "--task-id",
+            task_id,
+            "--command",
+            command,
+            "--cwd",
+            cwd,
+            "--output-path",
+            output_path,
+        ],
+        cwd=cwd,
+        env=_background_runner_env(),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
+def _background_runner_env() -> dict[str, str]:
+    env = os.environ.copy()
+    package_root = str(Path(__file__).resolve().parents[1])
+    env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
+    return env
+
+
+def _track_background_runner(runner: subprocess.Popen[Any]) -> None:
+    _BACKGROUND_RUNNERS[:] = [process for process in _BACKGROUND_RUNNERS if process.poll() is None]
+    _BACKGROUND_RUNNERS.append(runner)
 
 
 def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
@@ -1326,7 +1410,7 @@ async def _ensure_tool_permission(context: dict[str, Any], tool_name: str, categ
     prompt = "\n".join(part for part in (f"{tool_name} wants permission", "", summary, "", f"mode: {mode}", f"policy: {resolution.get('reason')}" if resolution.get("reason") else "") if part is not None)
     output_json("permission.requested", {"tool": tool_name, "mode": mode, "summary": summary, "options": options})
     answer = await maybe_await(context.get("askQuestion", lambda *_: deny_label)(prompt, options))
-    if answer == approve_label or str(answer).lower().startswith("y"):
+    if answer == approve_label:
         output_json("permission.decided", {"tool": tool_name, "mode": mode, "decision": "allow", "summary": summary, "source": "prompt"})
         return
     if switch_label and answer == switch_label:
