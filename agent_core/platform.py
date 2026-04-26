@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
+from ._utils import now_iso
 from .storage import getProjectRoot, getStateRoot, loadAuth, loadDaemonState, loadMcpServers, loadPlugins
 from .workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
 
@@ -160,7 +164,19 @@ async def maybeAutoConnectIde(cwd: str, args: dict[str, Any] | None = None, **kw
 
 async def resolveChromeCompanionServer(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     status = await detectChromeCompanionStatus(args, **kwargs)
-    return {"available": bool(status.get("supported") and status.get("browserBinary")), "status": status}
+    enabled = bool(status.get("supported"))
+    server = (
+        {
+            "name": "chrome_companion",
+            "transport": "stdio",
+            "commandOrUrl": sys.executable,
+            "args": ["-m", "agent_core.chrome_companion", "mcp"],
+            "updatedAt": now_iso(),
+        }
+        if enabled
+        else None
+    )
+    return {"available": bool(status.get("supported") and status.get("browserBinary")), "enabled": enabled, "status": status, "server": server}
 
 
 async def detectChromeCompanionStatus(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -172,12 +188,70 @@ async def detectChromeCompanionStatus(args: dict[str, Any] | None = None, **kwar
     return {"enabled": bool(browser), "supported": supported, "browserBinary": browser, "nativeHostModeSupported": supported, "platform": system}
 
 
-async def runChromeCompanionMcpServer() -> None:
-    raise RuntimeError("Chrome companion MCP server is not bundled in the Python port.")
+async def runChromeCompanionMcpServer(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
+    input_stream = input_stream or sys.stdin.buffer
+    output_stream = output_stream or sys.stdout.buffer
+    buffer = b""
+    while True:
+        chunk = await asyncio.to_thread(_read_stream_chunk, input_stream)
+        if not chunk:
+            return
+        buffer += chunk
+        while buffer:
+            parsed = _try_read_rpc_message(buffer)
+            if not parsed:
+                break
+            payload, buffer = parsed
+            response = await handleChromeCompanionRpcPayload(payload)
+            if response is not None:
+                _write_rpc_message(output_stream, response)
 
 
-async def runChromeNativeHost() -> None:
-    raise RuntimeError("Chrome native host is not bundled in the Python port.")
+async def runChromeNativeHost(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
+    input_stream = input_stream or sys.stdin.buffer
+    output_stream = output_stream or sys.stdout.buffer
+    while True:
+        header = await asyncio.to_thread(_read_exact_stream, input_stream, 4)
+        if not header:
+            return
+        length = int.from_bytes(header, "little")
+        payload_bytes = await asyncio.to_thread(_read_exact_stream, input_stream, length)
+        if payload_bytes is None:
+            return
+        payload = _parse_json_object(payload_bytes.decode("utf-8")) or {}
+        response = {"type": "pong", "version": "0.1.0"} if payload.get("type") == "ping" else {"type": "status", "status": await detectChromeCompanionStatus()}
+        _write_native_host_message(output_stream, response)
+
+
+async def handleChromeCompanionRpcPayload(payload: str) -> dict[str, Any] | None:
+    value = _parse_json_object(payload)
+    if not value:
+        return None
+    method = value.get("method") if isinstance(value.get("method"), str) else ""
+    request_id = value.get("id")
+    if method == "notifications/initialized":
+        return None
+    if method == "initialize":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2024-11-05", "serverInfo": {"name": "tess-chrome-companion", "version": "0.1.0"}, "capabilities": {"tools": {}, "resources": {}}}}
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": [{"name": "chrome_status", "description": "Return local Chrome companion status and browser availability.", "inputSchema": {"type": "object", "properties": {}}}]}}
+    if method == "tools/call":
+        params = value.get("params") if isinstance(value.get("params"), dict) else {}
+        name = params.get("name") if isinstance(params.get("name"), str) else ""
+        if name != "chrome_status":
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": f"Unknown tool: {name}"}}
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": json.dumps(await detectChromeCompanionStatus(), indent=2)}]}}
+    if method == "resources/list":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"resources": [{"uri": "tess://chrome/status", "name": "chrome_status", "mimeType": "application/json", "description": "Current local Chrome companion status."}]}}
+    if method == "resources/read":
+        params = value.get("params") if isinstance(value.get("params"), dict) else {}
+        uri = params.get("uri") if isinstance(params.get("uri"), str) else ""
+        if uri != "tess://chrome/status":
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": f"Unknown resource: {uri}"}}
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"contents": [{"uri": uri, "mimeType": "application/json", "text": json.dumps(await detectChromeCompanionStatus(), indent=2)}]}}
+    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method not implemented: {method}"}}
 
 
 async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -301,6 +375,65 @@ async def _runner_spawn_detached(runner: dict[str, Any], command: str, args: lis
             result = await result
         return int(result or 0)
     return await spawnDetached(command, args, cwd)
+
+
+def _read_stream_chunk(stream: Any) -> bytes:
+    reader = getattr(stream, "read1", None)
+    chunk = reader(4096) if callable(reader) else stream.read(4096)
+    if isinstance(chunk, str):
+        return chunk.encode("utf-8")
+    return chunk or b""
+
+
+def _read_exact_stream(stream: Any, size: int) -> bytes | None:
+    buffer = b""
+    while len(buffer) < size:
+        chunk = stream.read(size - len(buffer))
+        if isinstance(chunk, str):
+            chunk = chunk.encode("utf-8")
+        if not chunk:
+            return None
+        buffer += chunk
+    return buffer
+
+
+def _try_read_rpc_message(buffer: bytes) -> tuple[str, bytes] | None:
+    header_index = buffer.find(b"\r\n\r\n")
+    if header_index == -1:
+        return None
+    header = buffer[:header_index].decode("utf-8", errors="replace")
+    match = re.search(r"Content-Length:\s*(\d+)", header, re.IGNORECASE)
+    if not match:
+        return "", buffer[header_index + 4 :]
+    length = int(match.group(1))
+    start = header_index + 4
+    if len(buffer) < start + length:
+        return None
+    return buffer[start : start + length].decode("utf-8"), buffer[start + length :]
+
+
+def _write_rpc_message(stream: Any, value: dict[str, Any]) -> None:
+    payload = json.dumps(value).encode("utf-8")
+    stream.write(f"Content-Length: {len(payload)}\r\n\r\n".encode("utf-8") + payload)
+    flush = getattr(stream, "flush", None)
+    if callable(flush):
+        flush()
+
+
+def _parse_json_object(value: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(value)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _write_native_host_message(stream: Any, message: dict[str, Any]) -> None:
+    payload = json.dumps(message).encode("utf-8")
+    stream.write(len(payload).to_bytes(4, "little") + payload)
+    flush = getattr(stream, "flush", None)
+    if callable(flush):
+        flush()
 
 
 async def _find_chrome_binary(runner: dict[str, Any], system: str) -> str | None:

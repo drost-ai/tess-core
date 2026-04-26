@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import http.server
+import io
 import json
 import os
 import queue
@@ -1340,7 +1341,24 @@ class AgentCoreTests(unittest.TestCase):
             chrome = run(core.detectChromeCompanionStatus({"runner": runner, "platform": "linux"}))
             self.assertTrue(chrome["supported"])
             self.assertEqual(chrome["browserBinary"], "/usr/bin/google-chrome")
-            self.assertTrue(run(core.resolveChromeCompanionServer({"runner": runner, "platform": "linux"}))["available"])
+            chrome_server = run(core.resolveChromeCompanionServer({"runner": runner, "platform": "linux"}))
+            self.assertTrue(chrome_server["available"])
+            self.assertTrue(chrome_server["enabled"])
+            self.assertEqual(chrome_server["server"]["args"][:2], ["-m", "agent_core.chrome_companion"])
+            rpc_status = run(core.handleChromeCompanionRpcPayload(json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "chrome_status"}})))
+            self.assertEqual(rpc_status["id"], 7)
+            self.assertEqual(rpc_status["result"]["content"][0]["type"], "text")
+            initialize_payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).encode()
+            framed = b"Content-Length: " + str(len(initialize_payload)).encode() + b"\r\n\r\n" + initialize_payload
+            mcp_out = io.BytesIO()
+            run(core.runChromeCompanionMcpServer(io.BytesIO(framed), mcp_out))
+            self.assertIn(b"tess-chrome-companion", mcp_out.getvalue())
+            native_payload = json.dumps({"type": "ping"}).encode()
+            native_out = io.BytesIO()
+            run(core.runChromeNativeHost(io.BytesIO(len(native_payload).to_bytes(4, "little") + native_payload), native_out))
+            native_raw = native_out.getvalue()
+            native_length = int.from_bytes(native_raw[:4], "little")
+            self.assertEqual(json.loads(native_raw[4 : 4 + native_length])["type"], "pong")
 
             install = run(core.inspectInstallState({"runner": runner}))
             self.assertTrue(install["installed"])
