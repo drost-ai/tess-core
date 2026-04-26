@@ -49,8 +49,9 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         runtime = args.get("runtime") or {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
-        _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
         try:
+            _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
+            _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
             client = _create_openai_client(args, base_url)
             responses = get_value(client, "responses")
             if not responses:
@@ -64,11 +65,13 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 attempt=attempt,
                 had_output=had_output,
                 had_tool_use=had_tool_use,
+                abort_signal=runtime.get("abortSignal"),
             )
             phase = "stream_open"
             iterator = to_async_iter(response).__aiter__()
             while True:
                 try:
+                    _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                     event = await _race_openai_activity(
                         iterator.__anext__(),
                         timeout_ms=stream_idle_timeout_ms,
@@ -77,6 +80,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         attempt=attempt,
                         had_output=had_output,
                         had_tool_use=had_tool_use,
+                        abort_signal=runtime.get("abortSignal"),
                     )
                 except StopAsyncIteration:
                     break
@@ -217,8 +221,10 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
                 delay_ms = providerRetryDelayMs(attempt)
+                _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
                 await asyncio.sleep(delay_ms / 1000)
+                _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 continue
             raise failure
     raise last_failure or RuntimeError("OpenAI request failed unexpectedly.")
@@ -244,8 +250,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         runtime = args.get("runtime") or {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
-        _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
         try:
+            _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
+            _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
             client = _create_openai_client(args, base_url)
             chat = get_value(client, "chat")
             completions = get_value(chat, "completions") if chat else None
@@ -260,11 +267,13 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 attempt=attempt,
                 had_output=had_output,
                 had_tool_use=had_tool_use,
+                abort_signal=runtime.get("abortSignal"),
             )
             phase = "stream_open"
             iterator = to_async_iter(response).__aiter__()
             while True:
                 try:
+                    _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                     chunk = await _race_openai_activity(
                         iterator.__anext__(),
                         timeout_ms=stream_idle_timeout_ms,
@@ -273,6 +282,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                         attempt=attempt,
                         had_output=had_output,
                         had_tool_use=had_tool_use,
+                        abort_signal=runtime.get("abortSignal"),
                     )
                 except StopAsyncIteration:
                     break
@@ -325,8 +335,10 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
                 delay_ms = providerRetryDelayMs(attempt)
+                _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
                 await asyncio.sleep(delay_ms / 1000)
+                _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 continue
             raise failure
     raise last_failure or RuntimeError("OpenAI Chat Completions request failed unexpectedly.")
@@ -488,10 +500,12 @@ async def _race_openai_activity(
     attempt: int,
     had_output: bool,
     had_tool_use: bool,
+    abort_signal: Any = None,
 ) -> Any:
     try:
         return await asyncio.wait_for(awaitable, timeout=max(1, timeout_ms) / 1000)
     except asyncio.TimeoutError as exc:
+        _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
         raise createProviderRequestError(
             createProviderFailureRecord(
                 provider="openai",
@@ -505,6 +519,32 @@ async def _race_openai_activity(
                 rawMessage=f"OpenAI request timed out after {timeout_ms}ms while waiting for provider activity.",
             )
         ) from exc
+
+
+def _raise_openai_cancelled(runtime: dict[str, Any], provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool) -> None:
+    if not _signal_aborted(runtime.get("abortSignal")):
+        return
+    raise createProviderRequestError(
+        createProviderFailureRecord(
+            provider="openai",
+            providerLabel=provider_label,
+            phase=phase,
+            category="cancelled",
+            retryable=False,
+            attempt=attempt,
+            hadAssistantOutput=had_output,
+            hadToolUse=had_tool_use,
+            rawMessage="OpenAI request was cancelled.",
+        )
+    )
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
 
 
 def _resolve_instructions(system: str, is_codex: bool) -> str:

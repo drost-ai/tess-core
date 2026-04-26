@@ -227,11 +227,12 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         phase = "request_start"
         had_assistant_output = False
         had_tool_use = False
-        runtime.get("emitEvent", lambda *_: None)(
-            "provider.request_started",
-            {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
-        )
         try:
+            _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
+            runtime.get("emitEvent", lambda *_: None)(
+                "provider.request_started",
+                {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
+            )
             payload = buildAnthropicMessagesPayload(request, {"stream": stream})
             raw, content_type = await _race_anthropic_activity(
                 asyncio.to_thread(_send_anthropic_messages_sync, config, payload, timeout_ms, stream),
@@ -240,6 +241,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 phase=phase,
                 hadAssistantOutput=had_assistant_output,
                 hadToolUse=had_tool_use,
+                abortSignal=runtime.get("abortSignal"),
             )
             phase = "parse"
             if "text/event-stream" in content_type:
@@ -302,8 +304,10 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         last_failure = failure
         if canRetryProviderFailure(failure, max_attempts):
             delay_ms = providerRetryDelayMs(attempt)
+            _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             runtime.get("emitEvent", lambda *_: None)("provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
             await asyncio.sleep(delay_ms / 1000)
+            _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             continue
         raise failure
 
@@ -331,10 +335,12 @@ async def _race_anthropic_activity(
     phase: str = "request_start",
     hadAssistantOutput: bool = False,
     hadToolUse: bool = False,
+    abortSignal: Any = None,
 ) -> Any:
     try:
         return await asyncio.wait_for(awaitable, timeout=max(1, timeout_ms) / 1000)
     except asyncio.TimeoutError as exc:
+        _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
         raise createProviderRequestError(
             createProviderFailureRecord(
                 provider="anthropic",
@@ -348,6 +354,32 @@ async def _race_anthropic_activity(
                 rawMessage=f"Anthropic request timed out after {timeout_ms}ms while waiting for provider activity.",
             )
         ) from exc
+
+
+def _raise_anthropic_cancelled(runtime: dict[str, Any], phase: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool) -> None:
+    if not _signal_aborted(runtime.get("abortSignal")):
+        return
+    raise createProviderRequestError(
+        createProviderFailureRecord(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            phase=phase,
+            category="cancelled",
+            retryable=False,
+            attempt=attempt,
+            hadAssistantOutput=hadAssistantOutput,
+            hadToolUse=hadToolUse,
+            rawMessage="Anthropic request was cancelled.",
+        )
+    )
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
 
 
 def _build_anthropic_beta_header(config: dict[str, Any]) -> str:

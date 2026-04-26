@@ -532,6 +532,63 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             anthropic_module._send_anthropic_messages_sync = original_send
 
+    def test_provider_requests_respect_abort_signal(self):
+        signal = SimpleNamespace(aborted=True)
+        calls = {"openai": 0, "anthropic": 0}
+        openai_events = []
+
+        def openai_factory(_options):
+            calls["openai"] += 1
+
+            async def create(_params):
+                return AsyncChunks([])
+
+            return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+
+        with self.assertRaises(core.ProviderRequestError) as openai_ctx:
+            run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "test",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"abortSignal": signal, "emitEvent": lambda event, data: openai_events.append((event, data))},
+                        "maxAttempts": 2,
+                        "clientFactory": openai_factory,
+                    }
+                )
+            )
+        self.assertEqual(openai_ctx.exception.record["category"], "cancelled")
+        self.assertFalse(openai_ctx.exception.record["retryable"])
+        self.assertEqual(calls["openai"], 0)
+        self.assertFalse(any(event == "provider.request_started" for event, _ in openai_events))
+
+        original_send = anthropic_module._send_anthropic_messages_sync
+        anthropic_events = []
+
+        def send_anthropic(*_args):
+            calls["anthropic"] += 1
+            return "{}", "application/json"
+
+        anthropic_module._send_anthropic_messages_sync = send_anthropic
+        try:
+            with self.assertRaises(core.ProviderRequestError) as anthropic_ctx:
+                run(
+                    core.sendAnthropicMessagesRequest(
+                        {
+                            "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
+                            "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                            "runtime": {"abortSignal": signal, "emitEvent": lambda event, data: anthropic_events.append((event, data))},
+                            "maxAttempts": 2,
+                        }
+                    )
+                )
+            self.assertEqual(anthropic_ctx.exception.record["category"], "cancelled")
+            self.assertFalse(anthropic_ctx.exception.record["retryable"])
+            self.assertEqual(calls["anthropic"], 0)
+            self.assertFalse(any(event == "provider.request_started" for event, _ in anthropic_events))
+        finally:
+            anthropic_module._send_anthropic_messages_sync = original_send
+
     def test_anthropic_http_retry_and_non_retry_classification(self):
         original_delay = anthropic_module.providerRetryDelayMs
         anthropic_module.providerRetryDelayMs = lambda _attempt: 0
