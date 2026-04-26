@@ -19,6 +19,7 @@ from .config import (
     resolveFallbackProviderProfileName,
 )
 from .durable_memory import synchronizeManualProjectMemory
+from .daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from .remote import formatBridgeTail, formatRemoteSessionCandidate
 from .storage import (
     getProjectMemoryPath,
@@ -145,7 +146,7 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
     if command in {"agents", "background"}:
         return _info(hooks, "Agents" if command == "agents" else "Background", await buildAgentsReport(session, arg_text))
     if command == "daemon":
-        return _info(hooks, "Daemon", await buildDaemonReport())
+        return await _handle_daemon(arg_text, session, config, hooks, args)
     if command == "remote":
         return _info(hooks, "Remote", await buildRemoteReport(session))
     if command == "monitors":
@@ -238,16 +239,34 @@ async def buildPlansReport(session: dict[str, Any], status_filter: str = "") -> 
 
 async def buildTasksReport(session: dict[str, Any], arg_text: str = "", args: dict[str, Any] | None = None) -> str:
     parts = arg_text.split()
+    records = await listSessionTaskRecords(session.get("id"))
+    record = _resolve_task_record(records, parts[1]) if len(parts) > 1 else None
     if parts and parts[0] in {"inspect", "result"} and len(parts) > 1:
-        record = await loadTaskRecord(parts[1])
+        record = record or await loadTaskRecord(parts[1])
         return json.dumps(record or {"error": f"Task not found: {parts[1]}"}, indent=2)
     if parts and parts[0] == "log" and len(parts) > 1:
         supervisor = (args or {}).get("daemon") or (args or {}).get("taskSupervisor")
         if supervisor and supervisor.get("readTaskOutput"):
-            output = await supervisor["readTaskOutput"](parts[1], 12000)
+            output = await _maybe_await(supervisor["readTaskOutput"]((record or {}).get("id") or parts[1], 12000))
             return output.get("output") or ""
         return "Task log requires a task supervisor."
-    records = await listSessionTaskRecords(session.get("id"))
+    if parts and parts[0] in {"stop", "retry"} and len(parts) > 1:
+        if not record:
+            return f"Task not found: {parts[1]}"
+        supervisor = (args or {}).get("daemon") or (args or {}).get("taskSupervisor")
+        if not supervisor:
+            return "Task action requires a task supervisor."
+        if parts[0] == "stop":
+            stop_fn = supervisor.get("stopTask")
+            if not callable(stop_fn):
+                return "Task supervisor does not support stopTask."
+            stopped = await _maybe_await(stop_fn(record["id"]))
+            return f"Stopped {record['id']}" if stopped else f"Task could not be stopped: {record['id']}"
+        retry_fn = supervisor.get("retryTask")
+        if not callable(retry_fn):
+            return "Task supervisor does not support retryTask."
+        retried = await _maybe_await(retry_fn(record["id"]))
+        return "\n".join([f"Retried {record['id']}", f"new task     {retried.get('taskId') or retried.get('id')}", f"output       {retried.get('outputFile')}"]) if isinstance(retried, dict) else f"Retried {record['id']}"
     if not records:
         return "No runtime tasks for this session."
     return "\n".join(f"{record.get('id')} {record.get('status')} {record.get('kind')} {record.get('title')}" for record in records[:12])
@@ -271,6 +290,29 @@ async def buildDaemonReport() -> str:
     if not daemon:
         return "Daemon not running."
     return "\n".join(f"{key:<13} {daemon.get(key)}" for key in ("phase", "pid", "socketPath", "supervisorId", "epoch", "attachedClients", "watchedSessions", "activeTasks", "updatedAt"))
+
+
+async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    command = arg_text.strip().lower()
+    controller = args.get("daemonController") or {}
+    if not command:
+        return _info(hooks, "Daemon", await buildDaemonReport())
+    if command == "stop":
+        stop_fn = controller.get("stop") if isinstance(controller, dict) else None
+        if callable(stop_fn):
+            await _maybe_await(stop_fn())
+        else:
+            await stopTaskSupervisorDaemon()
+        return _info(hooks, "Daemon", "Daemon stopped.")
+    if command == "restart":
+        restart_fn = controller.get("restart") if isinstance(controller, dict) else None
+        if callable(restart_fn):
+            await _maybe_await(restart_fn())
+        else:
+            await stopTaskSupervisorDaemon()
+            await ensureTaskSupervisorDaemon({"cwd": session.get("cwd") or config.get("cwd") or os.getcwd()})
+        return _info(hooks, "Daemon", "Daemon restarted.")
+    return _error(hooks, "Usage: /daemon [restart|stop]")
 
 
 async def buildRemoteReport(session: dict[str, Any]) -> str:
@@ -510,6 +552,12 @@ def _split_subcommand(arg_text: str) -> tuple[str, str]:
     return (parts[0].lower(), parts[1].strip() if len(parts) > 1 else "") if parts else ("", "")
 
 
+async def _maybe_await(value: Any) -> Any:
+    if hasattr(value, "__await__"):
+        return await value
+    return value
+
+
 def _call_value(hooks: dict[str, Any], name: str) -> Any:
     fn = hooks.get(name) if isinstance(hooks, dict) else None
     return fn() if callable(fn) else None
@@ -524,6 +572,11 @@ def _emit_runtime(hooks: dict[str, Any], event: str, data: dict[str, Any]) -> No
 def _resolve_monitor(monitors: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
     normalized = query.strip().lower()
     return next((monitor for monitor in monitors if str(monitor.get("id", "")).lower() == normalized), None) or next((monitor for monitor in monitors if normalized in str(monitor.get("id", "")).lower()), None)
+
+
+def _resolve_task_record(records: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
+    normalized = query.strip().lower()
+    return next((record for record in records if str(record.get("id", "")).lower() == normalized), None) or next((record for record in records if normalized in str(record.get("id", "")).lower()), None)
 
 
 def _session_matches(session: dict[str, Any], query: str) -> bool:

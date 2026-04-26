@@ -1113,6 +1113,44 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_shell_task_and_daemon_mutation_commands(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            task = {"id": "task-shell-mutate", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Mutable shell task", "updatedAt": "2026-01-01T00:00:00Z"}
+            run(core.saveTaskRecord(task))
+            stopped = []
+            retried = []
+            daemon_actions = []
+            hooks = {"info": lambda *_: None, "error": lambda *_: None}
+            supervisor = {
+                "readTaskOutput": lambda task_id, _tail: {"output": f"log for {task_id}"},
+                "stopTask": lambda task_id: stopped.append(task_id) or True,
+                "retryTask": lambda task_id: retried.append(task_id) or {"taskId": "task-shell-retry", "outputFile": str(workspace / "retry.log")},
+            }
+            daemon_controller = {
+                "stop": lambda: daemon_actions.append("stop"),
+                "restart": lambda: daemon_actions.append("restart"),
+            }
+
+            log = run(core.handleSlashCommand({"command": "/tasks log mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            self.assertIn("log for task-shell-mutate", log["message"])
+            stop = run(core.handleSlashCommand({"command": "/tasks stop task-shell", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            self.assertIn("Stopped task-shell-mutate", stop["message"])
+            retry = run(core.handleSlashCommand({"command": "/tasks retry mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            self.assertIn("new task     task-shell-retry", retry["message"])
+            self.assertEqual(stopped, ["task-shell-mutate"])
+            self.assertEqual(retried, ["task-shell-mutate"])
+
+            stopped_daemon = run(core.handleSlashCommand({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
+            restarted_daemon = run(core.handleSlashCommand({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
+            self.assertIn("Daemon stopped", stopped_daemon["message"])
+            self.assertIn("Daemon restarted", restarted_daemon["message"])
+            self.assertEqual(daemon_actions, ["stop", "restart"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:
