@@ -23,7 +23,6 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     args = {**(args or {}), **kwargs}
     legacy_subscribers: list[Callable[[str, dict[str, Any]], Any]] = []
     event_subscribers: list[Callable[[dict[str, Any]], Any]] = []
-    owned_closers = []
     session = args.get("session")
     config = args.get("config") or {}
     if config.get("runtimeHome"):
@@ -32,6 +31,11 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     state_store = createRuntimeStateStore(createInitialRuntimeState(session) if session else None)
     session_runtime: dict[str, Any] | None = None
     daemon_unsubscribe = None
+    owned_mcp_close = None
+    owned_bridge_close = None
+    owned_monitor_close = None
+    owned_task_close = None
+    owned_collaboration_close = None
 
     def emit_runtime_event(event: str, data: dict[str, Any] | None = None):
         active_session = session_runtime["getActiveSession"]() if session_runtime else session
@@ -75,7 +79,7 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 "onRuntimeEvent": emit_runtime_event,
             }
         )
-        owned_closers.append(mcp_runtime["close"])
+        owned_mcp_close = mcp_runtime["close"]
 
     daemon = args.get("daemon") or args.get("daemonClient")
     if daemon is None and args.get("daemonEnabled"):
@@ -93,22 +97,22 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 **({"startPolling": args["bridgeStartPolling"]} if "bridgeStartPolling" in args else {}),
             }
         )
-        owned_closers.append(bridge_runtime["close"])
+        owned_bridge_close = bridge_runtime["close"]
 
     monitor_runtime = args.get("monitorRuntime") or args.get("monitors")
     if monitor_runtime is None and session and not daemon:
         monitor_runtime = await createMonitorRuntime({"session": session, "config": config, "emit": emit_runtime_event})
-        owned_closers.append(monitor_runtime["close"])
+        owned_monitor_close = monitor_runtime["close"]
 
     task_runtime = args.get("taskRuntime") or args.get("tasks")
     if task_runtime is None and session and not daemon:
         task_runtime = await createTaskRuntime({"session": session, "config": config, "emit": emit_runtime_event})
-        owned_closers.append(task_runtime["close"])
+        owned_task_close = task_runtime["close"]
 
     collaboration_runtime = args.get("collaborationRuntime")
     if collaboration_runtime is None and session and not daemon:
         collaboration_runtime = await createCollaborationRuntime({"session": session, "config": config, "emit": emit_runtime_event})
-        owned_closers.append(collaboration_runtime["close"])
+        owned_collaboration_close = collaboration_runtime["close"]
 
     if daemon and session and daemon.get("subscribe"):
         daemon_unsubscribe = await maybe_await(daemon["subscribe"](session["id"], lambda record: emit_runtime_event(record.get("event"), record.get("data") or {})))
@@ -157,7 +161,9 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             daemon_unsubscribe()
         if daemon and daemon.get("close"):
             await maybe_await(daemon["close"]())
-        for closer in owned_closers:
+        for closer in (owned_collaboration_close, owned_task_close, owned_monitor_close, owned_bridge_close, owned_mcp_close):
+            if not closer:
+                continue
             result = closer()
             if hasattr(result, "__await__"):
                 await result

@@ -25,6 +25,7 @@ from agent_core import testing
 import agent_core.monitors as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
+import agent_core.runtime as runtime_module
 import agent_core.tasks.subagents as subagents_module
 import agent_core.tools as tools_module
 
@@ -1206,6 +1207,129 @@ class AgentCoreTests(unittest.TestCase):
             run(boot["close"]())
             closed_bridge = run(core.loadBridge(boot["bridge"]["bridge"]["id"]))
             self.assertEqual(closed_bridge["status"], "closed")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bootstrap_runtime_closes_owned_local_runtimes_in_reference_order(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config["mcpConfig"] = [{"name": "fake", "transport": "stdio", "commandOrUrl": "fake"}]
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            close_order = []
+
+            def close_for(name):
+                async def close():
+                    close_order.append(name)
+
+                return close
+
+            async def fake_mcp(_args):
+                return {"createToolDefinitions": lambda: [], "close": close_for("mcp")}
+
+            async def fake_bridge(args):
+                return {
+                    "bridge": {
+                        "id": "bridge-close",
+                        "sessionId": args["session"]["id"],
+                        "remoteSessionId": args.get("remoteSessionId"),
+                        "status": "active",
+                    },
+                    "close": close_for("bridge"),
+                }
+
+            async def fake_monitors(_args):
+                return {"close": close_for("monitors"), "setForegroundBusy": lambda _busy: None, "setSession": lambda *_args: None}
+
+            async def fake_tasks(_args):
+                return {"close": close_for("tasks"), "setForegroundBusy": lambda _busy: None, "setSession": lambda *_args: None}
+
+            async def fake_collaboration(_args):
+                return {"close": close_for("collaboration"), "setForegroundBusy": lambda _busy: None, "setSession": lambda *_args: None}
+
+            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+                runtime_module,
+                "createBridgeRuntime",
+                fake_bridge,
+            ), mock.patch.object(runtime_module, "createMonitorRuntime", fake_monitors), mock.patch.object(
+                runtime_module,
+                "createTaskRuntime",
+                fake_tasks,
+            ), mock.patch.object(runtime_module, "createCollaborationRuntime", fake_collaboration):
+                boot = run(core.bootstrapRuntime({"session": session, "config": config, "enableBridge": True}))
+                run(boot["close"]())
+
+            self.assertEqual(close_order, ["collaboration", "tasks", "monitors", "bridge", "mcp"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bootstrap_runtime_closes_daemon_before_owned_bridge_and_mcp(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config["mcpConfig"] = [{"name": "fake", "transport": "stdio", "commandOrUrl": "fake"}]
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            close_order = []
+
+            def close_for(name):
+                async def close():
+                    close_order.append(name)
+
+                return close
+
+            async def fake_mcp(_args):
+                return {"createToolDefinitions": lambda: [], "close": close_for("mcp")}
+
+            async def fake_bridge(args):
+                return {
+                    "bridge": {"id": "bridge-daemon", "sessionId": args["session"]["id"], "status": "active"},
+                    "close": close_for("bridge"),
+                }
+
+            async def get_status():
+                return {
+                    "phase": "running",
+                    "epoch": "epoch-close",
+                    "pid": 123,
+                    "socketPath": str(workspace / "daemon.sock"),
+                    "supervisorId": "sup",
+                    "attachedClients": 1,
+                    "watchedSessions": 1,
+                    "activeTasks": 0,
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                }
+
+            daemon = {
+                "subscribe": lambda _session_id, _listener: lambda: close_order.append("unsubscribe"),
+                "getStatus": get_status,
+                "close": close_for("daemon"),
+            }
+
+            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+                runtime_module,
+                "createBridgeRuntime",
+                fake_bridge,
+            ):
+                boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True}))
+                run(boot["close"]())
+
+            self.assertEqual(close_order, ["unsubscribe", "daemon", "bridge", "mcp"])
         finally:
             self.restore_home(root, previous)
 
