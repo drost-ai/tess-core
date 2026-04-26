@@ -23,14 +23,17 @@ from .daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from .remote import formatBridgeTail, formatRemoteSessionCandidate
 from .storage import (
     getProjectMemoryPath,
+    getDefaultAutoMode,
     listChildAgents,
     listPlanApprovals,
     listRemoteSessions,
     listSessionMonitors,
     listSessionTaskRecords,
     listSessions,
+    loadAutoMode,
     loadDaemonState,
     loadTaskRecord,
+    saveAutoMode,
     saveMonitor,
 )
 from .transcript import buildTranscriptSnapshot
@@ -668,13 +671,62 @@ async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[st
 
 async def _handle_permissions(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
-        return _info(hooks, "Permissions", f"current   {session.get('permissionMode') or config.get('permissionMode')}\nlevels    {', '.join(sorted(PERMISSION_MODES))}")
+        policy = await loadAutoMode(session.get("cwd") or config.get("cwd") or os.getcwd())
+        return _info(hooks, "Permissions", f"current   {session.get('permissionMode') or config.get('permissionMode')}\nlevels    {', '.join(sorted(PERMISSION_MODES))}\n\n{formatAutoModePolicy(policy)}")
+    if arg_text.split(None, 1)[0] in {"policy", "allow", "deny", "reset"}:
+        return await _handle_auto_mode_policy(arg_text, session, config, hooks)
     if arg_text not in PERMISSION_MODES:
         return _error(hooks, f"Unknown permission mode: {arg_text}")
     session["permissionMode"] = config["permissionMode"] = arg_text
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Permissions", f"Permission mode set to {arg_text}")
+
+
+async def _handle_auto_mode_policy(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    cwd = session.get("cwd") or config.get("cwd") or os.getcwd()
+    parts = arg_text.split(None, 2)
+    command = parts[0]
+    policy = await loadAutoMode(cwd)
+    if command == "policy":
+        return _info(hooks, "Permissions", formatAutoModePolicy(policy))
+    if command == "reset":
+        policy = getDefaultAutoMode()
+        await saveAutoMode(cwd, policy)
+        await _persist(hooks)
+        return _info(hooks, "Permissions", "Auto-mode policy reset.\n\n" + formatAutoModePolicy(policy))
+    if len(parts) < 3 or parts[1] not in {"add", "remove"}:
+        return _error(hooks, "Usage: /permissions [policy|allow add TEXT|allow remove TEXT|deny add TEXT|deny remove TEXT|reset]")
+    bucket = command
+    action = parts[1]
+    value = parts[2].strip()
+    if not value:
+        return _error(hooks, "Policy entry cannot be empty.")
+    entries = [str(item) for item in policy.get(bucket, []) if str(item).strip()]
+    if action == "add" and value not in entries:
+        entries.append(value)
+    if action == "remove":
+        entries = [item for item in entries if item != value]
+    policy[bucket] = entries
+    await saveAutoMode(cwd, policy)
+    await _persist(hooks)
+    verb = "Added" if action == "add" else "Removed"
+    return _info(hooks, "Permissions", f"{verb} auto-mode {bucket} entry: {value}\n\n{formatAutoModePolicy(policy)}")
+
+
+def formatAutoModePolicy(policy: dict[str, Any]) -> str:
+    allow = policy.get("allow") or []
+    deny = policy.get("deny") or []
+    environment = policy.get("environment") or {}
+    return "\n".join(
+        [
+            "auto allow",
+            *[f"  - {item}" for item in allow[:12]],
+            "auto deny",
+            *[f"  - {item}" for item in deny[:12]],
+            f"auto env    {len(environment)} entries",
+        ]
+    )
 
 
 def compactModelName(model: str) -> str:

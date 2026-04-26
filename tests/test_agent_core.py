@@ -989,6 +989,18 @@ class AgentCoreTests(unittest.TestCase):
             self.assertGreaterEqual(counters["persist"], 3)
             self.assertGreaterEqual(counters["refresh"], 3)
 
+            policy = run(core.handleSlashCommand({"command": "/permissions policy", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("auto allow", policy["message"])
+            run(core.handleSlashCommand({"command": "/permissions allow add python -m pytest", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/permissions deny add rm -rf build", "session": session, "config": config, "hooks": hooks}))
+            auto_mode = run(core.loadAutoMode(str(workspace)))
+            self.assertIn("python -m pytest", auto_mode["allow"])
+            self.assertIn("rm -rf build", auto_mode["deny"])
+            run(core.handleSlashCommand({"command": "/permissions allow remove python -m pytest", "session": session, "config": config, "hooks": hooks}))
+            self.assertNotIn("python -m pytest", run(core.loadAutoMode(str(workspace)))["allow"])
+            run(core.handleSlashCommand({"command": "/permissions reset", "session": session, "config": config, "hooks": hooks}))
+            self.assertNotIn("rm -rf build", run(core.loadAutoMode(str(workspace)))["deny"])
+
             provider_result = run(core.handleSlashCommand({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("anthropic-console", provider_result["message"])
             self.assertEqual(session["provider"], "anthropic")
