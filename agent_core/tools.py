@@ -496,10 +496,10 @@ def _set_status_tool() -> ToolDefinition:
 
 def _agent_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        description = _require_string(input.get("description"), "description")
-        prompt = _require_string(input.get("prompt"), "prompt")
         if int(context["session"].get("metadata", {}).get("depth") or 0) >= 2:
             return {"content": "Delegation depth limit reached.", "isError": True}
+        description = _require_string(input.get("description"), "description")
+        prompt = _require_string(input.get("prompt"), "prompt")
         agent_type = input.get("subagent_type").strip() if isinstance(input.get("subagent_type"), str) else None
         if agent_type and agent_type not in context["config"].get("agents", {}):
             return {"content": f"Unknown subagent type: {agent_type}", "isError": True}

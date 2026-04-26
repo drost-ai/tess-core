@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import uuid
 from typing import Any
 
@@ -113,20 +115,19 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
     child_record = prepared["childRecord"]
     agent_id = prepared["agentId"]
     supervisor = context.get("daemon") or context.get("taskSupervisor")
-    if not supervisor:
-        from ..daemon import ensureTaskSupervisorDaemon
-
-        supervisor = await ensureTaskSupervisorDaemon({"cwd": child_session["cwd"]})
-    launched = await supervisor["startSubagentTask"](
-        {
-            "parentSessionId": context["session"]["id"],
-            "sessionId": child_session["id"],
-            "agentId": agent_id,
-            "cwd": child_session["cwd"],
-            "label": child_record.get("name") or child_record.get("agentType") or agent_id,
-            "parentTaskId": child_record.get("parentTaskId"),
-        }
-    )
+    if supervisor:
+        launched = await supervisor["startSubagentTask"](
+            {
+                "parentSessionId": context["session"]["id"],
+                "sessionId": child_session["id"],
+                "agentId": agent_id,
+                "cwd": child_session["cwd"],
+                "label": child_record.get("name") or child_record.get("agentType") or agent_id,
+                "parentTaskId": child_record.get("parentTaskId"),
+            }
+        )
+    else:
+        launched = await _start_local_background_subagent(prepared)
     task_id = launched.get("taskId") or launched.get("task_id")
     output_file = launched.get("outputFile") or launched.get("output_file") or (taskOutputPath(task_id) if task_id else None)
     started_at = now_iso()
@@ -136,7 +137,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             "taskId": task_id,
             "pid": launched.get("pid"),
             "status": "backgrounded",
-            "owner": "daemon" if context.get("daemon") or getattr(supervisor, "get", lambda *_: None)("_daemonClient") else "client",
+            "owner": "daemon" if context.get("daemon") else "client",
             "attachableSessionId": child_session["id"],
             "stoppable": True,
             "retryable": False,
@@ -186,7 +187,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     child_mode = inheritParentPermissionMode(requested_mode, parent.get("permissionMode") or config.get("permissionMode") or "default")
     child_model = normalizeModelName(model, parent.get("provider")) if model else resolveModelForAgent(config, agent_type, parent.get("model") or config.get("model"))
     child_provider = resolveProviderForModelSelection(parent.get("provider") or config.get("provider"), child_model) or parent.get("provider") or config.get("provider")
-    child_system = buildSystemPromptForAgent(config, agent_type, parent.get("systemPrompt") or config.get("systemPrompt"))
+    child_system = buildSystemPromptForAgent(config, agent_type) if agent_type else parent.get("systemPrompt") or config.get("systemPrompt")
     child_name = name or description.strip()
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     child_cwd = worktree_path or parent["cwd"]
@@ -246,7 +247,6 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "agentType": agent_type,
         "teamName": team_name,
         "provider": child_provider,
-        "providerProfileName": child_session.get("providerProfileName"),
         "model": child_model,
         "mode": child_mode,
         "description": description,
@@ -271,6 +271,67 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     return {"agentId": agent_id, "childSession": child_session, "childConfig": child_config, "childRecord": child_record, "worktreePath": worktree_path}
 
 
+async def _start_local_background_subagent(prepared: dict[str, Any]) -> dict[str, Any]:
+    agent_id = prepared["agentId"]
+    child_session = prepared["childSession"]
+    task_id = str(uuid.uuid4())
+    output_file = taskOutputPath(task_id)
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    proc = _spawn_local_subagent_worker(task_id, child_session["id"], agent_id, child_session["cwd"], output_file)
+    started_at = now_iso()
+    await writeTaskMeta(
+        task_id,
+        {
+            "type": "subagent",
+            "task_id": task_id,
+            "agent_id": agent_id,
+            "session_id": child_session["id"],
+            "cwd": child_session["cwd"],
+            "pid": proc.pid,
+            "startedAt": started_at,
+            "status": "running",
+            "outputFile": output_file,
+            "owner": "client",
+        },
+    )
+    return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file, "pid": proc.pid}
+
+
+def _spawn_local_subagent_worker(task_id: str, session_id: str, agent_id: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
+    handle = open(output_file, "ab")
+    kwargs: dict[str, Any] = {}
+    if hasattr(os, "setsid"):
+        kwargs["preexec_fn"] = os.setsid
+    env = {
+        **os.environ,
+        "TESS_CHILD_AGENT_ID": agent_id,
+        "TESS_CHILD_TASK_ID": task_id,
+        "TESS_CHILD_SESSION_ID": session_id,
+    }
+    try:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "agent_core.background_subagent_runner",
+                "--session-id",
+                session_id,
+                "--agent-id",
+                agent_id,
+                "--task-id",
+                task_id,
+            ],
+            cwd=cwd,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            env=env,
+            **kwargs,
+        )
+    finally:
+        handle.close()
+
+
 async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], result: dict[str, Any]) -> None:
     agent_id = os.environ.get("TESS_CHILD_AGENT_ID")
     task_id = os.environ.get("TESS_CHILD_TASK_ID")
@@ -278,7 +339,17 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
         return
     status = mapStopReasonToStatus(result.get("stopReason"))
     completed_at = now_iso()
-    existing = await loadChildAgent(agent_id) or {}
+    existing = await loadChildAgent(agent_id) or {
+        "agentId": agent_id,
+        "sessionId": session["id"],
+        "parentSessionId": session.get("metadata", {}).get("parentSessionId") or "",
+        "model": session.get("model"),
+        "provider": session.get("provider"),
+        "mode": session.get("permissionMode"),
+        "runInBackground": True,
+        "status": "running",
+        "startedAt": session.get("createdAt"),
+    }
     summary = (result.get("text") or "").strip()[:280] or None
     retryable = status in {"failed", "stopped", "truncated", "cancelled"}
     completed_like = status in {"completed", "failed", "truncated", "cancelled", "stopped"}
@@ -326,7 +397,17 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         return
     message = str(error)
     completed_at = now_iso()
-    existing = await loadChildAgent(agent_id) or {}
+    existing = await loadChildAgent(agent_id) or {
+        "agentId": agent_id,
+        "sessionId": session_id,
+        "parentSessionId": "",
+        "provider": "anthropic",
+        "model": "",
+        "mode": "default",
+        "runInBackground": True,
+        "status": "running",
+        "startedAt": completed_at,
+    }
     await saveChildAgent({**existing, "agentId": agent_id, "sessionId": session_id, "runInBackground": True, "status": "failed", "completedAt": completed_at, "taskId": task_id, "error": message, "attachableSessionId": session_id, "owner": existing.get("owner") or "daemon", "completionReason": "worker_failed", "resultSummary": message, "latestResultAt": completed_at, "retryable": True, "stoppable": False, "recoveryState": None, "lastUpdatedAt": completed_at, "lastSummary": message})
     await writeTaskMeta(task_id, {"type": "subagent", "task_id": task_id, "agent_id": agent_id, "session_id": session_id, "status": "failed", "completedAt": completed_at, "outputFile": taskOutputPath(task_id), "error": message, "summary": message, "resultSummary": message, "completionReason": "worker_failed", "attachableSessionId": session_id, "retryable": True, "stoppable": False, "owner": "daemon"})
 
@@ -354,7 +435,7 @@ def mapStopReasonToStatus(stopReason: str | None) -> str:
         return "cancelled"
     if stopReason == "max_tokens":
         return "truncated"
-    if stopReason in {"max_budget_exceeded", "plan_rejected", "error", "failed"}:
+    if stopReason in {"max_budget_exceeded", "plan_rejected"}:
         return "failed"
     return "completed"
 
@@ -374,8 +455,6 @@ def mapStopReasonToCompletionReason(stopReason: str | None) -> str | None:
         "max_tokens": "max_tokens",
         "max_budget_exceeded": "max_budget_exceeded",
         "plan_rejected": "plan_rejected",
-        "error": "worker_failed",
-        "failed": "worker_failed",
     }.get(stopReason)
 
 

@@ -24,6 +24,7 @@ from agent_core import testing
 import agent_core.monitors as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
+import agent_core.tasks.subagents as subagents_module
 import agent_core.tools as tools_module
 
 
@@ -3167,12 +3168,46 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_agent_tool_depth_limit_precedes_input_validation(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session["metadata"]["depth"] = 2
+            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            result = run(agent.handler({}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            self.assertTrue(result["isError"])
+            self.assertEqual(result["content"], "Delegation depth limit reached.")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_agent_permission_and_stop_reason_helpers_match_reference_edges(self):
+        self.assertEqual(core.sanitizePermissionMode("default"), "default")
+        self.assertEqual(core.sanitizePermissionMode("bypassPermissions"), "bypassPermissions")
+        self.assertEqual(core.sanitizePermissionMode("bogus"), "default")
+        self.assertEqual(core.inheritParentPermissionMode("default", "bypassPermissions"), "bypassPermissions")
+        self.assertEqual(core.inheritParentPermissionMode("plan", "acceptEdits"), "acceptEdits")
+        self.assertEqual(core.inheritParentPermissionMode("auto", "acceptEdits"), "auto")
+        self.assertEqual(core.inheritParentPermissionMode("bypassPermissions", "plan"), "plan")
+        self.assertEqual(core.mapStopReasonToStatus("plan_approval_required"), "awaiting_plan_approval")
+        self.assertEqual(core.mapStopReasonToStatus("plan_chat_requested"), "awaiting_input")
+        self.assertEqual(core.mapStopReasonToStatus("cancelled"), "cancelled")
+        self.assertEqual(core.mapStopReasonToStatus("max_tokens"), "truncated")
+        self.assertEqual(core.mapStopReasonToStatus("max_budget_exceeded"), "failed")
+        self.assertEqual(core.mapStopReasonToStatus("plan_rejected"), "failed")
+        self.assertEqual(core.mapStopReasonToStatus("error"), "completed")
+        self.assertEqual(core.mapStopReasonToStatus("failed"), "completed")
+        self.assertIsNone(core.mapStopReasonToCompletionReason("error"))
+        self.assertIsNone(core.mapStopReasonToCompletionReason("failed"))
+
     def test_agent_tool_foreground_prepares_child_session_and_record(self):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
+            config["systemPrompt"] = "Config level prompt."
             config["agents"] = {"researcher": {"prompt": "Research only.", "model": "gpt-mini"}}
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
+            parent["systemPrompt"] = "Parent session prompt."
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             self.assertEqual(agent.inputSchema["required"], ["description", "prompt"])
             self.assertIn("subagent_type", agent.inputSchema["properties"])
@@ -3212,9 +3247,12 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(captured["childSession"]["metadata"]["parentSessionId"], parent["id"])
             self.assertEqual(captured["childConfig"]["agent"], "researcher")
             self.assertEqual(captured["childConfig"]["model"], "gpt-5-mini-2025-08-07")
+            self.assertTrue(captured["childConfig"]["systemPrompt"].startswith("Config level prompt."))
+            self.assertEqual(captured["childSession"]["systemPrompt"], captured["childConfig"]["systemPrompt"])
             self.assertIn("# Agent Instructions\nResearch only.", captured["childConfig"]["systemPrompt"])
             child_record = run(core.loadChildAgent(payload["agent_id"]))
             self.assertEqual(child_record["status"], "completed")
+            self.assertNotIn("providerProfileName", child_record)
             self.assertEqual(child_record["teamName"], "alpha")
             self.assertEqual(child_record["resultSummary"], "child done")
             saved_child = run(core.loadSession(payload["session_id"]))
@@ -3226,6 +3264,94 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(unknown["isError"])
             self.assertIn("Unknown subagent type", unknown["content"])
         finally:
+            self.restore_home(root, previous)
+
+    def test_agent_tool_background_without_supervisor_uses_local_worker_contract(self):
+        root, home, workspace, previous = self.temp_context()
+        original_spawn = subagents_module._spawn_local_subagent_worker
+        try:
+            class FakeProc:
+                pid = 4321
+
+            spawn_calls = []
+
+            def fake_spawn(task_id, session_id, agent_id, cwd, output_file):
+                spawn_calls.append({"task_id": task_id, "session_id": session_id, "agent_id": agent_id, "cwd": cwd, "output_file": output_file})
+                return FakeProc()
+
+            subagents_module._spawn_local_subagent_worker = fake_spawn
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            events = []
+            result = run(
+                agent.handler(
+                    {"description": "Local async", "prompt": "Run locally", "run_in_background": True},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None},
+                )
+            )
+            payload = json.loads(result["content"])
+            self.assertEqual(payload["status"], "running")
+            self.assertEqual(payload["run_in_background"], True)
+            self.assertEqual(spawn_calls[0]["task_id"], payload["task_id"])
+            self.assertEqual(spawn_calls[0]["session_id"], payload["session_id"])
+            self.assertEqual(spawn_calls[0]["agent_id"], payload["agent_id"])
+            child_record = run(core.loadChildAgent(payload["agent_id"]))
+            self.assertEqual(child_record["owner"], "client")
+            self.assertEqual(child_record["pid"], 4321)
+            self.assertEqual(child_record["status"], "backgrounded")
+            meta = run(core.readTaskMeta(payload["task_id"]))
+            self.assertEqual(meta["type"], "subagent")
+            self.assertEqual(meta["task_id"], payload["task_id"])
+            self.assertEqual(meta["agent_id"], payload["agent_id"])
+            self.assertEqual(meta["session_id"], payload["session_id"])
+            self.assertEqual(meta["pid"], 4321)
+            self.assertEqual(meta["owner"], "client")
+            self.assertNotIn("parent_session_id", meta)
+            self.assertTrue(any(event == "subagent.backgrounded" and data["pid"] == 4321 for event, data in events))
+        finally:
+            subagents_module._spawn_local_subagent_worker = original_spawn
+            self.restore_home(root, previous)
+
+    def test_background_subagent_finalize_env_fallback_records_match_reference(self):
+        root, home, workspace, previous = self.temp_context()
+        previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["metadata"]["parentSessionId"] = "parent-env"
+            os.environ["TESS_CHILD_AGENT_ID"] = "agent-env-success"
+            os.environ["TESS_CHILD_TASK_ID"] = "task-env-success"
+            os.environ["TESS_CHILD_SESSION_ID"] = session["id"]
+            run(core.finalizeBackgroundSubagentSuccessFromEnv(session, {"text": "finished", "stopReason": "end_turn"}))
+            success_child = run(core.loadChildAgent("agent-env-success"))
+            self.assertEqual(success_child["parentSessionId"], "parent-env")
+            self.assertEqual(success_child["status"], "completed")
+            self.assertEqual(success_child["completionReason"], "worker_completed")
+            self.assertEqual(success_child["owner"], "daemon")
+            success_meta = run(core.readTaskMeta("task-env-success"))
+            self.assertEqual(success_meta["owner"], "daemon")
+            self.assertEqual(success_meta["completionReason"], "worker_completed")
+
+            os.environ["TESS_CHILD_AGENT_ID"] = "agent-env-failure"
+            os.environ["TESS_CHILD_TASK_ID"] = "task-env-failure"
+            os.environ["TESS_CHILD_SESSION_ID"] = "session-env-failure"
+            run(core.finalizeBackgroundSubagentFailureFromEnv(RuntimeError("boom")))
+            failure_child = run(core.loadChildAgent("agent-env-failure"))
+            self.assertEqual(failure_child["parentSessionId"], "")
+            self.assertEqual(failure_child["provider"], "anthropic")
+            self.assertEqual(failure_child["mode"], "default")
+            self.assertEqual(failure_child["status"], "failed")
+            self.assertEqual(failure_child["completionReason"], "worker_failed")
+            failure_meta = run(core.readTaskMeta("task-env-failure"))
+            self.assertEqual(failure_meta["error"], "boom")
+            self.assertEqual(failure_meta["owner"], "daemon")
+        finally:
+            for name, value in previous_env.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
             self.restore_home(root, previous)
 
     def test_agent_tool_background_registers_subagent_task_metadata(self):
