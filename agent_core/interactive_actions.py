@@ -8,6 +8,7 @@ from ._utils import now_iso
 from .compaction import runCompaction
 from .config import (
     getDefaultEffortForProvider,
+    getDefaultModelForProvider,
     listModelsForProvider,
     listProviderProfiles,
     listProviders,
@@ -223,12 +224,26 @@ def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
 def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any]) -> str:
     profiles = config.get("providerProfiles") or {}
     active = session.get("providerProfileName") or config.get("providerProfileName")
-    lines = []
+    sections = []
     for name in listProviderProfiles(profiles):
         profile = profiles.get(name, {})
-        marker = "*" if name == active else " "
-        lines.append(f"{marker} {name:<24} {profile.get('kind', ''):<10} {profile.get('defaultModel') or ''}")
-    return "\n".join(lines) if lines else "No provider profiles configured."
+        if not profile:
+            continue
+        kind = profile.get("kind") or ""
+        lines = [f"{name}{'  (active)' if name == active else ''}", f"  kind       {kind}"]
+        if kind == "openai":
+            lines.append(f"  mode       {profile.get('apiMode') or 'responses'}")
+            lines.append(f"  base url   {profile.get('baseUrl') or 'default'}")
+        lines.append(f"  model      {profile.get('defaultModel') or getDefaultModelForProvider(kind)}")
+        auth = profile.get("auth") or {}
+        auth_text = str(auth.get("kind") or "")
+        if auth.get("envVar"):
+            auth_text = f"{auth_text} via {auth.get('envVar')}"
+        lines.append(f"  auth       {auth_text}")
+        if profile.get("description"):
+            lines.append(f"  about      {profile.get('description')}")
+        sections.append("\n".join(lines))
+    return "\n\n".join(sections) if sections else "No provider profiles configured."
 
 
 async def buildPlansReport(session: dict[str, Any], status_filter: str = "") -> str:

@@ -1096,6 +1096,11 @@ class AgentCoreTests(unittest.TestCase):
             status = run(core.handleSlashCommand({"command": "/status", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("session", status["message"])
             self.assertEqual(infos[-1][0], "Status")
+            providers_report = run(core.handleSlashCommand({"command": "/providers", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("openai  (active)", providers_report["message"])
+            self.assertIn("mode       responses", providers_report["message"])
+            self.assertIn("auth       openai_api_key via OPENAI_API_KEY", providers_report["message"])
+            self.assertIn("about      Official OpenAI Responses API", providers_report["message"])
 
             run(core.handleSlashCommand({"command": "/model openai:gpt", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(session["provider"], "openai")
