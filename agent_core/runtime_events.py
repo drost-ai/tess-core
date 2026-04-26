@@ -82,6 +82,13 @@ def createRuntimeEvent(args: dict[str, Any] | None = None, **kwargs: Any) -> dic
 
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     payload = _camelize_record(data)
+    if event == "bridge.message":
+        return "bridge.message", {
+            "bridgeId": _field(data, "bridge_id", "bridgeId"),
+            "remoteSessionId": _field(data, "remote_session_id", "remoteSessionId"),
+            "text": _field(data, "text"),
+            "source": _field(data, "source"),
+        }
     if event in KNOWN_RUNTIME_EVENTS:
         return event, payload
     if event.startswith("bridge."):

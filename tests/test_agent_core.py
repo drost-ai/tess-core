@@ -1117,6 +1117,23 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.closed")
         self.assertEqual(state["collaboration"]["bridgeStatus"], "closed")
 
+        bridge_message = core.createRuntimeEvent(
+            {
+                "event": "bridge.message",
+                "createdAt": "t7",
+                "data": {
+                    "bridge_id": "bridge-1",
+                    "remote_session_id": "remote-1",
+                    "message_id": "msg-1",
+                    "session_id": "s1",
+                    "source": "remote",
+                    "text": "hello",
+                },
+            }
+        )
+        self.assertEqual(bridge_message["kind"], "bridge.message")
+        self.assertEqual(bridge_message["payload"], {"bridgeId": "bridge-1", "remoteSessionId": "remote-1", "text": "hello", "source": "remote"})
+
     def test_bootstrap_runtime_exposes_typed_event_and_turn_lifecycle_surface(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -1337,17 +1354,37 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(bridge["pendingMessages"], 0)
             self.assertEqual(bridge["messageCount"], 1)
             self.assertEqual(bridge["lastEventName"], "bridge.message.received")
+            event_records = run(core.loadBridgeEvents(bridge["id"]))
+            self.assertEqual(
+                [item["event"] for item in event_records],
+                ["bridge.started", "bridge.message.queued", "bridge.message.received"],
+            )
+            self.assertEqual(event_records[-1]["data"], {"message_id": message["id"], "source": "remote", "text": "please replay"})
             remote_after_receive = run(core.loadRemoteSession(remote["id"]))
             self.assertEqual(remote_after_receive["lastEventName"], "bridge.message.received")
+            self.assertEqual(remote_after_receive["status"], "awaiting_input")
+            self.assertEqual(remote_after_receive["bridgeStatus"], "active")
             self.assertIn("Bridge message: please replay", remote_after_receive["lastEventSummary"])
             self.assertIn("bridge.message.received", run(core.formatBridgeTail(bridge["id"])))
+
+            run(bridge_runtime["recordEvent"]("session.completed", {"summary": "finished"}))
+            completed_remote = run(core.loadRemoteSession(remote["id"]))
+            self.assertEqual(completed_remote["status"], "completed")
+            self.assertEqual(completed_remote["bridgeStatus"], "active")
+            self.assertEqual(completed_remote["lastEventSummary"], "session.completed: finished")
 
             self.assertEqual(run(bridge_runtime["pollInbox"]()), [])
             bridge_after_repoll = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
             self.assertEqual(bridge_after_repoll["messageCount"], 1)
             run(bridge_runtime["close"]())
             closed_remote = run(core.loadRemoteSession(remote["id"]))
+            self.assertEqual(closed_remote["status"], "idle")
             self.assertEqual(closed_remote["bridgeStatus"], "closed")
+            closed_events = run(core.loadBridgeEvents(bridge["id"]))
+            self.assertEqual(
+                [item["event"] for item in closed_events],
+                ["bridge.started", "bridge.message.queued", "bridge.message.received", "session.completed"],
+            )
         finally:
             self.restore_home(root, previous)
 
