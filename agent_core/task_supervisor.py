@@ -546,6 +546,8 @@ def _watch_process_thread(
     status = "completed" if code == 0 and previous.get("status") != "stopped" else "failed"
     if previous.get("status") == "stopped":
         status = "stopped"
+    elif code is not None and code < 0:
+        status = "stopped" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
     meta = {
         **previous,
         "type": previous.get("type") or "background_command",
@@ -561,7 +563,7 @@ def _watch_process_thread(
         "detailStatus": status,
     }
     asyncio.run(writeTaskMeta(task_id, meta))
-    asyncio.run(saveTaskRecord(_build_task_record(meta, f"Command exited with code {code}.")))
+    asyncio.run(saveTaskRecord(_build_task_record(meta, _process_exit_summary(status, code))))
     event_session_id = meta.get("parent_session_id") if meta.get("type") == "subagent" else meta.get("sessionId")
     asyncio.run(maybe_await(emit("task.completed" if status == "completed" else "task.failed", _task_event_payload(meta), event_session_id)))
     _WATCHERS.discard(threading.current_thread())
@@ -1071,6 +1073,12 @@ def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:
         "status": record.get("status"),
         "title": record.get("title"),
         "summary": record.get("summary"),
+        "detail_status": record.get("detailStatus"),
+        "foreground_mode": record.get("foregroundMode"),
+        "task_family": record.get("taskFamily"),
+        "attachable_session_id": record.get("attachableSessionId"),
+        "retrieve_only": record.get("retrieveOnly"),
+        "result_summary": record.get("resultSummary"),
         "updated_at": record.get("updatedAt"),
     }
 
@@ -1170,6 +1178,14 @@ def _terminate_process(pid: int | None) -> bool:
 def _summarize_command(command: Any) -> str:
     text = str(command or "task").strip()
     return text if len(text) <= 80 else f"{text[:77]}..."
+
+
+def _process_exit_summary(status: str, code: int | None) -> str:
+    if status == "completed":
+        return "Task completed successfully."
+    if status == "stopped":
+        return "Task was terminated."
+    return f"Task failed with exit code {code}." if isinstance(code, int) else "Task failed."
 
 
 def _next_backoff_interval_ms(record: dict[str, Any], failure_count: int) -> int:

@@ -673,6 +673,54 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(blocks[1]["tool_use_id"], "use_fast")
             self.assertEqual(blocks[1]["content"], "FAST")
 
+    def test_run_agent_prompt_cancels_turn_and_restores_session(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-cancel-") as cwd:
+            config = {
+                "cwd": cwd,
+                "runtimeHome": cwd,
+                "allowedRoots": [cwd],
+                "agents": {},
+                "provider": "anthropic",
+                "providerKind": "anthropic",
+                "providerProfileName": "default",
+                "providerProfile": {"kind": "anthropic", "name": "default", "auth": {}},
+                "providerProfiles": {"default": {"kind": "anthropic", "name": "default"}},
+                "customHeaders": {},
+                "openaiApiMode": "responses",
+                "model": "claude-sonnet-4-6",
+                "effort": "medium",
+                "assistantName": "Test",
+                "assistantDescription": "",
+                "systemPrompt": "test",
+                "tools": [],
+                "allowedTools": [],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            session = core.createEmptySession(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
+            signal = SimpleNamespace(aborted=False, reason=None)
+            events = []
+
+            async def send(_request):
+                signal.aborted = True
+                error = RuntimeError("provider aborted")
+                error.name = "AbortError"
+                raise error
+
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "abortSignal": signal},
+                    prompt="cancel this turn",
+                    providerOverride={"send": send},
+                )
+            )
+            self.assertEqual(result["stopReason"], "cancelled")
+            self.assertEqual(session["messages"], [])
+            self.assertTrue(any(event == "turn.cancelled" and data["session_id"] == session["id"] for event, data in events))
+
     def test_fetch_proxy_and_compaction_model_defaults(self):
         self.assertEqual(core.resolveEnvironmentProxyForUrl("https://api.openai.com/v1/responses", {"HTTPS_PROXY": "https-proxy", "HTTP_PROXY": "http-proxy"}), "https-proxy")
         self.assertEqual(core.resolveEnvironmentProxyForUrl("https://api.openai.com/v1/responses", {"HTTP_PROXY": "http-proxy"}), "http-proxy")
@@ -1477,6 +1525,12 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(any(event.get("event") == "task.updated" for event in task_events))
             self.assertTrue(any(event.get("event") == "task.completed" for event in task_events))
             self.assertTrue(all(event.get("sessionId") == session["id"] for event in task_events))
+            completed = next(event for event in task_events if event.get("event") == "task.completed")
+            self.assertEqual(completed["data"]["task_family"], "shell")
+            self.assertEqual(completed["data"]["detail_status"], "completed")
+            self.assertEqual(completed["data"]["foreground_mode"], "background")
+            self.assertTrue(completed["data"]["retrieve_only"])
+            self.assertIn("result_summary", completed["data"])
         finally:
             if unsubscribe:
                 unsubscribe()

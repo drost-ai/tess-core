@@ -77,6 +77,16 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     active_model = args.get("modelOverride") or session["model"]
     cost = 0.0
     tool_count = 0
+    last_stable_snapshot = copy.deepcopy(session)
+
+    async def cancel_turn() -> dict[str, Any]:
+        _restore_session_state(session, last_stable_snapshot)
+        await persistSession(session, config)
+        _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": active_model, "partial_text": "\n\n".join(text_parts).strip()})
+        return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "cancelled"}
+
+    if _is_turn_cancelled(runtime):
+        return await cancel_turn()
 
     if prompt.strip():
         session.setdefault("messages", []).append({"role": "user", "content": prompt})
@@ -86,6 +96,8 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     usage_totals["turns"] += 1
 
     while True:
+        if _is_turn_cancelled(runtime):
+            return await cancel_turn()
         prepared_request = await prepareProviderRequest(
             {
                 "session": session,
@@ -100,9 +112,12 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         )
         while True:
             try:
+                _throw_if_turn_cancelled(runtime)
                 response = await maybe_await(provider["send"](prepared_request["request"]))
                 break
             except Exception as error:
+                if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                    return await cancel_turn()
                 if prepared_request.get("reactiveAttempt", 0) < 2 and isContextWindowFailure(error):
                     prepared_request = await prepareProviderRequest(
                         {
@@ -168,6 +183,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 
         async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
             nonlocal tool_count
+            _throw_if_turn_cancelled(runtime)
             if _requires_plan_approval(session) and tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
                 message = f"{tool_use['name']} is not available while plan approval is still required."
                 _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": message, "error": True, "session_id": session["id"]})
@@ -186,29 +202,36 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                     block["_pauseMessage"] = (result.get("content") or "").strip() or "Approval required before continuing."
                 return block
             except Exception as exc:
+                if _is_turn_abort_error(exc, runtime.get("abortSignal")):
+                    raise
                 message = str(exc)
                 _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": message, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
 
-        if _requires_plan_approval(session):
-            for index, tool_use in enumerate(tool_uses):
-                result = await run_single(tool_use)
-                pause = result.pop("_pauseMessage", None)
-                tool_results[index] = result
-                if pause:
-                    paused_for_approval = True
-                    paused_message = pause
-                    for skipped in range(index + 1, len(tool_uses)):
-                        tool_results[skipped] = {"type": "tool_result", "tool_use_id": tool_uses[skipped]["id"], "is_error": True, "content": "Skipped: previous tool in the batch paused for approval."}
-                    break
-        else:
-            outcomes = await asyncio.gather(*(run_single(tool_use) for tool_use in tool_uses))
-            for index, result in enumerate(outcomes):
-                pause = result.pop("_pauseMessage", None)
-                if pause and not paused_for_approval:
-                    paused_for_approval = True
-                    paused_message = pause
-                tool_results[index] = result
+        try:
+            if _requires_plan_approval(session):
+                for index, tool_use in enumerate(tool_uses):
+                    result = await run_single(tool_use)
+                    pause = result.pop("_pauseMessage", None)
+                    tool_results[index] = result
+                    if pause:
+                        paused_for_approval = True
+                        paused_message = pause
+                        for skipped in range(index + 1, len(tool_uses)):
+                            tool_results[skipped] = {"type": "tool_result", "tool_use_id": tool_uses[skipped]["id"], "is_error": True, "content": "Skipped: previous tool in the batch paused for approval."}
+                        break
+            else:
+                outcomes = await asyncio.gather(*(run_single(tool_use) for tool_use in tool_uses))
+                for index, result in enumerate(outcomes):
+                    pause = result.pop("_pauseMessage", None)
+                    if pause and not paused_for_approval:
+                        paused_for_approval = True
+                        paused_message = pause
+                    tool_results[index] = result
+        except Exception as error:
+            if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                return await cancel_turn()
+            raise
 
         session["messages"].append({"role": "user", "content": [result for result in tool_results if result is not None]})
         await persistSession(session, config)
@@ -605,6 +628,54 @@ def _safe_emit(runtime: dict[str, Any], event: str, data: dict[str, Any]) -> Non
         runtime.get("emitEvent", lambda *_: None)(event, data)
     except Exception:
         pass
+
+
+def _is_turn_cancelled(runtime: dict[str, Any]) -> bool:
+    return _signal_aborted(runtime.get("abortSignal"))
+
+
+def _throw_if_turn_cancelled(runtime: dict[str, Any]) -> None:
+    signal = runtime.get("abortSignal")
+    if not _signal_aborted(signal):
+        return
+    reason = _signal_reason(signal)
+    if isinstance(reason, BaseException):
+        raise reason
+    error = RuntimeError(str(reason or "Turn cancelled"))
+    error.name = "AbortError"  # type: ignore[attr-defined]
+    raise error
+
+
+def _is_turn_abort_error(error: BaseException, signal: Any = None) -> bool:
+    if _signal_aborted(signal):
+        return True
+    if error.__class__.__name__ == "AbortError":
+        return True
+    return getattr(error, "name", None) == "AbortError"
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
+
+
+def _signal_reason(signal: Any) -> Any:
+    if not signal:
+        return None
+    if isinstance(signal, dict):
+        return signal.get("reason")
+    return getattr(signal, "reason", None)
+
+
+def _restore_session_state(session: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    preserved_permission_mode = session.get("permissionMode")
+    session.clear()
+    session.update(copy.deepcopy(snapshot))
+    if preserved_permission_mode is not None:
+        session["permissionMode"] = preserved_permission_mode
 
 
 def _now() -> str:
