@@ -90,6 +90,190 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(second_read.inputSchema["properties"]["file_path"]["type"], "string")
         self.assertEqual(core.BUILTIN_TOOL_INPUT_SCHEMAS["Read"]["properties"]["file_path"]["type"], "string")
 
+    def test_builtin_tool_behavior_parity_for_questions_status_config_todo_and_mcp(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config["mcpConfig"] = [{"name": "edge", "transport": "http", "commandOrUrl": "https://mcp.example.test"}]
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            events = []
+            prompts = []
+            context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda question, options: prompts.append((question, options)) or "Blue", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+
+            blocked = run(tools["AskUserQuestion"].handler({"questions": [{"question": "Pick?", "options": [{"label": "Blue"}]}]}, {**context, "interactive": False}))
+            self.assertTrue(blocked["isError"])
+            self.assertIn("print mode", blocked["content"])
+
+            asked = run(tools["AskUserQuestion"].handler({"questions": [{"question": "Pick?", "options": [{"label": "Blue"}, {"label": "Red"}]}]}, context))
+            self.assertEqual(json.loads(asked["content"]), {"answers": [{"question": "Pick?", "answer": "Blue"}]})
+            self.assertEqual(prompts, [("Pick?", ["Blue", "Red"])])
+
+            status = run(tools["SetStatus"].handler({"message": "Working", "detail": "tools"}, context))
+            self.assertEqual(json.loads(status["content"]), {"ok": True, "message": "Working", "detail": "tools"})
+            self.assertEqual(events[-1], ("status.updated", {"message": "Working", "detail": "tools", "session_id": session["id"]}))
+
+            todo = run(tools["TodoWrite"].handler({"todos": [{"content": "Ship parity", "status": "pending"}]}, context))
+            self.assertEqual(json.loads(todo["content"])["todos"][0]["activeForm"], "ship")
+
+            config_payload = json.loads(run(tools["Config"].handler({}, context))["content"])
+            self.assertEqual(config_payload["cwd"], str(workspace))
+            self.assertEqual(config_payload["providerProfile"], config["providerProfileName"])
+            self.assertEqual(config_payload["providerKind"], "openai")
+            self.assertEqual(config_payload["tools"], config["tools"])
+            self.assertEqual(config_payload["allowedRoots"], config["allowedRoots"])
+            self.assertEqual(config_payload["mcpServers"], ["edge"])
+
+            mcp_payload = json.loads(run(tools["Mcp"].handler({}, context))["content"])
+            self.assertEqual(mcp_payload["servers"][0]["capabilities"], {"tools": 0, "resources": 0, "channelsSupported": False})
+            self.assertEqual(mcp_payload["servers"][0]["channelRegistration"], {"requested": False, "status": "not_requested"})
+        finally:
+            self.restore_home(root, previous)
+
+    def test_exit_plan_mode_matches_reference_pending_and_approval_flows(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "ExitPlanMode")
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+
+            blocked = run(tool.handler({}, base_context))
+            self.assertTrue(blocked["isError"])
+            self.assertIn("only available", blocked["content"])
+
+            events = []
+            persisted = {"count": 0}
+            session["permissionMode"] = "plan"
+            config["permissionMode"] = "plan"
+            session["messages"] = [{"role": "assistant", "content": [{"type": "text", "text": "1. Build it.\n2. Test it."}]}]
+            context = {**base_context, "outputJson": lambda event, data: events.append((event, data)), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
+            pending = run(tool.handler({"allowedPrompts": [{"tool": "Bash", "prompt": "pytest"}, {"tool": "Read", "prompt": "ignored"}]}, context))
+            payload = json.loads(pending["content"])
+            self.assertEqual(payload["plan"], "1. Build it.\n2. Test it.")
+            self.assertTrue(payload["awaitingLeaderApproval"])
+            self.assertEqual(payload["allowedPrompts"], [{"tool": "Bash", "prompt": "pytest"}])
+            self.assertEqual(session["metadata"]["planMode"]["state"], "pending")
+            self.assertEqual(events[0][0], "plan.requested")
+            self.assertEqual(run(core.loadPlanApproval(payload["requestId"]))["status"], "pending")
+            self.assertEqual(persisted["count"], 1)
+
+            approve_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="plan")
+            approve_config = {**config, "permissionMode": "plan"}
+            approve_session["messages"] = [{"role": "assistant", "content": "Approve this plan."}]
+            approve_events = []
+            approved = run(
+                tool.handler(
+                    {},
+                    {
+                        "session": approve_session,
+                        "config": approve_config,
+                        "interactive": True,
+                        "askQuestion": lambda *_: "Approve plan",
+                        "outputJson": lambda event, data: approve_events.append((event, data)),
+                        "cwd": str(workspace),
+                        "persistSession": lambda: None,
+                    },
+                )
+            )
+            approved_payload = json.loads(approved["content"])
+            self.assertTrue(approved_payload["approved"])
+            self.assertEqual(approved_payload["nextMode"], "acceptEdits")
+            self.assertEqual(approve_session["permissionMode"], "acceptEdits")
+            self.assertEqual(approve_config["permissionMode"], "acceptEdits")
+            self.assertEqual([event for event, _ in approve_events], ["plan.requested", "plan.approved"])
+            self.assertEqual(run(core.loadPlanApproval(approved_payload["requestId"]))["status"], "approved")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_monitor_health_check_mcp_resource_and_ripgrep_tool_edges(self):
+        root, home, workspace, previous = self.temp_context()
+        original_fetch = tools_module.fetch
+        original_resolve_rg = tools_module._resolve_ripgrep_binary
+        original_exec_rg = tools_module._exec_ripgrep_allowing_no_matches
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            events = []
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
+            run(core.saveMonitor(monitor))
+            stopped = json.loads(run(tools["TaskMonitorStop"].handler({"monitor_id": monitor["id"]}, context))["content"])
+            self.assertEqual(stopped, {"monitor_id": monitor["id"], "task_id": "task-1", "status": "stopped"})
+            self.assertEqual([event for event, _ in events[-2:]], ["task.failed", "monitor.status_changed"])
+            self.assertEqual(events[-2][1]["task_id"], f"monitor:{monitor['id']}")
+
+            with self.assertRaises(RuntimeError):
+                run(tools["TaskHealthCheckStart"].handler({"title": "health", "mode": "http"}, context))
+            health_calls = []
+
+            async def start_health(payload):
+                health_calls.append(("start", payload))
+                return {"taskId": "health-1"}
+
+            async def stop_health(task_id):
+                health_calls.append(("stop", task_id))
+                return True
+
+            health_context = {**context, "daemon": {"startHealthCheck": start_health, "stopTask": stop_health}}
+            started = json.loads(run(tools["TaskHealthCheckStart"].handler({"title": "health", "mode": "http", "url": "http://localhost", "expected_status_codes": [200, "bad"], "expected_body_substring": "ok"}, health_context))["content"])
+            self.assertEqual(started["task_id"], "health-1")
+            self.assertEqual(health_calls[0][1]["expectedStatusCodes"], [200])
+            self.assertEqual(health_calls[0][1]["expectedBodySubstring"], "ok")
+            stopped_health = json.loads(run(tools["TaskHealthCheckStop"].handler({"task_id": "health-1"}, health_context))["content"])
+            self.assertEqual(stopped_health, {"task_id": "health-1", "stopped": True})
+
+            class HeaderResponse(Response):
+                def __init__(self, body, status=200):
+                    super().__init__(body, status)
+                    self.headers = {"content-type": "text/plain"}
+
+            async def fake_fetch(*args, **kwargs):
+                return HeaderResponse("resource body")
+
+            tools_module.fetch = fake_fetch
+            config["mcpConfig"] = [{"name": "http", "transport": "http", "commandOrUrl": "http://mcp", "headers": {"authorization": "Bearer token"}}, {"name": "stdio", "transport": "stdio", "commandOrUrl": "python"}]
+            resource = json.loads(run(tools["ReadMcpResource"].handler({"server": "http", "uri": "http://mcp/resource"}, context))["content"])
+            self.assertEqual(resource["contents"][0]["mimeType"], "text/plain")
+            self.assertEqual(resource["contents"][0]["text"], "resource body")
+            stdio_resource = run(tools["ReadMcpResource"].handler({"server": "stdio", "uri": "file://resource"}, context))
+            self.assertTrue(stdio_resource["isError"])
+            self.assertEqual(stdio_resource["content"], "MCP server not found: stdio")
+
+            async def missing_rg():
+                return None
+
+            tools_module._resolve_ripgrep_binary = missing_rg
+            self.assertTrue(run(tools["Glob"].handler({"pattern": "*.py"}, context))["isError"])
+            self.assertTrue(run(tools["Grep"].handler({"pattern": "needle"}, context))["isError"])
+
+            rg_calls = []
+
+            async def fake_rg():
+                return "/fake/rg"
+
+            async def fake_exec_rg(path, args, *, cwd):
+                rg_calls.append((path, args, cwd))
+                return "src/a.py\nnode_modules/ignored.js\n", ""
+
+            tools_module._resolve_ripgrep_binary = fake_rg
+            tools_module._exec_ripgrep_allowing_no_matches = fake_exec_rg
+            glob_payload = json.loads(run(tools["Glob"].handler({"pattern": "*.py"}, context))["content"])
+            self.assertEqual(glob_payload["matches"], ["src/a.py"])
+            self.assertEqual(rg_calls[-1][1][0:3], ["--files", "-g", "*.py"])
+            grep_payload = json.loads(run(tools["Grep"].handler({"pattern": "needle", "output_mode": "content", "glob": "*.py", "-i": True, "context": 2}, context))["content"])
+            self.assertEqual(grep_payload["outputMode"], "content")
+            self.assertIn("--glob", rg_calls[-1][1])
+            self.assertIn("-i", rg_calls[-1][1])
+            self.assertIn("-C", rg_calls[-1][1])
+        finally:
+            tools_module.fetch = original_fetch
+            tools_module._resolve_ripgrep_binary = original_resolve_rg
+            tools_module._exec_ripgrep_allowing_no_matches = original_exec_rg
+            self.restore_home(root, previous)
+
     def test_built_in_provider_profiles(self):
         profiles = core.resolveProviderProfiles(None)
         self.assertEqual(core.listProviderProfiles(profiles), ["anthropic-claude-code", "anthropic-console", "codex", "openai"])

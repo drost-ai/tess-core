@@ -4,14 +4,15 @@ import asyncio
 import base64
 import copy
 import difflib
-import glob as glob_lib
 import html
 import json
 import mimetypes
 import os
+import platform
 import re
-import shlex
+import shutil
 import subprocess
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,7 @@ from .storage import (
 )
 from .daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon
 from .tool_payloads import (
+    applyDefaultGlobExcludes,
     filterDefaultIgnoredGlobMatches,
     shapeGlobPayload,
     shapeGrepPayload,
@@ -279,11 +281,16 @@ def _edit_tool() -> ToolDefinition:
 def _glob_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         pattern = _require_string(input.get("pattern"), "pattern")
-        search_path = _authorize_path(input.get("path") or context["cwd"], context)
-        matches = glob_lib.glob(os.path.join(search_path, pattern), recursive=True)
-        rel = [os.path.relpath(path, search_path) if os.path.isabs(path) else path for path in matches if os.path.isfile(path)]
-        rel = filterDefaultIgnoredGlobMatches(sorted(rel))
-        payload = await shapeGlobPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, matches=rel, ignoredDefaultsApplied=True)
+        cwd = context.get("cwd") or context["session"]["cwd"]
+        search_path = _authorize_path(_require_string(input.get("path"), "path"), context) if input.get("path") else cwd
+        rg_path = await _resolve_ripgrep_binary()
+        if not rg_path:
+            return {"content": "ripgrep is required for Glob and was not found.", "isError": True}
+        args = applyDefaultGlobExcludes(["--files", "-g", pattern])
+        args.append(search_path)
+        stdout, _stderr = await _exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
+        matches = filterDefaultIgnoredGlobMatches([line for line in stdout.strip().splitlines() if line])
+        payload = await shapeGlobPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, matches=matches, ignoredDefaultsApplied=True)
         return {"content": pretty_json(payload)}
 
     return ToolDefinition("Glob", _tool_description("Glob"), _tool_schema("Glob"), handler)
@@ -292,33 +299,43 @@ def _glob_tool() -> ToolDefinition:
 def _grep_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         pattern = _require_string(input.get("pattern"), "pattern")
-        search_path = _authorize_path(input.get("path") or context["cwd"], context)
-        regex = re.compile(pattern, re.I if input.get("-i") else 0)
-        output_mode = input.get("output_mode") or "files_with_matches"
-        matches: list[str] = []
-        glob_pattern = input.get("glob") or "**/*"
-        for path in glob_lib.glob(os.path.join(search_path, glob_pattern), recursive=True):
-            if not os.path.isfile(path):
-                continue
-            if not filterDefaultIgnoredGlobMatches([os.path.relpath(path, search_path)]):
-                continue
-            try:
-                lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
-            except Exception:
-                continue
-            file_hits = []
-            for idx, line in enumerate(lines, 1):
-                if regex.search(line):
-                    file_hits.append((idx, line))
-            if not file_hits:
-                continue
-            rel = os.path.relpath(path, search_path)
-            if output_mode == "files_with_matches":
-                matches.append(rel)
-            elif output_mode == "count":
-                matches.append(f"{rel}:{len(file_hits)}")
-            else:
-                matches.extend(f"{rel}:{idx}:{line}" for idx, line in file_hits)
+        cwd = context.get("cwd") or context["session"]["cwd"]
+        search_path = _authorize_path(_require_string(input.get("path"), "path"), context) if input.get("path") else cwd
+        rg_path = await _resolve_ripgrep_binary()
+        if not rg_path:
+            return {"content": "ripgrep is required for Grep and was not found.", "isError": True}
+        output_mode = input.get("output_mode") if isinstance(input.get("output_mode"), str) else "files_with_matches"
+        args = ["--color", "never"]
+        if output_mode == "files_with_matches":
+            args.append("-l")
+        elif output_mode == "count":
+            args.append("-c")
+        else:
+            args.append("-n")
+        applyDefaultGlobExcludes(args)
+        if input.get("glob"):
+            args.extend(["--glob", _require_string(input.get("glob"), "glob")])
+        if input.get("type"):
+            args.extend(["--type", _require_string(input.get("type"), "type")])
+        if input.get("-i"):
+            args.append("-i")
+        context_lines = _require_optional_number(input.get("context"))
+        if context_lines is None:
+            context_lines = _require_optional_number(input.get("-C"))
+        if context_lines is not None:
+            args.extend(["-C", str(context_lines)])
+        else:
+            before = _require_optional_number(input.get("-B"))
+            after = _require_optional_number(input.get("-A"))
+            if after is not None:
+                args.extend(["-A", str(after)])
+            if before is not None:
+                args.extend(["-B", str(before)])
+        if input.get("multiline"):
+            args.extend(["-U", "--multiline-dotall"])
+        args.extend([pattern, search_path])
+        stdout, _stderr = await _exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
+        matches = [line for line in stdout.strip().splitlines() if line]
         payload = await shapeGrepPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, outputMode=output_mode, matches=matches, offset=int(input.get("offset") or 0), requestedHeadLimit=input.get("head_limit"))
         return {"content": pretty_json(payload)}
 
@@ -423,9 +440,7 @@ def _bash_tool() -> ToolDefinition:
 
 def _todo_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        todos = input.get("todos")
-        if not isinstance(todos, list):
-            raise ValueError("Expected todos to be an array")
+        todos = [_normalize_todo_item(item) for item in _require_list(input.get("todos"), "todos")]
         context["session"]["todos"] = todos
         await maybe_await(context.get("persistSession", lambda: None)())
         return {"content": pretty_json({"updated": len(todos), "todos": todos})}
@@ -474,7 +489,7 @@ def _set_status_tool() -> ToolDefinition:
         message = _require_string(input.get("message"), "message").strip()
         detail = input.get("detail") if isinstance(input.get("detail"), str) and input.get("detail").strip() else None
         context.get("outputJson", lambda *_: None)("status.updated", {"message": message, "detail": detail, "session_id": context["session"]["id"]})
-        return {"content": pretty_json({"message": message, "detail": detail})}
+        return {"content": pretty_json({"ok": True, "message": message, "detail": detail})}
 
     return ToolDefinition("SetStatus", _tool_description("SetStatus"), _tool_schema("SetStatus"), handler)
 
@@ -513,10 +528,22 @@ def _agent_tool() -> ToolDefinition:
 
 def _ask_user_question_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        prompt = _require_string(input.get("prompt") or input.get("question"), "prompt")
-        options = input.get("options") if isinstance(input.get("options"), list) else None
-        answer = await maybe_await(context.get("askQuestion", lambda *_: "")(prompt, options))
-        return {"content": pretty_json({"answer": answer})}
+        if not context.get("interactive"):
+            return {"content": "Cannot ask the user a question in print mode.", "isError": True}
+        answers = []
+        questions = input.get("questions") if isinstance(input.get("questions"), list) else []
+        for index, raw_question in enumerate(questions):
+            if not isinstance(raw_question, dict):
+                continue
+            question = _require_string(raw_question.get("question"), f"questions[{index}].question")
+            options = []
+            if isinstance(raw_question.get("options"), list):
+                for option in raw_question["options"]:
+                    label = option.get("label") if isinstance(option, dict) else None
+                    options.append(_require_string(label, "label"))
+            answer = await maybe_await(context.get("askQuestion", lambda *_: "")(question, options))
+            answers.append({"question": question, "answer": answer})
+        return {"content": pretty_json({"answers": answers})}
 
     return ToolDefinition("AskUserQuestion", _tool_description("AskUserQuestion"), _tool_schema("AskUserQuestion"), handler)
 
@@ -524,7 +551,18 @@ def _ask_user_question_tool() -> ToolDefinition:
 def _config_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         config = context["config"]
-        public = {key: config.get(key) for key in ("provider", "providerProfileName", "model", "effort", "permissionMode", "cwd")}
+        session = context["session"]
+        public = {
+            "cwd": session.get("cwd"),
+            "providerProfile": session.get("providerProfileName") or config.get("providerProfileName"),
+            "providerKind": config.get("provider"),
+            "model": config.get("model"),
+            "effort": session.get("effort") or config.get("effort"),
+            "permissionMode": config.get("permissionMode"),
+            "tools": config.get("tools"),
+            "allowedRoots": config.get("allowedRoots"),
+            "mcpServers": [server.get("name") for server in config.get("mcpConfig", [])],
+        }
         return {"content": pretty_json(public)}
 
     return ToolDefinition("Config", _tool_description("Config"), _tool_schema("Config"), handler)
@@ -532,15 +570,77 @@ def _config_tool() -> ToolDefinition:
 
 def _exit_plan_mode_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        plan = input.get("plan")
+        session = context["session"]
+        config = context["config"]
+        if session.get("permissionMode") != "plan":
+            return {"content": "ExitPlanMode is only available while the session is in plan mode.", "isError": True}
         allowed = parseAllowedPrompts(input.get("allowedPrompts"))
+        plan = _extract_latest_assistant_text(session)
         request_id = str(uuid.uuid4())
         created_at = now_iso()
-        file_path = await writePlanFile(requestId=request_id, sessionId=context["session"]["id"], cwd=context["session"]["cwd"], plan=plan, allowedPrompts=allowed, status="pending", createdAt=created_at)
-        context["session"].setdefault("metadata", {})["planMode"] = {"state": "pending", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed}
-        await savePlanApproval({"requestId": request_id, "sessionId": context["session"]["id"], "agentId": context["session"].get("metadata", {}).get("agentId"), "parentSessionId": context["session"].get("metadata", {}).get("parentSessionId"), "status": "pending", "plan": plan, "filePath": file_path, "allowedPrompts": allowed, "createdAt": created_at})
+        metadata = session.setdefault("metadata", {})
+        file_path = await writePlanFile(requestId=request_id, sessionId=session["id"], cwd=session["cwd"], plan=plan, allowedPrompts=allowed, status="pending", createdAt=created_at)
+        record_base = {
+            "requestId": request_id,
+            "sessionId": session["id"],
+            "agentId": metadata.get("agentId"),
+            "parentSessionId": metadata.get("parentSessionId"),
+            "plan": plan,
+            "filePath": file_path,
+            "allowedPrompts": allowed,
+            "createdAt": created_at,
+        }
+        context.get("outputJson", lambda *_: None)("plan.requested", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "plan": plan, "file_path": file_path})
+
+        if not context.get("interactive"):
+            metadata["planMode"] = {"state": "pending", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed}
+            await savePlanApproval({**record_base, "status": "pending"})
+            await maybe_await(context.get("persistSession", lambda: None)())
+            return {
+                "content": pretty_json(
+                    {
+                        "plan": plan,
+                        "isAgent": bool(metadata.get("parentSessionId")),
+                        "filePath": file_path,
+                        "awaitingLeaderApproval": True,
+                        "requestId": request_id,
+                        "allowedPrompts": allowed,
+                    }
+                )
+            }
+
+        answer = await maybe_await(
+            context.get("askQuestion", lambda *_: "Reject plan")(
+                f"Review the plan and choose the next action.\nSaved to: {file_path}",
+                ["Approve plan", "Chat with the assistant about the plan", "Reject plan"],
+            )
+        )
+        if answer == "Approve plan":
+            approved_at = now_iso()
+            await writePlanFile(requestId=request_id, sessionId=session["id"], cwd=session["cwd"], plan=plan, allowedPrompts=allowed, status="approved", createdAt=created_at, resolvedAt=approved_at, filePath=file_path)
+            next_mode = "plan" if metadata.get("gitRepoPlanOnly") else "acceptEdits"
+            session["permissionMode"] = next_mode
+            config["permissionMode"] = next_mode
+            metadata["planMode"] = {"state": "approved", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed, "approvedAt": approved_at}
+            await savePlanApproval({**record_base, "status": "approved", "resolvedAt": approved_at})
+            await maybe_await(context.get("persistSession", lambda: None)())
+            context.get("outputJson", lambda *_: None)("plan.approved", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "file_path": file_path, "next_mode": next_mode})
+            return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": True, "nextMode": next_mode, "allowedPrompts": allowed})}
+
+        if answer != "Reject plan":
+            metadata["planMode"] = {"state": "chatting", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed}
+            await maybe_await(context.get("persistSession", lambda: None)())
+            return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": False, "chat": True})}
+
+        rejected_at = now_iso()
+        await writePlanFile(requestId=request_id, sessionId=session["id"], cwd=session["cwd"], plan=plan, allowedPrompts=allowed, status="rejected", createdAt=created_at, resolvedAt=rejected_at, reason="Plan rejected by user", filePath=file_path)
+        session["permissionMode"] = "default"
+        config["permissionMode"] = "default"
+        metadata["planMode"] = {"state": "rejected", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed, "rejectedAt": rejected_at, "reason": "Plan rejected by user"}
+        await savePlanApproval({**record_base, "status": "rejected", "resolvedAt": rejected_at, "reason": "Plan rejected by user"})
         await maybe_await(context.get("persistSession", lambda: None)())
-        return {"content": pretty_json({"request_id": request_id, "status": "pending", "file_path": file_path}), "pause": "approval"}
+        context.get("outputJson", lambda *_: None)("plan.rejected", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "file_path": file_path})
+        return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": False, "reason": "Plan rejected by user"})}
 
     return ToolDefinition("ExitPlanMode", _tool_description("ExitPlanMode"), _tool_schema("ExitPlanMode"), handler)
 
@@ -721,46 +821,66 @@ def _task_monitor_stop_tool() -> ToolDefinition:
             return {"content": f"Monitor not found: {monitor_id}", "isError": True}
         monitor.update({"status": "stopped", "updatedAt": now_iso(), "stoppedAt": now_iso()})
         await saveMonitor(monitor)
-        return {"content": pretty_json({"monitor_id": monitor_id, "task_id": monitor.get("taskId"), "status": "stopped", "stopped": True})}
+        context.get("outputJson", lambda *_: None)(
+            "task.failed",
+            {
+                "session_id": context["session"]["id"],
+                "task_id": f"monitor:{monitor['id']}",
+                "kind": "monitor",
+                "title": f"Monitor {monitor.get('goal')}",
+                "summary": "Monitor stopped.",
+            },
+        )
+        context.get("outputJson", lambda *_: None)("monitor.status_changed", {"session_id": context["session"]["id"], "monitor_id": monitor["id"], "task_id": monitor.get("taskId"), "status": monitor["status"]})
+        return {"content": pretty_json({"monitor_id": monitor["id"], "task_id": monitor.get("taskId"), "status": monitor["status"]})}
 
     return ToolDefinition("TaskMonitorStop", _tool_description("TaskMonitorStop"), _tool_schema("TaskMonitorStop"), handler)
 
 
 def _task_health_check_start_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        supervisor = context.get("daemon") or context.get("taskSupervisor") or await ensureTaskSupervisorDaemon({"cwd": context["session"]["cwd"]})
+        supervisor = context.get("daemon")
+        if not supervisor:
+            raise RuntimeError("Health checks require the local task supervisor daemon.")
+        title = _require_string(input.get("title"), "title")
+        mode = _require_string(input.get("mode"), "mode")
         started = await supervisor["startHealthCheck"](
             {
                 "sessionId": context["session"]["id"],
                 "cwd": context["session"]["cwd"],
-                "title": _require_string(input.get("title"), "title"),
-                "mode": input.get("mode") or ("command" if input.get("command") else "http"),
-                "command": input.get("command"),
-                "url": input.get("url"),
-                "intervalMs": input.get("interval_ms") or input.get("intervalMs"),
-                "timeoutMs": input.get("timeout_ms") or input.get("timeoutMs"),
-                "expectedStatusCodes": input.get("expected_status_codes") or input.get("expectedStatusCodes"),
-                "expectedBodySubstring": input.get("expected_body_substring") or input.get("expectedBodySubstring"),
-                "backoffMultiplier": input.get("backoff_multiplier") or input.get("backoffMultiplier"),
-                "maxIntervalMs": input.get("max_interval_ms") or input.get("maxIntervalMs"),
-                "failureThreshold": input.get("failure_threshold") or input.get("failureThreshold"),
+                "title": title,
+                "mode": "command" if mode == "command" else "http",
+                "command": input.get("command") if isinstance(input.get("command"), str) else None,
+                "url": input.get("url") if isinstance(input.get("url"), str) else None,
+                "intervalMs": input.get("interval_ms") if isinstance(input.get("interval_ms"), (int, float)) else None,
+                "timeoutMs": input.get("timeout_ms") if isinstance(input.get("timeout_ms"), (int, float)) else None,
+                "failureThreshold": input.get("failure_threshold") if isinstance(input.get("failure_threshold"), (int, float)) else None,
+                "backoffMultiplier": input.get("backoff_multiplier") if isinstance(input.get("backoff_multiplier"), (int, float)) else None,
+                "maxIntervalMs": input.get("max_interval_ms") if isinstance(input.get("max_interval_ms"), (int, float)) else None,
+                "expectedStatusCodes": [value for value in input.get("expected_status_codes", []) if isinstance(value, (int, float))] if isinstance(input.get("expected_status_codes"), list) else None,
+                "expectedBodySubstring": input.get("expected_body_substring") if isinstance(input.get("expected_body_substring"), str) and input.get("expected_body_substring").strip() else None,
             }
         )
         task_id = started.get("taskId") or started.get("task_id")
         _append_unique_metadata_list(context["session"], "taskIds", task_id)
         await maybe_await(context.get("persistSession", lambda: None)())
-        context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": input.get("title"), "owner": "daemon"})
-        return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": input.get("title")})}
+        context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": title, "owner": "daemon"})
+        return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": title})}
 
     return ToolDefinition("TaskHealthCheckStart", _tool_description("TaskHealthCheckStart"), _tool_schema("TaskHealthCheckStart"), handler)
 
 
 def _task_health_check_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        supervisor = context.get("daemon")
+        if not supervisor:
+            raise RuntimeError("Health checks require the local task supervisor daemon.")
         task_id = _require_string(input.get("task_id"), "task_id")
-        supervisor = context.get("daemon") or context.get("taskSupervisor") or await ensureTaskSupervisorDaemon({"cwd": context["session"]["cwd"]})
         stopped = await supervisor["stopTask"](task_id)
-        return {"content": pretty_json({"task_id": task_id, "stopped": stopped}), "isError": not stopped}
+        if not stopped:
+            raise RuntimeError(f"Task not found or not stoppable: {task_id}")
+        context.get("outputJson", lambda *_: None)("task.failed", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "stopped"})
+        return {"content": pretty_json({"task_id": task_id, "stopped": True})}
 
     return ToolDefinition("TaskHealthCheckStop", _tool_description("TaskHealthCheckStop"), _tool_schema("TaskHealthCheckStop"), handler)
 
@@ -772,7 +892,16 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
                 "content": pretty_json(
                     {
                         "servers": [
-                            {"name": server.get("name"), "transport": server.get("transport"), "connected": False, "state": "disconnected"}
+                            {
+                                "name": server.get("name"),
+                                "transport": server.get("transport"),
+                                "connected": False,
+                                "state": "disconnected",
+                                "tools": 0,
+                                "resources": 0,
+                                "capabilities": {"tools": 0, "resources": 0, "channelsSupported": False},
+                                "channelRegistration": {"requested": False, "status": "not_requested"},
+                            }
                             for server in context["config"].get("mcpConfig", [])
                         ],
                         "tools": [],
@@ -783,7 +912,11 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
             result = await runtime["callTool"](input["server"], input["name"], input.get("arguments") or input.get("input") or {})
             return result
         diagnostics = runtime["getDiagnostics"]() if callable(runtime.get("getDiagnostics")) else runtime.get("diagnostics", {})
-        return {"content": pretty_json({"diagnostics": diagnostics, "servers": runtime["listServerStatus"](), "tools": runtime["listTools"]()})}
+        tools = [
+            {"server": tool.get("server"), "name": tool.get("name"), "runtime_name": tool.get("runtimeName") or tool.get("runtime_name"), "description": tool.get("description")}
+            for tool in runtime["listTools"]()
+        ]
+        return {"content": pretty_json({"diagnostics": diagnostics, "servers": runtime["listServerStatus"](), "tools": tools})}
 
     return ToolDefinition("Mcp", _tool_description("Mcp"), _tool_schema("Mcp"), handler)
 
@@ -808,12 +941,12 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
         config = next((entry for entry in context["config"].get("mcpConfig", []) if entry.get("name") == server), None)
         if not config:
             return {"content": f"MCP server not found: {server}", "isError": True}
-        if config.get("transport") in ("http", "sse") and re.match(r"^https?://", uri):
+        if config.get("transport") in ("http", "sse"):
             response = await fetch(uri, headers=config.get("headers"))
             text = await response.text()
             shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="ReadMcpResource", family="web", text=text, strategy="head")
-            return {"content": pretty_json({"contents": [{"uri": uri, "text": shaped["text"], "manifest": shaped["view"]}]})}
-        return {"content": f"MCP runtime is not connected for server: {server}", "isError": True}
+            return {"content": pretty_json({"contents": [{"uri": uri, "mimeType": _header_value(response.headers, "content-type"), "text": shaped["text"], "manifest": shaped["view"]}]})}
+        return {"content": f"MCP server not found: {server}", "isError": True}
 
     return ToolDefinition("ReadMcpResource", _tool_description("ReadMcpResource"), _tool_schema("ReadMcpResource"), handler)
 
@@ -1060,6 +1193,107 @@ def _require_string(value: Any, field: str) -> str:
     if not isinstance(value, str) or len(value) == 0:
         raise ValueError(f"Expected {field} to be a non-empty string")
     return value
+
+
+def _require_number(value: Any, field: str, fallback: float) -> float:
+    if value is None:
+        return fallback
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"Expected {field} to be a number")
+    return value
+
+
+def _require_optional_number(value: Any) -> float | None:
+    if value is None:
+        return None
+    if not isinstance(value, (int, float)):
+        raise ValueError("Expected number")
+    return value
+
+
+def _require_list(value: Any, field: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise ValueError(f"Expected {field} to be an array")
+    return value
+
+
+def _normalize_todo_item(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        raise ValueError("Invalid todo item")
+    content = _require_string(value.get("content"), "content")
+    status = _require_string(value.get("status"), "status")
+    active_form = value.get("activeForm")
+    if not isinstance(active_form, str) or not active_form.strip():
+        active_form = _derive_todo_active_form(content)
+    return {"content": content, "status": status, "activeForm": active_form}
+
+
+def _derive_todo_active_form(content: str) -> str:
+    normalized = content.strip().lower()
+    if not normalized:
+        return "work"
+    match = re.match(r"^[a-z0-9]+", normalized, re.I)
+    return match.group(0) if match else "work"
+
+
+def _extract_latest_assistant_text(session: dict[str, Any]) -> str | None:
+    for message in reversed(session.get("messages", [])):
+        if message.get("role") != "assistant":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            text = content.strip()
+            if text:
+                return text
+            continue
+        if isinstance(content, list):
+            text = "".join(str(block.get("text", "")) for block in content if isinstance(block, dict) and block.get("type") == "text").strip()
+            if text:
+                return text
+    return None
+
+
+def _header_value(headers: Any, name: str) -> str | None:
+    if not headers:
+        return None
+    if hasattr(headers, "get"):
+        return headers.get(name) or headers.get(name.lower()) or headers.get(name.title())
+    return None
+
+
+async def _resolve_ripgrep_binary() -> str | None:
+    packaged = _packaged_ripgrep_path()
+    if packaged and os.path.exists(packaged):
+        return packaged
+    return shutil.which("rg")
+
+
+def _packaged_ripgrep_path() -> str | None:
+    machine = platform.machine().lower()
+    arch = "arm64" if machine in ("arm64", "aarch64") else "x64" if machine in ("x86_64", "amd64") else machine
+    if sys.platform == "darwin":
+        key = f"{arch}-darwin"
+        binary = "rg"
+    elif sys.platform.startswith("linux"):
+        key = f"{arch}-linux"
+        binary = "rg"
+    elif sys.platform == "win32":
+        key = f"{arch}-win32"
+        binary = "rg.exe"
+    else:
+        return None
+    repo_root = Path(__file__).resolve().parents[1]
+    return str(repo_root / "package" / "vendor" / "ripgrep" / key / binary)
+
+
+async def _exec_ripgrep_allowing_no_matches(rg_path: str, args: list[str], *, cwd: str) -> tuple[str, str]:
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run([rg_path, *args], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    result = await asyncio.to_thread(run)
+    if result.returncode in (0, 1):
+        return result.stdout, result.stderr
+    raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"ripgrep failed with exit code {result.returncode}")
 
 
 def _display_path(context: dict[str, Any], file_path: str) -> str:
