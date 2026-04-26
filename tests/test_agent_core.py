@@ -723,6 +723,37 @@ class AgentCoreTests(unittest.TestCase):
             auth_server.server_close()
             anthropic_module.providerRetryDelayMs = original_delay
 
+    def test_provider_failure_classifier_matrix_matches_reference(self):
+        base = {"provider": "openai", "providerLabel": "OpenAI", "phase": "request_start", "attempt": 1, "hadAssistantOutput": False, "hadToolUse": False}
+        cases = [
+            (401, "invalid api key", None, "auth", False),
+            (403, "forbidden", None, "auth", False),
+            (408, "timeout", None, "timeout", True),
+            (429, "rate limit exceeded", None, "rate_limit", True),
+            (429, "insufficient quota or billing", None, "quota", False),
+            (400, "bad request", None, "client_request", False),
+            (500, "server overloaded", None, "server", True),
+        ]
+        for status, body, error_type, category, retryable in cases:
+            with self.subTest(status=status, category=category):
+                failure = core.classifyProviderHttpFailure({**base, "status": status, "body": body, "errorType": error_type})
+                self.assertEqual(failure.record["category"], category)
+                self.assertEqual(failure.record["retryable"], retryable)
+                self.assertEqual(failure.record["status"], status)
+                self.assertEqual(failure.record["rawBody"], body)
+
+        transport = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("socket hang up")})
+        self.assertEqual(transport.record["category"], "transport")
+        self.assertTrue(core.canRetryProviderFailure(transport, 2))
+        partial = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("ECONNRESET"), "hadAssistantOutput": True})
+        self.assertEqual(partial.record["category"], "transport")
+        self.assertFalse(core.canRetryProviderFailure(partial, 2))
+        protocol = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("Unexpected end of JSON input")})
+        self.assertEqual(protocol.record["category"], "protocol")
+        self.assertFalse(protocol.record["retryable"])
+        auth = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("invalid API key")})
+        self.assertEqual(auth.record["category"], "auth")
+
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:
             config = {
