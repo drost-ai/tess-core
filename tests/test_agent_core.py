@@ -1175,6 +1175,60 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["collaboration"]["recentAssistantUpdates"][0]["sourceKind"], "monitor")
         self.assertEqual(state["collaboration"]["recentAssistantUpdates"][0]["text"], "API recovered.")
 
+        monitor_status = core.createRuntimeEvent(
+            {
+                "event": "monitor.status_changed",
+                "createdAt": "t4b",
+                "data": {
+                    "monitor_id": "monitor-1",
+                    "task_id": "task-1",
+                    "status": "active",
+                    "task_status": "running",
+                    "exit_code": 0,
+                    "session_id": "s-typed",
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(
+            monitor_status["payload"],
+            {"monitorId": "monitor-1", "taskId": "task-1", "status": "active", "taskStatus": "running", "exitCode": 0},
+        )
+
+        collaboration_snapshot = core.createRuntimeEvent(
+            {
+                "event": "collaboration.snapshot",
+                "createdAt": "t4c",
+                "data": {
+                    "active_count": 1,
+                    "awaiting_input_count": 0,
+                    "background_count": 1,
+                    "remote_status": "active",
+                    "remote_title": "Remote QA",
+                    "bridge_status": "active",
+                    "pending_bridge_messages": 2,
+                    "labels": ["Remote QA"],
+                    "workers": [
+                        {
+                            "id": "remote-1",
+                            "kind": "remote",
+                            "status": "active",
+                            "label": "Remote QA",
+                            "remote_session_id": "remote-1",
+                            "bridge_id": "bridge-1",
+                            "ignored_extra": "drop me",
+                        }
+                    ],
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(collaboration_snapshot["payload"]["activeCount"], 1)
+        self.assertEqual(collaboration_snapshot["payload"]["pendingBridgeMessages"], 2)
+        self.assertNotIn("ignoredExtra", collaboration_snapshot["payload"])
+        self.assertEqual(collaboration_snapshot["payload"]["workers"][0]["remoteSessionId"], "remote-1")
+        self.assertNotIn("ignoredExtra", collaboration_snapshot["payload"]["workers"][0])
+
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "bridge.message", "createdAt": "t5", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1", "text": "continue"}}))
         self.assertTrue(state["bridge"]["attached"])
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.message")

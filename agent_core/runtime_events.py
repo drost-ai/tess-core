@@ -121,6 +121,59 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "status.updated", {"message": _field(data, "message") or "", "detail": _field(data, "detail")}
     if event == "status.cleared":
         return "status.cleared", {}
+    if event == "monitor.snapshot":
+        return "monitor.snapshot", {
+            "total": _number_field(_field(data, "total")),
+            "active": _number_field(_field(data, "active")),
+            "failed": _number_field(_field(data, "failed")),
+            "stopped": _number_field(_field(data, "stopped")),
+            "muted": _number_field(_field(data, "muted")),
+            "nextCheckInMs": _optional_number(_field(data, "next_check_in_ms", "nextCheckInMs")),
+            "labels": _string_array(_field(data, "labels")),
+        }
+    if event == "monitor.created":
+        return "monitor.created", {
+            "monitorId": _optional_string(_field(data, "monitor_id", "monitorId")),
+            "taskId": _optional_string(_field(data, "task_id", "taskId")),
+            "status": _optional_string(_field(data, "status")),
+            "goal": _optional_string(_field(data, "goal")),
+        }
+    if event == "monitor.assistant_update":
+        return "monitor.assistant_update", {
+            "monitorId": _optional_string(_field(data, "monitor_id", "monitorId")),
+            "taskId": _optional_string(_field(data, "task_id", "taskId")),
+            "status": _optional_string(_field(data, "status")),
+            "reason": _optional_string(_field(data, "reason")),
+            "text": _field(data, "text") or "",
+        }
+    if event == "monitor.status_changed":
+        return "monitor.status_changed", {
+            "monitorId": _optional_string(_field(data, "monitor_id", "monitorId")),
+            "taskId": _optional_string(_field(data, "task_id", "taskId")),
+            "status": _optional_string(_field(data, "status")),
+            "taskStatus": _optional_string(_field(data, "task_status", "taskStatus")),
+            "exitCode": _optional_number(_field(data, "exit_code", "exitCode")),
+        }
+    if event == "collaboration.snapshot":
+        return "collaboration.snapshot", {
+            "activeCount": _number_field(_field(data, "active_count", "activeCount")),
+            "awaitingInputCount": _number_field(_field(data, "awaiting_input_count", "awaitingInputCount")),
+            "backgroundCount": _number_field(_field(data, "background_count", "backgroundCount")),
+            "remoteStatus": _optional_string(_field(data, "remote_status", "remoteStatus")),
+            "remoteTitle": _optional_string(_field(data, "remote_title", "remoteTitle")),
+            "bridgeStatus": _optional_string(_field(data, "bridge_status", "bridgeStatus")),
+            "pendingBridgeMessages": _optional_number(_field(data, "pending_bridge_messages", "pendingBridgeMessages")),
+            "labels": _string_array(_field(data, "labels")),
+            "workers": [_collaboration_worker_payload(worker) for worker in _array_field(_field(data, "workers"))],
+        }
+    if event == "collaboration.assistant_update":
+        return "collaboration.assistant_update", {
+            "sourceKind": _optional_string(_field(data, "source_kind", "sourceKind")),
+            "sourceId": _optional_string(_field(data, "source_id", "sourceId")),
+            "status": _optional_string(_field(data, "status")),
+            "label": _optional_string(_field(data, "label")),
+            "text": _field(data, "text") or "",
+        }
     if event == "bridge.message":
         return "bridge.message", {
             "bridgeId": _field(data, "bridge_id", "bridgeId"),
@@ -150,6 +203,60 @@ def _field(data: dict[str, Any], *names: str) -> Any:
         if name in data:
             return data.get(name)
     return None
+
+
+def _optional_string(value: Any) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _optional_number(value: Any) -> int | float | None:
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _number_field(value: Any) -> int | float:
+    number = _optional_number(value)
+    return number if number is not None else 0
+
+
+def _string_array(value: Any) -> list[str]:
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
+def _array_field(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _record_field(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _collaboration_worker_payload(value: Any) -> dict[str, Any]:
+    worker = _record_field(value)
+    return {
+        "id": str(_field(worker, "id") or ""),
+        "kind": _optional_string(_field(worker, "kind")),
+        "status": _optional_string(_field(worker, "status")),
+        "label": _optional_string(_field(worker, "label")),
+        "summary": _optional_string(_field(worker, "summary")),
+        "sessionId": _optional_string(_field(worker, "session_id", "sessionId")),
+        "parentSessionId": _optional_string(_field(worker, "parent_session_id", "parentSessionId")),
+        "parentTaskId": _optional_string(_field(worker, "parent_task_id", "parentTaskId")),
+        "childSessionId": _optional_string(_field(worker, "child_session_id", "childSessionId")),
+        "taskId": _optional_string(_field(worker, "task_id", "taskId")),
+        "monitorId": _optional_string(_field(worker, "monitor_id", "monitorId")),
+        "remoteSessionId": _optional_string(_field(worker, "remote_session_id", "remoteSessionId")),
+        "bridgeId": _optional_string(_field(worker, "bridge_id", "bridgeId")),
+        "attachableSessionId": _optional_string(_field(worker, "attachable_session_id", "attachableSessionId")),
+        "owner": _optional_string(_field(worker, "owner")),
+        "waitingReason": _optional_string(_field(worker, "waiting_reason", "waitingReason")),
+        "completionReason": _optional_string(_field(worker, "completion_reason", "completionReason")),
+        "resultSummary": _optional_string(_field(worker, "result_summary", "resultSummary")),
+        "latestResultAt": _optional_string(_field(worker, "latest_result_at", "latestResultAt")),
+        "retryable": _field(worker, "retryable") if isinstance(_field(worker, "retryable"), bool) else None,
+        "stoppable": _field(worker, "stoppable") if isinstance(_field(worker, "stoppable"), bool) else None,
+        "recoveryState": _optional_string(_field(worker, "recovery_state", "recoveryState")),
+        "updatedAt": _optional_string(_field(worker, "updated_at", "updatedAt")),
+    }
 
 
 def _camelize_record(value: Any) -> Any:
