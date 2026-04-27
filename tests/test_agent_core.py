@@ -581,6 +581,25 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(payload["thinking"], {"type": "adaptive"})
         self.assertEqual(payload["output_config"], {"effort": "high"})
         self.assertEqual(payload["system"][1], {"type": "text", "text": "system prompt"})
+        count_payload = testing.buildAnthropicCountTokensPayload(request)
+        self.assertNotIn("max_tokens", count_payload)
+        self.assertNotIn("stream", count_payload)
+        self.assertNotIn("output_config", count_payload)
+        self.assertEqual(count_payload["thinking"], {"type": "adaptive"})
+        self.assertEqual(testing.resolveAnthropicMessagesUrl("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages?beta=true")
+        self.assertEqual(testing.resolveAnthropicCountTokensUrl("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages/count_tokens")
+        api_key_headers = testing.buildAnthropicHeaders({"apiKey": "api-key", "customHeaders": {"x-test": "1"}}, {"stream": True})
+        self.assertEqual(api_key_headers["accept"], "text/event-stream")
+        self.assertEqual(api_key_headers["x-api-key"], "api-key")
+        self.assertEqual(api_key_headers["x-test"], "1")
+        self.assertNotIn("authorization", api_key_headers)
+        self.assertEqual(api_key_headers["anthropic-beta"], "fine-grained-tool-streaming-2025-05-14")
+        oauth_headers = testing.buildAnthropicHeaders({"authToken": "oauth-token", "customHeaders": {}})
+        self.assertEqual(oauth_headers["accept"], "application/json")
+        self.assertEqual(oauth_headers["authorization"], "Bearer oauth-token")
+        self.assertNotIn("x-api-key", oauth_headers)
+        self.assertIn("claude-code-20250219", oauth_headers["anthropic-beta"])
+        self.assertIn("oauth-2025-04-20", oauth_headers["anthropic-beta"])
 
         emitted = []
         raw = "\n\n".join(
@@ -607,6 +626,29 @@ class AgentCoreTests(unittest.TestCase):
             testing.normalizeAnthropicSseResponse('event: error\ndata: {"type":"error","error":{"type":"rate_limit_error","message":"rate limit"}}', request)
         self.assertEqual(ctx.exception.record["category"], "rate_limit")
         self.assertTrue(ctx.exception.record["retryable"])
+
+        with self.assertRaises(core.ProviderRequestError) as malformed_ctx:
+            testing.normalizeAnthropicSseResponse('event: content_block_delta\ndata: {"type":"content_block_delta"', request, attempt=2)
+        self.assertEqual(malformed_ctx.exception.record["phase"], "parse")
+        self.assertEqual(malformed_ctx.exception.record["category"], "protocol")
+        self.assertEqual(malformed_ctx.exception.record["attempt"], 2)
+        self.assertEqual(malformed_ctx.exception.record["streamEventType"], "content_block_delta")
+        self.assertFalse(malformed_ctx.exception.record["retryable"])
+        self.assertIn("Failed to parse streamed provider event", malformed_ctx.exception.record["rawMessage"])
+
+        bad_tool_raw = "\n\n".join(
+            [
+                'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_bad","name":"Read","input":{}}}',
+                'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\\"not-object\\""}}',
+                'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}',
+            ]
+        )
+        with self.assertRaises(core.ProviderRequestError) as tool_ctx:
+            testing.normalizeAnthropicSseResponse(bad_tool_raw, request)
+        self.assertEqual(tool_ctx.exception.record["category"], "protocol")
+        self.assertTrue(tool_ctx.exception.record["hadToolUse"])
+        self.assertFalse(tool_ctx.exception.record["retryable"])
+        self.assertIn("Unable to parse tool parameter JSON from model", tool_ctx.exception.record["rawMessage"])
 
     def test_responses_auth_failure_and_base_url(self):
         async def create_error(_params):

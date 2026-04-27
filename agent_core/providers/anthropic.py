@@ -141,7 +141,16 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
     for raw_event in parseAnthropicSseEvents(raw):
         if raw_event["data"] == "[DONE]":
             continue
-        payload = json.loads(raw_event["data"])
+        try:
+            payload = json.loads(raw_event["data"])
+        except Exception:
+            raise _create_anthropic_protocol_error(
+                f"Failed to parse streamed provider event: {raw_event['data']}",
+                attempt,
+                had_assistant_output,
+                had_tool_use,
+                raw_event.get("event"),
+            )
         event_type = payload.get("type") or raw_event.get("event")
         if not event_type or event_type == "ping":
             continue
@@ -199,7 +208,7 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
         elif event_type == "content_block_stop":
             index = payload.get("index")
             if isinstance(index, int) and index < len(blocks):
-                _finalize_tool_block(blocks[index])
+                _finalize_tool_block(blocks[index], attempt=attempt, hadAssistantOutput=had_assistant_output, hadToolUse=had_tool_use)
         elif event_type == "message_delta":
             delta = payload.get("delta") or {}
             stop_reason = delta.get("stop_reason") or stop_reason
@@ -207,7 +216,7 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
         elif event_type == "message_stop":
             break
     for block in blocks:
-        _finalize_tool_block(block)
+        _finalize_tool_block(block, attempt=attempt, hadAssistantOutput=had_assistant_output, hadToolUse=had_tool_use)
     return {"content": [_strip_internal_block(block) for block in blocks if block and block.get("type") in ("text", "tool_use")], "usage": usage, "model": model, "stopReason": stop_reason}
 
 
@@ -461,10 +470,40 @@ def _internal_block_from_anthropic(block: dict[str, Any]) -> dict[str, Any]:
     return {"type": "ignored"}
 
 
-def _finalize_tool_block(block: dict[str, Any] | None) -> None:
+def _finalize_tool_block(
+    block: dict[str, Any] | None,
+    *,
+    attempt: int = 1,
+    hadAssistantOutput: bool = False,
+    hadToolUse: bool = False,
+) -> None:
     if not block or block.get("type") != "tool_use" or not str(block.get("_input_buffer") or "").strip():
         return
-    block["input"] = json.loads(block["_input_buffer"])
+    raw = str(block["_input_buffer"])
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        raise _create_anthropic_protocol_error(f"Unable to parse tool parameter JSON from model: {raw}", attempt, hadAssistantOutput, hadToolUse)
+    if not isinstance(parsed, dict):
+        raise _create_anthropic_protocol_error(f"Unable to parse tool parameter JSON from model: {raw}", attempt, hadAssistantOutput, hadToolUse)
+    block["input"] = parsed
+
+
+def _create_anthropic_protocol_error(rawMessage: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, streamEventType: str | None = None) -> Any:
+    return createProviderRequestError(
+        createProviderFailureRecord(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            phase="parse",
+            category="protocol",
+            retryable=False,
+            attempt=attempt,
+            hadAssistantOutput=hadAssistantOutput,
+            hadToolUse=hadToolUse,
+            rawMessage=rawMessage,
+            streamEventType=streamEventType,
+        )
+    )
 
 
 def _strip_internal_block(block: dict[str, Any]) -> dict[str, Any]:
