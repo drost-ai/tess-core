@@ -84,10 +84,10 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
     payload = _camelize_record(data)
     if event == "session.activated":
         return "session.activated", {
-            "cwd": _field(data, "cwd"),
-            "provider": _field(data, "provider"),
-            "model": _field(data, "model"),
-            "permissionMode": _field(data, "permission_mode", "permissionMode") or "default",
+            "cwd": _string_field(_field(data, "cwd")),
+            "provider": _provider_field(_field(data, "provider")),
+            "model": _string_field(_field(data, "model")),
+            "permissionMode": _permission_mode_field(_field(data, "permission_mode", "permissionMode")),
             "workspaceName": _field(data, "workspace_name", "workspaceName"),
             "gitRoot": _field(data, "git_root", "gitRoot"),
             "gitBranch": _field(data, "git_branch", "gitBranch"),
@@ -96,10 +96,10 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "updatedAt": _field(data, "updated_at", "updatedAt"),
         }
     if event == "message.user":
-        return "message.user", {"text": _field(data, "text") if isinstance(_field(data, "text"), str) else ""}
+        return "message.user", {"text": _string_field(_field(data, "text"))}
     if event == "message.assistant":
         return "message.assistant", {
-            "text": _field(data, "text") if isinstance(_field(data, "text"), str) else "",
+            "text": _string_field(_field(data, "text")),
             "model": _optional_string(_field(data, "model")),
         }
     if event == "message.assistant.partial":
@@ -115,7 +115,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         }
     if event == "turn.started":
         return "turn.started", {
-            "prompt": _field(data, "prompt") or "",
+            "prompt": _string_field(_field(data, "prompt")),
             "model": _field(data, "model"),
             "agentName": _field(data, "agent_name", "agentName"),
         }
@@ -128,7 +128,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "model": _field(data, "model"),
         }
     if event == "turn.failed":
-        return "turn.failed", {"message": _field(data, "message") or ""}
+        return "turn.failed", {"message": _string_field(_field(data, "message"))}
     if event == "turn.cancelled":
         return "turn.cancelled", {
             "model": _field(data, "model"),
@@ -136,7 +136,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "stopReason": _field(data, "stop_reason", "stopReason"),
         }
     if event == "status.updated":
-        return "status.updated", {"message": _field(data, "message") or "", "detail": _field(data, "detail")}
+        return "status.updated", {"message": _string_field(_field(data, "message")), "detail": _field(data, "detail")}
     if event == "status.cleared":
         return "status.cleared", {}
     if event == "provider.retrying":
@@ -179,10 +179,10 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "error": _optional_string(_field(data, "error")),
         }
     if event == "tool.started":
-        return "tool.started", {"name": _field(data, "name") if isinstance(_field(data, "name"), str) else "", "input": _field(data, "input")}
+        return "tool.started", {"name": _string_field(_field(data, "name")), "input": _field(data, "input")}
     if event == "tool.completed":
         return "tool.completed", {
-            "name": _field(data, "name") if isinstance(_field(data, "name"), str) else "",
+            "name": _string_field(_field(data, "name")),
             "output": _field(data, "output"),
             "error": _optional_boolean(_field(data, "error")),
         }
@@ -309,20 +309,20 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return event, _task_lifecycle_payload(data, include_status=False)
     if event == "task.output_delta":
         return "task.output_delta", {
-            "taskId": _field(data, "task_id", "taskId") if isinstance(_field(data, "task_id", "taskId"), str) else "",
+            "taskId": _string_field(_field(data, "task_id", "taskId")),
             "bytesDelta": _optional_number(_field(data, "bytes_delta", "bytesDelta")),
             "outputCursor": _optional_number(_field(data, "output_cursor", "outputCursor")),
         }
     if event == "health_check.unhealthy":
         return "health_check.unhealthy", {
-            "taskId": _field(data, "task_id", "taskId") if isinstance(_field(data, "task_id", "taskId"), str) else "",
+            "taskId": _string_field(_field(data, "task_id", "taskId")),
             "title": _optional_string(_field(data, "title")),
             "failures": _optional_number(_field(data, "failures")),
             "error": _optional_string(_field(data, "error")),
         }
     if event == "health_check.recovered":
         return "health_check.recovered", {
-            "taskId": _field(data, "task_id", "taskId") if isinstance(_field(data, "task_id", "taskId"), str) else "",
+            "taskId": _string_field(_field(data, "task_id", "taskId")),
             "title": _optional_string(_field(data, "title")),
         }
     if event == "monitor.snapshot":
@@ -415,6 +415,18 @@ def _field(data: dict[str, Any], *names: str) -> Any:
 
 def _optional_string(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
+
+
+def _string_field(value: Any) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def _provider_field(value: Any) -> str:
+    return "anthropic" if value == "anthropic" else "openai"
+
+
+def _permission_mode_field(value: Any) -> str:
+    return value if value in {"acceptEdits", "bypassPermissions", "default", "dontAsk", "plan", "auto"} else "default"
 
 
 def _optional_number(value: Any) -> int | float | None:

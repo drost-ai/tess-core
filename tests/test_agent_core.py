@@ -1132,9 +1132,20 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["session"]["activeSessionId"], "s-typed")
         self.assertEqual(state["session"]["summary"]["id"], "s-typed")
         self.assertEqual(state["bridge"]["bridgeId"], "bridge-typed")
+        normalized_activation = core.createRuntimeEvent(
+            {
+                "event": "session.activated",
+                "data": {"session_id": "s-normalized", "cwd": 123, "provider": "unknown", "model": None, "permission_mode": "bad"},
+            }
+        )
+        self.assertEqual(normalized_activation["payload"]["cwd"], "")
+        self.assertEqual(normalized_activation["payload"]["provider"], "openai")
+        self.assertEqual(normalized_activation["payload"]["model"], "")
+        self.assertEqual(normalized_activation["payload"]["permissionMode"], "default")
 
         user_message = core.createRuntimeEvent({"event": "message.user", "data": {"text": "hello", "session_id": "s-typed", "ignored_extra": "drop me"}})
         self.assertEqual(user_message["payload"], {"text": "hello"})
+        self.assertEqual(core.createRuntimeEvent({"event": "message.user", "data": {"text": 123}})["payload"], {"text": ""})
         assistant_partial = core.createRuntimeEvent(
             {
                 "event": "message.assistant.partial",
