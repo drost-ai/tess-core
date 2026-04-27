@@ -121,6 +121,192 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "status.updated", {"message": _field(data, "message") or "", "detail": _field(data, "detail")}
     if event == "status.cleared":
         return "status.cleared", {}
+    if event == "provider.retrying":
+        return "provider.retrying", {
+            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
+            "nextAttempt": _optional_number(_field(data, "next_attempt", "nextAttempt")),
+            "delayMs": _optional_number(_field(data, "delay_ms", "delayMs")),
+        }
+    if event == "provider.recovered":
+        return "provider.recovered", {
+            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
+            "attempts": _optional_number(_field(data, "attempts")),
+        }
+    if event == "provider.failed":
+        return "provider.failed", {
+            "provider": _optional_string(_field(data, "provider")),
+            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
+            "category": _optional_string(_field(data, "category")),
+            "phase": _optional_string(_field(data, "phase")),
+            "message": _optional_string(_field(data, "message")),
+            "retryable": _optional_boolean(_field(data, "retryable")),
+            "attempt": _optional_number(_field(data, "attempt")),
+            "status": _optional_number(_field(data, "status")),
+            "code": _optional_string(_field(data, "code")),
+            "errorType": _optional_string(_field(data, "error_type", "errorType")),
+        }
+    if event == "provider.input_tokens":
+        return "provider.input_tokens", {
+            "provider": _optional_string(_field(data, "provider")),
+            "model": _optional_string(_field(data, "model")),
+            "inputTokens": _optional_number(_field(data, "input_tokens", "inputTokens")),
+            "source": _optional_string(_field(data, "source")),
+            "baseInputTokens": _optional_number(_field(data, "base_input_tokens", "baseInputTokens")),
+            "safetyMarginTokens": _optional_number(_field(data, "safety_margin_tokens", "safetyMarginTokens")),
+        }
+    if event == "provider.fallback":
+        return "provider.fallback", {
+            "provider": _optional_string(_field(data, "provider")),
+            "model": _optional_string(_field(data, "model")),
+            "error": _optional_string(_field(data, "error")),
+        }
+    if event == "tool.started":
+        return "tool.started", {"name": _field(data, "name") if isinstance(_field(data, "name"), str) else "", "input": _field(data, "input")}
+    if event == "tool.completed":
+        return "tool.completed", {
+            "name": _field(data, "name") if isinstance(_field(data, "name"), str) else "",
+            "output": _field(data, "output"),
+            "error": _optional_boolean(_field(data, "error")),
+        }
+    if event == "permission.requested":
+        return "permission.requested", {"summary": _optional_string(_field(data, "summary"))}
+    if event == "permission.decided":
+        return "permission.decided", {
+            "decision": _optional_string(_field(data, "decision")),
+            "summary": _optional_string(_field(data, "summary")),
+        }
+    if event == "plan.requested":
+        return "plan.requested", {
+            "plan": _optional_string(_field(data, "plan")),
+            "filePath": _optional_string(_field(data, "file_path", "filePath")),
+        }
+    if event == "plan.approved":
+        return "plan.approved", {"summary": _optional_string(_field(data, "summary"))}
+    if event == "plan.rejected":
+        return "plan.rejected", {"summary": _optional_string(_field(data, "summary"))}
+    if event == "plan.contract_enforced":
+        return "plan.contract_enforced", {"reason": _optional_string(_field(data, "reason"))}
+    if event == "compaction.started":
+        return "compaction.started", {
+            "trigger": _optional_string(_field(data, "trigger")),
+            "currentTokenEstimate": _optional_number(_field(data, "current_token_estimate", "currentTokenEstimate")),
+            "currentTokenSource": _optional_string(_field(data, "current_token_source", "currentTokenSource")),
+        }
+    if event == "compaction.skipped":
+        return "compaction.skipped", {
+            "trigger": _optional_string(_field(data, "trigger")),
+            "reason": _optional_string(_field(data, "reason")),
+            "detail": _optional_string(_field(data, "detail")),
+            "qualityClassification": _optional_string(_field(data, "quality_classification", "qualityClassification")),
+        }
+    if event == "compaction.completed":
+        return "compaction.completed", {
+            "generation": _optional_number(_field(data, "generation")),
+            "trigger": _optional_string(_field(data, "trigger")),
+            "compactedThroughMessageIndex": _optional_number(_field(data, "compacted_through_message_index", "compactedThroughMessageIndex")),
+            "compactedMessageCount": _optional_number(_field(data, "compacted_message_count", "compactedMessageCount")),
+            "recentMessageCount": _optional_number(_field(data, "recent_message_count", "recentMessageCount")),
+            "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),
+            "workingContextTokenEstimate": _optional_number(_field(data, "working_context_token_estimate", "workingContextTokenEstimate")),
+            "workingContextTokenSource": _optional_string(_field(data, "working_context_token_source", "workingContextTokenSource")),
+            "qualityClassification": _optional_string(_field(data, "quality_classification", "qualityClassification")),
+            "compactionProvider": _optional_string(_field(data, "compaction_provider", "compactionProvider")),
+            "compactionModel": _optional_string(_field(data, "compaction_model", "compactionModel")),
+            "verificationProvider": _optional_string(_field(data, "verification_provider", "verificationProvider")),
+            "verificationModel": _optional_string(_field(data, "verification_model", "verificationModel")),
+            "verificationVerdict": _optional_string(_field(data, "verification_verdict", "verificationVerdict")),
+            "verificationConfidence": _optional_string(_field(data, "verification_confidence", "verificationConfidence")),
+            "summaryPath": _optional_string(_field(data, "summary_path", "summaryPath")),
+            "statePath": _optional_string(_field(data, "state_path", "statePath")),
+            "workingContextPath": _optional_string(_field(data, "working_context_path", "workingContextPath")),
+            "checkpointPath": _optional_string(_field(data, "checkpoint_path", "checkpointPath")),
+        }
+    if event == "compaction.failed":
+        return "compaction.failed", {
+            "trigger": _optional_string(_field(data, "trigger")),
+            "error": _optional_string(_field(data, "error")),
+            "provider": _optional_string(_field(data, "provider")),
+            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
+            "category": _optional_string(_field(data, "category")),
+            "phase": _optional_string(_field(data, "phase")),
+            "retryable": _optional_boolean(_field(data, "retryable")),
+        }
+    if event == "context_relief.selected":
+        return "context_relief.selected", {
+            "mode": _context_relief_mode_field(_field(data, "mode")),
+            "reason": _optional_string(_field(data, "reason")),
+            "tokenEstimate": _optional_number(_field(data, "token_estimate", "tokenEstimate")),
+            "pressureLevel": _optional_string(_field(data, "pressure_level", "pressureLevel")),
+            "reactiveAttempt": _optional_number(_field(data, "reactive_attempt", "reactiveAttempt")),
+            "plannedModes": _context_relief_mode_array(_field(data, "planned_modes", "plannedModes")),
+        }
+    if event == "context_relief.applied":
+        return "context_relief.applied", {
+            "mode": _context_relief_mode_field(_field(data, "mode")),
+            "modes": _context_relief_mode_array(_field(data, "modes")),
+            "tokensSavedEstimate": _optional_number(_field(data, "tokens_saved_estimate", "tokensSavedEstimate")),
+            "droppedMessageCount": _optional_number(_field(data, "dropped_message_count", "droppedMessageCount")),
+            "compactedMessageCount": _optional_number(_field(data, "compacted_message_count", "compactedMessageCount")),
+            "detail": _optional_string(_field(data, "detail")),
+            "pressureLevel": _optional_string(_field(data, "pressure_level", "pressureLevel")),
+            "reactiveAttempt": _optional_number(_field(data, "reactive_attempt", "reactiveAttempt")),
+            "reinjectionSummary": _optional_string(_field(data, "reinjection_summary", "reinjectionSummary")),
+            "reinjectionSectionCount": _optional_number(_field(data, "reinjection_section_count", "reinjectionSectionCount")),
+        }
+    if event == "daemon.snapshot":
+        return "daemon.snapshot", {
+            "phase": _optional_string(_field(data, "phase")),
+            "epoch": _optional_string(_field(data, "epoch")),
+            "pid": _optional_number(_field(data, "pid")),
+            "socketPath": _optional_string(_field(data, "socket_path", "socketPath")),
+            "supervisorId": _optional_string(_field(data, "supervisor_id", "supervisorId")),
+            "attachedClients": _optional_number(_field(data, "attached_clients", "attachedClients")),
+            "watchedSessions": _optional_number(_field(data, "watched_sessions", "watchedSessions")),
+            "activeTasks": _optional_number(_field(data, "active_tasks", "activeTasks")),
+            "updatedAt": _optional_string(_field(data, "updated_at", "updatedAt")),
+        }
+    if event == "daemon.recovering":
+        return "daemon.recovering", {
+            "phase": _optional_string(_field(data, "phase")),
+            "epoch": _optional_string(_field(data, "epoch")),
+        }
+    if event == "daemon.recovered":
+        return "daemon.recovered", {
+            "phase": _optional_string(_field(data, "phase")),
+            "epoch": _optional_string(_field(data, "epoch")),
+        }
+    if event == "task.snapshot":
+        return "task.snapshot", {
+            "total": _number_field(_field(data, "total")),
+            "active": _number_field(_field(data, "active")),
+            "backgrounded": _number_field(_field(data, "backgrounded")),
+            "awaitingInput": _number_field(_field(data, "awaiting_input", "awaitingInput")),
+            "failed": _number_field(_field(data, "failed")),
+            "labels": _string_array(_field(data, "labels")),
+            "tasks": [_task_snapshot_payload(task) for task in _array_field(_field(data, "tasks"))],
+        }
+    if event in {"task.registered", "task.updated", "task.restored"}:
+        return event, _task_lifecycle_payload(data, include_status=True)
+    if event in {"task.completed", "task.failed"}:
+        return event, _task_lifecycle_payload(data, include_status=False)
+    if event == "task.output_delta":
+        return "task.output_delta", {
+            "taskId": _field(data, "task_id", "taskId") if isinstance(_field(data, "task_id", "taskId"), str) else "",
+            "bytesDelta": _optional_number(_field(data, "bytes_delta", "bytesDelta")),
+            "outputCursor": _optional_number(_field(data, "output_cursor", "outputCursor")),
+        }
+    if event == "health_check.unhealthy":
+        return "health_check.unhealthy", {
+            "taskId": _field(data, "task_id", "taskId") if isinstance(_field(data, "task_id", "taskId"), str) else "",
+            "title": _optional_string(_field(data, "title")),
+            "failures": _optional_number(_field(data, "failures")),
+            "error": _optional_string(_field(data, "error")),
+        }
+    if event == "health_check.recovered":
+        return "health_check.recovered", {
+            "taskId": _field(data, "task_id", "taskId") if isinstance(_field(data, "task_id", "taskId"), str) else "",
+            "title": _optional_string(_field(data, "title")),
+        }
     if event == "monitor.snapshot":
         return "monitor.snapshot", {
             "total": _number_field(_field(data, "total")),
@@ -213,6 +399,10 @@ def _optional_number(value: Any) -> int | float | None:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _optional_boolean(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
 def _number_field(value: Any) -> int | float:
     number = _optional_number(value)
     return number if number is not None else 0
@@ -228,6 +418,93 @@ def _array_field(value: Any) -> list[Any]:
 
 def _record_field(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+_CONTEXT_RELIEF_MODES = {
+    "microcompact",
+    "api_microcompact",
+    "time_based_microcompact",
+    "partial_compaction",
+    "session_memory_compaction",
+    "full_checkpoint_compaction",
+}
+
+
+def _context_relief_mode_field(value: Any) -> str:
+    return value if value in _CONTEXT_RELIEF_MODES else "none"
+
+
+def _context_relief_mode_array(value: Any) -> list[str] | None:
+    return [_context_relief_mode_field(item) for item in value] if isinstance(value, list) else None
+
+
+_TASK_KINDS = {"background_command", "monitor", "health_check", "main_session", "subagent", "remote"}
+_TASK_STATUSES = {
+    "queued",
+    "running",
+    "backgrounded",
+    "awaiting_input",
+    "reconciling",
+    "degraded",
+    "completed",
+    "failed",
+    "stopped",
+    "idle",
+}
+
+
+def _optional_task_kind(value: Any) -> str | None:
+    return value if value in _TASK_KINDS else None
+
+
+def _optional_task_status(value: Any) -> str | None:
+    return value if value in _TASK_STATUSES else None
+
+
+def _optional_foreground_mode(value: Any) -> str | None:
+    return value if value in {"foreground", "background"} else None
+
+
+def _task_id_field(data: dict[str, Any]) -> str:
+    task_id = _field(data, "task_id", "taskId")
+    return task_id if isinstance(task_id, str) else ""
+
+
+def _task_lifecycle_payload(data: dict[str, Any], *, include_status: bool) -> dict[str, Any]:
+    payload = {
+        "taskId": _task_id_field(data),
+        "kind": _optional_task_kind(_field(data, "kind")),
+        "title": _optional_string(_field(data, "title")),
+        "summary": _optional_string(_field(data, "summary")),
+        "foregroundMode": _optional_foreground_mode(_field(data, "foreground_mode", "foregroundMode")),
+        "taskFamily": _optional_string(_field(data, "task_family", "taskFamily")),
+        "detailStatus": _optional_string(_field(data, "detail_status", "detailStatus")),
+        "attachableSessionId": _optional_string(_field(data, "attachable_session_id", "attachableSessionId")),
+        "retrieveOnly": _optional_boolean(_field(data, "retrieve_only", "retrieveOnly")),
+        "resultSummary": _optional_string(_field(data, "result_summary", "resultSummary")),
+    }
+    if include_status:
+        payload = {**payload, "status": _optional_task_status(_field(data, "status"))}
+    return payload
+
+
+def _task_snapshot_payload(value: Any) -> dict[str, Any]:
+    task = _record_field(value)
+    return {
+        "id": str(_field(task, "id") or ""),
+        "kind": _optional_task_kind(_field(task, "kind")),
+        "status": _optional_task_status(_field(task, "status")),
+        "title": _optional_string(_field(task, "title")),
+        "summary": _optional_string(_field(task, "summary")),
+        "updatedAt": _optional_string(_field(task, "updated_at", "updatedAt")),
+        "sessionId": _optional_string(_field(task, "session_id", "sessionId")),
+        "foregroundMode": _optional_foreground_mode(_field(task, "foreground_mode", "foregroundMode")),
+        "taskFamily": _optional_string(_field(task, "task_family", "taskFamily")),
+        "detailStatus": _optional_string(_field(task, "detail_status", "detailStatus")),
+        "attachableSessionId": _optional_string(_field(task, "attachable_session_id", "attachableSessionId")),
+        "retrieveOnly": _optional_boolean(_field(task, "retrieve_only", "retrieveOnly")),
+        "resultSummary": _optional_string(_field(task, "result_summary", "resultSummary")),
+    }
 
 
 def _collaboration_worker_payload(value: Any) -> dict[str, Any]:

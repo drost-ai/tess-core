@@ -1144,6 +1144,126 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(core.createRuntimeEvent({"event": "turn.cancelling", "data": {"session_id": "s-typed"}})["payload"], {})
         self.assertEqual(core.createRuntimeEvent({"event": "status.cleared", "data": {"session_id": "s-typed"}})["payload"], {})
 
+        provider_failed = core.createRuntimeEvent(
+            {
+                "event": "provider.failed",
+                "createdAt": "t-0p",
+                "data": {
+                    "provider": "openai",
+                    "provider_label": "OpenAI",
+                    "category": "timeout",
+                    "phase": "stream_read",
+                    "message": "timed out",
+                    "retryable": True,
+                    "attempt": 2,
+                    "status": 504,
+                    "code": "gateway_timeout",
+                    "error_type": "TimeoutError",
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(
+            provider_failed["payload"],
+            {
+                "provider": "openai",
+                "providerLabel": "OpenAI",
+                "category": "timeout",
+                "phase": "stream_read",
+                "message": "timed out",
+                "retryable": True,
+                "attempt": 2,
+                "status": 504,
+                "code": "gateway_timeout",
+                "errorType": "TimeoutError",
+            },
+        )
+
+        compaction_completed = core.createRuntimeEvent(
+            {
+                "event": "compaction.completed",
+                "createdAt": "t-0c",
+                "data": {
+                    "generation": 3,
+                    "trigger": "threshold",
+                    "compacted_message_count": 4,
+                    "working_context_token_estimate": 1200,
+                    "verification_verdict": "accept",
+                    "checkpoint_path": "/tmp/checkpoint.json",
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(compaction_completed["payload"]["generation"], 3)
+        self.assertEqual(compaction_completed["payload"]["compactedMessageCount"], 4)
+        self.assertEqual(compaction_completed["payload"]["verificationVerdict"], "accept")
+        self.assertNotIn("ignoredExtra", compaction_completed["payload"])
+
+        context_selected = core.createRuntimeEvent(
+            {
+                "event": "context_relief.selected",
+                "createdAt": "t-0r",
+                "data": {
+                    "mode": "microcompact",
+                    "pressure_level": "high",
+                    "planned_modes": ["microcompact", "bad_mode"],
+                    "reactive_attempt": 1,
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(context_selected["payload"]["mode"], "microcompact")
+        self.assertEqual(context_selected["payload"]["plannedModes"], ["microcompact", "none"])
+
+        task_snapshot = core.createRuntimeEvent(
+            {
+                "event": "task.snapshot",
+                "createdAt": "t-0t",
+                "data": {
+                    "total": 1,
+                    "active": 1,
+                    "backgrounded": 1,
+                    "awaiting_input": 0,
+                    "failed": 0,
+                    "labels": ["Build"],
+                    "tasks": [
+                        {
+                            "id": "task-typed",
+                            "kind": "background_command",
+                            "status": "backgrounded",
+                            "title": "Build",
+                            "session_id": "s-typed",
+                            "foreground_mode": "background",
+                            "retrieve_only": False,
+                            "ignored_extra": "drop me",
+                        }
+                    ],
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(task_snapshot["payload"]["awaitingInput"], 0)
+        self.assertEqual(task_snapshot["payload"]["tasks"][0]["sessionId"], "s-typed")
+        self.assertNotIn("ignoredExtra", task_snapshot["payload"])
+        self.assertNotIn("ignoredExtra", task_snapshot["payload"]["tasks"][0])
+        task_completed = core.createRuntimeEvent({"event": "task.completed", "data": {"task_id": "task-typed", "status": "completed", "summary": "done"}})
+        self.assertNotIn("status", task_completed["payload"])
+
+        daemon_snapshot = core.createRuntimeEvent(
+            {
+                "event": "daemon.snapshot",
+                "data": {
+                    "phase": "running",
+                    "pid": 123,
+                    "socket_path": "/tmp/daemon.sock",
+                    "active_tasks": 2,
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(daemon_snapshot["payload"]["socketPath"], "/tmp/daemon.sock")
+        self.assertNotIn("ignoredExtra", daemon_snapshot["payload"])
+
         self.assertNotIn("status", state)
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))
         self.assertNotIn("status", state)
