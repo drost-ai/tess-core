@@ -1133,6 +1133,31 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["session"]["summary"]["id"], "s-typed")
         self.assertEqual(state["bridge"]["bridgeId"], "bridge-typed")
 
+        user_message = core.createRuntimeEvent({"event": "message.user", "data": {"text": "hello", "session_id": "s-typed", "ignored_extra": "drop me"}})
+        self.assertEqual(user_message["payload"], {"text": "hello"})
+        assistant_partial = core.createRuntimeEvent(
+            {
+                "event": "message.assistant.partial",
+                "data": {"text": "hello", "text_delta": " world", "model": "ignored", "ignored_extra": "drop me"},
+            }
+        )
+        self.assertEqual(assistant_partial["payload"], {"text": "hello", "textDelta": " world"})
+        transcript_repaired = core.createRuntimeEvent(
+            {
+                "event": "transcript.repaired",
+                "data": {
+                    "truncated_from": 4,
+                    "removed_count": 2,
+                    "missing_tool_use_ids": ["tool-1", 2],
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(
+            transcript_repaired["payload"],
+            {"truncatedFrom": 4, "removedCount": 2, "missingToolUseIds": ["tool-1", "2"]},
+        )
+
         turn_started = core.createRuntimeEvent(
             {
                 "event": "turn.started",
@@ -1263,6 +1288,14 @@ class AgentCoreTests(unittest.TestCase):
         )
         self.assertEqual(daemon_snapshot["payload"]["socketPath"], "/tmp/daemon.sock")
         self.assertNotIn("ignoredExtra", daemon_snapshot["payload"])
+
+        budget = core.createRuntimeEvent(
+            {
+                "event": "budget.exceeded",
+                "data": {"estimated_cost_usd": 1.25, "max_budget_usd": 1.0, "model": "gpt-5.4", "ignored_extra": "drop me"},
+            }
+        )
+        self.assertEqual(budget["payload"], {"estimatedCostUsd": 1.25, "maxBudgetUsd": 1.0, "model": "gpt-5.4"})
 
         self.assertNotIn("status", state)
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))

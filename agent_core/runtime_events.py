@@ -95,6 +95,24 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "bridgeId": _field(data, "bridge_id", "bridgeId"),
             "updatedAt": _field(data, "updated_at", "updatedAt"),
         }
+    if event == "message.user":
+        return "message.user", {"text": _field(data, "text") if isinstance(_field(data, "text"), str) else ""}
+    if event == "message.assistant":
+        return "message.assistant", {
+            "text": _field(data, "text") if isinstance(_field(data, "text"), str) else "",
+            "model": _optional_string(_field(data, "model")),
+        }
+    if event == "message.assistant.partial":
+        return "message.assistant.partial", {
+            "text": _optional_string(_field(data, "text")),
+            "textDelta": _optional_string(_field(data, "text_delta", "textDelta")),
+        }
+    if event == "transcript.repaired":
+        return "transcript.repaired", {
+            "truncatedFrom": _optional_number(_field(data, "truncated_from", "truncatedFrom")),
+            "removedCount": _optional_number(_field(data, "removed_count", "removedCount")),
+            "missingToolUseIds": _string_array(_field(data, "missing_tool_use_ids", "missingToolUseIds")),
+        }
     if event == "turn.started":
         return "turn.started", {
             "prompt": _field(data, "prompt") or "",
@@ -380,7 +398,11 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
     if event.startswith("subagent."):
         return "subagent.event", {"eventName": event}
     if event == "budget.exceeded":
-        return "budget.exceeded", payload
+        return "budget.exceeded", {
+            "estimatedCostUsd": _optional_number(_field(data, "estimated_cost_usd", "estimatedCostUsd")),
+            "maxBudgetUsd": _optional_number(_field(data, "max_budget_usd", "maxBudgetUsd")),
+            "model": _optional_string(_field(data, "model")),
+        }
     return "runtime.unknown", {"eventName": event}
 
 
