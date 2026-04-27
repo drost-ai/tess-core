@@ -39,10 +39,6 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "stopReason": result.get("stopReason"),
                 "lastUpdatedAt": completed_at,
                 "lastSummary": summary,
-                "resultSummary": summary,
-                "latestResultAt": completed_at,
-                "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")),
-                "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")),
             }
         )
         _output(
@@ -87,9 +83,6 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "error": message,
                 "lastUpdatedAt": completed_at,
                 "lastSummary": message,
-                "resultSummary": message,
-                "latestResultAt": completed_at,
-                "completionReason": "worker_failed",
             }
         )
         _output(

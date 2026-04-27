@@ -1046,7 +1046,7 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
 def _exit_worktree_tool(controller: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         metadata = context["session"].setdefault("metadata", {})
-        original = metadata.get("originalCwd") or context["config"].get("cwd") or context["session"]["cwd"]
+        original = metadata.get("originalCwd")
         await maybe_await(context.get("updateCwd", lambda next_cwd: context["session"].__setitem__("cwd", next_cwd))(original))
         context["session"]["cwd"] = original
         context["cwd"] = original

@@ -5289,7 +5289,11 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(child_record["status"], "completed")
             self.assertNotIn("providerProfileName", child_record)
             self.assertEqual(child_record["teamName"], "alpha")
-            self.assertEqual(child_record["resultSummary"], "child done")
+            self.assertEqual(child_record["lastSummary"], "child done")
+            self.assertNotIn("resultSummary", child_record)
+            self.assertNotIn("latestResultAt", child_record)
+            self.assertNotIn("completionReason", child_record)
+            self.assertNotIn("waitingReason", child_record)
             saved_child = run(core.loadSession(payload["session_id"]))
             self.assertEqual(saved_child["metadata"]["agentId"], payload["agent_id"])
             self.assertTrue(any(event == "subagent.started" for event, _ in events))
@@ -5298,6 +5302,35 @@ class AgentCoreTests(unittest.TestCase):
             unknown = run(agent.handler({"description": "Nope", "prompt": "x", "subagent_type": "missing"}, {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
             self.assertTrue(unknown["isError"])
             self.assertIn("Unknown subagent type", unknown["content"])
+
+            async def fail_subagent(_args, _context):
+                raise RuntimeError("child exploded")
+
+            failed_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
+            failed_result = run(
+                agent.handler(
+                    {"description": "Fail child", "prompt": "break"},
+                    {
+                        "session": failed_parent,
+                        "config": config,
+                        "interactive": False,
+                        "askQuestion": lambda *_: "",
+                        "outputJson": lambda *_: None,
+                        "cwd": str(workspace),
+                        "persistSession": lambda: None,
+                        "runSubagent": fail_subagent,
+                    },
+                )
+            )
+            failed_payload = json.loads(failed_result["content"])
+            self.assertTrue(failed_result["isError"])
+            failed_record = run(core.loadChildAgent(failed_payload["agent_id"]))
+            self.assertEqual(failed_record["status"], "failed")
+            self.assertEqual(failed_record["error"], "child exploded")
+            self.assertEqual(failed_record["lastSummary"], "child exploded")
+            self.assertNotIn("resultSummary", failed_record)
+            self.assertNotIn("latestResultAt", failed_record)
+            self.assertNotIn("completionReason", failed_record)
 
             auto_config = {**config, "permissionMode": "auto"}
             auto_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
@@ -5714,6 +5747,23 @@ class AgentCoreTests(unittest.TestCase):
             bare_exited_payload = json.loads(bare_exited["content"])
             self.assertEqual(bare_exited_payload, {"cwd": str(workspace)})
             self.assertNotIn("meta", bare_exited)
+
+            missing_original_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            missing_original_session["metadata"].pop("originalCwd", None)
+            missing_updates = []
+            missing_context = {
+                "session": missing_original_session,
+                "config": config,
+                "interactive": False,
+                "askQuestion": lambda *_: "",
+                "outputJson": lambda *_: None,
+                "cwd": str(workspace),
+                "updateCwd": lambda next_cwd: missing_updates.append(next_cwd),
+            }
+            missing_exit = run(bare_exit.handler({}, missing_context))
+            self.assertEqual(json.loads(missing_exit["content"]), {})
+            self.assertEqual(missing_updates, [None])
+            self.assertIsNone(missing_original_session["cwd"])
         finally:
             self.restore_home(root, previous)
 

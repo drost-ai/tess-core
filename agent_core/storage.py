@@ -566,6 +566,14 @@ async def _load_by_path(path: str) -> dict[str, Any] | None:
     return await readJsonFile(path, None)
 
 
+def _omit_none_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _omit_none_fields(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_omit_none_fields(item) for item in value]
+    return value
+
+
 async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
     try:
         names = [name for name in os.listdir(directory) if name.endswith(".json")]
@@ -580,7 +588,7 @@ async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
 
 
 async def saveChildAgent(record: dict[str, Any]) -> None:
-    await _save_by_path(childAgentPath(record["agentId"]), record)
+    await _save_by_path(childAgentPath(record["agentId"]), _omit_none_fields(record))
 
 
 async def loadChildAgent(agentId: str) -> dict[str, Any] | None:
