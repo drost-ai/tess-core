@@ -73,9 +73,11 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
     if typ == "session.activated":
         summary = data.get("session") or data
         session_summary = summarizeSessionRecord(summary)
+        session_id = event.get("sessionId") or session_summary.get("id") or _field(data, "sessionId", "session_id") or ""
+        session_summary["id"] = session_id
         remote_session_id = _field(summary, "remoteSessionId", "remote_session_id")
         workspace_name = _field(summary, "workspaceName", "workspace_name")
-        next_state["session"] = {"activeSessionId": session_summary.get("id") or _field(data, "sessionId", "session_id"), "summary": session_summary, "lastActivatedAt": timestamp}
+        next_state["session"] = {"activeSessionId": session_id, "summary": session_summary, "lastActivatedAt": timestamp}
         next_state["turn"] = {
             **next_state.get("turn", {}),
             "status": "idle",

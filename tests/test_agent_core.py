@@ -1095,6 +1095,55 @@ class AgentCoreTests(unittest.TestCase):
 
     def test_runtime_state_matches_typed_event_projection_edges(self):
         state = core.createInitialRuntimeState()
+        activated = core.createRuntimeEvent(
+            {
+                "event": "session.activated",
+                "createdAt": "t-1",
+                "data": {
+                    "session_id": "s-typed",
+                    "cwd": "/tmp/typed",
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "permission_mode": "acceptEdits",
+                    "workspace_name": "typed workspace",
+                    "remote_session_id": "remote-typed",
+                    "bridge_id": "bridge-typed",
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(activated["sessionId"], "s-typed")
+        self.assertEqual(
+            activated["payload"],
+            {
+                "cwd": "/tmp/typed",
+                "provider": "openai",
+                "model": "gpt-5.4",
+                "permissionMode": "acceptEdits",
+                "workspaceName": "typed workspace",
+                "gitRoot": None,
+                "gitBranch": None,
+                "remoteSessionId": "remote-typed",
+                "bridgeId": "bridge-typed",
+                "updatedAt": None,
+            },
+        )
+        state = core.reduceRuntimeState(state, activated)
+        self.assertEqual(state["session"]["activeSessionId"], "s-typed")
+        self.assertEqual(state["session"]["summary"]["id"], "s-typed")
+        self.assertEqual(state["bridge"]["bridgeId"], "bridge-typed")
+
+        turn_started = core.createRuntimeEvent(
+            {
+                "event": "turn.started",
+                "createdAt": "t-0",
+                "data": {"session_id": "s-typed", "prompt": "go", "model": "gpt-5.4", "agent_name": "main", "ignored_extra": "drop me"},
+            }
+        )
+        self.assertEqual(turn_started["payload"], {"prompt": "go", "model": "gpt-5.4", "agentName": "main"})
+        self.assertEqual(core.createRuntimeEvent({"event": "turn.cancelling", "data": {"session_id": "s-typed"}})["payload"], {})
+        self.assertEqual(core.createRuntimeEvent({"event": "status.cleared", "data": {"session_id": "s-typed"}})["payload"], {})
+
         self.assertNotIn("status", state)
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))
         self.assertNotIn("status", state)

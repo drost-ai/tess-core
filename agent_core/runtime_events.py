@@ -82,6 +82,45 @@ def createRuntimeEvent(args: dict[str, Any] | None = None, **kwargs: Any) -> dic
 
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     payload = _camelize_record(data)
+    if event == "session.activated":
+        return "session.activated", {
+            "cwd": _field(data, "cwd"),
+            "provider": _field(data, "provider"),
+            "model": _field(data, "model"),
+            "permissionMode": _field(data, "permission_mode", "permissionMode") or "default",
+            "workspaceName": _field(data, "workspace_name", "workspaceName"),
+            "gitRoot": _field(data, "git_root", "gitRoot"),
+            "gitBranch": _field(data, "git_branch", "gitBranch"),
+            "remoteSessionId": _field(data, "remote_session_id", "remoteSessionId"),
+            "bridgeId": _field(data, "bridge_id", "bridgeId"),
+            "updatedAt": _field(data, "updated_at", "updatedAt"),
+        }
+    if event == "turn.started":
+        return "turn.started", {
+            "prompt": _field(data, "prompt") or "",
+            "model": _field(data, "model"),
+            "agentName": _field(data, "agent_name", "agentName"),
+        }
+    if event == "turn.cancelling":
+        return "turn.cancelling", {}
+    if event == "turn.completed":
+        return "turn.completed", {
+            "stopReason": _field(data, "stop_reason", "stopReason"),
+            "message": _field(data, "message"),
+            "model": _field(data, "model"),
+        }
+    if event == "turn.failed":
+        return "turn.failed", {"message": _field(data, "message") or ""}
+    if event == "turn.cancelled":
+        return "turn.cancelled", {
+            "model": _field(data, "model"),
+            "partialText": _field(data, "partial_text", "partialText"),
+            "stopReason": _field(data, "stop_reason", "stopReason"),
+        }
+    if event == "status.updated":
+        return "status.updated", {"message": _field(data, "message") or "", "detail": _field(data, "detail")}
+    if event == "status.cleared":
+        return "status.cleared", {}
     if event == "bridge.message":
         return "bridge.message", {
             "bridgeId": _field(data, "bridge_id", "bridgeId"),
