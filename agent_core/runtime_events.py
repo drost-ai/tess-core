@@ -63,7 +63,8 @@ KNOWN_RUNTIME_EVENTS = {
 def createRuntimeEvent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     legacy_event = args.get("event") or args.get("type") or args.get("kind")
-    data = args.get("data") or args.get("payload") or {}
+    raw_data = args["data"] if "data" in args and args.get("data") is not None else args.get("payload")
+    data = raw_data if isinstance(raw_data, dict) else {}
     timestamp = args.get("timestamp") or args.get("createdAt") or now_iso()
     session_id = _field(data, "session_id", "sessionId") or args.get("defaultSessionId")
     kind, payload = _typed_payload(str(legacy_event or ""), data)
@@ -89,12 +90,12 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "provider": _provider_field(_field(data, "provider")),
             "model": _string_field(_field(data, "model")),
             "permissionMode": _permission_mode_field(_field(data, "permission_mode", "permissionMode")),
-            "workspaceName": _field(data, "workspace_name", "workspaceName"),
-            "gitRoot": _field(data, "git_root", "gitRoot"),
-            "gitBranch": _field(data, "git_branch", "gitBranch"),
-            "remoteSessionId": _field(data, "remote_session_id", "remoteSessionId"),
-            "bridgeId": _field(data, "bridge_id", "bridgeId"),
-            "updatedAt": _field(data, "updated_at", "updatedAt"),
+            "workspaceName": _optional_string(_field(data, "workspace_name", "workspaceName")),
+            "gitRoot": _optional_string(_field(data, "git_root", "gitRoot")),
+            "gitBranch": _optional_string(_field(data, "git_branch", "gitBranch")),
+            "remoteSessionId": _optional_string(_field(data, "remote_session_id", "remoteSessionId")),
+            "bridgeId": _optional_string(_field(data, "bridge_id", "bridgeId")),
+            "updatedAt": _optional_string(_field(data, "updated_at", "updatedAt")),
         }
     if event == "message.user":
         return "message.user", {"text": _string_field(_field(data, "text"))}
@@ -117,27 +118,27 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
     if event == "turn.started":
         return "turn.started", {
             "prompt": _string_field(_field(data, "prompt")),
-            "model": _field(data, "model"),
-            "agentName": _field(data, "agent_name", "agentName"),
+            "model": _optional_string(_field(data, "model")),
+            "agentName": _optional_string(_field(data, "agent_name", "agentName")),
         }
     if event == "turn.cancelling":
         return "turn.cancelling", {}
     if event == "turn.completed":
         return "turn.completed", {
-            "stopReason": _field(data, "stop_reason", "stopReason"),
-            "message": _field(data, "message"),
-            "model": _field(data, "model"),
+            "stopReason": _optional_string(_field(data, "stop_reason", "stopReason")),
+            "message": _optional_string(_field(data, "message")),
+            "model": _optional_string(_field(data, "model")),
         }
     if event == "turn.failed":
         return "turn.failed", {"message": _string_field(_field(data, "message"))}
     if event == "turn.cancelled":
         return "turn.cancelled", {
-            "model": _field(data, "model"),
-            "partialText": _field(data, "partial_text", "partialText"),
-            "stopReason": _field(data, "stop_reason", "stopReason"),
+            "model": _optional_string(_field(data, "model")),
+            "partialText": _optional_string(_field(data, "partial_text", "partialText")),
+            "stopReason": _optional_string(_field(data, "stop_reason", "stopReason")),
         }
     if event == "status.updated":
-        return "status.updated", {"message": _string_field(_field(data, "message")), "detail": _field(data, "detail")}
+        return "status.updated", {"message": _string_field(_field(data, "message")), "detail": _optional_string(_field(data, "detail"))}
     if event == "status.cleared":
         return "status.cleared", {}
     if event == "provider.retrying":

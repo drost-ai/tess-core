@@ -33,7 +33,7 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
             return
         tick_in_flight = True
         try:
-            records = await _project_session_task_records(session_ref["id"])
+            records = await _project_session_task_records(session_ref["id"], session_ref)
             for record in records:
                 await saveTaskRecord(record)
             next_map = {record["id"]: record for record in records if record.get("id")}

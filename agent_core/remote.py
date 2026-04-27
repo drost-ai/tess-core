@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import math
 import sys
 import threading
 import uuid
@@ -281,10 +282,7 @@ async def promptToPickRemoteSession(
     answer = input("choice> ").strip()
     if not answer:
         return None
-    try:
-        numeric = int(answer)
-    except ValueError:
-        numeric = None
+    numeric = _parse_integer_selection(answer)
     if numeric is not None and 1 <= numeric <= len(remoteSessions):
         return remoteSessions[numeric - 1]
     matches = findMatchingRemoteSessions(remoteSessions, answer)
@@ -304,6 +302,16 @@ async def promptToPickRemoteSession(
 
 def _truncate_remote_summary(value: str, limit: int = 96) -> str:
     return value if len(value) <= limit else f"{value[:limit - 1]}…"
+
+
+def _parse_integer_selection(value: str) -> int | None:
+    try:
+        numeric = float(value)
+    except ValueError:
+        return None
+    if not math.isfinite(numeric) or not numeric.is_integer():
+        return None
+    return int(numeric)
 
 
 def _build_bridge_event_summary(event: str, data: dict[str, Any]) -> str:

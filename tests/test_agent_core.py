@@ -1880,16 +1880,20 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["session"]["activeSessionId"], "s-typed")
         self.assertEqual(state["session"]["summary"]["id"], "s-typed")
         self.assertEqual(state["bridge"]["bridgeId"], "bridge-typed")
+        empty_data_precedence = core.createRuntimeEvent({"event": "message.user", "data": {}, "payload": {"text": "from payload"}})
+        self.assertEqual(empty_data_precedence["payload"], {"text": ""})
         normalized_activation = core.createRuntimeEvent(
             {
                 "event": "session.activated",
-                "data": {"session_id": "s-normalized", "cwd": 123, "provider": "unknown", "model": None, "permission_mode": "bad"},
+                "data": {"session_id": "s-normalized", "cwd": 123, "provider": "unknown", "model": None, "permission_mode": "bad", "workspace_name": "", "bridge_id": ""},
             }
         )
         self.assertEqual(normalized_activation["payload"]["cwd"], "")
         self.assertEqual(normalized_activation["payload"]["provider"], "openai")
         self.assertEqual(normalized_activation["payload"]["model"], "")
         self.assertEqual(normalized_activation["payload"]["permissionMode"], "default")
+        self.assertIsNone(normalized_activation["payload"]["workspaceName"])
+        self.assertIsNone(normalized_activation["payload"]["bridgeId"])
 
         user_message = core.createRuntimeEvent({"event": "message.user", "data": {"text": "hello", "session_id": "s-typed", "ignored_extra": "drop me"}})
         self.assertEqual(user_message["payload"], {"text": "hello"})
@@ -1925,7 +1929,12 @@ class AgentCoreTests(unittest.TestCase):
             }
         )
         self.assertEqual(turn_started["payload"], {"prompt": "go", "model": "gpt-5.4", "agentName": "main"})
+        blank_turn_fields = core.createRuntimeEvent(
+            {"event": "turn.completed", "data": {"stop_reason": "", "message": "", "model": ""}}
+        )
+        self.assertEqual(blank_turn_fields["payload"], {"stopReason": None, "message": None, "model": None})
         self.assertEqual(core.createRuntimeEvent({"event": "turn.cancelling", "data": {"session_id": "s-typed"}})["payload"], {})
+        self.assertEqual(core.createRuntimeEvent({"event": "status.updated", "data": {"message": "ready", "detail": ""}})["payload"], {"message": "ready", "detail": None})
         self.assertEqual(core.createRuntimeEvent({"event": "status.cleared", "data": {"session_id": "s-typed"}})["payload"], {})
 
         provider_failed = core.createRuntimeEvent(
@@ -2788,6 +2797,13 @@ class AgentCoreTests(unittest.TestCase):
             ):
                 selected_by_query = run(core.resolveTeleportSession({"teleport": "remote", "options": {}}))
             self.assertEqual(selected_by_query["remote"]["id"], beta["id"])
+
+            with mock.patch.object(sys, "stdin", TtyBuffer()), mock.patch.object(sys, "stdout", TtyBuffer()), mock.patch(
+                "builtins.input",
+                return_value="1.0",
+            ):
+                selected_by_float_index = run(core.resolveTeleportSession({"teleport": True, "options": {}}))
+            self.assertEqual(selected_by_float_index["remote"]["id"], beta["id"])
 
             with self.assertRaisesRegex(RuntimeError, 'Multiple remote sessions matched "remote"'):
                 run(core.resolveTeleportSession({"teleport": "remote", "options": {"print": True}}))
@@ -4469,6 +4485,39 @@ class AgentCoreTests(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.assertTrue(any(event == "task.completed" and data.get("task_id") == task_id for event, data in events))
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            self.restore_home(root, previous)
+
+    def test_task_runtime_projects_live_session_and_ignores_stale_records(self):
+        root, home, workspace, previous = self.temp_context()
+        runtime = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            run(core.saveTaskRecord({"id": "stale-runtime-record", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "stale cache record", "updatedAt": "2026-01-01T00:00:09Z"}))
+
+            task_id = "live-main-runtime"
+            output_file = core.taskOutputPath(task_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("", encoding="utf-8")
+            session["metadata"]["taskIds"] = [task_id]
+            session["updatedAt"] = "2026-01-01T00:00:10Z"
+            session["messages"].append({"role": "user", "content": "Continue with Slice 8."})
+            session["messages"].append({"role": "assistant", "content": "Live in-memory session state is the source of truth."})
+            run(core.writeTaskMeta(task_id, {"type": "main_session", "taskId": task_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": output_file, "attachableSessionId": session["id"]}))
+
+            runtime = run(core.createTaskRuntime({"session": session, "config": config, "emit": lambda *_: None, "startTicker": False}))
+            snapshot = runtime["getSnapshot"]()
+            ids = [task["id"] for task in snapshot["tasks"]]
+            self.assertIn(task_id, ids)
+            self.assertNotIn("stale-runtime-record", ids)
+            task = next(item for item in snapshot["tasks"] if item["id"] == task_id)
+            self.assertEqual(task["summary"], "This session is continuing in the background. Latest assistant state: Live in-memory session state is the source of truth.")
+            persisted = run(core.loadSession(session["id"]))
+            self.assertEqual(persisted["messages"][-1]["content"], "Live in-memory session state is the source of truth.")
         finally:
             if runtime:
                 run(runtime["close"]())

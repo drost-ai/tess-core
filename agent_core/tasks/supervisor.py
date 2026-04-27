@@ -18,7 +18,6 @@ from ..storage import (
     listChildAgents,
     listHealthCheckTasks,
     listSessionMonitors,
-    listSessionTaskRecords,
     loadBridge,
     loadChildAgent,
     loadHealthCheckTask,
@@ -732,14 +731,10 @@ async def _reconcile_persisted_tasks(
             await _mark_lost_process(task_id, record, meta, supervisor_id, emit)
 
 
-async def _project_session_task_records(session_id: str) -> list[dict[str, Any]]:
-    session = await loadSession(session_id) or {"id": session_id, "metadata": {}}
+async def _project_session_task_records(session_id: str, session: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    session = session or await loadSession(session_id) or {"id": session_id, "metadata": {}}
     metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
     records_by_id: dict[str, dict[str, Any]] = {}
-
-    for record in await listSessionTaskRecords(session_id):
-        if record.get("id"):
-            records_by_id[str(record["id"])] = record
 
     monitors = await listSessionMonitors(session_id)
     task_ids = list(metadata.get("taskIds") or [])
