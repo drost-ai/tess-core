@@ -833,7 +833,6 @@ async def _mark_recovered_process(
     next_meta = {
         **meta,
         "status": "reconciling",
-        "detailStatus": "recovered_after_daemon_restart",
         "updatedAt": now,
         "owner": "daemon",
         "supervisorId": supervisor_id,
@@ -885,8 +884,9 @@ async def _mark_lost_process(
     )
     next_meta = {
         **meta,
+        "type": record.get("kind"),
+        "taskId": task_id,
         "status": "failed",
-        "detailStatus": "failed",
         "error": summary,
         "updatedAt": now,
         "finishedAt": now,
@@ -900,7 +900,6 @@ async def _mark_lost_process(
         "summary": summary,
         "updatedAt": now,
         "completedAt": now,
-        "detailStatus": "failed",
         "owner": "daemon",
         "supervisorId": supervisor_id,
     }

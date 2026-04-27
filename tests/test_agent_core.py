@@ -4494,7 +4494,7 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(record["metadata"]["recovery_state"], "recovered_after_daemon_restart")
             next_meta = run(core.readTaskMeta(task_id))
             self.assertEqual(next_meta["status"], "reconciling")
-            self.assertEqual(next_meta["detailStatus"], "recovered_after_daemon_restart")
+            self.assertEqual(next_meta["detailStatus"], "running")
         finally:
             if proc and proc.poll() is None:
                 proc.terminate()
@@ -4502,6 +4502,73 @@ class AgentCoreTests(unittest.TestCase):
                     proc.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_reconcile_marks_lost_process_without_overwriting_detail_status(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            task_id = "task-lost-after-restart"
+            created_at = "2026-01-01T00:00:00Z"
+            output_file = core.taskOutputPath(task_id)
+            meta = {
+                "type": "background_command",
+                "taskId": task_id,
+                "id": task_id,
+                "sessionId": "session-lost",
+                "command": "sleep",
+                "cwd": str(workspace),
+                "startedAt": created_at,
+                "updatedAt": created_at,
+                "status": "running",
+                "outputFile": output_file,
+                "detailStatus": "launching",
+                "owner": "daemon",
+            }
+            run(core.writeTaskMeta(task_id, meta))
+            run(
+                core.saveTaskRecord(
+                    {
+                        "id": task_id,
+                        "sessionId": "session-lost",
+                        "sourceId": task_id,
+                        "kind": "background_command",
+                        "status": "running",
+                        "title": "sleep",
+                        "summary": "Background command is running.",
+                        "createdAt": created_at,
+                        "updatedAt": created_at,
+                        "startedAt": created_at,
+                        "cwd": str(workspace),
+                        "command": "sleep",
+                        "outputFile": output_file,
+                        "foregroundMode": "background",
+                        "taskFamily": "shell",
+                        "detailStatus": "launching",
+                        "retrieveOnly": True,
+                        "owner": "daemon",
+                    }
+                )
+            )
+            events = []
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            record = run(supervisor["inspectTask"](task_id))
+            self.assertEqual(record["status"], "failed")
+            self.assertEqual(record["detailStatus"], "launching")
+            self.assertEqual(record["summary"], "Daemon restarted while this task was active and the process is no longer running.")
+            next_meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(next_meta["status"], "failed")
+            self.assertEqual(next_meta["type"], "background_command")
+            self.assertEqual(next_meta["taskId"], task_id)
+            self.assertEqual(next_meta["detailStatus"], "launching")
+            failed_event = next(event for event in events if event["event"] == "task.failed" and event["data"]["task_id"] == task_id)
+            self.assertEqual(failed_event["data"]["detail_status"], "launching")
+            self.assertNotIn("updated_at", failed_event["data"])
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
