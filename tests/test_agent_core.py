@@ -671,6 +671,83 @@ class AgentCoreTests(unittest.TestCase):
         run(testing.sendOpenAiResponsesRequest({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "mode": "responses", "request": {"model": "m", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": response_factory}))
         self.assertEqual(captured["base"], "http://127.0.0.1:8000/v1")
 
+    def test_openai_responses_streaming_tool_edges(self):
+        emitted = []
+
+        async def create_edges(_params):
+            return AsyncChunks(
+                [
+                    {"type": "response.output_text.delta", "delta": "Plan"},
+                    {"type": "response.function_call_arguments.done", "item_id": "item_1", "name": "Read", "arguments": '{"path":"a.txt"}'},
+                    {"type": "response.output_item.added", "item": {"type": "function_call", "id": "item_1", "call_id": "call_1"}},
+                    {"type": "response.output_item.done", "item": {"type": "function_call", "call_id": "call_2", "name": "Write", "arguments": "not-json"}},
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "output": [
+                                {"type": "message", "content": [{"type": "output_text", "text": "Plan done"}]},
+                                {"type": "function_call", "call_id": "call_1", "name": "Read", "arguments": '{"path":"a.txt"}'},
+                                {"type": "function_call", "call_id": "call_3", "name": "List", "arguments": '{"dir":"."}'},
+                            ],
+                            "usage": {"input_tokens": 12, "output_tokens": 4},
+                        },
+                    },
+                ]
+            )
+
+        response = run(
+            testing.sendOpenAiResponsesRequest(
+                {
+                    "token": "test",
+                    "mode": "responses",
+                    "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Use tools"}], "tools": []},
+                    "runtime": {"includePartialMessages": True, "streamProviderMessages": True, "emitEvent": lambda event, data: emitted.append((event, data))},
+                    "maxAttempts": 1,
+                    "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_edges)),
+                }
+            )
+        )
+        self.assertEqual(response["content"][0], {"type": "text", "text": "Plan"})
+        self.assertEqual(response["content"][1], {"type": "tool_use", "id": "call_1", "name": "Read", "input": {"path": "a.txt"}})
+        self.assertEqual(response["content"][2], {"type": "tool_use", "id": "call_2", "name": "Write", "input": {}})
+        self.assertEqual(response["content"][3], {"type": "text", "text": " done"})
+        self.assertEqual(response["content"][4], {"type": "tool_use", "id": "call_3", "name": "List", "input": {"dir": "."}})
+        self.assertEqual([block["id"] for block in response["content"] if block["type"] == "tool_use"].count("call_1"), 1)
+        self.assertEqual(response["usage"], {"input_tokens": 12, "output_tokens": 4})
+        self.assertEqual(response["stopReason"], "tool_calls")
+        self.assertTrue(any(event == "message.assistant.partial" and data["text_delta"] == "Plan" for event, data in emitted))
+        self.assertTrue(any(event == "provider.stream_event" and data["stream_event"] == "response.completed" for event, data in emitted))
+
+        attempts = {"count": 0}
+
+        async def create_partial_failure(_params):
+            attempts["count"] += 1
+            return AsyncChunks(
+                [
+                    {"type": "response.output_text.delta", "delta": "partial"},
+                    {"type": "response.failed", "response": {"error": {"code": "server_error", "message": "stream failed"}}},
+                ]
+            )
+
+        with self.assertRaises(core.ProviderRequestError) as ctx:
+            run(
+                testing.sendOpenAiResponsesRequest(
+                    {
+                        "token": "test",
+                        "mode": "responses",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {},
+                        "maxAttempts": 2,
+                        "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_partial_failure)),
+                    }
+                )
+            )
+        self.assertEqual(attempts["count"], 1)
+        self.assertEqual(ctx.exception.record["category"], "server")
+        self.assertTrue(ctx.exception.record["hadAssistantOutput"])
+        self.assertTrue(ctx.exception.record["retryable"])
+        self.assertEqual(ctx.exception.record["streamEventType"], "response.failed")
+
     def test_openai_retry_events_for_responses_and_chat(self):
         original_delay = openai_module.providerRetryDelayMs
         openai_module.providerRetryDelayMs = lambda _attempt: 0
