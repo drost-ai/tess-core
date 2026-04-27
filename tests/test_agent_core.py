@@ -4361,12 +4361,17 @@ class AgentCoreTests(unittest.TestCase):
             task_id = started["taskId"]
             record = run(supervisor["inspectTask"](task_id))
             self.assertEqual(record["status"], "backgrounded")
+            self.assertEqual(record["summary"], "Background command launched by daemon.")
+            self.assertEqual(record["detailStatus"], "launching")
             self.assertEqual(record["taskFamily"], "shell")
             self.assertTrue(record["retrieveOnly"])
             persisted = run(core.loadSession(session["id"]))
             self.assertIn(task_id, persisted["metadata"]["taskIds"])
             start_event = next(event for event in events if event["event"] == "task.updated" and event["data"]["task_id"] == task_id)
             self.assertEqual(start_event["data"]["status"], "backgrounded")
+            self.assertEqual(start_event["data"]["summary"], "Background command launched by daemon.")
+            self.assertEqual(start_event["data"]["detail_status"], "launching")
+            self.assertNotIn("updated_at", start_event["data"])
         finally:
             if supervisor:
                 run(supervisor["close"]())

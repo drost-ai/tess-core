@@ -81,12 +81,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "title": title,
             "description": title,
             "pid": proc.pid,
-            "detailStatus": "running",
+            "detailStatus": "launching",
             "owner": "daemon",
             "supervisorId": supervisor_id,
         }
         await writeTaskMeta(task_id, meta)
-        record = _build_task_record(meta, "Background command is running.")
+        record = _build_task_record(meta, "Background command launched by daemon.")
         await saveTaskRecord(record)
         session = await loadSession(session_id)
         if session:
@@ -1574,7 +1574,6 @@ def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:
         "attachable_session_id": record.get("attachableSessionId"),
         "retrieve_only": record.get("retrieveOnly"),
         "result_summary": record.get("resultSummary"),
-        "updated_at": record.get("updatedAt"),
     }
 
 
