@@ -391,20 +391,6 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             *next_state.get("collaboration", {}).get("recentAssistantUpdates", []),
         ]
         next_state["collaboration"] = {**next_state.get("collaboration", {}), "recentAssistantUpdates": updates[:10]}
-    elif typ in ("subagent.status_changed", "monitor.status_changed", "remote.status_changed", "bridge.status_changed", "subagent.event", "mcp.event", "platform.event"):
-        collab = copy.deepcopy(next_state.get("collaboration") or {})
-        events = [{"type": typ, "data": data, "updatedAt": timestamp}, *collab.get("recentEvents", [])]
-        collab["recentEvents"] = events[:12]
-        if _field(data, "status"):
-            collab["lastStatus"] = {
-                "kind": _field(data, "kind") or typ.split(".")[0],
-                "id": _field(data, "id", "agent_id", "monitor_id", "remote_session_id", "bridge_id"),
-                "status": _field(data, "status"),
-                "label": _field(data, "label"),
-                "summary": _field(data, "summary"),
-                "updatedAt": timestamp,
-            }
-        next_state["collaboration"] = collab
     elif typ == "bridge.message":
         bridge_id = _field(data, "bridgeId", "bridge_id") or next_state.get("bridge", {}).get("bridgeId")
         remote_session_id = _field(data, "remoteSessionId", "remote_session_id") or next_state.get("bridge", {}).get("remoteSessionId")

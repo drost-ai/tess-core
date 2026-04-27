@@ -1153,6 +1153,29 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(bridge_message["kind"], "bridge.message")
         self.assertEqual(bridge_message["payload"], {"bridgeId": "bridge-1", "remoteSessionId": "remote-1", "text": "hello", "source": "remote"})
 
+        state = core.reduceRuntimeState(
+            state,
+            core.createRuntimeEvent(
+                {
+                    "event": "subagent.status_changed",
+                    "createdAt": "t8",
+                    "data": {"agent_id": "agent-1", "status": "running", "label": "Delegate"},
+                }
+            ),
+        )
+        state = core.reduceRuntimeState(
+            state,
+            core.createRuntimeEvent(
+                {
+                    "event": "monitor.status_changed",
+                    "createdAt": "t9",
+                    "data": {"monitor_id": "monitor-1", "status": "active"},
+                }
+            ),
+        )
+        self.assertNotIn("recentEvents", state["collaboration"])
+        self.assertNotIn("lastStatus", state["collaboration"])
+
     def test_bootstrap_runtime_exposes_typed_event_and_turn_lifecycle_surface(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -1525,7 +1548,8 @@ class AgentCoreTests(unittest.TestCase):
                 state = core.reduceRuntimeState(state, {"type": event, "createdAt": "2026-01-01T00:00:02Z", "data": data})
             self.assertEqual(state["collaboration"]["backgroundCount"], 2)
             self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
-            self.assertTrue(state["collaboration"]["recentEvents"])
+            self.assertNotIn("recentEvents", state["collaboration"])
+            self.assertNotIn("lastStatus", state["collaboration"])
 
             boot = run(core.bootstrapRuntime({"session": session, "config": config}))
             self.assertTrue(boot["collaborationRuntime"])
