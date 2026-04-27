@@ -3171,6 +3171,8 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("tasks", names)
             self.assertIn("theme", names)
             self.assertIn("hello", names)
+            self.assertNotIn("transcript", names)
+            self.assertEqual(next(command for command in commands if command["name"] == "daemon")["usage"], "/daemon [restart]")
 
             help_result = run(core.handleSlashCommand({"command": "/help", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))
             self.assertEqual(help_result["outcome"], "handled")
@@ -3179,6 +3181,7 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("/tasks retry ID", help_result["message"])
             self.assertIn("/memory append TEXT", help_result["message"])
             self.assertIn("/hello", help_result["message"])
+            self.assertNotIn("/transcript", help_result["message"])
 
             self.assertEqual(run(core.handleSlashCommand({"command": "plain text"}))["outcome"], "pass")
             unknown = run(core.handleSlashCommand({"command": "/unknown", "session": session, "config": config, "hooks": hooks}))
@@ -3398,7 +3401,6 @@ class AgentCoreTests(unittest.TestCase):
                 "retryTask": lambda task_id: retried.append(task_id) or {"taskId": "task-shell-retry", "outputFile": str(workspace / "retry.log")},
             }
             daemon_controller = {
-                "stop": lambda: daemon_actions.append("stop"),
                 "restart": lambda: daemon_actions.append("restart"),
             }
 
@@ -3416,9 +3418,9 @@ class AgentCoreTests(unittest.TestCase):
 
             stopped_daemon = run(core.handleSlashCommand({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
             restarted_daemon = run(core.handleSlashCommand({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
-            self.assertIn("Daemon stopped", stopped_daemon["message"])
-            self.assertIn("Daemon restarted", restarted_daemon["message"])
-            self.assertEqual(daemon_actions, ["stop", "restart"])
+            self.assertEqual(stopped_daemon["message"], "Daemon not running.")
+            self.assertEqual(restarted_daemon["message"], "Daemon not running.")
+            self.assertEqual(daemon_actions, ["restart"])
         finally:
             self.restore_home(root, previous)
 

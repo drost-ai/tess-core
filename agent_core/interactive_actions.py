@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from typing import Any
 
@@ -69,10 +68,10 @@ def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list
         ("todos", "/todos", "Show the current todo list"),
         ("memory", "/memory", "Show project memory"),
         ("extensions", "/extensions", "Show MCP/plugin/runtime extension state"),
-        ("daemon", "/daemon [restart|stop]", "Show or control local task-supervisor daemon state"),
+        ("daemon", "/daemon [restart]", "Show or control local task-supervisor daemon state"),
         ("remote", "/remote", "Show remote, bridge, and platform session state"),
         ("tasks", "/tasks [inspect|log|result|attach|stop|retry <id>]", "Show and control runtime tasks"),
-        ("background", "/background [inspect|attach] [id]", "Show background workers, monitors, and remote activity"),
+        ("background", "/background [inspect|attach] [id]", "Show or attach background workers, monitors, and remote activity"),
         ("review", "/review [scope]", "Run a reviewer-style pass in the current session"),
         ("cost", "/cost", "Show tracked token/tool usage"),
         ("monitors", "/monitors", "List active and recent background monitors"),
@@ -80,7 +79,6 @@ def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list
         ("resume", "/resume [query]", "List or switch recent sessions"),
         ("compact", "/compact", "Summarize older context and trim it"),
         ("bug", "/bug", "Show the feedback URL"),
-        ("transcript", "/transcript", "Render transcript"),
     ]
     if args.get("includeStatusline"):
         commands.append(("statusline", "/statusline [on|off]", "Toggle the footer line"))
@@ -175,9 +173,6 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return _handle_mouse(arg_text, hooks)
     if command == "screen":
         return _handle_screen(arg_text, hooks)
-    if command == "transcript":
-        entries = buildTranscriptSnapshot(session)
-        return {"outcome": "handled", "entries": entries, "message": json.dumps(entries, indent=2)}
     if command == "bug":
         return _info(hooks, "Feedback", "Report issues at https://github.com/drost-ai/tess-core/issues")
     if runtime_command:
@@ -526,15 +521,6 @@ async def buildDaemonReport() -> str:
 async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     command = arg_text.strip().lower()
     controller = args.get("daemonController") or {}
-    if not command:
-        return _info(hooks, "Daemon", await buildDaemonReport())
-    if command == "stop":
-        stop_fn = controller.get("stop") if isinstance(controller, dict) else None
-        if callable(stop_fn):
-            await _maybe_await(stop_fn())
-        else:
-            await stopTaskSupervisorDaemon()
-        return _info(hooks, "Daemon", "Daemon stopped.")
     if command == "restart":
         restart_fn = controller.get("restart") if isinstance(controller, dict) else None
         if callable(restart_fn):
@@ -542,8 +528,7 @@ async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[st
         else:
             await stopTaskSupervisorDaemon()
             await ensureTaskSupervisorDaemon({"cwd": session.get("cwd") or config.get("cwd") or os.getcwd()})
-        return _info(hooks, "Daemon", "Daemon restarted.")
-    return _error(hooks, "Usage: /daemon [restart|stop]")
+    return _info(hooks, "Daemon", await buildDaemonReport())
 
 
 async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
