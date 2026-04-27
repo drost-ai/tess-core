@@ -6055,6 +6055,73 @@ class AgentCoreTests(unittest.TestCase):
             server.server_close()
             self.restore_home(root, previous)
 
+    def test_mcp_http_sse_response_requires_matching_json_rpc_id(self):
+        root, home, workspace, previous = self.temp_context()
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                request = json.loads(self.rfile.read(length).decode("utf-8"))
+                method = request.get("method")
+                if method == "initialize":
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "result": {"serverInfo": {"name": "sse-edge"}}}
+                    raw = json.dumps(payload).encode()
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                    return
+                if method == "tools/list":
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "result": {"tools": [{"name": "run", "inputSchema": {"type": "object"}}]}}
+                    raw = json.dumps(payload).encode()
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                    return
+                if method == "resources/list":
+                    payload = {"jsonrpc": "2.0", "id": request.get("id"), "result": {"resources": []}}
+                    raw = json.dumps(payload).encode()
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(raw)))
+                    self.end_headers()
+                    self.wfile.write(raw)
+                    return
+                wrong_id = int(request.get("id") or 0) + 100
+                payload = {"jsonrpc": "2.0", "id": wrong_id, "result": {"content": [{"type": "text", "text": "wrong id"}]}}
+                raw = f"event: message\ndata: {json.dumps(payload)}\n\n".encode()
+                self.send_response(200)
+                self.send_header("content-type", "text/event-stream")
+                self.send_header("content-length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        runtime = None
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "sse-edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            with self.assertRaisesRegex(RuntimeError, "No matching SSE JSON-RPC response was received"):
+                run(runtime["callTool"]("sse-edge", "run", {}))
+            status = runtime["listServerStatus"]()[0]
+            self.assertFalse(status["connected"])
+            self.assertEqual(status["state"], "degraded")
+            self.assertEqual(status["error"], "No matching SSE JSON-RPC response was received.")
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            server.shutdown()
+            server.server_close()
+            self.restore_home(root, previous)
+
     def test_mcp_discovery_only_swallows_method_not_found(self):
         root, home, workspace, previous = self.temp_context()
         mode = {"tools": "method_not_found"}

@@ -686,10 +686,12 @@ def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_http_rpc_response(status: int, raw: str, content_type: str, request_id: int | None) -> dict[str, Any]:
-    if status in (202, 204) or not raw.strip():
+    if status in (202, 204):
         return {"jsonrpc": "2.0", "id": request_id, "result": {}}
     if "text/event-stream" in content_type:
         return _parse_sse_rpc_response(raw, request_id)
+    if not raw.strip():
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
     return json.loads(raw)
 
 
@@ -704,7 +706,7 @@ def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
             continue
         if request_id is None or payload.get("id") == request_id:
             return payload
-    return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+    raise RuntimeError("No matching SSE JSON-RPC response was received.")
 
 
 def _parse_sse_events(raw: str) -> list[dict[str, str]]:
