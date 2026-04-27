@@ -4446,6 +4446,42 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(foreground["meta"]["execution"]["status"], "completed")
             self.assertEqual(foreground["meta"]["execution"]["metadata"]["exit_code"], 0)
 
+            fake_shell = workspace / "fake-shell.py"
+            fake_shell_args = workspace / "fake-shell-args.txt"
+            fake_shell.write_text(
+                textwrap.dedent(
+                    """
+                    #!/usr/bin/env python3
+                    import os
+                    import pathlib
+                    import sys
+
+                    pathlib.Path(os.environ["FAKE_SHELL_ARGS"]).write_text("\\n".join(sys.argv[1:]), encoding="utf-8")
+                    print("fake-shell:" + (sys.argv[2] if len(sys.argv) > 2 else ""))
+                    """
+                ).lstrip(),
+                encoding="utf-8",
+            )
+            fake_shell.chmod(0o755)
+            previous_shell = os.environ.get("SHELL")
+            previous_fake_shell_args = os.environ.get("FAKE_SHELL_ARGS")
+            try:
+                os.environ["SHELL"] = str(fake_shell)
+                os.environ["FAKE_SHELL_ARGS"] = str(fake_shell_args)
+                shell_result = run(bash.handler({"command": "printf shell-parity"}, base_context))
+            finally:
+                if previous_shell is None:
+                    os.environ.pop("SHELL", None)
+                else:
+                    os.environ["SHELL"] = previous_shell
+                if previous_fake_shell_args is None:
+                    os.environ.pop("FAKE_SHELL_ARGS", None)
+                else:
+                    os.environ["FAKE_SHELL_ARGS"] = previous_fake_shell_args
+            shell_payload = json.loads(shell_result["content"])
+            self.assertEqual(shell_payload["stdout"], "fake-shell:printf shell-parity\n")
+            self.assertEqual(fake_shell_args.read_text(encoding="utf-8"), "-lc\nprintf shell-parity")
+
             timeout_command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(1)')}"
             timed = run(bash.handler({"command": timeout_command, "timeout": 0.05}, base_context))
             timed_payload = json.loads(timed["content"])

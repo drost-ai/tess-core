@@ -466,7 +466,7 @@ def _bash_tool() -> ToolDefinition:
                 ),
                 "meta": {"execution": execution},
             }
-        proc = await asyncio.create_subprocess_shell(command, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        proc = await asyncio.create_subprocess_exec(_resolve_shell(), "-lc", command, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr, timed_out = await _communicate_shell_process(proc, timeout, context)
         if _signal_aborted(context.get("abortSignal")):
             raise _create_tool_abort_error()
@@ -1184,6 +1184,13 @@ def _kill_asyncio_process(proc: asyncio.subprocess.Process) -> None:
         proc.kill()
     except ProcessLookupError:
         pass
+
+
+def _resolve_shell() -> str:
+    shell = os.environ.get("SHELL")
+    if shell:
+        return shell
+    return "cmd.exe" if os.name == "nt" else "/bin/sh"
 
 
 def _throw_if_tool_cancelled(context: dict[str, Any]) -> None:
