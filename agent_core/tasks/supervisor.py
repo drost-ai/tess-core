@@ -217,6 +217,18 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     async def stop_task(task_id: str) -> bool:
         proc = _PROCESS_REGISTRY.get(task_id)
         meta = await readTaskMeta(task_id)
+        meta_type = meta.get("type") if meta else None
+        if proc and proc.poll() is None and meta_type != "subagent":
+            return _terminate_process(proc.pid)
+        health = await loadHealthCheckTask(task_id)
+        if health:
+            now = now_iso()
+            health.update({"status": "stopped", "updatedAt": now, "stoppedAt": now})
+            await saveHealthCheckTask(health)
+            await writeTaskMeta(task_id, {**health, "type": "health_check", "updatedAt": now})
+            return True
+        if meta and meta_type != "subagent" and isinstance(meta.get("pid"), int) and _is_process_alive(meta["pid"]):
+            return _terminate_process(meta["pid"])
         stopped = False
         if meta:
             now = now_iso()
@@ -232,12 +244,6 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                 proc.wait(timeout=2)
         elif meta and isinstance(meta.get("pid"), int):
             stopped = _terminate_process(meta["pid"])
-        health = await loadHealthCheckTask(task_id)
-        if health:
-            stopped = True
-            now = now_iso()
-            health.update({"status": "stopped", "updatedAt": now, "stoppedAt": now})
-            await saveHealthCheckTask(health)
         if meta:
             await emit("task.failed", _task_event_payload(meta), meta.get("sessionId"))
         _PROCESS_REGISTRY.pop(task_id, None)
@@ -554,11 +560,13 @@ def _watch_process_thread(
     _PROCESS_REGISTRY.pop(task_id, None)
     now = now_iso()
     previous = asyncio.run(readTaskMeta(task_id)) or {}
-    status = "completed" if code == 0 and previous.get("status") != "stopped" else "failed"
-    if previous.get("status") == "stopped":
-        status = "stopped"
+    previous_status = previous.get("status")
+    status = "completed" if code == 0 and previous_status not in {"stopped", "terminated"} else "failed"
+    if previous_status in {"stopped", "terminated"}:
+        status = "terminated" if previous_status == "terminated" else "stopped"
     elif code is not None and code < 0:
-        status = "stopped" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
+        status = "terminated" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
+    exit_code = None if status == "terminated" else code
     meta = {
         **previous,
         "type": previous.get("type") or "background_command",
@@ -568,7 +576,7 @@ def _watch_process_thread(
         "cwd": previous.get("cwd") or cwd,
         "outputFile": previous.get("outputFile") or output_file,
         "status": status,
-        "exitCode": code,
+        "exitCode": exit_code,
         "finishedAt": now,
         "updatedAt": now,
         "detailStatus": status,
@@ -1781,7 +1789,7 @@ def _resolve_shell() -> str:
 def _process_exit_summary(status: str, code: int | None) -> str:
     if status == "completed":
         return "Task completed successfully."
-    if status == "stopped":
+    if status in {"stopped", "terminated"}:
         return "Task was terminated."
     return f"Task failed with exit code {code}." if isinstance(code, int) else "Task failed."
 

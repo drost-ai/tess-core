@@ -4378,6 +4378,40 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_task_supervisor_stop_process_finalizes_through_exit_watcher(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            events = []
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
+            started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "stop parity"}))
+            task_id = started["taskId"]
+            self.assertTrue(run(supervisor["stopTask"](task_id)))
+            for _ in range(60):
+                meta = run(core.readTaskMeta(task_id))
+                if meta and meta.get("status") == "terminated":
+                    break
+                time.sleep(0.05)
+            meta = run(core.readTaskMeta(task_id))
+            self.assertEqual(meta["status"], "terminated")
+            self.assertIsNone(meta.get("exitCode"))
+            record = run(supervisor["inspectTask"](task_id))
+            self.assertEqual(record["status"], "stopped")
+            self.assertEqual(record["summary"], "Task was terminated.")
+            failed_events = [event for event in events if event["event"] == "task.failed" and event["data"]["task_id"] == task_id]
+            self.assertEqual(len(failed_events), 1)
+            self.assertEqual(failed_events[0]["data"]["summary"], "Task was terminated.")
+            self.assertNotIn("updated_at", failed_events[0]["data"])
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
     def test_daemon_connection_cleans_stale_state_and_socket(self):
         root, home, workspace, previous = self.temp_context()
         try:
