@@ -22,6 +22,7 @@ from unittest import mock
 
 import agent_core as core
 from agent_core import testing
+import agent_core.agent as agent_module
 import agent_core.monitors as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
@@ -1234,6 +1235,53 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             anthropic_module._send_anthropic_messages_sync = original_send
 
+    def test_anthropic_blocking_http_transport_abort_returns_before_socket_finishes(self):
+        signal = SimpleNamespace(aborted=False)
+        request_started = threading.Event()
+        request_finished = threading.Event()
+
+        class SlowAnthropicHandler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                request_started.set()
+                signal.aborted = True
+                time.sleep(0.4)
+                body = json.dumps({"model": "claude-sonnet-4-6", "content": [{"type": "text", "text": "late"}]}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+                    self.wfile.write(body)
+                request_finished.set()
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), SlowAnthropicHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with self.assertRaises(core.ProviderRequestError) as ctx:
+                run(
+                    core.sendAnthropicMessagesRequest(
+                        {
+                            "config": {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}},
+                            "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                            "runtime": {"abortSignal": signal},
+                            "maxAttempts": 2,
+                            "jsonResponseTimeoutMs": 1000,
+                        }
+                    )
+                )
+            self.assertTrue(request_started.is_set())
+            self.assertFalse(request_finished.is_set())
+            self.assertEqual(ctx.exception.record["category"], "cancelled")
+            self.assertFalse(ctx.exception.record["retryable"])
+            request_finished.wait(1)
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_anthropic_http_retry_and_non_retry_classification(self):
         original_delay = anthropic_module.providerRetryDelayMs
         anthropic_module.providerRetryDelayMs = lambda _attempt: 0
@@ -1341,6 +1389,37 @@ class AgentCoreTests(unittest.TestCase):
         self.assertFalse(protocol.record["retryable"])
         auth = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("invalid API key")})
         self.assertEqual(auth.record["category"], "auth")
+
+    def test_missing_provider_credentials_match_reference_diagnostics(self):
+        request = {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}
+        openai_config = {
+            "provider": "openai",
+            "providerProfileName": "codex",
+            "providerProfile": {"name": "codex", "kind": "openai", "auth": {"envVar": "OPENAI_API_KEY"}},
+            "openaiToken": None,
+        }
+        openai_response = agent_module._create_provider(openai_config, {})["send"](request)
+        self.assertEqual(
+            openai_response["content"][0]["text"],
+            "No credential is configured for provider profile 'codex'. Set OPENAI_API_KEY, provide a Codex auth file, or run `tess auth login --openai` for official OpenAI access.",
+        )
+        self.assertEqual(openai_response["usage"], {"input_tokens": 0, "output_tokens": 0})
+        self.assertEqual(openai_response["stopReason"], "end_turn")
+
+        anthropic_config = {
+            "provider": "anthropic",
+            "providerProfileName": "anthropic-claude-code",
+            "providerProfile": {"name": "anthropic-claude-code", "kind": "anthropic", "auth": {"envVar": "ANTHROPIC_AUTH_TOKEN"}},
+            "apiKey": None,
+            "authToken": None,
+        }
+        anthropic_response = agent_module._create_provider(anthropic_config, {})["send"]({**request, "model": "claude-sonnet-4-6"})
+        self.assertEqual(
+            anthropic_response["content"][0]["text"],
+            "No credential is configured for provider profile 'anthropic-claude-code'. Set ANTHROPIC_AUTH_TOKEN or run `tess auth login` to enable model-backed responses.",
+        )
+        self.assertEqual(anthropic_response["usage"], {"input_tokens": 0, "output_tokens": 0})
+        self.assertEqual(anthropic_response["stopReason"], "end_turn")
 
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:

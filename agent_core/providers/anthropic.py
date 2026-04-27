@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import re
+import threading
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -246,7 +247,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             )
             payload = buildAnthropicMessagesPayload(request, {"stream": stream})
             raw, content_type = await _race_anthropic_activity(
-                asyncio.to_thread(_send_anthropic_messages_sync, config, payload, timeout_ms, stream),
+                _send_anthropic_messages_async(config, payload, timeout_ms, stream),
                 timeout_ms=timeout_ms,
                 attempt=attempt,
                 phase=phase,
@@ -336,6 +337,32 @@ def _send_anthropic_messages_sync(config: dict[str, Any], payload: dict[str, Any
         raw = response.read().decode("utf-8")
         content_type = response.headers.get("content-type", "")
     return raw, content_type
+
+
+def _send_anthropic_messages_async(config: dict[str, Any], payload: dict[str, Any], timeout_ms: int, stream: bool = False) -> asyncio.Future[tuple[str, str]]:
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future[tuple[str, str]] = loop.create_future()
+
+    def complete_result(result: tuple[str, str]) -> None:
+        if not future.done():
+            future.set_result(result)
+
+    def complete_error(error: BaseException) -> None:
+        if not future.done():
+            future.set_exception(error)
+
+    def worker() -> None:
+        try:
+            result = _send_anthropic_messages_sync(config, payload, timeout_ms, stream)
+        except BaseException as exc:
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(complete_error, exc)
+            return
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(complete_result, result)
+
+    threading.Thread(target=worker, name="agent-core-anthropic-request", daemon=True).start()
+    return future
 
 
 async def _race_anthropic_activity(
