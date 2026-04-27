@@ -3797,6 +3797,10 @@ class AgentCoreTests(unittest.TestCase):
             tmux = run(core.detectTmuxAvailability({"runner": runner}))
             self.assertTrue(tmux["available"])
             self.assertEqual(tmux["version"], "tmux 3.4")
+            self.assertNotIn("path", tmux)
+            self.assertEqual(run(core.detectTmuxAvailability({"runner": {"which": lambda _command: None}})), {"available": False})
+            self.assertEqual(core.quoteShellArg("abc:/tmp/file"), "abc:/tmp/file")
+            self.assertEqual(core.buildShellCommand("/bin/echo", ["hello world"], {"KEEP": "yes", "DROP": ""}), "KEEP=yes /bin/echo 'hello world'")
 
             handoff = run(
                 core.maybeExecIntoTmux(
@@ -3810,24 +3814,49 @@ class AgentCoreTests(unittest.TestCase):
                 )
             )
             self.assertTrue(handoff["handled"])
+            self.assertNotIn("executed", handoff)
             self.assertEqual(handoff["event"]["event"], "platform.tmux_attached")
             self.assertTrue(any(call[0] == "exec" and call[2][0] == "new-session" for call in calls))
             tmux_command = next(call[2][-1] for call in calls if call[0] == "exec" and call[2][0] == "new-session")
             self.assertIn("--foo", tmux_command)
             self.assertNotIn("--worktree", tmux_command)
             self.assertEqual(core.resolveTmuxLaunchContextFromEnv({"TESS_LAUNCH_CWD": "/w", "TESS_LAUNCH_ORIGINAL_CWD": "/o", "TESS_LAUNCH_WORKTREE_PATH": "/wt", "TESS_TMUX_SESSION_NAME": "s"})["tmuxSessionName"], "s")
+            self.assertIsNone(core.resolveTmuxLaunchContextFromEnv({"TMUX": "/tmp/tmux.sock"}))
             self.assertIn("requires `--worktree`", run(core.maybeExecIntoTmux({"options": {"tmux": True}, "launch": {"cwd": str(workspace)}, "runner": runner, "env": {}}))["error"])
 
             ide_targets = run(core.detectIdeTargets({"runner": runner, "env": {}}))
             self.assertEqual(ide_targets[0]["id"], "vscode")
+            self.assertNotIn("name", ide_targets[0])
             ide_connect = run(core.maybeAutoConnectIde(str(workspace), {"runner": runner, "env": {}}))
             self.assertEqual(ide_connect["status"], "connected")
+            self.assertNotIn("connected", ide_connect)
             self.assertTrue(any(call[0] == "spawn" and call[2] == ("-r", str(workspace)) for call in calls))
             env_ide = run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"TERM_PROGRAM": "vscode", "CURSOR_TRACE_ID": "1"}}))
             self.assertEqual(env_ide[0]["id"], "cursor")
             self.assertEqual(run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"TERM_PROGRAM": "windsurf"}}))[0]["id"], "windsurf")
             self.assertEqual(run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"CURSOR_TRACE_ID": "1"}}))[0]["id"], "cursor")
             self.assertEqual(run(core.maybeAutoConnectIde(str(workspace), {"runner": {"which": lambda _command: None}, "env": {}}))["status"], "skipped")
+            multi_ide = run(core.maybeAutoConnectIde(str(workspace), {"runner": {"which": lambda command: f"/usr/bin/{command}" if command in {"code", "cursor"} else None}, "env": {}}))
+            self.assertEqual(multi_ide["status"], "skipped")
+            self.assertNotIn("targets", multi_ide)
+            failed_ide = run(core.maybeAutoConnectIde(str(workspace), {"runner": {"which": lambda command: "/usr/bin/code" if command == "code" else None, "spawnDetached": lambda *_: (_ for _ in ()).throw(RuntimeError("launch failed"))}, "env": {}}))
+            self.assertEqual(failed_ide["status"], "skipped")
+            self.assertNotIn("target", failed_ide)
+
+            mtime_root = workspace / "mtime"
+            (mtime_root / ".git").mkdir(parents=True)
+            (mtime_root / "node_modules").mkdir()
+            included = mtime_root / "included.txt"
+            ignored_git = mtime_root / ".git" / "ignored.txt"
+            ignored_modules = mtime_root / "node_modules" / "ignored.txt"
+            included.write_text("old", encoding="utf-8")
+            ignored_git.write_text("new", encoding="utf-8")
+            ignored_modules.write_text("new", encoding="utf-8")
+            os.utime(included, (1000, 1000))
+            os.utime(ignored_git, (3000, 3000))
+            os.utime(ignored_modules, (4000, 4000))
+            self.assertEqual(run(core.newestMtimeInTree(str(mtime_root))), 1000)
+            self.assertIsNone(run(core.newestMtimeInTree(str(workspace / "missing-mtime"))))
 
             chrome = run(core.detectChromeCompanionStatus({"runner": runner, "platform": "linux"}))
             self.assertTrue(chrome["supported"])

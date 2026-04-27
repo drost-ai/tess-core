@@ -36,26 +36,31 @@ def getNpmCommand() -> str:
 
 
 def quoteShellArg(value: str) -> str:
-    import shlex
-
-    return shlex.quote(value)
+    if re.match(r"^[A-Za-z0-9_./:@%+=,-]+$", value):
+        return value
+    return "'" + value.replace("'", "'\"'\"'") + "'"
 
 
 def buildShellCommand(command: str, args: list[str] | None = None, env: dict[str, str] | None = None) -> str:
     prefix = ""
     if env:
-        prefix = " ".join(f"{quoteShellArg(key)}={quoteShellArg(value)}" for key, value in env.items()) + " "
+        env_items = [(key, value) for key, value in env.items() if isinstance(value, str) and value]
+        prefix = (" ".join(f"{key}={quoteShellArg(value)}" for key, value in env_items) + " ") if env_items else ""
     return prefix + " ".join([quoteShellArg(command), *[quoteShellArg(arg) for arg in (args or [])]])
 
 
-async def spawnDetached(command: str, args: list[str] | None = None, cwd: str | None = None) -> int:
-    proc = subprocess.Popen([command, *(args or [])], cwd=cwd, start_new_session=True)
-    return proc.pid
+async def spawnDetached(command: str, args: list[str] | None = None, cwd: str | None = None) -> None:
+    proc = subprocess.Popen([command, *(args or [])], cwd=cwd, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc.poll()
+    return None
 
 
 async def newestMtimeInTree(rootPath: str) -> float | None:
+    if not os.path.exists(rootPath):
+        return None
     newest = None
     for root, _dirs, files in os.walk(rootPath):
+        _dirs[:] = [directory for directory in _dirs if directory not in {"node_modules", ".git"}]
         for file in files:
             try:
                 mtime = os.path.getmtime(os.path.join(root, file))
@@ -72,12 +77,12 @@ async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -
     env = args.get("env") or os.environ
     runner = args.get("runner") or {}
     if not options.get("tmux") or env.get("TESS_TMUX_HANDOFF") == "1":
-        return {"handled": False, "executed": False}
+        return {"handled": False}
     if not launch.get("worktreePath"):
-        return {"handled": False, "executed": False, "error": "`--tmux` requires `--worktree` so the assistant has a dedicated workspace to launch into."}
+        return {"handled": False, "error": "`--tmux` requires `--worktree` so the assistant has a dedicated workspace to launch into."}
     tmux_binary = await _runner_which(runner, "tmux")
     if not tmux_binary:
-        return {"handled": False, "executed": False, "error": "tmux is not installed or not on PATH."}
+        return {"handled": False, "error": "tmux is not installed or not on PATH."}
     requested_mode = options.get("tmux") if isinstance(options.get("tmux"), str) else "default"
     tmux_mode = "classic" if requested_mode == "classic" else "default"
     session_name = _sanitize_tmux_name(f"tess-{Path(launch['worktreePath']).name}") or "tess"
@@ -100,7 +105,7 @@ async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -
     await _runner_exec(runner, tmux_binary, tmux_args, launch.get("cwd"))
     event_name = "platform.tmux_window_created" if env.get("TMUX") else "platform.tmux_attached"
     event = {"event": event_name, "data": {"mode": tmux_mode, "tmux_session_name": session_name, "tmux_window_name": window_name, "cwd": launch.get("cwd") or os.getcwd()}}
-    return {"handled": True, "executed": True, "event": event}
+    return {"handled": True, "event": event}
 
 
 async def detectTmuxAvailability(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -108,12 +113,12 @@ async def detectTmuxAvailability(args: dict[str, Any] | None = None, **kwargs: A
     runner = args.get("runner") or {}
     binary = await _runner_which(runner, "tmux")
     if not binary:
-        return {"available": False, "binaryPath": None, "path": None}
+        return {"available": False}
     try:
         version = (await _runner_exec_text(runner, binary, ["-V"])).strip() or None
     except Exception:
         version = None
-    return {"available": True, "binaryPath": binary, "path": binary, "version": version}
+    return {"available": True, "binaryPath": binary, "version": version}
 
 
 def resolveTmuxLaunchContextFromEnv(env: dict[str, str] | None = None) -> dict[str, Any] | None:
@@ -121,7 +126,7 @@ def resolveTmuxLaunchContextFromEnv(env: dict[str, str] | None = None) -> dict[s
     cwd = env.get("TESS_LAUNCH_CWD")
     original = env.get("TESS_LAUNCH_ORIGINAL_CWD")
     if not cwd or not original:
-        return {"tmuxMode": "attached"} if env.get("TMUX") else None
+        return None
     return {"cwd": cwd, "originalCwd": original, "worktreePath": env.get("TESS_LAUNCH_WORKTREE_PATH"), "tmuxSessionName": env.get("TESS_TMUX_SESSION_NAME"), "tmuxWindowName": env.get("TESS_TMUX_WINDOW_NAME"), "tmuxMode": env.get("TESS_TMUX_MODE")}
 
 
@@ -139,7 +144,7 @@ async def detectIdeTargets(args: dict[str, Any] | None = None, **kwargs: Any) ->
         for command in commands:
             path = await _runner_which(runner, command)
             if path:
-                targets[target_id] = {"id": target_id, "name": command, "displayName": display, "command": path, "source": "path"}
+                targets[target_id] = {"id": target_id, "displayName": display, "command": path, "source": "path"}
                 break
     return list(targets.values())
 
@@ -148,18 +153,18 @@ async def maybeAutoConnectIde(cwd: str, args: dict[str, Any] | None = None, **kw
     args = {**(args or {}), **kwargs}
     targets = await detectIdeTargets(args)
     if not targets:
-        return {"status": "skipped", "connected": False, "reason": "No supported IDE targets were detected."}
+        return {"status": "skipped", "reason": "No supported IDE targets were detected."}
     if len(targets) > 1:
-        return {"status": "skipped", "connected": False, "reason": f"Multiple IDE targets were detected: {', '.join(target['displayName'] for target in targets)}.", "targets": targets}
+        return {"status": "skipped", "reason": f"Multiple IDE targets were detected: {', '.join(target['displayName'] for target in targets)}."}
     target = targets[0]
     if target.get("source") == "env":
-        return {"status": "connected", "connected": True, "target": target}
+        return {"status": "connected", "target": target}
     runner = args.get("runner") or {}
     try:
         await _runner_spawn_detached(runner, target["command"], ["-r", cwd], cwd)
     except Exception as exc:
-        return {"status": "skipped", "connected": False, "reason": f"Failed to launch {target['displayName']}: {exc}", "target": target}
-    return {"status": "connected", "connected": True, "target": target}
+        return {"status": "skipped", "reason": f"Failed to launch {target['displayName']}: {exc}"}
+    return {"status": "connected", "target": target}
 
 
 async def resolveChromeCompanionServer(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
