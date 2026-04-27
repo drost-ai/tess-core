@@ -242,6 +242,58 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_shell_and_task_output_manifests_persist_artifacts_match_reference(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({
+                "provider": "openai",
+                "runtimeHome": str(home),
+                "permissionMode": "bypassPermissions",
+                "openaiBaseUrl": "http://compatible.test",
+                "openaiApiMode": "chat",
+                "model": "small-model",
+            }, str(workspace)))
+            config.update({"providerKind": "openai", "openaiBaseUrl": "http://compatible.test", "openaiApiMode": "chat", "model": "small-model"})
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            long_output = "\n".join(f"line-{index:03} {'x' * 40}" for index in range(220)) + "\n"
+
+            bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+            command = "python3 - <<'PY'\nfor index in range(220):\n    print(f\"line-{index:03} {'x' * 40}\")\nPY"
+            bash_result = run(bash.handler({"command": command}, context))
+            bash_payload = json.loads(bash_result["content"])
+            self.assertFalse(bash_result.get("isError"))
+            self.assertEqual(bash_payload["stderr"], "")
+            self.assertNotIn("artifact", bash_payload["stderr_manifest"])
+            self.assertEqual(bash_payload["stdout_manifest"]["strategy"], "inline_head_tail")
+            self.assertTrue(bash_payload["stdout_manifest"]["truncated"])
+            self.assertGreater(bash_payload["stdout_manifest"]["originalLines"], bash_payload["stdout_manifest"]["returnedLines"])
+            bash_artifact = bash_payload["stdout_manifest"]["artifact"]
+            self.assertEqual(bash_artifact["toolName"], "Bash")
+            self.assertEqual(bash_artifact["family"], "bash")
+            self.assertEqual(bash_artifact["contentType"], "text")
+            self.assertEqual(Path(bash_artifact["filePath"]).read_text(encoding="utf-8"), long_output)
+
+            task_id = "task-manifest-fixture"
+            output_path = core.taskOutputPath(task_id)
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_path).write_text(long_output, encoding="utf-8")
+            run(core.writeTaskMeta(task_id, {"taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "long task", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": output_path}))
+            task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
+            task_result = run(task_output.handler({"task_id": task_id, "block": False, "timeout": 1000}, context))
+            task_payload = json.loads(task_result["content"])
+            self.assertEqual(task_payload["output_manifest"]["strategy"], "inline_head_tail")
+            self.assertTrue(task_payload["output_manifest"]["truncated"])
+            self.assertFalse(task_payload["output_truncated"])
+            task_artifact = task_payload["output_manifest"]["artifact"]
+            self.assertEqual(task_artifact["toolName"], "TaskOutput")
+            self.assertEqual(task_artifact["family"], "bash")
+            self.assertEqual(task_artifact["taskId"], task_id)
+            self.assertEqual(Path(task_artifact["filePath"]).read_text(encoding="utf-8"), long_output)
+            self.assertEqual(task_result["meta"]["execution"]["metadata"]["output_file"], output_path)
+        finally:
+            self.restore_home(root, previous)
+
     def test_mcp_introspection_tool_does_not_dispatch_tool_calls(self):
         root, home, workspace, previous = self.temp_context()
         try:
