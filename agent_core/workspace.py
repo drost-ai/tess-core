@@ -123,7 +123,6 @@ class _WorkspaceController:
 
     async def createWorktree(self, requestedName: str | None = None) -> dict[str, Any]:
         metadata = self.activeSession.setdefault("metadata", {})
-        metadata.setdefault("originalCwd", self.activeSession["cwd"])
         worktree = await createGitWorktree(cwd=self.activeSession["cwd"], name=requestedName)
         metadata["worktreePath"] = worktree["targetPath"]
         self.activeSession["cwd"] = worktree["targetPath"]
@@ -132,7 +131,7 @@ class _WorkspaceController:
 
     async def exitWorktree(self) -> dict[str, Any]:
         metadata = self.activeSession.setdefault("metadata", {})
-        self.activeSession["cwd"] = metadata.get("originalCwd") or self.activeSession["cwd"]
+        self.activeSession["cwd"] = metadata.get("originalCwd")
         return await self.refresh()
 
     def _snapshot_from_session(self, session: dict[str, Any]) -> dict[str, Any]:

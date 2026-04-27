@@ -1014,7 +1014,6 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
         requested_name = input.get("name").strip() if isinstance(input.get("name"), str) and input.get("name").strip() else f"tess-{int(__import__('time').time() * 1000)}"
         await _ensure_tool_permission(context, "EnterWorktree", "worktree", f"Create git worktree for {requested_name}")
         metadata = context["session"].setdefault("metadata", {})
-        original = metadata.setdefault("originalCwd", context["session"].get("cwd") or context["config"].get("cwd"))
         create_worktree = _controller_method(controller, "createWorktree")
         if callable(create_worktree):
             result = await maybe_await(create_worktree(requested_name))

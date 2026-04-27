@@ -5796,6 +5796,39 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_enter_worktree_does_not_fabricate_missing_original_cwd(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            worktree = Path(root.name) / "raw-worktree"
+            worktree.mkdir()
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = {"id": "raw-worktree-session", "cwd": str(workspace), "metadata": {}}
+
+            class Controller:
+                async def createWorktree(self, requested_name):
+                    return {"worktree": {"targetPath": str(worktree), "branchName": f"tess/{requested_name}"}, "snapshot": None}
+
+                async def exitWorktree(self):
+                    return None
+
+            tools = {tool.name: tool for tool in core.createBuiltinTools({"workspaceController": Controller()})}
+            cwd_updates = []
+
+            def update_cwd(next_cwd):
+                cwd_updates.append(next_cwd)
+                session["cwd"] = next_cwd
+
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "updateCwd": update_cwd}
+            entered = json.loads(run(tools["EnterWorktree"].handler({"name": "Raw"}, context))["content"])
+            self.assertEqual(entered, {"cwd": str(worktree), "branch": "tess/Raw", "created": True})
+            self.assertEqual(session["metadata"], {"worktreePath": str(worktree)})
+
+            exited = json.loads(run(tools["ExitWorktree"].handler({}, context))["content"])
+            self.assertEqual(exited, {})
+            self.assertEqual(cwd_updates, [str(worktree), None])
+        finally:
+            self.restore_home(root, previous)
+
     def test_worktree_tools_update_workspace_metadata_and_execution_descriptors(self):
         root, home, workspace, previous = self.temp_context()
         try:
