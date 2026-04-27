@@ -8,6 +8,7 @@ import json
 import os
 import queue
 import re
+import shutil
 import shlex
 import subprocess
 import sys
@@ -131,6 +132,32 @@ class AgentCoreTests(unittest.TestCase):
             mcp_payload = json.loads(run(tools["Mcp"].handler({}, context))["content"])
             self.assertEqual(mcp_payload["servers"][0]["capabilities"], {"tools": 0, "resources": 0, "channelsSupported": False})
             self.assertEqual(mcp_payload["servers"][0]["channelRegistration"], {"requested": False, "status": "not_requested"})
+        finally:
+            self.restore_home(root, previous)
+
+    def test_tool_payloads_omit_undefined_fields_and_preserve_reference_line_splitting(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            text_file = workspace / "lines.txt"
+            text_file.write_text("one\ntwo\n", encoding="utf-8")
+            read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+
+            payload = json.loads(run(read.handler({"file_path": str(text_file)}, context))["content"])
+            file_payload = payload["file"]
+            self.assertEqual(file_payload["content"], "one\ntwo\n")
+            self.assertEqual(file_payload["totalLines"], 3)
+            self.assertEqual(file_payload["selectedNumLines"], 3)
+            self.assertEqual(file_payload["transcriptView"]["originalLines"], 3)
+            self.assertNotIn("artifact", file_payload)
+            self.assertNotIn("nextOffset", file_payload)
+
+            shaped = run(core.shapeTextToolResult(config=config, sessionId=session["id"], toolName="Bash", family="bash", text="alpha\n"))
+            self.assertEqual(shaped["view"]["originalLines"], 2)
+            self.assertEqual(shaped["view"]["returnedLines"], 2)
+            self.assertNotIn("artifact", shaped["view"])
         finally:
             self.restore_home(root, previous)
 
@@ -5138,6 +5165,26 @@ class AgentCoreTests(unittest.TestCase):
             unknown = run(agent.handler({"description": "Nope", "prompt": "x", "subagent_type": "missing"}, {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
             self.assertTrue(unknown["isError"])
             self.assertIn("Unknown subagent type", unknown["content"])
+
+            auto_config = {**config, "permissionMode": "auto"}
+            auto_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
+            captured.clear()
+            run(
+                agent.handler(
+                    {"description": "Invalid mode", "prompt": "inherit auto", "mode": "invalid"},
+                    {
+                        "session": auto_parent,
+                        "config": auto_config,
+                        "interactive": False,
+                        "askQuestion": lambda *_: "",
+                        "outputJson": lambda *_: None,
+                        "cwd": str(workspace),
+                        "persistSession": lambda: None,
+                        "runSubagent": run_subagent,
+                    },
+                )
+            )
+            self.assertEqual(captured["childSession"]["permissionMode"], "auto")
         finally:
             self.restore_home(root, previous)
 
@@ -5388,6 +5435,42 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
+            self.restore_home(root, previous)
+
+    def test_enter_worktree_fallback_uses_reference_branch_and_target_naming(self):
+        if not shutil.which("git"):
+            self.skipTest("git is required for worktree parity")
+        root, home, workspace, previous = self.temp_context()
+        try:
+            subprocess.run(["git", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            subprocess.run(["git", "config", "user.email", "agent-core@example.test"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.name", "Agent Core"], cwd=workspace, check=True)
+            (workspace / "README.md").write_text("root\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            cwd_updates = []
+
+            def update_cwd(next_cwd):
+                cwd_updates.append(next_cwd)
+                session["cwd"] = next_cwd
+
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "updateCwd": update_cwd}
+            entered = json.loads(run(tools["EnterWorktree"].handler({"name": " Feature Work "}, context))["content"])
+            self.assertRegex(entered["branch"], r"^tess/feature-work-[0-9a-f]{6}$")
+            self.assertRegex(Path(entered["cwd"]).name, rf"^{re.escape(workspace.name)}-feature-work-[0-9a-f]{{6}}$")
+            self.assertEqual(session["cwd"], entered["cwd"])
+            self.assertEqual(session["metadata"]["worktreePath"], entered["cwd"])
+            self.assertNotIn("workspace", entered)
+            self.assertNotIn("execution", entered)
+
+            exited = json.loads(run(tools["ExitWorktree"].handler({}, context))["content"])
+            self.assertEqual(exited, {"cwd": str(workspace)})
+            self.assertEqual(cwd_updates, [entered["cwd"], str(workspace)])
+        finally:
             self.restore_home(root, previous)
 
     def test_worktree_tools_update_workspace_metadata_and_execution_descriptors(self):

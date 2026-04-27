@@ -53,7 +53,7 @@ async def createGitWorktree(args: dict[str, Any] | None = None, **kwargs: Any) -
     suffix = uuid.uuid4().hex[:6]
     target_path = args.get("path") or os.path.join(os.path.dirname(git_root), f"{os.path.basename(git_root)}-{safe_name}-{suffix}")
     branch_name = args.get("branchName") or f"tess/{safe_name}-{suffix}"
-    subprocess.run(["git", "worktree", "add", "-b", branch_name, target_path, "HEAD"], cwd=git_root, check=True)
+    subprocess.run(["git", "worktree", "add", "-b", branch_name, target_path, "HEAD"], cwd=git_root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     return {"gitRoot": git_root, "targetPath": target_path, "branchName": branch_name, "requestedName": safe_name}
 
 

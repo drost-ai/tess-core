@@ -43,6 +43,7 @@ from .tool_payloads import (
     shapeGrepPayload,
     shapeReadPayload,
     shapeTextToolResult,
+    splitToolTextLines,
 )
 
 
@@ -89,6 +90,8 @@ BUILTIN_TOOL_ORDER = [
 
 
 _BACKGROUND_RUNNERS: list[subprocess.Popen[Any]] = []
+
+PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
 
 
 BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -243,7 +246,7 @@ def _read_tool() -> ToolDefinition:
             config=context["config"],
             sessionId=context["session"]["id"],
             filePath=file_path,
-            lines=text.splitlines(),
+            lines=splitToolTextLines(text),
             offset=int(input.get("offset") or 1),
             requestedLimit=input.get("limit"),
         )
@@ -572,7 +575,7 @@ def _agent_tool() -> ToolDefinition:
             "runInBackground": bool(input.get("run_in_background")),
             "name": input.get("name") if isinstance(input.get("name"), str) else None,
             "teamName": input.get("team_name") if isinstance(input.get("team_name"), str) else None,
-            "mode": input.get("mode") if isinstance(input.get("mode"), str) else None,
+            "mode": _parse_permission_mode_value(input.get("mode")),
             "isolation": "worktree" if input.get("isolation") == "worktree" else None,
         }
         if input.get("run_in_background"):
@@ -795,6 +798,9 @@ def _task_stop_tool() -> ToolDefinition:
             pass
         meta.update({"status": "terminated", "stoppedAt": now_iso(), "updatedAt": now_iso()})
         await writeTaskMeta(task_id, meta)
+        runner_pid = meta.get("runnerPid")
+        if isinstance(runner_pid, int):
+            await _wait_for_tracked_background_runner(runner_pid)
         execution = _stopped_task_execution_descriptor(task_id, meta)
         context.get("outputJson", lambda *_: None)(
             "task.failed",
@@ -1008,7 +1014,7 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
 
 def _enter_worktree_tool(controller: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        requested_name = input.get("name") if isinstance(input.get("name"), str) and input.get("name").strip() else f"tess-{int(__import__('time').time())}"
+        requested_name = input.get("name").strip() if isinstance(input.get("name"), str) and input.get("name").strip() else f"tess-{int(__import__('time').time() * 1000)}"
         await _ensure_tool_permission(context, "EnterWorktree", "worktree", f"Create git worktree for {requested_name}")
         metadata = context["session"].setdefault("metadata", {})
         original = metadata.setdefault("originalCwd", context["session"].get("cwd") or context["config"].get("cwd"))
@@ -1128,6 +1134,19 @@ def _background_runner_env() -> dict[str, str]:
 def _track_background_runner(runner: subprocess.Popen[Any]) -> None:
     _BACKGROUND_RUNNERS[:] = [process for process in _BACKGROUND_RUNNERS if process.poll() is None]
     _BACKGROUND_RUNNERS.append(runner)
+
+
+async def _wait_for_tracked_background_runner(pid: int, timeout: float = 2) -> None:
+    for process in list(_BACKGROUND_RUNNERS):
+        if process.pid != pid:
+            continue
+        if process.poll() is None:
+            try:
+                await asyncio.to_thread(process.wait, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                pass
+        break
+    _BACKGROUND_RUNNERS[:] = [process for process in _BACKGROUND_RUNNERS if process.poll() is None]
 
 
 async def _communicate_shell_process(proc: asyncio.subprocess.Process, timeout_ms: int, context: dict[str, Any]) -> tuple[bytes, bytes, bool]:
@@ -1644,6 +1663,10 @@ async def _resolve_tool_permission(context: dict[str, Any], tool_name: str, cate
     return {"decision": "ask", "source": "mode", "switchMode": "bypassPermissions", "reason": "This shell command can modify the environment or repository."}
 
 
+def _parse_permission_mode_value(value: Any) -> str | None:
+    return value if isinstance(value, str) and value in PERMISSION_MODES else None
+
+
 def _is_safe_read_only_shell_command(command: str) -> bool:
     normalized = _normalize_shell_command(command)
     if not normalized:
@@ -1700,23 +1723,6 @@ def _normalize_bash_timeout(command: str, value: Any) -> int:
 
 
 async def _create_git_worktree(cwd: str, requested_name: str) -> dict[str, str] | None:
-    def run_git(args: list[str]) -> str:
-        result = subprocess.run(["git", *args], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode:
-            raise RuntimeError(result.stderr.strip() or result.stdout.strip())
-        return result.stdout.strip()
+    from .workspace import createGitWorktree
 
-    try:
-        root = run_git(["rev-parse", "--show-toplevel"])
-    except Exception:
-        return None
-    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", requested_name).strip("-") or f"worktree-{uuid.uuid4().hex[:8]}"
-    target = os.path.abspath(os.path.join(root, "..", safe_name))
-    branch = safe_name
-    suffix = 1
-    while os.path.exists(target):
-        suffix += 1
-        target = os.path.abspath(os.path.join(root, "..", f"{safe_name}-{suffix}"))
-        branch = f"{safe_name}-{suffix}"
-    await asyncio.to_thread(run_git, ["worktree", "add", "-b", branch, target])
-    return {"targetPath": target, "branchName": branch}
+    return await createGitWorktree(cwd=cwd, requestedName=requested_name)

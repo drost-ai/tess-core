@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -81,7 +82,19 @@ def _byte_len(value: str) -> int:
 
 
 def _count_lines(value: str) -> int:
-    return 0 if value == "" else len(value.splitlines() or [""])
+    return 0 if value == "" else len(splitToolTextLines(value))
+
+
+def splitToolTextLines(value: str) -> list[str]:
+    return re.split(r"\r?\n", value)
+
+
+def _without_none_values(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _without_none_values(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_without_none_values(item) for item in value]
+    return value
 
 
 def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
@@ -97,7 +110,7 @@ def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
 
 
 def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: int) -> dict[str, Any]:
-    lines = text.splitlines()
+    lines = splitToolTextLines(text)
     head = _fit_lines_within_bytes(lines[:head_lines], max_bytes)
     tail = _fit_lines_within_bytes(lines[max(len(lines) - tail_lines, 0):], max_bytes)
     excerpt = "\n".join(head)
@@ -120,7 +133,7 @@ async def _persist_artifact(args: dict[str, Any]) -> dict[str, Any]:
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as handle:
         handle.write(content)
-    record = {
+    record = _without_none_values({
         "artifactId": artifact_id,
         "toolName": args["toolName"],
         "sessionId": args["sessionId"],
@@ -132,7 +145,7 @@ async def _persist_artifact(args: dict[str, Any]) -> dict[str, Any]:
         "itemCount": args.get("itemCount"),
         "contentType": args.get("contentType", "text"),
         "createdAt": now_iso(),
-    }
+    })
     await writeJsonFile(toolArtifactMetaPath(args["sessionId"], artifact_id), record)
     return record
 
@@ -200,13 +213,13 @@ async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any)
     elif strategy == "head_tail":
         excerpt = _head_tail_excerpt(text, policy["textHeadLines"], policy["textTailLines"], policy["textInlineBytes"])
     else:
-        lines = _fit_lines_within_bytes(text.splitlines()[: policy["textInlineLines"]], policy["textInlineBytes"])
+        lines = _fit_lines_within_bytes(splitToolTextLines(text)[: policy["textInlineLines"]], policy["textInlineBytes"])
         next_text = "\n".join(lines).strip()
         excerpt = {"text": next_text, "truncated": next_text != text, "strategy": "inline_full" if next_text == text else "inline_truncated_head"}
     artifact = None
     if original_bytes > policy["artifactThresholdBytes"] or original_lines > policy["artifactThresholdLines"]:
         artifact = await _persist_artifact({**args, "content": text, "contentType": args.get("contentType", "text")})
-    return {
+    return _without_none_values({
         "text": excerpt["text"],
         "view": {
             "strategy": excerpt["strategy"],
@@ -217,7 +230,7 @@ async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any)
             "returnedLines": _count_lines(excerpt["text"]),
             "artifact": artifact,
         },
-    }
+    })
 
 
 async def shapeReadPayload(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -235,7 +248,7 @@ async def shapeReadPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
     if _byte_len(full) > policy["artifactThresholdBytes"] or _count_lines(full) > policy["artifactThresholdLines"]:
         artifact = await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Read", "family": "read", "content": full, "contentType": "text"})
     next_offset = start + len(selected) + 1 if start + len(selected) < len(lines) else (start + len(excerpt_lines) + 1 if len(excerpt_lines) < len(selected) else None)
-    return {
+    return _without_none_values({
         "type": "text",
         "file": {
             "filePath": args["filePath"],
@@ -258,7 +271,7 @@ async def shapeReadPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 "returnedLines": len(excerpt_lines),
             },
         },
-    }
+    })
 
 
 def _sample_paths_by_directory(matches: list[str], limit: int) -> list[str]:
@@ -298,7 +311,7 @@ async def shapeGlobPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
         directory = os.path.dirname(match) or "(root)"
         counts[directory] = counts.get(directory, 0) + 1
     directory_counts = [{"directory": name, "count": count} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:12]]
-    return {
+    return _without_none_values({
         "type": "glob",
         "pattern": args["pattern"],
         "path": args["searchPath"],
@@ -316,7 +329,7 @@ async def shapeGlobPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
             "returnedBytes": _byte_len("\n".join(sample)),
             "returnedLines": len(sample),
         },
-    }
+    })
 
 
 async def shapeGrepPayload(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -332,7 +345,7 @@ async def shapeGrepPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
     if len(matches) > len(sample) or _byte_len(full) > policy["grepInlineBytes"]:
         artifact = await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Grep", "family": "grep", "content": full, "contentType": "text", "itemCount": len(matches)})
     truncated = len(sample) < len(matches) - offset
-    return {
+    return _without_none_values({
         "type": "grep",
         "pattern": args["pattern"],
         "path": args["searchPath"],
@@ -352,4 +365,4 @@ async def shapeGrepPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
             "returnedBytes": _byte_len("\n".join(sample)),
             "returnedLines": len(sample),
         },
-    }
+    })
