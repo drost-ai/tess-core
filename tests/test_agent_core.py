@@ -2530,6 +2530,84 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_transcript_snapshot_matches_reference_shape(self):
+        read_payload_a = {
+            "type": "text",
+            "file": {"filePath": "/tmp/a.py", "content": "print('a')", "numLines": 1, "startLine": 1, "totalLines": 1},
+        }
+        read_payload_b = {
+            "type": "text",
+            "file": {"filePath": "/tmp/b.py", "content": "print('b')", "numLines": 1, "startLine": 1, "totalLines": 1},
+        }
+        session = {
+            "name": "Fallback Name",
+            "metadata": {"assistantName": "Tess"},
+            "messages": [
+                {"role": "user", "content": "read both files"},
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "\nI'll read them.\n"},
+                        {"type": "tool_use", "id": "status-1", "name": "SetStatus", "input": {"status": "reading"}},
+                        {"type": "tool_use", "id": "read-1", "name": "Read", "input": {"file_path": "/tmp/a.py"}},
+                    ],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "status-1", "content": "ignored"},
+                        {"type": "tool_result", "tool_use_id": "read-1", "content": json.dumps(read_payload_a)},
+                    ],
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "tool_use", "id": "read-2", "name": "Read", "input": {"file_path": "/tmp/b.py"}}],
+                },
+                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "read-2", "content": read_payload_b}]},
+            ],
+        }
+
+        entries = core.buildTranscriptSnapshot(session)
+        self.assertEqual(entries[0], {"tone": "user", "title": "You", "body": "read both files", "timestamp": "saved"})
+        self.assertEqual(entries[1], {"tone": "assistant", "title": "Tess", "body": "I'll read them.", "timestamp": "saved"})
+        self.assertEqual(len([entry for entry in entries if entry.get("tone") == "tool"]), 1)
+        tool_entry = entries[2]
+        self.assertEqual(tool_entry["title"], "Read")
+        self.assertEqual(tool_entry["payload"]["toolName"], "Read")
+        self.assertEqual(tool_entry["payload"]["label"], "Read")
+        self.assertEqual(tool_entry["payload"]["outputs"], [read_payload_a, read_payload_b])
+        self.assertNotIn("ignored", tool_entry["body"])
+
+    def test_transcript_plan_compaction_and_bug_command_match_reference(self):
+        plan_text = "Implement shell parity.\nRun the focused tests."
+        session = {
+            "id": "session-transcript",
+            "cwd": "/tmp/work",
+            "metadata": {"planMode": {"state": "pending", "plan": plan_text}},
+            "messages": [
+                {"role": "user", "content": "make a plan"},
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "Implement shell parity. Run the focused tests."},
+                        {"type": "tool_use", "id": "plan-tool", "name": "ExitPlanMode", "input": {}},
+                    ],
+                },
+                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "plan-tool", "content": "pending"}]},
+            ],
+        }
+
+        entries = core.buildTranscriptSnapshot(session)
+        self.assertEqual([entry["title"] for entry in entries], ["You", "Plan"])
+        self.assertEqual(entries[1]["body"], plan_text)
+        self.assertTrue(all(entry.get("payload", {}).get("toolName") != "ExitPlanMode" for entry in entries))
+
+        infos = []
+        result = run(core.handleSlashCommand({"command": "/bug", "session": session, "config": {}, "hooks": {"info": lambda title, message: infos.append((title, message))}}))
+        self.assertEqual(result["title"], "Feedback")
+        self.assertIn("https://github.com/drost-ai/tess-core/issues", result["message"])
+        self.assertEqual(infos[-1][0], "Feedback")
+
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:

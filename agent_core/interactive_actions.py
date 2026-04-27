@@ -174,7 +174,7 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         entries = buildTranscriptSnapshot(session)
         return {"outcome": "handled", "entries": entries, "message": json.dumps(entries, indent=2)}
     if command == "bug":
-        return _info(hooks, "Bug", "Open an issue with the current debug bundle and reproduction details.")
+        return _info(hooks, "Feedback", "Report issues at https://github.com/drost-ai/tess-core/issues")
     if runtime_command:
         result = runtime_command["handler"]({"argText": arg_text, "args": arg_text, "session": session, "config": config, "hooks": hooks})
         if hasattr(result, "__await__"):
