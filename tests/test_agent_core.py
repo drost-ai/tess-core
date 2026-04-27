@@ -5,6 +5,7 @@ import contextlib
 import http.server
 import io
 import json
+import math
 import os
 import queue
 import re
@@ -1922,6 +1923,13 @@ class AgentCoreTests(unittest.TestCase):
             }
         )
         self.assertEqual(budget["payload"], {"estimatedCostUsd": 1.25, "maxBudgetUsd": 1.0, "model": "gpt-5.4"})
+        non_finite_budget = core.createRuntimeEvent(
+            {
+                "event": "budget.exceeded",
+                "data": {"estimated_cost_usd": math.inf, "max_budget_usd": math.nan},
+            }
+        )
+        self.assertEqual(non_finite_budget["payload"], {"estimatedCostUsd": None, "maxBudgetUsd": None, "model": None})
 
         self.assertNotIn("status", state)
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))
@@ -2540,6 +2548,36 @@ class AgentCoreTests(unittest.TestCase):
             remote_after_queue = run(core.loadRemoteSession(remote["id"]))
             self.assertTrue(remote_after_queue["lastEventSummary"].endswith("\u2026"))
             self.assertEqual(len(remote_after_queue["lastEventSummary"]), 96)
+            run(bridge_runtime["close"]())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_remote_bridge_persistence_omits_undefined_optional_fields(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+
+            remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
+            persisted_remote = run(core.loadRemoteSession(remote["id"]))
+            for key in ("description", "workspaceName", "gitRoot", "gitBranch", "prNumber", "prUrl"):
+                self.assertNotIn(key, persisted_remote)
+
+            events = []
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "startPolling": False, "emit": lambda event, data: events.append((event, data))}))
+            bridge_id = bridge_runtime["bridge"]["id"]
+            persisted_bridge = run(core.loadBridge(bridge_id))
+            self.assertNotIn("remoteSessionId", persisted_bridge)
+            self.assertNotIn("name", persisted_bridge)
+            started_events = run(core.loadBridgeEvents(bridge_id))
+            self.assertEqual(started_events[0]["event"], "bridge.started")
+            self.assertNotIn("remote_session_id", started_events[0]["data"])
+            self.assertNotIn("name", started_events[0]["data"])
+
+            message = run(core.sendBridgeMessage({"bridgeId": bridge_id, "text": "local handoff"}))
+            inbox = run(core.loadBridgeInbox(bridge_id))
+            self.assertEqual(inbox[0]["id"], message["id"])
+            self.assertNotIn("remoteSessionId", inbox[0])
             run(bridge_runtime["close"]())
         finally:
             self.restore_home(root, previous)

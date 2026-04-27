@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from ._utils import now_iso
@@ -440,7 +441,7 @@ def _permission_mode_field(value: Any) -> str:
 
 
 def _optional_number(value: Any) -> int | float | None:
-    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
 
 def _optional_boolean(value: Any) -> bool | None:

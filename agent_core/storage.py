@@ -703,7 +703,7 @@ def remoteSessionPath(remoteSessionId: str) -> str:
 
 
 async def saveRemoteSession(record: dict[str, Any]) -> None:
-    await writeJsonFile(remoteSessionPath(record["id"]), record)
+    await writeJsonFile(remoteSessionPath(record["id"]), _omit_none_fields(record))
 
 
 async def loadRemoteSession(remoteSessionId: str) -> dict[str, Any] | None:
@@ -728,7 +728,7 @@ def bridgeEventsPath(bridgeId: str) -> str:
 
 
 async def saveBridge(record: dict[str, Any]) -> None:
-    await writeJsonFile(bridgePath(record["id"]), record)
+    await writeJsonFile(bridgePath(record["id"]), _omit_none_fields(record))
 
 
 async def loadBridge(bridgeId: str) -> dict[str, Any] | None:
@@ -758,7 +758,7 @@ async def loadBridgeInbox(bridgeId: str) -> list[dict[str, Any]]:
 
 async def appendBridgeInboxMessage(message: dict[str, Any]) -> None:
     existing = await loadBridgeInbox(message["bridgeId"])
-    await writeJsonFile(bridgeInboxPath(message["bridgeId"]), [*existing, message])
+    await writeJsonFile(bridgeInboxPath(message["bridgeId"]), _omit_none_fields([*existing, message]))
 
 
 async def loadBridgeEvents(bridgeId: str) -> list[dict[str, Any]]:
@@ -767,7 +767,7 @@ async def loadBridgeEvents(bridgeId: str) -> list[dict[str, Any]]:
 
 async def appendBridgeEvent(record: dict[str, Any]) -> None:
     existing = await loadBridgeEvents(record["bridgeId"])
-    await writeJsonFile(bridgeEventsPath(record["bridgeId"]), [*existing, record])
+    await writeJsonFile(bridgeEventsPath(record["bridgeId"]), _omit_none_fields([*existing, record]))
 
 
 async def saveDaemonState(record: dict[str, Any]) -> None:
