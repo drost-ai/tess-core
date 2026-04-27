@@ -1153,7 +1153,18 @@ async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str
 async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     if _call_value(hooks, "isCompacting"):
         return _info(hooks, "Compact", "Compaction is already running.")
-    _emit_runtime(hooks, "compaction.started", {"session_id": session.get("id"), "trigger": "manual", "current_token_estimate": ((session.get("metadata") or {}).get("compactionState") or {}).get("workingContextTokenEstimate")})
+    compaction_state = (session.get("metadata") or {}).get("compactionState") or {}
+    token_measurement = compaction_state.get("workingContextTokenMeasurement") or {}
+    _emit_runtime(
+        hooks,
+        "compaction.started",
+        {
+            "session_id": session.get("id"),
+            "trigger": "manual",
+            "current_token_estimate": compaction_state.get("workingContextTokenEstimate"),
+            "current_token_source": token_measurement.get("source"),
+        },
+    )
     runner = hooks.get("runCompaction") if isinstance(hooks, dict) else None
     runner = runner if callable(runner) else runCompaction
     payload = {"session": session, "config": config, "trigger": "manual", "force": True}
@@ -1164,16 +1175,111 @@ async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[s
         if hasattr(outcome, "__await__"):
             outcome = await outcome
     except Exception as exc:
-        _emit_runtime(hooks, "compaction.failed", {"session_id": session.get("id"), "trigger": "manual", "error": str(exc)})
+        provider_failure = getattr(exc, "record", None)
+        provider_failure = provider_failure if isinstance(provider_failure, dict) else {}
+        _emit_runtime(
+            hooks,
+            "compaction.failed",
+            {
+                "session_id": session.get("id"),
+                "trigger": "manual",
+                "current_token_estimate": compaction_state.get("workingContextTokenEstimate"),
+                "current_token_source": token_measurement.get("source"),
+                "error": provider_failure.get("message") or str(exc),
+                "provider": provider_failure.get("provider"),
+                "provider_label": provider_failure.get("providerLabel"),
+                "category": provider_failure.get("category"),
+                "phase": provider_failure.get("phase"),
+                "retryable": provider_failure.get("retryable"),
+                "attempt": provider_failure.get("attempt"),
+                "status": provider_failure.get("status"),
+                "code": provider_failure.get("code"),
+                "error_type": provider_failure.get("errorType"),
+                "raw_error": provider_failure.get("rawMessage"),
+            },
+        )
         return _error(hooks, str(exc))
     if outcome.get("status") == "skipped":
-        _emit_runtime(hooks, "compaction.skipped", {"session_id": session.get("id"), "trigger": "manual", "reason": outcome.get("reason"), "detail": outcome.get("detail")})
-        return _info(hooks, "Compact", "\n".join(["Checkpoint not created.", f"reason      {outcome.get('reason')}", f"detail      {outcome.get('detail')}"]))
+        _emit_runtime(
+            hooks,
+            "compaction.skipped",
+            {
+                "session_id": session.get("id"),
+                "trigger": "manual",
+                "current_token_estimate": compaction_state.get("workingContextTokenEstimate"),
+                "current_token_source": token_measurement.get("source"),
+                "reason": outcome.get("reason"),
+                "detail": outcome.get("detail"),
+                "previous_cutoff": outcome.get("previousCutoff"),
+                "candidate_cutoff": outcome.get("candidateCutoff"),
+                "quality_score": outcome.get("qualityScore"),
+                "quality_classification": outcome.get("qualityClassification"),
+            },
+        )
+        lines = ["Checkpoint not created.", f"reason          {outcome.get('reason')}", f"detail          {outcome.get('detail')}"]
+        if compaction_state:
+            artifacts = compaction_state.get("artifacts") or {}
+            lines.extend(
+                [
+                    f"latest gen      {compaction_state.get('latestCompactionGeneration')}",
+                    f"summary         {artifacts.get('summary')}",
+                    f"working ctx     {artifacts.get('workingContext')}",
+                ]
+            )
+        return _info(hooks, "Compact", "\n".join(lines))
     _call(hooks, "refresh")
     await _persist(hooks)
-    _emit_runtime(hooks, "compaction.completed", {"session_id": session.get("id"), "trigger": outcome.get("trigger"), "generation": outcome.get("generation"), "compacted_through_message_index": outcome.get("compactedThroughMessageIndex")})
     artifacts = outcome.get("artifacts") or {}
-    return _info(hooks, "Compact", "\n".join(["Compacted working context.", f"generation  {outcome.get('generation')}", f"summary     {artifacts.get('summary', 'n/a')}", f"checkpoint  {artifacts.get('checkpoint', 'n/a')}"]))
+    compaction_model = outcome.get("compactionModel") or {}
+    verification_model = outcome.get("verificationModel") or {}
+    verification = outcome.get("verification") or {}
+    working_measurement = outcome.get("workingContextTokenMeasurement") or {}
+    _emit_runtime(
+        hooks,
+        "compaction.completed",
+        {
+            "session_id": session.get("id"),
+            "generation": outcome.get("generation"),
+            "trigger": outcome.get("trigger"),
+            "compacted_through_message_index": outcome.get("compactedThroughMessageIndex"),
+            "compacted_message_count": outcome.get("compactedMessageCount"),
+            "recent_message_count": outcome.get("recentMessageCount"),
+            "raw_token_estimate": outcome.get("rawTokenEstimate"),
+            "working_context_token_estimate": outcome.get("workingContextTokenEstimate"),
+            "working_context_token_source": working_measurement.get("source"),
+            "quality_classification": outcome.get("qualityClassification"),
+            "compaction_provider": compaction_model.get("provider"),
+            "compaction_model": compaction_model.get("model"),
+            "verification_provider": verification_model.get("provider"),
+            "verification_model": verification_model.get("model"),
+            "verification_verdict": verification.get("verdict"),
+            "verification_confidence": verification.get("confidence"),
+            "summary_path": artifacts.get("summary"),
+            "state_path": artifacts.get("state"),
+            "working_context_path": artifacts.get("workingContext"),
+            "checkpoint_path": artifacts.get("checkpoint"),
+        },
+    )
+    return _info(
+        hooks,
+        "Compact",
+        "\n".join(
+            [
+                "Compacted working context.",
+                "Archive preserved.",
+                f"generation      {outcome.get('generation')}",
+                f"compacted msgs  {outcome.get('compactedMessageCount')}",
+                f"recent msgs     {outcome.get('recentMessageCount')}",
+                f"working ctx     {outcome.get('workingContextTokenEstimate')}",
+                f"quality         {outcome.get('qualityClassification')}",
+                f"summary         {artifacts.get('summary', 'n/a')}",
+                f"state           {artifacts.get('state', 'n/a')}",
+                f"working ctx     {artifacts.get('workingContext', 'n/a')}",
+                f"checkpoint      {artifacts.get('checkpoint', 'n/a')}",
+                "Future prompts will use the compacted artifacts plus recent raw turns.",
+            ]
+        ),
+    )
 
 
 async def _handle_review(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:

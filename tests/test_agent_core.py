@@ -2608,6 +2608,73 @@ class AgentCoreTests(unittest.TestCase):
         self.assertIn("https://github.com/drost-ai/tess-core/issues", result["message"])
         self.assertEqual(infos[-1][0], "Feedback")
 
+    def test_shell_compact_event_payload_matches_reference(self):
+        session = {
+            "id": "session-compact",
+            "cwd": "/tmp/work",
+            "metadata": {
+                "compactionState": {
+                    "workingContextTokenEstimate": 1234,
+                    "workingContextTokenMeasurement": {"source": "fixture"},
+                }
+            },
+        }
+        config = {"provider": "openai"}
+        events = []
+        counters = {"persist": 0, "refresh": 0}
+
+        def fake_compaction(payload):
+            self.assertEqual(payload["trigger"], "manual")
+            return {
+                "status": "completed",
+                "generation": 4,
+                "trigger": "manual",
+                "compactedThroughMessageIndex": 8,
+                "compactedMessageCount": 9,
+                "recentMessageCount": 3,
+                "rawTokenEstimate": 5000,
+                "workingContextTokenEstimate": 1500,
+                "workingContextTokenMeasurement": {"source": "post-compact"},
+                "qualityClassification": "rich",
+                "compactionModel": {"provider": "openai", "model": "gpt-5.4"},
+                "verificationModel": {"provider": "anthropic", "model": "claude"},
+                "verification": {"verdict": "accept", "confidence": "high"},
+                "artifacts": {
+                    "summary": "/tmp/summary.md",
+                    "state": "/tmp/state.json",
+                    "workingContext": "/tmp/context.md",
+                    "checkpoint": "/tmp/checkpoint.json",
+                },
+            }
+
+        result = run(
+            core.handleSlashCommand(
+                {
+                    "command": "/compact",
+                    "session": session,
+                    "config": config,
+                    "hooks": {
+                        "runCompaction": fake_compaction,
+                        "emitRuntimeEvent": lambda event, data: events.append((event, data)),
+                        "persist": lambda: counters.__setitem__("persist", counters["persist"] + 1),
+                        "refresh": lambda: counters.__setitem__("refresh", counters["refresh"] + 1),
+                    },
+                }
+            )
+        )
+
+        self.assertIn("Archive preserved.", result["message"])
+        self.assertEqual(events[0][0], "compaction.started")
+        self.assertEqual(events[0][1]["current_token_source"], "fixture")
+        self.assertEqual(events[-1][0], "compaction.completed")
+        completed = events[-1][1]
+        self.assertEqual(completed["compacted_message_count"], 9)
+        self.assertEqual(completed["working_context_token_source"], "post-compact")
+        self.assertEqual(completed["compaction_provider"], "openai")
+        self.assertEqual(completed["verification_verdict"], "accept")
+        self.assertEqual(completed["checkpoint_path"], "/tmp/checkpoint.json")
+        self.assertEqual(counters, {"persist": 1, "refresh": 1})
+
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:
