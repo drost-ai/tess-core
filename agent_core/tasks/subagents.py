@@ -29,7 +29,8 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
     try:
         result = await _execute_foreground_subagent(args, prepared)
         status = mapStopReasonToStatus(result.get("stopReason"))
-        summary = (result.get("text") or "").strip()[:280] or None
+        event_summary = (result.get("text") or "").strip()[:280]
+        summary = event_summary or None
         completed_at = now_iso()
         await saveChildAgent(
             {
@@ -51,24 +52,26 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "attachable_session_id": child_session["id"],
                 "status": status,
                 "stop_reason": result.get("stopReason"),
-                "summary": summary,
+                "summary": event_summary,
                 "duration_ms": _monotonic_ms() - started_at,
             },
         )
         return {
             "content": pretty_json(
-                {
-                    "agent_id": agent_id,
-                    "session_id": child_session["id"],
-                    "agent_type": child_record.get("agentType"),
-                    "status": status,
-                    "content": result.get("text") or "",
-                    "usage": result.get("usage") or {},
-                    "tool_count": result.get("toolCount") or 0,
-                    "duration_ms": _monotonic_ms() - started_at,
-                    "stop_reason": result.get("stopReason"),
-                    "worktree_path": prepared.get("worktreePath"),
-                }
+                _without_none_values(
+                    {
+                        "agent_id": agent_id,
+                        "session_id": child_session["id"],
+                        "agent_type": child_record.get("agentType"),
+                        "status": status,
+                        "content": result.get("text") or "",
+                        "usage": result.get("usage"),
+                        "tool_count": result.get("toolCount"),
+                        "duration_ms": _monotonic_ms() - started_at,
+                        "stop_reason": result.get("stopReason"),
+                        "worktree_path": prepared.get("worktreePath"),
+                    }
+                )
             ),
             "isError": status != "completed",
         }
@@ -97,7 +100,7 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "error": message,
             },
         )
-        return {"content": pretty_json({"agent_id": agent_id, "session_id": child_session["id"], "status": "failed", "error": message, "worktree_path": prepared.get("worktreePath")}), "isError": True}
+        return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "status": "failed", "error": message, "worktree_path": prepared.get("worktreePath")})), "isError": True}
 
 
 async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -159,7 +162,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             "worktree_path": prepared.get("worktreePath"),
         },
     )
-    return {"content": pretty_json({"agent_id": agent_id, "session_id": child_session["id"], "task_id": task_id, "status": "running", "run_in_background": True, "output_file": output_file, "worktree_path": prepared.get("worktreePath")})}
+    return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "task_id": task_id, "status": "running", "run_in_background": True, "output_file": output_file, "worktree_path": prepared.get("worktreePath")}))}
 
 
 async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
@@ -178,16 +181,20 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     agent_id = f"agent-{uuid.uuid4()}"
     requested_mode = sanitizePermissionMode(args.get("mode") or parent.get("permissionMode") or config.get("permissionMode"))
     child_mode = inheritParentPermissionMode(requested_mode, parent.get("permissionMode") or config.get("permissionMode") or "default")
-    child_model = normalizeModelName(model, parent.get("provider")) if model else resolveModelForAgent(config, agent_type, parent.get("model") or config.get("model"))
-    child_provider = resolveProviderForModelSelection(parent.get("provider") or config.get("provider"), child_model) or parent.get("provider") or config.get("provider")
-    child_system = buildSystemPromptForAgent(config, agent_type) if agent_type else parent.get("systemPrompt") or config.get("systemPrompt")
+    parent_provider = parent.get("provider") if parent.get("provider") is not None else config.get("provider")
+    parent_model = parent.get("model") if parent.get("model") is not None else config.get("model")
+    child_model = normalizeModelName(model, parent_provider) if model else resolveModelForAgent(config, agent_type, parent_model)
+    child_provider = resolveProviderForModelSelection(parent_provider, child_model) or parent_provider
+    child_system = buildSystemPromptForAgent(config, agent_type) if agent_type else (parent.get("systemPrompt") if parent.get("systemPrompt") is not None else config.get("systemPrompt"))
     child_name = name or description.strip()
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     child_cwd = worktree_path or parent["cwd"]
+    parent_metadata = parent.setdefault("metadata", {})
+    parent_has_original_cwd = parent_metadata.get("originalCwd") is not None
     child_session = createEmptySession(
         cwd=child_cwd,
         provider=child_provider,
-        providerProfileName=parent.get("providerProfileName") or config.get("providerProfileName"),
+        providerProfileName=parent.get("providerProfileName") if parent.get("providerProfileName") is not None else config.get("providerProfileName"),
         model=child_model,
         effort=parent.get("effort") if parent.get("effort") is not None else config.get("effort"),
         systemPrompt=child_system,
@@ -195,9 +202,15 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         name=child_name,
         assistantName=parent.get("metadata", {}).get("assistantName") or config.get("assistantName"),
         assistantDescription=parent.get("metadata", {}).get("assistantDescription") or config.get("assistantDescription"),
-        originalCwd=parent.get("metadata", {}).get("originalCwd") or parent["cwd"],
+        originalCwd=parent_metadata.get("originalCwd"),
     )
     metadata = child_session.setdefault("metadata", {})
+    if parent_has_original_cwd:
+        metadata["originalCwd"] = parent_metadata.get("originalCwd")
+    else:
+        metadata.pop("originalCwd", None)
+    metadata.pop("assistantName", None)
+    metadata.pop("assistantDescription", None)
     metadata["depth"] = int(parent.get("metadata", {}).get("depth") or 0) + 1
     metadata["parentSessionId"] = parent["id"]
     metadata["parentAgentId"] = parent.get("metadata", {}).get("agentId")
@@ -222,7 +235,6 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "appendSystemPrompt": None,
         "allowedRoots": _dedupe([*(config.get("allowedRoots") or []), child_cwd]),
     }
-    parent_metadata = parent.setdefault("metadata", {})
     parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])
     parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
     if run_in_background:
@@ -504,18 +516,20 @@ def _subagent_started_payload(prepared: dict[str, Any], args: dict[str, Any], ba
 
 async def _create_subagent_worktree(context: dict[str, Any], agent_id: str, child_name: str) -> str:
     suffix = _slugify(child_name) or agent_id[-8:]
-    controller = context.get("workspaceController")
-    if controller and hasattr(controller, "createWorktree"):
-        result = await maybe_await(controller.createWorktree(suffix))
-        worktree = result.get("worktree") if isinstance(result, dict) else None
-        if isinstance(worktree, dict) and worktree.get("targetPath"):
-            return worktree["targetPath"]
     result = await createGitWorktree({"cwd": context["session"]["cwd"], "requestedName": suffix})
     return result["targetPath"]
 
 
 def _output(context: dict[str, Any], event: str, data: dict[str, Any]) -> None:
-    context.get("outputJson", lambda *_: None)(event, data)
+    context.get("outputJson", lambda *_: None)(event, _without_none_values(data))
+
+
+def _without_none_values(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _without_none_values(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [_without_none_values(item) for item in value]
+    return value
 
 
 def _dedupe(values: list[Any]) -> list[str]:

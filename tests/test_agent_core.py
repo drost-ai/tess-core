@@ -5430,6 +5430,7 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(payload["status"], "completed")
             self.assertEqual(payload["content"], "child done")
             self.assertEqual(payload["agent_type"], "researcher")
+            self.assertNotIn("worktree_path", payload)
             self.assertEqual(persisted["count"], 1)
             self.assertEqual(parent["metadata"]["childAgentIds"], [payload["agent_id"]])
             self.assertEqual(parent["metadata"]["childSessionIds"], [payload["session_id"]])
@@ -5437,6 +5438,8 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(captured["childSession"]["permissionMode"], "acceptEdits")
             self.assertEqual(captured["childSession"]["metadata"]["depth"], 1)
             self.assertEqual(captured["childSession"]["metadata"]["parentSessionId"], parent["id"])
+            self.assertNotIn("assistantName", captured["childSession"]["metadata"])
+            self.assertNotIn("assistantDescription", captured["childSession"]["metadata"])
             self.assertEqual(captured["childConfig"]["agent"], "researcher")
             self.assertEqual(captured["childConfig"]["model"], "gpt-5-mini-2025-08-07")
             self.assertTrue(captured["childConfig"]["systemPrompt"].startswith("Config level prompt."))
@@ -5453,8 +5456,59 @@ class AgentCoreTests(unittest.TestCase):
             self.assertNotIn("waitingReason", child_record)
             saved_child = run(core.loadSession(payload["session_id"]))
             self.assertEqual(saved_child["metadata"]["agentId"], payload["agent_id"])
-            self.assertTrue(any(event == "subagent.started" for event, _ in events))
-            self.assertTrue(any(event == "subagent.completed" and data["status"] == "completed" for event, data in events))
+            self.assertEqual([event for event, _ in events], ["subagent.started", "subagent.completed"])
+            self.assertEqual(events[1][1]["status"], "completed")
+
+            raw_parent = {
+                "id": "raw-agent-parent",
+                "cwd": str(workspace),
+                "createdAt": "2026-01-01T00:00:00Z",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "provider": "openai",
+                "providerProfileName": config["providerProfileName"],
+                "model": config["model"],
+                "effort": config["effort"],
+                "systemPrompt": config["systemPrompt"],
+                "permissionMode": "default",
+                "messages": [],
+                "todos": [],
+                "metadata": {"childSessionIds": [], "childAgentIds": []},
+            }
+            raw_captured = {}
+
+            async def empty_waiting_subagent(args, _context):
+                raw_captured.update(args)
+                return {"text": "", "usage": {}, "toolCount": 0, "stopReason": "plan_chat_requested"}
+
+            raw_events = []
+            raw_result = run(
+                agent.handler(
+                    {"description": "Needs input", "prompt": "ask"},
+                    {
+                        "session": raw_parent,
+                        "config": config,
+                        "interactive": False,
+                        "askQuestion": lambda *_: "",
+                        "outputJson": lambda event, data: raw_events.append((event, data)),
+                        "cwd": str(workspace),
+                        "persistSession": lambda: None,
+                        "runSubagent": empty_waiting_subagent,
+                    },
+                )
+            )
+            raw_payload = json.loads(raw_result["content"])
+            self.assertTrue(raw_result["isError"])
+            self.assertEqual(raw_payload["status"], "awaiting_input")
+            self.assertNotIn("agent_type", raw_payload)
+            self.assertNotIn("worktree_path", raw_payload)
+            self.assertNotIn("originalCwd", raw_captured["childSession"]["metadata"])
+            self.assertEqual([event for event, _ in raw_events], ["subagent.started", "subagent.failed"])
+            self.assertNotIn("agent_type", raw_events[0][1])
+            self.assertIn("summary", raw_events[1][1])
+            self.assertEqual(raw_events[1][1]["summary"], "")
+            raw_child = run(core.loadChildAgent(raw_payload["agent_id"]))
+            self.assertEqual(raw_child["status"], "awaiting_input")
+            self.assertNotIn("lastSummary", raw_child)
 
             unknown = run(agent.handler({"description": "Nope", "prompt": "x", "subagent_type": "missing"}, {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
             self.assertTrue(unknown["isError"])
@@ -5538,6 +5592,7 @@ class AgentCoreTests(unittest.TestCase):
             payload = json.loads(result["content"])
             self.assertEqual(payload["status"], "running")
             self.assertEqual(payload["run_in_background"], True)
+            self.assertNotIn("worktree_path", payload)
             self.assertEqual(spawn_calls[0]["task_id"], payload["task_id"])
             self.assertEqual(spawn_calls[0]["session_id"], payload["session_id"])
             self.assertEqual(spawn_calls[0]["agent_id"], payload["agent_id"])
