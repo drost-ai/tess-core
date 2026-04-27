@@ -32,7 +32,10 @@ from .storage import (
     listSessionTaskRecords,
     listSessions,
     loadAutoMode,
+    loadBridge,
     loadDaemonState,
+    loadRemoteSession,
+    loadSession,
     loadTaskRecord,
     saveAutoMode,
     saveMonitor,
@@ -141,12 +144,14 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return _info(hooks, "Plans", await buildPlansReport(session, arg_text))
     if command == "tasks":
         return _info(hooks, "Tasks", await buildTasksReport(session, arg_text, args))
-    if command in {"agents", "background"}:
-        return _info(hooks, "Agents" if command == "agents" else "Background", await buildAgentsReport(session, arg_text))
+    if command == "agents":
+        return _info(hooks, "Agents", await buildAgentsReport(session, arg_text))
+    if command == "background":
+        return await _handle_background(arg_text, session, hooks)
     if command == "daemon":
         return await _handle_daemon(arg_text, session, config, hooks, args)
     if command == "remote":
-        return _info(hooks, "Remote", await buildRemoteReport(session))
+        return await _handle_remote(arg_text, session, hooks)
     if command == "monitors":
         return _info(hooks, "Monitors", await buildMonitorsReport(session))
     if command == "monitor":
@@ -336,17 +341,389 @@ async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[st
     return _error(hooks, "Usage: /daemon [restart|stop]")
 
 
-async def buildRemoteReport(session: dict[str, Any]) -> str:
+async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     metadata = session.get("metadata", {})
-    remotes = await listRemoteSessions()
-    active = [remote for remote in remotes if remote.get("id") == metadata.get("remoteSessionId") or remote.get("sessionId") == session.get("id")]
-    if not active:
-        return "No remote sessions linked to this session."
-    lines = [formatRemoteSessionCandidate(remote) for remote in active[:8]]
-    bridge_id = metadata.get("bridgeId")
-    if bridge_id:
-        lines.extend(["", "Bridge events:", await formatBridgeTail(bridge_id, 8)])
+    remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+    bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+    if not arg_text:
+        if remote or bridge:
+            return _info(hooks, "Remote", buildRemoteReport(session, remote, bridge))
+        fallback = _call_value(hooks, "getRemoteReport")
+        return _info(hooks, "Remote", str(fallback) if fallback is not None else buildRemoteFallbackReport(session))
+
+    subcommand, query = _split_subcommand(arg_text)
+    if subcommand not in {"attach", "resume"}:
+        return _error(hooks, "Usage: /remote [attach|resume]")
+    request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
+    if not callable(request_resume):
+        return _error(hooks, "/remote attach is only available in the full-screen TUI.")
+    target_session_id = await _resolve_remote_attach_target(query, session, remote)
+    if not target_session_id:
+        return _error(hooks, "No attachable remote session is available.")
+    target_session = await loadSession(target_session_id)
+    if not target_session:
+        return _error(hooks, f"Remote session target not found: {target_session_id}")
+    await _persist(hooks)
+    request_resume(target_session)
+    return _handled(f"resuming {target_session_id}")
+
+
+async def _handle_background(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
+    monitors = await listSessionMonitors(session.get("id"))
+    tasks = [
+        record
+        for record in await listSessionTaskRecords(session.get("id"))
+        if record.get("kind") in {"background_command", "main_session"}
+    ]
+    metadata = session.get("metadata", {})
+    remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+    bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+
+    if not arg_text:
+        return _info(hooks, "Background", buildBackgroundReport(session, agents, monitors, tasks, remote, bridge))
+
+    subcommand, query = _split_subcommand(arg_text)
+    if not subcommand or not query:
+        return _error(hooks, "Usage: /background [inspect|attach|resume] <id>")
+    selection = _resolve_background_selection(agents, monitors, tasks, remote, bridge, query)
+    if not selection:
+        return _error(hooks, f"No background item matched: {query}")
+
+    if subcommand == "inspect":
+        return _info(hooks, "Background", _format_background_selection(selection))
+    if subcommand not in {"attach", "resume"}:
+        return _error(hooks, "Usage: /background [inspect|attach|resume] <id>")
+
+    request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
+    if not callable(request_resume):
+        return _error(hooks, "/background attach is only available in the full-screen TUI.")
+    target_session_id = _background_attach_target(selection)
+    if not target_session_id:
+        return _error(hooks, f"No attachable session is available for {selection['label']}.")
+    target_session = await loadSession(target_session_id)
+    if not target_session:
+        return _error(hooks, f"Attach target not found: {target_session_id}")
+    await _persist(hooks)
+    request_resume(target_session)
+    return _handled(f"resuming {target_session_id}")
+
+
+def buildRemoteReport(
+    session: dict[str, Any],
+    remote: dict[str, Any] | None = None,
+    bridge: dict[str, Any] | None = None,
+) -> str:
+    sections = [buildRemoteFallbackReport(session)]
+    if remote:
+        sections.append(formatRemoteSessionRecord(remote, bridge))
+    if bridge and not remote:
+        sections.append(
+            "\n".join(
+                [
+                    f"{_short_id(bridge.get('id', ''))}  {bridge.get('status')}  {bridge.get('name') or 'bridge'}",
+                    f"updated      {str(bridge.get('updatedAt', ''))[:19]}",
+                    f"last event   {bridge.get('lastEventName') or 'n/a'}",
+                    f"pending      {bridge.get('pendingMessages') or 0}",
+                ]
+            )
+        )
+    return "\n\n".join(sections)
+
+
+def buildRemoteFallbackReport(session: dict[str, Any]) -> str:
+    metadata = session.get("metadata", {})
+    lines = [
+        f"session        {session.get('id')}",
+        f"cwd            {session.get('cwd')}",
+        f"remote         {metadata.get('remoteSessionId') or 'none'}",
+        f"bridge         {metadata.get('bridgeId') or 'none'}",
+        f"channels       {', '.join(metadata.get('channelServers') or []) or 'none'}",
+        f"tmux           {metadata.get('tmuxSessionName') or 'none'}",
+        f"ide            {metadata.get('ideName') or 'none'}",
+        f"chrome         {metadata.get('chromeIntegrationMode') or 'off'}",
+    ]
+    if metadata.get("remoteSessionTitle"):
+        lines.insert(3, f"title          {metadata.get('remoteSessionTitle')}")
     return "\n".join(lines)
+
+
+def buildBackgroundReport(
+    session: dict[str, Any],
+    agents: list[dict[str, Any]],
+    monitors: list[dict[str, Any]],
+    tasks: list[dict[str, Any]],
+    remote: dict[str, Any] | None = None,
+    bridge: dict[str, Any] | None = None,
+) -> str:
+    active_agents = [record for record in agents if _is_active_child_agent(record)]
+    active_tasks = [record for record in tasks if _is_active_task_record(record)]
+    lines = [
+        f"session        {session.get('id')}",
+        f"background     {len(session.get('metadata', {}).get('backgroundSessionIds') or [])}",
+        f"tasks          {len(active_tasks)}/{len(tasks)}",
+        f"workers        {len(active_agents)}/{len(agents)}",
+        f"monitors       {sum(1 for record in monitors if record.get('status') == 'active')}/{len(monitors)}",
+        f"remote         {_short_id(remote.get('id', '')) + ' ' + str(remote.get('status')) if remote else 'none'}",
+    ]
+    sections = ["\n".join(lines)]
+    if active_tasks:
+        sections.append("\n".join(["Tasks:", *[f"- {_format_background_line(formatTaskInspectReport(record))}" for record in active_tasks[:8]]]))
+    if active_agents:
+        sections.append("\n".join(["Workers:", *[f"- {_format_background_line(formatChildAgentRecord(record))}" for record in active_agents[:8]]]))
+    if monitors:
+        sections.append("\n".join(["Monitors:", *[f"- {_format_background_line(formatMonitorRecord(record))}" for record in monitors[:6]]]))
+    if remote:
+        sections.append("\n".join(["Remote:", *[f"- {line}" for line in formatRemoteSessionRecord(remote, bridge).splitlines()]]))
+    sections.append("tip            /background inspect <id> or /background attach <id>")
+    return "\n\n".join(sections)
+
+
+async def _resolve_remote_attach_target(query: str, session: dict[str, Any], remote: dict[str, Any] | None) -> str | None:
+    metadata = session.get("metadata", {})
+    if not query:
+        return (remote or {}).get("foregroundSessionId") or (remote or {}).get("sessionId")
+    remote_id = str(metadata.get("remoteSessionId") or "")
+    if remote_id and query.lower() in remote_id.lower():
+        return (remote or {}).get("foregroundSessionId") or (remote or {}).get("sessionId")
+    saved = await loadSession(query)
+    return (saved or {}).get("id")
+
+
+def _resolve_background_selection(
+    agents: list[dict[str, Any]],
+    monitors: list[dict[str, Any]],
+    tasks: list[dict[str, Any]],
+    remote: dict[str, Any] | None,
+    bridge: dict[str, Any] | None,
+    query: str,
+) -> dict[str, Any] | None:
+    normalized = query.strip().lower()
+    ordered = [
+        ("task", tasks, _background_task_tokens, lambda record: record.get("title")),
+        ("agent", agents, _background_agent_tokens, lambda record: record.get("name") or record.get("agentType") or record.get("agentId")),
+        ("monitor", monitors, _background_monitor_tokens, lambda record: record.get("goal")),
+    ]
+    for kind, records, tokenizer, labeler in ordered:
+        for record in records:
+            if normalized in tokenizer(record):
+                return {"kind": kind, "label": labeler(record), "record": record}
+    if remote and normalized in _background_remote_tokens(remote, bridge):
+        return {"kind": "remote", "label": remote.get("title"), "record": remote, "bridge": bridge}
+    for kind, records, tokenizer, labeler in ordered:
+        for record in records:
+            if any(normalized in token for token in tokenizer(record)):
+                return {"kind": kind, "label": labeler(record), "record": record}
+    if remote and any(normalized in token for token in _background_remote_tokens(remote, bridge)):
+        return {"kind": "remote", "label": remote.get("title"), "record": remote, "bridge": bridge}
+    return None
+
+
+def _format_background_selection(selection: dict[str, Any]) -> str:
+    if selection.get("kind") == "task":
+        return formatTaskInspectReport(selection["record"])
+    if selection.get("kind") == "agent":
+        return formatChildAgentRecord(selection["record"])
+    if selection.get("kind") == "monitor":
+        return formatMonitorRecord(selection["record"])
+    return formatRemoteSessionRecord(selection["record"], selection.get("bridge"))
+
+
+def _background_attach_target(selection: dict[str, Any]) -> str | None:
+    record = selection.get("record") or {}
+    if selection.get("kind") == "agent":
+        return record.get("sessionId")
+    if selection.get("kind") == "task":
+        return record.get("attachableSessionId")
+    if selection.get("kind") == "remote":
+        return record.get("foregroundSessionId") or record.get("sessionId")
+    return None
+
+
+def _background_task_tokens(record: dict[str, Any]) -> list[str]:
+    return _compact_tokens(
+        record.get("id"),
+        record.get("sourceId"),
+        record.get("kind"),
+        record.get("status"),
+        record.get("title"),
+        record.get("summary"),
+        record.get("detailStatus"),
+        record.get("attachableSessionId"),
+        record.get("command"),
+    )
+
+
+def _background_agent_tokens(record: dict[str, Any]) -> list[str]:
+    return _compact_tokens(
+        record.get("agentId"),
+        record.get("sessionId"),
+        record.get("taskId"),
+        record.get("name"),
+        record.get("agentType"),
+        record.get("teamName"),
+        record.get("status"),
+    )
+
+
+def _background_monitor_tokens(record: dict[str, Any]) -> list[str]:
+    return _compact_tokens(record.get("id"), record.get("taskId"), record.get("goal"), record.get("status"))
+
+
+def _background_remote_tokens(record: dict[str, Any], bridge: dict[str, Any] | None = None) -> list[str]:
+    return _compact_tokens(
+        record.get("id"),
+        record.get("sessionId"),
+        record.get("foregroundSessionId"),
+        record.get("title"),
+        record.get("description"),
+        record.get("status"),
+        record.get("bridgeId"),
+        (bridge or {}).get("id"),
+        (bridge or {}).get("name"),
+    )
+
+
+def _compact_tokens(*values: Any) -> list[str]:
+    return [str(value).lower() for value in values if value]
+
+
+def formatTaskInspectReport(record: dict[str, Any]) -> str:
+    lines = [
+        f"id           {record.get('id')}",
+        f"kind         {record.get('kind')}",
+        f"status       {record.get('status')}",
+        f"title        {record.get('title')}",
+    ]
+    for label, key in [
+        ("family", "taskFamily"),
+        ("detail", "detailStatus"),
+        ("summary", "summary"),
+        ("result", "resultSummary"),
+    ]:
+        if record.get(key):
+            lines.append(f"{label:<12} {record.get(key)}")
+    lines.append(f"surface      {formatTaskSurface(record)}")
+    if record.get("attachableSessionId"):
+        lines.append(f"attach       /tasks attach {record.get('id')}")
+    for label, key in [
+        ("owner", "owner"),
+        ("supervisor", "supervisorId"),
+        ("cwd", "cwd"),
+        ("command", "command"),
+        ("output", "outputFile"),
+    ]:
+        if record.get(key):
+            lines.append(f"{label:<12} {record.get(key)}")
+    if isinstance(record.get("attachmentCount"), int):
+        lines.append(f"attachments  {record.get('attachmentCount')}")
+    if isinstance(record.get("outputCursor"), int):
+        lines.append(f"output bytes {record.get('outputCursor')}")
+    if record.get("relatedMonitorIds"):
+        lines.append(f"monitors     {', '.join(record.get('relatedMonitorIds') or [])}")
+    if record.get("relatedChildSessionIds"):
+        lines.append(f"children     {', '.join(record.get('relatedChildSessionIds') or [])}")
+    lines.append(f"updated      {record.get('updatedAt')}")
+    return "\n".join(lines)
+
+
+def formatTaskSurface(record: dict[str, Any]) -> str:
+    if record.get("attachableSessionId"):
+        return f"attachable via session {_short_id(record.get('attachableSessionId', ''))}"
+    if record.get("retrieveOnly"):
+        return "retrieve-only"
+    return "inspectable"
+
+
+def formatChildAgentRecord(record: dict[str, Any]) -> str:
+    label = record.get("name") or record.get("agentType") or record.get("agentId")
+    mode = "bg" if record.get("runInBackground") else "fg"
+    worktree = " worktree" if record.get("isolation") == "worktree" else ""
+    detail = [
+        str(record.get("status")),
+        f"{mode}{worktree}",
+        compactModelName(str(record.get("model") or "")),
+        str(record.get("startedAt") or "")[:19].replace("T", " "),
+    ]
+    lines = [
+        f"{_short_id(record.get('agentId', ''))}  {label}",
+        f"status       {'  '.join(detail)}",
+    ]
+    for label_name, key in [
+        ("agent type", "agentType"),
+        ("team", "teamName"),
+        ("task", "taskId"),
+        ("owner", "owner"),
+        ("session", "sessionId"),
+        ("attach", "attachableSessionId"),
+        ("parent task", "parentTaskId"),
+        ("worktree", "worktreePath"),
+    ]:
+        value = record.get(key)
+        if value:
+            if key in {"taskId", "sessionId", "attachableSessionId", "parentTaskId"}:
+                value = _short_id(str(value))
+            lines.append(f"{label_name:<12} {value}")
+    if record.get("completedAt"):
+        lines.append(f"completed    {str(record.get('completedAt'))[:19].replace('T', ' ')}")
+    for label_name, key, limit in [
+        ("waiting", "waitingReason", 180),
+        ("completion", "completionReason", 180),
+        ("result", "resultSummary", 180),
+        ("recovery", "recoveryState", 180),
+        ("stop reason", "stopReason", 180),
+        ("error", "error", 180),
+    ]:
+        value = record.get(key)
+        if value:
+            lines.append(f"{label_name:<12} {truncate(collapseWhitespace(value), limit)}")
+    if record.get("retryable") is not None or record.get("stoppable") is not None:
+        lines.append(
+            f"controls     retry {'yes' if record.get('retryable') else 'no'} - stop {'yes' if record.get('stoppable') else 'no'}"
+        )
+    return "\n".join(lines)
+
+
+def formatRemoteSessionRecord(record: dict[str, Any], bridge: dict[str, Any] | None = None) -> str:
+    lines = [
+        f"{_short_id(record.get('id', ''))}  {record.get('status')}  {record.get('title')}",
+        f"session      {_short_id(record.get('sessionId', ''))}",
+        f"updated      {str(record.get('updatedAt') or '')[:19].replace('T', ' ')}",
+        f"channels     {', '.join(record.get('channelServers') or []) or 'none'}",
+    ]
+    if record.get("foregroundSessionId"):
+        lines.append(f"foreground   {_short_id(record.get('foregroundSessionId', ''))}")
+    if record.get("lastEventName"):
+        lines.append(f"last event   {record.get('lastEventName')}")
+    if record.get("lastEventSummary"):
+        lines.append(f"summary      {truncate(collapseWhitespace(record.get('lastEventSummary')), 180)}")
+    if record.get("unreadBridgeMessages"):
+        lines.append(f"queued       {record.get('unreadBridgeMessages')}")
+    if bridge:
+        lines.append(f"bridge       {_short_id(bridge.get('id', ''))}  {bridge.get('status')}")
+        if bridge.get("lastEventName"):
+            lines.append(f"bridge evt   {bridge.get('lastEventName')}")
+        if bridge.get("pendingMessages"):
+            lines.append(f"bridge q     {bridge.get('pendingMessages')}")
+    return "\n".join(lines)
+
+
+def _is_related_child_agent(session: dict[str, Any], record: dict[str, Any]) -> bool:
+    if record.get("parentSessionId") == session.get("id") or record.get("sessionId") == session.get("id"):
+        return True
+    return record.get("agentId") in (session.get("metadata", {}).get("childAgentIds") or [])
+
+
+def _is_active_child_agent(record: dict[str, Any]) -> bool:
+    return record.get("status") in {"queued", "running", "backgrounded", "awaiting_plan_approval", "awaiting_input"}
+
+
+def _is_active_task_record(record: dict[str, Any]) -> bool:
+    return record.get("status") in {"queued", "running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
+
+
+def _format_background_line(text: str) -> str:
+    return " | ".join(text.splitlines())
 
 
 async def buildMonitorsReport(session: dict[str, Any]) -> str:

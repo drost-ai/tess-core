@@ -2313,6 +2313,107 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_shell_background_and_remote_attach_match_reference_selection(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            target = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            run(core.saveSession(target))
+            run(
+                core.saveTaskRecord(
+                    {
+                        "id": "task-bg-shell",
+                        "sourceId": "task-source",
+                        "sessionId": session["id"],
+                        "kind": "background_command",
+                        "status": "running",
+                        "title": "Shell background task",
+                        "summary": "streaming output",
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:01Z",
+                        "foregroundable": True,
+                        "restorable": True,
+                        "attachableSessionId": target["id"],
+                        "command": "pytest",
+                    }
+                )
+            )
+            run(
+                core.saveChildAgent(
+                    {
+                        "agentId": "agent-bg-shell",
+                        "sessionId": target["id"],
+                        "parentSessionId": session["id"],
+                        "name": "Shell worker",
+                        "provider": "openai",
+                        "model": "gpt-5.4",
+                        "mode": "auto",
+                        "runInBackground": True,
+                        "status": "backgrounded",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "lastSummary": "working",
+                    }
+                )
+            )
+            session["metadata"]["childAgentIds"] = ["agent-bg-shell"]
+            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-bg-shell", "goal": "Watch shell background"})
+            run(core.saveMonitor(monitor))
+            remote = run(core.createRemoteSession({"session": session, "description": "Remote Shell", "channelServers": ["local"]}))
+            remote = run(
+                core.updateRemoteSession(
+                    remote["id"],
+                    {
+                        "status": "awaiting_input",
+                        "foregroundSessionId": target["id"],
+                        "lastEventName": "bridge.message.queued",
+                        "lastEventSummary": "Input is queued",
+                    },
+                )
+            )
+            session["metadata"]["remoteSessionId"] = remote["id"]
+
+            infos = []
+            errors = []
+            resumed = []
+            counters = {"persist": 0}
+            hooks = {
+                "info": lambda title, message: infos.append((title, message)),
+                "error": lambda message: errors.append(message),
+                "persist": lambda: counters.__setitem__("persist", counters["persist"] + 1),
+                "requestResume": lambda next_session: resumed.append(next_session["id"]),
+            }
+
+            background = run(core.handleSlashCommand({"command": "/background", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("tasks          1/1", background["message"])
+            self.assertIn("workers        1/1", background["message"])
+            self.assertIn("monitors       1/1", background["message"])
+            self.assertIn("Remote:", background["message"])
+            self.assertIn("tip            /background inspect <id> or /background attach <id>", background["message"])
+
+            inspected_task = run(core.handleSlashCommand({"command": "/background inspect task-bg", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("id           task-bg-shell", inspected_task["message"])
+            self.assertIn("attach       /tasks attach task-bg-shell", inspected_task["message"])
+            inspected_agent = run(core.handleSlashCommand({"command": "/background inspect agent-bg", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Shell worker", inspected_agent["message"])
+            inspected_monitor = run(core.handleSlashCommand({"command": f"/background inspect {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Watch shell background", inspected_monitor["message"])
+
+            run(core.handleSlashCommand({"command": "/background attach task-bg-shell", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": f"/remote attach {remote['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(resumed, [target["id"], target["id"]])
+            self.assertEqual(counters["persist"], 2)
+            remote_report = run(core.handleSlashCommand({"command": "/remote", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Remote Shell", remote_report["message"])
+            self.assertIn("foreground", remote_report["message"])
+
+            monitor_attach = run(core.handleSlashCommand({"command": f"/background attach {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
+            self.assertTrue(monitor_attach["isError"])
+            self.assertIn("No attachable session", errors[-1])
+        finally:
+            self.restore_home(root, previous)
+
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:
