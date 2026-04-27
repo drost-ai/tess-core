@@ -1419,6 +1419,34 @@ class AgentCoreTests(unittest.TestCase):
         )
         self.assertEqual(bridge_message["kind"], "bridge.message")
         self.assertEqual(bridge_message["payload"], {"bridgeId": "bridge-1", "remoteSessionId": "remote-1", "text": "hello", "source": "remote"})
+        malformed_bridge_message = core.createRuntimeEvent(
+            {
+                "event": "bridge.message",
+                "data": {"bridge_id": 1, "remote_session_id": 2, "text": 3, "source": 4},
+            }
+        )
+        self.assertEqual(
+            malformed_bridge_message["payload"],
+            {"bridgeId": None, "remoteSessionId": None, "text": None, "source": None},
+        )
+        malformed_generic = core.createRuntimeEvent(
+            {"event": "mcp.connection", "data": {"channel_name": 123, "ignored_extra": "drop me"}}
+        )
+        self.assertEqual(malformed_generic["payload"], {"eventName": "mcp.connection", "channelName": None})
+        malformed_bridge_generic = core.createRuntimeEvent(
+            {"event": "bridge.closed", "data": {"bridge_id": 123, "remote_session_id": False}}
+        )
+        self.assertEqual(
+            malformed_bridge_generic["payload"],
+            {"eventName": "bridge.closed", "bridgeId": None, "remoteSessionId": None},
+        )
+        malformed_remote_generic = core.createRuntimeEvent(
+            {"event": "remote.session_created", "data": {"remote_session_id": 123}}
+        )
+        self.assertEqual(
+            malformed_remote_generic["payload"],
+            {"eventName": "remote.session_created", "remoteSessionId": None},
+        )
 
         state = core.reduceRuntimeState(
             state,

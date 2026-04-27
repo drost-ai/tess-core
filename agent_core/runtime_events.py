@@ -380,19 +380,29 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         }
     if event == "bridge.message":
         return "bridge.message", {
-            "bridgeId": _field(data, "bridge_id", "bridgeId"),
-            "remoteSessionId": _field(data, "remote_session_id", "remoteSessionId"),
-            "text": _field(data, "text"),
-            "source": _field(data, "source"),
+            "bridgeId": _optional_string(_field(data, "bridge_id", "bridgeId")),
+            "remoteSessionId": _optional_string(_field(data, "remote_session_id", "remoteSessionId")),
+            "text": _optional_string(_field(data, "text")),
+            "source": _optional_string(_field(data, "source")),
         }
     if event in KNOWN_RUNTIME_EVENTS:
         return event, payload
     if event.startswith("bridge."):
-        return "bridge.event", {"eventName": event, "bridgeId": _field(data, "bridge_id", "bridgeId"), "remoteSessionId": _field(data, "remote_session_id", "remoteSessionId")}
+        return "bridge.event", {
+            "eventName": event,
+            "bridgeId": _optional_string(_field(data, "bridge_id", "bridgeId")),
+            "remoteSessionId": _optional_string(_field(data, "remote_session_id", "remoteSessionId")),
+        }
     if event.startswith("remote."):
-        return "remote.event", {"eventName": event, "remoteSessionId": _field(data, "remote_session_id", "remoteSessionId")}
+        return "remote.event", {
+            "eventName": event,
+            "remoteSessionId": _optional_string(_field(data, "remote_session_id", "remoteSessionId")),
+        }
     if event.startswith("mcp."):
-        return "mcp.event", {"eventName": event, "channelName": _field(data, "channel_name", "channelName")}
+        return "mcp.event", {
+            "eventName": event,
+            "channelName": _optional_string(_field(data, "channel_name", "channelName")),
+        }
     if event.startswith("platform."):
         return "platform.event", {"eventName": event}
     if event.startswith("subagent."):
