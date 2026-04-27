@@ -967,9 +967,6 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
                     }
                 )
             }
-        if input.get("server") and input.get("name"):
-            result = await runtime["callTool"](input["server"], input["name"], input.get("arguments") or input.get("input") or {})
-            return result
         diagnostics = runtime["getDiagnostics"]() if callable(runtime.get("getDiagnostics")) else runtime.get("diagnostics", {})
         tools = [
             {"server": tool.get("server"), "name": tool.get("name"), "runtime_name": tool.get("runtimeName") or tool.get("runtime_name"), "description": tool.get("description")}

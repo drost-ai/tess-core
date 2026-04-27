@@ -161,6 +161,33 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_mcp_introspection_tool_does_not_dispatch_tool_calls(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            calls = []
+
+            async def call_tool(*args):
+                calls.append(args)
+                return {"content": "called"}
+
+            runtime = {
+                "getDiagnostics": lambda: {"connectedServers": 1, "totalTools": 1, "totalResources": 0},
+                "listServerStatus": lambda: [{"name": "fake", "transport": "stdio", "connected": True, "state": "connected", "tools": 1, "resources": 0}],
+                "listTools": lambda: [{"server": "fake", "name": "echo", "runtimeName": "mcp__fake__echo", "description": "Echo"}],
+                "callTool": call_tool,
+            }
+            mcp = next(tool for tool in core.createBuiltinTools({"mcpRuntime": runtime}) if tool.name == "Mcp")
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+
+            payload = json.loads(run(mcp.handler({"server": "fake", "name": "echo", "arguments": {"value": "x"}}, context))["content"])
+            self.assertEqual(calls, [])
+            self.assertEqual(payload["diagnostics"]["totalTools"], 1)
+            self.assertEqual(payload["tools"][0]["runtime_name"], "mcp__fake__echo")
+        finally:
+            self.restore_home(root, previous)
+
     def test_file_change_payload_diff_matches_reference_shape(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -5868,9 +5895,15 @@ class AgentCoreTests(unittest.TestCase):
                 if method == "initialize":
                     result = {"serverInfo": {"name": "edge"}}
                 elif method == "tools/list":
-                    result = {"tools": [{"name": "zero", "input_schema": {"type": "object", "properties": {"value": {"type": "number"}}}}]}
+                    result = {
+                        "tools": [
+                            {"name": "zero", "input_schema": {"type": "object", "properties": {"value": {"type": "number"}}}},
+                            {"name": "empty", "inputSchema": {"type": "object"}},
+                        ]
+                    }
                 elif method == "tools/call":
-                    payload = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": 0}).encode()
+                    result_value = None if request.get("params", {}).get("name") == "empty" else 0
+                    payload = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": result_value}).encode()
                     self.send_response(200)
                     self.send_header("content-type", "application/json")
                     self.send_header("content-length", str(len(payload)))
@@ -5879,6 +5912,8 @@ class AgentCoreTests(unittest.TestCase):
                     return
                 elif method == "resources/list":
                     result = {"resources": [{"uri": "memory://named", "name": "named"}, {"uri": "memory://missing-name"}]}
+                elif method == "resources/read":
+                    result = {"contents": [{"uri": "memory://named", "mimeType": None, "text": "named text"}]}
                 payload = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": result}).encode()
                 self.send_response(200)
                 self.send_header("content-type", "application/json")
@@ -5896,14 +5931,17 @@ class AgentCoreTests(unittest.TestCase):
             tool = runtime["listTools"]()[0]
             self.assertEqual(tool["inputSchema"]["properties"]["value"]["type"], "number")
             self.assertEqual(run(runtime["callTool"]("edge", "zero", {"value": 0}))["content"], "0")
+            self.assertEqual(run(runtime["callTool"]("edge", "empty", {}))["content"], "null")
             self.assertEqual([resource["uri"] for resource in run(runtime["listResources"]("edge"))], ["memory://named"])
+            resource_payload = run(runtime["readResource"]("edge", "memory://named"))["contents"][0]
+            self.assertEqual(resource_payload, {"uri": "memory://named", "text": "named text"})
             mode["resources"] = "fail"
             with self.assertRaises(Exception):
                 run(runtime["listResources"]("edge"))
             status = runtime["listServerStatus"]()[0]
             self.assertFalse(status["connected"])
             self.assertEqual(status["state"], "degraded")
-            self.assertIn("HTTP Error 500", status["error"])
+            self.assertIn("HTTP 500 from MCP server edge", status["error"])
         finally:
             if runtime:
                 run(runtime["close"]())

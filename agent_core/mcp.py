@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urljoin
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from ._utils import now_iso, pretty_json
@@ -142,11 +143,14 @@ class HttpMcpClient(JsonRpcClient):
         body = json.dumps(request).encode("utf-8")
         headers = {"content-type": "application/json", "accept": "application/json, text/event-stream", **(self.config.get("headers") or {})}
         req = Request(self.config["commandOrUrl"], data=body, headers=headers, method="POST")
-        with urlopen(req, timeout=30) as response:
-            if response.status in (202, 204):
-                return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id"))
-            raw = response.read().decode("utf-8", errors="replace")
-            return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id"))
+        try:
+            with urlopen(req, timeout=30) as response:
+                if response.status in (202, 204):
+                    return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id"))
+                raw = response.read().decode("utf-8", errors="replace")
+                return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id"))
+        except HTTPError as exc:
+            raise RuntimeError(f"HTTP {exc.code} from MCP server {self.config.get('name')}") from exc
 
 
 class SseMcpClient(JsonRpcClient):
@@ -204,12 +208,15 @@ class SseMcpClient(JsonRpcClient):
         with self.post_lock:
             post_url = self.post_url
         req = Request(post_url, data=body, headers=headers, method="POST")
-        with urlopen(req, timeout=30) as response:
-            if response.status in (202, 204):
-                return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id")), True
-            raw = response.read().decode("utf-8", errors="replace")
-            empty_ack = response.status in (202, 204) or not raw.strip()
-            return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id")), empty_ack
+        try:
+            with urlopen(req, timeout=30) as response:
+                if response.status in (202, 204):
+                    return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id")), True
+                raw = response.read().decode("utf-8", errors="replace")
+                empty_ack = response.status in (202, 204) or not raw.strip()
+                return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id")), empty_ack
+        except HTTPError as exc:
+            raise RuntimeError(f"HTTP {exc.code} from MCP SSE server {self.config.get('name')}") from exc
 
     def _start_event_stream(self) -> None:
         if self.stream_thread and self.stream_thread.is_alive():
@@ -633,14 +640,15 @@ async def _normalize_read_resource_output(server: str, value: Any) -> dict[str, 
     for index, entry in enumerate(contents):
         content = entry if isinstance(entry, dict) else {}
         uri = content.get("uri") if isinstance(content.get("uri"), str) else f"{server}#{index}"
+        mime_type = content.get("mimeType") if isinstance(content.get("mimeType"), str) else None
         if isinstance(content.get("text"), str):
-            out.append({"uri": uri, "mimeType": content.get("mimeType"), "text": content["text"]})
+            out.append(_without_none_values({"uri": uri, "mimeType": mime_type, "text": content["text"]}))
             continue
         blob = content.get("blob") if isinstance(content.get("blob"), str) else content.get("data") if isinstance(content.get("data"), str) else None
         if blob:
-            out.append({"uri": uri, "mimeType": content.get("mimeType"), "blobSavedTo": await _save_blob_content(server, uri, blob)})
+            out.append(_without_none_values({"uri": uri, "mimeType": mime_type, "blobSavedTo": await _save_blob_content(server, uri, blob)}))
         else:
-            out.append({"uri": uri, "mimeType": content.get("mimeType"), "text": pretty_json(content)})
+            out.append(_without_none_values({"uri": uri, "mimeType": mime_type, "text": pretty_json(content)}))
     return {"contents": out}
 
 
@@ -668,9 +676,13 @@ def _unwrap_json_rpc_response(response: dict[str, Any]) -> Any:
         if isinstance(error, dict):
             raise RuntimeError(f"{error.get('code')}: {error.get('message')}")
         raise RuntimeError(str(error))
-    if "result" in response and response.get("result") is not None:
+    if "result" in response:
         return response.get("result")
-    return {}
+    return None
+
+
+def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _parse_http_rpc_response(status: int, raw: str, content_type: str, request_id: int | None) -> dict[str, Any]:
