@@ -133,6 +133,75 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_file_change_payload_diff_matches_reference_shape(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+
+            created = json.loads(run(tools["Write"].handler({"file_path": "diff.txt", "content": "one\ntwo\nthree\nfour\nfive\n"}, context))["content"])
+            self.assertNotIn("note", created)
+
+            edited = json.loads(run(tools["Edit"].handler({"file_path": "diff.txt", "old_string": "two", "new_string": "TWO"}, context))["content"])
+            self.assertEqual(
+                edited["diff"],
+                "\n".join(
+                    [
+                        "  1   one",
+                        "  2 - two",
+                        "  2 + TWO",
+                        "  3   three",
+                        "  4   four",
+                        "  5   five",
+                    ]
+                ),
+            )
+            self.assertNotIn("---", edited["diff"])
+            self.assertEqual(edited["note"], "Replaced the first matching occurrence.")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_tool_cancellation_guards_web_question_and_mcp_paths(self):
+        root, home, workspace, previous = self.temp_context()
+        original_fetch = tools_module.fetch
+        original_search = tools_module.searchWeb
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config["mcpConfig"] = [{"name": "edge", "transport": "http", "commandOrUrl": "https://mcp.example.test"}]
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            calls = []
+
+            async def fetch_should_not_run(*args, **kwargs):
+                calls.append(("fetch", args, kwargs))
+                return tools_module.FetchResponse(200, "ok")
+
+            async def search_should_not_run(*args, **kwargs):
+                calls.append(("search", args, kwargs))
+                return []
+
+            tools_module.fetch = fetch_should_not_run
+            tools_module.searchWeb = search_should_not_run
+            context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda *_: calls.append(("question", (), {})) or "Blue", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "abortSignal": {"aborted": True}}
+
+            for tool_name, payload in (
+                ("WebFetch", {"url": "https://example.test", "prompt": "summarize"}),
+                ("WebSearch", {"query": "agent core"}),
+                ("AskUserQuestion", {"questions": [{"question": "Pick?", "options": [{"label": "Blue"}]}]}),
+                ("ReadMcpResource", {"server": "edge", "uri": "https://mcp.example.test/resource"}),
+            ):
+                with self.subTest(tool=tool_name):
+                    with self.assertRaises(RuntimeError) as abort_ctx:
+                        run(tools[tool_name].handler(payload, context))
+                    self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")
+            self.assertEqual(calls, [])
+        finally:
+            tools_module.fetch = original_fetch
+            tools_module.searchWeb = original_search
+            self.restore_home(root, previous)
+
     def test_exit_plan_mode_matches_reference_pending_and_approval_flows(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -151,7 +220,7 @@ class AgentCoreTests(unittest.TestCase):
             config["permissionMode"] = "plan"
             session["messages"] = [{"role": "assistant", "content": [{"type": "text", "text": "1. Build it.\n2. Test it."}]}]
             context = {**base_context, "outputJson": lambda event, data: events.append((event, data)), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
-            pending = run(tool.handler({"allowedPrompts": [{"tool": "Bash", "prompt": "pytest"}, {"tool": "Read", "prompt": "ignored"}]}, context))
+            pending = run(tool.handler({"allowedPrompts": [{"tool": "Bash", "prompt": "  pytest  "}, {"tool": "Bash", "prompt": "   "}, {"tool": "Read", "prompt": "ignored"}]}, context))
             payload = json.loads(pending["content"])
             self.assertEqual(payload["plan"], "1. Build it.\n2. Test it.")
             self.assertTrue(payload["awaitingLeaderApproval"])
