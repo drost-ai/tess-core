@@ -2643,6 +2643,32 @@ class AgentCoreTests(unittest.TestCase):
             for key in ("description", "workspaceName", "gitRoot", "gitBranch", "prNumber", "prUrl"):
                 self.assertNotIn(key, persisted_remote)
 
+            session["metadata"]["originalCwd"] = str(workspace.parent)
+            session["metadata"]["workspaceName"] = "typed-workspace"
+            metadata_remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
+            persisted_metadata_remote = run(core.loadRemoteSession(metadata_remote["id"]))
+            self.assertEqual(persisted_metadata_remote["originalCwd"], str(workspace.parent))
+            self.assertEqual(persisted_metadata_remote["workspaceName"], "typed-workspace")
+            self.assertEqual(persisted_metadata_remote["title"], "typed-workspace")
+
+            raw_remote = run(core.createRemoteSession({"session": {"id": "raw-remote", "cwd": str(workspace), "metadata": {}}, "channelServers": []}))
+            persisted_raw_remote = run(core.loadRemoteSession(raw_remote["id"]))
+            self.assertNotIn("originalCwd", persisted_raw_remote)
+            empty_name_remote = run(core.createRemoteSession({"session": {"id": "empty-name", "cwd": str(workspace), "name": "", "metadata": {"workspaceName": "fallback-name"}}, "channelServers": []}))
+            self.assertEqual(run(core.loadRemoteSession(empty_name_remote["id"]))["title"], "")
+            empty_workspace = {
+                "id": "remote-empty-workspace",
+                "sessionId": session["id"],
+                "title": "Empty Workspace",
+                "createdAt": "2026-01-01T00:00:00Z",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "status": "created",
+                "cwd": str(workspace),
+                "workspaceName": "",
+                "channelServers": [],
+            }
+            self.assertEqual(core.formatRemoteSessionCandidate(empty_workspace)[10:28], " " * 18)
+
             events = []
             bridge_runtime = run(core.createBridgeRuntime({"session": session, "startPolling": False, "emit": lambda event, data: events.append((event, data))}))
             bridge_id = bridge_runtime["bridge"]["id"]
@@ -2658,6 +2684,13 @@ class AgentCoreTests(unittest.TestCase):
             inbox = run(core.loadBridgeInbox(bridge_id))
             self.assertEqual(inbox[0]["id"], message["id"])
             self.assertNotIn("remoteSessionId", inbox[0])
+            default_source = run(core.sendBridgeMessage({"bridgeId": bridge_id, "text": "default source", "source": None}))
+            self.assertEqual(default_source["source"], "bridge")
+            empty_name_bridge = run(core.createBridgeRuntime({"session": session, "name": "", "startPolling": False, "emit": lambda *_: None}))
+            bridge_rows = run(core.listActiveBridgeRows())
+            empty_name_row = next(row for row in bridge_rows if row.startswith(empty_name_bridge["bridge"]["id"][:8]))
+            self.assertEqual(empty_name_row[10:28], " " * 18)
+            run(empty_name_bridge["close"]())
             run(bridge_runtime["close"]())
         finally:
             self.restore_home(root, previous)

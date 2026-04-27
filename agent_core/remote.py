@@ -28,7 +28,25 @@ async def createRemoteSession(args: dict[str, Any] | None = None, **kwargs: Any)
     now = now_iso()
     metadata = session.get("metadata", {}) if isinstance(session, dict) else {}
     cwd = args.get("cwd") or session.get("cwd")
-    record = {"id": args.get("id") or str(uuid.uuid4()), "sessionId": args.get("sessionId") or session.get("id"), "title": args.get("title") or _derive_remote_title(args.get("description"), session, cwd), "description": args.get("description"), "createdAt": now, "updatedAt": now, "status": "created", "cwd": cwd, "originalCwd": args.get("originalCwd") or metadata.get("originalCwd") or cwd, "workspaceName": metadata.get("workspaceName"), "gitRoot": metadata.get("gitRoot"), "gitBranch": metadata.get("gitBranch"), "prNumber": metadata.get("prNumber"), "prUrl": metadata.get("prUrl"), "channelServers": list(args.get("channelServers", [])), "unreadBridgeMessages": 0, "foregroundSessionId": args.get("sessionId") or session.get("id")}
+    record = {
+        "id": args.get("id") or str(uuid.uuid4()),
+        "sessionId": args.get("sessionId") or session.get("id"),
+        "title": args.get("title") or _derive_remote_title(args.get("description"), session, cwd),
+        "description": args.get("description"),
+        "createdAt": now,
+        "updatedAt": now,
+        "status": "created",
+        "cwd": cwd,
+        "originalCwd": args.get("originalCwd") if args.get("originalCwd") is not None else metadata.get("originalCwd"),
+        "workspaceName": metadata.get("workspaceName"),
+        "gitRoot": metadata.get("gitRoot"),
+        "gitBranch": metadata.get("gitBranch"),
+        "prNumber": metadata.get("prNumber"),
+        "prUrl": metadata.get("prUrl"),
+        "channelServers": list(args.get("channelServers", [])),
+        "unreadBridgeMessages": 0,
+        "foregroundSessionId": args.get("sessionId") or session.get("id"),
+    }
     await saveRemoteSession(record)
     return record
 
@@ -38,7 +56,7 @@ async def updateRemoteSession(remoteSessionId: str, updates: dict[str, Any]) -> 
     if not record:
         return None
     record.update(updates)
-    record["updatedAt"] = updates.get("updatedAt") or now_iso()
+    record["updatedAt"] = updates.get("updatedAt") if updates.get("updatedAt") is not None else now_iso()
     await saveRemoteSession(record)
     return record
 
@@ -176,7 +194,8 @@ async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -
         raise RuntimeError(f"Bridge not found: {args['bridgeId']}")
     if bridge.get("status") != "active":
         raise RuntimeError(f"Bridge is not active: {args['bridgeId']}")
-    message = {"id": str(uuid.uuid4()), "bridgeId": args["bridgeId"], "createdAt": now_iso(), "source": args.get("source", "bridge"), "text": args["text"]}
+    source = args.get("source") if args.get("source") is not None else "bridge"
+    message = {"id": str(uuid.uuid4()), "bridgeId": args["bridgeId"], "createdAt": now_iso(), "source": source, "text": args["text"]}
     await appendBridgeInboxMessage(message)
     current = await loadBridge(args["bridgeId"])
     if current:
@@ -209,7 +228,7 @@ async def listActiveBridgeRows() -> list[str]:
     for bridge in await listBridges():
         if bridge.get("status") != "active":
             continue
-        name = bridge.get("name") or os.path.basename(bridge.get("cwd") or "")
+        name = bridge.get("name") if bridge.get("name") is not None else os.path.basename(bridge.get("cwd") or "")
         remote = bridge.get("remoteSessionId")[:8] if bridge.get("remoteSessionId") else "-"
         rows.append("  ".join([bridge.get("id", "")[:8], str(name).ljust(18), str(bridge.get("status", "")).ljust(8), remote, str(bridge.get("updatedAt", ""))[:19].replace("T", " ")]))
     return rows
@@ -224,7 +243,7 @@ def findMatchingRemoteSessions(sessions: list[dict[str, Any]], query: str) -> li
 
 
 def formatRemoteSessionCandidate(remote: dict[str, Any]) -> str:
-    workspace = remote.get("workspaceName") or os.path.basename(remote.get("cwd") or "")
+    workspace = remote.get("workspaceName") if remote.get("workspaceName") is not None else os.path.basename(remote.get("cwd") or "")
     return "  ".join([remote.get("id", "")[:8], str(workspace).ljust(18), str(remote.get("gitBranch") or "").ljust(18), str(remote.get("status", "")).ljust(10), _truncate_remote_summary(str(remote.get("title") or "")).ljust(34), str(remote.get("updatedAt", ""))[:19].replace("T", " ")])
 
 
@@ -300,7 +319,11 @@ def _derive_remote_title(description: str | None, session: dict[str, Any], cwd: 
     if trimmed:
         return _truncate_remote_summary(trimmed, 72)
     metadata = session.get("metadata", {}) if isinstance(session, dict) else {}
-    return session.get("name") or metadata.get("workspaceName") or os.path.basename(cwd or "") or "Remote Session"
+    if session.get("name") is not None:
+        return session.get("name")
+    if metadata.get("workspaceName") is not None:
+        return metadata.get("workspaceName")
+    return os.path.basename(cwd or "")
 
 
 def _score_remote_session(remote: dict[str, Any], query: str) -> int:
