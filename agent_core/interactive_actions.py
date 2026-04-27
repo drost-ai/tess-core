@@ -47,7 +47,8 @@ from .transcript import buildTranscriptSnapshot
 
 
 AVAILABLE_TUI_THEMES = ["tess", "copper", "ocean", "forest"]
-PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
+PERMISSION_MODE_ORDER = ["acceptEdits", "bypassPermissions", "default", "dontAsk", "plan", "auto"]
+PERMISSION_MODES = set(PERMISSION_MODE_ORDER)
 
 
 def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
@@ -1359,13 +1360,26 @@ def _handle_mouse(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
     if not callable(get_mode) or not callable(set_mode):
         return _error(hooks, "/mouse is only available in the interactive TUI.")
     if not arg_text:
-        return _info(hooks, "Mouse", f"Mouse mode is {get_mode()}.")
+        current = get_mode()
+        return _info(
+            hooks,
+            "Mouse",
+            "Mouse capture is on. Wheel and clicks control the TUI."
+            if current == "capture"
+            else "Mouse capture is off. Native terminal selection is enabled.",
+        )
     if arg_text not in {"on", "off", "toggle", "capture", "selection"}:
         return _error(hooks, "Usage: /mouse [on|off|toggle]")
     current = get_mode()
     next_mode = "selection" if arg_text == "toggle" and current == "capture" else "capture" if arg_text in {"toggle", "on", "capture"} else "selection"
     set_mode(next_mode)
-    return _info(hooks, "Mouse", f"Mouse mode set to {next_mode}.")
+    return _info(
+        hooks,
+        "Mouse",
+        "Mouse capture on. Wheel and clicks control the TUI."
+        if next_mode == "capture"
+        else "Mouse capture off. Native terminal selection enabled.",
+    )
 
 
 def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
@@ -1577,12 +1591,13 @@ async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[st
 
 async def _handle_permissions(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
-        policy = await loadAutoMode(session.get("cwd") or config.get("cwd") or os.getcwd())
-        return _info(hooks, "Permissions", f"current   {session.get('permissionMode') or config.get('permissionMode')}\nlevels    {', '.join(sorted(PERMISSION_MODES))}\n\n{formatAutoModePolicy(policy)}")
+        return _info(hooks, "Permissions", f"current  {session.get('permissionMode') or config.get('permissionMode')}\nmodes    {', '.join(PERMISSION_MODE_ORDER)}")
     if arg_text.split(None, 1)[0] in {"policy", "allow", "deny", "reset"}:
         return await _handle_auto_mode_policy(arg_text, session, config, hooks)
     if arg_text not in PERMISSION_MODES:
-        return _error(hooks, f"Unknown permission mode: {arg_text}")
+        return _error(hooks, f"Unknown permission mode: {arg_text}. Expected one of: {', '.join(PERMISSION_MODE_ORDER)}")
+    if (session.get("metadata") or {}).get("gitRepoPlanOnly") and arg_text != "plan":
+        return _error(hooks, "Git repository not initialized. Only plan mode is available until you run `git init`.")
     session["permissionMode"] = config["permissionMode"] = arg_text
     await _persist(hooks)
     _call(hooks, "refresh")
