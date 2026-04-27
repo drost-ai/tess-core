@@ -141,11 +141,11 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
     if command == "cost":
         return _info(hooks, "Usage", formatUsageBreakdown(session.get("metadata", {}).get("usage")))
     if command == "plans":
-        return _info(hooks, "Plans", await buildPlansReport(session, arg_text))
+        return await _handle_plans(arg_text, session, hooks)
     if command == "tasks":
         return await _handle_tasks(arg_text, session, hooks, args)
     if command == "agents":
-        return _info(hooks, "Agents", await buildAgentsReport(session, arg_text))
+        return await _handle_agents(arg_text, session, config, hooks, args)
     if command == "background":
         return await _handle_background(arg_text, session, hooks)
     if command == "daemon":
@@ -255,12 +255,31 @@ def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any])
 
 
 async def buildPlansReport(session: dict[str, Any], status_filter: str = "") -> str:
-    plans = [plan for plan in await listPlanApprovals() if plan.get("sessionId") == session.get("id")]
-    if status_filter:
-        plans = [plan for plan in plans if plan.get("status") == status_filter]
-    if not plans:
-        return "No plan approvals for this session."
-    return "\n".join(f"{plan.get('requestId')} {plan.get('status')} {plan.get('createdAt', '')[:19]}" for plan in plans[:12])
+    approvals = [plan for plan in await listPlanApprovals() if _is_related_plan_approval(session, plan)]
+    normalized = status_filter.strip().lower()
+    current_state = session.get("metadata", {}).get("planMode", {}).get("state") or "inactive"
+    if not normalized or normalized == "pending":
+        visible = [plan for plan in approvals if plan.get("status") == "pending"]
+    elif normalized == "all":
+        visible = approvals
+    elif normalized in {"approved", "rejected"}:
+        visible = [plan for plan in approvals if plan.get("status") == normalized]
+    else:
+        visible = [plan for plan in approvals if _matches_plan_query(plan, normalized)]
+    if not visible:
+        detail = f"No plan approvals matched: {status_filter}" if normalized and normalized != "pending" else "No pending plan approvals linked to this session."
+        return "\n".join([f"current state  {current_state}", detail])
+    return "\n".join(
+        [
+            f"current state  {current_state}",
+            "",
+            "\n\n".join(formatPlanApprovalRecord(plan) for plan in visible[:10]),
+        ]
+    )
+
+
+async def _handle_plans(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    return _info(hooks, "Plans", await buildPlansReport(session, arg_text))
 
 
 async def buildTasksReport(session: dict[str, Any], arg_text: str = "", args: dict[str, Any] | None = None) -> str:
@@ -366,16 +385,105 @@ async def _handle_tasks(arg_text: str, session: dict[str, Any], hooks: dict[str,
 
 
 async def buildAgentsReport(session: dict[str, Any], arg_text: str = "") -> str:
-    agents = [agent for agent in await listChildAgents() if agent.get("parentSessionId") == session.get("id") or agent.get("agentId") in (session.get("metadata", {}).get("childAgentIds") or [])]
-    parts = arg_text.split()
-    if parts and parts[0] == "running":
-        agents = [agent for agent in agents if agent.get("status") in {"queued", "running", "backgrounded", "awaiting_input", "awaiting_plan_approval"}]
-    if parts and parts[0] == "inspect" and len(parts) > 1:
-        match = next((agent for agent in agents if agent.get("agentId", "").startswith(parts[1]) or agent.get("sessionId", "").startswith(parts[1])), None)
-        return json.dumps(match or {"error": f"Agent not found: {parts[1]}"}, indent=2)
-    if not agents:
-        return "No child agents for this session."
-    return "\n".join(f"{agent.get('agentId')} {agent.get('status')} {agent.get('name') or agent.get('agentType') or ''} {agent.get('lastSummary') or ''}" for agent in agents[:12])
+    return await _build_agents_report(session, {}, arg_text)
+
+
+async def _handle_agents(
+    arg_text: str,
+    session: dict[str, Any],
+    config: dict[str, Any],
+    hooks: dict[str, Any],
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    related_agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
+    normalized = arg_text.strip().lower()
+    subcommand, query = _split_subcommand(arg_text)
+    if not normalized:
+        return _info(hooks, "Agents", await _build_agents_report(session, config, ""))
+    if subcommand in {"inspect", "attach", "stop", "retry"}:
+        if not query:
+            return _error(hooks, "Usage: /agents [inspect|attach|stop|retry <id>]")
+        record = _resolve_agent_record(related_agents, query)
+        if not record:
+            return _error(hooks, f"No child agent matched: {query}")
+        if subcommand == "inspect":
+            return _info(hooks, "Agent", formatChildAgentRecord(record))
+        if subcommand == "attach":
+            request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
+            if not callable(request_resume):
+                return _error(hooks, "/agents attach is only available in the full-screen TUI.")
+            target_session_id = record.get("attachableSessionId") or record.get("sessionId")
+            target_session = await loadSession(target_session_id)
+            if not target_session:
+                return _error(hooks, f"Attach target not found: {target_session_id}")
+            if target_session.get("id") == session.get("id"):
+                return _info(hooks, "Agent", f"{record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))} belongs to the current session.")
+            await _persist(hooks)
+            request_resume(target_session)
+            return _handled(f"resuming {target_session.get('id')}")
+        if not record.get("taskId"):
+            return _error(hooks, f"Child agent {_short_id(record.get('agentId', ''))} is not linked to a supervised task.")
+        supervisor = args.get("daemon") or args.get("taskSupervisor")
+        if not supervisor:
+            return _error(hooks, "This child-agent action requires the local task supervisor daemon.")
+        if subcommand == "stop":
+            stop_fn = supervisor.get("stopTask") if isinstance(supervisor, dict) else None
+            if not callable(stop_fn):
+                return _error(hooks, "Task supervisor does not support stopTask.")
+            stopped = await _maybe_await(stop_fn(record["taskId"]))
+            if not stopped:
+                return _error(hooks, f"Child agent could not be stopped: {record['taskId']}")
+            return _info(hooks, "Agent", f"Stopped {record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))}")
+        retry_fn = supervisor.get("retryTask") if isinstance(supervisor, dict) else None
+        if not callable(retry_fn):
+            return _error(hooks, "Task supervisor does not support retryTask.")
+        try:
+            retried = await _maybe_await(retry_fn(record["taskId"]))
+        except Exception as exc:
+            return _error(hooks, str(exc))
+        return _info(
+            hooks,
+            "Agent",
+            "\n".join(
+                [
+                    f"Retried {record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))}",
+                    f"new task     {(retried or {}).get('taskId') or (retried or {}).get('id')}",
+                    *([f"output       {retried.get('outputFile')}"] if isinstance(retried, dict) and retried.get("outputFile") else []),
+                ]
+            ),
+        )
+    return _info(hooks, "Agents", await _build_agents_report(session, config, arg_text))
+
+
+async def _build_agents_report(session: dict[str, Any], config: dict[str, Any], arg_text: str = "") -> str:
+    related_agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
+    normalized = arg_text.strip().lower()
+    if not normalized:
+        configured = config.get("agents") or {}
+        active = [record for record in related_agents if _is_active_child_agent(record)]
+        awaiting = [record for record in related_agents if record.get("status") == "awaiting_plan_approval"]
+        configured_lines = _format_configured_agents(configured)
+        return "\n".join(
+            [
+                configured_lines if configured_lines else "No configured agents.",
+                "",
+                f"child runs   {len(related_agents)}",
+                f"active       {len(active)}",
+                f"awaiting     {len(awaiting)}",
+                "tip          /agents running or /agents all",
+            ]
+        )
+    if normalized in {"running", "active"}:
+        visible = [record for record in related_agents if _is_active_child_agent(record)]
+    elif normalized in {"all", "history"}:
+        visible = related_agents
+    else:
+        visible = [record for record in related_agents if _matches_agent_query(record, normalized)]
+    if not visible:
+        if normalized in {"running", "active"}:
+            return "No active child agents for this session."
+        return f"No child agents matched: {arg_text}"
+    return "\n\n".join(formatChildAgentRecord(record) for record in visible[:12])
 
 
 async def buildDaemonReport() -> str:
@@ -653,6 +761,93 @@ def _background_remote_tokens(record: dict[str, Any], bridge: dict[str, Any] | N
 
 def _compact_tokens(*values: Any) -> list[str]:
     return [str(value).lower() for value in values if value]
+
+
+def _format_configured_agents(agents: dict[str, Any]) -> str:
+    lines = []
+    for name, agent in agents.items():
+        description = agent.get("description") if isinstance(agent, dict) else getattr(agent, "description", "")
+        lines.append(f"{str(name).ljust(12)} {description or ''}".rstrip())
+    return "\n".join(lines)
+
+
+def _resolve_agent_record(records: list[dict[str, Any]], query: str) -> dict[str, Any] | None:
+    normalized = query.strip().lower()
+    for record in records:
+        if normalized in _compact_tokens(record.get("agentId"), record.get("sessionId")):
+            return record
+    for record in records:
+        values = _compact_tokens(record.get("agentId"), record.get("sessionId"), record.get("taskId"))
+        if any(normalized in value for value in values):
+            return record
+    return None
+
+
+def _matches_agent_query(record: dict[str, Any], query: str) -> bool:
+    return any(
+        query in value
+        for value in _compact_tokens(
+            record.get("agentId"),
+            record.get("sessionId"),
+            record.get("parentSessionId"),
+            record.get("name"),
+            record.get("agentType"),
+            record.get("teamName"),
+            record.get("status"),
+            record.get("taskId"),
+        )
+    )
+
+
+def _is_related_plan_approval(session: dict[str, Any], record: dict[str, Any]) -> bool:
+    if record.get("sessionId") == session.get("id") or record.get("parentSessionId") == session.get("id"):
+        return True
+    agent_id = record.get("agentId")
+    if agent_id and agent_id == session.get("metadata", {}).get("agentId"):
+        return True
+    return bool(agent_id and agent_id in (session.get("metadata", {}).get("childAgentIds") or []))
+
+
+def _matches_plan_query(record: dict[str, Any], query: str) -> bool:
+    return any(
+        query in value
+        for value in _compact_tokens(
+            record.get("requestId"),
+            record.get("sessionId"),
+            record.get("parentSessionId"),
+            record.get("agentId"),
+            record.get("status"),
+            record.get("filePath"),
+            record.get("reason"),
+            record.get("plan"),
+        )
+    )
+
+
+def formatPlanApprovalRecord(record: dict[str, Any]) -> str:
+    request_id = str(record.get("requestId") or "")
+    origin = f"agent {_short_id(str(record.get('agentId')))}" if record.get("agentId") else "session"
+    lines = [
+        f"{_short_id(request_id)}  {record.get('status')}  {origin}",
+        f"created      {str(record.get('createdAt') or '')[:19].replace('T', ' ')}",
+    ]
+    if record.get("resolvedAt"):
+        lines.append(f"resolved     {str(record.get('resolvedAt'))[:19].replace('T', ' ')}")
+    prompts = record.get("allowedPrompts") or []
+    if prompts:
+        formatted_prompts = []
+        for prompt in prompts:
+            if isinstance(prompt, dict):
+                formatted_prompts.append(f"{prompt.get('tool')}({truncate(collapseWhitespace(prompt.get('prompt')), 48)})")
+        if formatted_prompts:
+            lines.append(f"prompts      {', '.join(formatted_prompts)}")
+    if record.get("reason"):
+        lines.append(f"reason       {record.get('reason')}")
+    if record.get("filePath"):
+        lines.append(f"file         {record.get('filePath')}")
+    if record.get("plan"):
+        lines.append(f"plan         {truncate(collapseWhitespace(record.get('plan')), 180)}")
+    return "\n".join(lines)
 
 
 async def _read_task_output(record: dict[str, Any], args: dict[str, Any] | None = None) -> tuple[str, bool]:

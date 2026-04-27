@@ -2427,6 +2427,109 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_shell_agents_and_plans_match_reference_reports(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config["agents"] = {"reviewer": {"description": "Strict review pass"}}
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            target = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            run(core.saveSession(target))
+            child = {
+                "agentId": "agent-plan-shell",
+                "sessionId": target["id"],
+                "parentSessionId": session["id"],
+                "name": "Plan worker",
+                "provider": "openai",
+                "model": "gpt-5.4",
+                "mode": "auto",
+                "runInBackground": True,
+                "status": "awaiting_plan_approval",
+                "startedAt": "2026-01-01T00:00:00Z",
+                "taskId": "task-agent-plan",
+                "attachableSessionId": target["id"],
+                "waitingReason": "Review the proposed migration plan.",
+                "retryable": True,
+                "stoppable": True,
+            }
+            run(core.saveChildAgent(child))
+            session["metadata"]["childAgentIds"] = [child["agentId"]]
+            run(
+                core.savePlanApproval(
+                    {
+                        "requestId": "plan-pending-shell",
+                        "sessionId": target["id"],
+                        "parentSessionId": session["id"],
+                        "agentId": child["agentId"],
+                        "status": "pending",
+                        "createdAt": "2026-01-01T00:00:01Z",
+                        "filePath": str(workspace / "plan.md"),
+                        "plan": "Migrate shell command reports to parity.",
+                        "allowedPrompts": [{"tool": "Bash", "prompt": "python3 -m unittest discover -s tests"}],
+                    }
+                )
+            )
+            run(
+                core.savePlanApproval(
+                    {
+                        "requestId": "plan-approved-shell",
+                        "sessionId": session["id"],
+                        "status": "approved",
+                        "createdAt": "2026-01-01T00:00:02Z",
+                        "resolvedAt": "2026-01-01T00:00:03Z",
+                        "plan": "Approved plan",
+                        "allowedPrompts": [],
+                    }
+                )
+            )
+
+            resumed = []
+            stopped = []
+            retried = []
+            counters = {"persist": 0}
+            hooks = {
+                "info": lambda *_: None,
+                "error": lambda *_: None,
+                "persist": lambda: counters.__setitem__("persist", counters["persist"] + 1),
+                "requestResume": lambda next_session: resumed.append(next_session["id"]),
+            }
+            supervisor = {
+                "stopTask": lambda task_id: stopped.append(task_id) or True,
+                "retryTask": lambda task_id: retried.append(task_id) or {"taskId": "task-agent-retry", "outputFile": str(workspace / "agent.log")},
+            }
+
+            agents_summary = run(core.handleSlashCommand({"command": "/agents", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("reviewer", agents_summary["message"])
+            self.assertIn("Strict review pass", agents_summary["message"])
+            self.assertIn("child runs   1", agents_summary["message"])
+            self.assertIn("awaiting     1", agents_summary["message"])
+            agents_running = run(core.handleSlashCommand({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("Plan worker", agents_running["message"])
+            self.assertIn("awaiting_plan_approval", agents_running["message"])
+            inspected = run(core.handleSlashCommand({"command": "/agents inspect plan-shell", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("waiting      Review the proposed migration plan.", inspected["message"])
+
+            run(core.handleSlashCommand({"command": "/agents attach agent-plan", "session": session, "config": config, "hooks": hooks}))
+            stop = run(core.handleSlashCommand({"command": "/agents stop agent-plan", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            retry = run(core.handleSlashCommand({"command": "/agents retry agent-plan", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            self.assertEqual(resumed, [target["id"]])
+            self.assertEqual(stopped, ["task-agent-plan"])
+            self.assertEqual(retried, ["task-agent-plan"])
+            self.assertIn("Stopped Plan worker", stop["message"])
+            self.assertIn("new task     task-agent-retry", retry["message"])
+
+            plans_pending = run(core.handleSlashCommand({"command": "/plans", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("current state  inactive", plans_pending["message"])
+            self.assertIn("plan-pending", plans_pending["message"])
+            self.assertIn("agent agent-plan", plans_pending["message"])
+            self.assertIn("Bash(python3 -m unittest discover -s tests)", plans_pending["message"])
+            plans_approved = run(core.handleSlashCommand({"command": "/plans approved", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("plan-approve", plans_approved["message"])
+            plans_missing = run(core.handleSlashCommand({"command": "/plans missing-query", "session": session, "config": config, "hooks": hooks}))
+            self.assertIn("No plan approvals matched: missing-query", plans_missing["message"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_platform_detection_tmux_ide_chrome_and_doctor(self):
         root, home, workspace, previous = self.temp_context()
         try:
