@@ -2173,7 +2173,8 @@ class AgentCoreTests(unittest.TestCase):
             tasks = run(core.handleSlashCommand({"command": "/tasks", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("task-shell", tasks["message"])
             inspected = run(core.handleSlashCommand({"command": "/tasks inspect task-shell", "session": session, "config": config, "hooks": hooks}))
-            self.assertIn('"kind": "background_command"', inspected["message"])
+            self.assertIn("kind         background_command", inspected["message"])
+            self.assertIn("surface      inspectable", inspected["message"])
 
             run(core.saveDaemonState({"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
             daemon = run(core.handleSlashCommand({"command": "/daemon", "session": session, "config": config, "hooks": hooks}))
@@ -2280,12 +2281,21 @@ class AgentCoreTests(unittest.TestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            task = {"id": "task-shell-mutate", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Mutable shell task", "updatedAt": "2026-01-01T00:00:00Z"}
+            target = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            run(core.saveSession(target))
+            task = {"id": "task-shell-mutate", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Mutable shell task", "updatedAt": "2026-01-01T00:00:00Z", "attachableSessionId": target["id"]}
             run(core.saveTaskRecord(task))
             stopped = []
             retried = []
             daemon_actions = []
-            hooks = {"info": lambda *_: None, "error": lambda *_: None}
+            resumed = []
+            counters = {"persist": 0}
+            hooks = {
+                "info": lambda *_: None,
+                "error": lambda *_: None,
+                "persist": lambda: counters.__setitem__("persist", counters["persist"] + 1),
+                "requestResume": lambda next_session: resumed.append(next_session["id"]),
+            }
             supervisor = {
                 "readTaskOutput": lambda task_id, _tail: {"output": f"log for {task_id}"},
                 "stopTask": lambda task_id: stopped.append(task_id) or True,
@@ -2302,8 +2312,11 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("Stopped task-shell-mutate", stop["message"])
             retry = run(core.handleSlashCommand({"command": "/tasks retry mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertIn("new task     task-shell-retry", retry["message"])
+            run(core.handleSlashCommand({"command": "/tasks attach mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertEqual(stopped, ["task-shell-mutate"])
             self.assertEqual(retried, ["task-shell-mutate"])
+            self.assertEqual(resumed, [target["id"]])
+            self.assertEqual(counters["persist"], 1)
 
             stopped_daemon = run(core.handleSlashCommand({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
             restarted_daemon = run(core.handleSlashCommand({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
