@@ -6089,14 +6089,28 @@ class AgentCoreTests(unittest.TestCase):
             notebook_path.write_text(json.dumps({"cells": [{"id": "cell-1", "cell_type": "code", "source": ["print(1)"], "metadata": {}, "outputs": []}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}))
             tool = next(tool for tool in core.createBuiltinTools() if tool.name == "NotebookEdit")
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}
-            run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "print(2)"}, context))
+            replaced = run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "print(2)"}, context))
+            self.assertEqual(replaced, {"content": f"Updated notebook {notebook_path}"})
             self.assertEqual(json.loads(notebook_path.read_text())["cells"][0]["source"], ["print(2)"])
-            run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "print(3)", "edit_mode": "insert"}, context))
-            self.assertEqual(len(json.loads(notebook_path.read_text())["cells"]), 2)
-            run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "ignored", "edit_mode": "delete"}, context))
+            self.assertTrue(notebook_path.read_text(encoding="utf-8").endswith("\n"))
+
+            inserted = run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "print(3)", "cell_type": "markdown", "edit_mode": "insert"}, context))
+            self.assertEqual(inserted, {"content": f"Updated notebook {notebook_path}"})
+            inserted_cells = json.loads(notebook_path.read_text())["cells"]
+            self.assertEqual(len(inserted_cells), 2)
+            self.assertEqual(inserted_cells[1]["cell_type"], "markdown")
+            self.assertEqual(inserted_cells[1]["source"], ["print(3)"])
+            self.assertEqual(inserted_cells[1]["metadata"], {})
+            self.assertEqual(inserted_cells[1]["outputs"], [])
+
+            deleted = run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "ignored", "edit_mode": "delete"}, context))
+            self.assertEqual(deleted, {"content": f"Updated notebook {notebook_path}"})
             cells = json.loads(notebook_path.read_text())["cells"]
             self.assertEqual(len(cells), 1)
             self.assertEqual(cells[0]["source"], ["print(3)"])
+
+            missing = run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "missing", "new_source": "ignored", "edit_mode": "delete"}, context))
+            self.assertEqual(missing, {"content": "Cell not found", "isError": True})
         finally:
             self.restore_home(root, previous)
 
