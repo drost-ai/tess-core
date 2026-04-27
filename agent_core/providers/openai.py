@@ -491,12 +491,22 @@ def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
     factory = args.get("clientFactory") or args.get("client_factory")
     if not factory:
         raise RuntimeError("A clientFactory is required unless the optional OpenAI SDK transport is added by the application.")
-    options = {"apiKey": args.get("token"), "dangerouslyAllowBrowser": False}
+    options = {"apiKey": args.get("token"), "dangerouslyAllowBrowser": False, "fetch": _build_openai_fetch(args.get("runtime") or {})}
     if args.get("headers"):
         options["defaultHeaders"] = args["headers"]
     if base_url:
         options["baseURL"] = base_url
     return factory(options)
+
+
+def _build_openai_fetch(runtime: dict[str, Any]):
+    async def fetch(_input: Any, init: dict[str, Any] | None = None) -> Any:
+        signal = get_value(init or {}, "signal") or runtime.get("abortSignal")
+        if _signal_aborted(signal):
+            raise RuntimeError("The operation was aborted.")
+        raise RuntimeError("OpenAI fetch transport is only available through the configured clientFactory.")
+
+    return fetch
 
 
 async def _race_openai_activity(

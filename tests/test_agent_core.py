@@ -580,6 +580,150 @@ class AgentCoreTests(unittest.TestCase):
         self.assertTrue(ctx.exception.record["retryable"])
         self.assertTrue(ctx.exception.record["hadToolUse"])
 
+    def test_openai_codex_transport_and_compatible_retry_edges(self):
+        codex_captured = {}
+
+        async def create_codex(params):
+            codex_captured["params"] = params
+            return AsyncChunks([{"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "codex-ok"}]}], "usage": {"input_tokens": 5, "output_tokens": 2}}}])
+
+        def codex_factory(options):
+            codex_captured["options"] = options
+            return SimpleNamespace(responses=SimpleNamespace(create=create_codex))
+
+        codex_response = run(
+            testing.sendOpenAiResponsesRequest(
+                {
+                    "token": "codex-token",
+                    "mode": "codex",
+                    "headers": {"x-codex-test": "1"},
+                    "request": {
+                        "model": "gpt-5.3-codex-spark",
+                        "effort": "high",
+                        "system": "Follow the project policy.",
+                        "messages": [{"role": "user", "content": "Summarize"}],
+                        "tools": [{"name": "Read", "description": "Read files", "input_schema": {"type": "object", "properties": {"path": {"type": "string"}}}}],
+                    },
+                    "runtime": {},
+                    "maxAttempts": 1,
+                    "clientFactory": codex_factory,
+                }
+            )
+        )
+        self.assertEqual(codex_response["content"], [{"type": "text", "text": "codex-ok"}])
+        self.assertEqual(codex_captured["options"]["apiKey"], "codex-token")
+        self.assertEqual(codex_captured["options"]["baseURL"], testing.DEFAULT_CODEX_BASE_URL)
+        self.assertEqual(codex_captured["options"]["defaultHeaders"], {"x-codex-test": "1"})
+        self.assertFalse(codex_captured["options"]["dangerouslyAllowBrowser"])
+        self.assertTrue(callable(codex_captured["options"]["fetch"]))
+        with self.assertRaisesRegex(RuntimeError, "aborted"):
+            run(codex_captured["options"]["fetch"]("https://example.test", {"signal": SimpleNamespace(aborted=True)}))
+        self.assertEqual(codex_captured["params"]["instructions"], "You are a helpful and reliable assistant.\n\nFollow the project policy.")
+        self.assertEqual(codex_captured["params"]["reasoning"], {"effort": "high"})
+        self.assertEqual(codex_captured["params"]["store"], False)
+        self.assertEqual(codex_captured["params"]["stream"], True)
+        self.assertNotIn("max_output_tokens", codex_captured["params"])
+        self.assertEqual(codex_captured["params"]["tools"][0]["parameters"]["properties"]["path"], {"type": "string"})
+
+        original_delay = openai_module.providerRetryDelayMs
+        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        try:
+            compatible_attempts = {"count": 0}
+            compatible_captured = {}
+            events = []
+
+            async def create_compatible(params):
+                compatible_attempts["count"] += 1
+                compatible_captured["params"] = params
+                if compatible_attempts["count"] == 1:
+                    raise RuntimeError("fetch failed")
+                return AsyncChunks([{"choices": [{"delta": {"content": "compatible-ok"}, "finish_reason": "stop"}], "usage": {"prompt_tokens": 8, "completion_tokens": 2}}])
+
+            def compatible_factory(options):
+                compatible_captured["options"] = options
+                return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_compatible)))
+
+            compatible_response = run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "compatible-token",
+                        "baseUrl": "https://api.deepinfra.com/v1/openai",
+                        "headers": {"x-provider": "deepinfra"},
+                        "request": {"model": "zai-org/GLM-5", "effort": "xhigh", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"emitEvent": lambda event, data: events.append((event, data))},
+                        "maxAttempts": 2,
+                        "clientFactory": compatible_factory,
+                    }
+                )
+            )
+            self.assertEqual(compatible_response["content"], [{"type": "text", "text": "compatible-ok"}])
+            self.assertEqual(compatible_response["usage"], {"input_tokens": 8, "output_tokens": 2})
+            self.assertEqual(compatible_attempts["count"], 2)
+            self.assertEqual(compatible_captured["options"]["baseURL"], "https://api.deepinfra.com/v1/openai")
+            self.assertEqual(compatible_captured["options"]["defaultHeaders"], {"x-provider": "deepinfra"})
+            self.assertNotIn("reasoning_effort", compatible_captured["params"])
+            self.assertTrue(any(event == "provider.retrying" and data["category"] == "transport" and data["providerLabel"] == "OpenAI Chat Completions" for event, data in events))
+            self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in events))
+        finally:
+            openai_module.providerRetryDelayMs = original_delay
+
+    def test_openai_responses_error_event_retry_and_protocol_edges(self):
+        original_delay = openai_module.providerRetryDelayMs
+        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        try:
+            attempts = {"count": 0}
+            events = []
+
+            async def create_rate_limit(_params):
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    return AsyncChunks([{"type": "error", "code": "rate_limit_exceeded", "message": "rate limit"}])
+                return AsyncChunks([{"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "retry-ok"}]}]}}])
+
+            response = run(
+                testing.sendOpenAiResponsesRequest(
+                    {
+                        "token": "test",
+                        "mode": "responses",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"emitEvent": lambda event, data: events.append((event, data))},
+                        "maxAttempts": 2,
+                        "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_rate_limit)),
+                    }
+                )
+            )
+            self.assertEqual(response["content"], [{"type": "text", "text": "retry-ok"}])
+            self.assertEqual(attempts["count"], 2)
+            self.assertTrue(any(event == "provider.retrying" and data["category"] == "rate_limit" and data["streamEventType"] == "error" for event, data in events))
+            self.assertTrue(any(event == "provider.recovered" and data["category"] == "rate_limit" for event, data in events))
+        finally:
+            openai_module.providerRetryDelayMs = original_delay
+
+        incomplete_calls = {"count": 0}
+
+        async def create_incomplete(_params):
+            incomplete_calls["count"] += 1
+            return AsyncChunks([{"type": "response.incomplete", "response": {"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}}}])
+
+        with self.assertRaises(core.ProviderRequestError) as ctx:
+            run(
+                testing.sendOpenAiResponsesRequest(
+                    {
+                        "token": "test",
+                        "mode": "responses",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {},
+                        "maxAttempts": 2,
+                        "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_incomplete)),
+                    }
+                )
+            )
+        self.assertEqual(incomplete_calls["count"], 1)
+        self.assertEqual(ctx.exception.record["category"], "protocol")
+        self.assertFalse(ctx.exception.record["retryable"])
+        self.assertEqual(ctx.exception.record["streamEventType"], "response.incomplete")
+        self.assertEqual(ctx.exception.record["rawMessage"], "incomplete: max_output_tokens")
+
     def test_openai_reasoning_and_base_url(self):
         response = run(
             testing.sendOpenAiChatCompletionsRequest(
@@ -657,7 +801,7 @@ class AgentCoreTests(unittest.TestCase):
         emitted = []
         raw = "\n\n".join(
             [
-                'event: message_start\ndata: {"type":"message_start","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":10}}}',
+                'event: message_start\ndata: {"type":"message_start","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":10,"cache_creation_input_tokens":2,"cache_read_input_tokens":4}}}',
                 'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
                 'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi "}}',
                 'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"Read","input":{}}}',
@@ -671,7 +815,7 @@ class AgentCoreTests(unittest.TestCase):
         normalized = testing.normalizeAnthropicSseResponse(raw, request, {"includePartialMessages": True, "emitEvent": lambda event, data: emitted.append((event, data))})
         self.assertEqual(normalized["content"][0], {"type": "text", "text": "Hi "})
         self.assertEqual(normalized["content"][1], {"type": "tool_use", "id": "toolu_1", "name": "Read", "input": {"file_path": "a.txt"}})
-        self.assertEqual(normalized["usage"], {"input_tokens": 10, "output_tokens": 3})
+        self.assertEqual(normalized["usage"], {"input_tokens": 10, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 4, "output_tokens": 3})
         self.assertTrue(any(event == "message.assistant.partial" for event, _ in emitted))
         self.assertNotIn("stream", testing.buildAnthropicMessagesPayload({**request, "effort": None}))
 
