@@ -25,6 +25,7 @@ from unittest import mock
 import agent_core as core
 from agent_core import testing
 import agent_core.agent as agent_module
+import agent_core.mcp as mcp_module
 import agent_core.monitors as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
@@ -6731,6 +6732,10 @@ class AgentCoreTests(unittest.TestCase):
                 length = int(self.headers.get("content-length") or 0)
                 request = json.loads(self.rfile.read(length).decode("utf-8"))
                 method = request.get("method")
+                if method == "notifications/initialized":
+                    self.send_response(202)
+                    self.end_headers()
+                    return
                 if method == "initialize":
                     payload = {"jsonrpc": "2.0", "id": request.get("id"), "result": {"serverInfo": {"name": "sse-edge"}}}
                     raw = json.dumps(payload).encode()
@@ -6786,6 +6791,21 @@ class AgentCoreTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             self.restore_home(root, previous)
+
+    def test_mcp_sse_endpoint_and_id_matching_follow_reference_edges(self):
+        client = mcp_module.SseMcpClient({"name": "edge", "commandOrUrl": "http://127.0.0.1:1/sse"}, "/tmp")
+        client._handle_sse_event("endpoint", [json.dumps({"url": "/messages"})])
+        self.assertEqual(client.post_url, "/messages")
+
+        no_id = mcp_module._parse_sse_rpc_response('data: {"jsonrpc":"2.0","result":{"ok":true}}\n\n', None)
+        self.assertEqual(no_id["result"], {"ok": True})
+        for raw, request_id in [
+            ('data: {"jsonrpc":"2.0","id":null,"result":{}}\n\n', None),
+            ('data: {"jsonrpc":"2.0","id":true,"result":{}}\n\n', 1),
+            ('data: {"jsonrpc":"2.0","id":"1","result":{}}\n\n', 1),
+        ]:
+            with self.assertRaisesRegex(RuntimeError, "No matching SSE JSON-RPC response was received"):
+                mcp_module._parse_sse_rpc_response(raw, request_id)
 
     def test_mcp_discovery_only_swallows_method_not_found(self):
         root, home, workspace, previous = self.temp_context()

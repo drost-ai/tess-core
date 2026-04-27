@@ -12,7 +12,6 @@ import threading
 import uuid
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urljoin
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -272,7 +271,7 @@ class SseMcpClient(JsonRpcClient):
             next_url = endpoint.get("url") if isinstance(endpoint.get("url"), str) else endpoint.get("endpoint") if isinstance(endpoint.get("endpoint"), str) else None
             if next_url:
                 with self.post_lock:
-                    self.post_url = urljoin(self.config["commandOrUrl"], next_url)
+                    self.post_url = next_url
                 self.endpoint_ready.set()
             return
         message = payload if isinstance(payload, dict) else {}
@@ -282,7 +281,7 @@ class SseMcpClient(JsonRpcClient):
             if self.on_notification:
                 self.on_notification({"method": method, "params": message.get("params")})
             return
-        if isinstance(request_id, int):
+        if isinstance(request_id, int) and not isinstance(request_id, bool):
             response_queue = self.pending.pop(request_id, None)
             if response_queue:
                 response_queue.put(message)
@@ -411,7 +410,7 @@ class StdioMcpClient(JsonRpcClient):
             if self.on_notification:
                 self.on_notification({"method": method, "params": message.get("params")})
             return
-        if isinstance(request_id, int):
+        if isinstance(request_id, int) and not isinstance(request_id, bool):
             response_queue = self.pending.pop(request_id, None)
             if response_queue:
                 response_queue.put(message)
@@ -704,9 +703,16 @@ def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
             payload = json.loads(data)
         except Exception:
             continue
-        if request_id is None or payload.get("id") == request_id:
+        if isinstance(payload, dict) and _json_rpc_id_matches(payload, request_id):
             return payload
     raise RuntimeError("No matching SSE JSON-RPC response was received.")
+
+
+def _json_rpc_id_matches(payload: dict[str, Any], request_id: int | None) -> bool:
+    if request_id is None:
+        return "id" not in payload
+    payload_id = payload.get("id")
+    return isinstance(payload_id, int) and not isinstance(payload_id, bool) and payload_id == request_id
 
 
 def _parse_sse_events(raw: str) -> list[dict[str, str]]:
