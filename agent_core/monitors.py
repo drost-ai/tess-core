@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import uuid
 from pathlib import Path
@@ -171,13 +172,13 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
 
 
 def defaultMonitorCheckIntervalMs(value: Any) -> int:
-    if not isinstance(value, (int, float)) or value != value:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
         return DEFAULT_CHECK_INTERVAL_MS
     return max(2000, min(round(value), 60000))
 
 
 def defaultMonitorHeartbeatIntervalMs(value: Any) -> int:
-    if not isinstance(value, (int, float)) or value != value:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
         return DEFAULT_HEARTBEAT_INTERVAL_MS
     return max(15000, min(round(value), 15 * 60_000))
 

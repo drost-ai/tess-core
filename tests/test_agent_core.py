@@ -4933,6 +4933,9 @@ class AgentCoreTests(unittest.TestCase):
                 core.formatMonitorSummary([{"id": "monitor-123456", "status": "active", "taskId": task_id, "goal": "watch server", "lastAssistantUpdateAt": "2026-01-01T00:00:00Z"}]),
                 "monitor-  active · task monitor- · watch server · last update 2026-01-01T00:00:00Z",
             )
+            self.assertEqual(core.defaultMonitorCheckIntervalMs(math.inf), 5000)
+            self.assertEqual(core.defaultMonitorHeartbeatIntervalMs(math.inf), 60000)
+            self.assertEqual(core.defaultMonitorCheckIntervalMs(True), 5000)
 
             plugin_descriptors = core.createPluginActivityDescriptors(
                 [
