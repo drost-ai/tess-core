@@ -2292,6 +2292,230 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_plugin_runtime_loads_manifest_entry_commands_and_mcp_servers(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            plugin_dir = workspace / "alpha-plugin"
+            plugin_dir.mkdir()
+            (plugin_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "alpha",
+                        "version": "1.2.3",
+                        "entry": "plugin_entry.py",
+                        "capabilities": {"tools": True, "commands": True, "mcpServers": True},
+                        "commands": [
+                            {
+                                "name": "/hello",
+                                "description": "Say hello",
+                                "command": "printf 'cmd:%s:%s' \"{{args}}\" \"{{session_id}}\"",
+                            }
+                        ],
+                        "mcpServers": [
+                            {
+                                "name": "alpha-mcp",
+                                "transport": "http",
+                                "commandOrUrl": "http://alpha.invalid/rpc",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (plugin_dir / "plugin_entry.py").write_text(
+                textwrap.dedent(
+                    """
+                    from agent_core.tools import ToolDefinition
+
+
+                    async def echo_handler(input, context):
+                        return {"content": "entry:" + str(input.get("value", ""))}
+
+
+                    def default(context):
+                        return {
+                            "tools": [
+                                ToolDefinition(
+                                    "PluginEcho",
+                                    "Echo from plugin",
+                                    {"type": "object", "properties": {"value": {"type": "string"}}},
+                                    echo_handler,
+                                )
+                            ],
+                            "commands": [
+                                {
+                                    "name": "entrycmd",
+                                    "usage": "/entrycmd",
+                                    "description": "Entry command",
+                                    "handler": lambda payload: "entry handled " + payload.get("argText", ""),
+                                }
+                            ],
+                            "mcpServers": [
+                                {
+                                    "name": "entry-mcp",
+                                    "transport": "http",
+                                    "commandOrUrl": "http://entry.invalid/rpc",
+                                }
+                            ],
+                        }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            config = run(
+                core.resolveConfig(
+                    {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]},
+                    str(workspace),
+                )
+            )
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+
+            plugin_runtime = run(core.loadPluginRuntime(config))
+            self.assertEqual(plugin_runtime["errors"], [])
+            self.assertEqual([plugin["id"] for plugin in plugin_runtime["plugins"]], ["alpha"])
+            self.assertEqual([tool.name for tool in plugin_runtime["tools"]], ["PluginEcho"])
+            self.assertEqual([command["name"] for command in plugin_runtime["commands"]], ["hello", "entrycmd"])
+            self.assertEqual({server["name"] for server in plugin_runtime["mcpServers"]}, {"alpha-mcp", "entry-mcp"})
+            self.assertTrue(all(server.get("updatedAt") for server in plugin_runtime["mcpServers"]))
+            self.assertEqual(plugin_runtime["plugins"][0]["capabilities"]["provided"], {"tools": 1, "commands": 2, "mcpServers": 2})
+            self.assertEqual([diagnostic for diagnostic in plugin_runtime["diagnostics"] if diagnostic["severity"] == "error"], [])
+
+            tool_result = run(plugin_runtime["tools"][0].handler({"value": "ok"}, {"session": session, "config": config}))
+            self.assertEqual(tool_result["content"], "entry:ok")
+
+            infos = []
+            errors = []
+            hooks = {"info": lambda title, message: infos.append((title, message)), "error": errors.append}
+            shell_result = run(
+                core.handleSlashCommand(
+                    {
+                        "command": "/hello world",
+                        "session": session,
+                        "config": config,
+                        "hooks": hooks,
+                        "runtimeCommands": plugin_runtime["commands"],
+                    }
+                )
+            )
+            self.assertEqual(shell_result, {"outcome": "handled"})
+            self.assertEqual(errors, [])
+            self.assertEqual(infos[-1], ("Plugin alpha", f"cmd:world:{session['id']}"))
+
+            entry_result = run(
+                core.handleSlashCommand(
+                    {
+                        "command": "/entrycmd payload",
+                        "session": session,
+                        "config": config,
+                        "hooks": hooks,
+                        "runtimeCommands": plugin_runtime["commands"],
+                    }
+                )
+            )
+            self.assertEqual(entry_result["message"], "entry handled payload")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bootstrap_runtime_composes_plugin_tools_commands_and_mcp_servers(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            plugin_dir = workspace / "bootstrap-plugin"
+            plugin_dir.mkdir()
+            (plugin_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "bootstrapper",
+                        "version": "1.0.0",
+                        "entry": "plugin_entry.py",
+                        "commands": [{"name": "ship", "description": "Ship it", "command": "printf shipped"}],
+                        "mcpServers": [
+                            {"name": "plugin-mcp", "transport": "http", "commandOrUrl": "http://plugin.invalid/rpc"}
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (plugin_dir / "plugin_entry.py").write_text(
+                textwrap.dedent(
+                    """
+                    from agent_core.tools import ToolDefinition
+
+
+                    async def handler(input, context):
+                        return {"content": "plugin tool"}
+
+
+                    def default(context):
+                        return {
+                            "tools": [
+                                ToolDefinition(
+                                    "PluginTool",
+                                    "Plugin tool",
+                                    {"type": "object", "properties": {}},
+                                    handler,
+                                )
+                            ],
+                            "mcpServers": [
+                                {"name": "entry-mcp", "transport": "http", "commandOrUrl": "http://entry.invalid/rpc"}
+                            ],
+                        }
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            config = run(
+                core.resolveConfig(
+                    {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]},
+                    str(workspace),
+                )
+            )
+            default_tools = core.getDefaultToolList()
+            config["tools"] = list(default_tools)
+            config["allowedTools"] = list(default_tools)
+            config["channels"] = ["local"]
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            captured = {}
+
+            async def fake_mcp(args):
+                captured.update(args)
+                return {"createToolDefinitions": lambda: [SimpleNamespace(name="McpFromPlugin")], "close": lambda: None}
+
+            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp):
+                boot = run(core.bootstrapRuntime({"session": session, "config": config}))
+                tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
+                command_names = [command["name"] for command in boot["slashCommands"]]
+                server_names = [server["name"] for server in captured["servers"]]
+                self.assertEqual(captured["sessionId"], session["id"])
+                self.assertEqual(captured["registeredChannels"], ["local"])
+                self.assertEqual(server_names, ["plugin-mcp", "entry-mcp"])
+                self.assertIn("McpFromPlugin", tool_names)
+                self.assertIn("PluginTool", tool_names)
+                self.assertIn("PluginTool", config["tools"])
+                self.assertIn("PluginTool", config["allowedTools"])
+                self.assertEqual(command_names, ["ship"])
+                self.assertEqual([plugin["id"] for plugin in boot["plugins"]["plugins"]], ["bootstrapper"])
+                run(boot["close"]())
+        finally:
+            self.restore_home(root, previous)
+
     def test_bootstrap_runtime_closes_owned_local_runtimes_in_reference_order(self):
         root, home, workspace, previous = self.temp_context()
         try:
