@@ -4377,9 +4377,12 @@ class AgentCoreTests(unittest.TestCase):
             default_tail = run(supervisor["readTaskOutput"](task_id))
             self.assertTrue(default_tail["truncated"])
             self.assertEqual(len(default_tail["output"]), 12000)
-            explicit_full = run(supervisor["readTaskOutput"](task_id, 0))
-            self.assertFalse(explicit_full["truncated"])
-            self.assertEqual(len(explicit_full["output"]), 13000)
+            zero_tail = run(supervisor["readTaskOutput"](task_id, 0))
+            self.assertTrue(zero_tail["truncated"])
+            self.assertEqual(zero_tail["output"], "a")
+            negative_tail = run(supervisor["readTaskOutput"](task_id, -10))
+            self.assertTrue(negative_tail["truncated"])
+            self.assertEqual(negative_tail["output"], "a")
         finally:
             if supervisor:
                 run(supervisor["close"]())

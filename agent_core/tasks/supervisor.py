@@ -203,8 +203,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             return {"taskId": task_id, "output": "", "truncated": False, "outputFile": output_file}
         data = path.read_bytes()
         truncated = False
-        effective_tail_bytes = 12000 if tailBytes is None else tailBytes
-        if effective_tail_bytes and effective_tail_bytes > 0 and len(data) > effective_tail_bytes:
+        effective_tail_bytes = 12000 if tailBytes is None else max(1, int(tailBytes))
+        if len(data) > effective_tail_bytes:
             data = data[-effective_tail_bytes:]
             truncated = True
         return {
