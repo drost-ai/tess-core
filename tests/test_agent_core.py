@@ -419,6 +419,35 @@ class AgentCoreTests(unittest.TestCase):
                 os.environ["ANTHROPIC_API_KEY"] = prev_key
             self.restore_home(root, previous)
 
+    def test_resolve_config_stored_anthropic_profile_credentials(self):
+        root, home, workspace, previous = self.temp_context()
+        prev_token = os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        prev_key = os.environ.get("ANTHROPIC_API_KEY")
+        try:
+            os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+            (home / "auth.json").write_text(json.dumps({"provider": "claudeai", "apiKey": "sk-ant-o-stored-token"}))
+            token_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
+            self.assertEqual(token_config["providerProfileName"], "anthropic-claude-code")
+            self.assertEqual(token_config["authToken"], "sk-ant-o-stored-token")
+            self.assertIsNone(token_config["apiKey"])
+
+            (home / "auth.json").write_text(json.dumps({"provider": "console", "apiKey": "sk-ant-api-stored-key"}))
+            key_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
+            self.assertEqual(key_config["providerProfileName"], "anthropic-console")
+            self.assertEqual(key_config["apiKey"], "sk-ant-api-stored-key")
+            self.assertIsNone(key_config["authToken"])
+        finally:
+            if prev_token is None:
+                os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+            else:
+                os.environ["ANTHROPIC_AUTH_TOKEN"] = prev_token
+            if prev_key is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = prev_key
+            self.restore_home(root, previous)
+
     def test_resolve_config_prefers_codex_oauth_for_codex_profile(self):
         root, home, workspace, previous = self.temp_context()
         prev_openai = os.environ.get("OPENAI_API_KEY")
@@ -724,6 +753,74 @@ class AgentCoreTests(unittest.TestCase):
         self.assertFalse(ctx.exception.record["retryable"])
         self.assertEqual(ctx.exception.record["streamEventType"], "response.incomplete")
         self.assertEqual(ctx.exception.record["rawMessage"], "incomplete: max_output_tokens")
+
+    def test_openai_stream_abort_after_partial_output_and_tool_use(self):
+        response_signal = SimpleNamespace(aborted=False)
+        response_attempts = {"count": 0}
+
+        class ResponseStreamAbort:
+            async def __aiter__(self):
+                yield {"type": "response.output_text.delta", "delta": "partial"}
+                response_signal.aborted = True
+                await asyncio.sleep(1)
+                yield {"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "partial late"}]}]}}
+
+        async def create_response_abort(_params):
+            response_attempts["count"] += 1
+            return ResponseStreamAbort()
+
+        with self.assertRaises(core.ProviderRequestError) as response_ctx:
+            run(
+                testing.sendOpenAiResponsesRequest(
+                    {
+                        "token": "test",
+                        "mode": "responses",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"abortSignal": response_signal},
+                        "maxAttempts": 2,
+                        "streamIdleTimeoutMs": 1000,
+                        "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_response_abort)),
+                    }
+                )
+            )
+        self.assertEqual(response_attempts["count"], 1)
+        self.assertEqual(response_ctx.exception.record["category"], "cancelled")
+        self.assertFalse(response_ctx.exception.record["retryable"])
+        self.assertTrue(response_ctx.exception.record["hadAssistantOutput"])
+        self.assertFalse(response_ctx.exception.record["hadToolUse"])
+
+        chat_signal = SimpleNamespace(aborted=False)
+        chat_attempts = {"count": 0}
+
+        class ChatStreamAbort:
+            async def __aiter__(self):
+                yield {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_abort", "function": {"name": "Read", "arguments": "{}"}}]}, "finish_reason": "tool_calls"}]}
+                chat_signal.aborted = True
+                await asyncio.sleep(1)
+                yield {"choices": [{"delta": {"content": "late"}, "finish_reason": "stop"}]}
+
+        async def create_chat_abort(_params):
+            chat_attempts["count"] += 1
+            return ChatStreamAbort()
+
+        with self.assertRaises(core.ProviderRequestError) as chat_ctx:
+            run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "test",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+                        "runtime": {"abortSignal": chat_signal},
+                        "maxAttempts": 2,
+                        "streamIdleTimeoutMs": 1000,
+                        "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_chat_abort))),
+                    }
+                )
+            )
+        self.assertEqual(chat_attempts["count"], 1)
+        self.assertEqual(chat_ctx.exception.record["category"], "cancelled")
+        self.assertFalse(chat_ctx.exception.record["retryable"])
+        self.assertFalse(chat_ctx.exception.record["hadAssistantOutput"])
+        self.assertTrue(chat_ctx.exception.record["hadToolUse"])
 
     def test_openai_reasoning_and_base_url(self):
         response = run(
