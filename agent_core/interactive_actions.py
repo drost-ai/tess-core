@@ -7,15 +7,18 @@ from typing import Any
 from ._utils import now_iso
 from .compaction import runCompaction
 from .config import (
+    ensureProviderForModelSelection,
     getDefaultEffortForProvider,
     getDefaultModelForProvider,
     listModelsForProvider,
     listProviderProfiles,
     listProviders,
+    modelSupportsEffort,
     normalizeEffortForModel,
     normalizeEffortLevel,
     normalizeModelName,
     normalizeProviderName,
+    resolveProviderForModelSelection,
     normalizeProviderProfileName,
     resolveFallbackProviderProfileName,
 )
@@ -113,6 +116,7 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return _handled("")
 
     runtime_command = _find_runtime_command(command, runtime_commands)
+    _sync_effective_provider(session, config)
     if command == "help":
         return _info(hooks, "Commands", buildSlashHelp({"hooks": hooks, "runtimeCommands": runtime_commands}))
     if command in {"exit", "quit"}:
@@ -184,14 +188,14 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         if result in {"handled", "exit", "pass"}:
             return {"outcome": result}
         return _handled(result or "")
-    return {"outcome": "pass"}
+    return _error(hooks, f"Unknown slash command: /{command}")
 
 
 def buildSlashHelp(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     args = {**(args or {}), **kwargs}
     hooks = args.get("hooks") or {}
     lines = [
-        f"{command['usage']:<28} {command['description']}"
+        f"{command['usage']:<22} {command['description']}"
         for command in listSlashCommands(
             {
                 "includeStatusline": bool(hooks.get("getStatusLineVisible") and hooks.get("setStatusLineVisible")),
@@ -202,12 +206,32 @@ def buildSlashHelp(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
             }
         )
     ]
+    for index, line in [
+        (11, "/memory append TEXT    Append text to project memory"),
+        (12, "/memory set TEXT       Replace project memory contents"),
+        (13, "/memory clear          Delete project memory"),
+        (8, "/agents running        Show active child agents for this session"),
+        (9, "/agents all            Show all child agents for this session"),
+        (10, "/agents inspect ID     Inspect a child agent"),
+        (11, "/agents attach ID      Attach to a child agent session"),
+        (12, "/agents stop ID        Stop a daemon-backed child agent"),
+        (13, "/agents retry ID       Retry a daemon-backed child agent"),
+        (22, "/tasks log ID          Show recent task output"),
+        (23, "/tasks result ID       Show the latest task result surface"),
+        (24, "/tasks attach ID       Reconnect to an attachable task session"),
+        (25, "/tasks stop ID         Stop a daemon-backed task"),
+        (26, "/tasks retry ID        Retry a retryable task"),
+    ]:
+        lines.insert(index, line)
     return "\n".join(lines)
 
 
 def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
     metadata = session.get("metadata", {})
     provider = session.get("provider") or config.get("provider")
+    compaction_state = metadata.get("compactionState") or {}
+    token_measurement = compaction_state.get("workingContextTokenMeasurement") or {}
+    full_log = metadata.get("fullTranscriptLog") or {}
     return "\n".join(
         [
             f"session      {session.get('id', 'n/a')}",
@@ -216,7 +240,7 @@ def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
             f"provider     {provider or 'n/a'}",
             f"model        {session.get('model') or config.get('model') or 'n/a'}",
             f"mode         {config.get('openaiApiMode') if provider == 'openai' else 'messages'}",
-            f"base url     {config.get('openaiBaseUrl') if provider == 'openai' else config.get('anthropicBaseUrl') or 'default'}",
+            f"base url     {(config.get('openaiBaseUrl') or 'default') if provider == 'openai' else 'default'}",
             f"effort       {session.get('effort') or config.get('effort') or 'n/a'}",
             f"permissions  {session.get('permissionMode') or config.get('permissionMode') or 'n/a'}",
             f"messages     {len(session.get('messages') or [])}",
@@ -224,7 +248,12 @@ def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
             f"monitors     {len(metadata.get('monitorIds') or [])}",
             f"usage        {formatUsageSummary(metadata.get('usage'))}",
             f"compactions  {metadata.get('compactions', 0)}",
-            f"archived     {metadata.get('fullTranscriptLog', {}).get('archivedMessageCount', 0)}",
+            f"working ctx  {compaction_state.get('workingContextTokenEstimate', 'n/a')}",
+            f"ctx source   {token_measurement.get('source', 'n/a')}",
+            f"preflight    {formatPreflightTokenSummary(session)}",
+            f"compacted to {compaction_state.get('compactedThroughMessageIndex', 'n/a')}",
+            f"archived     {full_log.get('archivedMessageCount', 0)}",
+            f"archive log  {full_log.get('path', 'n/a')}",
         ]
     )
 
@@ -1450,7 +1479,19 @@ def truncate(value: str, limit: int) -> str:
 
 async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
-        return _info(hooks, "Provider", f"profile   {session.get('providerProfileName') or config.get('providerProfileName')}\nkind      {session.get('provider') or config.get('provider')}")
+        provider = session.get("provider") or config.get("provider")
+        return _info(
+            hooks,
+            "Provider",
+            "\n".join(
+                [
+                    f"profile   {session.get('providerProfileName') or config.get('providerProfileName')}",
+                    f"kind      {provider}",
+                    f"mode      {config.get('openaiApiMode') if provider == 'openai' else 'messages'}",
+                    f"base url  {(config.get('openaiBaseUrl') or 'default') if provider == 'openai' else 'default'}",
+                ]
+            ),
+        )
     requested = normalizeProviderProfileName(arg_text)
     profiles = config.get("providerProfiles") or {}
     if not requested or requested not in profiles:
@@ -1460,9 +1501,16 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
     config["providerProfileName"] = requested
     config["providerProfile"] = profile
     session["provider"] = config["provider"] = config["providerKind"] = profile.get("kind")
+    if profile.get("kind") == "openai":
+        config["openaiApiMode"] = profile.get("apiMode") or config.get("openaiApiMode")
+        config["openaiBaseUrl"] = profile.get("baseUrl")
+        config.pop("anthropicBaseUrl", None)
+    else:
+        config["anthropicBaseUrl"] = profile.get("baseUrl")
+        config.pop("openaiBaseUrl", None)
     if profile.get("defaultModel"):
         session["model"] = config["model"] = normalizeModelName(profile["defaultModel"], profile.get("kind"))
-    session["effort"] = config["effort"] = normalizeEffortForModel(profile.get("kind"), session.get("model"), session.get("effort") or config.get("effort")) or getDefaultEffortForProvider(profile.get("kind"))
+        session["effort"] = config["effort"] = normalizeEffortForModel(profile.get("kind"), session.get("model"), session.get("effort") or config.get("effort")) or getDefaultEffortForProvider(profile.get("kind"))
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Provider", f"Provider profile set to {requested}")
@@ -1471,17 +1519,38 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
 async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     provider = session.get("provider") or config.get("provider") or "anthropic"
     if not arg_text:
-        lines = [f"current   {session.get('model') or config.get('model')}"]
+        lines = [
+            f"profile   {session.get('providerProfileName') or config.get('providerProfileName')}",
+            f"provider  {provider}",
+            f"current   {session.get('model') or config.get('model')}",
+            "",
+        ]
         for name in listProviders():
             lines.append(f"{name}{'  (active)' if name == provider else ''}")
             lines.append(f"  {', '.join(listModelsForProvider(name))}")
+        lines.extend(["", "tip       /model openai:gpt-5.4 or /model anthropic:claude-opus-4-6"])
         return _info(hooks, "Model", "\n".join(lines))
     selection_provider, model = _parse_model_selection(arg_text, provider)
+    switched_provider = selection_provider != provider
     session["provider"] = config["provider"] = config["providerKind"] = selection_provider
     session["model"] = config["model"] = normalizeModelName(model, selection_provider)
-    profile_name = resolveFallbackProviderProfileName(selection_provider, config.get("providerProfiles") or {}, session.get("providerProfileName") or config.get("providerProfileName"))
+    profile_name = resolveFallbackProviderProfileName(
+        selection_provider,
+        config.get("providerProfiles") or {},
+        None if switched_provider else session.get("providerProfileName") or config.get("providerProfileName"),
+    )
     session["providerProfileName"] = config["providerProfileName"] = profile_name
-    session["effort"] = config["effort"] = normalizeEffortForModel(selection_provider, session["model"], session.get("effort") or config.get("effort")) or getDefaultEffortForProvider(selection_provider)
+    profile = (config.get("providerProfiles") or {}).get(profile_name) or config.get("providerProfile") or {}
+    config["providerProfile"] = profile
+    if profile.get("kind") == "openai":
+        config["openaiApiMode"] = profile.get("apiMode") or config.get("openaiApiMode")
+        config["openaiBaseUrl"] = profile.get("baseUrl")
+        config.pop("anthropicBaseUrl", None)
+    elif profile:
+        config["anthropicBaseUrl"] = profile.get("baseUrl")
+        config.pop("openaiBaseUrl", None)
+    next_effort = getDefaultEffortForProvider(selection_provider) if switched_provider else session.get("effort") or config.get("effort")
+    session["effort"] = config["effort"] = normalizeEffortForModel(selection_provider, session["model"], next_effort) or getDefaultEffortForProvider(selection_provider)
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Model", f"Model set to {selection_provider}:{session['model']}")
@@ -1489,14 +1558,17 @@ async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str
 
 async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
-        return _info(hooks, "Effort", f"current   {session.get('effort') or config.get('effort')}\nlevels    low, medium, high, xhigh, max")
+        return _info(hooks, "Effort", f"current  {session.get('effort') or config.get('effort')}\nlevels   low, medium, high, xhigh, max")
     effort = normalizeEffortLevel(arg_text)
     if not effort:
-        return _error(hooks, f"Unknown effort level: {arg_text}")
-    provider = session.get("provider") or config.get("provider")
-    normalized = normalizeEffortForModel(provider, session.get("model") or config.get("model"), effort)
+        return _error(hooks, f"Unknown effort level: {arg_text}. Expected one of: low, medium, high, xhigh, max")
+    provider = session.get("provider") or config.get("provider") or "anthropic"
+    model = session.get("model") or config.get("model") or ""
+    if not modelSupportsEffort(provider, model):
+        return _error(hooks, f"The active model does not support configurable reasoning effort: {model}")
+    normalized = normalizeEffortForModel(provider, model, effort)
     if not normalized:
-        return _error(hooks, f"Effort {effort} is not supported by {session.get('model') or config.get('model')}")
+        return _error(hooks, f"Effort {effort} is not supported for {provider}:{model}")
     session["effort"] = config["effort"] = normalized
     await _persist(hooks)
     _call(hooks, "refresh")
@@ -1573,14 +1645,31 @@ def normalizeModel(inputModel: str) -> str:
 
 def formatUsageSummary(usage: dict[str, Any] | None) -> str:
     if not usage:
-        return "0 turns, 0 tools, 0 input, 0 output"
-    return f"{usage.get('turns', 0)} turns, {usage.get('toolCalls', 0)} tools, {usage.get('inputTokens', 0)} input, {usage.get('outputTokens', 0)} output"
+        return "no tracked usage"
+    return f"{usage.get('inputTokens', 0)} in · {usage.get('outputTokens', 0)} out · {usage.get('toolCalls', 0)} tools · {usage.get('turns', 0)} turns"
 
 
 def formatUsageBreakdown(usage: dict[str, Any] | None) -> str:
     if not usage:
-        return "No usage recorded."
-    return "\n".join(f"{key}: {value}" for key, value in usage.items())
+        return "No tracked usage for this session yet."
+    return "\n".join(
+        [
+            f"turns                    {usage.get('turns', 0)}",
+            f"tool calls               {usage.get('toolCalls', 0)}",
+            f"input tokens             {usage.get('inputTokens', 0)}",
+            f"output tokens            {usage.get('outputTokens', 0)}",
+            f"cache creation tokens    {usage.get('cacheCreationInputTokens', 0)}",
+            f"cache read tokens        {usage.get('cacheReadInputTokens', 0)}",
+        ]
+    )
+
+
+def formatPreflightTokenSummary(session: dict[str, Any]) -> str:
+    measurement = ((session.get("metadata") or {}).get("tokenTracking") or {}).get("lastPreflight")
+    if not isinstance(measurement, dict):
+        return "n/a"
+    margin = f" (+{measurement.get('safetyMarginTokens')})" if measurement.get("safetyMarginTokens") else ""
+    return f"{measurement.get('inputTokens')}{margin} via {measurement.get('source')}"
 
 
 def buildTodosReport(session: dict[str, Any]) -> str:
@@ -1594,11 +1683,38 @@ def _parse_command(raw: str) -> tuple[str, str]:
 
 
 def _parse_model_selection(value: str, fallback_provider: str) -> tuple[str, str]:
-    if ":" in value:
-        prefix, model = value.split(":", 1)
-        provider = normalizeProviderName(prefix) or fallback_provider
-        return provider, model.strip()
-    return fallback_provider, value.strip()
+    raw = value.strip()
+    provider_only = normalizeProviderName(raw)
+    if provider_only:
+        return provider_only, getDefaultModelForProvider(provider_only)
+    if ":" in raw:
+        prefix, model = raw.split(":", 1)
+        explicit_model = model.strip()
+        provider = resolveProviderForModelSelection(normalizeProviderName(prefix), explicit_model) or fallback_provider
+        return provider, explicit_model or getDefaultModelForProvider(provider)
+    provider = resolveProviderForModelSelection(None, raw) or fallback_provider
+    return provider, raw or getDefaultModelForProvider(provider)
+
+
+def _sync_effective_provider(session: dict[str, Any], config: dict[str, Any]) -> None:
+    model = session.get("model") or config.get("model")
+    effective_provider = ensureProviderForModelSelection(
+        session.get("provider") or config.get("provider"),
+        model,
+        config.get("provider") or "anthropic",
+    )
+    if effective_provider != session.get("provider"):
+        session["provider"] = effective_provider
+    if effective_provider != config.get("provider"):
+        config["provider"] = effective_provider
+        config["providerKind"] = effective_provider
+    profile_name = resolveFallbackProviderProfileName(
+        effective_provider,
+        config.get("providerProfiles") or {},
+        session.get("providerProfileName") or config.get("providerProfileName"),
+    )
+    session["providerProfileName"] = profile_name
+    config["providerProfileName"] = profile_name
 
 
 def _find_runtime_command(name: str, commands: list[Any]) -> Any:

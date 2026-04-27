@@ -2637,6 +2637,13 @@ class AgentCoreTests(unittest.TestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["todos"] = [{"content": "ship shell slice", "status": "in_progress"}]
+            session["metadata"]["compactionState"] = {
+                "workingContextTokenEstimate": 4200,
+                "workingContextTokenMeasurement": {"source": "openai_responses_estimate"},
+                "compactedThroughMessageIndex": 3,
+            }
+            session["metadata"]["tokenTracking"] = {"lastPreflight": {"inputTokens": 300, "safetyMarginTokens": 30, "source": "openai_responses_estimate"}}
+            session["metadata"]["fullTranscriptLog"] = {"archivedMessageCount": 5, "path": str(workspace / "archive.jsonl")}
             infos = []
             errors = []
             counters = {"persist": 0, "refresh": 0, "clear": 0}
@@ -2671,9 +2678,15 @@ class AgentCoreTests(unittest.TestCase):
             help_result = run(core.handleSlashCommand({"command": "/help", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))
             self.assertEqual(help_result["outcome"], "handled")
             self.assertIn("/provider [name]", help_result["message"])
+            self.assertIn("/agents inspect ID", help_result["message"])
+            self.assertIn("/tasks retry ID", help_result["message"])
+            self.assertIn("/memory append TEXT", help_result["message"])
             self.assertIn("/hello", help_result["message"])
 
             self.assertEqual(run(core.handleSlashCommand({"command": "plain text"}))["outcome"], "pass")
+            unknown = run(core.handleSlashCommand({"command": "/unknown", "session": session, "config": config, "hooks": hooks}))
+            self.assertTrue(unknown["isError"])
+            self.assertIn("Unknown slash command: /unknown", errors[-1])
             self.assertEqual(run(core.handleSlashCommand({"command": "/hello plugin args", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))["message"], "hello from plugin")
             self.assertEqual(runtime_seen["hello"]["argText"], "plugin args")
             self.assertEqual(runtime_seen["hello"]["args"], "plugin args")
@@ -2682,6 +2695,12 @@ class AgentCoreTests(unittest.TestCase):
 
             status = run(core.handleSlashCommand({"command": "/status", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("session", status["message"])
+            self.assertIn("working ctx  4200", status["message"])
+            self.assertIn("ctx source   openai_responses_estimate", status["message"])
+            self.assertIn("preflight    300 (+30) via openai_responses_estimate", status["message"])
+            self.assertIn("compacted to 3", status["message"])
+            self.assertIn("archived     5", status["message"])
+            self.assertIn(f"archive log  {workspace / 'archive.jsonl'}", status["message"])
             self.assertNotIn("status_override", runtime_seen)
             self.assertEqual(infos[-1][0], "Status")
             providers_report = run(core.handleSlashCommand({"command": "/providers", "session": session, "config": config, "hooks": hooks}))
@@ -2690,6 +2709,13 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("auth       openai_api_key via OPENAI_API_KEY", providers_report["message"])
             self.assertIn("about      Official OpenAI Responses API", providers_report["message"])
 
+            run(core.handleSlashCommand({"command": "/model claude-opus-4-6", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(session["provider"], "anthropic")
+            self.assertEqual(config["providerProfileName"], "anthropic-console")
+            run(core.handleSlashCommand({"command": "/model openai:gpt-4.1", "session": session, "config": config, "hooks": hooks}))
+            unsupported_effort = run(core.handleSlashCommand({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
+            self.assertTrue(unsupported_effort["isError"])
+            self.assertIn("does not support configurable reasoning effort", errors[-1])
             run(core.handleSlashCommand({"command": "/model openai:gpt", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(session["provider"], "openai")
             self.assertEqual(session["model"], "gpt-5.4")
@@ -2723,7 +2749,7 @@ class AgentCoreTests(unittest.TestCase):
             todos = run(core.handleSlashCommand({"command": "/todos", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("ship shell slice", todos["message"])
             usage = run(core.handleSlashCommand({"command": "/cost", "session": session, "config": config, "hooks": hooks}))
-            self.assertIn("inputTokens", usage["message"])
+            self.assertIn("input tokens", usage["message"])
 
             run(core.saveChildAgent({"agentId": "agent-shell", "sessionId": "child-shell", "parentSessionId": session["id"], "name": "Shell worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "backgrounded", "startedAt": "2026-01-01T00:00:00Z", "lastSummary": "working"}))
             session["metadata"]["childAgentIds"] = ["agent-shell"]
