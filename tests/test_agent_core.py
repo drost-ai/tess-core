@@ -527,6 +527,59 @@ class AgentCoreTests(unittest.TestCase):
         self.assertTrue(any(item["event"] == "provider.request_started" and item["data"]["attempt"] == 1 for item in emitted))
         self.assertTrue(any(item["event"] == "provider.stream_event" and item["data"]["stream_event"] == "chat.completion.chunk" for item in emitted))
 
+    def test_openai_chat_tool_call_edge_parity(self):
+        async def create_edges(_params):
+            return AsyncChunks(
+                [
+                    {"choices": [{"delta": {"reasoning_content": "Need the file."}, "finish_reason": None}]},
+                    {"choices": [{"delta": {"tool_calls": [{"index": "not-a-number", "id": "call_edge", "function": {"name": "Re", "arguments": "not-json"}}]}, "finish_reason": None}]},
+                    {"choices": [{"delta": {"tool_calls": [{"function": {"name": "Read"}}, {"index": 1, "id": 123, "function": {"name": {}, "arguments": {"path": "ignored"}}}]}, "finish_reason": "tool_calls"}], "usage": {"prompt_tokens": 9, "completion_tokens": 3}},
+                ]
+            )
+
+        response = run(
+            testing.sendOpenAiChatCompletionsRequest(
+                {
+                    "token": "test-token",
+                    "request": {"model": "gpt-5.4", "effort": "high", "system": "s", "messages": [{"role": "user", "content": "Read"}], "tools": []},
+                    "runtime": {},
+                    "maxAttempts": 1,
+                    "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_edges))),
+                }
+            )
+        )
+        self.assertEqual(response["content"], [{"type": "tool_use", "id": "call_edge", "name": "Read", "input": {}, "provider_metadata": {"reasoning_content": "Need the file."}}])
+        self.assertEqual(response["usage"], {"input_tokens": 9, "output_tokens": 3})
+        self.assertEqual(response["stopReason"], "tool_calls")
+
+        attempts = {"count": 0}
+
+        class ToolThenCrash:
+            async def __aiter__(self):
+                yield {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_once", "function": {"name": "Read", "arguments": "{}"}}]}, "finish_reason": "tool_calls"}]}
+                raise RuntimeError("socket hang up")
+
+        async def create_partial_tool_failure(_params):
+            attempts["count"] += 1
+            return ToolThenCrash()
+
+        with self.assertRaises(core.ProviderRequestError) as ctx:
+            run(
+                testing.sendOpenAiChatCompletionsRequest(
+                    {
+                        "token": "test-token",
+                        "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Read"}], "tools": []},
+                        "runtime": {},
+                        "maxAttempts": 2,
+                        "clientFactory": lambda _options: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_partial_tool_failure))),
+                    }
+                )
+            )
+        self.assertEqual(attempts["count"], 1)
+        self.assertEqual(ctx.exception.record["category"], "transport")
+        self.assertTrue(ctx.exception.record["retryable"])
+        self.assertTrue(ctx.exception.record["hadToolUse"])
+
     def test_openai_reasoning_and_base_url(self):
         response = run(
             testing.sendOpenAiChatCompletionsRequest(

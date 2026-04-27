@@ -304,17 +304,23 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     reasoning_delta = get_value(delta, "reasoning_content", "")
                     if isinstance(reasoning_delta, str) and reasoning_delta:
                         reasoning_content += reasoning_delta
-                    for default_index, tool_call in enumerate(get_value(delta, "tool_calls", []) or []):
-                        index = get_value(tool_call, "index", default_index)
-                        pending = pending_tool_calls.setdefault(int(index), {"arguments": ""})
-                        if get_value(tool_call, "id"):
-                            pending["id"] = get_value(tool_call, "id")
+                    tool_calls = get_value(delta, "tool_calls", []) or []
+                    for default_index, tool_call in enumerate(tool_calls):
+                        raw_index = get_value(tool_call, "index")
+                        index = raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) else default_index
+                        pending = pending_tool_calls.setdefault(index, {"arguments": ""})
+                        tool_call_id = get_value(tool_call, "id")
+                        if isinstance(tool_call_id, str) and tool_call_id:
+                            pending["id"] = tool_call_id
                         fn = get_value(tool_call, "function", {}) or {}
-                        if get_value(fn, "name"):
-                            pending["name"] = _merge_tool_call_name(pending.get("name"), get_value(fn, "name"))
-                        if get_value(fn, "arguments"):
-                            pending["arguments"] += get_value(fn, "arguments")
-                    finish = get_value(choice, "finish_reason", "") or ""
+                        fn_name = get_value(fn, "name")
+                        if isinstance(fn_name, str) and fn_name:
+                            pending["name"] = _merge_tool_call_name(pending.get("name"), fn_name)
+                        fn_arguments = get_value(fn, "arguments")
+                        if isinstance(fn_arguments, str) and fn_arguments:
+                            pending["arguments"] += fn_arguments
+                    finish_value = get_value(choice, "finish_reason", "")
+                    finish = finish_value if isinstance(finish_value, str) else ""
                     if finish in ("tool_calls", "function_call"):
                         had_tool_use = _emit_pending_chat_tool_calls(blocks, pending_tool_calls, emitted_tool_ids, reasoning_content) or had_tool_use
                         stop_reason = "tool_calls"
