@@ -24,7 +24,7 @@ async def pathExists(targetPath: str) -> bool:
 
 async def execText(command: str, args: list[str] | None = None, cwd: str | None = None) -> str:
     result = subprocess.run([command, *(args or [])], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    return result.stdout
+    return result.stdout.strip()
 
 
 async def findCommandInPath(command: str) -> str | None:
@@ -261,7 +261,7 @@ async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any)
     pyproject = repo_root / "pyproject.toml"
     version = _read_pyproject_version(pyproject)
     package_dir = repo_root / "agent_core"
-    global_bin = await _runner_which(runner, "agent-core") or await _runner_which(runner, "tess")
+    global_bin = args.get("globalBinPath") or await _runner_which(runner, "agent-core") or await _runner_which(runner, "tess")
     repo_real = _safe_realpath(repo_root)
     global_package_path = args.get("globalPackagePath")
     global_package_real = _safe_realpath(global_package_path) if global_package_path else None
@@ -275,14 +275,24 @@ async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any)
 
 async def runRepoInstall(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
+    runner = args.get("runner") or {}
+    repo_root = str(Path(args.get("repoRoot") or REPO_ROOT))
     target = args.get("target") or "latest"
     if target not in {"latest", "stable", "0.1.0"}:
         raise RuntimeError(f'This repo-backed install flow does not support target "{target}". Use "latest" or "stable".')
     state = await inspectInstallState(args)
-    detail = "Python package is used directly from this checkout."
-    if args.get("force"):
-        detail = "Python package checkout was re-inspected after a forced install request."
-    return {"ok": True, "installState": state, "steps": [{"step": "python_package", "status": "skipped", "detail": detail}], "actions": []}
+    steps: list[dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
+    python_command = args.get("python") or sys.executable
+    should_link = bool(args.get("force")) or state.get("mode") != "linked-global"
+    if should_link:
+        command_args = ["-m", "pip", "install", "-e", repo_root]
+        await _runner_exec(runner, python_command, command_args, repo_root)
+        steps.append({"step": "link", "status": "run", "detail": "Installed this checkout in editable mode as the active Python package."})
+        actions.append({"type": "exec", "command": python_command, "args": command_args, "cwd": repo_root})
+    else:
+        steps.append({"step": "link", "status": "skipped", "detail": "`agent-core` is already linked to this checkout."})
+    return {"ok": True, "installState": await inspectInstallState(args), "steps": steps, "actions": actions}
 
 
 async def runRepoUpdate(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -338,6 +348,8 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
         plugin_records.extend(await loadPlugins(scope, cwd))
     checks = [
         _doctor_check("auth", "pass" if _has_auth(auth) else "warn", "Provider authentication is configured." if _has_auth(auth) else "No provider credential is configured.", "Set provider credentials or login before running model calls."),
+        _doctor_check("dist", "pass" if install.get("distExists") and not install.get("distStale") else "warn" if install.get("distExists") else "fail", "Python package files are present and current." if install.get("distExists") and not install.get("distStale") else "Python package files are present but may need reinstall." if install.get("distExists") else "Python package files are missing.", "Run `python -m pip install -e .` from this repo."),
+        _doctor_check("global_link", "pass" if install.get("mode") == "linked-global" else "warn", "`agent-core` is linked to this repo." if install.get("mode") == "linked-global" else "`agent-core` is not linked to this checkout as the active command.", "Run `python -m pip install -e .` from this repo.", {"mode": install.get("mode"), "globalBinPath": install.get("globalBinPath"), "globalPackagePath": install.get("globalPackagePath")}),
         _doctor_check("package", "pass" if install.get("distExists") else "fail", "Python package files are present." if install.get("distExists") else "Python package files are missing.", "Run from the repository root or reinstall the package."),
         _doctor_check("tmux", "pass" if tmux.get("available") else "warn", "tmux is available." if tmux.get("available") else "tmux is not available on PATH.", "Install tmux to use tmux startup flows.", {"binaryPath": tmux.get("binaryPath"), "version": tmux.get("version")}),
         _doctor_check("ide", "pass" if len(ide_targets) == 1 else "warn", f"Exactly one IDE target is available: {ide_targets[0]['displayName']}." if len(ide_targets) == 1 else "No supported IDE targets were detected." if not ide_targets else f"Multiple IDE targets are available: {', '.join(target['displayName'] for target in ide_targets)}.", "Expose exactly one supported IDE CLI on PATH for predictable IDE auto-connect.", {"targets": ide_targets}),
@@ -511,7 +523,8 @@ def _write_native_host_message(stream: Any, message: dict[str, Any]) -> None:
 
 
 async def _find_chrome_binary(runner: dict[str, Any], system: str) -> str | None:
-    for command in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+    commands = ("chrome", "chrome.exe") if system.startswith("win") else ("google-chrome", "chromium", "chrome", "google-chrome-stable", "chromium-browser")
+    for command in commands:
         found = await _runner_which(runner, command)
         if found:
             return found
@@ -529,19 +542,25 @@ def _detect_env_ide_target(env: dict[str, str]) -> dict[str, Any] | None:
         return {"id": "cursor" if is_cursor else "vscode", "name": "cursor" if is_cursor else "code", "displayName": "Cursor" if is_cursor else "VS Code", "command": "cursor" if is_cursor else "code", "source": "env"}
     if term_program == "cursor":
         return {"id": "cursor", "name": "cursor", "displayName": "Cursor", "command": "cursor", "source": "env"}
+    if term_program == "windsurf":
+        return {"id": "windsurf", "name": "windsurf", "displayName": "Windsurf", "command": "windsurf", "source": "env"}
+    if env.get("CURSOR_TRACE_ID"):
+        return {"id": "cursor", "name": "cursor", "displayName": "Cursor", "command": "cursor", "source": "env"}
     return None
 
 
 def _strip_tmux_launch_flags(argv: list[str]) -> list[str]:
     output = []
     skip_next = False
-    for arg in argv:
+    for i, arg in enumerate(argv):
         if skip_next:
             skip_next = False
             continue
-        if arg == "--tmux":
+        if arg in {"--tmux", "-w", "--worktree"}:
+            if i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                skip_next = True
             continue
-        if arg.startswith("--tmux="):
+        if arg.startswith("--tmux=") or arg.startswith("--worktree="):
             continue
         output.append(arg)
     return output

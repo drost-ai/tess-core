@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import subprocess
@@ -104,11 +105,13 @@ class _WorkspaceController:
 
     async def refresh(self) -> dict[str, Any]:
         metadata = self.activeSession.setdefault("metadata", {})
+        integrations = await _detect_workspace_integrations(self.activeSession)
         self.snapshot = await captureWorkspaceSnapshot(
             self.activeSession["cwd"],
             {
                 "originalCwd": metadata.get("originalCwd"),
                 "worktreePath": metadata.get("worktreePath"),
+                "integrations": integrations,
             },
         )
         _apply_workspace_snapshot_to_session(self.activeSession, self.snapshot)
@@ -160,6 +163,37 @@ def _apply_workspace_snapshot_to_session(session: dict[str, Any], snapshot: dict
     metadata["gitBranch"] = snapshot.get("gitBranch")
     metadata["prNumber"] = snapshot.get("prNumber")
     metadata["prUrl"] = snapshot.get("prUrl")
+
+
+async def _detect_workspace_integrations(session: dict[str, Any]) -> dict[str, Any]:
+    from .platform import detectChromeCompanionStatus, detectIdeTargets, detectTmuxAvailability
+
+    metadata = session.setdefault("metadata", {})
+    tmux, ide_targets, chrome = await asyncio.gather(
+        detectTmuxAvailability(),
+        detectIdeTargets(),
+        detectChromeCompanionStatus(),
+    )
+    return {
+        "tmux": {
+            "available": tmux.get("available"),
+            "sessionName": metadata.get("tmuxSessionName"),
+            "windowName": metadata.get("tmuxWindowName"),
+            "mode": metadata.get("tmuxMode"),
+        },
+        "ide": {
+            "availableTargets": [target.get("displayName") for target in ide_targets],
+            "connectedTarget": metadata.get("ideName"),
+            "autoConnectable": len(ide_targets) == 1,
+        },
+        "chrome": {
+            "enabled": bool(metadata.get("chromeIntegrationEnabled") or metadata.get("chromeIntegrationMode")),
+            "supported": chrome.get("supported"),
+            "browserBinary": chrome.get("browserBinary"),
+            "nativeHostModeSupported": chrome.get("nativeHostModeSupported"),
+            "mode": metadata.get("chromeIntegrationMode"),
+        },
+    }
 
 
 def _resolve_workspace_mode(cwd: str | None, gitRoot: str | None = None, worktreePath: str | None = None, originalCwd: str | None = None, **_: Any) -> str:

@@ -2705,7 +2705,7 @@ class AgentCoreTests(unittest.TestCase):
                     {
                         "options": {"tmux": True},
                         "launch": {"cwd": str(workspace), "originalCwd": str(workspace), "worktreePath": str(workspace / "wt")},
-                        "argv": ["--tmux", "--foo"],
+                        "argv": ["--tmux", "--worktree", str(workspace / "wt"), "-w", "ignored", "--foo"],
                         "runner": runner,
                         "env": {},
                     }
@@ -2714,6 +2714,9 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(handoff["handled"])
             self.assertEqual(handoff["event"]["event"], "platform.tmux_attached")
             self.assertTrue(any(call[0] == "exec" and call[2][0] == "new-session" for call in calls))
+            tmux_command = next(call[2][-1] for call in calls if call[0] == "exec" and call[2][0] == "new-session")
+            self.assertIn("--foo", tmux_command)
+            self.assertNotIn("--worktree", tmux_command)
             self.assertEqual(core.resolveTmuxLaunchContextFromEnv({"TESS_LAUNCH_CWD": "/w", "TESS_LAUNCH_ORIGINAL_CWD": "/o", "TESS_LAUNCH_WORKTREE_PATH": "/wt", "TESS_TMUX_SESSION_NAME": "s"})["tmuxSessionName"], "s")
             self.assertIn("requires `--worktree`", run(core.maybeExecIntoTmux({"options": {"tmux": True}, "launch": {"cwd": str(workspace)}, "runner": runner, "env": {}}))["error"])
 
@@ -2724,6 +2727,8 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(any(call[0] == "spawn" and call[2] == ("-r", str(workspace)) for call in calls))
             env_ide = run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"TERM_PROGRAM": "vscode", "CURSOR_TRACE_ID": "1"}}))
             self.assertEqual(env_ide[0]["id"], "cursor")
+            self.assertEqual(run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"TERM_PROGRAM": "windsurf"}}))[0]["id"], "windsurf")
+            self.assertEqual(run(core.detectIdeTargets({"runner": {"which": lambda _command: None}, "env": {"CURSOR_TRACE_ID": "1"}}))[0]["id"], "cursor")
             self.assertEqual(run(core.maybeAutoConnectIde(str(workspace), {"runner": {"which": lambda _command: None}, "env": {}}))["status"], "skipped")
 
             chrome = run(core.detectChromeCompanionStatus({"runner": runner, "platform": "linux"}))
@@ -2751,7 +2756,12 @@ class AgentCoreTests(unittest.TestCase):
             install = run(core.inspectInstallState({"runner": runner}))
             self.assertTrue(install["installed"])
             self.assertEqual(install["mode"], "repo-only")
-            self.assertEqual(run(core.runRepoInstall({"runner": runner}))["steps"][0]["status"], "skipped")
+            install_result = run(core.runRepoInstall({"runner": runner, "python": "/usr/bin/python3"}))
+            self.assertEqual(install_result["steps"][0]["step"], "link")
+            self.assertEqual(install_result["steps"][0]["status"], "run")
+            self.assertTrue(any(call[0] == "exec" and call[1] == "/usr/bin/python3" and call[2][:4] == ("-m", "pip", "install", "-e") for call in calls))
+            linked_install = run(core.runRepoInstall({"runner": runner, "python": "/usr/bin/python3", "globalPackagePath": str(core.REPO_ROOT), "globalBinPath": "/usr/local/bin/agent-core"}))
+            self.assertEqual(linked_install["steps"][0]["status"], "skipped")
             self.assertEqual(run(core.runRepoUpdate({"runner": runner}))["upstreamStatus"], "skipped")
             with self.assertRaises(RuntimeError):
                 run(core.runRepoInstall({"runner": runner, "target": "nightly"}))
@@ -2804,8 +2814,9 @@ class AgentCoreTests(unittest.TestCase):
             report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))
             self.assertTrue(report["healthy"])
             check_ids = {check["id"] for check in report["checks"]}
-            self.assertTrue({"auth", "package", "tmux", "ide", "chrome", "daemon", "git", "workspace", "extensions"}.issubset(check_ids))
+            self.assertTrue({"auth", "dist", "global_link", "package", "tmux", "ide", "chrome", "daemon", "git", "workspace", "extensions"}.issubset(check_ids))
             self.assertEqual(next(check for check in report["checks"] if check["id"] == "tmux")["status"], "pass")
+            self.assertEqual(next(check for check in report["checks"] if check["id"] == "global_link")["status"], "warn")
             self.assertEqual(next(check for check in report["checks"] if check["id"] == "daemon")["status"], "warn")
             run(core.saveDaemonState({"phase": "running", "pid": os.getpid(), "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
             daemon_report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))

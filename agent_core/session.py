@@ -36,6 +36,8 @@ async def resolveSession(options: dict[str, Any], config: dict[str, Any], launch
         sessionId=options.get("sessionId"),
         originalCwd=launch["originalCwd"],
     )
+    if launch.get("worktreePath"):
+        created.setdefault("metadata", {})["worktreePath"] = launch["worktreePath"]
     await hydrateSessionWorkspaceMetadata(created)
     return created
 
