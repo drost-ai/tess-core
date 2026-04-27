@@ -78,7 +78,7 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 definitions.append(
                     ToolDefinition(
                         tool["runtimeName"],
-                        f"MCP {tool['server']}: {tool.get('description') or tool['name']}",
+                        f"MCP {tool['server']}: {tool['description']}" if tool.get("description") else f"MCP {tool['server']} tool {tool['name']}",
                         tool.get("inputSchema") or {"type": "object"},
                         handler,
                     )
@@ -461,7 +461,15 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
 
 def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> JsonRpcClient:
     def notification(payload: dict[str, Any]) -> None:
-        on_event("mcp.channel_notification", {"server": config.get("name"), "method": payload.get("method"), "params": payload.get("params") or {}})
+        params = payload.get("params")
+        on_event(
+            "mcp.channel_notification",
+            {
+                "server": config.get("name"),
+                "method": payload.get("method"),
+                "params": params if isinstance(params, dict) else {"payload": params},
+            },
+        )
 
     if config.get("transport") == "stdio":
         return StdioMcpClient(config, cwd, notification)
@@ -509,7 +517,7 @@ async def _refresh_tools(state: dict[str, Any]) -> list[dict[str, Any]]:
                 "server": state["config"]["name"],
                 "name": tool["name"],
                 "description": tool.get("description"),
-                "inputSchema": tool.get("inputSchema") or {"type": "object"},
+                "inputSchema": tool.get("inputSchema") or tool.get("input_schema") or {"type": "object"},
                 "runtimeName": _runtime_tool_name(state["config"]["name"], tool["name"]),
             }
         )
@@ -521,17 +529,20 @@ async def _refresh_resources(state: dict[str, Any]) -> list[dict[str, Any]]:
     if result is None:
         return state.get("resources") or []
     resources = result.get("resources") if isinstance(result, dict) else []
-    return [
-        {
-            "server": state["config"]["name"],
-            "uri": item.get("uri"),
-            "name": item.get("name") or item.get("uri"),
-            "mimeType": item.get("mimeType"),
-            "description": item.get("description"),
-        }
-        for item in resources or []
-        if isinstance(item, dict) and isinstance(item.get("uri"), str)
-    ]
+    out = []
+    for item in resources or []:
+        if not isinstance(item, dict) or not isinstance(item.get("uri"), str) or not isinstance(item.get("name"), str):
+            continue
+        out.append(
+            {
+                "server": state["config"]["name"],
+                "uri": item.get("uri"),
+                "name": item.get("name"),
+                "mimeType": item.get("mimeType"),
+                "description": item.get("description"),
+            }
+        )
+    return out
 
 
 async def _safe_request(state: dict[str, Any], method: str, params: Any = None) -> Any:
@@ -540,6 +551,7 @@ async def _safe_request(state: dict[str, Any], method: str, params: Any = None) 
     except Exception as exc:
         if re.search(r"-32601|Method not found|not implemented", str(exc), re.I):
             return None
+        _mark_state_failure(state, exc)
         raise
 
 
@@ -656,7 +668,9 @@ def _unwrap_json_rpc_response(response: dict[str, Any]) -> Any:
         if isinstance(error, dict):
             raise RuntimeError(f"{error.get('code')}: {error.get('message')}")
         raise RuntimeError(str(error))
-    return response.get("result") or {}
+    if "result" in response and response.get("result") is not None:
+        return response.get("result")
+    return {}
 
 
 def _parse_http_rpc_response(status: int, raw: str, content_type: str, request_id: int | None) -> dict[str, Any]:

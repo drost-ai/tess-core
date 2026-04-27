@@ -5576,12 +5576,12 @@ class AgentCoreTests(unittest.TestCase):
                         if method == "initialize":
                             send({"jsonrpc": "2.0", "id": request_id, "result": {"serverInfo": {"name": "fake"}}})
                         elif method == "tools/list":
-                            send({"jsonrpc": "2.0", "id": request_id, "result": {"tools": [{"name": "echo", "description": "Echo input", "inputSchema": {"type": "object"}}]}})
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {"tools": [{"name": "echo", "description": "Echo input", "inputSchema": {"type": "object"}}, {"name": "raw", "input_schema": {"type": "object", "properties": {"value": {"type": "string"}}}}]}})
                         elif method == "tools/call":
                             args = request.get("params", {}).get("arguments", {})
                             send({"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "echo:" + args.get("value", "")}]}})
                         elif method == "resources/list":
-                            send({"jsonrpc": "2.0", "id": request_id, "result": {"resources": [{"uri": "memory://one", "name": "one", "mimeType": "text/plain"}]}})
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {"resources": [{"uri": "memory://one", "name": "one", "mimeType": "text/plain"}, {"uri": "memory://missing-name"}]}})
                         elif method == "resources/read":
                             send({"jsonrpc": "2.0", "id": request_id, "result": {"contents": [{"uri": "memory://one", "mimeType": "text/plain", "text": "resource text"}]}})
                         else:
@@ -5591,9 +5591,14 @@ class AgentCoreTests(unittest.TestCase):
             )
             runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "fake", "transport": "stdio", "commandOrUrl": sys.executable, "args": [str(server)], "updatedAt": "now"}]}))
             self.assertEqual(runtime["listTools"]()[0]["runtimeName"], "mcp__fake__echo")
+            raw_tool = next(tool for tool in runtime["listTools"]() if tool["name"] == "raw")
+            self.assertEqual(raw_tool["inputSchema"]["properties"]["value"]["type"], "string")
+            raw_definition = next(tool for tool in runtime["createToolDefinitions"]() if tool.name == "mcp__fake__raw")
+            self.assertEqual(raw_definition.description, "MCP fake tool raw")
             called = run(runtime["callTool"]("fake", "echo", {"value": "ok"}))
             self.assertEqual(called["content"], "echo:ok")
             resources = run(runtime["listResources"]("fake"))
+            self.assertEqual(len(resources), 1)
             self.assertEqual(resources[0]["uri"], "memory://one")
             resource = run(runtime["readResource"]("fake", "memory://one"))
             self.assertEqual(resource["contents"][0]["text"], "resource text")
@@ -5663,6 +5668,7 @@ class AgentCoreTests(unittest.TestCase):
                         item.put({"jsonrpc": "2.0", "id": request_id, "result": result})
                         if method == "initialize":
                             item.put({"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "text": "ready"}})
+                            item.put({"jsonrpc": "2.0", "method": "notifications/progress", "params": "halfway"})
                 self.send_response(202)
                 self.end_headers()
 
@@ -5692,6 +5698,7 @@ class AgentCoreTests(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.assertTrue(any(event == "mcp.channel_notification" and data["server"] == "sse" for event, data in events))
+            self.assertTrue(any(event == "mcp.channel_notification" and data["method"] == "notifications/progress" and data["params"] == {"payload": "halfway"} for event, data in events))
         finally:
             if runtime:
                 run(runtime["close"]())
@@ -5750,6 +5757,70 @@ class AgentCoreTests(unittest.TestCase):
             called = run(runtime["callTool"]("http", "echo", {"value": "ok"}))
             self.assertEqual(called["content"], "reconnected")
             self.assertEqual(runtime["listServerStatus"]()[0]["state"], "connected")
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            server.shutdown()
+            server.server_close()
+            self.restore_home(root, previous)
+
+    def test_mcp_runtime_protocol_edge_normalization_and_discovery_failure_state(self):
+        root, home, workspace, previous = self.temp_context()
+        mode = {"resources": "ok"}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                request = json.loads(self.rfile.read(length).decode("utf-8"))
+                method = request.get("method")
+                if method == "resources/list" and mode["resources"] == "fail":
+                    self.send_response(500)
+                    self.end_headers()
+                    self.wfile.write(b"resource listing failed")
+                    return
+                result = {}
+                if method == "initialize":
+                    result = {"serverInfo": {"name": "edge"}}
+                elif method == "tools/list":
+                    result = {"tools": [{"name": "zero", "input_schema": {"type": "object", "properties": {"value": {"type": "number"}}}}]}
+                elif method == "tools/call":
+                    payload = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": 0}).encode()
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
+                elif method == "resources/list":
+                    result = {"resources": [{"uri": "memory://named", "name": "named"}, {"uri": "memory://missing-name"}]}
+                payload = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": result}).encode()
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        runtime = None
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            tool = runtime["listTools"]()[0]
+            self.assertEqual(tool["inputSchema"]["properties"]["value"]["type"], "number")
+            self.assertEqual(run(runtime["callTool"]("edge", "zero", {"value": 0}))["content"], "0")
+            self.assertEqual([resource["uri"] for resource in run(runtime["listResources"]("edge"))], ["memory://named"])
+            mode["resources"] = "fail"
+            with self.assertRaises(Exception):
+                run(runtime["listResources"]("edge"))
+            status = runtime["listServerStatus"]()[0]
+            self.assertFalse(status["connected"])
+            self.assertEqual(status["state"], "degraded")
+            self.assertIn("HTTP Error 500", status["error"])
         finally:
             if runtime:
                 run(runtime["close"]())
