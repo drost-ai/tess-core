@@ -45,7 +45,6 @@ LINE_BUDGET_ALLOWLIST = {
     "agent_core/context/compaction.py": 1843,
     "agent_core/context/continuation.py": 939,
     "agent_core/daemon.py": 737,
-    "agent_core/interactive_actions.py": 2212,
     "agent_core/mcp.py": 903,
     "agent_core/platform.py": 854,
     "agent_core/providers/anthropic.py": 537,
