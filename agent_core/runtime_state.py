@@ -407,6 +407,43 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             "lastEventAt": timestamp,
         }
         next_state["collaboration"] = {**next_state.get("collaboration", {}), "pendingBridgeMessages": max(1, int(next_state.get("collaboration", {}).get("pendingBridgeMessages") or 0))}
+    elif typ == "remote.status_changed":
+        remote_session_id = _field(data, "remoteSessionId", "remote_session_id") or next_state.get("bridge", {}).get("remoteSessionId")
+        bridge_id = _field(data, "bridgeId", "bridge_id") or next_state.get("bridge", {}).get("bridgeId")
+        bridge_status = _field(data, "bridgeStatus", "bridge_status")
+        unread = _field(data, "unreadBridgeMessages", "unread_bridge_messages")
+        next_state["bridge"] = {
+            **next_state.get("bridge", {}),
+            "attached": bool(bridge_id) or next_state.get("bridge", {}).get("attached"),
+            "bridgeId": bridge_id,
+            "remoteSessionId": remote_session_id,
+            "lastEventName": typ,
+            "lastEventAt": timestamp,
+        }
+        next_state["collaboration"] = {
+            **next_state.get("collaboration", {}),
+            "remoteStatus": _field(data, "status") or next_state.get("collaboration", {}).get("remoteStatus"),
+            "remoteTitle": _field(data, "title") or next_state.get("collaboration", {}).get("remoteTitle"),
+            "bridgeStatus": bridge_status or next_state.get("collaboration", {}).get("bridgeStatus"),
+            **({"pendingBridgeMessages": unread} if unread is not None else {}),
+        }
+    elif typ == "bridge.status_changed":
+        status = _field(data, "status")
+        pending = _field(data, "pendingMessages", "pending_messages")
+        event_name = _field(data, "lastEventName", "last_event_name") or typ
+        next_state["bridge"] = {
+            **next_state.get("bridge", {}),
+            "attached": False if status == "closed" else True,
+            "bridgeId": _field(data, "bridgeId", "bridge_id") or next_state.get("bridge", {}).get("bridgeId"),
+            "remoteSessionId": _field(data, "remoteSessionId", "remote_session_id") or next_state.get("bridge", {}).get("remoteSessionId"),
+            "lastEventName": event_name,
+            "lastEventAt": timestamp,
+        }
+        next_state["collaboration"] = {
+            **next_state.get("collaboration", {}),
+            "bridgeStatus": status or next_state.get("collaboration", {}).get("bridgeStatus"),
+            **({"pendingBridgeMessages": pending} if pending is not None else {}),
+        }
     elif typ in ("bridge.event", "remote.event"):
         event_name = _field(data, "eventName", "event_name", "event") or typ
         bridge = next_state.get("bridge", {})

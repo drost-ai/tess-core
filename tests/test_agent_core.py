@@ -26,6 +26,7 @@ from unittest import mock
 import agent_core as core
 from agent_core import testing
 import agent_core.agent as agent_module
+import agent_core.interactive_actions as interactive_actions_module
 import agent_core.mcp as mcp_module
 import agent_core.monitors as monitors_module
 import agent_core.providers.anthropic as anthropic_module
@@ -2237,6 +2238,58 @@ class AgentCoreTests(unittest.TestCase):
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.message")
         self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
 
+        remote_status = core.createRuntimeEvent(
+            {
+                "event": "remote.status_changed",
+                "createdAt": "t5b",
+                "data": {
+                    "remote_session_id": "remote-1",
+                    "session_id": "s-typed",
+                    "status": "awaiting_input",
+                    "title": "Remote QA",
+                    "bridge_id": "bridge-1",
+                    "bridge_status": "active",
+                    "unread_bridge_messages": 4,
+                    "summary": "Remote needs input.",
+                    "change_kind": "changed",
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(remote_status["kind"], "remote.status_changed")
+        self.assertEqual(remote_status["payload"]["unreadBridgeMessages"], 4)
+        self.assertNotIn("ignoredExtra", remote_status["payload"])
+        state = core.reduceRuntimeState(state, remote_status)
+        self.assertEqual(state["collaboration"]["remoteStatus"], "awaiting_input")
+        self.assertEqual(state["collaboration"]["remoteTitle"], "Remote QA")
+        self.assertEqual(state["collaboration"]["bridgeStatus"], "active")
+        self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 4)
+
+        bridge_status = core.createRuntimeEvent(
+            {
+                "event": "bridge.status_changed",
+                "createdAt": "t5c",
+                "data": {
+                    "bridge_id": "bridge-1",
+                    "remote_session_id": "remote-1",
+                    "status": "active",
+                    "pending_messages": 3,
+                    "last_event_name": "bridge.message.queued",
+                    "summary": "Remote queued input.",
+                    "change_kind": "changed",
+                    "ignored_extra": "drop me",
+                },
+            }
+        )
+        self.assertEqual(bridge_status["kind"], "bridge.status_changed")
+        self.assertEqual(bridge_status["payload"]["pendingMessages"], 3)
+        self.assertNotIn("ignoredExtra", bridge_status["payload"])
+        state = core.reduceRuntimeState(state, bridge_status)
+        self.assertTrue(state["bridge"]["attached"])
+        self.assertEqual(state["bridge"]["lastEventName"], "bridge.message.queued")
+        self.assertEqual(state["collaboration"]["bridgeStatus"], "active")
+        self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 3)
+
         state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "bridge.closed", "createdAt": "t6", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1"}}))
         self.assertFalse(state["bridge"]["attached"])
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.closed")
@@ -2500,6 +2553,70 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_plugin_runtime_installed_invalid_source_and_explicit_conflict_resolution(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            explicit_dir = workspace / "shared-plugin"
+            explicit_dir.mkdir()
+            (explicit_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "shared",
+                        "version": "2.0.0",
+                        "commands": [{"name": "explicit", "description": "Explicit wins", "command": "printf explicit"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            run(
+                core.savePlugins(
+                    "project",
+                    str(workspace),
+                    [
+                        {
+                            "enabled": True,
+                            "source": str(workspace / "missing-ghost-plugin"),
+                            "manifest": {
+                                "id": "ghost",
+                                "version": "1.0.0",
+                                "commands": [{"name": "ghost", "description": "Manifest only", "command": "printf ghost"}],
+                                "mcpServers": [{"name": "ghost-mcp", "transport": "http", "commandOrUrl": "http://ghost.invalid/rpc"}],
+                            },
+                        },
+                        {
+                            "enabled": True,
+                            "source": str(workspace / "missing-shared-plugin"),
+                            "manifest": {
+                                "id": "shared",
+                                "version": "1.0.0",
+                                "commands": [{"name": "installed", "description": "Installed loses", "command": "printf installed"}],
+                            },
+                        },
+                    ],
+                )
+            )
+            config = run(
+                core.resolveConfig(
+                    {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(explicit_dir)]},
+                    str(workspace),
+                )
+            )
+
+            plugin_runtime = run(core.loadPluginRuntime(config))
+            self.assertEqual(plugin_runtime["errors"], [])
+            self.assertEqual([plugin["id"] for plugin in plugin_runtime["plugins"]], ["ghost", "shared"])
+            commands = [command["name"] for command in plugin_runtime["commands"]]
+            self.assertIn("ghost", commands)
+            self.assertIn("explicit", commands)
+            self.assertNotIn("installed", commands)
+            ghost = next(plugin for plugin in plugin_runtime["plugins"] if plugin["id"] == "ghost")
+            shared = next(plugin for plugin in plugin_runtime["plugins"] if plugin["id"] == "shared")
+            self.assertIsNone(ghost["source"])
+            self.assertEqual(shared["source"], str(explicit_dir))
+            self.assertEqual([server["name"] for server in plugin_runtime["mcpServers"]], ["ghost-mcp"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_bootstrap_runtime_composes_plugin_tools_commands_and_mcp_servers(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -2588,6 +2705,126 @@ class AgentCoreTests(unittest.TestCase):
                 self.assertEqual(command_names, ["ship"])
                 self.assertEqual([plugin["id"] for plugin in boot["plugins"]["plugins"]], ["bootstrapper"])
                 run(boot["close"]())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bootstrap_runtime_composes_daemon_mcp_workspace_plugin_and_bridge(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            plugin_dir = workspace / "daemon-bootstrap-plugin"
+            plugin_dir.mkdir()
+            (plugin_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "daemon-bootstrapper",
+                        "version": "1.0.0",
+                        "commands": [{"name": "remote", "description": "Remote command", "command": "printf remote"}],
+                        "mcpServers": [{"name": "plugin-daemon-mcp", "transport": "http", "commandOrUrl": "http://plugin.invalid/rpc"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = run(
+                core.resolveConfig(
+                    {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]},
+                    str(workspace),
+                )
+            )
+            config["mcpConfig"] = [{"name": "config-mcp", "transport": "http", "commandOrUrl": "http://config.invalid/rpc"}]
+            config["channels"] = ["local", "remote"]
+            default_tools = core.getDefaultToolList()
+            config["tools"] = list(default_tools)
+            config["allowedTools"] = list(default_tools)
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            remote = run(core.createRemoteSession({"session": session, "description": "Daemon bridge", "channelServers": ["local"]}))
+            session["metadata"]["remoteControlEnabled"] = True
+            session["metadata"]["remoteSessionId"] = remote["id"]
+            session["metadata"]["bridgeId"] = "bridge-daemon-compose"
+            captured = {"subscriptions": [], "unsubscribed": []}
+            close_order = []
+
+            async def fake_mcp(args):
+                captured["mcp"] = args
+                return {"createToolDefinitions": lambda: [SimpleNamespace(name="McpDaemonTool")], "close": lambda: close_order.append("mcp")}
+
+            async def fake_bridge(args):
+                captured["bridge"] = args
+                args["emit"](
+                    "bridge.started",
+                    {
+                        "bridge_id": "bridge-daemon-compose",
+                        "session_id": args["session"]["id"],
+                        "remote_session_id": args.get("remoteSessionId"),
+                        "name": args.get("name"),
+                    },
+                )
+                return {
+                    "bridge": {
+                        "id": "bridge-daemon-compose",
+                        "sessionId": args["session"]["id"],
+                        "remoteSessionId": args.get("remoteSessionId"),
+                        "status": "active",
+                    },
+                    "close": lambda: close_order.append("bridge"),
+                }
+
+            async def get_status():
+                return {
+                    "phase": "running",
+                    "epoch": "epoch-compose",
+                    "pid": 456,
+                    "socketPath": str(workspace / "daemon.sock"),
+                    "supervisorId": "sup-compose",
+                    "attachedClients": 2,
+                    "watchedSessions": 1,
+                    "activeTasks": 3,
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                }
+
+            daemon = {
+                "subscribe": lambda session_id, _listener: captured["subscriptions"].append(session_id) or (lambda: captured["unsubscribed"].append(session_id)),
+                "getStatus": get_status,
+                "close": lambda: close_order.append("daemon"),
+            }
+
+            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+                runtime_module,
+                "createBridgeRuntime",
+                fake_bridge,
+            ):
+                boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))
+                self.assertIsNotNone(boot["workspace"])
+                self.assertIsNone(boot["monitorRuntime"])
+                self.assertIsNone(boot["taskRuntime"])
+                self.assertIsNone(boot["collaborationRuntime"])
+                self.assertEqual(captured["subscriptions"], [session["id"]])
+                self.assertEqual(captured["mcp"]["sessionId"], session["id"])
+                self.assertEqual(captured["mcp"]["registeredChannels"], ["local", "remote"])
+                self.assertEqual([server["name"] for server in captured["mcp"]["servers"]], ["config-mcp", "plugin-daemon-mcp"])
+                self.assertEqual(captured["bridge"]["bridgeId"], "bridge-daemon-compose")
+                self.assertEqual(captured["bridge"]["remoteSessionId"], remote["id"])
+                self.assertEqual(captured["bridge"]["name"], "qa")
+                tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
+                self.assertIn("McpDaemonTool", tool_names)
+                self.assertIn("McpDaemonTool", config["tools"])
+                self.assertIn("McpDaemonTool", config["allowedTools"])
+                self.assertEqual([command["name"] for command in boot["slashCommands"]], ["remote"])
+                state = boot["getState"]()
+                self.assertEqual(state["daemon"]["activeTasks"], 3)
+                self.assertTrue(state["bridge"]["attached"])
+                self.assertEqual(state["bridge"]["bridgeId"], "bridge-daemon-compose")
+                run(boot["close"]())
+
+            self.assertEqual(captured["unsubscribed"], [session["id"]])
+            self.assertEqual(close_order, ["daemon", "bridge", "mcp"])
         finally:
             self.restore_home(root, previous)
 
@@ -2921,6 +3158,127 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_collaboration_runtime_tracks_terminal_and_awaiting_workers_incrementally(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child_records = [
+                {
+                    "agentId": "agent-completed",
+                    "sessionId": "child-completed",
+                    "parentSessionId": session["id"],
+                    "name": "Completed worker",
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "mode": "bypassPermissions",
+                    "runInBackground": True,
+                    "status": "completed",
+                    "completedAt": "2026-01-01T00:00:04Z",
+                    "lastUpdatedAt": "2026-01-01T00:00:04Z",
+                    "completionReason": "finished",
+                    "resultSummary": "Collected final notes.",
+                    "latestResultAt": "2026-01-01T00:00:04Z",
+                    "stoppable": False,
+                },
+                {
+                    "agentId": "agent-failed",
+                    "sessionId": "child-failed",
+                    "parentSessionId": session["id"],
+                    "name": "Failed worker",
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "mode": "bypassPermissions",
+                    "runInBackground": True,
+                    "status": "failed",
+                    "completedAt": "2026-01-01T00:00:03Z",
+                    "lastUpdatedAt": "2026-01-01T00:00:03Z",
+                    "completionReason": "worker_failed",
+                    "error": "Process exited 2",
+                    "resultSummary": "Tests failed.",
+                    "retryable": True,
+                    "stoppable": False,
+                },
+                {
+                    "agentId": "agent-awaiting",
+                    "sessionId": "child-awaiting",
+                    "parentSessionId": session["id"],
+                    "name": "Awaiting plan",
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "mode": "bypassPermissions",
+                    "runInBackground": True,
+                    "status": "awaiting_plan_approval",
+                    "startedAt": "2026-01-01T00:00:02Z",
+                    "lastUpdatedAt": "2026-01-01T00:00:02Z",
+                    "waitingReason": "Needs plan approval.",
+                    "stoppable": True,
+                },
+                {
+                    "agentId": "agent-running",
+                    "sessionId": "child-running",
+                    "parentSessionId": session["id"],
+                    "name": "Running worker",
+                    "provider": "openai",
+                    "model": "gpt-5.4",
+                    "mode": "bypassPermissions",
+                    "runInBackground": True,
+                    "status": "running",
+                    "startedAt": "2026-01-01T00:00:01Z",
+                    "lastUpdatedAt": "2026-01-01T00:00:01Z",
+                    "lastSummary": "Still running.",
+                    "stoppable": True,
+                },
+            ]
+            for record in child_records:
+                run(core.saveChildAgent(record))
+            session["metadata"]["childAgentIds"] = [record["agentId"] for record in child_records]
+
+            events = []
+            runtime = run(
+                core.createCollaborationRuntime(
+                    {
+                        "session": session,
+                        "config": config,
+                        "startTicker": False,
+                        "minAssistantUpdateSpacingMs": 10**15,
+                        "emit": lambda event, data: events.append((event, data)),
+                    }
+                )
+            )
+            workers = {worker["id"]: worker for worker in runtime["getSnapshot"]()["workers"]}
+            self.assertEqual(workers["agent-completed"]["status"], "completed")
+            self.assertEqual(workers["agent-completed"]["resultSummary"], "Collected final notes.")
+            self.assertEqual(workers["agent-failed"]["status"], "failed")
+            self.assertEqual(workers["agent-failed"]["retryable"], True)
+            self.assertEqual(workers["agent-awaiting"]["status"], "awaiting_input")
+            self.assertEqual(workers["agent-awaiting"]["waitingReason"], "Needs plan approval.")
+            self.assertEqual(runtime["getSnapshot"]()["activeCount"], 1)
+            self.assertEqual(runtime["getSnapshot"]()["awaitingInputCount"], 1)
+            self.assertTrue(
+                any(event == "subagent.status_changed" and data["agent_id"] == "agent-awaiting" and data["change_kind"] == "started" for event, data in events)
+            )
+
+            running = {**child_records[-1], "status": "completed", "completedAt": "2026-01-01T00:00:05Z", "lastUpdatedAt": "2026-01-01T00:00:05Z", "completionReason": "finished", "resultSummary": "Delivered runtime notes.", "latestResultAt": "2026-01-01T00:00:05Z", "stoppable": False}
+            run(core.saveChildAgent(running))
+            before_count = len(events)
+            run(runtime["refresh"]())
+            changed = events[before_count:]
+            self.assertTrue(
+                any(
+                    event == "subagent.status_changed"
+                    and data["agent_id"] == "agent-running"
+                    and data["status"] == "completed"
+                    and data["change_kind"] == "changed"
+                    and data["result_summary"] == "Delivered runtime notes."
+                    for event, data in changed
+                )
+            )
+            self.assertEqual(runtime["getSnapshot"]()["activeCount"], 0)
+            run(runtime["close"]())
+        finally:
+            self.restore_home(root, previous)
+
     def test_bridge_runtime_polls_inbox_and_records_received_event(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -2969,6 +3327,82 @@ class AgentCoreTests(unittest.TestCase):
                 [item["event"] for item in closed_events],
                 ["bridge.started", "bridge.message.queued", "bridge.message.received", "session.completed"],
             )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bridge_runtime_reconnects_and_replays_only_pending_inbox_after_restart(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            remote = run(core.createRemoteSession({"session": session, "description": "Remote restart QA", "channelServers": ["local"]}))
+            initial_events = []
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: initial_events.append((event, data))}))
+            first = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "already delivered", "source": "remote"}))
+            run(bridge_runtime["pollInbox"]())
+            second = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "deliver after restart", "source": "remote"}))
+            run(bridge_runtime["close"]())
+
+            replay_events = []
+            restarted = run(core.createBridgeRuntime({"session": session, "bridgeId": bridge_runtime["bridge"]["id"], "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: replay_events.append((event, data))}))
+            self.assertEqual(replay_events[0][0], "bridge.reconnected")
+            delivered = run(restarted["pollInbox"]())
+            self.assertEqual([message["id"] for message in delivered], [second["id"]])
+            self.assertFalse(any(event == "bridge.message" and data["message_id"] == first["id"] for event, data in replay_events))
+            self.assertTrue(any(event == "bridge.message" and data["message_id"] == second["id"] for event, data in replay_events))
+            bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            self.assertEqual(bridge["status"], "active")
+            self.assertEqual(bridge["messageCount"], 2)
+            self.assertEqual(bridge["pendingMessages"], 0)
+            diagnostics = run(restarted["diagnostics"]())
+            self.assertEqual(diagnostics["status"], "active")
+            self.assertEqual(diagnostics["inboxCount"], 2)
+            self.assertEqual(diagnostics["messageCount"], 2)
+            self.assertTrue(any(event["event"] == "bridge.reconnected" for event in diagnostics["events"]))
+            with self.assertRaisesRegex(RuntimeError, "Bridge not found for reconnect"):
+                run(core.createBridgeRuntime({"session": session, "bridgeId": "missing-bridge", "startPolling": False, "emit": lambda *_: None}))
+            run(restarted["close"]())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bridge_runtime_records_poll_failure_diagnostics_and_retries_pending_message(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            remote = run(core.createRemoteSession({"session": session, "description": "Remote failure QA", "channelServers": ["local"]}))
+            emitted = []
+            fail = {"enabled": True}
+
+            def emit(event, data):
+                emitted.append((event, data))
+                if event == "bridge.message" and fail["enabled"]:
+                    raise RuntimeError("emit failed")
+
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": emit}))
+            message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "retry me", "source": "remote"}))
+            with self.assertRaisesRegex(RuntimeError, "emit failed"):
+                run(bridge_runtime["pollInbox"]())
+            failed_bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            self.assertEqual(failed_bridge["status"], "failed")
+            self.assertEqual(failed_bridge["lastEventName"], "bridge.failed")
+            self.assertEqual(failed_bridge["lastFailurePhase"], "poll")
+            self.assertIn("emit failed", failed_bridge["lastFailureMessage"])
+            failed_remote = run(core.loadRemoteSession(remote["id"]))
+            self.assertEqual(failed_remote["status"], "failed")
+            self.assertEqual(failed_remote["bridgeStatus"], "failed")
+            diagnostics = run(bridge_runtime["getDiagnostics"]())
+            self.assertEqual(diagnostics["status"], "failed")
+            self.assertTrue(any(event["event"] == "bridge.failed" and event["data"]["phase"] == "poll" for event in diagnostics["events"]))
+
+            fail["enabled"] = False
+            delivered = run(bridge_runtime["pollInbox"]())
+            self.assertEqual([item["id"] for item in delivered], [message["id"]])
+            recovered_bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            self.assertEqual(recovered_bridge["status"], "active")
+            self.assertEqual(recovered_bridge["pendingMessages"], 0)
+            self.assertEqual(recovered_bridge["messageCount"], 1)
+            run(bridge_runtime["close"]())
         finally:
             self.restore_home(root, previous)
 
@@ -3246,7 +3680,10 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("tasks", names)
             self.assertIn("theme", names)
             self.assertIn("hello", names)
-            self.assertNotIn("transcript", names)
+            self.assertIn("transcript", names)
+            self.assertIn("debug", names)
+            self.assertIn("diagnostics", names)
+            self.assertIn("collaboration", names)
             self.assertEqual(next(command for command in commands if command["name"] == "daemon")["usage"], "/daemon [restart]")
 
             help_result = run(core.handleSlashCommand({"command": "/help", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))
@@ -3256,7 +3693,7 @@ class AgentCoreTests(unittest.TestCase):
             self.assertIn("/tasks retry ID", help_result["message"])
             self.assertIn("/memory append TEXT", help_result["message"])
             self.assertIn("/hello", help_result["message"])
-            self.assertNotIn("/transcript", help_result["message"])
+            self.assertIn("/transcript", help_result["message"])
 
             self.assertEqual(run(core.handleSlashCommand({"command": "plain text"}))["outcome"], "pass")
             unknown = run(core.handleSlashCommand({"command": "/unknown", "session": session, "config": config, "hooks": hooks}))
@@ -3496,6 +3933,151 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(stopped_daemon["message"], "Daemon not running.")
             self.assertEqual(restarted_daemon["message"], "Daemon not running.")
             self.assertEqual(daemon_actions, ["restart"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_shell_availability_settings_and_inherited_permissions(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            hooks = {"persist": lambda: None, "refresh": lambda: None}
+            availability = core.getSlashCommandAvailability({"mode": "bare", "hooks": hooks})
+            review = next(command for command in availability if command["name"] == "review")
+            theme = next(command for command in availability if command["name"] == "theme")
+            self.assertFalse(review["available"])
+            self.assertEqual(review["reason"], "interactive runtime required")
+            self.assertFalse(theme["available"])
+            self.assertEqual(theme["reason"], "full-screen TUI required")
+
+            run(core.handleSlashCommand({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/model openai:gpt-5.4-mini", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
+            run(core.handleSlashCommand({"command": "/permissions acceptEdits", "session": session, "config": config, "hooks": hooks}))
+            settings = run(core.loadSettings("project", str(workspace)))
+            self.assertEqual(settings["provider"], "openai")
+            self.assertEqual(settings["model"], "gpt-5.4-mini")
+            self.assertEqual(settings["effortLevel"], "high")
+            self.assertEqual(settings["permissionMode"], "acceptEdits")
+
+            parent = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="bypassPermissions")
+            run(core.saveSession(parent))
+            child = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            child["metadata"]["parentSessionId"] = parent["id"]
+            report = run(core.handleSlashCommand({"command": "/permissions", "session": child, "config": config, "hooks": hooks}))
+            self.assertIn("current  default", report["message"])
+            self.assertIn(f"inherited bypassPermissions from {parent['id'][:12]}", report["message"])
+            self.assertIn("effective bypassPermissions", report["message"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_shell_daemon_client_fallback_for_tasks_and_agents(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            run(core.saveTaskRecord({"id": "task-daemon-fallback", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Daemon fallback task", "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.saveChildAgent({"agentId": "agent-daemon-fallback", "sessionId": "child-daemon-session", "parentSessionId": session["id"], "name": "Daemon worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "running", "taskId": "task-daemon-fallback", "startedAt": "2026-01-01T00:00:00Z"}))
+            session["metadata"]["childAgentIds"] = ["agent-daemon-fallback"]
+            calls = []
+
+            async def fake_connect():
+                return {
+                    "_daemonClient": True,
+                    "readTaskOutput": lambda task_id, tail: calls.append(("read", task_id, tail)) or {"output": f"daemon output {task_id}", "truncated": True},
+                    "stopTask": lambda task_id: calls.append(("stop", task_id)) or True,
+                    "retryTask": lambda task_id: calls.append(("retry", task_id)) or {"taskId": "task-daemon-retry"},
+                    "close": lambda: calls.append(("close",)),
+                }
+
+            with mock.patch.object(interactive_actions_module, "connectTaskSupervisorDaemonClient", fake_connect):
+                log = run(core.handleSlashCommand({"command": "/tasks log fallback", "session": session, "config": config, "hooks": {}}))
+                stop = run(core.handleSlashCommand({"command": "/tasks stop fallback", "session": session, "config": config, "hooks": {}}))
+                retry = run(core.handleSlashCommand({"command": "/agents retry daemon", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("daemon output task-daemon-fallback", log["message"])
+            self.assertIn("[truncated to recent output]", log["message"])
+            self.assertIn("Stopped task-daemon-fallback", stop["message"])
+            self.assertIn("new task     task-daemon-retry", retry["message"])
+            self.assertEqual(calls.count(("close",)), 3)
+            self.assertIn(("read", "task-daemon-fallback", 12000), calls)
+            self.assertIn(("stop", "task-daemon-fallback"), calls)
+            self.assertIn(("retry", "task-daemon-fallback"), calls)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_shell_remote_collaboration_transcript_diagnostics_and_debug_commands(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session["messages"] = [
+                {"role": "user", "content": "render the transcript"},
+                {"role": "assistant", "content": [{"type": "tool_use", "id": "tool-1", "name": "Bash", "input": {"command": "pytest"}}]},
+                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tool-1", "content": "tests passed"}]},
+            ]
+            session["metadata"]["compactionState"] = {
+                "latestCompactionGeneration": 2,
+                "workingContextTokenEstimate": 1200,
+                "workingContextTokenMeasurement": {"source": "fixture"},
+                "compactedThroughMessageIndex": 1,
+                "artifacts": {
+                    "summary": str(workspace / "summary.md"),
+                    "state": str(workspace / "state.json"),
+                    "workingContext": str(workspace / "working-context.json"),
+                    "checkpoint": str(workspace / "checkpoint.json"),
+                },
+            }
+            (workspace / "summary.md").write_text("summary", encoding="utf-8")
+            (workspace / "state.json").write_text("{}", encoding="utf-8")
+            (workspace / "working-context.json").write_text("{}", encoding="utf-8")
+            (workspace / "checkpoint.json").write_text("{}", encoding="utf-8")
+            run(core.saveSession(session))
+            run(core.saveCompactionManifest({"sessionId": session["id"], "latestGeneration": 2, "status": "ready"}))
+            run(core.saveCompactionCheckpoint({"sessionId": session["id"], "generation": 2, "state": "ok"}))
+            remote = run(core.createRemoteSession({"session": session, "description": "Shell remote", "channelServers": ["local"]}))
+            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "shell-bridge", "startPolling": False}))
+            bridge = bridge_runtime["bridge"]
+            session["metadata"]["remoteSessionId"] = remote["id"]
+            session["metadata"]["bridgeId"] = bridge["id"]
+            run(core.saveSession(session))
+            run(core.saveTaskRecord({"id": "task-collab-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Collaboration task", "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.saveMonitor(core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-collab-shell", "goal": "Watch shell collaboration"})))
+            run(core.saveChildAgent({"agentId": "agent-collab-shell", "sessionId": "child-collab-shell", "parentSessionId": session["id"], "name": "Collab worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "awaiting_input", "startedAt": "2026-01-01T00:00:00Z"}))
+            session["metadata"]["childAgentIds"] = ["agent-collab-shell"]
+
+            transcript = run(core.handleSlashCommand({"command": "/transcript", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("render the transcript", transcript["message"])
+            self.assertIn("tool         Bash", transcript["message"])
+            self.assertIn("tests passed", transcript["message"])
+            compact_status = run(core.handleSlashCommand({"command": "/compact status", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("latest gen     2", compact_status["message"])
+            self.assertIn(str(workspace / "summary.md"), compact_status["message"])
+            remote_list = run(core.handleSlashCommand({"command": "/remote list", "session": session, "config": config, "hooks": {}}))
+            self.assertIn(remote["id"][:8], remote_list["message"])
+            remote_inspect = run(core.handleSlashCommand({"command": f"/remote inspect {remote['id'][:8]}", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("Shell remote", remote_inspect["message"])
+            queued = run(core.handleSlashCommand({"command": "/remote queue Continue from bridge", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("Queued", queued["message"])
+            tail = run(core.handleSlashCommand({"command": f"/remote tail {bridge['id'][:8]}", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("bridge.message.queued", tail["message"])
+            collaboration = run(core.handleSlashCommand({"command": "/collaboration", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("awaiting       1", collaboration["message"])
+            self.assertIn("bridge", collaboration["message"])
+            diagnostics = run(core.handleSlashCommand({"command": "/diagnostics", "session": session, "config": config, "hooks": {}}))
+            self.assertIn("healthy", diagnostics["message"])
+            self.assertIn("extensions", diagnostics["message"])
+            debug_dir = workspace / "debug-bundle"
+            debug = run(core.handleSlashCommand({"command": f"/debug {debug_dir}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
+            self.assertIn(str(debug_dir), debug["message"])
+            self.assertTrue((debug_dir / "manifest.json").exists())
+            self.assertTrue((debug_dir / "remote" / "bridge.events.json").exists())
+            compact_debug = run(core.handleSlashCommand({"command": f"/compact debug {workspace / 'compact-debug'}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
+            self.assertIn("compaction    yes", compact_debug["message"])
+            closed = run(core.handleSlashCommand({"command": f"/remote close {remote['id'][:8]}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
+            self.assertIn("Closed", closed["message"])
+            self.assertEqual(run(core.loadBridge(bridge["id"]))["status"], "closed")
+            self.assertEqual(run(core.loadRemoteSession(remote["id"]))["bridgeStatus"], "closed")
+            run(bridge_runtime["close"]())
         finally:
             self.restore_home(root, previous)
 

@@ -91,6 +91,7 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         bridge_runtime = await createBridgeRuntime(
             {
                 "session": session,
+                "bridgeId": session_metadata.get("bridgeId"),
                 "remoteSessionId": session_metadata.get("remoteSessionId"),
                 "name": args.get("bridgeName"),
                 "emit": emit_runtime_event,

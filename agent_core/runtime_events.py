@@ -56,6 +56,8 @@ KNOWN_RUNTIME_EVENTS = {
     "monitor.status_changed",
     "collaboration.snapshot",
     "collaboration.assistant_update",
+    "remote.status_changed",
+    "bridge.status_changed",
     "bridge.message",
 }
 
@@ -379,6 +381,28 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "status": _optional_string(_field(data, "status")),
             "label": _optional_string(_field(data, "label")),
             "text": _field(data, "text") or "",
+        }
+    if event == "remote.status_changed":
+        return "remote.status_changed", {
+            "remoteSessionId": _optional_string(_field(data, "remote_session_id", "remoteSessionId")),
+            "sessionId": _optional_string(_field(data, "session_id", "sessionId")),
+            "status": _optional_string(_field(data, "status")),
+            "title": _optional_string(_field(data, "title")),
+            "bridgeId": _optional_string(_field(data, "bridge_id", "bridgeId")),
+            "bridgeStatus": _optional_string(_field(data, "bridge_status", "bridgeStatus")),
+            "unreadBridgeMessages": _optional_number(_field(data, "unread_bridge_messages", "unreadBridgeMessages")),
+            "summary": _optional_string(_field(data, "summary")),
+            "changeKind": _optional_string(_field(data, "change_kind", "changeKind")),
+        }
+    if event == "bridge.status_changed":
+        return "bridge.status_changed", {
+            "bridgeId": _optional_string(_field(data, "bridge_id", "bridgeId")),
+            "remoteSessionId": _optional_string(_field(data, "remote_session_id", "remoteSessionId")),
+            "status": _optional_string(_field(data, "status")),
+            "pendingMessages": _optional_number(_field(data, "pending_messages", "pendingMessages")),
+            "lastEventName": _optional_string(_field(data, "last_event_name", "lastEventName")),
+            "summary": _optional_string(_field(data, "summary")),
+            "changeKind": _optional_string(_field(data, "change_kind", "changeKind")),
         }
     if event == "bridge.message":
         return "bridge.message", {

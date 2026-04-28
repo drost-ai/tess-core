@@ -94,10 +94,27 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
     session = args.get("session") or {}
     emit = args.get("emit") or (lambda *_: None)
     now = now_iso()
-    bridge = {"id": args.get("id") or str(uuid.uuid4()), "sessionId": args.get("sessionId") or session.get("id"), "remoteSessionId": args.get("remoteSessionId"), "name": args.get("name"), "createdAt": now, "updatedAt": now, "status": "active", "cwd": args.get("cwd") or session.get("cwd"), "lastEventName": "bridge.started", "pendingMessages": 0, "messageCount": 0}
+    requested_bridge_id = args.get("bridgeId") or args.get("bridge_id")
+    existing_bridge = await loadBridge(requested_bridge_id) if requested_bridge_id else None
+    if requested_bridge_id and not existing_bridge:
+        raise RuntimeError(f"Bridge not found for reconnect: {requested_bridge_id}")
+
+    if existing_bridge:
+        bridge = {
+            **existing_bridge,
+            "sessionId": args.get("sessionId") or session.get("id") or existing_bridge.get("sessionId"),
+            "remoteSessionId": args.get("remoteSessionId") if args.get("remoteSessionId") is not None else existing_bridge.get("remoteSessionId"),
+            "name": args.get("name") if args.get("name") is not None else existing_bridge.get("name"),
+            "cwd": args.get("cwd") or session.get("cwd") or existing_bridge.get("cwd"),
+            "updatedAt": now,
+            "status": "active",
+            "lastEventName": "bridge.reconnected",
+        }
+    else:
+        bridge = {"id": args.get("id") or str(uuid.uuid4()), "sessionId": args.get("sessionId") or session.get("id"), "remoteSessionId": args.get("remoteSessionId"), "name": args.get("name"), "createdAt": now, "updatedAt": now, "status": "active", "cwd": args.get("cwd") or session.get("cwd"), "lastEventName": "bridge.started", "pendingMessages": 0, "messageCount": 0}
     await saveBridge(bridge)
     if bridge.get("remoteSessionId"):
-        await updateRemoteSession(bridge["remoteSessionId"], {"bridgeId": bridge["id"], "status": "active", "lastEventAt": now, "lastEventSummary": "Bridge attached"})
+        await updateRemoteSession(bridge["remoteSessionId"], {"bridgeId": bridge["id"], "status": "active", "bridgeStatus": "active", "lastEventAt": now, "lastEventSummary": "Bridge reconnected" if existing_bridge else "Bridge attached"})
 
     async def record_event(event: str, data: dict[str, Any] | None = None) -> None:
         timestamp = now_iso()
@@ -109,8 +126,22 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
         if bridge.get("remoteSessionId"):
             await updateRemoteSession(bridge["remoteSessionId"], {"status": "idle" if event == "bridge.closed" else "completed" if event == "session.completed" else "active", "bridgeStatus": "closed" if event == "bridge.closed" else "active", "lastEventName": event, "lastEventAt": timestamp, "lastEventSummary": _truncate_remote_summary(_build_bridge_event_summary(event, data or {}))})
 
+    async def record_failure(error: Exception, phase: str) -> None:
+        timestamp = now_iso()
+        message = str(error) or error.__class__.__name__
+        payload = {"bridge_id": bridge["id"], "session_id": bridge.get("sessionId"), "remote_session_id": bridge.get("remoteSessionId"), "phase": phase, "error": message}
+        current = await loadBridge(bridge["id"])
+        if current:
+            current.update({"status": "failed", "updatedAt": timestamp, "lastEventName": "bridge.failed", "lastFailurePhase": phase, "lastFailureMessage": message})
+            await saveBridge(current)
+        await appendBridgeEvent({"id": str(uuid.uuid4()), "bridgeId": bridge["id"], "createdAt": timestamp, "event": "bridge.failed", "data": payload})
+        if bridge.get("remoteSessionId"):
+            await updateRemoteSession(bridge["remoteSessionId"], {"status": "failed", "bridgeStatus": "failed", "lastEventName": "bridge.failed", "lastEventAt": timestamp, "lastEventSummary": _truncate_remote_summary(f"Bridge failed during {phase}: {message}")})
+
     closed = False
-    inbox_cursor = 0
+    existing_inbox = await loadBridgeInbox(bridge["id"]) if existing_bridge else []
+    inbox_cursor = min(int(bridge.get("messageCount") or 0), len(existing_inbox)) if existing_bridge else 0
+    pending_replay_count = max(0, len(existing_inbox) - inbox_cursor)
     poll_lock = threading.Lock()
     stop_event = threading.Event()
     poll_interval = float(args.get("pollIntervalSeconds", 0.75))
@@ -123,35 +154,41 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
         if not poll_lock.acquire(blocking=False):
             return []
         try:
-            inbox = await loadBridgeInbox(bridge["id"])
-            pending = inbox[inbox_cursor:]
-            if not pending:
-                return []
-            inbox_cursor = len(inbox)
-            delivered = []
-            for message in pending:
-                payload = {"bridge_id": bridge["id"], "session_id": bridge.get("sessionId"), "remote_session_id": bridge.get("remoteSessionId"), "message_id": message.get("id"), "source": message.get("source"), "text": message.get("text")}
-                emit("bridge.message", payload)
-                current_bridge = await loadBridge(bridge["id"])
-                timestamp = now_iso()
-                if current_bridge:
-                    current_bridge.update(
-                        {
-                            "status": "active",
-                            "updatedAt": timestamp,
-                            "lastEventName": "bridge.message.received",
-                            "lastMessageAt": message.get("createdAt"),
-                            "lastMessageSource": message.get("source"),
-                            "pendingMessages": max(0, int(current_bridge.get("pendingMessages") or 1) - 1),
-                            "messageCount": int(current_bridge.get("messageCount") or 0) + 1,
-                        }
-                    )
-                    await saveBridge(current_bridge)
-                await appendBridgeEvent({"id": str(uuid.uuid4()), "bridgeId": bridge["id"], "createdAt": timestamp, "event": "bridge.message.received", "data": {"message_id": message.get("id"), "source": message.get("source"), "text": message.get("text")}})
-                if bridge.get("remoteSessionId"):
-                    await updateRemoteSession(bridge["remoteSessionId"], {"status": "awaiting_input", "bridgeStatus": "active", "lastEventName": "bridge.message.received", "lastEventAt": now_iso(), "lastEventSummary": _truncate_remote_summary(f"Bridge message: {message.get('text')}")})
-                delivered.append(message)
-            return delivered
+            try:
+                start_cursor = inbox_cursor
+                inbox = await loadBridgeInbox(bridge["id"])
+                pending = inbox[start_cursor:]
+                if not pending:
+                    return []
+                inbox_cursor = len(inbox)
+                delivered = []
+                for message in pending:
+                    payload = {"bridge_id": bridge["id"], "session_id": bridge.get("sessionId"), "remote_session_id": bridge.get("remoteSessionId"), "message_id": message.get("id"), "source": message.get("source"), "text": message.get("text")}
+                    emit("bridge.message", payload)
+                    current_bridge = await loadBridge(bridge["id"])
+                    timestamp = now_iso()
+                    if current_bridge:
+                        current_bridge.update(
+                            {
+                                "status": "active",
+                                "updatedAt": timestamp,
+                                "lastEventName": "bridge.message.received",
+                                "lastMessageAt": message.get("createdAt"),
+                                "lastMessageSource": message.get("source"),
+                                "pendingMessages": max(0, int(current_bridge.get("pendingMessages") or 1) - 1),
+                                "messageCount": int(current_bridge.get("messageCount") or 0) + 1,
+                            }
+                        )
+                        await saveBridge(current_bridge)
+                    await appendBridgeEvent({"id": str(uuid.uuid4()), "bridgeId": bridge["id"], "createdAt": timestamp, "event": "bridge.message.received", "data": {"message_id": message.get("id"), "source": message.get("source"), "text": message.get("text")}})
+                    if bridge.get("remoteSessionId"):
+                        await updateRemoteSession(bridge["remoteSessionId"], {"status": "awaiting_input", "bridgeStatus": "active", "lastEventName": "bridge.message.received", "lastEventAt": now_iso(), "lastEventSummary": _truncate_remote_summary(f"Bridge message: {message.get('text')}")})
+                    delivered.append(message)
+                return delivered
+            except Exception as exc:
+                inbox_cursor = start_cursor
+                await record_failure(exc, "poll")
+                raise
         finally:
             poll_lock.release()
 
@@ -180,12 +217,16 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
         if bridge.get("remoteSessionId"):
             await updateRemoteSession(bridge["remoteSessionId"], {"status": "idle", "bridgeStatus": "closed", "lastEventName": "bridge.closed", "lastEventAt": timestamp, "lastEventSummary": "Bridge closed"})
 
-    await record_event("bridge.started", {"bridge_id": bridge["id"], "session_id": bridge.get("sessionId"), "remote_session_id": bridge.get("remoteSessionId"), "name": bridge.get("name")})
-    emit("bridge.started", {"bridge_id": bridge["id"], "session_id": bridge.get("sessionId"), "remote_session_id": bridge.get("remoteSessionId"), "name": bridge.get("name")})
+    start_event = "bridge.reconnected" if existing_bridge else "bridge.started"
+    start_payload = {"bridge_id": bridge["id"], "session_id": bridge.get("sessionId"), "remote_session_id": bridge.get("remoteSessionId"), "name": bridge.get("name")}
+    if existing_bridge:
+        start_payload["replayed_messages"] = pending_replay_count
+    await record_event(start_event, start_payload)
+    emit(start_event, start_payload)
     if args.get("startPolling", True):
         poll_thread = threading.Thread(target=poll_loop, name=f"agent-core-bridge-{bridge['id'][:8]}", daemon=True)
         poll_thread.start()
-    return {"bridge": bridge, "send": lambda text: sendBridgeMessage({"bridgeId": bridge["id"], "text": text}), "recordEvent": record_event, "pollInbox": poll_bridge_inbox, "pollBridgeInbox": poll_bridge_inbox, "close": close}
+    return {"bridge": bridge, "send": lambda text: sendBridgeMessage({"bridgeId": bridge["id"], "text": text}), "recordEvent": record_event, "pollInbox": poll_bridge_inbox, "pollBridgeInbox": poll_bridge_inbox, "diagnostics": lambda: getBridgeDiagnostics(bridge["id"]), "getDiagnostics": lambda: getBridgeDiagnostics(bridge["id"]), "close": close}
 
 
 async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -222,6 +263,24 @@ async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:
             summary = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         lines.append(f"{item.get('createdAt')}  {item.get('event')}  {summary}")
     return "\n".join(lines)
+
+
+async def getBridgeDiagnostics(bridgeId: str, limit: int = 20) -> dict[str, Any]:
+    bridge = await loadBridge(bridgeId)
+    events = await loadBridgeEvents(bridgeId)
+    inbox = await loadBridgeInbox(bridgeId)
+    remote = await loadRemoteSession(bridge.get("remoteSessionId")) if bridge and bridge.get("remoteSessionId") else None
+    return {
+        "bridge": bridge,
+        "remote": remote,
+        "status": (bridge or {}).get("status"),
+        "remoteStatus": (remote or {}).get("status"),
+        "bridgeStatus": (remote or {}).get("bridgeStatus"),
+        "pendingMessages": (bridge or {}).get("pendingMessages") if bridge else 0,
+        "messageCount": (bridge or {}).get("messageCount") if bridge else 0,
+        "inboxCount": len(inbox),
+        "events": events[-limit:],
+    }
 
 
 async def listActiveBridgeRows() -> list[str]:

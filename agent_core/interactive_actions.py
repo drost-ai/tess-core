@@ -21,12 +21,17 @@ from .config import (
     normalizeProviderProfileName,
     resolveFallbackProviderProfileName,
 )
+from .debug_bundle import createDebugBundle
 from .durable_memory import synchronizeManualProjectMemory
-from .daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
-from .remote import formatBridgeTail, formatRemoteSessionCandidate
+from .daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
+from .platform import collectDoctorReport
+from .remote import formatBridgeTail, formatRemoteSessionCandidate, sendBridgeMessage, updateRemoteSession
 from .storage import (
+    compactionCheckpointPath,
+    compactionManifestPath,
     getProjectMemoryPath,
     getDefaultAutoMode,
+    listBridges,
     listChildAgents,
     listPlanApprovals,
     listRemoteSessions,
@@ -35,11 +40,15 @@ from .storage import (
     listSessions,
     loadAutoMode,
     loadBridge,
+    loadCompactionManifest,
     loadDaemonState,
     loadRemoteSession,
     loadSession,
+    loadSettings,
     loadTaskRecord,
+    saveBridge,
     saveAutoMode,
+    saveSettings,
     saveMonitor,
 )
 from .transcript import buildTranscriptSnapshot
@@ -77,7 +86,11 @@ def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list
         ("monitors", "/monitors", "List active and recent background monitors"),
         ("monitor", "/monitor <stop|resume> <id>", "Manage a specific background monitor"),
         ("resume", "/resume [query]", "List or switch recent sessions"),
-        ("compact", "/compact", "Summarize older context and trim it"),
+        ("compact", "/compact [status|debug]", "Summarize older context and trim it"),
+        ("transcript", "/transcript [limit]", "Render saved transcript entries"),
+        ("debug", "/debug [output-dir]", "Create a debug bundle for this session"),
+        ("diagnostics", "/diagnostics", "Show runtime diagnostic checks"),
+        ("collaboration", "/collaboration", "Show workers, monitors, remote, and bridge status"),
         ("bug", "/bug", "Show the feedback URL"),
     ]
     if args.get("includeStatusline"):
@@ -96,6 +109,38 @@ def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list
         description = command.get("description") if isinstance(command, dict) else getattr(command, "description", "")
         commands.append((name, usage or f"/{name}", description))
     return [{"name": name, "usage": usage, "description": description} for name, usage, description in commands]
+
+
+def getSlashCommandAvailability(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
+    args = {**(args or {}), **kwargs}
+    hooks = args.get("hooks") or {}
+    mode = str(args.get("mode") or ("bare" if args.get("bare") else "tui")).lower()
+    commands = listSlashCommands(
+        {
+            "includeStatusline": True,
+            "includeTheme": True,
+            "includeMouse": True,
+            "includeScreen": True,
+            "runtimeCommands": args.get("runtimeCommands") or [],
+        }
+    )
+    interactive_modes = {"tui", "interactive", "fullscreen", "inline"}
+    availability = []
+    for command in commands:
+        name = command["name"]
+        available = True
+        reason = None
+        if name in {"statusline", "theme", "mouse", "screen"} and mode not in interactive_modes:
+            available = False
+            reason = "full-screen TUI required"
+        if name == "review" and not callable(hooks.get("runPrompt")):
+            available = False
+            reason = "interactive runtime required"
+        if name == "extensions" and not callable(hooks.get("getExtensionsReport")):
+            available = False
+            reason = "extension report unavailable"
+        availability.append({**command, "mode": mode, "available": available, "reason": reason})
+    return availability
 
 
 async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -163,6 +208,14 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
         return await _handle_resume(arg_text, session, hooks)
     if command == "compact":
         return await _handle_compact(arg_text, session, config, hooks, args)
+    if command == "transcript":
+        return await _handle_transcript(arg_text, session, hooks)
+    if command == "debug":
+        return await _handle_debug(arg_text, session, config, hooks)
+    if command == "diagnostics":
+        return await _handle_diagnostics(arg_text, session, config, hooks)
+    if command == "collaboration":
+        return await _handle_collaboration(arg_text, session, hooks)
     if command == "review":
         return await _handle_review(arg_text, hooks)
     if command == "statusline":
@@ -217,6 +270,12 @@ def buildSlashHelp(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
         (24, "/tasks attach ID       Reconnect to an attachable task session"),
         (25, "/tasks stop ID         Stop a daemon-backed task"),
         (26, "/tasks retry ID        Retry a retryable task"),
+        (27, "/remote list           List known remote sessions"),
+        (28, "/remote tail ID        Show recent bridge events"),
+        (29, "/remote queue TEXT     Queue bridge input for the active remote"),
+        (30, "/remote close ID       Close a remote bridge/session record"),
+        (31, "/compact status        Show checkpoint and artifact state"),
+        (32, "/compact debug         Create a debug bundle with compaction artifacts"),
     ]:
         lines.insert(index, line)
     return "\n".join(lines)
@@ -378,35 +437,38 @@ async def _handle_tasks(arg_text: str, session: dict[str, Any], hooks: dict[str,
                 ]
             ),
         )
-    supervisor = args.get("daemon") or args.get("taskSupervisor")
+    supervisor, should_close = await _resolve_task_supervisor(args)
     if not supervisor:
         return _error(hooks, "This task action requires the local task supervisor daemon.")
-    if subcommand == "stop":
-        stop_fn = supervisor.get("stopTask") if isinstance(supervisor, dict) else None
-        if not callable(stop_fn):
-            return _error(hooks, "Task supervisor does not support stopTask.")
-        stopped = await _maybe_await(stop_fn(record["id"]))
-        if not stopped:
-            return _error(hooks, f"Task could not be stopped: {record['id']}")
-        return _info(hooks, "Task", f"Stopped {record['id']}")
-    retry_fn = supervisor.get("retryTask") if isinstance(supervisor, dict) else None
-    if not callable(retry_fn):
-        return _error(hooks, "Task supervisor does not support retryTask.")
     try:
-        retried = await _maybe_await(retry_fn(record["id"]))
-    except Exception as exc:
-        return _error(hooks, str(exc))
-    return _info(
-        hooks,
-        "Task",
-        "\n".join(
-            [
-                f"Retried {record['id']}",
-                f"new task     {(retried or {}).get('taskId') or (retried or {}).get('id')}",
-                *([f"output       {retried.get('outputFile')}"] if isinstance(retried, dict) and retried.get("outputFile") else []),
-            ]
-        ),
-    )
+        if subcommand == "stop":
+            stop_fn = supervisor.get("stopTask") if isinstance(supervisor, dict) else None
+            if not callable(stop_fn):
+                return _error(hooks, "Task supervisor does not support stopTask.")
+            stopped = await _maybe_await(stop_fn(record["id"]))
+            if not stopped:
+                return _error(hooks, f"Task could not be stopped: {record['id']}")
+            return _info(hooks, "Task", f"Stopped {record['id']}")
+        retry_fn = supervisor.get("retryTask") if isinstance(supervisor, dict) else None
+        if not callable(retry_fn):
+            return _error(hooks, "Task supervisor does not support retryTask.")
+        try:
+            retried = await _maybe_await(retry_fn(record["id"]))
+        except Exception as exc:
+            return _error(hooks, str(exc))
+        return _info(
+            hooks,
+            "Task",
+            "\n".join(
+                [
+                    f"Retried {record['id']}",
+                    f"new task     {(retried or {}).get('taskId') or (retried or {}).get('id')}",
+                    *([f"output       {retried.get('outputFile')}"] if isinstance(retried, dict) and retried.get("outputFile") else []),
+                ]
+            ),
+        )
+    finally:
+        await _close_task_supervisor_if_needed(supervisor, should_close)
 
 
 async def buildAgentsReport(session: dict[str, Any], arg_text: str = "") -> str:
@@ -448,35 +510,38 @@ async def _handle_agents(
             return _handled(f"resuming {target_session.get('id')}")
         if not record.get("taskId"):
             return _error(hooks, f"Child agent {_short_id(record.get('agentId', ''))} is not linked to a supervised task.")
-        supervisor = args.get("daemon") or args.get("taskSupervisor")
+        supervisor, should_close = await _resolve_task_supervisor(args)
         if not supervisor:
             return _error(hooks, "This child-agent action requires the local task supervisor daemon.")
-        if subcommand == "stop":
-            stop_fn = supervisor.get("stopTask") if isinstance(supervisor, dict) else None
-            if not callable(stop_fn):
-                return _error(hooks, "Task supervisor does not support stopTask.")
-            stopped = await _maybe_await(stop_fn(record["taskId"]))
-            if not stopped:
-                return _error(hooks, f"Child agent could not be stopped: {record['taskId']}")
-            return _info(hooks, "Agent", f"Stopped {record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))}")
-        retry_fn = supervisor.get("retryTask") if isinstance(supervisor, dict) else None
-        if not callable(retry_fn):
-            return _error(hooks, "Task supervisor does not support retryTask.")
         try:
-            retried = await _maybe_await(retry_fn(record["taskId"]))
-        except Exception as exc:
-            return _error(hooks, str(exc))
-        return _info(
-            hooks,
-            "Agent",
-            "\n".join(
-                [
-                    f"Retried {record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))}",
-                    f"new task     {(retried or {}).get('taskId') or (retried or {}).get('id')}",
-                    *([f"output       {retried.get('outputFile')}"] if isinstance(retried, dict) and retried.get("outputFile") else []),
-                ]
-            ),
-        )
+            if subcommand == "stop":
+                stop_fn = supervisor.get("stopTask") if isinstance(supervisor, dict) else None
+                if not callable(stop_fn):
+                    return _error(hooks, "Task supervisor does not support stopTask.")
+                stopped = await _maybe_await(stop_fn(record["taskId"]))
+                if not stopped:
+                    return _error(hooks, f"Child agent could not be stopped: {record['taskId']}")
+                return _info(hooks, "Agent", f"Stopped {record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))}")
+            retry_fn = supervisor.get("retryTask") if isinstance(supervisor, dict) else None
+            if not callable(retry_fn):
+                return _error(hooks, "Task supervisor does not support retryTask.")
+            try:
+                retried = await _maybe_await(retry_fn(record["taskId"]))
+            except Exception as exc:
+                return _error(hooks, str(exc))
+            return _info(
+                hooks,
+                "Agent",
+                "\n".join(
+                    [
+                        f"Retried {record.get('name') or record.get('agentType') or _short_id(record.get('agentId', ''))}",
+                        f"new task     {(retried or {}).get('taskId') or (retried or {}).get('id')}",
+                        *([f"output       {retried.get('outputFile')}"] if isinstance(retried, dict) and retried.get("outputFile") else []),
+                    ]
+                ),
+            )
+        finally:
+            await _close_task_supervisor_if_needed(supervisor, should_close)
     return _info(hooks, "Agents", await _build_agents_report(session, config, arg_text))
 
 
@@ -542,8 +607,43 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
         return _info(hooks, "Remote", str(fallback) if fallback is not None else buildRemoteFallbackReport(session))
 
     subcommand, query = _split_subcommand(arg_text)
+    if subcommand == "list":
+        return _info(hooks, "Remote", await buildRemoteListReport())
+    if subcommand in {"inspect", "show"}:
+        selection = await _resolve_remote_record(query, session, remote)
+        if not selection:
+            return _error(hooks, f"No remote session matched: {query or 'current'}")
+        linked_bridge = await loadBridge(selection.get("bridgeId")) if selection.get("bridgeId") else bridge
+        return _info(hooks, "Remote", formatRemoteSessionRecord(selection, linked_bridge))
+    if subcommand in {"tail", "events"}:
+        selected_bridge = await _resolve_bridge_record(query, session, bridge)
+        if not selected_bridge:
+            return _error(hooks, f"No bridge matched: {query or 'current'}")
+        return _info(hooks, "Bridge", await formatBridgeTail(selected_bridge["id"]))
+    if subcommand in {"queue", "send", "message"}:
+        if not query:
+            return _error(hooks, "Usage: /remote queue TEXT")
+        selected_bridge = await _resolve_bridge_record("", session, bridge)
+        if not selected_bridge and remote and remote.get("bridgeId"):
+            selected_bridge = await loadBridge(remote["bridgeId"])
+        if not selected_bridge:
+            return _error(hooks, "No active bridge is available for this session.")
+        try:
+            message = await sendBridgeMessage({"bridgeId": selected_bridge["id"], "text": query, "source": "local"})
+        except Exception as exc:
+            return _error(hooks, str(exc))
+        return _info(hooks, "Bridge", f"Queued {message.get('id')} for bridge {_short_id(selected_bridge['id'])}")
+    if subcommand in {"close", "disconnect"}:
+        selection = await _resolve_remote_record(query, session, remote)
+        selected_bridge = await _resolve_bridge_record(query, session, bridge)
+        if not selection and not selected_bridge:
+            return _error(hooks, f"No remote or bridge matched: {query or 'current'}")
+        await _close_remote_records(selection, selected_bridge)
+        _call(hooks, "refresh")
+        await _persist(hooks)
+        return _info(hooks, "Remote", f"Closed {selection.get('id') if selection else selected_bridge.get('id')}")
     if subcommand not in {"attach", "resume"}:
-        return _error(hooks, "Usage: /remote [attach|resume]")
+        return _error(hooks, "Usage: /remote [list|inspect|tail|attach|resume|queue|close]")
     request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
     if not callable(request_resume):
         return _error(hooks, "/remote attach is only available in the full-screen TUI.")
@@ -636,6 +736,98 @@ def buildRemoteFallbackReport(session: dict[str, Any]) -> str:
     if metadata.get("remoteSessionTitle"):
         lines.insert(3, f"title          {metadata.get('remoteSessionTitle')}")
     return "\n".join(lines)
+
+
+async def buildRemoteListReport() -> str:
+    remotes = await listRemoteSessions()
+    if not remotes:
+        return "No remote sessions recorded."
+    return "\n".join(formatRemoteSessionCandidate(record) for record in remotes[:12])
+
+
+async def _resolve_remote_record(
+    query: str,
+    session: dict[str, Any],
+    current_remote: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    normalized = query.strip().lower()
+    if not normalized:
+        return current_remote
+    if current_remote and any(normalized in token for token in _background_remote_tokens(current_remote)):
+        return current_remote
+    for record in await listRemoteSessions():
+        if any(normalized in token for token in _background_remote_tokens(record)):
+            return record
+    session_match = await loadSession(query)
+    if session_match:
+        for record in await listRemoteSessions():
+            if record.get("sessionId") == session_match.get("id") or record.get("foregroundSessionId") == session_match.get("id"):
+                return record
+    metadata = session.get("metadata", {})
+    if metadata.get("remoteSessionId") and normalized in str(metadata.get("remoteSessionId")).lower():
+        return await loadRemoteSession(metadata["remoteSessionId"])
+    return None
+
+
+async def _resolve_bridge_record(
+    query: str,
+    session: dict[str, Any],
+    current_bridge: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    normalized = query.strip().lower()
+    if not normalized:
+        return current_bridge
+    if current_bridge and any(normalized in token for token in _compact_tokens(current_bridge.get("id"), current_bridge.get("name"), current_bridge.get("remoteSessionId"), current_bridge.get("sessionId"), current_bridge.get("status"))):
+        return current_bridge
+    remote = await _resolve_remote_record(query, session, None)
+    if remote and remote.get("bridgeId"):
+        bridge = await loadBridge(remote["bridgeId"])
+        if bridge:
+            return bridge
+    for bridge in await listBridges():
+        tokens = _compact_tokens(bridge.get("id"), bridge.get("name"), bridge.get("remoteSessionId"), bridge.get("sessionId"), bridge.get("status"))
+        if any(normalized in token for token in tokens):
+            return bridge
+    metadata = session.get("metadata", {})
+    if metadata.get("bridgeId") and normalized in str(metadata.get("bridgeId")).lower():
+        return await loadBridge(metadata["bridgeId"])
+    return None
+
+
+async def _close_remote_records(remote: dict[str, Any] | None, bridge: dict[str, Any] | None) -> None:
+    timestamp = now_iso()
+    if bridge:
+        bridge = {
+            **bridge,
+            "status": "closed",
+            "updatedAt": timestamp,
+            "lastEventName": "bridge.closed",
+        }
+        await saveBridge(bridge)
+    if remote:
+        await updateRemoteSession(
+            remote["id"],
+            {
+                "status": "idle",
+                "bridgeStatus": "closed" if bridge else remote.get("bridgeStatus"),
+                "lastEventName": "remote.closed" if not bridge else "bridge.closed",
+                "lastEventAt": timestamp,
+                "lastEventSummary": "Remote shell record closed.",
+                "unreadBridgeMessages": 0,
+            },
+        )
+    elif bridge and bridge.get("remoteSessionId"):
+        await updateRemoteSession(
+            bridge["remoteSessionId"],
+            {
+                "status": "idle",
+                "bridgeStatus": "closed",
+                "lastEventName": "bridge.closed",
+                "lastEventAt": timestamp,
+                "lastEventSummary": "Remote shell bridge closed.",
+                "unreadBridgeMessages": 0,
+            },
+        )
 
 
 def buildBackgroundReport(
@@ -866,13 +1058,16 @@ def formatPlanApprovalRecord(record: dict[str, Any]) -> str:
 
 
 async def _read_task_output(record: dict[str, Any], args: dict[str, Any] | None = None) -> tuple[str, bool]:
-    supervisor = (args or {}).get("daemon") or (args or {}).get("taskSupervisor")
-    read_output = supervisor.get("readTaskOutput") if isinstance(supervisor, dict) else None
-    if callable(read_output):
-        value = await _maybe_await(read_output(record.get("id"), 12000))
-        if isinstance(value, dict):
-            return str(value.get("output") or ""), bool(value.get("truncated"))
-        return str(value or ""), False
+    supervisor, should_close = await _resolve_task_supervisor(args or {})
+    try:
+        read_output = supervisor.get("readTaskOutput") if isinstance(supervisor, dict) else None
+        if callable(read_output):
+            value = await _maybe_await(read_output(record.get("id"), 12000))
+            if isinstance(value, dict):
+                return str(value.get("output") or ""), bool(value.get("truncated"))
+            return str(value or ""), False
+    finally:
+        await _close_task_supervisor_if_needed(supervisor, should_close)
     output_file = record.get("outputFile")
     if output_file:
         try:
@@ -1166,6 +1361,13 @@ async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str
 
 
 async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    subcommand, payload = _split_subcommand(arg_text)
+    if subcommand in {"status", "artifacts", "state"}:
+        return _info(hooks, "Compact", await buildCompactionStatusReport(session))
+    if subcommand == "debug":
+        return await _handle_debug(payload, session, config, hooks, title="Compact Debug")
+    if subcommand and subcommand not in {"run", "force"}:
+        return _error(hooks, "Usage: /compact [status|debug]")
     if _call_value(hooks, "isCompacting"):
         return _info(hooks, "Compact", "Compaction is already running.")
     compaction_state = (session.get("metadata") or {}).get("compactionState") or {}
@@ -1297,6 +1499,174 @@ async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[s
     )
 
 
+async def buildCompactionStatusReport(session: dict[str, Any]) -> str:
+    metadata = session.get("metadata") or {}
+    state = metadata.get("compactionState") or {}
+    artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
+    measurement = state.get("workingContextTokenMeasurement") or {}
+    manifest = await loadCompactionManifest(session.get("id")) if session.get("id") else None
+    generation = state.get("latestCompactionGeneration")
+    lines = [
+        f"session        {session.get('id') or 'n/a'}",
+        f"compactions    {metadata.get('compactions', 0)}",
+        f"latest gen     {generation if generation is not None else 'n/a'}",
+        f"working ctx    {state.get('workingContextTokenEstimate', 'n/a')}",
+        f"ctx source     {measurement.get('source', 'n/a')}",
+        f"compacted to   {state.get('compactedThroughMessageIndex', 'n/a')}",
+        f"manifest       {compactionManifestPath(session.get('id')) if session.get('id') and manifest else 'none'}",
+    ]
+    if manifest:
+        lines.extend(
+            [
+                f"manifest gen   {manifest.get('latestGeneration') or manifest.get('generation') or 'n/a'}",
+                f"manifest ok    {manifest.get('status') or manifest.get('qualityClassification') or 'n/a'}",
+            ]
+        )
+    for label, key in [
+        ("summary", "summary"),
+        ("state", "state"),
+        ("working ctx", "workingContext"),
+        ("activity", "activity"),
+        ("checkpoint", "checkpoint"),
+    ]:
+        if artifacts.get(key):
+            lines.append(f"{label:<14} {artifacts.get(key)}")
+    if session.get("id") and isinstance(generation, int):
+        lines.append(f"checkpoint src {compactionCheckpointPath(session['id'], generation)}")
+    if not state and not manifest:
+        lines.append("No compaction checkpoint recorded for this session.")
+    return "\n".join(lines)
+
+
+async def _handle_transcript(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    arg_text = arg_text.strip()
+    limit = None
+    if arg_text:
+        try:
+            limit = max(1, int(arg_text))
+        except ValueError:
+            return _error(hooks, "Usage: /transcript [limit]")
+    return _info(hooks, "Transcript", formatTranscriptEntries(buildTranscriptSnapshot(session, limit)))
+
+
+async def _handle_debug(
+    arg_text: str,
+    session: dict[str, Any],
+    config: dict[str, Any],
+    hooks: dict[str, Any],
+    title: str = "Debug",
+) -> dict[str, Any]:
+    if not session.get("id"):
+        return _error(hooks, "A persisted session id is required to create a debug bundle.")
+    await _persist(hooks)
+    try:
+        report = await createDebugBundle(
+            {
+                "sessionId": session["id"],
+                "cwd": session.get("cwd") or config.get("cwd") or os.getcwd(),
+                "outputDir": arg_text.strip() or None,
+                "session": session,
+            }
+        )
+    except Exception as exc:
+        return _error(hooks, str(exc))
+    return _info(hooks, title, formatDebugBundleReport(report))
+
+
+async def _handle_diagnostics(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    if arg_text.strip():
+        return _error(hooks, "Usage: /diagnostics")
+    report = await collectDoctorReport(session.get("cwd") or config.get("cwd") or os.getcwd())
+    return _info(hooks, "Diagnostics", formatDiagnosticsReport(report))
+
+
+async def _handle_collaboration(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
+    if arg_text.strip():
+        return _error(hooks, "Usage: /collaboration")
+    return _info(hooks, "Collaboration", await buildCollaborationStatusReport(session))
+
+
+def formatTranscriptEntries(entries: list[dict[str, Any]]) -> str:
+    if not entries:
+        return "No transcript entries for this session."
+    sections = []
+    for entry in entries:
+        header = f"{entry.get('timestamp', 'saved')}  {entry.get('tone')}  {entry.get('title')}"
+        payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
+        details = []
+        if payload:
+            details.append(f"tool         {payload.get('toolName') or 'Tool'}")
+            details.append(f"failed       {'yes' if payload.get('failed') else 'no'}")
+        body = str(entry.get("body") or "")
+        if body:
+            details.append(_indent_block(body, "  "))
+        sections.append("\n".join([header, *details]))
+    return "\n\n".join(sections)
+
+
+def formatDebugBundleReport(report: dict[str, Any]) -> str:
+    summary = report.get("summary") or {}
+    return "\n".join(
+        [
+            f"session       {report.get('sessionId')}",
+            f"bundle        {report.get('bundleDir') or report.get('path')}",
+            f"manifest      {report.get('manifestPath')}",
+            f"created       {report.get('createdAt')}",
+            f"files         {len(report.get('includedFiles') or report.get('files') or [])}",
+            f"agents        {summary.get('childAgentCount', 0)}",
+            f"monitors      {summary.get('monitorCount', 0)}",
+            f"plans         {summary.get('planApprovalCount', 0)}",
+            f"tasks         {summary.get('taskCount', 0)}",
+            f"compaction    {'yes' if summary.get('hasCompaction') else 'no'}",
+            f"remote        {'yes' if summary.get('hasRemote') else 'no'}",
+            f"bridge        {'yes' if summary.get('hasBridge') else 'no'}",
+            f"transcript    {'yes' if summary.get('hasTranscriptLog') else 'no'}",
+        ]
+    )
+
+
+def formatDiagnosticsReport(report: dict[str, Any]) -> str:
+    checks = report.get("checks") or []
+    lines = [
+        f"healthy       {'yes' if report.get('healthy') else 'no'}",
+        f"cwd           {report.get('cwd')}",
+        f"state root    {report.get('stateRoot')}",
+        "",
+    ]
+    for check in checks:
+        lines.append(f"{str(check.get('id')).ljust(14)} {str(check.get('status')).ljust(5)} {check.get('message')}")
+        if check.get("suggestion"):
+            lines.append(f"{'':14}       {check.get('suggestion')}")
+    return "\n".join(lines).rstrip()
+
+
+async def buildCollaborationStatusReport(session: dict[str, Any]) -> str:
+    agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
+    monitors = await listSessionMonitors(session.get("id"))
+    tasks = await listSessionTaskRecords(session.get("id"))
+    metadata = session.get("metadata", {})
+    remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+    bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+    awaiting = [record for record in agents if record.get("status") in {"awaiting_plan_approval", "awaiting_input"}]
+    failed = [record for record in [*agents, *tasks, *monitors] if record.get("status") in {"failed", "crashed", "orphaned"}]
+    sections = [
+        "\n".join(
+            [
+                f"session        {session.get('id')}",
+                f"workers        {len([record for record in agents if _is_active_child_agent(record)])}/{len(agents)}",
+                f"awaiting       {len(awaiting)}",
+                f"tasks          {len([record for record in tasks if _is_active_task_record(record)])}/{len(tasks)}",
+                f"monitors       {sum(1 for record in monitors if record.get('status') == 'active')}/{len(monitors)}",
+                f"failures       {len(failed)}",
+                f"remote         {_short_id(remote.get('id', '')) + ' ' + str(remote.get('status')) if remote else 'none'}",
+                f"bridge         {_short_id(bridge.get('id', '')) + ' ' + str(bridge.get('status')) if bridge else 'none'}",
+            ]
+        ),
+        buildBackgroundReport(session, agents, monitors, [task for task in tasks if task.get("kind") in {"background_command", "main_session"}], remote, bridge),
+    ]
+    return "\n\n".join(section for section in sections if section)
+
+
 async def _handle_review(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
     run_prompt = hooks.get("runPrompt") if isinstance(hooks, dict) else None
     if not callable(run_prompt):
@@ -1423,6 +1793,24 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+async def _resolve_task_supervisor(args: dict[str, Any] | None = None) -> tuple[dict[str, Any] | None, bool]:
+    args = args or {}
+    supervisor = args.get("daemon") or args.get("taskSupervisor")
+    if supervisor:
+        return supervisor, False
+    supervisor = await connectTaskSupervisorDaemonClient()
+    should_close = bool(isinstance(supervisor, dict) and supervisor.get("_daemonClient"))
+    return supervisor, should_close
+
+
+async def _close_task_supervisor_if_needed(supervisor: dict[str, Any] | None, should_close: bool) -> None:
+    if not should_close or not isinstance(supervisor, dict):
+        return
+    close = supervisor.get("close")
+    if callable(close):
+        await _maybe_await(close())
+
+
 def _call_value(hooks: dict[str, Any], name: str) -> Any:
     fn = hooks.get(name) if isinstance(hooks, dict) else None
     return fn() if callable(fn) else None
@@ -1476,6 +1864,50 @@ def truncate(value: str, limit: int) -> str:
     return value if len(value) <= limit else f"{value[: max(0, limit - 1)]}..."
 
 
+def _indent_block(value: str, prefix: str) -> str:
+    return "\n".join(f"{prefix}{line}" if line else prefix.rstrip() for line in value.splitlines())
+
+
+async def buildPermissionsReport(session: dict[str, Any], config: dict[str, Any]) -> str:
+    current = session.get("permissionMode") or config.get("permissionMode") or "default"
+    metadata = session.get("metadata") or {}
+    parent_session_id = metadata.get("parentSessionId") or metadata.get("leaderSessionId")
+    lines = [f"current  {current}"]
+    if parent_session_id:
+        parent = await loadSession(parent_session_id)
+        parent_mode = (parent or {}).get("permissionMode")
+        if parent_mode:
+            lines.append(f"inherited {parent_mode} from {_short_id(parent_session_id)}")
+            if parent_mode != current:
+                lines.append(f"effective {parent_mode} while running as an interactive child")
+        else:
+            lines.append(f"inherited unknown from {_short_id(parent_session_id)}")
+    lines.append(f"modes    {', '.join(PERMISSION_MODE_ORDER)}")
+    return "\n".join(lines)
+
+
+async def _persist_shell_settings(
+    config: dict[str, Any],
+    session: dict[str, Any],
+    updates: dict[str, Any],
+    hooks: dict[str, Any],
+) -> None:
+    clean_updates = {key: value for key, value in updates.items() if value is not None}
+    if not clean_updates:
+        return
+    cwd = session.get("cwd") or config.get("cwd") or os.getcwd()
+    scope = config.get("settingsWriteScope") or config.get("settingsScope") or "project"
+    if scope not in {"user", "project", "local"}:
+        scope = "project"
+    settings = await loadSettings(scope, cwd)
+    await saveSettings(scope, cwd, {**settings, **clean_updates})
+    persist_choice = hooks.get("persistConfigChoice") if isinstance(hooks, dict) else None
+    if callable(persist_choice):
+        outcome = persist_choice({"scope": scope, "cwd": cwd, "updates": clean_updates})
+        if hasattr(outcome, "__await__"):
+            await outcome
+
+
 async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
         provider = session.get("provider") or config.get("provider")
@@ -1510,6 +1942,16 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
     if profile.get("defaultModel"):
         session["model"] = config["model"] = normalizeModelName(profile["defaultModel"], profile.get("kind"))
         session["effort"] = config["effort"] = normalizeEffortForModel(profile.get("kind"), session.get("model"), session.get("effort") or config.get("effort")) or getDefaultEffortForProvider(profile.get("kind"))
+    await _persist_shell_settings(
+        config,
+        session,
+        {
+            "provider": requested,
+            "model": session.get("model") or config.get("model"),
+            "effortLevel": session.get("effort") or config.get("effort"),
+        },
+        hooks,
+    )
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Provider", f"Provider profile set to {requested}")
@@ -1550,6 +1992,16 @@ async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str
         config.pop("openaiBaseUrl", None)
     next_effort = getDefaultEffortForProvider(selection_provider) if switched_provider else session.get("effort") or config.get("effort")
     session["effort"] = config["effort"] = normalizeEffortForModel(selection_provider, session["model"], next_effort) or getDefaultEffortForProvider(selection_provider)
+    await _persist_shell_settings(
+        config,
+        session,
+        {
+            "provider": profile_name or selection_provider,
+            "model": session.get("model"),
+            "effortLevel": session.get("effort"),
+        },
+        hooks,
+    )
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Model", f"Model set to {selection_provider}:{session['model']}")
@@ -1569,6 +2021,7 @@ async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[st
     if not normalized:
         return _error(hooks, f"Effort {effort} is not supported for {provider}:{model}")
     session["effort"] = config["effort"] = normalized
+    await _persist_shell_settings(config, session, {"effortLevel": normalized}, hooks)
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Effort", f"Effort set to {normalized}")
@@ -1576,7 +2029,7 @@ async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[st
 
 async def _handle_permissions(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
-        return _info(hooks, "Permissions", f"current  {session.get('permissionMode') or config.get('permissionMode')}\nmodes    {', '.join(PERMISSION_MODE_ORDER)}")
+        return _info(hooks, "Permissions", await buildPermissionsReport(session, config))
     if arg_text.split(None, 1)[0] in {"policy", "allow", "deny", "reset"}:
         return await _handle_auto_mode_policy(arg_text, session, config, hooks)
     if arg_text not in PERMISSION_MODES:
@@ -1584,6 +2037,7 @@ async def _handle_permissions(arg_text: str, session: dict[str, Any], config: di
     if (session.get("metadata") or {}).get("gitRepoPlanOnly") and arg_text != "plan":
         return _error(hooks, "Git repository not initialized. Only plan mode is available until you run `git init`.")
     session["permissionMode"] = config["permissionMode"] = arg_text
+    await _persist_shell_settings(config, session, {"permissionMode": arg_text}, hooks)
     await _persist(hooks)
     _call(hooks, "refresh")
     return _info(hooks, "Permissions", f"Permission mode set to {arg_text}")
