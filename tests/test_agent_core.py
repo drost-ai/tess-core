@@ -5227,6 +5227,53 @@ class AgentCoreTests(unittest.TestCase):
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
 
+    def test_task_supervisor_reconciles_terminal_unknown_and_failed_subagent_states(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            completed_id = "terminal-main-after-restart"
+            unknown_id = "unknown-pid-after-restart"
+            failed_subagent_id = "failed-subagent-after-restart"
+            agent_id = "failed-subagent-agent"
+            parent_session_id = "failed-subagent-parent"
+            child_session_id = "failed-subagent-child"
+            created_at = "2026-01-01T00:00:00Z"
+            completed_at = "2026-01-01T00:00:05Z"
+            for task_id in (completed_id, unknown_id, failed_subagent_id):
+                output_file = core.taskOutputPath(task_id)
+                Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+                Path(output_file).write_text("", encoding="utf-8")
+            run(core.writeTaskMeta(completed_id, {"type": "main_session", "taskId": completed_id, "sessionId": "terminal-session", "command": "continue", "cwd": str(workspace), "startedAt": created_at, "updatedAt": completed_at, "finishedAt": completed_at, "status": "completed", "outputFile": core.taskOutputPath(completed_id), "owner": "daemon"}))
+            run(core.saveTaskRecord({"id": completed_id, "sessionId": "terminal-session", "sourceId": completed_id, "kind": "main_session", "status": "running", "title": "terminal", "summary": "Still running before restart.", "createdAt": created_at, "updatedAt": created_at, "startedAt": created_at, "cwd": str(workspace), "command": "continue", "outputFile": core.taskOutputPath(completed_id), "foregroundMode": "background", "taskFamily": "detached_session", "detailStatus": "session_starting", "retrieveOnly": False, "owner": "daemon"}))
+            run(core.writeTaskMeta(unknown_id, {"type": "background_command", "taskId": unknown_id, "sessionId": "unknown-session", "command": "sleep", "cwd": str(workspace), "startedAt": created_at, "updatedAt": created_at, "status": "running", "outputFile": core.taskOutputPath(unknown_id), "owner": "daemon"}))
+            run(core.saveTaskRecord({"id": unknown_id, "sessionId": "unknown-session", "sourceId": unknown_id, "kind": "background_command", "status": "running", "title": "unknown", "summary": "Background command is running.", "createdAt": created_at, "updatedAt": created_at, "startedAt": created_at, "cwd": str(workspace), "command": "sleep", "outputFile": core.taskOutputPath(unknown_id), "foregroundMode": "background", "taskFamily": "shell", "detailStatus": "launching", "retrieveOnly": True, "owner": "daemon"}))
+            run(core.saveChildAgent({"agentId": agent_id, "sessionId": child_session_id, "parentSessionId": parent_session_id, "name": "Failed worker", "provider": "openai", "model": "gpt-5.4", "mode": "bypassPermissions", "runInBackground": True, "status": "failed", "startedAt": created_at, "completedAt": completed_at, "latestResultAt": completed_at, "lastUpdatedAt": completed_at, "completionReason": "worker_failed", "resultSummary": "Worker exploded", "lastSummary": "Worker exploded", "attachableSessionId": child_session_id, "owner": "daemon", "retryable": True, "stoppable": False}))
+            run(core.writeTaskMeta(failed_subagent_id, {"type": "subagent", "taskId": failed_subagent_id, "task_id": failed_subagent_id, "agent_id": agent_id, "sessionId": child_session_id, "session_id": child_session_id, "parent_session_id": parent_session_id, "cwd": str(workspace), "pid": 999999999, "startedAt": created_at, "updatedAt": created_at, "status": "running", "outputFile": core.taskOutputPath(failed_subagent_id), "title": "Failed worker", "attachableSessionId": child_session_id, "detailStatus": "worker_running", "owner": "daemon"}))
+            run(core.saveTaskRecord({"id": failed_subagent_id, "sessionId": parent_session_id, "sourceId": agent_id, "kind": "subagent", "status": "running", "title": "Failed worker", "summary": "Background subagent is running under daemon supervision.", "createdAt": created_at, "updatedAt": created_at, "startedAt": created_at, "cwd": str(workspace), "outputFile": core.taskOutputPath(failed_subagent_id), "foregroundMode": "background", "taskFamily": "subagent", "detailStatus": "worker_running", "retrieveOnly": False, "attachableSessionId": child_session_id, "relatedChildSessionIds": [child_session_id], "owner": "daemon", "metadata": {"agent_id": agent_id, "child_session_id": child_session_id, "pid": 999999999}}))
+
+            events = []
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            completed = run(supervisor["inspectTask"](completed_id))
+            unknown = run(supervisor["inspectTask"](unknown_id))
+            failed_subagent = run(supervisor["inspectTask"](failed_subagent_id))
+            self.assertEqual(completed["status"], "completed")
+            self.assertEqual(completed["metadata"]["process_state"], "completed")
+            self.assertEqual(unknown["status"], "failed")
+            self.assertEqual(unknown["metadata"]["process_state"], "unknown")
+            self.assertEqual(failed_subagent["status"], "failed")
+            self.assertEqual(failed_subagent["summary"], "Worker exploded")
+            self.assertEqual(failed_subagent["metadata"]["recovery_state"], "completed_while_detached")
+            self.assertTrue(any(event["event"] == "task.completed" and event["data"]["task_id"] == completed_id for event in events))
+            self.assertTrue(any(event["event"] == "task.failed" and event["data"]["task_id"] == failed_subagent_id for event in events))
+            with self.assertRaises(RuntimeError) as missing_ctx:
+                run(supervisor["startSubagentTask"]({"parentSessionId": parent_session_id, "sessionId": "missing-child-session", "agentId": "missing-agent", "cwd": str(workspace)}))
+            self.assertIn("Subagent session not found: missing-child-session", str(missing_ctx.exception))
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
     def test_stop_task_marks_subagent_child_cancelled(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
@@ -5617,6 +5664,113 @@ class AgentCoreTests(unittest.TestCase):
             self.assertEqual(task_record["taskFamily"], "health_check")
             self.assertEqual(task_record["status"], "running")
         finally:
+            self.restore_home(root, previous)
+
+    def test_health_check_http_body_fixtures_and_timeout_details(self):
+        root, home, workspace, previous = self.temp_context()
+        server = None
+        try:
+            class HealthHandler(http.server.BaseHTTPRequestHandler):
+                calls = 0
+
+                def log_message(self, *_args):
+                    return
+
+                def do_GET(self):
+                    HealthHandler.calls += 1
+                    if HealthHandler.calls == 1:
+                        self.send_response(503)
+                        body = b"not ready"
+                    elif HealthHandler.calls == 2:
+                        self.send_response(202)
+                        body = b"wrong body"
+                    else:
+                        self.send_response(202)
+                        body = b"ready body"
+                    self.end_headers()
+                    self.wfile.write(body)
+
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), HealthHandler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+
+            async def scenario():
+                config = await core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
+                session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+                await core.saveSession(session)
+                events = []
+                supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
+                try:
+                    http_started = await supervisor["startHealthCheck"](
+                        {
+                            "sessionId": session["id"],
+                            "cwd": str(workspace),
+                            "title": "http body",
+                            "mode": "http",
+                            "url": f"http://127.0.0.1:{server.server_address[1]}/health",
+                            "expectedStatusCodes": [202],
+                            "expectedBodySubstring": "ready",
+                            "intervalMs": 250,
+                            "timeoutMs": 1000,
+                            "failureThreshold": 4,
+                        }
+                    )
+                    http_task_id = http_started["taskId"]
+                    http_record = None
+                    for _ in range(120):
+                        http_record = await core.loadHealthCheckTask(http_task_id)
+                        if http_record and http_record.get("status") == "active" and http_record.get("lastSuccessAt"):
+                            break
+                        await asyncio.sleep(0.05)
+                    timeout_started = await supervisor["startHealthCheck"](
+                        {
+                            "sessionId": session["id"],
+                            "cwd": str(workspace),
+                            "title": "timeout body",
+                            "mode": "command",
+                            "command": f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(2)')}",
+                            "intervalMs": 250,
+                            "timeoutMs": 1000,
+                            "failureThreshold": 1,
+                        }
+                    )
+                    timeout_task_id = timeout_started["taskId"]
+                    timeout_record = None
+                    for _ in range(80):
+                        timeout_record = await core.loadHealthCheckTask(timeout_task_id)
+                        if timeout_record and timeout_record.get("status") == "failed":
+                            break
+                        await asyncio.sleep(0.05)
+                    http_output = await supervisor["readTaskOutput"](http_task_id, 12000)
+                    timeout_output = await supervisor["readTaskOutput"](timeout_task_id, 12000)
+                    await supervisor["stopTask"](http_task_id)
+                    return {"events": events, "http": http_record, "timeout": timeout_record, "httpOutput": http_output, "timeoutOutput": timeout_output, "httpTaskId": http_task_id, "timeoutTaskId": timeout_task_id}
+                finally:
+                    await supervisor["close"]()
+
+            result = run(scenario())
+            http_record = result["http"]
+            timeout_record = result["timeout"]
+            self.assertEqual(http_record["status"], "active")
+            self.assertEqual(http_record["lastStatusCode"], 202)
+            self.assertEqual(http_record["lastResponseSnippet"], "ready body")
+            self.assertIn("HTTP 503", result["httpOutput"]["output"])
+            self.assertIn("wrong body", result["httpOutput"]["output"])
+            self.assertIn("ready body", result["httpOutput"]["output"])
+            unhealthy_errors = [event["data"]["error"] for event in result["events"] if event["event"] == "health_check.unhealthy" and event["data"]["task_id"] == result["httpTaskId"]]
+            self.assertEqual(unhealthy_errors[:2], ["Unexpected status code 503", "Response body did not contain expected text: ready"])
+            self.assertTrue(any(event["event"] == "health_check.recovered" and event["data"]["task_id"] == result["httpTaskId"] for event in result["events"]))
+            direct_task_events = [event for event in result["events"] if event["data"].get("task_id") in {result["httpTaskId"], result["timeoutTaskId"]} and event["event"].startswith("task.")]
+            self.assertEqual(direct_task_events, [])
+            self.assertEqual(timeout_record["status"], "failed")
+            self.assertTrue(timeout_record["lastTimedOut"])
+            self.assertTrue(timeout_record["lastTerminated"])
+            self.assertIn(timeout_record["lastSignal"], {"SIGTERM", "SIGKILL"})
+            self.assertIn("Health check timed out.", result["timeoutOutput"]["output"])
+        finally:
+            if server:
+                server.shutdown()
+                server.server_close()
             self.restore_home(root, previous)
 
     def test_tool_permission_modes_for_edits_and_interactive_switch(self):
@@ -6203,6 +6357,41 @@ class AgentCoreTests(unittest.TestCase):
             retry_record = run(supervisor["inspectTask"](retry_id))
             self.assertEqual(retry_record["kind"], "main_session")
             self.assertEqual(retry_record["command"], prompt)
+        finally:
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)
+
+    def test_task_supervisor_retry_records_lineage_and_rejects_unsupported_kind(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            original_id = "retry-original-task"
+            output_file = core.taskOutputPath(original_id)
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(output_file).write_text("old\n", encoding="utf-8")
+            retry_script = 'print("retried")'
+            retry_command = f"{shlex.quote(sys.executable)} -c {shlex.quote(retry_script)}"
+            run(core.writeTaskMeta(original_id, {"type": "background_command", "taskId": original_id, "id": original_id, "sessionId": session["id"], "command": retry_command, "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "finishedAt": "2026-01-01T00:00:01Z", "status": "failed", "outputFile": output_file, "owner": "daemon", "metadata": {"retry_attempt": 2, "retry_root_task_id": "root-task"}}))
+            run(core.saveTaskRecord({"id": original_id, "sessionId": session["id"], "sourceId": original_id, "kind": "background_command", "status": "failed", "title": "retry original", "summary": "failed", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "startedAt": "2026-01-01T00:00:00Z", "cwd": str(workspace), "command": retry_command, "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "retrieveOnly": True, "owner": "daemon", "metadata": {"retry_attempt": 2, "retry_root_task_id": "root-task"}}))
+            run(core.saveTaskRecord({"id": "retry-monitor", "sessionId": session["id"], "sourceId": "retry-monitor", "kind": "monitor", "status": "running", "title": "monitor", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "startedAt": "2026-01-01T00:00:00Z", "foregroundable": False, "restorable": True}))
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            retried = run(supervisor["retryTask"](original_id))
+            retry_id = retried["taskId"]
+            self.assertNotEqual(retry_id, original_id)
+            retry_meta = run(core.readTaskMeta(retry_id))
+            retry_record = run(supervisor["inspectTask"](retry_id))
+            self.assertEqual(retry_meta["retryOfTaskId"], original_id)
+            self.assertEqual(retry_meta["retryRootTaskId"], "root-task")
+            self.assertEqual(retry_meta["retryAttempt"], 3)
+            self.assertEqual(retry_meta["metadata"]["retry_of_task_id"], original_id)
+            self.assertEqual(retry_record["metadata"]["retry_attempt"], 3)
+            with self.assertRaises(RuntimeError) as ctx:
+                run(supervisor["retryTask"]("retry-monitor"))
+            self.assertIn("Retry is not supported for task kind: monitor", str(ctx.exception))
         finally:
             if supervisor:
                 run(supervisor["close"]())

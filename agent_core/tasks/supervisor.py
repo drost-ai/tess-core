@@ -153,6 +153,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         agent_id = _require_string(task_args.get("agentId") or task_args.get("agent_id"), "agentId")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
         title = task_args.get("label") or task_args.get("title") or agent_id
+        child_session = await loadSession(session_id)
+        if not child_session:
+            raise RuntimeError(f"Subagent session not found: {session_id}")
         task_id = str(uuid.uuid4())
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -274,7 +277,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             command = source.get("command")
             if not command:
                 raise RuntimeError("Background command task is missing retry metadata.")
-            return await start_background_command(
+            retried = await start_background_command(
                 {
                     "sessionId": source.get("sessionId"),
                     "command": command,
@@ -282,11 +285,13 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "title": source.get("title"),
                 }
             )
+            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            return retried
         if kind == "main_session":
             prompt = source.get("command")
             if not prompt:
                 raise RuntimeError("Main-session task is missing retry metadata.")
-            return await start_main_session_task(
+            retried = await start_main_session_task(
                 {
                     "sessionId": source.get("sessionId"),
                     "prompt": prompt,
@@ -294,11 +299,15 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "title": source.get("title"),
                 }
             )
+            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            return retried
         if kind == "health_check":
             health = await loadHealthCheckTask(task_id)
             if not health:
                 raise RuntimeError(f"Health check metadata not found: {task_id}")
-            return await start_health_check(health)
+            retried = await start_health_check(health)
+            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            return retried
         if kind == "subagent":
             metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
             agent_id = metadata.get("agent_id") or source.get("sourceId") or (meta or {}).get("agent_id")
@@ -308,7 +317,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             child_session = await loadSession(child["sessionId"])
             if not child_session:
                 raise RuntimeError(f"Subagent session not found: {child['sessionId']}")
-            return await start_subagent_task(
+            retried = await start_subagent_task(
                 {
                     "parentSessionId": child.get("parentSessionId"),
                     "sessionId": child.get("sessionId"),
@@ -318,6 +327,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "parentTaskId": child.get("parentTaskId"),
                 }
             )
+            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            return retried
         raise RuntimeError(f"Retry is not supported for task kind: {kind}")
 
     async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
@@ -560,12 +571,16 @@ def _watch_process_thread(
     now = now_iso()
     previous = asyncio.run(readTaskMeta(task_id)) or {}
     previous_status = previous.get("status")
-    status = "completed" if code == 0 and previous_status not in {"stopped", "terminated"} else "failed"
-    if previous_status in {"stopped", "terminated"}:
-        status = "terminated" if previous_status == "terminated" else "stopped"
-    elif code is not None and code < 0:
-        status = "terminated" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
-    exit_code = None if status == "terminated" else code
+    if _is_terminal_worker_status(previous_status):
+        status = str(previous_status)
+    else:
+        status = "completed" if code == 0 else "failed"
+        if code is not None and code < 0:
+            status = "terminated" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
+    exit_code = previous.get("exitCode") if _is_terminal_worker_status(previous_status) else None if status == "terminated" else code
+    signal_name = previous.get("signal")
+    if signal_name is None and code is not None and code < 0:
+        signal_name = _signal_name(abs(code))
     meta = {
         **previous,
         "type": previous.get("type") or "background_command",
@@ -576,15 +591,17 @@ def _watch_process_thread(
         "outputFile": previous.get("outputFile") or output_file,
         "status": status,
         "exitCode": exit_code,
-        "finishedAt": now,
+        "signal": signal_name,
+        "finishedAt": previous.get("finishedAt") or previous.get("completedAt") or now,
         "updatedAt": now,
-        "detailStatus": status,
+        "detailStatus": previous.get("detailStatus") or previous.get("completionReason") or previous.get("waitingReason") or status,
     }
     asyncio.run(writeTaskMeta(task_id, meta))
-    record = _build_task_record(meta, _process_exit_summary(status, code))
+    summary = None if _is_terminal_worker_status(previous_status) else _process_exit_summary(status, code)
+    record = _build_task_record(meta, summary)
     asyncio.run(saveTaskRecord(record))
     event_session_id = meta.get("parent_session_id") if meta.get("type") == "subagent" else meta.get("sessionId")
-    asyncio.run(maybe_await(emit("task.completed" if status == "completed" else "task.failed", _task_record_event_payload(record), event_session_id)))
+    asyncio.run(maybe_await(emit(_event_name_for_task_status(record.get("status")), _task_record_event_payload(record), event_session_id)))
     _WATCHERS.discard(threading.current_thread())
 
 
@@ -614,6 +631,9 @@ async def _run_health_check(record: dict[str, Any], emit: Callable[[str, dict[st
                 "lastExitCode": result.get("exitCode", current.get("lastExitCode")),
                 "lastStatusCode": result.get("status", current.get("lastStatusCode")),
                 "lastResponseSnippet": result.get("snippet", current.get("lastResponseSnippet")),
+                "lastSignal": result.get("signal", current.get("lastSignal")),
+                "lastTimedOut": bool(result.get("timedOut")),
+                "lastTerminated": bool(result.get("terminated")),
             }
         )
         output_file = current.get("outputFile") or taskOutputPath(task_id)
@@ -634,7 +654,6 @@ async def _run_health_check(record: dict[str, Any], emit: Callable[[str, dict[st
             )
         elif previous_status != "active" and next_status == "active":
             await maybe_await(emit("health_check.recovered", {"task_id": task_id, "title": current.get("title")}, current.get("sessionId")))
-        await maybe_await(emit("task.failed" if next_status == "failed" else "task.updated", _task_event_payload(current), current.get("sessionId")))
         if next_status == "failed":
             return
         await asyncio.sleep(max(0.25, int(current.get("currentIntervalMs") or current.get("intervalMs") or 10000) / 1000))
@@ -655,9 +674,27 @@ async def _execute_health_check(record: dict[str, Any]) -> dict[str, Any]:
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout)
         except asyncio.TimeoutError:
-            proc.kill()
+            signal_name = "SIGTERM"
+            with contextlib.suppress(Exception):
+                proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), 1)
+            except asyncio.TimeoutError:
+                signal_name = "SIGKILL"
+                with contextlib.suppress(Exception):
+                    proc.kill()
+                await proc.wait()
             await proc.wait()
-            return {"ok": False, "summary": "Health check timed out.", "output": "Health check timed out.", "error": "Health check timed out."}
+            return {
+                "ok": False,
+                "summary": "Health check timed out.",
+                "output": "Health check timed out.",
+                "error": "Health check timed out.",
+                "exitCode": None,
+                "signal": signal_name,
+                "timedOut": True,
+                "terminated": True,
+            }
         output = (stdout + stderr).decode("utf-8", errors="replace").strip()
         expected_body = record.get("expectedBodySubstring")
         body_ok = expected_body in output if expected_body else True
@@ -682,10 +719,10 @@ async def _execute_health_check(record: dict[str, Any]) -> dict[str, Any]:
         try:
             with urllib.request.urlopen(str(url), timeout=timeout) as response:
                 body = response.read(4096).decode("utf-8", errors="replace")
-                return {"status": response.status, "body": body}
+                return {"status": response.status, "reason": getattr(response, "reason", ""), "body": body}
         except urllib.error.HTTPError as exc:
             body = exc.read(4096).decode("utf-8", errors="replace")
-            return {"status": exc.code, "body": body}
+            return {"status": exc.code, "reason": getattr(exc, "reason", ""), "body": body}
 
     try:
         response = await asyncio.to_thread(fetch)
@@ -699,7 +736,8 @@ async def _execute_health_check(record: dict[str, Any]) -> dict[str, Any]:
     error = None
     if not ok:
         error = f"Unexpected status code {response['status']}" if response["status"] not in expected else f"Response body did not contain expected text: {expected_body}"
-    output = f"HTTP {response['status']}{chr(10) + response['body'][:500] if response.get('body') else ''}"
+    reason = f" {response['reason']}" if response.get("reason") else ""
+    output = f"HTTP {response['status']}{reason}{chr(10) + response['body'][:500] if response.get('body') else ''}"
     return {"ok": ok, "summary": f"HTTP {response['status']}", "output": output, "status": response["status"], "snippet": response.get("body", "")[:500], "error": error}
 
 
@@ -721,14 +759,13 @@ async def _reconcile_persisted_tasks(
         meta = await readTaskMeta(task_id)
         if not meta:
             continue
-        pid = meta.get("pid")
-        if not isinstance(pid, int):
-            metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
-            pid = metadata.get("pid")
-        if isinstance(pid, int) and _is_process_alive(pid):
-            await _mark_recovered_process(task_id, pid, record, meta, supervisor_id, emit)
+        process_state = _classify_persisted_process(task_id, record, meta)
+        if process_state["state"] in {"completed", "failed"}:
+            await _mark_terminal_process_from_meta(task_id, record, meta, supervisor_id, emit, process_state)
+        elif process_state["state"] in {"running", "orphaned"} and isinstance(process_state.get("pid"), int):
+            await _mark_recovered_process(task_id, int(process_state["pid"]), record, meta, supervisor_id, emit, process_state)
         else:
-            await _mark_lost_process(task_id, record, meta, supervisor_id, emit)
+            await _mark_lost_process(task_id, record, meta, supervisor_id, emit, process_state)
 
 
 async def _project_session_task_records(session_id: str, session: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -769,6 +806,43 @@ async def _project_session_task_records(session_id: str, session: dict[str, Any]
     records = sorted(records_by_id.values(), key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
     await _sync_projected_task_metadata(session, records)
     return records
+
+
+async def _annotate_retry_lineage(original_task_id: str, new_task_id: Any, source: dict[str, Any]) -> None:
+    if not isinstance(new_task_id, str) or not new_task_id:
+        return
+    source_metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    root_task_id = (
+        source_metadata.get("retry_root_task_id")
+        or source_metadata.get("retryRootTaskId")
+        or source.get("retryRootTaskId")
+        or original_task_id
+    )
+    previous_attempt = source_metadata.get("retry_attempt", source_metadata.get("retryAttempt", source.get("retryAttempt", 0)))
+    try:
+        retry_attempt = int(previous_attempt) + 1
+    except Exception:
+        retry_attempt = 1
+    lineage = {
+        "retry_of_task_id": original_task_id,
+        "retry_root_task_id": root_task_id,
+        "retry_attempt": retry_attempt,
+    }
+    camel_lineage = {
+        "retryOfTaskId": original_task_id,
+        "retryRootTaskId": root_task_id,
+        "retryAttempt": retry_attempt,
+    }
+    meta = await readTaskMeta(new_task_id)
+    if meta:
+        meta_metadata = dict(meta.get("metadata") or {})
+        meta_metadata.update(lineage)
+        await writeTaskMeta(new_task_id, {**meta, **camel_lineage, "metadata": meta_metadata})
+    record = await loadTaskRecord(new_task_id)
+    if record:
+        record_metadata = dict(record.get("metadata") or {})
+        record_metadata.update(lineage)
+        await saveTaskRecord({**record, "metadata": record_metadata})
 
 
 async def _sync_projected_task_metadata(session: dict[str, Any], records: list[dict[str, Any]]) -> None:
@@ -819,12 +893,15 @@ async def _mark_recovered_process(
     meta: dict[str, Any],
     supervisor_id: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
+    process_state: dict[str, Any] | None = None,
 ) -> None:
     now = now_iso()
     metadata = dict(record.get("metadata") or {})
     metadata["recovery_state"] = "recovered_after_daemon_restart"
+    metadata.update(_process_state_metadata(process_state))
     meta_metadata = dict(meta.get("metadata") or {})
     meta_metadata["recovery_state"] = "recovered_after_daemon_restart"
+    meta_metadata.update(_process_state_metadata(process_state))
     next_meta = {
         **meta,
         "status": "reconciling",
@@ -832,6 +909,8 @@ async def _mark_recovered_process(
         "owner": "daemon",
         "supervisorId": supervisor_id,
         "metadata": meta_metadata,
+        "processState": (process_state or {}).get("state"),
+        "processReconciledAt": now,
     }
     summary = (
         "Recovered after daemon restart. The worker is still alive, but supervisor tracking is degraded until it exits."
@@ -868,15 +947,20 @@ async def _mark_lost_process(
     meta: dict[str, Any],
     supervisor_id: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
+    process_state: dict[str, Any] | None = None,
 ) -> None:
     if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
         return
     now = now_iso()
-    summary = (
-        "Daemon restarted while this worker was active and the worker process is no longer running."
-        if record.get("kind") == "subagent"
-        else "Daemon restarted while this task was active and the process is no longer running."
-    )
+    if record.get("kind") == "subagent":
+        summary = "Daemon restarted while this worker was active and the worker process is no longer running."
+    else:
+        summary = "Daemon restarted while this task was active and the process is no longer running."
+    state = (process_state or {}).get("state") or "failed"
+    meta_metadata = dict(meta.get("metadata") or {})
+    meta_metadata.update(_process_state_metadata(process_state))
+    record_metadata = dict(record.get("metadata") or {})
+    record_metadata.update(_process_state_metadata(process_state))
     next_meta = {
         **meta,
         "type": record.get("kind"),
@@ -887,6 +971,9 @@ async def _mark_lost_process(
         "finishedAt": now,
         "owner": "daemon",
         "supervisorId": supervisor_id,
+        "metadata": meta_metadata,
+        "processState": state,
+        "processReconciledAt": now,
     }
     next_record = {
         **_build_task_record(next_meta, summary),
@@ -897,10 +984,55 @@ async def _mark_lost_process(
         "completedAt": now,
         "owner": "daemon",
         "supervisorId": supervisor_id,
+        "metadata": record_metadata,
     }
     await writeTaskMeta(task_id, next_meta)
     await saveTaskRecord(next_record)
     await maybe_await(emit("task.failed", _task_record_event_payload(next_record), record.get("sessionId")))
+
+
+async def _mark_terminal_process_from_meta(
+    task_id: str,
+    record: dict[str, Any],
+    meta: dict[str, Any],
+    supervisor_id: str,
+    emit: Callable[[str, dict[str, Any], str | None], Any],
+    process_state: dict[str, Any],
+) -> None:
+    if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
+        return
+    now = now_iso()
+    status = _map_status(meta.get("status"))
+    if status not in {"completed", "failed", "stopped", "awaiting_input"}:
+        status = "failed"
+    meta_metadata = dict(meta.get("metadata") or {})
+    meta_metadata.update(_process_state_metadata(process_state))
+    next_meta = {
+        **meta,
+        "type": meta.get("type") or record.get("kind"),
+        "taskId": task_id,
+        "updatedAt": meta.get("updatedAt") or meta.get("finishedAt") or now,
+        "owner": "daemon",
+        "supervisorId": supervisor_id,
+        "metadata": meta_metadata,
+        "processState": process_state.get("state"),
+        "processReconciledAt": now,
+    }
+    summary = _process_exit_summary(str(meta.get("status") or status), meta.get("exitCode") if isinstance(meta.get("exitCode"), int) else None)
+    next_record = {
+        **_build_task_record(next_meta, summary),
+        **record,
+        "status": status,
+        "summary": record.get("summary") if record.get("status") == status and record.get("summary") else summary,
+        "updatedAt": next_meta["updatedAt"],
+        "completedAt": meta.get("finishedAt") or meta.get("completedAt") or next_meta["updatedAt"],
+        "owner": "daemon",
+        "supervisorId": supervisor_id,
+        "metadata": {**dict(record.get("metadata") or {}), **_process_state_metadata(process_state)},
+    }
+    await writeTaskMeta(task_id, next_meta)
+    await saveTaskRecord(next_record)
+    await maybe_await(emit(_event_name_for_task_status(status), _task_record_event_payload(next_record), record.get("sessionId")))
 
 
 async def _watch_recovered_process(
@@ -1160,7 +1292,17 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
     if summary is None:
         summary = _summary_for_task_meta(meta, status, output_cursor, output_preview, latest_assistant, latest_user)
     metadata = dict(meta.get("metadata") or {})
-    metadata.update({"pid": meta.get("pid"), "exitCode": meta.get("exitCode"), "exit_code": meta.get("exitCode"), "lastResult": meta.get("lastResult")})
+    metadata.update(
+        {
+            "pid": meta.get("pid"),
+            "exitCode": meta.get("exitCode"),
+            "exit_code": meta.get("exitCode"),
+            "signal": meta.get("signal"),
+            "lastResult": meta.get("lastResult"),
+            "process_state": meta.get("processState") or metadata.get("process_state"),
+            "process_reconciled_at": meta.get("processReconciledAt") or metadata.get("process_reconciled_at"),
+        }
+    )
     if not is_health_check:
         metadata.update(
             {
@@ -1183,6 +1325,9 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
                 "consecutive_failures": meta.get("consecutiveFailures") or 0,
                 "last_status_code": meta.get("lastStatusCode"),
                 "last_exit_code": meta.get("lastExitCode"),
+                "last_signal": meta.get("lastSignal"),
+                "last_timed_out": meta.get("lastTimedOut"),
+                "last_terminated": meta.get("lastTerminated"),
                 "expected_body_substring": meta.get("expectedBodySubstring"),
             }
         )
@@ -1533,6 +1678,51 @@ def _restore_without_saved_at(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if key != "savedAt"}
 
 
+def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
+    status = meta.get("status")
+    if _is_terminal_worker_status(status):
+        mapped = _map_status(status)
+        return {
+            "state": "completed" if mapped == "completed" else "failed",
+            "pid": _extract_pid(record, meta),
+            "source": "terminal_meta",
+            "status": status,
+        }
+    proc = _PROCESS_REGISTRY.get(task_id)
+    if proc and proc.poll() is None:
+        return {"state": "running", "pid": proc.pid, "source": "process_registry", "status": status}
+    pid = _extract_pid(record, meta)
+    if isinstance(pid, int):
+        if _is_process_alive(pid):
+            return {"state": "orphaned", "pid": pid, "source": "pid_probe", "status": status}
+        return {"state": "failed", "pid": pid, "source": "pid_probe", "status": status}
+    return {"state": "unknown", "pid": None, "source": "missing_pid", "status": status}
+
+
+def _extract_pid(record: dict[str, Any], meta: dict[str, Any]) -> int | None:
+    candidates = [meta.get("pid")]
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    candidates.append(metadata.get("pid"))
+    for candidate in candidates:
+        if isinstance(candidate, int) and candidate > 0:
+            return candidate
+    return None
+
+
+def _process_state_metadata(process_state: dict[str, Any] | None) -> dict[str, Any]:
+    if not process_state:
+        return {}
+    result = {
+        "process_state": process_state.get("state"),
+        "process_state_source": process_state.get("source"),
+    }
+    if isinstance(process_state.get("pid"), int):
+        result["process_pid"] = process_state["pid"]
+    if process_state.get("status") is not None:
+        result["process_meta_status"] = process_state.get("status")
+    return result
+
+
 def _parse_iso_ms(value: Any) -> float | None:
     if not isinstance(value, str) or not value:
         return None
@@ -1586,6 +1776,10 @@ def _map_status(value: Any) -> str:
         return "degraded"
     if value in ("running", "completed", "failed", "stopped", "queued", "awaiting_input", "reconciling", "degraded"):
         return str(value)
+    if value == "awaiting_plan_approval":
+        return "awaiting_input"
+    if value == "truncated":
+        return "failed"
     if value in ("terminated", "cancelled"):
         return "stopped"
     return "idle"
@@ -1720,6 +1914,19 @@ def _event_name_for_task_status(status: Any) -> str:
     return "task.updated"
 
 
+def _is_terminal_worker_status(status: Any) -> bool:
+    return status in {
+        "completed",
+        "failed",
+        "terminated",
+        "stopped",
+        "cancelled",
+        "truncated",
+        "awaiting_input",
+        "awaiting_plan_approval",
+    }
+
+
 def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:
     if isinstance(value, str) and value:
         return value
@@ -1766,6 +1973,13 @@ def _terminate_process(pid: int | None) -> bool:
             os.kill(pid, signal.SIGTERM)
             return True
         return False
+
+
+def _signal_name(signum: int) -> str | None:
+    try:
+        return signal.Signals(signum).name
+    except Exception:
+        return None
 
 
 def _summarize_command(command: Any) -> str:
