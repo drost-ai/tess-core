@@ -79,17 +79,20 @@ def classifyContextPressure(args: dict[str, Any] | None = None, **kwargs: Any) -
         if not isinstance(content, list):
             continue
         for block in content:
+            if not isinstance(block, dict):
+                continue
             if block.get("type") == "tool_use":
                 tool_uses[str(block.get("id") or "")] = str(block.get("name") or "")
                 continue
-            if block.get("type") != "tool_result" or not isinstance(block.get("content"), str):
+            if block.get("type") != "tool_result":
                 continue
+            content_text = _tool_result_content_string(block.get("content"))
             tool_name = tool_uses.get(str(block.get("tool_use_id") or ""), "UnknownTool")
-            token_estimate = estimateTextTokens(block["content"])
+            token_estimate = estimateTextTokens(content_text)
             categories["currentTurnToolPayloadTokens"] += token_estimate
             if tool_name in LOW_VALUE_TOOL_NAMES:
                 categories["lowValueTailTokens"] += token_estimate
-            if re.search(r'"content":|"filePath":|"startLine":|"totalLines":', block["content"]):
+            if re.search(r'"content":|"filePath":|"startLine":|"totalLines":', content_text):
                 categories["repeatedFileContentTokens"] += token_estimate
 
     return {
@@ -423,7 +426,7 @@ def findLastPlainUserIndex(messages: list[dict[str, Any]]) -> int | None:
         content = message.get("content")
         if not isinstance(content, list):
             return index
-        if not any(block.get("type") == "tool_result" for block in content):
+        if not any(isinstance(block, dict) and block.get("type") == "tool_result" for block in content):
             return index
     return None
 
@@ -475,6 +478,8 @@ def compactMessageForContinuation(message: dict[str, Any], toolUses: dict[str, s
         return message
     next_blocks: list[dict[str, Any]] = []
     for block in content:
+        if not isinstance(block, dict):
+            continue
         block_type = block.get("type")
         if block_type == "text":
             next_blocks.append({**block, "text": truncate(str(block.get("text") or ""), int(options["messageTextCharLimit"]))})
@@ -495,7 +500,7 @@ def compactMessageForContinuation(message: dict[str, Any], toolUses: dict[str, s
             next_blocks.append(
                 {
                     **block,
-                    "content": summarizeToolResultForRelief(str(block.get("content") or ""), int(options["toolResultCharLimit"]), compactionState),
+                    "content": summarizeToolResultForRelief(_tool_result_content_string(block.get("content")), int(options["toolResultCharLimit"]), compactionState),
                 }
             )
             continue
@@ -644,7 +649,7 @@ def compactToolInput(input: dict[str, Any], limit: int) -> dict[str, Any]:
 
 def summarizeToolResultForRelief(content: str, limit: int, compactionState: dict[str, set[str]] | None = None) -> str:
     try:
-        parsed = json.loads(content)
+        parsed = _json_loads_strict(content)
     except Exception:
         return truncate(re.sub(r"\s+", " ", content), limit)
     if not isinstance(parsed, dict):
@@ -762,6 +767,8 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
         if not isinstance(content, list):
             continue
         for block in content:
+            if not isinstance(block, dict):
+                continue
             if block.get("type") == "text":
                 push_line(requests if message.get("role") == "user" else findings, str(block.get("text") or ""), 220)
                 continue
@@ -775,7 +782,8 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
                     push_unique(commands, truncate(command, 200))
                 continue
             if block.get("type") == "tool_result":
-                parsed = parseStructuredToolResult(str(block.get("content") or ""))
+                content = _tool_result_content_string(block.get("content"))
+                parsed = parseStructuredToolResult(content)
                 if parsed.get("filePath"):
                     push_unique(files, parsed["filePath"])
                 if parsed.get("command"):
@@ -783,7 +791,7 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
                 if parsed.get("failure"):
                     push_unique(failures, parsed["failure"])
                 elif block.get("is_error"):
-                    push_unique(failures, truncate(re.sub(r"\s+", " ", str(block.get("content") or "")), 200))
+                    push_unique(failures, truncate(re.sub(r"\s+", " ", content), 200))
 
     return {
         "requests": requests[-4:],
@@ -848,7 +856,7 @@ def extractCommand(input: dict[str, Any]) -> str | None:
 
 def parseStructuredToolResult(content: str) -> dict[str, str]:
     try:
-        parsed = json.loads(content)
+        parsed = _json_loads_strict(content)
     except Exception:
         return {}
     if not isinstance(parsed, dict):
@@ -895,6 +903,23 @@ def emptyCompactionResult(messages: list[dict[str, Any]]) -> dict[str, Any]:
 
 def omitNone(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item is not None}
+
+
+def _json_loads_strict(content: str) -> Any:
+    return json.loads(content, parse_constant=_reject_non_finite_json)
+
+
+def _reject_non_finite_json(value: str) -> None:
+    raise ValueError(f"Invalid JSON constant: {value}")
+
+
+def _tool_result_content_string(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _idle_gap_ms(updated_at: Any) -> int:

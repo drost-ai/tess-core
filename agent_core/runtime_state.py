@@ -231,10 +231,11 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
         }
     elif typ == "context_relief.applied":
         pressure = _normalize_pressure_level(_field(data, "pressureLevel", "pressure_level")) or next_state.get("compaction", {}).get("pressureLevel")
+        modes = _field(data, "modes")
         next_state["compaction"] = {
             **next_state.get("compaction", {}),
             "selectedMode": _field(data, "mode"),
-            "appliedModes": _field(data, "modes") or [_field(data, "mode")],
+            "appliedModes": modes if modes is not None else [_field(data, "mode")],
             "pressureLevel": pressure,
             "reactiveAttempt": _field(data, "reactiveAttempt", "reactive_attempt") if _field(data, "reactiveAttempt", "reactive_attempt") is not None else next_state.get("compaction", {}).get("reactiveAttempt"),
             "lastDetail": _field(data, "detail"),

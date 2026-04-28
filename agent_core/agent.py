@@ -98,18 +98,23 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     while True:
         if _is_turn_cancelled(runtime):
             return await cancel_turn()
-        prepared_request = await prepareProviderRequest(
-            {
-                "session": session,
-                "config": config,
-                "runtime": runtime,
-                "baseSystemPrompt": base_system_prompt,
-                "toolRegistry": tool_registry,
-                "activeModel": active_model,
-                "prompt": prompt,
-                "reactiveAttempt": 0,
-            }
-        )
+        try:
+            prepared_request = await prepareProviderRequest(
+                {
+                    "session": session,
+                    "config": config,
+                    "runtime": runtime,
+                    "baseSystemPrompt": base_system_prompt,
+                    "toolRegistry": tool_registry,
+                    "activeModel": active_model,
+                    "prompt": prompt,
+                    "reactiveAttempt": 0,
+                }
+            )
+        except Exception as error:
+            if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                return await cancel_turn()
+            raise
         while True:
             try:
                 _throw_if_turn_cancelled(runtime)
@@ -119,18 +124,23 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 if _is_turn_abort_error(error, runtime.get("abortSignal")):
                     return await cancel_turn()
                 if prepared_request.get("reactiveAttempt", 0) < 2 and isContextWindowFailure(error):
-                    prepared_request = await prepareProviderRequest(
-                        {
-                            "session": session,
-                            "config": config,
-                            "runtime": runtime,
-                            "baseSystemPrompt": base_system_prompt,
-                            "toolRegistry": tool_registry,
-                            "activeModel": active_model,
-                            "prompt": prompt,
-                            "reactiveAttempt": int(prepared_request.get("reactiveAttempt") or 0) + 1,
-                        }
-                    )
+                    try:
+                        prepared_request = await prepareProviderRequest(
+                            {
+                                "session": session,
+                                "config": config,
+                                "runtime": runtime,
+                                "baseSystemPrompt": base_system_prompt,
+                                "toolRegistry": tool_registry,
+                                "activeModel": active_model,
+                                "prompt": prompt,
+                                "reactiveAttempt": int(prepared_request.get("reactiveAttempt") or 0) + 1,
+                            }
+                        )
+                    except Exception as prepare_error:
+                        if _is_turn_abort_error(prepare_error, runtime.get("abortSignal")):
+                            return await cancel_turn()
+                        raise
                     continue
                 if isProviderRequestError(error):
                     session.setdefault("metadata", {})["lastProviderFailure"] = copy.deepcopy(error.record)
@@ -144,6 +154,12 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             await persistProviderRecovery(session, config, {"provider": config["provider"], "recoveredAt": recovered_at, "attempts": last.get("attempt", 1), "lastFailure": last})
             session["metadata"].pop("lastProviderFailure", None)
 
+        try:
+            _throw_if_turn_cancelled(runtime)
+        except Exception as error:
+            if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                return await cancel_turn()
+            raise
         active_model = response["model"]
         session["messages"].append({"role": "assistant", "content": response["content"]})
         merge_usage(total_usage, response.get("usage") or {})
@@ -196,6 +212,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             _safe_emit(runtime, "tool.started", {"name": tool.name, "input": tool_use.get("input") or {}, "session_id": session["id"]})
             try:
                 result = await tool.handler(tool_use.get("input") or {}, build_context())
+                _throw_if_turn_cancelled(runtime)
                 _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
                 block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": result.get("isError"), "content": result.get("content", "")}
                 if result.get("pause") == "approval":
@@ -228,6 +245,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                         paused_for_approval = True
                         paused_message = pause
                     tool_results[index] = result
+            _throw_if_turn_cancelled(runtime)
         except Exception as error:
             if _is_turn_abort_error(error, runtime.get("abortSignal")):
                 return await cancel_turn()
