@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import stat
 import json
 import os
 import re
@@ -16,6 +17,8 @@ from .workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CHROME_NATIVE_HOST_NAME = "com.drost_ai.tess"
+DEFAULT_CHROME_EXTENSION_ORIGIN = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/"
 
 
 async def pathExists(targetPath: str) -> bool:
@@ -108,6 +111,59 @@ async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -
     return {"handled": True, "event": event}
 
 
+def applyPlatformIntegrationMetadata(
+    session: dict[str, Any],
+    args: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    args = {**(args or {}), **kwargs}
+    metadata = session.setdefault("metadata", {})
+    timestamp = args.get("updatedAt") or now_iso()
+    tmux = args.get("tmux") or args.get("tmuxResult")
+    if isinstance(tmux, dict):
+        event = tmux.get("event") if isinstance(tmux.get("event"), dict) else {}
+        data = event.get("data") if isinstance(event.get("data"), dict) else tmux.get("data") if isinstance(tmux.get("data"), dict) else {}
+        if data.get("tmux_session_name"):
+            metadata["tmuxSessionName"] = data.get("tmux_session_name")
+        if data.get("tmux_window_name"):
+            metadata["tmuxWindowName"] = data.get("tmux_window_name")
+        if data.get("mode"):
+            metadata["tmuxMode"] = data.get("mode")
+        if event.get("event"):
+            metadata["tmuxLastEvent"] = event.get("event")
+        if tmux.get("handled") is not None:
+            metadata["tmuxHandoffHandled"] = bool(tmux.get("handled"))
+        metadata["tmuxUpdatedAt"] = timestamp
+    ide = args.get("ide") or args.get("ideResult")
+    if isinstance(ide, dict):
+        target = ide.get("target") if isinstance(ide.get("target"), dict) else {}
+        metadata["ideConnectionStatus"] = ide.get("status")
+        if target.get("displayName"):
+            metadata["ideName"] = target.get("displayName")
+        if target.get("id"):
+            metadata["ideTargetId"] = target.get("id")
+        if target.get("command"):
+            metadata["ideCommand"] = target.get("command")
+        if target.get("source"):
+            metadata["ideSource"] = target.get("source")
+        if ide.get("reason"):
+            metadata["ideConnectionReason"] = ide.get("reason")
+        metadata["ideUpdatedAt"] = timestamp
+    chrome = args.get("chrome") or args.get("chromeResult")
+    if isinstance(chrome, dict):
+        status = chrome.get("status") if isinstance(chrome.get("status"), dict) else chrome
+        metadata["chromeIntegrationEnabled"] = bool(chrome.get("enabled") or status.get("enabled") or chrome.get("server"))
+        metadata["chromeIntegrationMode"] = "mcp" if chrome.get("server") else metadata.get("chromeIntegrationMode") or ("native" if status.get("nativeHostInstalled") else "status")
+        metadata["chromePlatform"] = status.get("platform")
+        metadata["chromeBrowserBinary"] = status.get("browserBinary")
+        metadata["chromeNativeHostModeSupported"] = status.get("nativeHostModeSupported")
+        native_host = status.get("nativeHostManifest") if isinstance(status.get("nativeHostManifest"), dict) else {}
+        if native_host.get("manifestPath"):
+            metadata["chromeNativeHostManifestPath"] = native_host.get("manifestPath")
+        metadata["chromeUpdatedAt"] = timestamp
+    return metadata
+
+
 async def detectTmuxAvailability(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     runner = args.get("runner") or {}
@@ -190,7 +246,109 @@ async def detectChromeCompanionStatus(args: dict[str, Any] | None = None, **kwar
     system = args.get("platform") or sys.platform
     browser = await _find_chrome_binary(runner, system)
     supported = system.startswith("darwin") or system.startswith("linux") or system.startswith("win")
-    return {"enabled": bool(browser), "supported": supported, "browserBinary": browser, "nativeHostModeSupported": supported, "platform": system}
+    status = {"enabled": bool(browser), "supported": supported, "browserBinary": browser, "nativeHostModeSupported": supported, "platform": system}
+    if args.get("includeNativeHostManifest"):
+        native_host = await inspectChromeNativeHostManifest({**args, "platform": system})
+        status["nativeHostManifest"] = native_host
+        status["nativeHostInstalled"] = native_host.get("installed")
+    return status
+
+
+def getChromeNativeHostManifestPath(args: dict[str, Any] | None = None, **kwargs: Any) -> str | None:
+    args = {**(args or {}), **kwargs}
+    if args.get("manifestPath"):
+        return str(args["manifestPath"])
+    system = args.get("platform") or sys.platform
+    host_name = args.get("hostName") or DEFAULT_CHROME_NATIVE_HOST_NAME
+    home = Path(args.get("home") or Path.home())
+    if system.startswith("darwin"):
+        return str(home / "Library" / "Application Support" / "Google" / "Chrome" / "NativeMessagingHosts" / f"{host_name}.json")
+    if system.startswith("linux"):
+        return str(home / ".config" / "google-chrome" / "NativeMessagingHosts" / f"{host_name}.json")
+    if system.startswith("win"):
+        local = os.environ.get("LOCALAPPDATA")
+        base = Path(args.get("home") or local) if args.get("home") or local else None
+        return str(base / "Google" / "Chrome" / "NativeMessagingHosts" / f"{host_name}.json") if base else None
+    return None
+
+
+async def buildChromeNativeHostManifest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    args = {**(args or {}), **kwargs}
+    host_path = args.get("nativeHostPath") or await _chrome_native_host_wrapper_path(args)
+    origins = args.get("allowedOrigins") or args.get("allowed_origins") or [DEFAULT_CHROME_EXTENSION_ORIGIN]
+    return {
+        "name": args.get("hostName") or DEFAULT_CHROME_NATIVE_HOST_NAME,
+        "description": args.get("description") or "Tess local Chrome companion native host.",
+        "path": str(host_path),
+        "type": "stdio",
+        "allowed_origins": [str(origin) for origin in origins if str(origin).strip()],
+    }
+
+
+async def inspectChromeNativeHostManifest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    args = {**(args or {}), **kwargs}
+    system = args.get("platform") or sys.platform
+    supported = system.startswith("darwin") or system.startswith("linux") or system.startswith("win")
+    manifest_path = getChromeNativeHostManifestPath(args)
+    expected = await buildChromeNativeHostManifest(args)
+    manifest = None
+    issues: list[str] = []
+    if not supported:
+        issues.append(f"Unsupported platform: {system}")
+    if not manifest_path:
+        issues.append("No native-host manifest path is available.")
+    elif os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+        except Exception as exc:
+            issues.append(f"Manifest is not valid JSON: {exc}")
+    else:
+        issues.append("Native-host manifest is not installed.")
+    if isinstance(manifest, dict):
+        if manifest.get("name") != expected.get("name"):
+            issues.append("Manifest host name does not match.")
+        if manifest.get("type") != "stdio":
+            issues.append("Manifest type must be stdio.")
+        if not isinstance(manifest.get("allowed_origins"), list) or not manifest.get("allowed_origins"):
+            issues.append("Manifest has no allowed_origins.")
+        host_path = manifest.get("path")
+        if not isinstance(host_path, str) or not host_path:
+            issues.append("Manifest has no native host path.")
+        elif not os.path.exists(host_path):
+            issues.append("Native host executable is missing.")
+    installed = bool(supported and manifest_path and isinstance(manifest, dict) and not issues)
+    return {
+        "supported": supported,
+        "installed": installed,
+        "manifestPath": manifest_path,
+        "manifestExists": bool(manifest_path and os.path.exists(manifest_path)),
+        "hostPath": (manifest or expected).get("path") if isinstance(manifest or expected, dict) else None,
+        "hostExists": bool((manifest or expected).get("path") and os.path.exists((manifest or expected).get("path"))) if isinstance(manifest or expected, dict) else False,
+        "manifest": manifest,
+        "expectedManifest": expected,
+        "issues": issues,
+        "platform": system,
+    }
+
+
+async def installChromeNativeHostManifest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    args = {**(args or {}), **kwargs}
+    status = await inspectChromeNativeHostManifest(args)
+    if not status.get("supported") or not status.get("manifestPath"):
+        return {**status, "status": "skipped", "reason": "; ".join(status.get("issues") or ["Native-host manifests are not supported."])}
+    manifest = status["expectedManifest"]
+    host_path = manifest["path"]
+    if args.get("dryRun"):
+        return {**status, "status": "planned", "manifest": manifest}
+    if not args.get("nativeHostPath"):
+        await _write_chrome_native_host_wrapper(host_path)
+    os.makedirs(os.path.dirname(status["manifestPath"]), exist_ok=True)
+    with open(status["manifestPath"], "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+        handle.write("\n")
+    installed = await inspectChromeNativeHostManifest({**args, "nativeHostPath": host_path})
+    return {**installed, "status": "installed" if installed.get("installed") else "degraded", "manifest": manifest}
 
 
 async def runChromeCompanionMcpServer(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
@@ -265,17 +423,35 @@ async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any)
     repo_root = Path(args.get("repoRoot") or REPO_ROOT)
     pyproject = repo_root / "pyproject.toml"
     version = _read_pyproject_version(pyproject)
-    package_dir = repo_root / "agent_core"
+    bundled_version = _read_optional_pyproject_version(Path(args.get("bundledPyprojectPath") or repo_root / "package" / "pyproject.toml"))
+    package_dir = Path(args.get("distPath") or repo_root / "agent_core")
+    source_dir = Path(args.get("sourcePath") or repo_root / "agent_core")
+    dist_exists = package_dir.exists()
+    dist_stale = await _is_dist_stale(source_dir, package_dir) if dist_exists else True
     global_bin = args.get("globalBinPath") or await _runner_which(runner, "agent-core") or await _runner_which(runner, "tess")
     repo_real = _safe_realpath(repo_root)
-    global_package_path = args.get("globalPackagePath")
+    global_package_path = args.get("globalPackagePath") or await _resolve_global_python_package_path(args, runner, repo_root, global_bin)
     global_package_real = _safe_realpath(global_package_path) if global_package_path else None
-    mode = "repo-only" if package_dir.exists() else "uninstalled"
+    mode = "repo-only" if dist_exists else "uninstalled"
     if global_package_real and repo_real and os.path.normcase(global_package_real) == os.path.normcase(repo_real):
         mode = "linked-global"
     elif global_package_path:
         mode = "global-copy"
-    return {"repoRoot": str(repo_root), "repoVersion": version, "distExists": package_dir.exists(), "distStale": False, "globalPackagePath": global_package_path, "globalPackageRealPath": global_package_real, "globalBinPath": global_bin, "mode": mode, "installed": package_dir.exists(), "python": True}
+    return {
+        "repoRoot": str(repo_root),
+        "repoVersion": version,
+        "bundledReleasedVersion": bundled_version,
+        "distExists": dist_exists,
+        "distStale": dist_stale,
+        "distPath": str(package_dir),
+        "sourcePath": str(source_dir),
+        "globalPackagePath": global_package_path,
+        "globalPackageRealPath": global_package_real,
+        "globalBinPath": global_bin,
+        "mode": mode,
+        "installed": dist_exists,
+        "python": True,
+    }
 
 
 async def runRepoInstall(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -342,7 +518,7 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
     install = await inspectInstallState(args)
     tmux = await detectTmuxAvailability(args)
     ide_targets = await detectIdeTargets(args)
-    chrome = await detectChromeCompanionStatus(args)
+    chrome = await detectChromeCompanionStatus({**args, "includeNativeHostManifest": True})
     daemon = await loadDaemonState()
     workspace = await captureWorkspaceSnapshot(cwd)
     capabilities = summarizeWorkspaceCapabilities(workspace)
@@ -359,6 +535,13 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
         _doctor_check("tmux", "pass" if tmux.get("available") else "warn", "tmux is available." if tmux.get("available") else "tmux is not available on PATH.", "Install tmux to use tmux startup flows.", {"binaryPath": tmux.get("binaryPath"), "version": tmux.get("version")}),
         _doctor_check("ide", "pass" if len(ide_targets) == 1 else "warn", f"Exactly one IDE target is available: {ide_targets[0]['displayName']}." if len(ide_targets) == 1 else "No supported IDE targets were detected." if not ide_targets else f"Multiple IDE targets are available: {', '.join(target['displayName'] for target in ide_targets)}.", "Expose exactly one supported IDE CLI on PATH for predictable IDE auto-connect.", {"targets": ide_targets}),
         _doctor_check("chrome", "pass" if chrome.get("supported") else "warn", "Chrome companion mode is supported on this platform." if chrome.get("supported") else "Chrome companion mode is not supported on this platform.", "Use Chrome companion mode only on supported platforms.", chrome),
+        _doctor_check(
+            "chrome_native_host",
+            "pass" if (chrome.get("nativeHostManifest") or {}).get("installed") else "warn",
+            "Chrome native-host manifest is installed." if (chrome.get("nativeHostManifest") or {}).get("installed") else "Chrome native-host manifest is not installed.",
+            "Run the native-host install helper when Chrome extension bridge mode is required.",
+            chrome.get("nativeHostManifest") or {},
+        ),
         _doctor_check("daemon", _daemon_check_status(daemon), _daemon_check_message(daemon), "Start the task supervisor daemon when background task, monitor, or bridge features are needed.", {"phase": (daemon or {}).get("phase"), "pid": (daemon or {}).get("pid"), "socketPath": (daemon or {}).get("socketPath"), "updatedAt": (daemon or {}).get("updatedAt")}),
         _doctor_check("git", "pass" if capabilities.get("hasGit") else "warn", "A git project root is available." if capabilities.get("hasGit") else "This directory is not inside a git repository.", "Run inside a git repository for worktree and PR-aware flows.", {"projectRoot": project_root}),
         _doctor_check("workspace", "pass" if capabilities.get("hasGit") or workspace.get("mode") else "warn", f"Workspace {workspace.get('workspaceName')} is running in {workspace.get('mode')} mode.", "Use worktree mode when isolated execution is required.", {"workspaceId": workspace.get("workspaceId"), "workspaceRoot": workspace.get("workspaceRoot"), "mode": workspace.get("mode")}),
@@ -436,6 +619,65 @@ async def _runner_spawn_detached(runner: dict[str, Any], command: str, args: lis
             result = await result
         return int(result or 0)
     return await spawnDetached(command, args, cwd)
+
+
+async def _is_dist_stale(source_path: Path, dist_path: Path) -> bool:
+    dist_mtime = await newestMtimeInTree(str(dist_path))
+    if not dist_mtime:
+        return True
+    source_mtime = await newestMtimeInTree(str(source_path))
+    if not source_mtime:
+        return False
+    return source_mtime > dist_mtime
+
+
+async def _resolve_global_python_package_path(
+    args: dict[str, Any],
+    runner: dict[str, Any],
+    repo_root: Path,
+    global_bin: str | None,
+) -> str | None:
+    if not global_bin and not args.get("discoverGlobalPackage"):
+        return None
+    python_command = args.get("python") or sys.executable
+    package_name = args.get("packageName") or "agent-core-python"
+    try:
+        output = await _runner_exec(runner, python_command, ["-m", "pip", "show", package_name], str(repo_root))
+    except Exception:
+        return None
+    fields = _parse_pip_show(output)
+    direct_url = fields.get("editable-project-location") or fields.get("location")
+    return direct_url or None
+
+
+def _parse_pip_show(output: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in str(output or "").splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip().lower()] = value.strip()
+    return fields
+
+
+async def _chrome_native_host_wrapper_path(args: dict[str, Any]) -> str:
+    system = args.get("platform") or sys.platform
+    suffix = ".cmd" if system.startswith("win") else ""
+    root = Path(args.get("stateRoot") or getStateRoot()) / "chrome-native-host"
+    return str(root / f"{args.get('hostName') or DEFAULT_CHROME_NATIVE_HOST_NAME}{suffix}")
+
+
+async def _write_chrome_native_host_wrapper(host_path: str) -> None:
+    os.makedirs(os.path.dirname(host_path), exist_ok=True)
+    if host_path.endswith(".cmd"):
+        body = f'@echo off\r\n"{sys.executable}" -m agent_core.chrome_companion native %*\r\n'
+    else:
+        body = f'#!/bin/sh\nexec {quoteShellArg(sys.executable)} -m agent_core.chrome_companion native "$@"\n'
+    with open(host_path, "w", encoding="utf-8", newline="" if host_path.endswith(".cmd") else None) as handle:
+        handle.write(body)
+    if not host_path.endswith(".cmd"):
+        current = os.stat(host_path).st_mode
+        os.chmod(host_path, current | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def _safe_realpath(path: str | Path | None) -> str | None:
@@ -586,6 +828,17 @@ def _read_pyproject_version(path: Path) -> str:
 
     match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
     return match.group(1) if match else "0.1.0"
+
+
+def _read_optional_pyproject_version(path: Path) -> str | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    import re
+
+    match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return match.group(1) if match else None
 
 
 def _has_auth(auth: dict[str, Any] | None) -> bool:

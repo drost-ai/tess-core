@@ -4608,6 +4608,161 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_platform_install_state_tracks_source_staleness_and_global_path(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            fake_repo = workspace / "install-state"
+            source = fake_repo / "agent_core"
+            dist = fake_repo / "dist_pkg"
+            bundled = fake_repo / "package"
+            source.mkdir(parents=True)
+            dist.mkdir(parents=True)
+            bundled.mkdir(parents=True)
+            (fake_repo / "pyproject.toml").write_text('[project]\nname = "agent-core-python"\nversion = "1.2.3"\n', encoding="utf-8")
+            (bundled / "pyproject.toml").write_text('[project]\nversion = "1.1.0"\n', encoding="utf-8")
+            source_file = source / "new.py"
+            dist_file = dist / "old.py"
+            source_file.write_text("new", encoding="utf-8")
+            dist_file.write_text("old", encoding="utf-8")
+            os.utime(source_file, (3000, 3000))
+            os.utime(dist_file, (1000, 1000))
+            calls = []
+
+            def which(command):
+                return "/usr/local/bin/agent-core" if command == "agent-core" else None
+
+            def exec_cmd(command, args, cwd=None):
+                calls.append((command, tuple(args), cwd))
+                if args[:3] == ["-m", "pip", "show"]:
+                    return f"Name: agent-core-python\nVersion: 1.2.3\nEditable-project-location: {fake_repo}\n"
+                return ""
+
+            state = run(
+                core.inspectInstallState(
+                    {
+                        "repoRoot": str(fake_repo),
+                        "sourcePath": str(source),
+                        "distPath": str(dist),
+                        "bundledPyprojectPath": str(bundled / "pyproject.toml"),
+                        "runner": {"which": which, "exec": exec_cmd},
+                        "python": "/usr/bin/python3",
+                    }
+                )
+            )
+            self.assertEqual(state["repoVersion"], "1.2.3")
+            self.assertEqual(state["bundledReleasedVersion"], "1.1.0")
+            self.assertTrue(state["distExists"])
+            self.assertTrue(state["distStale"])
+            self.assertEqual(state["mode"], "linked-global")
+            self.assertEqual(state["globalPackagePath"], str(fake_repo))
+            self.assertTrue(any(call[1][:3] == ("-m", "pip", "show") for call in calls))
+
+            os.utime(dist_file, (4000, 4000))
+            fresh = run(core.inspectInstallState({"repoRoot": str(fake_repo), "sourcePath": str(source), "distPath": str(dist), "globalPackagePath": str(workspace / "global-copy")}))
+            self.assertFalse(fresh["distStale"])
+            self.assertEqual(fresh["mode"], "global-copy")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_platform_chrome_native_host_manifest_install_and_inspection(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            manifest_path = workspace / "native-hosts" / "com.example.tess.json"
+            state_root = workspace / "state"
+            planned = run(
+                core.installChromeNativeHostManifest(
+                    {
+                        "platform": "linux",
+                        "home": str(home),
+                        "stateRoot": str(state_root),
+                        "manifestPath": str(manifest_path),
+                        "hostName": "com.example.tess",
+                        "allowedOrigins": ["chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/"],
+                        "dryRun": True,
+                    }
+                )
+            )
+            self.assertEqual(planned["status"], "planned")
+            self.assertFalse(manifest_path.exists())
+            self.assertFalse(Path(planned["expectedManifest"]["path"]).exists())
+
+            installed = run(
+                core.installChromeNativeHostManifest(
+                    {
+                        "platform": "linux",
+                        "home": str(home),
+                        "stateRoot": str(state_root),
+                        "manifestPath": str(manifest_path),
+                        "hostName": "com.example.tess",
+                        "allowedOrigins": ["chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/"],
+                    }
+                )
+            )
+            self.assertEqual(installed["status"], "installed")
+            self.assertTrue(installed["installed"])
+            self.assertTrue(manifest_path.exists())
+            host_path = Path(installed["hostPath"])
+            self.assertTrue(host_path.exists())
+            self.assertTrue(os.access(host_path, os.X_OK))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["name"], "com.example.tess")
+            self.assertEqual(manifest["type"], "stdio")
+            self.assertEqual(manifest["path"], str(host_path))
+
+            inspected = run(core.inspectChromeNativeHostManifest({"platform": "linux", "manifestPath": str(manifest_path), "hostName": "com.example.tess", "nativeHostPath": str(host_path), "allowedOrigins": manifest["allowed_origins"]}))
+            self.assertTrue(inspected["installed"])
+            self.assertEqual(inspected["issues"], [])
+            unsupported = run(core.inspectChromeNativeHostManifest({"platform": "freebsd", "manifestPath": str(manifest_path)}))
+            self.assertFalse(unsupported["supported"])
+            self.assertIn("Unsupported platform", unsupported["issues"][0])
+
+            report = run(core.collectDoctorReport(str(workspace), {"runner": {"which": lambda _command: None}, "platform": "linux", "manifestPath": str(manifest_path), "hostName": "com.example.tess", "nativeHostPath": str(host_path), "allowedOrigins": manifest["allowed_origins"]}))
+            native_check = next(check for check in report["checks"] if check["id"] == "chrome_native_host")
+            self.assertEqual(native_check["status"], "pass")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_platform_launch_metadata_capture_for_workspace_integrations(self):
+        session = {"id": "session-platform-metadata", "cwd": "/tmp/work", "metadata": {}}
+        tmux_result = {
+            "handled": True,
+            "event": {
+                "event": "platform.tmux_attached",
+                "data": {
+                    "mode": "default",
+                    "tmux_session_name": "tess-work",
+                    "tmux_window_name": "work",
+                    "cwd": "/tmp/work",
+                },
+            },
+        }
+        ide_result = {
+            "status": "connected",
+            "target": {"id": "cursor", "displayName": "Cursor", "command": "cursor", "source": "env"},
+        }
+        chrome_result = {
+            "enabled": True,
+            "server": {"name": "chrome_companion"},
+            "status": {
+                "platform": "linux",
+                "browserBinary": "/usr/bin/google-chrome",
+                "nativeHostModeSupported": True,
+                "nativeHostManifest": {"manifestPath": "/tmp/native-host.json"},
+            },
+        }
+        metadata = core.applyPlatformIntegrationMetadata(session, {"tmux": tmux_result, "ide": ide_result, "chrome": chrome_result, "updatedAt": "2026-01-01T00:00:00Z"})
+        self.assertEqual(metadata["tmuxSessionName"], "tess-work")
+        self.assertEqual(metadata["tmuxWindowName"], "work")
+        self.assertEqual(metadata["tmuxMode"], "default")
+        self.assertEqual(metadata["tmuxLastEvent"], "platform.tmux_attached")
+        self.assertEqual(metadata["ideName"], "Cursor")
+        self.assertEqual(metadata["ideTargetId"], "cursor")
+        self.assertEqual(metadata["ideSource"], "env")
+        self.assertTrue(metadata["chromeIntegrationEnabled"])
+        self.assertEqual(metadata["chromeIntegrationMode"], "mcp")
+        self.assertEqual(metadata["chromeBrowserBinary"], "/usr/bin/google-chrome")
+        self.assertEqual(metadata["chromeNativeHostManifestPath"], "/tmp/native-host.json")
+
     def test_codex_spark_compaction_uses_codex_transport(self):
         root, home, workspace, previous = self.temp_context()
         try:

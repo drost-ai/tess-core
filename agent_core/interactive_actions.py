@@ -1634,9 +1634,11 @@ def formatDiagnosticsReport(report: dict[str, Any]) -> str:
         "",
     ]
     for check in checks:
-        lines.append(f"{str(check.get('id')).ljust(14)} {str(check.get('status')).ljust(5)} {check.get('message')}")
-        if check.get("suggestion"):
-            lines.append(f"{'':14}       {check.get('suggestion')}")
+        message = check.get("message") or check.get("summary")
+        suggestion = check.get("suggestion") or check.get("remediation")
+        lines.append(f"{str(check.get('id')).ljust(14)} {str(check.get('status')).ljust(5)} {message}")
+        if suggestion:
+            lines.append(f"{'':14}       {suggestion}")
     return "\n".join(lines).rstrip()
 
 
