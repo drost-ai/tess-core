@@ -73,8 +73,13 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             for tool in state["tools"]:
                 async def handler(input: dict[str, Any], _context: dict[str, Any], _tool=tool) -> dict[str, Any]:
                     try:
-                        return await call_tool(_tool["server"], _tool["name"], input)
+                        _throw_if_runtime_tool_cancelled(_context)
+                        result = await call_tool(_tool["server"], _tool["name"], input)
+                        _throw_if_runtime_tool_cancelled(_context)
+                        return result
                     except Exception as exc:
+                        if _is_runtime_tool_abort_error(exc, _context.get("abortSignal") if isinstance(_context, dict) else None):
+                            raise
                         return {"content": str(exc), "isError": True}
 
                 definitions.append(
@@ -786,6 +791,42 @@ def _unwrap_json_rpc_response(response: dict[str, Any]) -> Any:
 
 def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _throw_if_runtime_tool_cancelled(context: dict[str, Any]) -> None:
+    signal = context.get("abortSignal") if isinstance(context, dict) else None
+    if not _signal_aborted(signal):
+        return
+    reason = _signal_reason(signal)
+    if isinstance(reason, BaseException):
+        raise reason
+    error = RuntimeError(str(reason or "MCP tool execution cancelled"))
+    error.name = "AbortError"  # type: ignore[attr-defined]
+    raise error
+
+
+def _is_runtime_tool_abort_error(error: BaseException, signal: Any = None) -> bool:
+    if _signal_aborted(signal):
+        return True
+    if error.__class__.__name__ == "AbortError":
+        return True
+    return getattr(error, "name", None) == "AbortError"
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
+
+
+def _signal_reason(signal: Any) -> Any:
+    if not signal:
+        return None
+    if isinstance(signal, dict):
+        return signal.get("reason")
+    return getattr(signal, "reason", None)
 
 
 def _parse_http_rpc_response(status: int, raw: str, content_type: str, request_id: int | None) -> dict[str, Any]:

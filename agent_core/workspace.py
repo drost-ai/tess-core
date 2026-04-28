@@ -53,6 +53,10 @@ async def createGitWorktree(args: dict[str, Any] | None = None, **kwargs: Any) -
     suffix = uuid.uuid4().hex[:6]
     target_path = args.get("path") or os.path.join(os.path.dirname(git_root), f"{os.path.basename(git_root)}-{safe_name}-{suffix}")
     branch_name = args.get("branchName") or f"tess/{safe_name}-{suffix}"
+    if os.path.exists(target_path):
+        raise RuntimeError(f"Worktree target already exists: {target_path}")
+    if _git_branch_exists(git_root, branch_name):
+        raise RuntimeError(f"Worktree branch already exists: {branch_name}")
     subprocess.run(["git", "worktree", "add", "-b", branch_name, target_path, "HEAD"], cwd=git_root, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     return {"gitRoot": git_root, "targetPath": target_path, "branchName": branch_name, "requestedName": safe_name}
 
@@ -207,6 +211,11 @@ def _resolve_workspace_mode(cwd: str | None, gitRoot: str | None = None, worktre
 
 def _slugify_worktree_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")[:24]
+
+
+def _git_branch_exists(git_root: str, branch_name: str) -> bool:
+    result = subprocess.run(["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch_name}"], cwd=git_root, text=True)
+    return result.returncode == 0
 
 
 def _build_workspace_id(root_path: str | None) -> str:

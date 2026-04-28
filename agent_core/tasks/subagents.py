@@ -17,8 +17,9 @@ PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "a
 
 async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    prepared = await prepareSubagent(args)
     context = args["context"]
+    _throw_if_subagent_cancelled(context)
+    prepared = await prepareSubagent(args)
     child_record = prepared["childRecord"]
     child_session = prepared["childSession"]
     agent_id = prepared["agentId"]
@@ -27,6 +28,7 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
     await saveChildAgent({**child_record, "status": "running", "lastUpdatedAt": now_iso(), "lastSummary": "Started foreground subagent run."})
 
     try:
+        _throw_if_subagent_cancelled(context)
         result = await _execute_foreground_subagent(args, prepared)
         status = mapStopReasonToStatus(result.get("stopReason"))
         event_summary = (result.get("text") or "").strip()[:280]
@@ -76,37 +78,59 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
             "isError": status != "completed",
         }
     except Exception as exc:
-        message = str(exc)
+        cancelled = _is_subagent_abort_error(exc, context.get("abortSignal"))
+        status = "cancelled" if cancelled else "failed"
+        message = str(exc) or ("Subagent cancelled" if cancelled else "Subagent failed")
         completed_at = now_iso()
-        await saveChildAgent(
-            {
-                **child_record,
-                "status": "failed",
-                "completedAt": completed_at,
-                "error": message,
-                "lastUpdatedAt": completed_at,
-                "lastSummary": message,
-            }
-        )
+        next_record = {
+            **child_record,
+            "status": status,
+            "completedAt": completed_at,
+            "error": message,
+            "lastUpdatedAt": completed_at,
+            "lastSummary": message,
+        }
+        if cancelled:
+            next_record["stopReason"] = "cancelled"
+        await saveChildAgent(next_record)
         _output(
             context,
             "subagent.failed",
-            {
-                "agent_id": agent_id,
-                "session_id": child_session["id"],
-                "parent_session_id": context["session"]["id"],
-                "attachable_session_id": child_session["id"],
-                "status": "failed",
-                "error": message,
-            },
+            _without_none_values(
+                {
+                    "agent_id": agent_id,
+                    "session_id": child_session["id"],
+                    "parent_session_id": context["session"]["id"],
+                    "attachable_session_id": child_session["id"],
+                    "status": status,
+                    "stop_reason": "cancelled" if cancelled else None,
+                    "error": message,
+                }
+            ),
         )
-        return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "status": "failed", "error": message, "worktree_path": prepared.get("worktreePath")})), "isError": True}
+        return {
+            "content": pretty_json(
+                _without_none_values(
+                    {
+                        "agent_id": agent_id,
+                        "session_id": child_session["id"],
+                        "status": status,
+                        "error": message,
+                        "stop_reason": "cancelled" if cancelled else None,
+                        "worktree_path": prepared.get("worktreePath"),
+                    }
+                )
+            ),
+            "isError": True,
+        }
 
 
 async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    prepared = await prepareSubagent(args)
     context = args["context"]
+    _throw_if_subagent_cancelled(context)
+    prepared = await prepareSubagent(args)
+    _throw_if_subagent_cancelled(context)
     child_session = prepared["childSession"]
     child_record = prepared["childRecord"]
     agent_id = prepared["agentId"]
@@ -465,9 +489,11 @@ def mapStopReasonToCompletionReason(stopReason: str | None) -> str | None:
 
 async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str, Any]) -> dict[str, Any]:
     context = args["context"]
+    _throw_if_subagent_cancelled(context)
     callback = context.get("runSubagent")
     if callable(callback):
         result = await maybe_await(callback({**args, **prepared}, context))
+        _throw_if_subagent_cancelled(context)
         if isinstance(result, dict) and "content" in result and "text" not in result:
             return {"text": result.get("content") or "", "usage": result.get("usage") or {}, "toolCount": result.get("tool_count") or result.get("toolCount") or 0, "stopReason": result.get("stopReason") or result.get("stop_reason") or ("error" if result.get("isError") else "end_turn")}
         if isinstance(result, str):
@@ -475,6 +501,7 @@ async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str,
         return result
     get_tools = context.get("getTools")
     tools = await maybe_await(get_tools()) if callable(get_tools) else context.get("tools")
+    _throw_if_subagent_cancelled(context)
     if tools is None:
         raise RuntimeError("Foreground subagent execution requires getTools, tools, or runSubagent in the runtime context.")
     from ..agent import runAgentPrompt
@@ -484,6 +511,7 @@ async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str,
         "askQuestion": context.get("askQuestion", lambda *_: ""),
         "emitEvent": lambda event, data: _emit_child_event(context, event, data, prepared["agentId"], prepared["childSession"]["id"]),
         "tools": tools,
+        "abortSignal": context.get("abortSignal"),
     }
     call_args: dict[str, Any] = {"session": prepared["childSession"], "config": prepared["childConfig"], "prompt": "", "runtime": runtime}
     if context.get("providerOverride"):
@@ -548,6 +576,42 @@ def _require_string(value: Any, name: str) -> str:
 
 def _slugify(value: str) -> str:
     return __import__("re").sub(r"(^-+|-+$)", "", __import__("re").sub(r"[^a-z0-9]+", "-", value.lower()))[:24]
+
+
+def _throw_if_subagent_cancelled(context: dict[str, Any]) -> None:
+    signal = context.get("abortSignal")
+    if not _signal_aborted(signal):
+        return
+    reason = _signal_reason(signal)
+    if isinstance(reason, BaseException):
+        raise reason
+    error = RuntimeError(str(reason or "Subagent cancelled"))
+    error.name = "AbortError"  # type: ignore[attr-defined]
+    raise error
+
+
+def _is_subagent_abort_error(error: BaseException, signal: Any = None) -> bool:
+    if _signal_aborted(signal):
+        return True
+    if error.__class__.__name__ == "AbortError":
+        return True
+    return getattr(error, "name", None) == "AbortError"
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
+
+
+def _signal_reason(signal: Any) -> Any:
+    if not signal:
+        return None
+    if isinstance(signal, dict):
+        return signal.get("reason")
+    return getattr(signal, "reason", None)
 
 
 def _monotonic_ms() -> int:

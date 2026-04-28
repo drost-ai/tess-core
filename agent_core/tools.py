@@ -557,6 +557,7 @@ def _agent_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         if int(context["session"].get("metadata", {}).get("depth") or 0) >= 2:
             return {"content": "Delegation depth limit reached.", "isError": True}
+        _throw_if_tool_cancelled(context)
         description = _require_string(input.get("description"), "description")
         prompt = _require_string(input.get("prompt"), "prompt")
         agent_type = input.get("subagent_type").strip() if isinstance(input.get("subagent_type"), str) else None
@@ -564,6 +565,7 @@ def _agent_tool() -> ToolDefinition:
             return {"content": f"Unknown subagent type: {agent_type}", "isError": True}
         if input.get("isolation") == "worktree":
             await _ensure_tool_permission(context, "Agent", "worktree", f"Spawn subagent with isolated worktree\n{description}")
+        _throw_if_tool_cancelled(context)
         from .subagents import runForegroundSubagent, startBackgroundSubagent
 
         agent_args = {
@@ -946,6 +948,7 @@ def _task_health_check_stop_tool() -> ToolDefinition:
 
 def _mcp_tool(runtime: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+        _throw_if_tool_cancelled(context)
         if not runtime:
             return {
                 "content": pretty_json(
@@ -968,10 +971,12 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
                 )
             }
         diagnostics = runtime["getDiagnostics"]() if callable(runtime.get("getDiagnostics")) else runtime.get("diagnostics", {})
+        _throw_if_tool_cancelled(context)
         tools = [
             {"server": tool.get("server"), "name": tool.get("name"), "runtime_name": tool.get("runtimeName") or tool.get("runtime_name"), "description": tool.get("description")}
             for tool in runtime["listTools"]()
         ]
+        _throw_if_tool_cancelled(context)
         return {"content": pretty_json({"diagnostics": diagnostics, "servers": runtime["listServerStatus"](), "tools": tools})}
 
     return ToolDefinition("Mcp", _tool_description("Mcp"), _tool_schema("Mcp"), handler)
@@ -981,7 +986,10 @@ def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         server = input.get("server") if isinstance(input.get("server"), str) else None
         if runtime:
-            return {"content": pretty_json(await runtime["listResources"](server))}
+            _throw_if_tool_cancelled(context)
+            resources = await runtime["listResources"](server)
+            _throw_if_tool_cancelled(context)
+            return {"content": pretty_json(resources)}
         configs = context["config"].get("mcpConfig", [])
         return {"content": pretty_json([{"server": item.get("name"), "name": item.get("name"), "uri": item.get("commandOrUrl"), "description": f"{item.get('transport')} server (not connected)"} for item in configs if not server or item.get("name") == server])}
 
@@ -993,7 +1001,10 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
         server = _require_string(input.get("server"), "server")
         uri = _require_string(input.get("uri"), "uri")
         if runtime:
-            return {"content": pretty_json(await runtime["readResource"](server, uri))}
+            _throw_if_tool_cancelled(context)
+            resource = await runtime["readResource"](server, uri)
+            _throw_if_tool_cancelled(context)
+            return {"content": pretty_json(resource)}
         config = next((entry for entry in context["config"].get("mcpConfig", []) if entry.get("name") == server), None)
         if not config:
             return {"content": f"MCP server not found: {server}", "isError": True}

@@ -392,6 +392,51 @@ class AgentCoreTests(unittest.TestCase):
             tools_module.searchWeb = original_search
             self.restore_home(root, previous)
 
+    def test_runtime_mcp_resource_tools_honor_late_abort_signals(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            calls = []
+
+            class FlipSignal:
+                def __init__(self):
+                    self.count = 0
+
+                @property
+                def aborted(self):
+                    self.count += 1
+                    return self.count >= 2
+
+            async def list_resources(server=None):
+                calls.append(("list", server))
+                return [{"server": server or "edge", "uri": "memory://one", "name": "one"}]
+
+            async def read_resource(server, uri):
+                calls.append(("read", server, uri))
+                return {"contents": [{"uri": uri, "text": "one"}]}
+
+            runtime = {
+                "listResources": list_resources,
+                "readResource": read_resource,
+                "getDiagnostics": lambda: {"connectedServers": 1},
+                "listTools": lambda: [],
+                "listServerStatus": lambda: [],
+            }
+            tools = {tool.name: tool for tool in core.createBuiltinTools({"mcpRuntime": runtime})}
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+
+            with self.assertRaises(RuntimeError) as list_ctx:
+                run(tools["ListMcpResources"].handler({"server": "edge"}, {**base_context, "abortSignal": FlipSignal()}))
+            self.assertEqual(getattr(list_ctx.exception, "name", None), "AbortError")
+
+            with self.assertRaises(RuntimeError) as read_ctx:
+                run(tools["ReadMcpResource"].handler({"server": "edge", "uri": "memory://one"}, {**base_context, "abortSignal": FlipSignal()}))
+            self.assertEqual(getattr(read_ctx.exception, "name", None), "AbortError")
+            self.assertEqual(calls, [("list", "edge"), ("read", "edge", "memory://one")])
+        finally:
+            self.restore_home(root, previous)
+
     def test_exit_plan_mode_matches_reference_pending_and_approval_flows(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -6104,6 +6149,94 @@ class AgentCoreTests(unittest.TestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_agent_nested_depth_boundary_and_cancellation_propagation(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+
+            depth_one_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            depth_one_parent["metadata"]["depth"] = 1
+            captured = {}
+
+            async def run_subagent(args, _context):
+                captured.update(args)
+                return {"text": "depth ok", "usage": {}, "toolCount": 0, "stopReason": "end_turn"}
+
+            depth_one_result = json.loads(
+                run(
+                    agent.handler(
+                        {"description": "Depth one", "prompt": "go"},
+                        {
+                            "session": depth_one_parent,
+                            "config": config,
+                            "interactive": False,
+                            "askQuestion": lambda *_: "",
+                            "outputJson": lambda *_: None,
+                            "cwd": str(workspace),
+                            "persistSession": lambda: None,
+                            "runSubagent": run_subagent,
+                        },
+                    )
+                )["content"]
+            )
+            self.assertEqual(depth_one_result["status"], "completed")
+            self.assertEqual(captured["childSession"]["metadata"]["depth"], 2)
+
+            depth_two_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            depth_two_parent["metadata"]["depth"] = 2
+            blocked = run(agent.handler({"description": "Blocked", "prompt": "no"}, {"session": depth_two_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "runSubagent": run_subagent}))
+            self.assertTrue(blocked["isError"])
+            self.assertEqual(depth_two_parent["metadata"].get("childAgentIds"), [])
+            self.assertEqual(depth_two_parent["metadata"].get("childSessionIds"), [])
+
+            signal = {"aborted": False, "reason": "parent cancelled"}
+            cancelled_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            events = []
+
+            async def cancel_subagent(_args, _context):
+                self.assertIs(_context["abortSignal"], signal)
+                signal["aborted"] = True
+                error = RuntimeError("parent cancelled")
+                error.name = "AbortError"
+                raise error
+
+            cancelled = run(
+                agent.handler(
+                    {"description": "Cancelled child", "prompt": "stop"},
+                    {
+                        "session": cancelled_parent,
+                        "config": config,
+                        "interactive": False,
+                        "askQuestion": lambda *_: "",
+                        "outputJson": lambda event, data: events.append((event, data)),
+                        "cwd": str(workspace),
+                        "persistSession": lambda: None,
+                        "runSubagent": cancel_subagent,
+                        "abortSignal": signal,
+                    },
+                )
+            )
+            cancelled_payload = json.loads(cancelled["content"])
+            self.assertTrue(cancelled["isError"])
+            self.assertEqual(cancelled_payload["status"], "cancelled")
+            self.assertEqual(cancelled_payload["stop_reason"], "cancelled")
+            self.assertEqual([event for event, _ in events], ["subagent.started", "subagent.failed"])
+            self.assertEqual(events[1][1]["status"], "cancelled")
+            self.assertEqual(events[1][1]["stop_reason"], "cancelled")
+            cancelled_record = run(core.loadChildAgent(cancelled_payload["agent_id"]))
+            self.assertEqual(cancelled_record["status"], "cancelled")
+            self.assertEqual(cancelled_record["stopReason"], "cancelled")
+
+            already_cancelled_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            with self.assertRaises(RuntimeError) as abort_ctx:
+                run(agent.handler({"description": "Already cancelled", "prompt": "no"}, {"session": already_cancelled_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "runSubagent": run_subagent, "abortSignal": {"aborted": True}}))
+            self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")
+            self.assertEqual(already_cancelled_parent["metadata"]["childAgentIds"], [])
+            self.assertEqual(already_cancelled_parent["metadata"]["childSessionIds"], [])
+        finally:
+            self.restore_home(root, previous)
+
     def test_agent_permission_and_stop_reason_helpers_match_reference_edges(self):
         self.assertEqual(core.sanitizePermissionMode("default"), "default")
         self.assertEqual(core.sanitizePermissionMode("bypassPermissions"), "bypassPermissions")
@@ -6614,6 +6747,29 @@ class AgentCoreTests(unittest.TestCase):
             exited = json.loads(run(tools["ExitWorktree"].handler({}, context))["content"])
             self.assertEqual(exited, {"cwd": str(workspace)})
             self.assertEqual(cwd_updates, [entered["cwd"], str(workspace)])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_create_git_worktree_reports_target_and_branch_collisions(self):
+        if not shutil.which("git"):
+            self.skipTest("git is required for worktree parity")
+        root, home, workspace, previous = self.temp_context()
+        try:
+            subprocess.run(["git", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            subprocess.run(["git", "config", "user.email", "agent-core@example.test"], cwd=workspace, check=True)
+            subprocess.run(["git", "config", "user.name", "Agent Core"], cwd=workspace, check=True)
+            (workspace / "README.md").write_text("root\n", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
+            subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+            existing_target = Path(root.name) / "existing-worktree"
+            existing_target.mkdir()
+            with self.assertRaisesRegex(RuntimeError, "Worktree target already exists"):
+                run(core.createGitWorktree(cwd=str(workspace), name="collision", path=str(existing_target), branchName="tess/collision"))
+
+            subprocess.run(["git", "branch", "tess/collision"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            with self.assertRaisesRegex(RuntimeError, "Worktree branch already exists"):
+                run(core.createGitWorktree(cwd=str(workspace), name="collision", path=str(Path(root.name) / "new-worktree"), branchName="tess/collision"))
         finally:
             self.restore_home(root, previous)
 
@@ -7132,6 +7288,72 @@ class AgentCoreTests(unittest.TestCase):
             self.assertFalse(status["connected"])
             self.assertEqual(status["state"], "degraded")
             self.assertIn("HTTP 500 from MCP server edge", status["error"])
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            server.shutdown()
+            server.server_close()
+            self.restore_home(root, previous)
+
+    def test_mcp_runtime_generated_tools_honor_abort_before_and_after_call(self):
+        root, home, workspace, previous = self.temp_context()
+        calls = {"tool": 0}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                request = json.loads(self.rfile.read(length).decode("utf-8"))
+                method = request.get("method")
+                result = {}
+                if method == "initialize":
+                    result = {"serverInfo": {"name": "generated"}}
+                elif method == "tools/list":
+                    result = {"tools": [{"name": "run", "inputSchema": {"type": "object"}}]}
+                elif method == "resources/list":
+                    result = {"resources": []}
+                elif method == "tools/call":
+                    calls["tool"] += 1
+                    result = {"content": [{"type": "text", "text": "ran"}]}
+                raw = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": result}).encode()
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        class FlipSignal:
+            def __init__(self):
+                self.count = 0
+
+            @property
+            def aborted(self):
+                self.count += 1
+                return self.count >= 2
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        runtime = None
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "generated", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            generated_tool = runtime["createToolDefinitions"]()[0]
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+
+            with self.assertRaises(RuntimeError) as pre_ctx:
+                run(generated_tool.handler({}, {**base_context, "abortSignal": {"aborted": True}}))
+            self.assertEqual(getattr(pre_ctx.exception, "name", None), "AbortError")
+            self.assertEqual(calls["tool"], 0)
+
+            with self.assertRaises(RuntimeError) as post_ctx:
+                run(generated_tool.handler({}, {**base_context, "abortSignal": FlipSignal()}))
+            self.assertEqual(getattr(post_ctx.exception, "name", None), "AbortError")
+            self.assertEqual(calls["tool"], 1)
         finally:
             if runtime:
                 run(runtime["close"]())
