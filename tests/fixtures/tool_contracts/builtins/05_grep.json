@@ -1,0 +1,54 @@
+{
+  "description": "Search file contents with ripgrep.",
+  "inputSchema": {
+    "properties": {
+      "-A": {
+        "type": "number"
+      },
+      "-B": {
+        "type": "number"
+      },
+      "-C": {
+        "type": "number"
+      },
+      "-i": {
+        "type": "boolean"
+      },
+      "-n": {
+        "type": "boolean"
+      },
+      "context": {
+        "type": "number"
+      },
+      "glob": {
+        "type": "string"
+      },
+      "head_limit": {
+        "type": "number"
+      },
+      "multiline": {
+        "type": "boolean"
+      },
+      "offset": {
+        "type": "number"
+      },
+      "output_mode": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "pattern": {
+        "type": "string"
+      },
+      "type": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "pattern"
+    ],
+    "type": "object"
+  },
+  "name": "Grep"
+}

@@ -1,0 +1,28 @@
+{
+  "description": "Start proactive monitoring for a background task so the assistant can keep watching it and update the user without another prompt.",
+  "inputSchema": {
+    "properties": {
+      "check_interval_ms": {
+        "type": "number"
+      },
+      "goal": {
+        "type": "string"
+      },
+      "heartbeat_interval_ms": {
+        "type": "number"
+      },
+      "summary_style": {
+        "type": "string"
+      },
+      "task_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_id",
+      "goal"
+    ],
+    "type": "object"
+  },
+  "name": "TaskMonitorStart"
+}

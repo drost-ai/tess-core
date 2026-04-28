@@ -1,0 +1,48 @@
+{
+  "description": "Spawn a delegated subagent to work on a focused task.",
+  "inputSchema": {
+    "properties": {
+      "description": {
+        "type": "string"
+      },
+      "isolation": {
+        "type": "string"
+      },
+      "mode": {
+        "enum": [
+          "default",
+          "acceptEdits",
+          "bypassPermissions",
+          "dontAsk",
+          "auto",
+          "plan"
+        ],
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "prompt": {
+        "type": "string"
+      },
+      "run_in_background": {
+        "type": "boolean"
+      },
+      "subagent_type": {
+        "type": "string"
+      },
+      "team_name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "description",
+      "prompt"
+    ],
+    "type": "object"
+  },
+  "name": "Agent"
+}

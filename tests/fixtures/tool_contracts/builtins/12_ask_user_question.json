@@ -1,0 +1,17 @@
+{
+  "description": "Ask the interactive user one or more multiple-choice questions.",
+  "inputSchema": {
+    "properties": {
+      "questions": {
+        "maxItems": 4,
+        "minItems": 1,
+        "type": "array"
+      }
+    },
+    "required": [
+      "questions"
+    ],
+    "type": "object"
+  },
+  "name": "AskUserQuestion"
+}

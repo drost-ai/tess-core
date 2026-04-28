@@ -1,0 +1,26 @@
+{
+  "description": "Apply exact string replacements inside a file.",
+  "inputSchema": {
+    "properties": {
+      "file_path": {
+        "type": "string"
+      },
+      "new_string": {
+        "type": "string"
+      },
+      "old_string": {
+        "type": "string"
+      },
+      "replace_all": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "file_path",
+      "old_string",
+      "new_string"
+    ],
+    "type": "object"
+  },
+  "name": "Edit"
+}

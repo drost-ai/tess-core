@@ -1,0 +1,24 @@
+{
+  "description": "Read files from disk, including partial line ranges for large text files.",
+  "inputSchema": {
+    "properties": {
+      "file_path": {
+        "type": "string"
+      },
+      "limit": {
+        "type": "number"
+      },
+      "offset": {
+        "type": "number"
+      },
+      "pages": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "file_path"
+    ],
+    "type": "object"
+  },
+  "name": "Read"
+}

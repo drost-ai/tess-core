@@ -1,0 +1,23 @@
+{
+  "description": "Read output from a background task. This is a pull-based inspection tool, not proactive monitoring.",
+  "inputSchema": {
+    "properties": {
+      "block": {
+        "type": "boolean"
+      },
+      "task_id": {
+        "type": "string"
+      },
+      "timeout": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "task_id",
+      "block",
+      "timeout"
+    ],
+    "type": "object"
+  },
+  "name": "TaskOutput"
+}

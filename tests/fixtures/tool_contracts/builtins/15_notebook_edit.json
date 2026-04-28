@@ -1,0 +1,28 @@
+{
+  "description": "Edit Jupyter notebook cells by ID.",
+  "inputSchema": {
+    "properties": {
+      "cell_id": {
+        "type": "string"
+      },
+      "cell_type": {
+        "type": "string"
+      },
+      "edit_mode": {
+        "type": "string"
+      },
+      "new_source": {
+        "type": "string"
+      },
+      "notebook_path": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "notebook_path",
+      "new_source"
+    ],
+    "type": "object"
+  },
+  "name": "NotebookEdit"
+}

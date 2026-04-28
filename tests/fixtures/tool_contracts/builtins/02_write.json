@@ -1,0 +1,19 @@
+{
+  "description": "Write full file contents to disk, creating parent directories when needed.",
+  "inputSchema": {
+    "properties": {
+      "content": {
+        "type": "string"
+      },
+      "file_path": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "file_path",
+      "content"
+    ],
+    "type": "object"
+  },
+  "name": "Write"
+}

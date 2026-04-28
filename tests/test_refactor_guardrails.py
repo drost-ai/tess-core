@@ -57,8 +57,6 @@ LINE_BUDGET_ALLOWLIST = {
     "agent_core/tasks/supervisor.py": 2026,
     "agent_core/tools.py": 1742,
     "product-planning/01-vision-architecture/04-workstreams.md": 600,
-    "tests/fixtures/tool_contracts/builtin_tools.json": 591,
-    "tests/test_agent_core.py": 8495,
 }
 
 

@@ -1,0 +1,19 @@
+{
+  "description": "Read a resource published by a connected MCP server.",
+  "inputSchema": {
+    "properties": {
+      "server": {
+        "type": "string"
+      },
+      "uri": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "server",
+      "uri"
+    ],
+    "type": "object"
+  },
+  "name": "ReadMcpResource"
+}

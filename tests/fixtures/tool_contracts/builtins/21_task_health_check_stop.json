@@ -1,0 +1,15 @@
+{
+  "description": "Stop a daemon-backed health check task.",
+  "inputSchema": {
+    "properties": {
+      "task_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "task_id"
+    ],
+    "type": "object"
+  },
+  "name": "TaskHealthCheckStop"
+}

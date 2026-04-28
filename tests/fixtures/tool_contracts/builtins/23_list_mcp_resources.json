@@ -1,0 +1,12 @@
+{
+  "description": "List resources published by connected MCP servers.",
+  "inputSchema": {
+    "properties": {
+      "server": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "name": "ListMcpResources"
+}

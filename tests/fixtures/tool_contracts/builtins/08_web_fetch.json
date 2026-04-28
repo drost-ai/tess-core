@@ -1,0 +1,19 @@
+{
+  "description": "Fetch a URL and return a text snapshot of its contents.",
+  "inputSchema": {
+    "properties": {
+      "prompt": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "url",
+      "prompt"
+    ],
+    "type": "object"
+  },
+  "name": "WebFetch"
+}

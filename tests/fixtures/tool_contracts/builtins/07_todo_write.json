@@ -1,0 +1,34 @@
+{
+  "description": "Update the session todo list.",
+  "inputSchema": {
+    "properties": {
+      "todos": {
+        "items": {
+          "properties": {
+            "activeForm": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "content",
+            "status",
+            "activeForm"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "todos"
+    ],
+    "type": "object"
+  },
+  "name": "TodoWrite"
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Perform a lightweight web search and return ranked results.",
+  "inputSchema": {
+    "properties": {
+      "allowed_domains": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "blocked_domains": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "query": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "type": "object"
+  },
+  "name": "WebSearch"
+}
