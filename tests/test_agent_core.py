@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import http.server
 import io
@@ -6776,6 +6777,9 @@ class AgentCoreTests(unittest.TestCase):
                         if method == "initialize":
                             item.put({"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "text": "ready"}})
                             item.put({"jsonrpc": "2.0", "method": "notifications/progress", "params": "halfway"})
+                            item.put({"jsonrpc": "2.0", "method": "notifications/tools/list_changed", "params": {"reason": "new-tool"}})
+                            item.put({"jsonrpc": "2.0", "method": "notifications/resources/list_changed", "params": {"reason": "new-resource"}})
+                            item.put({"jsonrpc": "2.0", "method": "notifications/logging/message", "params": {"level": "warning", "data": "log-ready"}})
                 self.send_response(202)
                 self.end_headers()
 
@@ -6806,6 +6810,12 @@ class AgentCoreTests(unittest.TestCase):
                 time.sleep(0.05)
             self.assertTrue(any(event == "mcp.channel_notification" and data["server"] == "sse" for event, data in events))
             self.assertTrue(any(event == "mcp.channel_notification" and data["method"] == "notifications/progress" and data["params"] == {"payload": "halfway"} for event, data in events))
+            self.assertTrue(any(event == "mcp.tools_changed" and data["server"] == "sse" for event, data in events))
+            self.assertTrue(any(event == "mcp.resources_changed" and data["server"] == "sse" for event, data in events))
+            self.assertTrue(any(event == "mcp.log" and data["level"] == "warning" and data["message"] == "log-ready" for event, data in events))
+            status = runtime["listServerStatus"]()[0]
+            self.assertEqual(status["serverInfo"]["name"], "sse-fake")
+            self.assertIsNotNone(status["lastNotificationAt"])
         finally:
             if runtime:
                 run(runtime["close"]())
@@ -6939,6 +6949,84 @@ class AgentCoreTests(unittest.TestCase):
             self.assertFalse(status["connected"])
             self.assertEqual(status["state"], "degraded")
             self.assertIn("HTTP 500 from MCP server edge", status["error"])
+        finally:
+            if runtime:
+                run(runtime["close"]())
+            server.shutdown()
+            server.server_close()
+            self.restore_home(root, previous)
+
+    def test_mcp_protocol_rejects_malformed_ids_batches_and_invalid_json(self):
+        root, home, workspace, previous = self.temp_context()
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                request = json.loads(self.rfile.read(length).decode("utf-8"))
+                method = request.get("method")
+                request_id = request.get("id")
+                if method == "initialize":
+                    payload = {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {
+                            "serverInfo": {"name": "protocol-edge"},
+                            "capabilities": {"tools": {"listChanged": True}, "resources": {"listChanged": True}},
+                        },
+                    }
+                elif method == "tools/list":
+                    payload = {"jsonrpc": "2.0", "id": request_id, "result": {"tools": [{"name": "edge", "inputSchema": {"type": "object"}}]}}
+                elif method == "resources/list":
+                    payload = {"jsonrpc": "2.0", "id": request_id, "result": {"resources": []}}
+                elif method == "tools/call":
+                    variant = request.get("params", {}).get("arguments", {}).get("variant")
+                    if variant == "batch":
+                        self._send_raw(json.dumps([{"jsonrpc": "2.0", "id": request_id, "result": {}}]).encode())
+                        return
+                    if variant == "missing":
+                        self._send_raw(json.dumps({"jsonrpc": "2.0", "result": {}}).encode())
+                        return
+                    if variant == "wrong":
+                        self._send_raw(json.dumps({"jsonrpc": "2.0", "id": int(request_id or 0) + 1, "result": {}}).encode())
+                        return
+                    if variant == "invalid":
+                        self._send_raw(b"{not-json")
+                        return
+                    payload = {"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "ok"}]}}
+                else:
+                    payload = {"jsonrpc": "2.0", "id": request_id, "result": {}}
+                self._send_raw(json.dumps(payload).encode())
+
+            def _send_raw(self, raw):
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        runtime = None
+        try:
+            url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            status = runtime["listServerStatus"]()[0]
+            self.assertEqual(status["serverCapabilities"], {"tools": {"listChanged": True}, "resources": {"listChanged": True}})
+            for variant, message in [
+                ("batch", "batch JSON-RPC response"),
+                ("missing", "missing JSON-RPC id"),
+                ("wrong", "response id did not match"),
+                ("invalid", "Invalid JSON-RPC response"),
+            ]:
+                with self.subTest(variant=variant):
+                    with self.assertRaisesRegex(RuntimeError, message):
+                        run(runtime["callTool"]("edge", "edge", {"variant": variant}))
+                    self.assertEqual(runtime["listServerStatus"]()[0]["state"], "degraded")
+            self.assertEqual(run(runtime["callTool"]("edge", "edge", {"variant": "ok"}))["content"], "ok")
         finally:
             if runtime:
                 run(runtime["close"]())
@@ -7100,6 +7188,164 @@ class AgentCoreTests(unittest.TestCase):
             self.assertTrue(any(event == "mcp.channel_registration_failed" and data["server"] == "missing" for event, data in events))
             run(runtime["close"]())
         finally:
+            self.restore_home(root, previous)
+
+    def test_stdio_mcp_cancellation_cleans_pending_request_and_keeps_connection(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            server = workspace / "slow_mcp.py"
+            server.write_text(
+                textwrap.dedent(
+                    r'''
+                    import json
+                    import sys
+                    import time
+
+                    calls = 0
+
+                    def read_message():
+                        header = b""
+                        while not header.endswith(b"\r\n\r\n"):
+                            chunk = sys.stdin.buffer.read(1)
+                            if not chunk:
+                                return None
+                            header += chunk
+                        length = 0
+                        for line in header.decode().splitlines():
+                            if line.lower().startswith("content-length:"):
+                                length = int(line.split(":", 1)[1].strip())
+                        return json.loads(sys.stdin.buffer.read(length).decode())
+
+                    def send(message):
+                        payload = json.dumps(message).encode()
+                        sys.stdout.buffer.write(f"Content-Length: {len(payload)}\r\n\r\n".encode() + payload)
+                        sys.stdout.buffer.flush()
+
+                    while True:
+                        request = read_message()
+                        if request is None:
+                            break
+                        method = request.get("method")
+                        request_id = request.get("id")
+                        if request_id is None:
+                            continue
+                        if method == "initialize":
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {"serverInfo": {"name": "slow"}}})
+                        elif method == "tools/list":
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {"tools": [{"name": "slow", "inputSchema": {"type": "object"}}]}})
+                        elif method == "resources/list":
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {"resources": []}})
+                        elif method == "tools/call":
+                            calls += 1
+                            if calls == 1:
+                                time.sleep(0.3)
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"call-{calls}"}]}})
+                        else:
+                            send({"jsonrpc": "2.0", "id": request_id, "result": {}})
+                    '''
+                ),
+                encoding="utf-8",
+            )
+            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "slow", "transport": "stdio", "commandOrUrl": sys.executable, "args": [str(server)], "updatedAt": "now", "requestTimeoutSeconds": 2}]}))
+
+            async def cancel_then_retry():
+                with self.assertRaises(asyncio.TimeoutError):
+                    await asyncio.wait_for(runtime["callTool"]("slow", "slow", {}), timeout=0.05)
+                result = await runtime["callTool"]("slow", "slow", {})
+                return result
+
+            result = run(cancel_then_retry())
+            self.assertEqual(result["content"], "call-2")
+            self.assertTrue(runtime["listServerStatus"]()[0]["connected"])
+            run(runtime["close"]())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mcp_blob_lifecycle_uses_stable_paths_and_cleanup(self):
+        root, home, workspace, previous = self.temp_context()
+        previous_keep = os.environ.get("AGENT_CORE_MCP_BLOB_KEEP")
+        os.environ["AGENT_CORE_MCP_BLOB_KEEP"] = "2"
+        try:
+            first = base64.b64encode(b"a" * 65536).decode("ascii")
+            second = base64.b64encode(b"b" * 1024).decode("ascii")
+            third = base64.b64encode(b"c" * 1024).decode("ascii")
+            first_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/large.bin", "mimeType": "application/octet-stream", "blob": first}]}))["contents"][0]["blobSavedTo"]
+            repeated_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/large.bin", "mimeType": "application/octet-stream", "data": first}]}))["contents"][0]["blobSavedTo"]
+            self.assertEqual(first_path, repeated_path)
+            self.assertEqual(Path(first_path).read_bytes(), b"a" * 65536)
+            second_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/second.bin", "blob": second}]}))["contents"][0]["blobSavedTo"]
+            third_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/third.bin", "blob": third}]}))["contents"][0]["blobSavedTo"]
+            self.assertTrue(Path(second_path).exists())
+            self.assertTrue(Path(third_path).exists())
+            self.assertFalse(Path(first_path).exists())
+        finally:
+            if previous_keep is None:
+                os.environ.pop("AGENT_CORE_MCP_BLOB_KEEP", None)
+            else:
+                os.environ["AGENT_CORE_MCP_BLOB_KEEP"] = previous_keep
+            self.restore_home(root, previous)
+
+    def test_plugin_mcp_server_conflict_uses_last_plugin_server_definition(self):
+        root, home, workspace, previous = self.temp_context()
+        server = None
+        boot = None
+        try:
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def log_message(self, *_args):
+                    return
+
+                def do_POST(self):
+                    length = int(self.headers.get("content-length") or 0)
+                    request = json.loads(self.rfile.read(length).decode("utf-8"))
+                    method = request.get("method")
+                    result = {}
+                    if method == "initialize":
+                        result = {"serverInfo": {"name": "plugin-shared"}}
+                    elif method == "tools/list":
+                        result = {"tools": [{"name": "plugin_tool", "description": "Plugin tool", "inputSchema": {"type": "object"}}]}
+                    elif method == "resources/list":
+                        result = {"resources": []}
+                    payload = json.dumps({"jsonrpc": "2.0", "id": request.get("id"), "result": result}).encode()
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            plugin_dir = workspace / "mcp-conflict-plugin"
+            plugin_dir.mkdir()
+            (plugin_dir / "plugin.json").write_text(
+                json.dumps(
+                    {
+                        "id": "conflict",
+                        "version": "1.0.0",
+                        "mcpServers": [
+                            {
+                                "name": "shared",
+                                "transport": "http",
+                                "commandOrUrl": f"http://127.0.0.1:{server.server_address[1]}/rpc",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]}, str(workspace)))
+            config["mcpConfig"] = [{"name": "shared", "transport": "http", "commandOrUrl": "http://127.0.0.1:1/broken", "updatedAt": "now"}]
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            boot = run(core.bootstrapRuntime({"session": session, "config": config}))
+            tools = boot["mcpRuntime"]["listTools"]()
+            self.assertEqual([tool["runtimeName"] for tool in tools], ["mcp__shared__plugin_tool"])
+            self.assertEqual(boot["mcpRuntime"]["listServerStatus"]()[0]["serverInfo"]["name"], "plugin-shared")
+        finally:
+            if boot:
+                run(boot["close"]())
+            if server:
+                server.shutdown()
+                server.server_close()
             self.restore_home(root, previous)
 
 

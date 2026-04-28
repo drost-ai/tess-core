@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import queue
@@ -13,6 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError
+from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 from ._utils import now_iso, pretty_json
@@ -110,12 +112,17 @@ class JsonRpcClient:
         self.cwd = cwd
         self.on_notification = on_notification
         self.next_id = 1
+        self.server_info: dict[str, Any] = {}
+        self.server_capabilities: dict[str, Any] = {}
 
     async def initialize(self) -> None:
-        await self.request(
+        result = await self.request(
             "initialize",
             {"protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": "tess", "version": "0.1.0"}},
         )
+        if isinstance(result, dict):
+            self.server_info = result.get("serverInfo") if isinstance(result.get("serverInfo"), dict) else {}
+            self.server_capabilities = result.get("capabilities") if isinstance(result.get("capabilities"), dict) else {}
         await self.notify("notifications/initialized")
 
     async def request(self, method: str, params: Any = None) -> Any:
@@ -143,7 +150,7 @@ class HttpMcpClient(JsonRpcClient):
         headers = {"content-type": "application/json", "accept": "application/json, text/event-stream", **(self.config.get("headers") or {})}
         req = Request(self.config["commandOrUrl"], data=body, headers=headers, method="POST")
         try:
-            with urlopen(req, timeout=30) as response:
+            with urlopen(req, timeout=float(self.config.get("requestTimeoutSeconds") or 30)) as response:
                 if response.status in (202, 204):
                     return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id"))
                 raw = response.read().decode("utf-8", errors="replace")
@@ -196,6 +203,10 @@ class SseMcpClient(JsonRpcClient):
             if isinstance(queued, BaseException):
                 raise queued
             return queued
+        except asyncio.CancelledError:
+            if isinstance(request_id, int):
+                self.pending.pop(request_id, None)
+            raise
         except Exception:
             if isinstance(request_id, int):
                 self.pending.pop(request_id, None)
@@ -208,7 +219,7 @@ class SseMcpClient(JsonRpcClient):
             post_url = self.post_url
         req = Request(post_url, data=body, headers=headers, method="POST")
         try:
-            with urlopen(req, timeout=30) as response:
+            with urlopen(req, timeout=float(self.config.get("requestTimeoutSeconds") or 30)) as response:
                 if response.status in (202, 204):
                     return _parse_http_rpc_response(response.status, "", response.headers.get("content-type", ""), request.get("id")), True
                 raw = response.read().decode("utf-8", errors="replace")
@@ -230,7 +241,7 @@ class SseMcpClient(JsonRpcClient):
         try:
             headers = {"accept": "text/event-stream", **(self.config.get("headers") or {})}
             req = Request(self.config["commandOrUrl"], headers=headers, method="GET")
-            with urlopen(req, timeout=30) as response:
+            with urlopen(req, timeout=float(self.config.get("streamTimeoutSeconds") or 30)) as response:
                 self.stream_response = response
                 while not self.stop_event.is_set():
                     raw_line = response.readline()
@@ -266,6 +277,9 @@ class SseMcpClient(JsonRpcClient):
             payload = json.loads(data)
         except Exception:
             return
+        if isinstance(payload, list):
+            self._reject_pending(RuntimeError("MCP server returned a batch JSON-RPC response."))
+            return
         if event_name == "endpoint":
             endpoint = payload if isinstance(payload, dict) else {}
             next_url = endpoint.get("url") if isinstance(endpoint.get("url"), str) else endpoint.get("endpoint") if isinstance(endpoint.get("endpoint"), str) else None
@@ -285,6 +299,14 @@ class SseMcpClient(JsonRpcClient):
             response_queue = self.pending.pop(request_id, None)
             if response_queue:
                 response_queue.put(message)
+            return
+        if "result" in message or "error" in message:
+            self._reject_pending(RuntimeError("MCP server response id did not match the pending request."))
+
+    def _reject_pending(self, error: BaseException) -> None:
+        for response_queue in list(self.pending.values()):
+            response_queue.put(error)
+        self.pending.clear()
 
 
 def _close_http_response_socket(response: Any) -> None:
@@ -346,10 +368,13 @@ class StdioMcpClient(JsonRpcClient):
         self.pending[int(request_id)] = response_queue
         await asyncio.to_thread(self._write_message, request)
         try:
-            response = await asyncio.to_thread(response_queue.get, True, 30)
+            response = await asyncio.to_thread(response_queue.get, True, float(self.config.get("requestTimeoutSeconds") or 30))
         except queue.Empty as exc:
             self.pending.pop(int(request_id), None)
             raise TimeoutError(f"Timed out waiting for MCP response {request_id}") from exc
+        except asyncio.CancelledError:
+            self.pending.pop(int(request_id), None)
+            raise
         if isinstance(response, BaseException):
             raise response
         return response
@@ -404,6 +429,12 @@ class StdioMcpClient(JsonRpcClient):
             message = json.loads(payload)
         except Exception:
             return
+        if isinstance(message, list):
+            self._reject_pending(RuntimeError("MCP server returned a batch JSON-RPC response."))
+            return
+        if not isinstance(message, dict):
+            self._reject_pending(RuntimeError("MCP server returned an invalid JSON-RPC response."))
+            return
         request_id = message.get("id")
         method = message.get("method")
         if method and request_id is None:
@@ -414,6 +445,14 @@ class StdioMcpClient(JsonRpcClient):
             response_queue = self.pending.pop(request_id, None)
             if response_queue:
                 response_queue.put(message)
+            return
+        if "result" in message or "error" in message:
+            self._reject_pending(RuntimeError("MCP server response id did not match the pending request."))
+
+    def _reject_pending(self, error: BaseException) -> None:
+        for response_queue in list(self.pending.values()):
+            response_queue.put(error)
+        self.pending.clear()
 
 class contextlib_suppress:
     def __enter__(self):
@@ -442,6 +481,9 @@ def _create_state(config: dict[str, Any]) -> dict[str, Any]:
         "client": None,
         "lastConnectedAt": None,
         "lastErrorAt": None,
+        "serverCapabilities": {},
+        "serverInfo": {},
+        "lastNotificationAt": None,
         "channelRegistration": {"requested": False, "status": "not_requested"},
     }
 
@@ -454,9 +496,9 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
         except Exception:
             pass
     try:
-        client = _create_client(state["config"], cwd, on_event)
+        client = _create_client(state["config"], cwd, on_event, state)
         await client.initialize()
-        state.update({"client": client, "connected": True, "state": "connected", "lastConnectedAt": now_iso()})
+        state.update({"client": client, "connected": True, "state": "connected", "lastConnectedAt": now_iso(), "serverCapabilities": client.server_capabilities, "serverInfo": client.server_info})
         state["tools"] = await _refresh_tools(state)
         state["resources"] = await _refresh_resources(state)
         on_event("mcp.server_connected", {"server": state["config"]["name"], "transport": state["config"].get("transport"), "tools": len(state["tools"]), "resources": len(state["resources"])})
@@ -465,17 +507,9 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
         on_event("mcp.server_connection_failed", {"server": state["config"].get("name"), "transport": state["config"].get("transport"), "reason": state.get("error")})
 
 
-def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> JsonRpcClient:
+def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any], state: dict[str, Any] | None = None) -> JsonRpcClient:
     def notification(payload: dict[str, Any]) -> None:
-        params = payload.get("params")
-        on_event(
-            "mcp.channel_notification",
-            {
-                "server": config.get("name"),
-                "method": payload.get("method"),
-                "params": params if isinstance(params, dict) else {"payload": params},
-            },
-        )
+        _emit_mcp_notification(config, payload, on_event, state)
 
     if config.get("transport") == "stdio":
         return StdioMcpClient(config, cwd, notification)
@@ -504,6 +538,8 @@ async def _require_connected(states: list[dict[str, Any]], server: str, cwd: str
 async def _request_with_state_tracking(state: dict[str, Any], method: str, params: Any = None) -> Any:
     try:
         return await state["client"].request(method, params)
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         _mark_state_failure(state, exc)
         raise
@@ -571,6 +607,9 @@ def _server_status(state: dict[str, Any]) -> dict[str, Any]:
         "tools": len(state["tools"]),
         "resources": len(state["resources"]),
         "capabilities": {"tools": len(state["tools"]), "resources": len(state["resources"]), "channelsSupported": bool(state["channelRegistration"].get("requested")) or state["channelRegistration"].get("status") == "registered"},
+        "serverCapabilities": state.get("serverCapabilities") or {},
+        "serverInfo": state.get("serverInfo") or {},
+        "lastNotificationAt": state.get("lastNotificationAt"),
         "lastConnectedAt": state.get("lastConnectedAt"),
         "lastErrorAt": state.get("lastErrorAt"),
         "channelRegistration": state["channelRegistration"],
@@ -582,6 +621,45 @@ def _mark_state_failure(state: dict[str, Any], error: Exception) -> None:
     state["state"] = "degraded" if state["tools"] or state["resources"] else "disconnected"
     state["error"] = str(error)
     state["lastErrorAt"] = now_iso()
+
+
+def _emit_mcp_notification(config: dict[str, Any], payload: dict[str, Any], on_event: Callable[..., Any], state: dict[str, Any] | None = None) -> None:
+    method = payload.get("method")
+    params = payload.get("params")
+    normalized_params = params if isinstance(params, dict) else {"payload": params}
+    if state is not None:
+        state["lastNotificationAt"] = now_iso()
+    on_event(
+        "mcp.channel_notification",
+        {
+            "server": config.get("name"),
+            "method": method,
+            "params": normalized_params,
+        },
+    )
+    if method in {"notifications/tools/list_changed", "tools/list_changed"}:
+        if state is not None:
+            state["toolsStale"] = True
+        on_event("mcp.tools_changed", {"server": config.get("name"), "method": method, "params": normalized_params})
+    elif method in {"notifications/resources/list_changed", "resources/list_changed"}:
+        if state is not None:
+            state["resourcesStale"] = True
+        on_event("mcp.resources_changed", {"server": config.get("name"), "method": method, "params": normalized_params})
+    elif method in {"notifications/message", "notifications/logging/message", "logging/message"}:
+        level = normalized_params.get("level") or normalized_params.get("severity")
+        message = normalized_params.get("message") or normalized_params.get("text") or normalized_params.get("data") or normalized_params.get("payload")
+        on_event(
+            "mcp.log",
+            _without_none_values(
+                {
+                    "server": config.get("name"),
+                    "method": method,
+                    "level": level if isinstance(level, str) else None,
+                    "message": message if isinstance(message, str) else pretty_json(message) if message is not None else None,
+                    "params": normalized_params,
+                }
+            ),
+        )
 
 
 async def _register_requested_channels(states: list[dict[str, Any]], channels: list[str], session_id: str | None, on_event: Callable[..., Any]) -> None:
@@ -654,10 +732,36 @@ async def _normalize_read_resource_output(server: str, value: Any) -> dict[str, 
 async def _save_blob_content(server: str, uri: str, data: str) -> str:
     target_dir = Path(getStateRoot()) / "mcp-blobs" / _sanitize_name(server)
     target_dir.mkdir(parents=True, exist_ok=True)
-    ext = Path(uri).suffix or ".bin"
-    target = target_dir / f"{_sanitize_name(Path(uri).name or str(uuid.uuid4()))}{ext}"
-    target.write_bytes(base64.b64decode(data))
+    raw = base64.b64decode(data)
+    target = target_dir / _blob_file_name(uri, raw)
+    target.write_bytes(raw)
+    _cleanup_blob_dir(target_dir, keep=int(os.environ.get("AGENT_CORE_MCP_BLOB_KEEP") or 64))
     return str(target)
+
+
+def _blob_file_name(uri: str, raw: bytes) -> str:
+    parsed = urlparse(uri)
+    basename = Path(unquote(parsed.path)).name or Path(unquote(uri)).name
+    if not basename:
+        basename = str(uuid.uuid5(uuid.NAMESPACE_URL, uri))
+    ext = Path(basename).suffix
+    if not ext or len(ext) > 16 or not re.fullmatch(r"\.[A-Za-z0-9._-]+", ext):
+        ext = ".bin"
+    stem = Path(basename).stem or _sanitize_name(uri)
+    digest = hashlib.sha256(raw).hexdigest()[:16]
+    return f"{_sanitize_name(stem)}-{digest}{ext}"
+
+
+def _cleanup_blob_dir(target_dir: Path, keep: int = 64) -> None:
+    if keep <= 0:
+        return
+    try:
+        files = [path for path in target_dir.iterdir() if path.is_file()]
+    except FileNotFoundError:
+        return
+    for path in sorted(files, key=lambda item: item.stat().st_mtime_ns, reverse=True)[keep:]:
+        with contextlib_suppress():
+            path.unlink()
 
 
 def _runtime_tool_name(server: str, tool: str) -> str:
@@ -691,7 +795,11 @@ def _parse_http_rpc_response(status: int, raw: str, content_type: str, request_i
         return _parse_sse_rpc_response(raw, request_id)
     if not raw.strip():
         return {"jsonrpc": "2.0", "id": request_id, "result": {}}
-    return json.loads(raw)
+    try:
+        payload = json.loads(raw)
+    except Exception as exc:
+        raise RuntimeError("Invalid JSON-RPC response from MCP server.") from exc
+    return _validate_json_rpc_response(payload, request_id)
 
 
 def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
@@ -704,8 +812,25 @@ def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
         except Exception:
             continue
         if isinstance(payload, dict) and _json_rpc_id_matches(payload, request_id):
-            return payload
+            return _validate_json_rpc_response(payload, request_id, id_already_matched=True)
     raise RuntimeError("No matching SSE JSON-RPC response was received.")
+
+
+def _validate_json_rpc_response(payload: Any, request_id: int | None, id_already_matched: bool = False) -> dict[str, Any]:
+    if isinstance(payload, list):
+        raise RuntimeError("MCP server returned a batch JSON-RPC response.")
+    if not isinstance(payload, dict):
+        raise RuntimeError("MCP server returned an invalid JSON-RPC response.")
+    if request_id is not None and not id_already_matched:
+        if "id" not in payload:
+            raise RuntimeError("MCP server response missing JSON-RPC id.")
+        if not _json_rpc_id_matches(payload, request_id):
+            raise RuntimeError("MCP server response id did not match the pending request.")
+    if "error" in payload or "result" in payload:
+        return payload
+    if request_id is None and payload.get("method"):
+        return {"jsonrpc": "2.0", "id": None, "result": {}}
+    raise RuntimeError("MCP server returned an invalid JSON-RPC response.")
 
 
 def _json_rpc_id_matches(payload: dict[str, Any], request_id: int | None) -> bool:
