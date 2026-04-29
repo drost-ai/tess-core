@@ -38,6 +38,17 @@ def collect_observations(
         }
     if "logs" in selected:
         observations["logs"] = tree_snapshot(sandbox.logs)
+    provider_runtime = state.get("provider_runtime")
+    if provider_runtime:
+        provider_observations = provider_runtime.observations()
+        if "provider_requests" in selected:
+            observations["provider_requests"] = provider_observations["provider_requests"]
+        if "provider_events" in selected:
+            observations["provider_events"] = provider_observations["provider_events"]
+        if "provider_response" in selected:
+            observations["provider_response"] = provider_observations["provider_results"]
+        if "provider_state" in selected:
+            observations["provider_state"] = provider_observations["provider_state"]
     return observations
 
 

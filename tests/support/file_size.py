@@ -18,6 +18,7 @@ SKIPPED_DIR_NAMES = {
     ".git",
     ".mypy_cache",
     ".pytest_cache",
+    ".scenario-runs",
     "__pycache__",
     "build",
     "dist",
@@ -70,4 +71,3 @@ def find_line_budget_violations(
             )
 
     return failures
-

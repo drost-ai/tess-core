@@ -8,6 +8,7 @@ import agent_core as core
 from .assertions import assert_file_exists, assert_observation, assert_session, validate_workspace_rel_path
 from .capture import collect_observations, write_observations
 from .debug_bundle import write_debug_bundle
+from .fake_providers import FakeProviderRuntime, assert_provider_capture, assert_provider_response
 from .loader import load_scenario
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
 from .sandbox import ScenarioSandbox
@@ -48,6 +49,9 @@ async def run_scenario_async(
         debug_dir = write_debug_bundle(resolved, sandbox, observations, failure) if failure else None
         return ScenarioResult(resolved.id, "failed" if failure else "passed", sandbox.run_id, str(sandbox.run_dir), steps, raw_path, normalized_path, debug_dir, failure)
     finally:
+        provider_runtime = state.get("provider_runtime")
+        if provider_runtime:
+            provider_runtime.close()
         sandbox.cleanup_sandbox(passed=failure is None)
         core.resetConfiguredRuntimeHome()
 
@@ -107,6 +111,18 @@ async def _execute_step(
     if step_type == "assert_observation":
         assert_observation(observations, data)
         return ["observations"]
+    if step_type == "provider_request":
+        runtime = state.setdefault("provider_runtime", FakeProviderRuntime())
+        result = await runtime.run(data)
+        state["provider_results"] = runtime.results
+        state["provider_last_result"] = result
+        return ["provider_response", "provider_requests", "provider_events"]
+    if step_type == "assert_provider_response":
+        assert_provider_response(state, data)
+        return ["provider_response"]
+    if step_type == "assert_provider_capture":
+        assert_provider_capture(state, data)
+        return ["provider_requests", "provider_events"]
     if step_type == "capture":
         include = data.get("include") or scenario.capture.get("include") or []
         observations.clear()

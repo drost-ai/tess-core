@@ -1,0 +1,295 @@
+{
+  "id": "providers.fake-provider-pack",
+  "title": "Fake Provider Pack",
+  "area": "providers",
+  "mode": ["python"],
+  "steps": [
+    {
+      "provider_request": {
+        "provider": "openai",
+        "api": "responses",
+        "maxAttempts": 2,
+        "runtime": {
+          "includePartialMessages": true,
+          "streamProviderMessages": true
+        },
+        "script": {
+          "attempts": [
+            {
+              "createError": "socket hang up"
+            },
+            {
+              "stream": [
+                {
+                  "type": "response.output_text.delta",
+                  "delta": "Plan"
+                },
+                {
+                  "type": "response.completed",
+                  "response": {
+                    "output": [
+                      {
+                        "type": "message",
+                        "content": [
+                          {
+                            "type": "output_text",
+                            "text": "Plan done"
+                          }
+                        ]
+                      }
+                    ],
+                    "usage": {
+                      "input_tokens": 12,
+                      "output_tokens": 4
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "assert_provider_response": {
+        "index": 0,
+        "provider": "openai",
+        "api": "responses",
+        "status": "passed",
+        "content": [
+          {
+            "type": "text",
+            "text": "Plan done"
+          }
+        ],
+        "usage": {
+          "input_tokens": 12,
+          "output_tokens": 4
+        }
+      }
+    },
+    {
+      "assert_provider_capture": {
+        "provider": "openai",
+        "api": "responses",
+        "requestCount": 2,
+        "eventsInclude": [
+          "provider.request_started",
+          "provider.retrying",
+          "provider.stream_event",
+          "provider.recovered",
+          "message.assistant.partial"
+        ],
+        "requestPathEquals": [
+          {
+            "path": "params.stream",
+            "equals": true
+          },
+          {
+            "path": "params.model",
+            "equals": "gpt-5.4"
+          }
+        ]
+      }
+    },
+    {
+      "provider_request": {
+        "provider": "anthropic",
+        "api": "messages",
+        "maxAttempts": 2,
+        "runtime": {
+          "streamProviderMessages": true,
+          "includePartialMessages": true
+        },
+        "script": {
+          "messages": [
+            {
+              "status": 500,
+              "body": {
+                "error": {
+                  "type": "overloaded_error",
+                  "message": "temporary"
+                }
+              }
+            },
+            {
+              "contentType": "text/event-stream",
+              "body": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"model\":\"claude-sonnet-4-6\",\"usage\":{\"input_tokens\":9}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Anthropic ok\"}}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":3}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "assert_provider_response": {
+        "index": 1,
+        "provider": "anthropic",
+        "api": "messages",
+        "status": "passed",
+        "content": [
+          {
+            "type": "text",
+            "text": "Anthropic ok"
+          }
+        ],
+        "usage": {
+          "input_tokens": 9,
+          "output_tokens": 3
+        },
+        "stopReason": "end_turn"
+      }
+    },
+    {
+      "assert_provider_capture": {
+        "provider": "anthropic",
+        "api": "messages",
+        "requestCount": 2,
+        "eventsInclude": [
+          "provider.retrying",
+          "provider.recovered",
+          "provider.stream_event"
+        ],
+        "requestPathEquals": [
+          {
+            "path": "body.stream",
+            "equals": true
+          },
+          {
+            "path": "headers.x-api-key",
+            "equals": "test-anthropic-key"
+          }
+        ]
+      }
+    },
+    {
+      "provider_request": {
+        "provider": "anthropic",
+        "api": "count_tokens",
+        "script": {
+          "countTokens": [
+            {
+              "body": {
+                "input_tokens": 77
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "assert_provider_response": {
+        "index": 2,
+        "provider": "anthropic",
+        "api": "count_tokens",
+        "status": "passed",
+        "inputTokens": 77,
+        "source": "anthropic_count"
+      }
+    },
+    {
+      "provider_request": {
+        "provider": "openai",
+        "api": "chat_completions",
+        "expectFailure": true,
+        "maxAttempts": 1,
+        "streamIdleTimeoutMs": 1,
+        "script": {
+          "attempts": [
+            {
+              "stream": [
+                {
+                  "delayMs": 40,
+                  "chunk": {
+                    "choices": [
+                      {
+                        "delta": {
+                          "content": "late"
+                        },
+                        "finish_reason": "stop"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "assert_provider_response": {
+        "index": 3,
+        "provider": "openai",
+        "api": "chat_completions",
+        "status": "failed",
+        "failureCategory": "timeout",
+        "failurePhase": "stream_open",
+        "retryable": true
+      }
+    },
+    {
+      "provider_request": {
+        "provider": "openai",
+        "api": "chat_completions",
+        "expectFailure": true,
+        "maxAttempts": 2,
+        "streamIdleTimeoutMs": 1000,
+        "script": {
+          "attempts": [
+            {
+              "stream": [
+                {
+                  "chunk": {
+                    "choices": [
+                      {
+                        "delta": {
+                          "content": "partial"
+                        },
+                        "finish_reason": null
+                      }
+                    ]
+                  }
+                },
+                {
+                  "abort": true,
+                  "delayMs": 80
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "assert_provider_response": {
+        "index": 4,
+        "provider": "openai",
+        "api": "chat_completions",
+        "status": "failed",
+        "failureCategory": "cancelled",
+        "retryable": false,
+        "hadAssistantOutput": true
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "provider_requests",
+          "provider_events",
+          "provider_response",
+          "provider_state",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "provider_requests",
+      "provider_events",
+      "provider_response",
+      "provider_state",
+      "step_results"
+    ]
+  }
+}
