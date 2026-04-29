@@ -1,0 +1,35 @@
+{
+  "createdAt": "<timestamp>",
+  "cwd": "<workspace>",
+  "effort": "xhigh",
+  "id": "<uuid:1>",
+  "messages": [],
+  "metadata": {
+    "assistantDescription": null,
+    "assistantName": null,
+    "childAgentIds": [],
+    "childSessionIds": [],
+    "compactions": 0,
+    "depth": 0,
+    "originalCwd": "<workspace>",
+    "planMode": {
+      "state": "inactive"
+    },
+    "usage": {
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "toolCalls": 0,
+      "turns": 0
+    }
+  },
+  "model": "gpt-5.4",
+  "name": null,
+  "permissionMode": "bypassPermissions",
+  "provider": "openai",
+  "providerProfileName": "openai",
+  "systemPrompt": "You are assistant, a helpful and reliable software engineering agent.\nWork directly in the user's codebase.\nPrefer concrete actions over long explanations.\nUse tools when needed, keep edits minimal, and preserve user intent.\nBefore modifying files, inspect the relevant code and respect the existing style.\nUse SetStatus to keep the live UI updated when you change phases or begin a meaningful chunk of work. Keep statuses brief and concrete, for example: 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",
+  "todos": [],
+  "updatedAt": "<timestamp>"
+}

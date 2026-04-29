@@ -1,0 +1,64 @@
+{
+  "area": "smoke",
+  "capture": {
+    "include": [
+      "session",
+      "storage_tree",
+      "workspace_tree",
+      "step_results",
+      "environment",
+      "logs"
+    ]
+  },
+  "id": "smoke.basic-session",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "hello from harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "create_session": {
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "provider": "openai"
+      }
+    },
+    {
+      "save_session": {}
+    },
+    {
+      "load_session": {}
+    },
+    {
+      "assert_session": {
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "provider": "openai"
+      }
+    },
+    {
+      "assert_file_exists": {
+        "path": "README.md"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "storage_tree",
+          "workspace_tree",
+          "step_results",
+          "environment",
+          "logs"
+        ]
+      }
+    }
+  ],
+  "title": "Basic Session Smoke"
+}

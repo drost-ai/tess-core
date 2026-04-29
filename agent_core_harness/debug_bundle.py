@@ -4,8 +4,8 @@ import json
 import stat
 from typing import Any
 
-from .capture import normalize_observations
 from .model import Scenario
+from .normalization import normalize_observations
 from .sandbox import ScenarioSandbox
 
 
@@ -14,6 +14,7 @@ def write_debug_bundle(
     sandbox: ScenarioSandbox,
     observations: dict[str, Any],
     failure: dict[str, Any],
+    extras: dict[str, str] | None = None,
 ) -> str:
     sandbox.debug.mkdir(parents=True, exist_ok=True)
     manifest_path = sandbox.debug / "manifest.json"
@@ -27,6 +28,8 @@ def write_debug_bundle(
     normalized = normalize_observations(observations, sandbox)
     normalized_path.write_text(json.dumps(normalized, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     failure_path.write_text(json.dumps(failure, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    for filename, content in (extras or {}).items():
+        (sandbox.debug / filename).write_text(content, encoding="utf-8")
     replay = f"#!/usr/bin/env bash\nPYTHONDONTWRITEBYTECODE=1 python3 -m agent_core_harness run {scenario.id}\n"
     replay_path.write_text(replay, encoding="utf-8")
     replay_path.chmod(replay_path.stat().st_mode | stat.S_IXUSR)

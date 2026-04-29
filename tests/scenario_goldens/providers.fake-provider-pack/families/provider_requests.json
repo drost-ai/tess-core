@@ -1,0 +1,232 @@
+[
+  {
+    "api": "responses",
+    "attempt": 1,
+    "options": {
+      "apiKey": "test-token",
+      "dangerouslyAllowBrowser": false,
+      "fetch": "<callable>"
+    },
+    "params": {
+      "input": [
+        {
+          "content": "Hello from the harness.",
+          "role": "user",
+          "type": "message"
+        }
+      ],
+      "instructions": "Harness provider system.",
+      "max_output_tokens": 16384,
+      "model": "gpt-5.4",
+      "store": false,
+      "stream": true
+    },
+    "provider": "openai"
+  },
+  {
+    "api": "responses",
+    "attempt": 2,
+    "options": {
+      "apiKey": "test-token",
+      "dangerouslyAllowBrowser": false,
+      "fetch": "<callable>"
+    },
+    "params": {
+      "input": [
+        {
+          "content": "Hello from the harness.",
+          "role": "user",
+          "type": "message"
+        }
+      ],
+      "instructions": "Harness provider system.",
+      "max_output_tokens": 16384,
+      "model": "gpt-5.4",
+      "store": false,
+      "stream": true
+    },
+    "provider": "openai"
+  },
+  {
+    "api": "messages",
+    "attempt": 1,
+    "body": {
+      "max_tokens": 16384,
+      "messages": [
+        {
+          "content": [
+            {
+              "text": "Hello from the harness.",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "model": "claude-sonnet-4-6",
+      "stream": true,
+      "system": [
+        {
+          "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
+          "type": "text"
+        },
+        {
+          "text": "Harness provider system.",
+          "type": "text"
+        }
+      ]
+    },
+    "headers": {
+      "accept": "text/event-stream",
+      "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "user-agent": "tess/0.1.0 (sdk-cli)",
+      "x-api-key": "test-anthropic-key",
+      "x-app": "cli"
+    },
+    "method": "POST",
+    "path": "/v1/messages?beta=true",
+    "provider": "anthropic"
+  },
+  {
+    "api": "messages",
+    "attempt": 2,
+    "body": {
+      "max_tokens": 16384,
+      "messages": [
+        {
+          "content": [
+            {
+              "text": "Hello from the harness.",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "model": "claude-sonnet-4-6",
+      "stream": true,
+      "system": [
+        {
+          "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
+          "type": "text"
+        },
+        {
+          "text": "Harness provider system.",
+          "type": "text"
+        }
+      ]
+    },
+    "headers": {
+      "accept": "text/event-stream",
+      "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "user-agent": "tess/0.1.0 (sdk-cli)",
+      "x-api-key": "test-anthropic-key",
+      "x-app": "cli"
+    },
+    "method": "POST",
+    "path": "/v1/messages?beta=true",
+    "provider": "anthropic"
+  },
+  {
+    "api": "count_tokens",
+    "attempt": 1,
+    "body": {
+      "messages": [
+        {
+          "content": [
+            {
+              "text": "Hello from the harness.",
+              "type": "text"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "model": "claude-sonnet-4-6",
+      "system": [
+        {
+          "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
+          "type": "text"
+        },
+        {
+          "text": "Harness provider system.",
+          "type": "text"
+        }
+      ]
+    },
+    "headers": {
+      "accept": "application/json",
+      "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+      "user-agent": "tess/0.1.0 (sdk-cli)",
+      "x-api-key": "test-anthropic-key",
+      "x-app": "cli"
+    },
+    "method": "POST",
+    "path": "/v1/messages/count_tokens",
+    "provider": "anthropic"
+  },
+  {
+    "api": "chat_completions",
+    "attempt": 1,
+    "options": {
+      "apiKey": "test-token",
+      "dangerouslyAllowBrowser": false,
+      "fetch": "<callable>"
+    },
+    "params": {
+      "max_tokens": 16384,
+      "messages": [
+        {
+          "content": "Harness provider system.",
+          "role": "system"
+        },
+        {
+          "content": "Hello from the harness.",
+          "role": "user"
+        }
+      ],
+      "model": "gpt-5.4",
+      "store": false,
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "provider": "openai"
+  },
+  {
+    "api": "chat_completions",
+    "attempt": 1,
+    "options": {
+      "apiKey": "test-token",
+      "dangerouslyAllowBrowser": false,
+      "fetch": "<callable>"
+    },
+    "params": {
+      "max_tokens": 16384,
+      "messages": [
+        {
+          "content": "Harness provider system.",
+          "role": "system"
+        },
+        {
+          "content": "Hello from the harness.",
+          "role": "user"
+        }
+      ],
+      "model": "gpt-5.4",
+      "store": false,
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    "provider": "openai"
+  }
+]

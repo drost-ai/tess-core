@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 from .model import Scenario, StepResult
+from .normalization import normalize_observations
 from .sandbox import ScenarioSandbox
 
 
@@ -78,40 +78,3 @@ def tree_snapshot(root: Path) -> list[dict[str, Any]]:
                 pass
         entries.append(item)
     return entries
-
-
-def normalize_observations(value: Any, sandbox: ScenarioSandbox) -> Any:
-    uuid_map: dict[str, str] = {}
-
-    def normalize(item: Any) -> Any:
-        if isinstance(item, dict):
-            return {key: normalize(val) for key, val in item.items()}
-        if isinstance(item, list):
-            return [normalize(val) for val in item]
-        if isinstance(item, str):
-            return _normalize_string(item, sandbox, uuid_map)
-        return item
-
-    return normalize(value)
-
-
-def _normalize_string(value: str, sandbox: ScenarioSandbox, uuid_map: dict[str, str]) -> str:
-    normalized = value
-    replacements = [
-        (str(sandbox.run_dir), "<run-dir>"),
-        (str(sandbox.home), "<runtime-home>"),
-        (str(sandbox.workspace), "<workspace>"),
-    ]
-    for raw, marker in replacements:
-        normalized = normalized.replace(raw, marker)
-    if re.match(r"^\d{4}-\d{2}-\d{2}T", normalized):
-        return "<timestamp>"
-    uuid_pattern = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
-
-    def replace_uuid(match: re.Match[str]) -> str:
-        raw = match.group(0)
-        if raw not in uuid_map:
-            uuid_map[raw] = f"<uuid:{len(uuid_map) + 1}>"
-        return uuid_map[raw]
-
-    return uuid_pattern.sub(replace_uuid, normalized)

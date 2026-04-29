@@ -1,0 +1,11 @@
+{
+  "eventCount": 19,
+  "requestCount": 7,
+  "resultStatuses": [
+    "passed",
+    "passed",
+    "passed",
+    "failed",
+    "failed"
+  ]
+}

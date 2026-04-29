@@ -1,0 +1,5 @@
+{
+  "AGENT_CORE_HARNESS_RUN_ID": "<run-id>",
+  "AGENT_CORE_HARNESS_SCENARIO_ID": "smoke.basic-session",
+  "AGENT_CORE_HOME": "<runtime-home>"
+}

@@ -56,6 +56,7 @@ class ScenarioResult:
     steps: list[StepResult]
     observationsPath: str
     normalizedPath: str
+    golden: dict[str, Any] | None = None
     debugDir: str | None = None
     failure: dict[str, Any] | None = None
 
@@ -69,6 +70,8 @@ class ScenarioResult:
             "observationsPath": self.observationsPath,
             "normalizedPath": self.normalizedPath,
         }
+        if self.golden:
+            data["golden"] = self.golden
         if self.debugDir:
             data["debugDir"] = self.debugDir
         if self.failure:

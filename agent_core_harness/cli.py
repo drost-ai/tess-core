@@ -18,6 +18,8 @@ def main(argv: list[str] | None = None) -> int:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("scenario_id")
     run_parser.add_argument("--cleanup", choices=["never", "success"], default="never")
+    run_parser.add_argument("--golden", choices=["off", "compare", "update"], default="off")
+    run_parser.add_argument("--goldens-dir")
     args = parser.parse_args(argv)
     try:
         if args.command == "list":
@@ -40,7 +42,14 @@ def _list(scenarios_dir: str | None) -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
-    result = run_scenario(args.scenario_id, scenarios_dir=args.scenarios_dir, runs_dir=args.runs_dir, cleanup=args.cleanup)
+    result = run_scenario(
+        args.scenario_id,
+        scenarios_dir=args.scenarios_dir,
+        runs_dir=args.runs_dir,
+        cleanup=args.cleanup,
+        golden=args.golden,
+        goldens_dir=args.goldens_dir,
+    )
     print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
     if result.status == "passed":
         return 0

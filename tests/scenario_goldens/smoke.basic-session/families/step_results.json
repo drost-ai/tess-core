@@ -1,0 +1,69 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "create_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "save_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 2,
+    "observationKeys": [
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "load_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 3,
+    "observationKeys": [
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 4,
+    "observationKeys": [
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_file_exists"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 5,
+    "observationKeys": [
+      "environment",
+      "logs",
+      "run",
+      "scenario",
+      "session",
+      "step_results",
+      "storage_tree",
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]

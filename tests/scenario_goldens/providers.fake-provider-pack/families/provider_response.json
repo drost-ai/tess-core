@@ -1,0 +1,98 @@
+[
+  {
+    "api": "responses",
+    "provider": "openai",
+    "response": {
+      "content": [
+        {
+          "text": "Plan done",
+          "type": "text"
+        }
+      ],
+      "model": "gpt-5.4",
+      "stopReason": "stop",
+      "usage": {
+        "input_tokens": 12,
+        "output_tokens": 4
+      }
+    },
+    "status": "passed"
+  },
+  {
+    "api": "messages",
+    "provider": "anthropic",
+    "response": {
+      "content": [
+        {
+          "text": "Anthropic ok",
+          "type": "text"
+        }
+      ],
+      "model": "claude-sonnet-4-6",
+      "stopReason": "end_turn",
+      "usage": {
+        "input_tokens": 9,
+        "output_tokens": 3
+      }
+    },
+    "status": "passed"
+  },
+  {
+    "api": "count_tokens",
+    "provider": "anthropic",
+    "response": {
+      "inputTokens": 77,
+      "measuredAt": "<timestamp>",
+      "model": "claude-sonnet-4-6",
+      "provider": "anthropic",
+      "source": "anthropic_count"
+    },
+    "status": "passed"
+  },
+  {
+    "api": "chat_completions",
+    "failure": {
+      "attempt": 1,
+      "category": "timeout",
+      "code": null,
+      "errorType": null,
+      "hadAssistantOutput": false,
+      "hadToolUse": false,
+      "message": "OpenAI Chat Completions request timed out before completion.",
+      "occurredAt": "<timestamp>",
+      "phase": "stream_open",
+      "provider": "openai",
+      "providerLabel": "OpenAI Chat Completions",
+      "rawBody": null,
+      "rawMessage": "OpenAI request timed out after 1ms while waiting for provider activity.",
+      "retryable": true,
+      "status": null,
+      "streamEventType": null
+    },
+    "provider": "openai",
+    "status": "failed"
+  },
+  {
+    "api": "chat_completions",
+    "failure": {
+      "attempt": 1,
+      "category": "cancelled",
+      "code": null,
+      "errorType": null,
+      "hadAssistantOutput": true,
+      "hadToolUse": false,
+      "message": "OpenAI Chat Completions request was cancelled.",
+      "occurredAt": "<timestamp>",
+      "phase": "stream_read",
+      "provider": "openai",
+      "providerLabel": "OpenAI Chat Completions",
+      "rawBody": null,
+      "rawMessage": "OpenAI request was cancelled.",
+      "retryable": false,
+      "status": null,
+      "streamEventType": null
+    },
+    "provider": "openai",
+    "status": "failed"
+  }
+]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import agent_core as core
@@ -9,8 +10,10 @@ from .assertions import assert_file_exists, assert_observation, assert_session, 
 from .capture import collect_observations, write_observations
 from .debug_bundle import write_debug_bundle
 from .fake_providers import FakeProviderRuntime, assert_provider_capture, assert_provider_response
+from .goldens import compare_golden, expected_observations, render_diff, update_golden
 from .loader import load_scenario
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
+from .normalization import normalize_observations
 from .sandbox import ScenarioSandbox
 
 
@@ -20,6 +23,8 @@ async def run_scenario_async(
     scenarios_dir: str | None = None,
     runs_dir: str | None = None,
     cleanup: str = "never",
+    golden: str = "off",
+    goldens_dir: str | None = None,
 ) -> ScenarioResult:
     resolved = load_scenario(scenario, scenarios_dir) if isinstance(scenario, str) else scenario
     sandbox = ScenarioSandbox(resolved.id, cleanup=cleanup, **({"runs_dir": runs_dir} if runs_dir else {})).create()
@@ -27,6 +32,8 @@ async def run_scenario_async(
     state: dict[str, Any] = {}
     observations: dict[str, Any] = {}
     failure: dict[str, Any] | None = None
+    golden_result: dict[str, Any] | None = None
+    debug_extras: dict[str, str] = {}
     raw_path = ""
     normalized_path = ""
     try:
@@ -46,8 +53,22 @@ async def run_scenario_async(
                 break
         observations = _final_observations(resolved, sandbox, state, steps)
         raw_path, normalized_path = write_observations(sandbox, observations)
-        debug_dir = write_debug_bundle(resolved, sandbox, observations, failure) if failure else None
-        return ScenarioResult(resolved.id, "failed" if failure else "passed", sandbox.run_id, str(sandbox.run_dir), steps, raw_path, normalized_path, debug_dir, failure)
+        if failure is None and golden != "off":
+            normalized = normalize_observations(observations, sandbox)
+            golden_result, failure, debug_extras = _handle_golden(resolved, sandbox, normalized, golden, goldens_dir)
+        debug_dir = write_debug_bundle(resolved, sandbox, observations, failure, debug_extras) if failure else None
+        return ScenarioResult(
+            resolved.id,
+            "failed" if failure else "passed",
+            sandbox.run_id,
+            str(sandbox.run_dir),
+            steps,
+            raw_path,
+            normalized_path,
+            golden_result,
+            debug_dir,
+            failure,
+        )
     finally:
         provider_runtime = state.get("provider_runtime")
         if provider_runtime:
@@ -151,3 +172,32 @@ def _current_session(state: dict[str, Any]) -> dict[str, Any]:
 def _final_observations(scenario: Scenario, sandbox: ScenarioSandbox, state: dict[str, Any], steps: list[StepResult]) -> dict[str, Any]:
     include = scenario.capture.get("include") or ["session", "step_results"]
     return collect_observations(scenario, sandbox, state, steps, include)
+
+
+def _handle_golden(
+    scenario: Scenario,
+    sandbox: ScenarioSandbox,
+    normalized: dict[str, Any],
+    mode: str,
+    goldens_dir: str | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, str]]:
+    if mode == "update":
+        return update_golden(scenario, normalized, goldens_dir), None, {}
+    if mode != "compare":
+        raise ScenarioAssertionError(f"Unsupported golden mode: {mode}", category="harness")
+    diff_path = sandbox.debug / "golden.diff"
+    result = compare_golden(scenario, normalized, goldens_dir=goldens_dir, diff_path=diff_path)
+    if result.get("status") == "matched":
+        return result, None, {}
+    expected = expected_observations(scenario, goldens_dir)
+    extras: dict[str, str] = {}
+    if expected is not None:
+        extras["expected-observations.normalized.json"] = json.dumps(expected, indent=2, sort_keys=True) + "\n"
+        extras["golden.diff"] = diff_path.read_text(encoding="utf-8") if diff_path.exists() else render_diff(expected, normalized)
+    failure = {
+        "category": "golden",
+        "message": result.get("message", "Golden comparison failed."),
+        "stepIndex": None,
+        "stepType": "golden_compare",
+    }
+    return result, failure, extras

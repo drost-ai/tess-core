@@ -1,0 +1,150 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "provider_response",
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "provider_request"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "provider_response"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_response"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 2,
+    "observationKeys": [
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_capture"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 3,
+    "observationKeys": [
+      "provider_response",
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "provider_request"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 4,
+    "observationKeys": [
+      "provider_response"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_response"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 5,
+    "observationKeys": [
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_capture"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 6,
+    "observationKeys": [
+      "provider_response",
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "provider_request"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 7,
+    "observationKeys": [
+      "provider_response"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_response"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 8,
+    "observationKeys": [
+      "provider_response",
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "provider_request"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 9,
+    "observationKeys": [
+      "provider_response"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_response"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 10,
+    "observationKeys": [
+      "provider_response",
+      "provider_requests",
+      "provider_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "provider_request"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 11,
+    "observationKeys": [
+      "provider_response"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_provider_response"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 12,
+    "observationKeys": [
+      "provider_events",
+      "provider_requests",
+      "provider_response",
+      "provider_state",
+      "run",
+      "scenario",
+      "step_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]
