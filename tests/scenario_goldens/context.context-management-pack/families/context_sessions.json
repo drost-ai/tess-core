@@ -1,0 +1,154 @@
+[
+  {
+    "alias": "accept",
+    "id": "<uuid:3>",
+    "messageCount": 34,
+    "metadata": {
+      "assistantDescription": null,
+      "assistantName": null,
+      "childAgentIds": [],
+      "childSessionIds": [],
+      "compactionState": {
+        "archiveMessageCount": 34,
+        "artifacts": {
+          "activity": "<runtime-home>/compactions/<uuid:3>/activity.md",
+          "checkpoint": "<runtime-home>/compactions/<uuid:3>/checkpoints/0001.json",
+          "decisions": "<runtime-home>/compactions/<uuid:3>/decisions.md",
+          "manifest": "<runtime-home>/compactions/<uuid:3>/manifest.json",
+          "plan": "<runtime-home>/compactions/<uuid:3>/plan.md",
+          "state": "<runtime-home>/compactions/<uuid:3>/state.json",
+          "summary": "<runtime-home>/compactions/<uuid:3>/summary.md",
+          "todos": "<runtime-home>/compactions/<uuid:3>/todos.json",
+          "workingContext": "<runtime-home>/compactions/<uuid:3>/working-context.json"
+        },
+        "compactedContextTokenEstimate": "<token-estimate>",
+        "compactedMessageCount": 14,
+        "compactedThroughMessageIndex": 14,
+        "compactionModel": {
+          "effort": "high",
+          "model": "gpt-5.3-codex-spark",
+          "provider": "openai",
+          "purpose": "synthesis",
+          "selectionSource": "fixed"
+        },
+        "lastTrigger": "manual",
+        "latestCompactionAt": "<timestamp>",
+        "latestCompactionGeneration": 1,
+        "latestCompactionId": "<uuid:4>",
+        "qualityClassification": "rich",
+        "rawTokenEstimate": "<token-estimate>",
+        "recentMessageCount": 20,
+        "verification": {
+          "confidence": "high",
+          "issues": [],
+          "notes": [
+            "verified"
+          ],
+          "reason": "checkpoint preserves current state",
+          "verdict": "accept"
+        },
+        "verificationModel": {
+          "effort": "high",
+          "model": "gpt-5.3-codex-spark",
+          "provider": "openai",
+          "purpose": "verification",
+          "selectionSource": "fixed"
+        },
+        "workingContextTokenEstimate": "<token-estimate>",
+        "workingContextTokenMeasurement": null
+      },
+      "compactions": 1,
+      "depth": 0,
+      "originalCwd": "<workspace>",
+      "planMode": {
+        "state": "inactive"
+      },
+      "usage": {
+        "cacheCreationInputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "inputTokens": 22,
+        "outputTokens": 14,
+        "toolCalls": 0,
+        "turns": 0
+      }
+    },
+    "profile": "plain",
+    "todoCount": 1
+  },
+  {
+    "alias": "repair",
+    "id": "<uuid:1>",
+    "messageCount": 34,
+    "metadata": {
+      "assistantDescription": null,
+      "assistantName": null,
+      "childAgentIds": [],
+      "childSessionIds": [],
+      "compactionState": {
+        "archiveMessageCount": 34,
+        "artifacts": {
+          "activity": "<runtime-home>/compactions/<uuid:1>/activity.md",
+          "checkpoint": "<runtime-home>/compactions/<uuid:1>/checkpoints/0001.json",
+          "decisions": "<runtime-home>/compactions/<uuid:1>/decisions.md",
+          "manifest": "<runtime-home>/compactions/<uuid:1>/manifest.json",
+          "plan": "<runtime-home>/compactions/<uuid:1>/plan.md",
+          "state": "<runtime-home>/compactions/<uuid:1>/state.json",
+          "summary": "<runtime-home>/compactions/<uuid:1>/summary.md",
+          "todos": "<runtime-home>/compactions/<uuid:1>/todos.json",
+          "workingContext": "<runtime-home>/compactions/<uuid:1>/working-context.json"
+        },
+        "compactedContextTokenEstimate": "<token-estimate>",
+        "compactedMessageCount": 14,
+        "compactedThroughMessageIndex": 14,
+        "compactionModel": {
+          "effort": "high",
+          "model": "gpt-5.3-codex-spark",
+          "provider": "openai",
+          "purpose": "synthesis",
+          "selectionSource": "fixed"
+        },
+        "lastTrigger": "manual",
+        "latestCompactionAt": "<timestamp>",
+        "latestCompactionGeneration": 1,
+        "latestCompactionId": "<uuid:2>",
+        "qualityClassification": "usable",
+        "rawTokenEstimate": "<token-estimate>",
+        "recentMessageCount": 20,
+        "verification": {
+          "confidence": "high",
+          "issues": [],
+          "notes": [
+            "repair accepted"
+          ],
+          "reason": "repair is accurate",
+          "verdict": "accept"
+        },
+        "verificationModel": {
+          "effort": "high",
+          "model": "gpt-5.3-codex-spark",
+          "provider": "openai",
+          "purpose": "verification",
+          "selectionSource": "fixed"
+        },
+        "workingContextTokenEstimate": "<token-estimate>",
+        "workingContextTokenMeasurement": null
+      },
+      "compactions": 1,
+      "depth": 0,
+      "originalCwd": "<workspace>",
+      "planMode": {
+        "state": "inactive"
+      },
+      "usage": {
+        "cacheCreationInputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "inputTokens": 22,
+        "outputTokens": 14,
+        "toolCalls": 0,
+        "turns": 0
+      }
+    },
+    "profile": "plain",
+    "todoCount": 1
+  }
+]

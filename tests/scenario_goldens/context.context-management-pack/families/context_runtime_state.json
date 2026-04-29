@@ -1,0 +1,99 @@
+{
+  "bridge": {
+    "attached": false,
+    "bridgeId": null,
+    "remoteSessionId": null
+  },
+  "collaboration": {
+    "activeCount": 0,
+    "awaitingInputCount": 0,
+    "backgroundCount": 0,
+    "labels": [],
+    "recentAssistantUpdates": [],
+    "remoteStatus": null,
+    "remoteTitle": "<workspace-name>",
+    "workers": []
+  },
+  "compaction": {
+    "appliedModes": [],
+    "checkpointPath": "/tmp/checkpoint.json",
+    "compactionModel": null,
+    "compactionProvider": null,
+    "currentTokenEstimate": null,
+    "currentTokenSource": null,
+    "generation": 3,
+    "lastDetail": "trimmed",
+    "lastReinjectionSummary": "summary",
+    "plannedModes": [
+      "microcompact",
+      "none"
+    ],
+    "pressureLevel": "high",
+    "qualityClassification": null,
+    "reactiveAttempt": 0,
+    "selectedMode": "api_microcompact",
+    "statePath": null,
+    "status": "completed",
+    "summaryPath": null,
+    "trigger": "threshold",
+    "updatedAt": "<timestamp>",
+    "verificationConfidence": null,
+    "verificationModel": null,
+    "verificationProvider": null,
+    "verificationVerdict": "accept",
+    "workingContextPath": null
+  },
+  "daemon": {
+    "phase": "offline"
+  },
+  "monitors": {
+    "activeMonitorIds": [],
+    "recentAssistantUpdates": [],
+    "snapshot": {
+      "active": 0,
+      "failed": 0,
+      "labels": [],
+      "muted": 0,
+      "stopped": 0,
+      "total": 0
+    }
+  },
+  "provider": {
+    "phase": "idle"
+  },
+  "session": {
+    "activeSessionId": "<uuid:1>",
+    "lastActivatedAt": "<timestamp>",
+    "summary": {
+      "bridgeId": null,
+      "cwd": "<workspace>",
+      "gitBranch": "<git-branch>",
+      "gitRoot": "<git-root>",
+      "id": "<uuid:1>",
+      "model": "gpt-5.4",
+      "name": null,
+      "permissionMode": "bypassPermissions",
+      "provider": "openai",
+      "remoteSessionId": null,
+      "updatedAt": "<timestamp>",
+      "workspaceName": "<workspace-name>"
+    }
+  },
+  "tasks": {
+    "activeCount": 0,
+    "awaitingInputCount": 0,
+    "backgroundedCount": 0,
+    "failedCount": 0,
+    "labels": [],
+    "tasks": [],
+    "total": 0
+  },
+  "turn": {
+    "lastOutcome": {
+      "kind": "completed",
+      "message": "Previous turn complete.",
+      "updatedAt": "<timestamp>"
+    },
+    "status": "idle"
+  }
+}

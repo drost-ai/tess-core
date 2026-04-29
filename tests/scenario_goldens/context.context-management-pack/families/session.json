@@ -1,0 +1,227 @@
+{
+  "createdAt": "<timestamp>",
+  "cwd": "<workspace>",
+  "effort": "xhigh",
+  "id": "<uuid:1>",
+  "messages": [
+    {
+      "content": "plain context message 0 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 1 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 2 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 3 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 4 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 5 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 6 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 7 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 8 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 9 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 10 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 11 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 12 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 13 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 14 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 15 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 16 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 17 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 18 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 19 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 20 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 21 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 22 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 23 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 24 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 25 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 26 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 27 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 28 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 29 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 30 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 31 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    },
+    {
+      "content": "plain context message 32 for /tmp/workspace/app.py and pytest",
+      "role": "user"
+    },
+    {
+      "content": "plain context message 33 for /tmp/workspace/app.py and pytest",
+      "role": "assistant"
+    }
+  ],
+  "metadata": {
+    "assistantDescription": null,
+    "assistantName": null,
+    "childAgentIds": [],
+    "childSessionIds": [],
+    "compactionState": {
+      "archiveMessageCount": 34,
+      "artifacts": {
+        "activity": "<runtime-home>/compactions/<uuid:1>/activity.md",
+        "checkpoint": "<runtime-home>/compactions/<uuid:1>/checkpoints/0001.json",
+        "decisions": "<runtime-home>/compactions/<uuid:1>/decisions.md",
+        "manifest": "<runtime-home>/compactions/<uuid:1>/manifest.json",
+        "plan": "<runtime-home>/compactions/<uuid:1>/plan.md",
+        "state": "<runtime-home>/compactions/<uuid:1>/state.json",
+        "summary": "<runtime-home>/compactions/<uuid:1>/summary.md",
+        "todos": "<runtime-home>/compactions/<uuid:1>/todos.json",
+        "workingContext": "<runtime-home>/compactions/<uuid:1>/working-context.json"
+      },
+      "compactedContextTokenEstimate": "<token-estimate>",
+      "compactedMessageCount": 14,
+      "compactedThroughMessageIndex": 14,
+      "compactionModel": {
+        "effort": "high",
+        "model": "gpt-5.3-codex-spark",
+        "provider": "openai",
+        "purpose": "synthesis",
+        "selectionSource": "fixed"
+      },
+      "lastTrigger": "manual",
+      "latestCompactionAt": "<timestamp>",
+      "latestCompactionGeneration": 1,
+      "latestCompactionId": "<uuid:2>",
+      "qualityClassification": "usable",
+      "rawTokenEstimate": "<token-estimate>",
+      "recentMessageCount": 20,
+      "verification": {
+        "confidence": "high",
+        "issues": [],
+        "notes": [
+          "repair accepted"
+        ],
+        "reason": "repair is accurate",
+        "verdict": "accept"
+      },
+      "verificationModel": {
+        "effort": "high",
+        "model": "gpt-5.3-codex-spark",
+        "provider": "openai",
+        "purpose": "verification",
+        "selectionSource": "fixed"
+      },
+      "workingContextTokenEstimate": "<token-estimate>",
+      "workingContextTokenMeasurement": null
+    },
+    "compactions": 1,
+    "depth": 0,
+    "originalCwd": "<workspace>",
+    "planMode": {
+      "state": "inactive"
+    },
+    "usage": {
+      "cacheCreationInputTokens": 0,
+      "cacheReadInputTokens": 0,
+      "inputTokens": 22,
+      "outputTokens": 14,
+      "toolCalls": 0,
+      "turns": 0
+    }
+  },
+  "model": "gpt-5.4",
+  "name": null,
+  "permissionMode": "bypassPermissions",
+  "provider": "openai",
+  "providerProfileName": "codex",
+  "systemPrompt": "You are assistant, a helpful and reliable software engineering agent.\nWork directly in the user's codebase.\nPrefer concrete actions over long explanations.\nUse tools when needed, keep edits minimal, and preserve user intent.\nBefore modifying files, inspect the relevant code and respect the existing style.\nUse SetStatus to keep the live UI updated when you change phases or begin a meaningful chunk of work. Keep statuses brief and concrete, for example: 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",
+  "todos": [
+    {
+      "activeForm": "Implementing context harness",
+      "content": "Finish context harness",
+      "status": "in_progress"
+    }
+  ],
+  "updatedAt": "<timestamp>"
+}

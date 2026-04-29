@@ -1,0 +1,283 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "session",
+      "context_sessions",
+      "context_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "seed_context_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "compaction_results",
+      "compaction_artifacts",
+      "durable_memory",
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_context_compaction"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 2,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 3,
+    "observationKeys": [
+      "compaction_artifacts",
+      "durable_memory"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_compaction_artifact"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 4,
+    "observationKeys": [
+      "compaction_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_context_fallback"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 5,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 6,
+    "observationKeys": [
+      "session",
+      "context_sessions",
+      "context_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "seed_context_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 7,
+    "observationKeys": [
+      "compaction_results",
+      "compaction_artifacts",
+      "durable_memory",
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_context_compaction"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 8,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 9,
+    "observationKeys": [
+      "compaction_artifacts",
+      "durable_memory"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_compaction_artifact"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 10,
+    "observationKeys": [
+      "continuation_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "apply_context_relief"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 11,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 12,
+    "observationKeys": [
+      "continuation_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "apply_context_relief"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 13,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 14,
+    "observationKeys": [
+      "continuation_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "apply_context_relief"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 15,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 16,
+    "observationKeys": [
+      "context_events",
+      "context_runtime_state"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "project_context_events"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 17,
+    "observationKeys": [
+      "context_runtime_state"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_runtime_state"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 18,
+    "observationKeys": [
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_reactive_context_retry"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 19,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 20,
+    "observationKeys": [
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_reactive_context_cancellation"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 21,
+    "observationKeys": [
+      "compaction_results",
+      "continuation_results",
+      "context_agent_results",
+      "context_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_context_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 22,
+    "observationKeys": [
+      "compaction_artifacts",
+      "compaction_results",
+      "context_agent_results",
+      "context_driver_results",
+      "context_events",
+      "context_runtime_state",
+      "context_sessions",
+      "continuation_results",
+      "durable_memory",
+      "run",
+      "scenario",
+      "session",
+      "step_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]

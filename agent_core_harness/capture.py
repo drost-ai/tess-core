@@ -40,6 +40,24 @@ def collect_observations(
         }
     if "logs" in selected:
         observations["logs"] = tree_snapshot(sandbox.logs)
+    if "context_sessions" in selected:
+        observations["context_sessions"] = state.get("context_sessions") or []
+    if "context_driver_results" in selected:
+        observations["context_driver_results"] = state.get("context_driver_results") or []
+    if "compaction_results" in selected:
+        observations["compaction_results"] = state.get("compaction_results") or []
+    if "compaction_artifacts" in selected:
+        observations["compaction_artifacts"] = state.get("compaction_artifacts") or []
+    if "durable_memory" in selected:
+        observations["durable_memory"] = state.get("durable_memory") or {}
+    if "continuation_results" in selected:
+        observations["continuation_results"] = state.get("continuation_results") or []
+    if "context_events" in selected:
+        observations["context_events"] = state.get("context_events") or []
+    if "context_runtime_state" in selected:
+        observations["context_runtime_state"] = state.get("context_runtime_state") or {}
+    if "context_agent_results" in selected:
+        observations["context_agent_results"] = state.get("context_agent_results") or []
     if "mcp_servers" in selected:
         observations["mcp_servers"] = state.get("mcp_servers") or []
     if "mcp_events" in selected:

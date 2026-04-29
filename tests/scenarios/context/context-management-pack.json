@@ -1,0 +1,199 @@
+{
+  "id": "context.context-management-pack",
+  "title": "Context Compaction And Continuation Pack",
+  "area": "context",
+  "mode": ["python"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "context management harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "seed_context_session": {
+        "alias": "accept",
+        "profile": "plain",
+        "messageCount": 34,
+        "manualMemoryText": "Prefer focused parity tests"
+      }
+    },
+    {
+      "run_context_compaction": {
+        "mode": "accept",
+        "resultAlias": "accept"
+      }
+    },
+    {
+      "assert_context_result": {
+        "family": "compaction",
+        "alias": "accept",
+        "status": "completed",
+        "textContains": "rich"
+      }
+    },
+    {
+      "assert_compaction_artifact": {
+        "alias": "accept",
+        "qualityClassification": "rich",
+        "nextStepContains": "Persist checkpoint artifacts",
+        "memoryContains": "Use fixed Codex Spark compaction model selection"
+      }
+    },
+    {
+      "run_context_fallback": {}
+    },
+    {
+      "assert_context_result": {
+        "family": "compaction",
+        "index": 1,
+        "status": "passed",
+        "textContains": "fallback"
+      }
+    },
+    {
+      "seed_context_session": {
+        "alias": "repair",
+        "profile": "plain",
+        "messageCount": 34
+      }
+    },
+    {
+      "run_context_compaction": {
+        "mode": "repair",
+        "resultAlias": "repair"
+      }
+    },
+    {
+      "assert_context_result": {
+        "family": "compaction",
+        "alias": "repair",
+        "status": "completed",
+        "textContains": "repair accepted"
+      }
+    },
+    {
+      "assert_compaction_artifact": {
+        "alias": "repair",
+        "qualityClassification": "usable",
+        "nextStepContains": "run focused context harness tests"
+      }
+    },
+    {
+      "apply_context_relief": {
+        "alias": "api",
+        "profile": "tool_heavy",
+        "messageCount": 18
+      }
+    },
+    {
+      "assert_context_result": {
+        "family": "continuation",
+        "alias": "api",
+        "modesInclude": ["api_microcompact"],
+        "textContains": "<context_relief>"
+      }
+    },
+    {
+      "apply_context_relief": {
+        "alias": "memory",
+        "profile": "plain",
+        "messageCount": 44,
+        "retrievedMemory": true,
+        "reactiveAttempt": 2
+      }
+    },
+    {
+      "assert_context_result": {
+        "family": "continuation",
+        "alias": "memory",
+        "modesInclude": ["session_memory_compaction"],
+        "textContains": "durable memory:"
+      }
+    },
+    {
+      "apply_context_relief": {
+        "alias": "partial",
+        "profile": "plain",
+        "messageCount": 44,
+        "reactiveAttempt": 1
+      }
+    },
+    {
+      "assert_context_result": {
+        "family": "continuation",
+        "alias": "partial",
+        "modesInclude": ["partial_compaction"],
+        "textContains": "bounded partial summary"
+      }
+    },
+    {
+      "project_context_events": {}
+    },
+    {
+      "assert_context_runtime_state": {
+        "selectedMode": "api_microcompact",
+        "pressureLevel": "high",
+        "reactiveAttempt": 0,
+        "lastReinjectionSummary": "summary"
+      }
+    },
+    {
+      "run_reactive_context_retry": {}
+    },
+    {
+      "assert_context_result": {
+        "family": "agent",
+        "index": 0,
+        "status": "passed",
+        "eventsInclude": ["context_relief.applied"],
+        "textContains": "lastContextReliefReactiveAttempt"
+      }
+    },
+    {
+      "run_reactive_context_cancellation": {}
+    },
+    {
+      "assert_context_result": {
+        "family": "agent",
+        "index": 1,
+        "status": "passed",
+        "eventsInclude": ["turn.cancelled"],
+        "textContains": "cancelled"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "context_sessions",
+          "context_driver_results",
+          "compaction_results",
+          "compaction_artifacts",
+          "durable_memory",
+          "continuation_results",
+          "context_events",
+          "context_runtime_state",
+          "context_agent_results",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "session",
+      "context_sessions",
+      "context_driver_results",
+      "compaction_results",
+      "compaction_artifacts",
+      "durable_memory",
+      "continuation_results",
+      "context_events",
+      "context_runtime_state",
+      "context_agent_results",
+      "step_results"
+    ]
+  }
+}

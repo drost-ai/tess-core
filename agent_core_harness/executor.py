@@ -8,6 +8,18 @@ import agent_core as core
 
 from .assertions import assert_file_exists, assert_observation, assert_session, validate_workspace_rel_path
 from .capture import collect_observations, write_observations
+from .context_driver import (
+    apply_context_relief,
+    assert_compaction_artifact,
+    assert_context_result,
+    assert_context_runtime_state,
+    project_context_events,
+    run_context_compaction,
+    run_context_fallback,
+    run_reactive_context_cancellation,
+    run_reactive_context_retry,
+    seed_context_session,
+)
 from .debug_bundle import write_debug_bundle
 from .fake_providers import FakeProviderRuntime, assert_provider_capture, assert_provider_response
 from .goldens import compare_golden, expected_observations, render_diff, update_golden
@@ -188,6 +200,20 @@ async def _execute_step(
         state["provider_results"] = runtime.results
         state["provider_last_result"] = result
         return ["provider_response", "provider_requests", "provider_events"]
+    if step_type == "seed_context_session":
+        return await seed_context_session(data, sandbox, state)
+    if step_type == "run_context_compaction":
+        return await run_context_compaction(data, sandbox, state)
+    if step_type == "run_context_fallback":
+        return await run_context_fallback(data, sandbox, state)
+    if step_type == "apply_context_relief":
+        return await apply_context_relief(data, sandbox, state)
+    if step_type == "project_context_events":
+        return await project_context_events(data, sandbox, state)
+    if step_type == "run_reactive_context_retry":
+        return await run_reactive_context_retry(data, sandbox, state)
+    if step_type == "run_reactive_context_cancellation":
+        return await run_reactive_context_cancellation(data, sandbox, state)
     if step_type == "bootstrap_runtime":
         return await bootstrap_runtime(data, sandbox, state)
     if step_type == "start_fake_mcp":
@@ -250,6 +276,15 @@ async def _execute_step(
     if step_type == "assert_provider_capture":
         assert_provider_capture(state, data)
         return ["provider_requests", "provider_events"]
+    if step_type == "assert_context_result":
+        assert_context_result(state, data)
+        return ["compaction_results", "continuation_results", "context_agent_results", "context_events"]
+    if step_type == "assert_compaction_artifact":
+        assert_compaction_artifact(state, data)
+        return ["compaction_artifacts", "durable_memory"]
+    if step_type == "assert_context_runtime_state":
+        assert_context_runtime_state(state, data)
+        return ["context_runtime_state"]
     if step_type == "assert_driver_result":
         assert_driver_result(state, data)
         return ["driver_results"]

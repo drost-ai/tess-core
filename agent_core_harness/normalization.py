@@ -25,6 +25,8 @@ class NormalizationContext:
             if key_path and key_path[-1] == "workspace_tree":
                 return [item for item in normalized_items if not _is_empty_project_config_dir(item)]
             return normalized_items
+        if isinstance(value, tuple):
+            return [self.normalize(item, (*key_path, str(index))) for index, item in enumerate(value)]
         if isinstance(value, str):
             return self._normalize_string(value, key_path)
         if isinstance(value, int) and not isinstance(value, bool):
@@ -60,15 +62,21 @@ class NormalizationContext:
             if isinstance(categories, dict):
                 for key in categories:
                     categories[key] = "<token-estimate>"
+        if key_path and key_path[-1] == "categories" and any("tokens" in key.lower() for key in value):
+            for key in value:
+                if "tokens" in key.lower():
+                    value[key] = "<token-estimate>"
         return value
 
     def _normalize_int(self, value: int, key_path: tuple[str, ...]) -> Any:
         key = key_path[-1].lower() if key_path else ""
+        if _is_token_estimate_key(key):
+            return "<token-estimate>"
         if key in {"pid", "ppid", "processid", "process_id"} or key.endswith("pid"):
             return self._placeholder(self.pid_map, str(value), "pid")
         if "port" in key and 0 < value <= 65535:
             return self._placeholder(self.port_map, str(value), "port")
-        if key == "size" and key_path and key_path[0] in {"logs", "storage_tree", "tool_artifacts"}:
+        if key == "size" and key_path and key_path[0] in {"logs", "storage_tree", "tool_artifacts", "compaction_artifacts"}:
             return "<size>"
         return value
 
@@ -136,6 +144,11 @@ def _replace_path_prefix(value: str, raw: str, marker: str) -> str:
 
 def _is_estimated_token_record(value: dict[str, Any]) -> bool:
     return value.get("source") == "openai_responses_estimate" or value.get("inputTokenSource") == "openai_responses_estimate"
+
+
+def _is_token_estimate_key(key: str) -> bool:
+    normalized = key.replace("_", "")
+    return "tokenestimate" in normalized
 
 
 _TIMESTAMP_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
