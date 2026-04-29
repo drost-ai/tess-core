@@ -58,6 +58,32 @@ def collect_observations(
         observations["context_runtime_state"] = state.get("context_runtime_state") or {}
     if "context_agent_results" in selected:
         observations["context_agent_results"] = state.get("context_agent_results") or []
+    if "remote_driver_results" in selected:
+        observations["remote_driver_results"] = state.get("remote_driver_results") or []
+    if "remote_sessions" in selected:
+        observations["remote_sessions"] = state.get("remote_sessions") or []
+    if "bridge_records" in selected:
+        observations["bridge_records"] = state.get("bridge_records") or []
+    if "bridge_inbox" in selected:
+        observations["bridge_inbox"] = state.get("bridge_inbox") or []
+    if "bridge_events" in selected:
+        observations["bridge_events"] = state.get("bridge_events") or []
+    if "bridge_diagnostics" in selected:
+        observations["bridge_diagnostics"] = state.get("bridge_diagnostics") or []
+    if "remote_events" in selected:
+        observations["remote_events"] = state.get("remote_events") or []
+    if "collaboration_events" in selected:
+        observations["collaboration_events"] = state.get("collaboration_events") or []
+    if "collaboration_snapshots" in selected:
+        observations["collaboration_snapshots"] = state.get("collaboration_snapshots") or []
+    if "remote_runtime_state" in selected:
+        observations["remote_runtime_state"] = state.get("remote_runtime_state") or {}
+    if "remote_projected_events" in selected:
+        observations["remote_projected_events"] = state.get("remote_projected_events") or []
+    if "remote_bootstrap_results" in selected:
+        observations["remote_bootstrap_results"] = state.get("remote_bootstrap_results") or []
+    if "remote_bootstrap_events" in selected:
+        observations["remote_bootstrap_events"] = state.get("remote_bootstrap_events") or []
     if "mcp_servers" in selected:
         observations["mcp_servers"] = state.get("mcp_servers") or []
     if "mcp_events" in selected:

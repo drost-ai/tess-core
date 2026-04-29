@@ -1,0 +1,45 @@
+[
+  {
+    "bridgeId": "bridge-failure",
+    "messages": [
+      {
+        "bridgeId": "bridge-failure",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:5>",
+        "source": "remote",
+        "text": "retry me"
+      }
+    ]
+  },
+  {
+    "bridgeId": "bridge-main",
+    "messages": [
+      {
+        "bridgeId": "bridge-main",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:2>",
+        "source": "remote",
+        "text": "please review"
+      }
+    ]
+  },
+  {
+    "bridgeId": "bridge-replay",
+    "messages": [
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:3>",
+        "source": "remote",
+        "text": "already delivered"
+      },
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:4>",
+        "source": "remote",
+        "text": "deliver after restart"
+      }
+    ]
+  }
+]

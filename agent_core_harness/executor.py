@@ -43,6 +43,25 @@ from .mcp_driver import (
 )
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
 from .normalization import normalize_observations
+from .remote_driver import (
+    assert_bridge_diagnostics,
+    assert_collaboration_snapshot,
+    assert_remote_result,
+    assert_remote_runtime_state,
+    bootstrap_remote_runtime,
+    close_bridge_runtime,
+    close_remote_driver,
+    collect_bridge_diagnostics,
+    create_remote_bridge,
+    poll_bridge_inbox,
+    project_remote_events,
+    queue_bridge_message,
+    reconnect_bridge,
+    refresh_collaboration,
+    seed_collaboration_fixture,
+    set_bridge_emit_failure,
+    update_child_agent_status,
+)
 from .runtime_driver import (
     assert_driver_result,
     assert_runtime_event,
@@ -134,6 +153,7 @@ async def run_scenario_async(
             provider_runtime.close()
         await close_mcp_driver(state)
         await close_task_driver(state)
+        await close_remote_driver(state)
         await close_runtime_driver(state)
         sandbox.cleanup_sandbox(passed=failure is None)
         core.resetConfiguredRuntimeHome()
@@ -216,6 +236,30 @@ async def _execute_step(
         return await run_reactive_context_cancellation(data, sandbox, state)
     if step_type == "bootstrap_runtime":
         return await bootstrap_runtime(data, sandbox, state)
+    if step_type == "seed_collaboration_fixture":
+        return await seed_collaboration_fixture(data, sandbox, state)
+    if step_type == "create_remote_bridge":
+        return await create_remote_bridge(data, sandbox, state)
+    if step_type == "queue_bridge_message":
+        return await queue_bridge_message(data, sandbox, state)
+    if step_type == "poll_bridge_inbox":
+        return await poll_bridge_inbox(data, sandbox, state)
+    if step_type == "set_bridge_emit_failure":
+        return await set_bridge_emit_failure(data, sandbox, state)
+    if step_type == "close_bridge_runtime":
+        return await close_bridge_runtime(data, sandbox, state)
+    if step_type == "reconnect_bridge":
+        return await reconnect_bridge(data, sandbox, state)
+    if step_type == "collect_bridge_diagnostics":
+        return await collect_bridge_diagnostics(data, sandbox, state)
+    if step_type == "refresh_collaboration":
+        return await refresh_collaboration(data, sandbox, state)
+    if step_type == "update_child_agent_status":
+        return await update_child_agent_status(data, sandbox, state)
+    if step_type == "bootstrap_remote_runtime":
+        return await bootstrap_remote_runtime(data, sandbox, state)
+    if step_type == "project_remote_events":
+        return await project_remote_events(data, sandbox, state)
     if step_type == "start_fake_mcp":
         return await start_fake_mcp(data, sandbox, state)
     if step_type == "create_mcp_runtime":
@@ -285,6 +329,18 @@ async def _execute_step(
     if step_type == "assert_context_runtime_state":
         assert_context_runtime_state(state, data)
         return ["context_runtime_state"]
+    if step_type == "assert_bridge_diagnostics":
+        assert_bridge_diagnostics(state, data)
+        return ["bridge_diagnostics", "bridge_events", "bridge_records"]
+    if step_type == "assert_collaboration_snapshot":
+        assert_collaboration_snapshot(state, data)
+        return ["collaboration_snapshots", "collaboration_events"]
+    if step_type == "assert_remote_runtime_state":
+        assert_remote_runtime_state(state, data)
+        return ["remote_runtime_state"]
+    if step_type == "assert_remote_result":
+        assert_remote_result(state, data)
+        return ["remote_driver_results"]
     if step_type == "assert_driver_result":
         assert_driver_result(state, data)
         return ["driver_results"]

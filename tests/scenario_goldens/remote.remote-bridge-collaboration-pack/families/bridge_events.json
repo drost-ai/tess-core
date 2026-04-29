@@ -1,0 +1,180 @@
+[
+  {
+    "bridgeId": "bridge-failure",
+    "events": [
+      {
+        "bridgeId": "bridge-failure",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_id": "bridge-failure",
+          "name": "failure",
+          "remote_session_id": "remote-failure",
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.started",
+        "id": "<uuid:6>"
+      },
+      {
+        "bridgeId": "bridge-failure",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:5>",
+          "source": "remote",
+          "text": "retry me"
+        },
+        "event": "bridge.message.queued",
+        "id": "<uuid:7>"
+      },
+      {
+        "bridgeId": "bridge-failure",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_id": "bridge-failure",
+          "error": "emit failure for failure",
+          "phase": "poll",
+          "remote_session_id": "remote-failure",
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.failed",
+        "id": "<uuid:8>"
+      },
+      {
+        "bridgeId": "bridge-failure",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:5>",
+          "source": "remote",
+          "text": "retry me"
+        },
+        "event": "bridge.message.received",
+        "id": "<uuid:9>"
+      }
+    ]
+  },
+  {
+    "bridgeId": "bridge-main",
+    "events": [
+      {
+        "bridgeId": "bridge-main",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_id": "bridge-main",
+          "name": "qa",
+          "remote_session_id": "remote-main",
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.started",
+        "id": "<uuid:10>"
+      },
+      {
+        "bridgeId": "bridge-main",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:2>",
+          "source": "remote",
+          "text": "please review"
+        },
+        "event": "bridge.message.queued",
+        "id": "<uuid:11>"
+      },
+      {
+        "bridgeId": "bridge-main",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:2>",
+          "source": "remote",
+          "text": "please review"
+        },
+        "event": "bridge.message.received",
+        "id": "<uuid:12>"
+      },
+      {
+        "bridgeId": "bridge-main",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_id": "bridge-main",
+          "name": "qa",
+          "remote_session_id": "remote-main",
+          "replayed_messages": 0,
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.reconnected",
+        "id": "<uuid:13>"
+      }
+    ]
+  },
+  {
+    "bridgeId": "bridge-replay",
+    "events": [
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_id": "bridge-replay",
+          "name": "replay",
+          "remote_session_id": "remote-replay",
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.started",
+        "id": "<uuid:14>"
+      },
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:3>",
+          "source": "remote",
+          "text": "already delivered"
+        },
+        "event": "bridge.message.queued",
+        "id": "<uuid:15>"
+      },
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:3>",
+          "source": "remote",
+          "text": "already delivered"
+        },
+        "event": "bridge.message.received",
+        "id": "<uuid:16>"
+      },
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:4>",
+          "source": "remote",
+          "text": "deliver after restart"
+        },
+        "event": "bridge.message.queued",
+        "id": "<uuid:17>"
+      },
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_id": "bridge-replay",
+          "name": "replay",
+          "remote_session_id": "remote-replay",
+          "replayed_messages": 1,
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.reconnected",
+        "id": "<uuid:18>"
+      },
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "data": {
+          "message_id": "<uuid:4>",
+          "source": "remote",
+          "text": "deliver after restart"
+        },
+        "event": "bridge.message.received",
+        "id": "<uuid:19>"
+      }
+    ]
+  }
+]

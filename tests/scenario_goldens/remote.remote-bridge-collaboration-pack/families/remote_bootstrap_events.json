@@ -1,0 +1,65 @@
+[
+  {
+    "data": {
+      "bridge_id": "bridge-main",
+      "cwd": "<workspace>",
+      "git_branch": "<git-branch>",
+      "git_root": "<git-root>",
+      "model": "gpt-5.4",
+      "permission_mode": "bypassPermissions",
+      "provider": "openai",
+      "remote_session_id": "remote-main",
+      "session_id": "<uuid:1>",
+      "updated_at": "<timestamp>",
+      "workspace_name": "<workspace-name>"
+    },
+    "event": "session.activated",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "bridge_id": "bridge-main",
+        "cwd": "<workspace>",
+        "git_branch": "<git-branch>",
+        "git_root": "<git-root>",
+        "model": "gpt-5.4",
+        "permission_mode": "bypassPermissions",
+        "provider": "openai",
+        "remote_session_id": "remote-main",
+        "session_id": "<uuid:1>",
+        "updated_at": "<timestamp>",
+        "workspace_name": "<workspace-name>"
+      },
+      "event": "session.activated",
+      "kind": "session.activated",
+      "legacyData": {
+        "bridge_id": "bridge-main",
+        "cwd": "<workspace>",
+        "git_branch": "<git-branch>",
+        "git_root": "<git-root>",
+        "model": "gpt-5.4",
+        "permission_mode": "bypassPermissions",
+        "provider": "openai",
+        "remote_session_id": "remote-main",
+        "session_id": "<uuid:1>",
+        "updated_at": "<timestamp>",
+        "workspace_name": "<workspace-name>"
+      },
+      "legacyEvent": "session.activated",
+      "payload": {
+        "bridgeId": "bridge-main",
+        "cwd": "<workspace>",
+        "gitBranch": "<git-branch>",
+        "gitRoot": "<git-root>",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "provider": "openai",
+        "remoteSessionId": "remote-main",
+        "updatedAt": "<timestamp>",
+        "workspaceName": "<workspace-name>"
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "session.activated"
+    }
+  }
+]

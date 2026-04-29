@@ -1,0 +1,214 @@
+[
+  {
+    "childCount": 4,
+    "driver": "seed_collaboration_fixture",
+    "monitorId": "monitor-remote",
+    "status": "passed"
+  },
+  {
+    "alias": "main",
+    "bridgeId": "bridge-main",
+    "driver": "create_remote_bridge",
+    "remoteId": "remote-main",
+    "status": "passed"
+  },
+  {
+    "alias": "main",
+    "driver": "queue_bridge_message",
+    "message": {
+      "bridgeId": "bridge-main",
+      "createdAt": "<timestamp>",
+      "id": "<uuid:2>",
+      "source": "remote",
+      "text": "please review"
+    },
+    "status": "passed"
+  },
+  {
+    "activeCount": 2,
+    "awaitingInputCount": 2,
+    "driver": "refresh_collaboration",
+    "status": "passed"
+  },
+  {
+    "alias": "main",
+    "delivered": [
+      {
+        "bridgeId": "bridge-main",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:2>",
+        "source": "remote",
+        "text": "please review"
+      }
+    ],
+    "driver": "poll_bridge_inbox",
+    "status": "passed"
+  },
+  {
+    "alias": "main",
+    "driver": "collect_bridge_diagnostics",
+    "eventCount": 3,
+    "status": "passed"
+  },
+  {
+    "agentId": "agent-running",
+    "driver": "update_child_agent_status",
+    "nextStatus": "completed",
+    "status": "passed"
+  },
+  {
+    "activeCount": 1,
+    "awaitingInputCount": 2,
+    "driver": "refresh_collaboration",
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "bridgeId": "bridge-replay",
+    "driver": "create_remote_bridge",
+    "remoteId": "remote-replay",
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "driver": "queue_bridge_message",
+    "message": {
+      "bridgeId": "bridge-replay",
+      "createdAt": "<timestamp>",
+      "id": "<uuid:3>",
+      "source": "remote",
+      "text": "already delivered"
+    },
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "delivered": [
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:3>",
+        "source": "remote",
+        "text": "already delivered"
+      }
+    ],
+    "driver": "poll_bridge_inbox",
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "driver": "queue_bridge_message",
+    "message": {
+      "bridgeId": "bridge-replay",
+      "createdAt": "<timestamp>",
+      "id": "<uuid:4>",
+      "source": "remote",
+      "text": "deliver after restart"
+    },
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "driver": "close_bridge_runtime",
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "bridgeId": "bridge-replay",
+    "driver": "reconnect_bridge",
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "delivered": [
+      {
+        "bridgeId": "bridge-replay",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:4>",
+        "source": "remote",
+        "text": "deliver after restart"
+      }
+    ],
+    "driver": "poll_bridge_inbox",
+    "status": "passed"
+  },
+  {
+    "alias": "replay",
+    "driver": "collect_bridge_diagnostics",
+    "eventCount": 6,
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "bridgeId": "bridge-failure",
+    "driver": "create_remote_bridge",
+    "remoteId": "remote-failure",
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "driver": "set_bridge_emit_failure",
+    "enabled": true,
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "driver": "queue_bridge_message",
+    "message": {
+      "bridgeId": "bridge-failure",
+      "createdAt": "<timestamp>",
+      "id": "<uuid:5>",
+      "source": "remote",
+      "text": "retry me"
+    },
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "driver": "poll_bridge_inbox",
+    "error": "emit failure for failure",
+    "status": "failed"
+  },
+  {
+    "alias": "failure",
+    "driver": "collect_bridge_diagnostics",
+    "eventCount": 3,
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "driver": "set_bridge_emit_failure",
+    "enabled": false,
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "delivered": [
+      {
+        "bridgeId": "bridge-failure",
+        "createdAt": "<timestamp>",
+        "id": "<uuid:5>",
+        "source": "remote",
+        "text": "retry me"
+      }
+    ],
+    "driver": "poll_bridge_inbox",
+    "status": "passed"
+  },
+  {
+    "alias": "failure",
+    "driver": "collect_bridge_diagnostics",
+    "eventCount": 4,
+    "status": "passed"
+  },
+  {
+    "bridgeAttached": true,
+    "driver": "bootstrap_remote_runtime",
+    "status": "passed"
+  },
+  {
+    "driver": "project_remote_events",
+    "eventCount": 23,
+    "status": "passed"
+  }
+]

@@ -1,0 +1,342 @@
+{
+  "area": "remote",
+  "capture": {
+    "include": [
+      "session",
+      "remote_driver_results",
+      "remote_sessions",
+      "bridge_records",
+      "bridge_inbox",
+      "bridge_events",
+      "bridge_diagnostics",
+      "remote_events",
+      "collaboration_events",
+      "collaboration_snapshots",
+      "remote_runtime_state",
+      "remote_projected_events",
+      "remote_bootstrap_results",
+      "remote_bootstrap_events",
+      "step_results"
+    ]
+  },
+  "id": "remote.remote-bridge-collaboration-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "remote bridge collaboration harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "create_session": {
+        "permissionMode": "bypassPermissions"
+      }
+    },
+    {
+      "seed_collaboration_fixture": {}
+    },
+    {
+      "create_remote_bridge": {
+        "alias": "main",
+        "attachSession": true,
+        "bridgeId": "bridge-main",
+        "description": "Remote QA",
+        "name": "qa",
+        "remoteId": "remote-main"
+      }
+    },
+    {
+      "queue_bridge_message": {
+        "alias": "main",
+        "messageAlias": "main-review",
+        "source": "remote",
+        "text": "please review"
+      }
+    },
+    {
+      "refresh_collaboration": {
+        "alias": "initial"
+      }
+    },
+    {
+      "assert_collaboration_snapshot": {
+        "activeCount": 2,
+        "awaitingInputCount": 2,
+        "backgroundCount": 5,
+        "bridgeStatus": "active",
+        "eventsInclude": [
+          "collaboration.snapshot",
+          "subagent.status_changed",
+          "monitor.status_changed",
+          "remote.status_changed",
+          "bridge.status_changed"
+        ],
+        "pendingBridgeMessages": 1,
+        "remoteStatus": "awaiting_input",
+        "workersInclude": {
+          "Awaiting plan": "awaiting_input",
+          "Remote QA": "awaiting_input",
+          "Running worker": "running"
+        }
+      }
+    },
+    {
+      "poll_bridge_inbox": {
+        "alias": "main"
+      }
+    },
+    {
+      "collect_bridge_diagnostics": {
+        "alias": "main"
+      }
+    },
+    {
+      "assert_bridge_diagnostics": {
+        "alias": "main",
+        "bridgeStatus": "active",
+        "eventsInclude": [
+          "bridge.started",
+          "bridge.message.queued",
+          "bridge.message.received"
+        ],
+        "inboxCount": 1,
+        "messageCount": 1,
+        "pendingMessages": 0,
+        "remoteStatus": "awaiting_input",
+        "status": "active",
+        "textContains": "please review"
+      }
+    },
+    {
+      "update_child_agent_status": {
+        "alias": "running",
+        "completedAt": "2026-01-01T00:00:07Z",
+        "completionReason": "finished",
+        "lastUpdatedAt": "2026-01-01T00:00:07Z",
+        "latestResultAt": "2026-01-01T00:00:07Z",
+        "resultSummary": "Delivered runtime notes.",
+        "status": "completed",
+        "stoppable": false
+      }
+    },
+    {
+      "refresh_collaboration": {
+        "alias": "after-running-completed"
+      }
+    },
+    {
+      "assert_collaboration_snapshot": {
+        "activeCount": 1,
+        "awaitingInputCount": 2,
+        "backgroundCount": 5,
+        "eventsInclude": [
+          "subagent.status_changed"
+        ],
+        "index": 1,
+        "pendingBridgeMessages": 0,
+        "workersInclude": {
+          "Awaiting plan": "awaiting_input",
+          "Failed worker": "failed",
+          "Running worker": "completed"
+        }
+      }
+    },
+    {
+      "create_remote_bridge": {
+        "alias": "replay",
+        "attachSession": false,
+        "bridgeId": "bridge-replay",
+        "description": "Replay Remote",
+        "name": "replay",
+        "remoteId": "remote-replay"
+      }
+    },
+    {
+      "queue_bridge_message": {
+        "alias": "replay",
+        "messageAlias": "replay-first",
+        "source": "remote",
+        "text": "already delivered"
+      }
+    },
+    {
+      "poll_bridge_inbox": {
+        "alias": "replay"
+      }
+    },
+    {
+      "queue_bridge_message": {
+        "alias": "replay",
+        "messageAlias": "replay-second",
+        "source": "remote",
+        "text": "deliver after restart"
+      }
+    },
+    {
+      "close_bridge_runtime": {
+        "alias": "replay"
+      }
+    },
+    {
+      "reconnect_bridge": {
+        "alias": "replay",
+        "name": "replay"
+      }
+    },
+    {
+      "poll_bridge_inbox": {
+        "alias": "replay"
+      }
+    },
+    {
+      "collect_bridge_diagnostics": {
+        "alias": "replay"
+      }
+    },
+    {
+      "assert_bridge_diagnostics": {
+        "alias": "replay",
+        "eventsInclude": [
+          "bridge.reconnected",
+          "bridge.message.received"
+        ],
+        "inboxCount": 2,
+        "messageCount": 2,
+        "pendingMessages": 0,
+        "status": "active",
+        "textContains": "deliver after restart"
+      }
+    },
+    {
+      "create_remote_bridge": {
+        "alias": "failure",
+        "attachSession": false,
+        "bridgeId": "bridge-failure",
+        "description": "Failure Remote",
+        "name": "failure",
+        "remoteId": "remote-failure"
+      }
+    },
+    {
+      "set_bridge_emit_failure": {
+        "alias": "failure",
+        "enabled": true
+      }
+    },
+    {
+      "queue_bridge_message": {
+        "alias": "failure",
+        "messageAlias": "failure-retry",
+        "source": "remote",
+        "text": "retry me"
+      }
+    },
+    {
+      "poll_bridge_inbox": {
+        "alias": "failure",
+        "expectFailure": true
+      }
+    },
+    {
+      "collect_bridge_diagnostics": {
+        "alias": "failure"
+      }
+    },
+    {
+      "assert_bridge_diagnostics": {
+        "alias": "failure",
+        "bridgeStatus": "failed",
+        "eventsInclude": [
+          "bridge.failed"
+        ],
+        "inboxCount": 1,
+        "messageCount": 0,
+        "pendingMessages": 1,
+        "remoteStatus": "failed",
+        "status": "failed",
+        "textContains": "emit failure for failure"
+      }
+    },
+    {
+      "set_bridge_emit_failure": {
+        "alias": "failure",
+        "enabled": false
+      }
+    },
+    {
+      "poll_bridge_inbox": {
+        "alias": "failure"
+      }
+    },
+    {
+      "collect_bridge_diagnostics": {
+        "alias": "failure"
+      }
+    },
+    {
+      "assert_bridge_diagnostics": {
+        "alias": "failure",
+        "bridgeStatus": "active",
+        "eventsInclude": [
+          "bridge.failed",
+          "bridge.message.received"
+        ],
+        "inboxCount": 1,
+        "messageCount": 1,
+        "pendingMessages": 0,
+        "remoteStatus": "awaiting_input",
+        "status": "active",
+        "textContains": "retry me"
+      }
+    },
+    {
+      "bootstrap_remote_runtime": {
+        "bridgeName": "qa"
+      }
+    },
+    {
+      "assert_remote_result": {
+        "driver": "bootstrap_remote_runtime",
+        "status": "passed",
+        "textContains": "bridgeAttached"
+      }
+    },
+    {
+      "project_remote_events": {}
+    },
+    {
+      "assert_remote_runtime_state": {
+        "bridgeAttached": true,
+        "bridgeLastEventName": "remote.status_changed",
+        "pendingBridgeMessages": 0,
+        "remoteStatus": "awaiting_input"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "remote_driver_results",
+          "remote_sessions",
+          "bridge_records",
+          "bridge_inbox",
+          "bridge_events",
+          "bridge_diagnostics",
+          "remote_events",
+          "collaboration_events",
+          "collaboration_snapshots",
+          "remote_runtime_state",
+          "remote_projected_events",
+          "remote_bootstrap_results",
+          "remote_bootstrap_events",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Remote Bridge Collaboration Pack"
+}

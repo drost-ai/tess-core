@@ -1,0 +1,103 @@
+[
+  {
+    "alias": "main",
+    "data": {
+      "bridge_id": "bridge-main",
+      "name": "qa",
+      "remote_session_id": "remote-main",
+      "session_id": "<uuid:1>"
+    },
+    "event": "bridge.started"
+  },
+  {
+    "alias": "main",
+    "data": {
+      "bridge_id": "bridge-main",
+      "message_id": "<uuid:2>",
+      "remote_session_id": "remote-main",
+      "session_id": "<uuid:1>",
+      "source": "remote",
+      "text": "please review"
+    },
+    "event": "bridge.message"
+  },
+  {
+    "alias": "replay",
+    "data": {
+      "bridge_id": "bridge-replay",
+      "name": "replay",
+      "remote_session_id": "remote-replay",
+      "session_id": "<uuid:1>"
+    },
+    "event": "bridge.started"
+  },
+  {
+    "alias": "replay",
+    "data": {
+      "bridge_id": "bridge-replay",
+      "message_id": "<uuid:3>",
+      "remote_session_id": "remote-replay",
+      "session_id": "<uuid:1>",
+      "source": "remote",
+      "text": "already delivered"
+    },
+    "event": "bridge.message"
+  },
+  {
+    "alias": "replay",
+    "data": {
+      "bridge_id": "bridge-replay",
+      "name": "replay",
+      "remote_session_id": "remote-replay",
+      "replayed_messages": 1,
+      "session_id": "<uuid:1>"
+    },
+    "event": "bridge.reconnected"
+  },
+  {
+    "alias": "replay",
+    "data": {
+      "bridge_id": "bridge-replay",
+      "message_id": "<uuid:4>",
+      "remote_session_id": "remote-replay",
+      "session_id": "<uuid:1>",
+      "source": "remote",
+      "text": "deliver after restart"
+    },
+    "event": "bridge.message"
+  },
+  {
+    "alias": "failure",
+    "data": {
+      "bridge_id": "bridge-failure",
+      "name": "failure",
+      "remote_session_id": "remote-failure",
+      "session_id": "<uuid:1>"
+    },
+    "event": "bridge.started"
+  },
+  {
+    "alias": "failure",
+    "data": {
+      "bridge_id": "bridge-failure",
+      "message_id": "<uuid:5>",
+      "remote_session_id": "remote-failure",
+      "session_id": "<uuid:1>",
+      "source": "remote",
+      "text": "retry me"
+    },
+    "event": "bridge.message"
+  },
+  {
+    "alias": "failure",
+    "data": {
+      "bridge_id": "bridge-failure",
+      "message_id": "<uuid:5>",
+      "remote_session_id": "remote-failure",
+      "session_id": "<uuid:1>",
+      "source": "remote",
+      "text": "retry me"
+    },
+    "event": "bridge.message"
+  }
+]

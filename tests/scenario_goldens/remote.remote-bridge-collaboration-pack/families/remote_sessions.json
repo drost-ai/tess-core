@@ -1,0 +1,71 @@
+[
+  {
+    "bridgeId": "bridge-failure",
+    "bridgeStatus": "active",
+    "channelServers": [
+      "local"
+    ],
+    "createdAt": "<timestamp>",
+    "cwd": "<workspace>",
+    "description": "Failure Remote",
+    "foregroundSessionId": "<uuid:1>",
+    "gitBranch": "<git-branch>",
+    "id": "remote-failure",
+    "lastEventAt": "<timestamp>",
+    "lastEventName": "bridge.message.received",
+    "lastEventSummary": "Bridge message: retry me",
+    "originalCwd": "<workspace>",
+    "sessionId": "<uuid:1>",
+    "status": "awaiting_input",
+    "title": "Failure Remote",
+    "unreadBridgeMessages": 1,
+    "updatedAt": "<timestamp>",
+    "workspaceName": "<workspace-name>"
+  },
+  {
+    "bridgeId": "bridge-main",
+    "bridgeStatus": "active",
+    "channelServers": [
+      "local"
+    ],
+    "createdAt": "<timestamp>",
+    "cwd": "<workspace>",
+    "description": "Remote QA",
+    "foregroundSessionId": "<uuid:1>",
+    "gitBranch": "<git-branch>",
+    "id": "remote-main",
+    "lastEventAt": "<timestamp>",
+    "lastEventName": "bridge.reconnected",
+    "lastEventSummary": "bridge.reconnected",
+    "originalCwd": "<workspace>",
+    "sessionId": "<uuid:1>",
+    "status": "active",
+    "title": "Remote QA",
+    "unreadBridgeMessages": 1,
+    "updatedAt": "<timestamp>",
+    "workspaceName": "<workspace-name>"
+  },
+  {
+    "bridgeId": "bridge-replay",
+    "bridgeStatus": "active",
+    "channelServers": [
+      "local"
+    ],
+    "createdAt": "<timestamp>",
+    "cwd": "<workspace>",
+    "description": "Replay Remote",
+    "foregroundSessionId": "<uuid:1>",
+    "gitBranch": "<git-branch>",
+    "id": "remote-replay",
+    "lastEventAt": "<timestamp>",
+    "lastEventName": "bridge.message.received",
+    "lastEventSummary": "Bridge message: deliver after restart",
+    "originalCwd": "<workspace>",
+    "sessionId": "<uuid:1>",
+    "status": "awaiting_input",
+    "title": "Replay Remote",
+    "unreadBridgeMessages": 2,
+    "updatedAt": "<timestamp>",
+    "workspaceName": "<workspace-name>"
+  }
+]
