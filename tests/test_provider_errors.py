@@ -4,6 +4,28 @@ from tests.support.agent_core_case import *
 
 
 class ProviderErrorTests(AgentCoreTestCase):
+    def test_provider_request_watchdog_parity_surface(self):
+        import agent_core.provider_watchdog as provider_watchdog
+
+        watchdog = provider_watchdog.createProviderRequestWatchdog(
+            {"initialTimeoutMs": 1, "buildTimeoutError": lambda: TimeoutError("timed out")}
+        )
+        with self.assertRaises(TimeoutError):
+            run(watchdog.race(asyncio.sleep(0.05)))
+        self.assertTrue(watchdog.didTimeout())
+        self.assertTrue(watchdog.signal.aborted)
+        self.assertIsInstance(watchdog.signal.reason, TimeoutError)
+        watchdog.dispose()
+
+        parent_reason = RuntimeError("cancelled by parent")
+        parent = SimpleNamespace(aborted=True, reason=parent_reason)
+        cancelled = provider_watchdog.createProviderRequestWatchdog(
+            {"parentSignal": parent, "initialTimeoutMs": 1000, "buildTimeoutError": lambda: TimeoutError("unused")}
+        )
+        with self.assertRaisesRegex(RuntimeError, "cancelled by parent"):
+            run(cancelled.race(asyncio.sleep(0)))
+        self.assertTrue(cancelled.signal.aborted)
+
     def test_provider_requests_respect_abort_signal(self):
         signal = SimpleNamespace(aborted=True)
         calls = {"openai": 0, "anthropic": 0}

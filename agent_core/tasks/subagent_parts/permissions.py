@@ -47,3 +47,13 @@ def mapStopReasonToCompletionReason(stopReason: str | None) -> str | None:
         "max_budget_exceeded": "max_budget_exceeded",
         "plan_rejected": "plan_rejected",
     }.get(stopReason)
+
+
+def parseAllowedPrompts(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value:
+        if isinstance(item, dict) and item.get("tool") == "Bash" and isinstance(item.get("prompt"), str) and item["prompt"].strip():
+            out.append({"tool": "Bash", "prompt": item["prompt"].strip()})
+    return out

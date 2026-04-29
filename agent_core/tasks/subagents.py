@@ -7,7 +7,7 @@ from .subagent_parts import *
 from .subagent_parts import _modules as _SUBAGENT_PART_MODULES
 
 
-_PUBLIC_EXPORTS = ['Any', 'PERMISSION_MODES', 'annotations', 'buildSystemPromptForAgent', 'createEmptySession', 'createGitWorktree', 'finalizeBackgroundSubagentFailureFromEnv', 'finalizeBackgroundSubagentSuccessFromEnv', 'inheritParentPermissionMode', 'loadChildAgent', 'mapStopReasonToCompletionReason', 'mapStopReasonToStatus', 'mapStopReasonToWaitingReason', 'maybe_await', 'normalizeModelName', 'now_iso', 'os', 'prepareSubagent', 'pretty_json', 'resolveModelForAgent', 'resolveProviderForModelSelection', 'runForegroundSubagent', 'sanitizePermissionMode', 'saveChildAgent', 'saveSession', 'startBackgroundSubagent', 'subprocess', 'sys', 'taskOutputPath', 'uuid', 'writeTaskMeta']
+_PUBLIC_EXPORTS = ['Any', 'PERMISSION_MODES', 'annotations', 'buildSystemPromptForAgent', 'createEmptySession', 'createGitWorktree', 'finalizeBackgroundSubagentFailureFromEnv', 'finalizeBackgroundSubagentSuccessFromEnv', 'inheritParentPermissionMode', 'loadChildAgent', 'mapStopReasonToCompletionReason', 'mapStopReasonToStatus', 'mapStopReasonToWaitingReason', 'maybe_await', 'normalizeModelName', 'now_iso', 'os', 'parseAllowedPrompts', 'prepareSubagent', 'pretty_json', 'resolveModelForAgent', 'resolveProviderForModelSelection', 'runForegroundSubagent', 'sanitizePermissionMode', 'saveChildAgent', 'saveSession', 'startBackgroundSubagent', 'subprocess', 'sys', 'taskOutputPath', 'uuid', 'writeTaskMeta']
 
 __all__ = _PUBLIC_EXPORTS
 

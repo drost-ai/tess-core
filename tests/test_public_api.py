@@ -10,3 +10,16 @@ class PublicApiTests(AgentCoreTestCase):
         self.assertTrue(callable(core.bootstrapRuntime))
         self.assertTrue(callable(core.createEmptySession))
         self.assertTrue(callable(core.ensureTaskSupervisorDaemon))
+
+    def test_reference_module_surfaces(self):
+        import agent_core.platform_support.common as platform_common
+        import agent_core.provider_watchdog as provider_watchdog
+
+        self.assertTrue(callable(provider_watchdog.createProviderRequestWatchdog))
+        self.assertEqual(platform_common.buildShellCommand("echo", ["hello world"], {"FOO": "bar baz"}), "FOO='bar baz' echo 'hello world'")
+        self.assertEqual(
+            subagents_module.parseAllowedPrompts(
+                [{"tool": "Bash", "prompt": "  pytest  "}, {"tool": "Read", "prompt": "ignored"}]
+            ),
+            [{"tool": "Bash", "prompt": "pytest"}],
+        )
