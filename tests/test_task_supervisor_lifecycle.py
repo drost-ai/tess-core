@@ -4,6 +4,47 @@ from tests.support.agent_core_case import *
 
 
 class TaskSupervisorLifecycleTests(AgentCoreTestCase):
+    def test_background_runner_accepts_reference_positional_contract(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            task_id = "runner-positional"
+            meta_path = workspace / "task-meta.json"
+            output_path = workspace / "task-output.log"
+            repo_root = Path(__file__).parents[1]
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root) if not env.get("PYTHONPATH") else f"{repo_root}{os.pathsep}{env['PYTHONPATH']}"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_core.background_task_runner",
+                    task_id,
+                    str(meta_path),
+                    str(output_path),
+                    str(workspace),
+                    os.environ.get("SHELL") or "/bin/sh",
+                    "printf runner-parity",
+                ],
+                cwd=str(workspace),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "runner-parity")
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            self.assertEqual(meta["taskId"], task_id)
+            self.assertEqual(meta["command"], "printf runner-parity")
+            self.assertEqual(meta["cwd"], str(workspace))
+            self.assertEqual(meta["outputFile"], str(output_path))
+            self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["exitCode"], 0)
+            self.assertIsInstance(meta["pid"], int)
+            self.assertIsInstance(meta["runnerPid"], int)
+        finally:
+            self.restore_home(root, previous)
+
     def test_task_supervisor_read_output_defaults_to_reference_tail_size(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
