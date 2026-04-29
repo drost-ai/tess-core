@@ -1,0 +1,26 @@
+[
+  {
+    "driver": "run_worker_entrypoint",
+    "meta": {
+      "command": "printf worker-entrypoint-ok",
+      "cwd": "<workspace>",
+      "detailStatus": "completed",
+      "exitCode": 0,
+      "finishedAt": "<timestamp>",
+      "id": "worker-entrypoint",
+      "outputFile": "<runtime-home>/worker-entrypoints/worker-entrypoint.output.log",
+      "pid": "<pid:5>",
+      "runnerPid": "<pid:6>",
+      "status": "completed",
+      "taskId": "worker-entrypoint",
+      "updatedAt": "<timestamp>"
+    },
+    "output": "worker-entrypoint-ok",
+    "returnCode": 0,
+    "runnerReturnCode": 0,
+    "status": "passed",
+    "stderr": "",
+    "stdout": "",
+    "taskId": "worker-entrypoint"
+  }
+]

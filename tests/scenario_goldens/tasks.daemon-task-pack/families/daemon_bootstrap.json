@@ -1,0 +1,126 @@
+[
+  {
+    "collaborationSnapshot": {
+      "activeCount": 1,
+      "awaitingInputCount": 0,
+      "backgroundCount": 1,
+      "bridgeStatus": null,
+      "labels": [
+        "watch background completion"
+      ],
+      "pendingBridgeMessages": null,
+      "remoteStatus": null,
+      "remoteTitle": "<workspace-name>",
+      "workers": [
+        {
+          "id": "<uuid:2>",
+          "kind": "monitor",
+          "label": "watch background completion",
+          "monitorId": "<uuid:2>",
+          "sessionId": "<uuid:1>",
+          "status": "active",
+          "summary": null,
+          "taskId": "<uuid:3>",
+          "updatedAt": "<timestamp>"
+        }
+      ]
+    },
+    "monitorSnapshot": {
+      "active": 1,
+      "failed": 0,
+      "labels": [
+        "watch background completion"
+      ],
+      "muted": 0,
+      "nextCheckInMs": 0,
+      "stopped": 0,
+      "total": 1
+    },
+    "taskSnapshot": {
+      "active": 1,
+      "awaitingInput": 0,
+      "backgrounded": 0,
+      "failed": 0,
+      "labels": [
+        "Monitor watch background completion"
+      ],
+      "tasks": [
+        {
+          "completedAt": null,
+          "createdAt": "<timestamp>",
+          "detailStatus": "active",
+          "foregroundable": false,
+          "id": "monitor:<uuid:2>",
+          "kind": "monitor",
+          "metadata": {
+            "goal": "watch background completion",
+            "last_task_status": null,
+            "muted": null,
+            "task_id": "<uuid:3>"
+          },
+          "outputCursor": 19,
+          "relatedMonitorIds": [
+            "<uuid:2>"
+          ],
+          "restorable": true,
+          "resultSummary": null,
+          "retrieveOnly": true,
+          "sessionId": "<uuid:1>",
+          "sourceId": "<uuid:2>",
+          "startedAt": "<timestamp>",
+          "status": "running",
+          "summary": "0 bytes observed",
+          "taskFamily": "monitor",
+          "title": "Monitor watch background completion",
+          "updatedAt": "<timestamp>"
+        },
+        {
+          "attachableSessionId": null,
+          "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+          "completedAt": "<timestamp>",
+          "createdAt": "<timestamp>",
+          "cwd": "<workspace>",
+          "detailStatus": "result_ready",
+          "foregroundMode": "background",
+          "foregroundable": true,
+          "id": "<uuid:3>",
+          "kind": "background_command",
+          "metadata": {
+            "detached_type": "background_command",
+            "exitCode": 0,
+            "exit_code": 0,
+            "lastResult": null,
+            "output_preview": "background task ok",
+            "pid": "<pid:2>",
+            "process_reconciled_at": null,
+            "process_state": null,
+            "recovery_state": null,
+            "runner_pid": null,
+            "signal": null
+          },
+          "outputCursor": 19,
+          "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
+          "owner": "daemon",
+          "parentTaskId": null,
+          "relatedChildSessionIds": [],
+          "relatedMonitorIds": [
+            "<uuid:2>"
+          ],
+          "restorable": true,
+          "resultSummary": "background task ok",
+          "retrieveOnly": true,
+          "sessionId": "<uuid:1>",
+          "sourceId": "<uuid:3>",
+          "startedAt": "<timestamp>",
+          "status": "completed",
+          "summary": "Background command completed successfully. Latest output: background task ok",
+          "supervisorId": "<uuid:6>",
+          "taskFamily": "shell",
+          "title": "scenario background",
+          "updatedAt": "<timestamp>"
+        }
+      ],
+      "total": 2
+    }
+  }
+]

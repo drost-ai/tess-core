@@ -25,6 +25,26 @@ from .runtime_driver import (
     run_subprocess,
 )
 from .sandbox import ScenarioSandbox
+from .task_driver import (
+    assert_bootstrap,
+    assert_daemon_event,
+    assert_task_output,
+    assert_task_record,
+    close_task_driver,
+    create_monitor,
+    daemon_subscribe,
+    ensure_daemon,
+    get_daemon_bootstrap,
+    read_task_output,
+    restart_daemon,
+    run_worker_entrypoint,
+    seed_recovery_task,
+    start_background_task,
+    start_health_check,
+    stop_task,
+    wait_health_check,
+    wait_task_status,
+)
 
 
 async def run_scenario_async(
@@ -83,6 +103,7 @@ async def run_scenario_async(
         provider_runtime = state.get("provider_runtime")
         if provider_runtime:
             provider_runtime.close()
+        await close_task_driver(state)
         await close_runtime_driver(state)
         sandbox.cleanup_sandbox(passed=failure is None)
         core.resetConfiguredRuntimeHome()
@@ -151,6 +172,32 @@ async def _execute_step(
         return ["provider_response", "provider_requests", "provider_events"]
     if step_type == "bootstrap_runtime":
         return await bootstrap_runtime(data, sandbox, state)
+    if step_type == "ensure_daemon":
+        return await ensure_daemon(data, sandbox, state)
+    if step_type == "daemon_subscribe":
+        return await daemon_subscribe(data, sandbox, state)
+    if step_type == "start_background_task":
+        return await start_background_task(data, sandbox, state)
+    if step_type == "wait_task_status":
+        return await wait_task_status(data, sandbox, state)
+    if step_type == "read_task_output":
+        return await read_task_output(data, sandbox, state)
+    if step_type == "stop_task":
+        return await stop_task(data, sandbox, state)
+    if step_type == "create_monitor":
+        return await create_monitor(data, sandbox, state)
+    if step_type == "get_daemon_bootstrap":
+        return await get_daemon_bootstrap(data, sandbox, state)
+    if step_type == "seed_recovery_task":
+        return await seed_recovery_task(data, sandbox, state)
+    if step_type == "restart_daemon":
+        return await restart_daemon(data, sandbox, state)
+    if step_type == "run_worker_entrypoint":
+        return await run_worker_entrypoint(data, sandbox, state)
+    if step_type == "start_health_check":
+        return await start_health_check(data, sandbox, state)
+    if step_type == "wait_health_check":
+        return await wait_health_check(data, sandbox, state)
     if step_type == "run_agent":
         return await run_agent(data, sandbox, state)
     if step_type == "run_subprocess":
@@ -168,6 +215,18 @@ async def _execute_step(
     if step_type == "assert_driver_result":
         assert_driver_result(state, data)
         return ["driver_results"]
+    if step_type == "assert_task_record":
+        assert_task_record(state, data)
+        return ["task_records", "task_metadata"]
+    if step_type == "assert_daemon_event":
+        assert_daemon_event(state, data)
+        return ["daemon_events"]
+    if step_type == "assert_task_output":
+        assert_task_output(state, data)
+        return ["task_outputs"]
+    if step_type == "assert_bootstrap":
+        assert_bootstrap(state, data)
+        return ["daemon_bootstrap"]
     if step_type == "assert_runtime_event":
         assert_runtime_event(state, data)
         return ["runtime_events"]

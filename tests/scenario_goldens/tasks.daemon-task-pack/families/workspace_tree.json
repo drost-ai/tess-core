@@ -1,0 +1,25 @@
+[
+  {
+    "path": ".tess",
+    "type": "dir"
+  },
+  {
+    "path": ".tess/local",
+    "type": "dir"
+  },
+  {
+    "path": "README.md",
+    "size": 20,
+    "type": "file"
+  },
+  {
+    "path": "background.txt",
+    "size": 20,
+    "type": "file"
+  },
+  {
+    "path": "health-count.txt",
+    "size": 1,
+    "type": "file"
+  }
+]

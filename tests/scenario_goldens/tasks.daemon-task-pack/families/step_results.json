@@ -1,0 +1,332 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "create_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "session"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "save_session"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 2,
+    "observationKeys": [
+      "daemon_state",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "ensure_daemon"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 3,
+    "observationKeys": [
+      "daemon_events",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "daemon_subscribe"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 4,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "task_driver_results",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_background_task"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 5,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "wait_task_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 6,
+    "observationKeys": [
+      "task_outputs",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "read_task_output"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 7,
+    "observationKeys": [
+      "task_outputs"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_task_output"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 8,
+    "observationKeys": [
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_daemon_event"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 9,
+    "observationKeys": [
+      "monitor_records",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "create_monitor"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 10,
+    "observationKeys": [
+      "daemon_bootstrap",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "get_daemon_bootstrap"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 11,
+    "observationKeys": [
+      "daemon_bootstrap"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_bootstrap"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 12,
+    "observationKeys": [
+      "worker_results",
+      "task_driver_results",
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_worker_entrypoint"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 13,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "seed_recovery_task"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 14,
+    "observationKeys": [
+      "daemon_state",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "restart_daemon"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 15,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "wait_task_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 16,
+    "observationKeys": [
+      "task_records",
+      "task_metadata"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_task_record"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 17,
+    "observationKeys": [
+      "daemon_events",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "daemon_subscribe"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 18,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "task_driver_results",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_background_task"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 19,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "wait_task_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 20,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "task_driver_results",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "stop_task"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 21,
+    "observationKeys": [
+      "task_records",
+      "task_metadata",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "wait_task_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 22,
+    "observationKeys": [
+      "health_checks",
+      "task_records",
+      "task_metadata",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_health_check"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 23,
+    "observationKeys": [
+      "health_checks",
+      "task_records",
+      "task_metadata",
+      "daemon_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "wait_health_check"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 24,
+    "observationKeys": [
+      "task_outputs",
+      "task_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "read_task_output"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 25,
+    "observationKeys": [
+      "task_outputs"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_task_output"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 26,
+    "observationKeys": [
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_file_exists"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 27,
+    "observationKeys": [
+      "daemon_bootstrap",
+      "daemon_events",
+      "daemon_state",
+      "health_checks",
+      "monitor_records",
+      "run",
+      "scenario",
+      "session",
+      "step_results",
+      "task_driver_results",
+      "task_metadata",
+      "task_outputs",
+      "task_records",
+      "worker_results",
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]

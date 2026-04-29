@@ -1,0 +1,24 @@
+[
+  {
+    "driver": "read_task_output",
+    "result": {
+      "output": "background task ok\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
+      "taskId": "<uuid:3>",
+      "truncated": false
+    },
+    "status": "passed",
+    "taskId": "<uuid:3>"
+  },
+  {
+    "driver": "read_task_output",
+    "result": {
+      "output": "[<timestamp>] health-attempt-1\n[<timestamp>] health-attempt-2\n[<timestamp>] health-attempt-3\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
+      "truncated": false
+    },
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  }
+]

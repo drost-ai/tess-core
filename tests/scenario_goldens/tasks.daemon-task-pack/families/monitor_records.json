@@ -1,0 +1,16 @@
+[
+  {
+    "checkIntervalMs": 2000,
+    "createdAt": "<timestamp>",
+    "goal": "watch background completion",
+    "heartbeatIntervalMs": 60000,
+    "id": "<uuid:2>",
+    "lastNarratedOutputSize": 0,
+    "lastObservedOutputSize": 0,
+    "sessionId": "<uuid:1>",
+    "status": "active",
+    "summaryStyle": null,
+    "taskId": "<uuid:3>",
+    "updatedAt": "<timestamp>"
+  }
+]

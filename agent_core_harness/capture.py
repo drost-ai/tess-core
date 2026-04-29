@@ -40,6 +40,29 @@ def collect_observations(
         }
     if "logs" in selected:
         observations["logs"] = tree_snapshot(sandbox.logs)
+    if "daemon_state" in selected:
+        observations["daemon_state"] = state.get("daemon_state")
+    if "daemon_events" in selected:
+        observations["daemon_events"] = {
+            "live": state.get("daemon_events") or [],
+            "persisted": state.get("persisted_daemon_events") or [],
+        }
+    if "daemon_bootstrap" in selected:
+        observations["daemon_bootstrap"] = state.get("daemon_bootstrap") or []
+    if "task_records" in selected:
+        observations["task_records"] = state.get("task_records") or []
+    if "task_metadata" in selected:
+        observations["task_metadata"] = state.get("task_metadata") or []
+    if "task_outputs" in selected:
+        observations["task_outputs"] = state.get("task_outputs") or []
+    if "task_driver_results" in selected:
+        observations["task_driver_results"] = state.get("task_driver_results") or []
+    if "health_checks" in selected:
+        observations["health_checks"] = state.get("health_checks") or []
+    if "monitor_records" in selected:
+        observations["monitor_records"] = state.get("monitor_records") or []
+    if "worker_results" in selected:
+        observations["worker_results"] = state.get("worker_results") or []
     if "runtime_events" in selected:
         observations["runtime_events"] = state.get("runtime_events") or []
     if "runtime_state" in selected:

@@ -1,0 +1,232 @@
+{
+  "live": [
+    {
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "launching",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": null,
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "backgrounded",
+        "summary": "Background command launched by daemon.",
+        "task_family": "shell",
+        "task_id": "<uuid:3>",
+        "title": "scenario background"
+      },
+      "event": "task.updated",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "result_ready",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": "background task ok",
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "completed",
+        "summary": "Task completed successfully.",
+        "task_family": "shell",
+        "task_id": "<uuid:3>",
+        "title": "scenario background"
+      },
+      "event": "task.completed",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "launching",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": null,
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "backgrounded",
+        "summary": "Background command launched by daemon.",
+        "task_family": "shell",
+        "task_id": "<uuid:4>",
+        "title": "scenario stoppable"
+      },
+      "event": "task.updated",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "stopped",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": null,
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "stopped",
+        "summary": "Task was terminated.",
+        "task_family": "shell",
+        "task_id": "<uuid:4>",
+        "title": "scenario stoppable"
+      },
+      "event": "task.failed",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "data": {
+        "error": "Health check exited with code 1",
+        "failures": 1,
+        "task_id": "<uuid:5>",
+        "title": "scenario health"
+      },
+      "event": "health_check.unhealthy",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "data": {
+        "error": "Health check exited with code 1",
+        "failures": 2,
+        "task_id": "<uuid:5>",
+        "title": "scenario health"
+      },
+      "event": "health_check.unhealthy",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "data": {
+        "task_id": "<uuid:5>",
+        "title": "scenario health"
+      },
+      "event": "health_check.recovered",
+      "sessionId": "<uuid:1>"
+    }
+  ],
+  "persisted": [
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "launching",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": null,
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "backgrounded",
+        "summary": "Background command launched by daemon.",
+        "task_family": "shell",
+        "task_id": "<uuid:3>",
+        "title": "scenario background"
+      },
+      "event": "task.updated",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "result_ready",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": "background task ok",
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "completed",
+        "summary": "Task completed successfully.",
+        "task_family": "shell",
+        "task_id": "<uuid:3>",
+        "title": "scenario background"
+      },
+      "event": "task.completed",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "recovered_after_daemon_restart",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": "still running before restart\\n",
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "degraded",
+        "summary": "Recovered after daemon restart. The process is still alive, but lifecycle tracking is degraded until it exits.",
+        "task_family": "shell",
+        "task_id": "recovery",
+        "title": "restart recovery"
+      },
+      "event": "task.updated",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "launching",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": null,
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "backgrounded",
+        "summary": "Background command launched by daemon.",
+        "task_family": "shell",
+        "task_id": "<uuid:4>",
+        "title": "scenario stoppable"
+      },
+      "event": "task.updated",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "attachable_session_id": null,
+        "detail_status": "stopped",
+        "foreground_mode": "background",
+        "kind": "background_command",
+        "result_summary": null,
+        "retrieve_only": true,
+        "session_id": "<uuid:1>",
+        "status": "stopped",
+        "summary": "Task was terminated.",
+        "task_family": "shell",
+        "task_id": "<uuid:4>",
+        "title": "scenario stoppable"
+      },
+      "event": "task.failed",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "error": "Health check exited with code 1",
+        "failures": 1,
+        "task_id": "<uuid:5>",
+        "title": "scenario health"
+      },
+      "event": "health_check.unhealthy",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "error": "Health check exited with code 1",
+        "failures": 2,
+        "task_id": "<uuid:5>",
+        "title": "scenario health"
+      },
+      "event": "health_check.unhealthy",
+      "sessionId": "<uuid:1>"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "task_id": "<uuid:5>",
+        "title": "scenario health"
+      },
+      "event": "health_check.recovered",
+      "sessionId": "<uuid:1>"
+    }
+  ]
+}

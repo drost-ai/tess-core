@@ -1,0 +1,134 @@
+[
+  {
+    "driver": "ensure_daemon",
+    "state": {
+      "activeTasks": 0,
+      "attachedClients": 0,
+      "supervisorId": "<uuid:6>",
+      "watchedSessions": 0
+    },
+    "status": "passed"
+  },
+  {
+    "driver": "daemon_subscribe",
+    "sessionId": "<uuid:1>",
+    "status": "passed"
+  },
+  {
+    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:3>/output.log",
+      "taskId": "<uuid:3>",
+      "task_id": "<uuid:3>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:3>"
+  },
+  {
+    "driver": "read_task_output",
+    "result": {
+      "output": "background task ok\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
+      "taskId": "<uuid:3>",
+      "truncated": false
+    },
+    "status": "passed",
+    "taskId": "<uuid:3>"
+  },
+  {
+    "driver": "create_monitor",
+    "monitorId": "<uuid:2>",
+    "status": "passed",
+    "taskId": "<uuid:3>"
+  },
+  {
+    "driver": "get_daemon_bootstrap",
+    "status": "passed",
+    "taskTotal": 2
+  },
+  {
+    "driver": "run_worker_entrypoint",
+    "meta": {
+      "command": "printf worker-entrypoint-ok",
+      "cwd": "<workspace>",
+      "detailStatus": "completed",
+      "exitCode": 0,
+      "finishedAt": "<timestamp>",
+      "id": "worker-entrypoint",
+      "outputFile": "<runtime-home>/worker-entrypoints/worker-entrypoint.output.log",
+      "pid": "<pid:5>",
+      "runnerPid": "<pid:6>",
+      "status": "completed",
+      "taskId": "worker-entrypoint",
+      "updatedAt": "<timestamp>"
+    },
+    "output": "worker-entrypoint-ok",
+    "returnCode": 0,
+    "runnerReturnCode": 0,
+    "status": "passed",
+    "stderr": "",
+    "stdout": "",
+    "taskId": "worker-entrypoint"
+  },
+  {
+    "driver": "seed_recovery_task",
+    "pid": "<pid:4>",
+    "status": "passed",
+    "taskId": "recovery"
+  },
+  {
+    "driver": "ensure_daemon",
+    "state": {
+      "activeTasks": 0,
+      "attachedClients": 0,
+      "supervisorId": "<uuid:7>",
+      "watchedSessions": 0
+    },
+    "status": "passed"
+  },
+  {
+    "driver": "daemon_subscribe",
+    "sessionId": "<uuid:1>",
+    "status": "passed"
+  },
+  {
+    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "taskId": "<uuid:4>",
+      "task_id": "<uuid:4>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:4>"
+  },
+  {
+    "driver": "stop_task",
+    "status": "passed",
+    "stopped": true,
+    "taskId": "<uuid:4>"
+  },
+  {
+    "driver": "start_health_check",
+    "result": {
+      "taskId": "<uuid:5>",
+      "task_id": "<uuid:5>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  },
+  {
+    "driver": "read_task_output",
+    "result": {
+      "output": "[<timestamp>] health-attempt-1\n[<timestamp>] health-attempt-2\n[<timestamp>] health-attempt-3\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
+      "truncated": false
+    },
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  }
+]
