@@ -3,6 +3,8 @@
   "title": "Parity Runtime State Smoke",
   "area": "parity",
   "mode": ["parity"],
+  "tags": ["ci", "parity"],
+  "capabilities": ["node", "typescript_repo"],
   "setup": {
     "workspace": {
       "files": {

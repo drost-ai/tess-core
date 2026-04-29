@@ -192,6 +192,11 @@ def _parse_scenario(data: dict[str, Any], path: Any = None) -> Scenario:
     if not isinstance(setup, dict):
         raise ScenarioValidationError(f"{scenario_id}: setup must be an object")
     _validate_workspace_setup(scenario_id, setup.get("workspace") or {})
+    tags = _optional_string_list(data, "tags")
+    capabilities = _optional_string_list(data, "capabilities")
+    ci = data.get("ci") or {}
+    if not isinstance(ci, dict):
+        raise ScenarioValidationError(f"{scenario_id}: ci must be an object")
     capture = data.get("capture") or {}
     if not isinstance(capture, dict):
         raise ScenarioValidationError(f"{scenario_id}: capture must be an object")
@@ -205,7 +210,7 @@ def _parse_scenario(data: dict[str, Any], path: Any = None) -> Scenario:
     if not isinstance(raw_steps, list) or not raw_steps:
         raise ScenarioValidationError(f"{scenario_id}: steps must be a non-empty list")
     steps = [_parse_step(scenario_id, index, item) for index, item in enumerate(raw_steps)]
-    return Scenario(scenario_id, title, area, modes, setup, steps, capture, path)
+    return Scenario(scenario_id, title, area, modes, setup, steps, capture, path, tags, capabilities, ci)
 
 
 def _parse_step(scenario_id: str, index: int, item: Any) -> ScenarioStep:
@@ -257,4 +262,11 @@ def _require_string_list(data: dict[str, Any], key: str) -> list[str]:
     value = data.get(key)
     if not isinstance(value, list) or not value or any(not isinstance(item, str) or not item.strip() for item in value):
         raise ScenarioValidationError(f"Scenario field {key!r} must be a non-empty string list")
+    return [item.strip() for item in value]
+
+
+def _optional_string_list(data: dict[str, Any], key: str) -> list[str]:
+    value = data.get(key) or []
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip() for item in value):
+        raise ScenarioValidationError(f"Scenario field {key!r} must be a string list")
     return [item.strip() for item in value]

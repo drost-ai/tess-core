@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 
+from .ci_runner import run_ci_suite
 from .executor import run_scenario
 from .loader import load_scenarios
 from .model import ScenarioValidationError
@@ -27,6 +28,17 @@ def main(argv: list[str] | None = None) -> int:
     parity_parser.add_argument("--golden", choices=["off", "compare", "update"], default="off")
     parity_parser.add_argument("--goldens-dir")
     parity_parser.add_argument("--typescript-repo")
+    ci_parser = subparsers.add_parser("ci")
+    ci_parser.add_argument("--scenario", action="append", dest="scenario_ids")
+    ci_parser.add_argument("--area", action="append", dest="areas")
+    ci_parser.add_argument("--changed-area", action="append", dest="changed_areas")
+    ci_parser.add_argument("--reports-dir")
+    ci_parser.add_argument("--cleanup", choices=["never", "success"], default="success")
+    ci_parser.add_argument("--golden", choices=["off", "compare", "update"], default="compare")
+    ci_parser.add_argument("--goldens-dir")
+    ci_parser.add_argument("--disable-capability", action="append", dest="disabled_capabilities")
+    ci_parser.add_argument("--typescript-repo")
+    ci_parser.add_argument("--fail-fast", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.command == "list":
@@ -35,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run(args)
         if args.command == "parity":
             return _parity(args)
+        if args.command == "ci":
+            return _ci(args)
     except ScenarioValidationError as exc:
         print(f"harness validation error: {exc}", file=sys.stderr)
         return 2
@@ -92,4 +106,26 @@ def _parity(args: argparse.Namespace) -> int:
     )
     if result.debugDir:
         print(f"debug bundle: {result.debugDir}", file=sys.stderr)
+    return 1
+
+
+def _ci(args: argparse.Namespace) -> int:
+    result = run_ci_suite(
+        scenarios_dir=args.scenarios_dir,
+        runs_dir=args.runs_dir,
+        reports_dir=args.reports_dir,
+        scenario_ids=args.scenario_ids,
+        areas=args.areas,
+        changed_areas=args.changed_areas,
+        cleanup=args.cleanup,
+        golden=args.golden,
+        goldens_dir=args.goldens_dir,
+        disabled_capabilities=args.disabled_capabilities,
+        typescript_repo=args.typescript_repo,
+        fail_fast=args.fail_fast,
+    )
+    print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+    if result.status == "passed":
+        return 0
+    print(f"ci suite failed: report={result.reports.get('markdown')}", file=sys.stderr)
     return 1

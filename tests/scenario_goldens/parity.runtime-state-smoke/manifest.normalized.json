@@ -1,5 +1,9 @@
 {
   "area": "parity",
+  "capabilities": [
+    "node",
+    "typescript_repo"
+  ],
   "capture": {
     "include": [
       "parity_summary",
@@ -34,6 +38,10 @@
         "workspaceName": "Parity Workspace"
       }
     }
+  ],
+  "tags": [
+    "ci",
+    "parity"
   ],
   "title": "Parity Runtime State Smoke"
 }

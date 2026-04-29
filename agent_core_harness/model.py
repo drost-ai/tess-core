@@ -21,6 +21,9 @@ class Scenario:
     steps: list[ScenarioStep]
     capture: dict[str, Any]
     path: Path | None = None
+    tags: list[str] = field(default_factory=list)
+    capabilities: list[str] = field(default_factory=list)
+    ci: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
