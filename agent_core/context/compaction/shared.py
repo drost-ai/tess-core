@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import json
+import os
+import re
+import uuid
+from typing import Any
+
+from ..._utils import now_iso
+from ..compaction_models import createDefaultCompactionModelClient, resolveCompactionModelCandidates
+from ..durable_memory import updateDurableMemoryFromWorkingContext
+from ...provider_errors import fallbackEligibleProviderFailure, isProviderRequestError
+from ...storage import (
+    compactionCheckpointPath,
+    compactionManifestPath,
+    ensureBaseLayout,
+    getSessionCompactionsDir,
+    listPlanApprovals,
+    loadCompactionManifest,
+    saveCompactionCheckpoint,
+    saveCompactionManifest,
+)
+
+
+COMPACTION_STRATEGY = "checkpoint-v2"
+MIN_RECENT_MESSAGE_COUNT = 20
+MIN_COMPACTABLE_MESSAGE_COUNT = 28
+RAW_TAIL_TOKEN_TARGET = 100_000
+RAW_TAIL_TOKEN_BUDGET = 40_000
+SOFT_WORKING_CONTEXT_TOKEN_LIMIT = 150_000
+HARD_WORKING_CONTEXT_TOKEN_LIMIT = 180_000
+AUTO_SOFT_RETRIGGER_MESSAGE_DELTA = 16
+AUTO_SOFT_RETRIGGER_TOKEN_DELTA = 64_000
+MAX_PRESERVED_TOOL_EXCHANGE_PAIRS = 10
+MIN_PRESERVED_TOOL_EXCHANGE_PAIRS = 3
+MAX_ACTIVITY_LINES = 16
+MAX_FAILURES = 8
+MAX_TODOS = 12
+CONTINUATION_BRIDGE_MESSAGE = (
+    "Continuation context: earlier history and older parts of the current tool-driven turn were compacted into the working "
+    "context provided in the system prompt. Continue from the recent raw messages below."
+)
+LOW_VALUE_TAIL_TOOL_NAMES = {"SetStatus", "TodoWrite", "Config"}
+COMPACTION_SYNTHESIS_MAX_RETRIES = 3
+COMPACTION_VERIFICATION_MAX_RETRIES = 3
+COMPACTION_EVIDENCE_TOKEN_BUDGET = 90_000
+COMPACTION_EVIDENCE_FALLBACK_BUDGETS = [COMPACTION_EVIDENCE_TOKEN_BUDGET, 60_000, 40_000]
+COMPACTION_MESSAGE_TEXT_CHAR_LIMIT = 2_400
+COMPACTION_TOOL_INPUT_CHAR_LIMIT = 1_200
+COMPACTION_TOOL_RESULT_CHAR_LIMIT = 2_000
+COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT = 600
+COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT = 1_200
+COMPACTION_FILE_PREVIEW_LINES = 8
+COMPACTION_MATCH_PREVIEW_LIMIT = 8
+
+COMPACTION_SYSTEM_PROMPT = """You synthesize durable working context for a coding agent.
+
+Your job is to replace old transcript history with a compact checkpoint that still lets the agent continue work accurately.
+
+Output rules:
+- Return a single JSON object only. No markdown. No prose outside JSON.
+- Reconcile the previous working context with the new transcript slice.
+- Keep only information that still matters for continuation.
+- Remove stale asks, completed one-off requests, chit-chat, routine status chatter, and transient dead-end tool failures unless they still affect the current task.
+- Preserve the current user goal, completed implementation work, remaining work, key decisions, relevant files, durable discoveries, active blockers, and any critical repo or runtime facts.
+- Prefer exact file paths, exact command names, and exact task state when available.
+- Lists should be concise, deduplicated, current, and ordered by usefulness for continuation.
+- If the compacted slice is too thin to justify a checkpoint, set shouldCheckpoint to false and explain why.
+
+JSON shape:
+{
+  "shouldCheckpoint": true,
+  "quality": {
+    "classification": "thin|usable|rich",
+    "reason": "short explanation"
+  },
+  "workingContext": {
+    "project": {
+      "description": "string or null",
+      "facts": {
+        "primaryLanguage": "string or null",
+        "languages": ["..."],
+        "ecosystem": "string or null",
+        "packageManager": "string or null",
+        "evidence": ["..."]
+      },
+      "keyFiles": [
+        { "path": "repo-relative-or-absolute-path", "role": "read|modified", "note": "optional short note" }
+      ]
+    },
+    "goals": {
+      "active": ["..."],
+      "recentRequests": ["..."],
+      "constraints": ["..."],
+      "preferences": ["..."]
+    },
+    "currentState": {
+      "completed": ["..."],
+      "inProgress": ["..."],
+      "blocked": ["..."]
+    },
+    "decisions": ["..."],
+    "discoveries": ["..."],
+    "activity": {
+      "commands": ["..."],
+      "searches": ["..."],
+      "web": ["..."],
+      "failures": ["..."]
+    },
+    "nextSteps": ["..."],
+    "criticalContext": ["..."]
+  }
+}"""
+
+COMPACTION_VERIFICATION_SYSTEM_PROMPT = """You verify and, when necessary, repair compaction checkpoints for a coding agent.
+
+Your job is to determine whether a candidate checkpoint preserves enough accurate, current information for the agent to continue work correctly after transcript history is compacted.
+
+Output rules:
+- Return a single JSON object only. No markdown. No prose outside JSON.
+- Use the provided transcript evidence and previous working context as ground truth.
+- Prefer rejecting or repairing a checkpoint over accepting a misleading one.
+- Remove stale requests, stale blockers, stale commit/push chatter, dead-end failures, and outdated next steps.
+- Preserve the active user goal, real completed work, current in-progress work, current blockers, relevant files, durable discoveries, and usable next steps.
+- If repair is needed, return a fully repaired checkpoint in repairedCheckpoint.
+
+JSON shape:
+{
+  "verdict": "accept|accept_with_notes|repair|reject",
+  "confidence": "low|medium|high",
+  "reason": "short explanation",
+  "issues": ["..."],
+  "notes": ["..."],
+  "repairedCheckpoint": {
+    "quality": {
+      "classification": "thin|usable|rich",
+      "reason": "short explanation"
+    },
+    "workingContext": {
+      "project": {
+        "description": "string or null",
+        "facts": {
+          "primaryLanguage": "string or null",
+          "languages": ["..."],
+          "ecosystem": "string or null",
+          "packageManager": "string or null",
+          "evidence": ["..."]
+        },
+        "keyFiles": [
+          { "path": "repo-relative-or-absolute-path", "role": "read|modified", "note": "optional short note" }
+        ]
+      },
+      "goals": {
+        "active": ["..."],
+        "recentRequests": ["..."],
+        "constraints": ["..."],
+        "preferences": ["..."]
+      },
+      "currentState": {
+        "completed": ["..."],
+        "inProgress": ["..."],
+        "blocked": ["..."]
+      },
+      "decisions": ["..."],
+      "discoveries": ["..."],
+      "activity": {
+        "commands": ["..."],
+        "searches": ["..."],
+        "web": ["..."],
+        "failures": ["..."]
+      },
+      "nextSteps": ["..."],
+      "criticalContext": ["..."]
+    }
+  }
+}"""

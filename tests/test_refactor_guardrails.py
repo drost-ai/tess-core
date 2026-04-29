@@ -42,8 +42,6 @@ PUBLIC_MODULES = [
 LINE_BUDGET_ALLOWLIST = {
     "agent_core/agent.py": 732,
     "agent_core/config.py": 878,
-    "agent_core/context/compaction.py": 1843,
-    "agent_core/context/continuation.py": 939,
     "agent_core/daemon.py": 737,
     "agent_core/mcp.py": 903,
     "agent_core/platform.py": 854,
