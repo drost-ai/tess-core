@@ -1,0 +1,33 @@
+[
+  {
+    "path": ".tess",
+    "type": "dir"
+  },
+  {
+    "path": ".tess/local",
+    "type": "dir"
+  },
+  {
+    "path": "README.md",
+    "size": 27,
+    "type": "file"
+  },
+  {
+    "path": "generated",
+    "type": "dir"
+  },
+  {
+    "path": "generated/big.txt",
+    "size": 30800,
+    "type": "file"
+  },
+  {
+    "path": "notes",
+    "type": "dir"
+  },
+  {
+    "path": "notes/tool.txt",
+    "size": 18,
+    "type": "file"
+  }
+]

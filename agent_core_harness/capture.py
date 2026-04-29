@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+import agent_core as core
+
 from .model import Scenario, StepResult
 from .normalization import normalize_observations
 from .sandbox import ScenarioSandbox
@@ -38,6 +40,23 @@ def collect_observations(
         }
     if "logs" in selected:
         observations["logs"] = tree_snapshot(sandbox.logs)
+    if "runtime_events" in selected:
+        observations["runtime_events"] = state.get("runtime_events") or []
+    if "runtime_state" in selected:
+        runtime = state.get("runtime")
+        observations["runtime_state"] = runtime["getState"]() if runtime and runtime.get("getState") else {}
+    if "driver_results" in selected:
+        observations["driver_results"] = state.get("driver_results") or []
+    if "tool_results" in selected:
+        observations["tool_results"] = state.get("tool_results") or []
+    if "subprocess_results" in selected:
+        observations["subprocess_results"] = state.get("subprocess_results") or []
+    if "slash_results" in selected:
+        observations["slash_results"] = state.get("slash_results") or []
+    if "transcript" in selected and state.get("session"):
+        observations["transcript"] = core.buildTranscriptSnapshot(state["session"])
+    if "tool_artifacts" in selected and state.get("session"):
+        observations["tool_artifacts"] = tree_snapshot(Path(core.getSessionToolArtifactsDir(state["session"]["id"])))
     provider_runtime = state.get("provider_runtime")
     if provider_runtime:
         provider_observations = provider_runtime.observations()

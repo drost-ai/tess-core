@@ -14,6 +14,16 @@ from .goldens import compare_golden, expected_observations, render_diff, update_
 from .loader import load_scenario
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
 from .normalization import normalize_observations
+from .runtime_driver import (
+    assert_driver_result,
+    assert_runtime_event,
+    bootstrap_runtime,
+    call_tool,
+    close_runtime_driver,
+    run_agent,
+    run_slash_command,
+    run_subprocess,
+)
 from .sandbox import ScenarioSandbox
 
 
@@ -73,6 +83,7 @@ async def run_scenario_async(
         provider_runtime = state.get("provider_runtime")
         if provider_runtime:
             provider_runtime.close()
+        await close_runtime_driver(state)
         sandbox.cleanup_sandbox(passed=failure is None)
         core.resetConfiguredRuntimeHome()
 
@@ -138,12 +149,28 @@ async def _execute_step(
         state["provider_results"] = runtime.results
         state["provider_last_result"] = result
         return ["provider_response", "provider_requests", "provider_events"]
+    if step_type == "bootstrap_runtime":
+        return await bootstrap_runtime(data, sandbox, state)
+    if step_type == "run_agent":
+        return await run_agent(data, sandbox, state)
+    if step_type == "run_subprocess":
+        return await run_subprocess(data, sandbox, state)
+    if step_type == "run_slash_command":
+        return await run_slash_command(data, sandbox, state)
+    if step_type == "call_tool":
+        return await call_tool(data, sandbox, state)
     if step_type == "assert_provider_response":
         assert_provider_response(state, data)
         return ["provider_response"]
     if step_type == "assert_provider_capture":
         assert_provider_capture(state, data)
         return ["provider_requests", "provider_events"]
+    if step_type == "assert_driver_result":
+        assert_driver_result(state, data)
+        return ["driver_results"]
+    if step_type == "assert_runtime_event":
+        assert_runtime_event(state, data)
+        return ["runtime_events"]
     if step_type == "capture":
         include = data.get("include") or scenario.capture.get("include") or []
         observations.clear()

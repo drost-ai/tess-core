@@ -1,0 +1,469 @@
+[
+  {
+    "data": {
+      "bridge_id": null,
+      "cwd": "<workspace>",
+      "git_branch": "<git-branch>",
+      "git_root": "<git-root>",
+      "model": "gpt-5.4",
+      "permission_mode": "bypassPermissions",
+      "provider": "openai",
+      "remote_session_id": null,
+      "session_id": "<uuid:1>",
+      "updated_at": "<timestamp>",
+      "workspace_name": "<workspace-name>"
+    },
+    "event": "session.activated",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "bridge_id": null,
+        "cwd": "<workspace>",
+        "git_branch": "<git-branch>",
+        "git_root": "<git-root>",
+        "model": "gpt-5.4",
+        "permission_mode": "bypassPermissions",
+        "provider": "openai",
+        "remote_session_id": null,
+        "session_id": "<uuid:1>",
+        "updated_at": "<timestamp>",
+        "workspace_name": "<workspace-name>"
+      },
+      "event": "session.activated",
+      "kind": "session.activated",
+      "legacyData": {
+        "bridge_id": null,
+        "cwd": "<workspace>",
+        "git_branch": "<git-branch>",
+        "git_root": "<git-root>",
+        "model": "gpt-5.4",
+        "permission_mode": "bypassPermissions",
+        "provider": "openai",
+        "remote_session_id": null,
+        "session_id": "<uuid:1>",
+        "updated_at": "<timestamp>",
+        "workspace_name": "<workspace-name>"
+      },
+      "legacyEvent": "session.activated",
+      "payload": {
+        "bridgeId": null,
+        "cwd": "<workspace>",
+        "gitBranch": "<git-branch>",
+        "gitRoot": "<git-root>",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "provider": "openai",
+        "remoteSessionId": null,
+        "updatedAt": "<timestamp>",
+        "workspaceName": "<workspace-name>"
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "session.activated"
+    }
+  },
+  {
+    "data": {
+      "session_id": "<uuid:1>",
+      "text": "Read README.md and summarize it."
+    },
+    "event": "message.user",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "session_id": "<uuid:1>",
+        "text": "Read README.md and summarize it."
+      },
+      "event": "message.user",
+      "kind": "message.user",
+      "legacyData": {
+        "session_id": "<uuid:1>",
+        "text": "Read README.md and summarize it."
+      },
+      "legacyEvent": "message.user",
+      "payload": {
+        "text": "Read README.md and summarize it."
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "message.user"
+    }
+  },
+  {
+    "data": {
+      "base_input_tokens": "<token-estimate>",
+      "continuity_pressure": {
+        "categories": {
+          "currentTurnToolPayloadTokens": "<token-estimate>",
+          "lowValueTailTokens": "<token-estimate>",
+          "oldHistoryTokens": "<token-estimate>",
+          "planTodoNoiseTokens": "<token-estimate>",
+          "repeatedFileContentTokens": "<token-estimate>"
+        },
+        "totalTokenEstimate": "<token-estimate>"
+      },
+      "continuity_relief": {
+        "applied": false,
+        "appliedModes": [],
+        "compactedMessageCount": 0,
+        "detail": null,
+        "droppedMessageCount": 0,
+        "plannedModes": [],
+        "preservedRawStartIndex": 0,
+        "pressureLevel": "low",
+        "reactiveAttempt": 0,
+        "reinjectionLines": [],
+        "reinjectionSummary": null,
+        "selectedMode": "none",
+        "steps": [],
+        "tokensSavedEstimate": 0
+      },
+      "input_tokens": "<token-estimate>",
+      "model": "gpt-5.4",
+      "provider": "openai",
+      "retrieved_memory_count": 0,
+      "retrieved_memory_tokens": 0,
+      "safety_margin_tokens": null,
+      "session_id": "<uuid:1>",
+      "source": "openai_responses_estimate"
+    },
+    "event": "provider.input_tokens",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "base_input_tokens": "<token-estimate>",
+        "continuity_pressure": {
+          "categories": {
+            "currentTurnToolPayloadTokens": "<token-estimate>",
+            "lowValueTailTokens": "<token-estimate>",
+            "oldHistoryTokens": "<token-estimate>",
+            "planTodoNoiseTokens": "<token-estimate>",
+            "repeatedFileContentTokens": "<token-estimate>"
+          },
+          "totalTokenEstimate": "<token-estimate>"
+        },
+        "continuity_relief": {
+          "applied": false,
+          "appliedModes": [],
+          "compactedMessageCount": 0,
+          "detail": null,
+          "droppedMessageCount": 0,
+          "plannedModes": [],
+          "preservedRawStartIndex": 0,
+          "pressureLevel": "low",
+          "reactiveAttempt": 0,
+          "reinjectionLines": [],
+          "reinjectionSummary": null,
+          "selectedMode": "none",
+          "steps": [],
+          "tokensSavedEstimate": 0
+        },
+        "input_tokens": "<token-estimate>",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "retrieved_memory_count": 0,
+        "retrieved_memory_tokens": 0,
+        "safety_margin_tokens": null,
+        "session_id": "<uuid:1>",
+        "source": "openai_responses_estimate"
+      },
+      "event": "provider.input_tokens",
+      "kind": "provider.input_tokens",
+      "legacyData": {
+        "base_input_tokens": "<token-estimate>",
+        "continuity_pressure": {
+          "categories": {
+            "currentTurnToolPayloadTokens": "<token-estimate>",
+            "lowValueTailTokens": "<token-estimate>",
+            "oldHistoryTokens": "<token-estimate>",
+            "planTodoNoiseTokens": "<token-estimate>",
+            "repeatedFileContentTokens": "<token-estimate>"
+          },
+          "totalTokenEstimate": "<token-estimate>"
+        },
+        "continuity_relief": {
+          "applied": false,
+          "appliedModes": [],
+          "compactedMessageCount": 0,
+          "detail": null,
+          "droppedMessageCount": 0,
+          "plannedModes": [],
+          "preservedRawStartIndex": 0,
+          "pressureLevel": "low",
+          "reactiveAttempt": 0,
+          "reinjectionLines": [],
+          "reinjectionSummary": null,
+          "selectedMode": "none",
+          "steps": [],
+          "tokensSavedEstimate": 0
+        },
+        "input_tokens": "<token-estimate>",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "retrieved_memory_count": 0,
+        "retrieved_memory_tokens": 0,
+        "safety_margin_tokens": null,
+        "session_id": "<uuid:1>",
+        "source": "openai_responses_estimate"
+      },
+      "legacyEvent": "provider.input_tokens",
+      "payload": {
+        "baseInputTokens": "<token-estimate>",
+        "inputTokens": "<token-estimate>",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "safetyMarginTokens": null,
+        "source": "openai_responses_estimate"
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "provider.input_tokens"
+    }
+  },
+  {
+    "data": {
+      "input": {
+        "file_path": "README.md"
+      },
+      "name": "Read",
+      "session_id": "<uuid:1>"
+    },
+    "event": "tool.started",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "input": {
+          "file_path": "README.md"
+        },
+        "name": "Read",
+        "session_id": "<uuid:1>"
+      },
+      "event": "tool.started",
+      "kind": "tool.started",
+      "legacyData": {
+        "input": {
+          "file_path": "README.md"
+        },
+        "name": "Read",
+        "session_id": "<uuid:1>"
+      },
+      "legacyEvent": "tool.started",
+      "payload": {
+        "input": {
+          "file_path": "README.md"
+        },
+        "name": "Read"
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "tool.started"
+    }
+  },
+  {
+    "data": {
+      "error": false,
+      "name": "Read",
+      "output": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/README.md\",\n    \"content\": \"hello from runtime harness\\n\",\n    \"numLines\": 2,\n    \"startLine\": 1,\n    \"totalLines\": 2,\n    \"selectedNumLines\": 2,\n    \"selectedBytes\": 27,\n    \"truncated\": false,\n    \"requestedLimit\": 320,\n    \"transcriptView\": {\n      \"strategy\": \"inline_full\",\n      \"truncated\": false,\n      \"originalBytes\": 27,\n      \"originalLines\": 2,\n      \"returnedBytes\": 27,\n      \"returnedLines\": 2\n    }\n  }\n}",
+      "session_id": "<uuid:1>"
+    },
+    "event": "tool.completed",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "error": false,
+        "name": "Read",
+        "output": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/README.md\",\n    \"content\": \"hello from runtime harness\\n\",\n    \"numLines\": 2,\n    \"startLine\": 1,\n    \"totalLines\": 2,\n    \"selectedNumLines\": 2,\n    \"selectedBytes\": 27,\n    \"truncated\": false,\n    \"requestedLimit\": 320,\n    \"transcriptView\": {\n      \"strategy\": \"inline_full\",\n      \"truncated\": false,\n      \"originalBytes\": 27,\n      \"originalLines\": 2,\n      \"returnedBytes\": 27,\n      \"returnedLines\": 2\n    }\n  }\n}",
+        "session_id": "<uuid:1>"
+      },
+      "event": "tool.completed",
+      "kind": "tool.completed",
+      "legacyData": {
+        "error": false,
+        "name": "Read",
+        "output": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/README.md\",\n    \"content\": \"hello from runtime harness\\n\",\n    \"numLines\": 2,\n    \"startLine\": 1,\n    \"totalLines\": 2,\n    \"selectedNumLines\": 2,\n    \"selectedBytes\": 27,\n    \"truncated\": false,\n    \"requestedLimit\": 320,\n    \"transcriptView\": {\n      \"strategy\": \"inline_full\",\n      \"truncated\": false,\n      \"originalBytes\": 27,\n      \"originalLines\": 2,\n      \"returnedBytes\": 27,\n      \"returnedLines\": 2\n    }\n  }\n}",
+        "session_id": "<uuid:1>"
+      },
+      "legacyEvent": "tool.completed",
+      "payload": {
+        "error": false,
+        "name": "Read",
+        "output": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/README.md\",\n    \"content\": \"hello from runtime harness\\n\",\n    \"numLines\": 2,\n    \"startLine\": 1,\n    \"totalLines\": 2,\n    \"selectedNumLines\": 2,\n    \"selectedBytes\": 27,\n    \"truncated\": false,\n    \"requestedLimit\": 320,\n    \"transcriptView\": {\n      \"strategy\": \"inline_full\",\n      \"truncated\": false,\n      \"originalBytes\": 27,\n      \"originalLines\": 2,\n      \"returnedBytes\": 27,\n      \"returnedLines\": 2\n    }\n  }\n}"
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "tool.completed"
+    }
+  },
+  {
+    "data": {
+      "base_input_tokens": "<token-estimate>",
+      "continuity_pressure": {
+        "categories": {
+          "currentTurnToolPayloadTokens": "<token-estimate>",
+          "lowValueTailTokens": "<token-estimate>",
+          "oldHistoryTokens": "<token-estimate>",
+          "planTodoNoiseTokens": "<token-estimate>",
+          "repeatedFileContentTokens": "<token-estimate>"
+        },
+        "totalTokenEstimate": "<token-estimate>"
+      },
+      "continuity_relief": {
+        "applied": false,
+        "appliedModes": [],
+        "compactedMessageCount": 0,
+        "detail": null,
+        "droppedMessageCount": 0,
+        "plannedModes": [],
+        "preservedRawStartIndex": 0,
+        "pressureLevel": "low",
+        "reactiveAttempt": 0,
+        "reinjectionLines": [],
+        "reinjectionSummary": null,
+        "selectedMode": "none",
+        "steps": [],
+        "tokensSavedEstimate": 0
+      },
+      "input_tokens": "<token-estimate>",
+      "model": "gpt-5.4",
+      "provider": "openai",
+      "retrieved_memory_count": 0,
+      "retrieved_memory_tokens": 0,
+      "safety_margin_tokens": null,
+      "session_id": "<uuid:1>",
+      "source": "openai_responses_estimate"
+    },
+    "event": "provider.input_tokens",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "base_input_tokens": "<token-estimate>",
+        "continuity_pressure": {
+          "categories": {
+            "currentTurnToolPayloadTokens": "<token-estimate>",
+            "lowValueTailTokens": "<token-estimate>",
+            "oldHistoryTokens": "<token-estimate>",
+            "planTodoNoiseTokens": "<token-estimate>",
+            "repeatedFileContentTokens": "<token-estimate>"
+          },
+          "totalTokenEstimate": "<token-estimate>"
+        },
+        "continuity_relief": {
+          "applied": false,
+          "appliedModes": [],
+          "compactedMessageCount": 0,
+          "detail": null,
+          "droppedMessageCount": 0,
+          "plannedModes": [],
+          "preservedRawStartIndex": 0,
+          "pressureLevel": "low",
+          "reactiveAttempt": 0,
+          "reinjectionLines": [],
+          "reinjectionSummary": null,
+          "selectedMode": "none",
+          "steps": [],
+          "tokensSavedEstimate": 0
+        },
+        "input_tokens": "<token-estimate>",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "retrieved_memory_count": 0,
+        "retrieved_memory_tokens": 0,
+        "safety_margin_tokens": null,
+        "session_id": "<uuid:1>",
+        "source": "openai_responses_estimate"
+      },
+      "event": "provider.input_tokens",
+      "kind": "provider.input_tokens",
+      "legacyData": {
+        "base_input_tokens": "<token-estimate>",
+        "continuity_pressure": {
+          "categories": {
+            "currentTurnToolPayloadTokens": "<token-estimate>",
+            "lowValueTailTokens": "<token-estimate>",
+            "oldHistoryTokens": "<token-estimate>",
+            "planTodoNoiseTokens": "<token-estimate>",
+            "repeatedFileContentTokens": "<token-estimate>"
+          },
+          "totalTokenEstimate": "<token-estimate>"
+        },
+        "continuity_relief": {
+          "applied": false,
+          "appliedModes": [],
+          "compactedMessageCount": 0,
+          "detail": null,
+          "droppedMessageCount": 0,
+          "plannedModes": [],
+          "preservedRawStartIndex": 0,
+          "pressureLevel": "low",
+          "reactiveAttempt": 0,
+          "reinjectionLines": [],
+          "reinjectionSummary": null,
+          "selectedMode": "none",
+          "steps": [],
+          "tokensSavedEstimate": 0
+        },
+        "input_tokens": "<token-estimate>",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "retrieved_memory_count": 0,
+        "retrieved_memory_tokens": 0,
+        "safety_margin_tokens": null,
+        "session_id": "<uuid:1>",
+        "source": "openai_responses_estimate"
+      },
+      "legacyEvent": "provider.input_tokens",
+      "payload": {
+        "baseInputTokens": "<token-estimate>",
+        "inputTokens": "<token-estimate>",
+        "model": "gpt-5.4",
+        "provider": "openai",
+        "safetyMarginTokens": null,
+        "source": "openai_responses_estimate"
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "provider.input_tokens"
+    }
+  },
+  {
+    "data": {
+      "model": "gpt-5.4",
+      "session_id": "<uuid:1>",
+      "text": "README says hello from runtime harness."
+    },
+    "event": "message.assistant",
+    "typedEvent": {
+      "createdAt": "<timestamp>",
+      "data": {
+        "model": "gpt-5.4",
+        "session_id": "<uuid:1>",
+        "text": "README says hello from runtime harness."
+      },
+      "event": "message.assistant",
+      "kind": "message.assistant",
+      "legacyData": {
+        "model": "gpt-5.4",
+        "session_id": "<uuid:1>",
+        "text": "README says hello from runtime harness."
+      },
+      "legacyEvent": "message.assistant",
+      "payload": {
+        "model": "gpt-5.4",
+        "text": "README says hello from runtime harness."
+      },
+      "sessionId": "<uuid:1>",
+      "timestamp": "<timestamp>",
+      "type": "message.assistant"
+    }
+  },
+  {
+    "data": {
+      "decision": "allow",
+      "mode": "bypassPermissions",
+      "source": "mode",
+      "summary": "Write notes/tool.txt (18 bytes)",
+      "tool": "Write"
+    },
+    "event": "permission.decided"
+  }
+]

@@ -18,7 +18,8 @@ class NormalizationContext:
 
     def normalize(self, value: Any, key_path: tuple[str, ...] = ()) -> Any:
         if isinstance(value, dict):
-            return {key: self.normalize(val, (*key_path, str(key))) for key, val in value.items()}
+            normalized = {key: self.normalize(val, (*key_path, str(key))) for key, val in value.items()}
+            return self._normalize_dynamic_dict(normalized, key_path)
         if isinstance(value, list):
             normalized_items = [self.normalize(item, (*key_path, str(index))) for index, item in enumerate(value)]
             if key_path and key_path[-1] == "workspace_tree":
@@ -30,21 +31,54 @@ class NormalizationContext:
             return self._normalize_int(value, key_path)
         return value
 
+    def _normalize_dynamic_dict(self, value: dict[str, Any], key_path: tuple[str, ...]) -> dict[str, Any]:
+        for key in ("git_branch", "gitBranch"):
+            if key in value:
+                value[key] = "<git-branch>"
+        for key in ("git_root", "gitRoot"):
+            if key in value:
+                value[key] = "<git-root>"
+        for key in ("workspace_name", "workspaceName", "remoteTitle"):
+            if key in value:
+                value[key] = "<workspace-name>"
+        for key in ("workspaceId", "workspace_id"):
+            if key in value:
+                value[key] = "<workspace-id>"
+        for key in ("workspaceMode", "workspace_mode"):
+            if key in value:
+                value[key] = "<workspace-mode>"
+        for key in ("workspaceRoot", "workspace_root"):
+            if key in value:
+                value[key] = "<workspace-root>"
+        if _is_estimated_token_record(value):
+            for key in ("base_input_tokens", "input_tokens", "baseInputTokens", "inputTokens"):
+                if key in value:
+                    value[key] = "<token-estimate>"
+        if key_path and key_path[-1] in {"continuity_pressure", "continuityPressure"}:
+            value["totalTokenEstimate"] = "<token-estimate>"
+            categories = value.get("categories")
+            if isinstance(categories, dict):
+                for key in categories:
+                    categories[key] = "<token-estimate>"
+        return value
+
     def _normalize_int(self, value: int, key_path: tuple[str, ...]) -> Any:
         key = key_path[-1].lower() if key_path else ""
         if key in {"pid", "ppid", "processid", "process_id"} or key.endswith("pid"):
             return self._placeholder(self.pid_map, str(value), "pid")
         if "port" in key and 0 < value <= 65535:
             return self._placeholder(self.port_map, str(value), "port")
-        if key == "size" and key_path and key_path[0] in {"storage_tree", "logs"}:
+        if key == "size" and key_path and key_path[0] in {"logs", "storage_tree", "tool_artifacts"}:
             return "<size>"
         return value
 
     def _normalize_string(self, value: str, key_path: tuple[str, ...]) -> str:
         normalized = self._replace_paths(value)
         normalized = normalized.replace(self.sandbox.run_id, "<run-id>")
-        if re.match(r"^\d{4}-\d{2}-\d{2}T", normalized):
+        if _TIMESTAMP_PATTERN.fullmatch(normalized):
             return "<timestamp>"
+        normalized = _TIMESTAMP_PATTERN.sub("<timestamp>", normalized)
+        normalized = re.sub(r"\bpreflight\s+\d+\s+via\b", "preflight <token-estimate> via", normalized)
         normalized = self._replace_labeled_numbers(normalized, r"\b(pid|ppid|process_id|processId)[=:\s]+(\d+)\b", self.pid_map, "pid")
         normalized = self._replace_labeled_numbers(normalized, r"\b(port)[=:\s]+(\d+)\b", self.port_map, "port")
         normalized = self._replace_localhost_ports(normalized)
@@ -100,6 +134,11 @@ def _replace_path_prefix(value: str, raw: str, marker: str) -> str:
     return normalized.replace(raw_path.replace("\\", "/"), marker)
 
 
+def _is_estimated_token_record(value: dict[str, Any]) -> bool:
+    return value.get("source") == "openai_responses_estimate" or value.get("inputTokenSource") == "openai_responses_estimate"
+
+
+_TIMESTAMP_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 
 

@@ -1,0 +1,120 @@
+[
+  {
+    "body": "Read README.md and summarize it.",
+    "timestamp": "saved",
+    "title": "You",
+    "tone": "user"
+  },
+  {
+    "body": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/README.md\",\n    \"content\": \"hello from runtime harness\\n\",\n    \"numLines\": 2,\n    \"startLine\": 1,\n    \"totalLines\": 2,\n    \"selectedNumLines\": 2,\n    \"selectedBytes\": 27,\n    \"truncated\": false,\n    \"requestedLimit\": 320,\n    \"transcriptView\": {\n      \"strategy\": \"inline_full\",\n      \"truncated\": false,\n      \"originalBytes\": 27,\n      \"originalLines\": 2,\n      \"returnedBytes\": 27,\n      \"returnedLines\": 2\n    }\n  }\n}",
+    "payload": {
+      "failed": false,
+      "label": "Read(README.md)",
+      "outputs": [
+        {
+          "file": {
+            "content": "hello from runtime harness\n",
+            "filePath": "<workspace>/README.md",
+            "numLines": 2,
+            "requestedLimit": 320,
+            "selectedBytes": 27,
+            "selectedNumLines": 2,
+            "startLine": 1,
+            "totalLines": 2,
+            "transcriptView": {
+              "originalBytes": 27,
+              "originalLines": 2,
+              "returnedBytes": 27,
+              "returnedLines": 2,
+              "strategy": "inline_full",
+              "truncated": false
+            },
+            "truncated": false
+          },
+          "type": "text"
+        }
+      ],
+      "toolName": "Read",
+      "type": "tool_result"
+    },
+    "timestamp": "saved",
+    "title": "Read(README.md)",
+    "tone": "tool"
+  },
+  {
+    "body": "README says hello from runtime harness.",
+    "timestamp": "saved",
+    "title": "Assistant",
+    "tone": "assistant"
+  },
+  {
+    "body": "{\n  \"type\": \"file_change\",\n  \"tool\": \"Write\",\n  \"action\": \"create\",\n  \"filePath\": \"<workspace>/notes/tool.txt\",\n  \"bytes\": 18,\n  \"diff\": \"  1 + direct tool write\\n  2   \"\n}",
+    "payload": {
+      "failed": false,
+      "label": "Write(tool.txt)",
+      "outputs": [
+        {
+          "action": "create",
+          "bytes": 18,
+          "diff": "  1 + direct tool write\n  2   ",
+          "filePath": "<workspace>/notes/tool.txt",
+          "tool": "Write",
+          "type": "file_change"
+        }
+      ],
+      "toolName": "Write",
+      "type": "tool_result"
+    },
+    "timestamp": "saved",
+    "title": "Write(tool.txt)",
+    "tone": "tool"
+  },
+  {
+    "body": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/generated/big.txt\",\n    \"content\": \"artifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\\nartifact line\",\n    \"numLines\": 420,\n    \"startLine\": 1,\n    \"totalLines\": 2201,\n    \"selectedNumLines\": 2000,\n    \"selectedBytes\": 27999,\n    \"truncated\": true,\n    \"requestedLimit\": 2000,\n    \"nextOffset\": 2001,\n    \"artifact\": {\n      \"artifactId\": \"<uuid:2>\",\n      \"toolName\": \"Read\",\n      \"sessionId\": \"<uuid:1>\",\n      \"family\": \"read\",\n      \"filePath\": \"<runtime-home>/tool-artifacts/<uuid:1>/<uuid:2>.txt\",\n      \"bytes\": 27999,\n      \"lines\": 2000,\n      \"contentType\": \"text\",\n      \"createdAt\": \"<timestamp>\"\n    },\n    \"transcriptView\": {\n      \"strategy\": \"windowed_file_read\",\n      \"truncated\": true,\n      \"originalBytes\": 27999,\n      \"originalLines\": 2000,\n      \"returnedBytes\": 5879,\n      \"returnedLines\": 420\n    }\n  }\n}",
+    "payload": {
+      "failed": false,
+      "label": "Read(big.txt)",
+      "outputs": [
+        {
+          "file": {
+            "artifact": {
+              "artifactId": "<uuid:2>",
+              "bytes": 27999,
+              "contentType": "text",
+              "createdAt": "<timestamp>",
+              "family": "read",
+              "filePath": "<runtime-home>/tool-artifacts/<uuid:1>/<uuid:2>.txt",
+              "lines": 2000,
+              "sessionId": "<uuid:1>",
+              "toolName": "Read"
+            },
+            "content": "artifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line\nartifact line",
+            "filePath": "<workspace>/generated/big.txt",
+            "nextOffset": 2001,
+            "numLines": 420,
+            "requestedLimit": 2000,
+            "selectedBytes": 27999,
+            "selectedNumLines": 2000,
+            "startLine": 1,
+            "totalLines": 2201,
+            "transcriptView": {
+              "originalBytes": 27999,
+              "originalLines": 2000,
+              "returnedBytes": 5879,
+              "returnedLines": 420,
+              "strategy": "windowed_file_read",
+              "truncated": true
+            },
+            "truncated": true
+          },
+          "type": "text"
+        }
+      ],
+      "toolName": "Read",
+      "type": "tool_result"
+    },
+    "timestamp": "saved",
+    "title": "Read(big.txt)",
+    "tone": "tool"
+  }
+]

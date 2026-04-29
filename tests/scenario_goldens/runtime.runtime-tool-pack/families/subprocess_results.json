@@ -1,0 +1,14 @@
+[
+  {
+    "command": [
+      "python3",
+      "-c",
+      "from pathlib import Path\nPath('generated').mkdir(exist_ok=True)\nPath('generated/big.txt').write_text(('artifact line\\n') * 2200, encoding='utf-8')\nprint('subprocess ok')"
+    ],
+    "driver": "run_subprocess",
+    "returnCode": 0,
+    "status": "passed",
+    "stderr": "",
+    "stdout": "subprocess ok\n"
+  }
+]

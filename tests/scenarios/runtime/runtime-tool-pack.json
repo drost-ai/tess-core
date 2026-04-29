@@ -1,0 +1,177 @@
+{
+  "id": "runtime.runtime-tool-pack",
+  "title": "Runtime And Tool Driver Pack",
+  "area": "runtime",
+  "mode": ["python"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "hello from runtime harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "create_session": {
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions"
+      }
+    },
+    {
+      "bootstrap_runtime": {}
+    },
+    {
+      "assert_driver_result": {
+        "driver": "bootstrap_runtime",
+        "status": "passed",
+        "toolNamesInclude": ["Read", "Write", "Bash"]
+      }
+    },
+    {
+      "run_agent": {
+        "prompt": "Read README.md and summarize it.",
+        "providerResponses": [
+          {
+            "model": "gpt-5.4",
+            "stopReason": "tool_use",
+            "usage": {
+              "input_tokens": 10,
+              "output_tokens": 3
+            },
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "read_readme",
+                "name": "Read",
+                "input": {
+                  "file_path": "README.md"
+                }
+              }
+            ]
+          },
+          {
+            "model": "gpt-5.4",
+            "stopReason": "end_turn",
+            "usage": {
+              "input_tokens": 8,
+              "output_tokens": 5
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "README says hello from runtime harness."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_agent",
+        "status": "passed"
+      }
+    },
+    {
+      "assert_runtime_event": {
+        "eventsInclude": [
+          "session.activated",
+          "message.user",
+          "tool.started",
+          "tool.completed",
+          "message.assistant"
+        ]
+      }
+    },
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-c",
+          "from pathlib import Path\nPath('generated').mkdir(exist_ok=True)\nPath('generated/big.txt').write_text(('artifact line\\n') * 2200, encoding='utf-8')\nprint('subprocess ok')"
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "status": "passed",
+        "stdoutContains": "subprocess ok"
+      }
+    },
+    {
+      "run_slash_command": {
+        "command": "/status"
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_slash_command",
+        "status": "passed",
+        "messageContains": "session"
+      }
+    },
+    {
+      "call_tool": {
+        "name": "Write",
+        "input": {
+          "file_path": "notes/tool.txt",
+          "content": "direct tool write\n"
+        }
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "call_tool",
+        "status": "passed"
+      }
+    },
+    {
+      "call_tool": {
+        "name": "Read",
+        "input": {
+          "file_path": "generated/big.txt",
+          "limit": 2000
+        }
+      }
+    },
+    {
+      "assert_file_exists": {
+        "path": "notes/tool.txt"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "runtime_events",
+          "runtime_state",
+          "driver_results",
+          "tool_results",
+          "subprocess_results",
+          "slash_results",
+          "transcript",
+          "tool_artifacts",
+          "workspace_tree",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "session",
+      "runtime_events",
+      "runtime_state",
+      "driver_results",
+      "tool_results",
+      "subprocess_results",
+      "slash_results",
+      "transcript",
+      "tool_artifacts",
+      "workspace_tree",
+      "step_results"
+    ]
+  }
+}

@@ -45,6 +45,7 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "run": {"id": sandbox.run_id, "pid": 12345, "port": 54321},
                     "url": "http://127.0.0.1:54321/v1/messages",
                     "when": "2026-04-29T18:00:00.000Z",
+                    "embedded": '{"createdAt":"2026-04-29T18:00:00.000Z"}',
                     "sessionId": "session-11111111-2222-3333-4444-555555555555",
                     "path": str(sandbox.workspace / "README.md"),
                     "repo": str(Path.cwd() / "agent_core_harness"),
@@ -56,6 +57,7 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(normalized["run"]["port"], "<port:1>")
                 self.assertEqual(normalized["url"], "http://127.0.0.1:<port:1>/v1/messages")
                 self.assertEqual(normalized["when"], "<timestamp>")
+                self.assertEqual(normalized["embedded"], '{"createdAt":"<timestamp>"}')
                 self.assertEqual(normalized["sessionId"], "session-<uuid:1>")
                 self.assertEqual(normalized["path"], "<workspace>/README.md")
                 self.assertEqual(normalized["repo"], "<repo>/agent_core_harness")

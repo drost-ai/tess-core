@@ -1,0 +1,83 @@
+{
+  "bridge": {
+    "attached": false,
+    "bridgeId": null,
+    "remoteSessionId": null
+  },
+  "collaboration": {
+    "activeCount": 0,
+    "awaitingInputCount": 0,
+    "backgroundCount": 0,
+    "bridgeStatus": null,
+    "labels": [],
+    "pendingBridgeMessages": null,
+    "recentAssistantUpdates": [],
+    "remoteStatus": null,
+    "remoteTitle": "<workspace-name>",
+    "workers": []
+  },
+  "compaction": {
+    "status": "idle"
+  },
+  "daemon": {
+    "phase": "offline"
+  },
+  "monitors": {
+    "activeMonitorIds": [],
+    "recentAssistantUpdates": [],
+    "snapshot": {
+      "active": 0,
+      "failed": 0,
+      "labels": [],
+      "muted": 0,
+      "nextCheckInMs": null,
+      "stopped": 0,
+      "total": 0
+    }
+  },
+  "provider": {
+    "baseInputTokens": "<token-estimate>",
+    "inputTokenSource": "openai_responses_estimate",
+    "inputTokens": "<token-estimate>",
+    "model": "gpt-5.4",
+    "phase": "idle",
+    "provider": "openai",
+    "safetyMarginTokens": null
+  },
+  "session": {
+    "activeSessionId": "<uuid:1>",
+    "lastActivatedAt": "<timestamp>",
+    "summary": {
+      "bridgeId": null,
+      "cwd": "<workspace>",
+      "gitBranch": "<git-branch>",
+      "gitRoot": "<git-root>",
+      "id": "<uuid:1>",
+      "model": "gpt-5.4",
+      "name": null,
+      "permissionMode": "bypassPermissions",
+      "provider": "openai",
+      "remoteSessionId": null,
+      "updatedAt": "<timestamp>",
+      "workspaceName": "<workspace-name>"
+    }
+  },
+  "tasks": {
+    "activeCount": 0,
+    "awaitingInputCount": 0,
+    "backgroundedCount": 0,
+    "failedCount": 0,
+    "labels": [],
+    "tasks": [],
+    "total": 0
+  },
+  "turn": {
+    "agentName": null,
+    "lastOutcome": null,
+    "liveStatus": null,
+    "model": "gpt-5.4",
+    "prompt": null,
+    "startedAt": null,
+    "status": "idle"
+  }
+}

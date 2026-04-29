@@ -1,0 +1,23 @@
+[
+  {
+    "json": {
+      "artifactId": "<uuid:2>",
+      "bytes": 27999,
+      "contentType": "text",
+      "createdAt": "<timestamp>",
+      "family": "read",
+      "filePath": "<runtime-home>/tool-artifacts/<uuid:1>/<uuid:2>.txt",
+      "lines": 2000,
+      "sessionId": "<uuid:1>",
+      "toolName": "Read"
+    },
+    "path": "<uuid:2>.meta.json",
+    "size": "<size>",
+    "type": "file"
+  },
+  {
+    "path": "<uuid:2>.txt",
+    "size": "<size>",
+    "type": "file"
+  }
+]
