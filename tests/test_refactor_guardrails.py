@@ -52,8 +52,6 @@ LINE_BUDGET_ALLOWLIST = {
     "agent_core/runtime_events.py": 621,
     "agent_core/runtime_state.py": 711,
     "agent_core/storage.py": 841,
-    "agent_core/tasks/subagents.py": 620,
-    "agent_core/tasks/supervisor.py": 2026,
     "product-planning/01-vision-architecture/04-workstreams.md": 600,
 }
 

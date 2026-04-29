@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+from .shared import *
+
+
+async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    args = {**(args or {}), **kwargs}
+    context = args["context"]
+    _throw_if_subagent_cancelled(context)
+    prepared = await prepareSubagent(args)
+    _throw_if_subagent_cancelled(context)
+    child_session = prepared["childSession"]
+    child_record = prepared["childRecord"]
+    agent_id = prepared["agentId"]
+    supervisor = context.get("daemon") or context.get("taskSupervisor")
+    if supervisor:
+        launched = await supervisor["startSubagentTask"](
+            {
+                "parentSessionId": context["session"]["id"],
+                "sessionId": child_session["id"],
+                "agentId": agent_id,
+                "cwd": child_session["cwd"],
+                "label": child_record.get("name") or child_record.get("agentType") or agent_id,
+                "parentTaskId": child_record.get("parentTaskId"),
+            }
+        )
+    else:
+        launched = await _start_local_background_subagent(prepared)
+    task_id = launched.get("taskId") or launched.get("task_id")
+    output_file = launched.get("outputFile") or launched.get("output_file") or (taskOutputPath(task_id) if task_id else None)
+    started_at = now_iso()
+    await saveChildAgent(
+        {
+            **child_record,
+            "taskId": task_id,
+            "pid": launched.get("pid"),
+            "status": "backgrounded",
+            "owner": "daemon" if context.get("daemon") else "client",
+            "attachableSessionId": child_session["id"],
+            "stoppable": True,
+            "retryable": False,
+            "waitingReason": None,
+            "completionReason": None,
+            "resultSummary": None,
+            "latestResultAt": None,
+            "recoveryState": None,
+            "lastUpdatedAt": started_at,
+            "lastSummary": "Running in the background.",
+        }
+    )
+    _output(
+        context,
+        "subagent.backgrounded",
+        {
+            "agent_id": agent_id,
+            "session_id": child_session["id"],
+            "parent_session_id": context["session"]["id"],
+            "attachable_session_id": child_session["id"],
+            "task_id": task_id,
+            "pid": launched.get("pid"),
+            "output_file": output_file,
+            "status": "backgrounded",
+            "label": child_record.get("name") or child_record.get("agentType") or agent_id,
+            "worktree_path": prepared.get("worktreePath"),
+        },
+    )
+    return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "task_id": task_id, "status": "running", "run_in_background": True, "output_file": output_file, "worktree_path": prepared.get("worktreePath")}))}
+
+
+async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
+    context = args["context"]
+    parent = context["session"]
+    config = context["config"]
+    description = _require_string(args.get("description"), "description")
+    prompt = _require_string(args.get("prompt"), "prompt")
+    agent_type = (args.get("agentType") or args.get("subagent_type") or "").strip() or None
+    model = args.get("model") if isinstance(args.get("model"), str) and args.get("model").strip() else None
+    name = args.get("name") if isinstance(args.get("name"), str) and args.get("name").strip() else None
+    team_name = args.get("teamName") or args.get("team_name")
+    team_name = team_name.strip() if isinstance(team_name, str) and team_name.strip() else parent.get("metadata", {}).get("teamName")
+    run_in_background = bool(args.get("runInBackground") if "runInBackground" in args else args.get("run_in_background"))
+    isolation = "worktree" if args.get("isolation") == "worktree" else None
+    agent_id = f"agent-{uuid.uuid4()}"
+    requested_mode = sanitizePermissionMode(args.get("mode") or parent.get("permissionMode") or config.get("permissionMode"))
+    child_mode = inheritParentPermissionMode(requested_mode, parent.get("permissionMode") or config.get("permissionMode") or "default")
+    parent_provider = parent.get("provider") if parent.get("provider") is not None else config.get("provider")
+    parent_model = parent.get("model") if parent.get("model") is not None else config.get("model")
+    child_model = normalizeModelName(model, parent_provider) if model else resolveModelForAgent(config, agent_type, parent_model)
+    child_provider = resolveProviderForModelSelection(parent_provider, child_model) or parent_provider
+    child_system = buildSystemPromptForAgent(config, agent_type) if agent_type else (parent.get("systemPrompt") if parent.get("systemPrompt") is not None else config.get("systemPrompt"))
+    child_name = name or description.strip()
+    worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
+    child_cwd = worktree_path or parent["cwd"]
+    parent_metadata = parent.setdefault("metadata", {})
+    parent_has_original_cwd = parent_metadata.get("originalCwd") is not None
+    child_session = createEmptySession(
+        cwd=child_cwd,
+        provider=child_provider,
+        providerProfileName=parent.get("providerProfileName") if parent.get("providerProfileName") is not None else config.get("providerProfileName"),
+        model=child_model,
+        effort=parent.get("effort") if parent.get("effort") is not None else config.get("effort"),
+        systemPrompt=child_system,
+        permissionMode=child_mode,
+        name=child_name,
+        assistantName=parent.get("metadata", {}).get("assistantName") or config.get("assistantName"),
+        assistantDescription=parent.get("metadata", {}).get("assistantDescription") or config.get("assistantDescription"),
+        originalCwd=parent_metadata.get("originalCwd"),
+    )
+    metadata = child_session.setdefault("metadata", {})
+    if parent_has_original_cwd:
+        metadata["originalCwd"] = parent_metadata.get("originalCwd")
+    else:
+        metadata.pop("originalCwd", None)
+    metadata.pop("assistantName", None)
+    metadata.pop("assistantDescription", None)
+    metadata["depth"] = int(parent.get("metadata", {}).get("depth") or 0) + 1
+    metadata["parentSessionId"] = parent["id"]
+    metadata["parentAgentId"] = parent.get("metadata", {}).get("agentId")
+    metadata["agentId"] = agent_id
+    metadata["agentName"] = child_name
+    metadata["agentType"] = agent_type
+    metadata["teamName"] = team_name
+    metadata["worktreePath"] = worktree_path
+    metadata["childSessionIds"] = []
+    metadata["childAgentIds"] = []
+    child_session["messages"].append({"role": "user", "content": prompt})
+
+    child_config = {
+        **config,
+        "agent": agent_type,
+        "provider": child_provider,
+        "model": child_model,
+        "effort": child_session.get("effort"),
+        "permissionMode": child_mode,
+        "name": child_name,
+        "systemPrompt": child_system,
+        "appendSystemPrompt": None,
+        "allowedRoots": _dedupe([*(config.get("allowedRoots") or []), child_cwd]),
+    }
+    parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])
+    parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
+    if run_in_background:
+        parent_metadata["backgroundSessionIds"] = _dedupe([*(parent_metadata.get("backgroundSessionIds") or []), child_session["id"]])
+    await maybe_await(context.get("persistSession", lambda: None)())
+    await saveSession(child_session)
+    now = now_iso()
+    child_record = {
+        "agentId": agent_id,
+        "sessionId": child_session["id"],
+        "parentSessionId": parent["id"],
+        "parentToolUseId": args.get("parentToolUseId"),
+        "parentTaskId": args.get("parentTaskId"),
+        "name": child_name,
+        "agentType": agent_type,
+        "teamName": team_name,
+        "provider": child_provider,
+        "model": child_model,
+        "mode": child_mode,
+        "description": description,
+        "isolation": isolation,
+        "worktreePath": worktree_path,
+        "runInBackground": run_in_background,
+        "status": "queued" if run_in_background else "running",
+        "startedAt": now,
+        "owner": "daemon" if run_in_background and context.get("daemon") else "client",
+        "attachableSessionId": child_session["id"],
+        "waitingReason": None,
+        "completionReason": None,
+        "resultSummary": None,
+        "latestResultAt": None,
+        "retryable": False,
+        "stoppable": run_in_background,
+        "recoveryState": None,
+        "lastUpdatedAt": now,
+        "lastSummary": "Queued for background execution." if run_in_background else "Starting foreground execution.",
+    }
+    await saveChildAgent(child_record)
+    return {"agentId": agent_id, "childSession": child_session, "childConfig": child_config, "childRecord": child_record, "worktreePath": worktree_path}
