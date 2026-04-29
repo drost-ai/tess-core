@@ -43,7 +43,6 @@ LINE_BUDGET_ALLOWLIST = {
     "agent_core/agent.py": 732,
     "agent_core/config.py": 878,
     "agent_core/daemon.py": 737,
-    "agent_core/mcp.py": 903,
     "agent_core/platform.py": 854,
     "agent_core/providers/anthropic.py": 537,
     "agent_core/providers/openai.py": 729,
