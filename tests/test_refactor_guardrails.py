@@ -39,9 +39,7 @@ PUBLIC_MODULES = [
     "agent_core.tasks.supervisor",
 ]
 
-LINE_BUDGET_ALLOWLIST = {
-    "agent_core/daemon.py": 737,
-}
+LINE_BUDGET_ALLOWLIST = {}
 
 
 def _public_names(module_name: str) -> list[str]:
