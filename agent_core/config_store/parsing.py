@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+from .shared import *
+
+def _parse_setting_sources(raw: str | None) -> list[str]:
+    parts = [part.strip() for part in raw.split(",")] if raw else ["user", "project", "local"]
+    valid = [part for part in parts if part in ("user", "project", "local")]
+    return valid or ["user", "project", "local"]
+
+async def _load_merged_settings(sources: list[str], cwd: str, inline_settings: str | None) -> dict[str, Any]:
+    merged = await loadSettingsBySources(sources, cwd)  # type: ignore[arg-type]
+    direct = fileOrJson(inline_settings) or {}
+    return {**merged, **direct, "providerProfiles": {**(merged.get("providerProfiles") or {}), **(direct.get("providerProfiles") or {})}}
+
+async def _resolve_api_key_from_helper(settings: dict[str, Any]) -> str | None:
+    helper = settings.get("apiKeyHelper")
+    if not helper:
+        return None
+    parts = str(helper).split()
+    if not parts:
+        return None
+    try:
+        result = subprocess.run(parts, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
+        return result.stdout.strip() or None
+    except Exception:
+        return None
+
+def _parse_custom_headers(raw: str | None) -> dict[str, str]:
+    if not raw or not raw.strip():
+        return {}
+    trimmed = raw.strip()
+    if trimmed.startswith("{"):
+        parsed = json.loads(trimmed)
+        return {str(k): v for k, v in parsed.items() if isinstance(v, str)}
+    headers = {}
+    for line in re.split(r"\r?\n|;", trimmed):
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        headers[key.strip()] = value.strip()
+    return headers
+
+def _parse_tool_list(cli_value: list[str] | None, settings_value: list[str] | None, fallback: list[str]) -> list[str]:
+    source = cli_value if cli_value is not None else settings_value if settings_value is not None else fallback
+    if len(source) == 1 and source[0] == "":
+        return []
+    parsed: list[str] = []
+    for entry in source:
+        parsed.extend(item.strip() for item in re.split(r"[,\s]+", entry) if item.strip())
+    if parsed == ["default"]:
+        return fallback
+    return _dedupe([_strip_tool_pattern(item) for item in parsed])
+
+def _strip_tool_pattern(value: str) -> str:
+    match = re.match(r"^([A-Za-z]+)(?:\(.+\))?$", value)
+    return match.group(1) if match else value
+
+def _dedupe(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))
+
+def _parse_inline_agents(raw: str | None) -> dict[str, Any] | None:
+    return json.loads(raw) if raw else None
+
+def _parse_json_schema(raw: str | None) -> Any:
+    return json.loads(raw) if raw else None
+
+async def _load_mcp_config(cwd: str, inputs: list[str] | None) -> list[dict[str, Any]]:
+    existing = []
+    for scope in ("user", "project", "local"):
+        existing.extend(await loadMcpServers(scope, cwd))  # type: ignore[arg-type]
+    inline = []
+    for item in inputs or []:
+        parsed = fileOrJson(item)
+        if isinstance(parsed, list):
+            inline.extend(parsed)
+        elif parsed:
+            inline.append(parsed)
+    return [{**item, "commandOrUrl": os.path.expanduser(item.get("commandOrUrl", ""))} for item in [*existing, *inline]]
