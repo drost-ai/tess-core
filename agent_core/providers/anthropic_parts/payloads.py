@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+from .shared import *
+
+def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
+    if not baseUrl:
+        return MESSAGES_API_URL
+    return f"{baseUrl.rstrip('/')}/messages?beta=true"
+
+def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
+    if not baseUrl:
+        return MESSAGES_COUNT_TOKENS_API_URL
+    return f"{baseUrl.rstrip('/')}/messages/count_tokens"
+
+def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
+    options = options or {}
+    headers = {
+        "accept": "text/event-stream" if options.get("stream") else "application/json",
+        "content-type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": _build_anthropic_beta_header(config),
+        "anthropic-dangerous-direct-browser-access": "true",
+        "user-agent": "tess/0.1.0 (sdk-cli)",
+        "x-app": "cli",
+        **(config.get("customHeaders") or {}),
+    }
+    if config.get("authToken"):
+        headers["authorization"] = f"Bearer {config['authToken']}"
+    elif config.get("apiKey"):
+        headers["x-api-key"] = config["apiKey"]
+    else:
+        raise RuntimeError("No Anthropic credential is configured.")
+    return headers
+
+def buildAnthropicCountTokensPayload(request: dict[str, Any]) -> dict[str, Any]:
+    payload = buildAnthropicMessagesPayload(request, {"stream": False})
+    payload.pop("max_tokens", None)
+    payload.pop("stream", None)
+    payload.pop("output_config", None)
+    return payload
+
+def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
+    options = options or {}
+    payload: dict[str, Any] = {
+        "model": request["model"],
+        "max_tokens": 16384,
+        "system": [
+            {"type": "text", "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;"},
+            {"type": "text", "text": request.get("system", "")},
+        ],
+        "messages": [{"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))} for message in request.get("messages", [])],
+    }
+    if options.get("stream"):
+        payload["stream"] = True
+    effort = request.get("effort")
+    if effort:
+        payload["thinking"] = {"type": "adaptive"}
+        payload["output_config"] = {"effort": effort}
+    tools = request.get("tools") or []
+    if tools:
+        payload["tools"] = tools
+    return payload
+
+def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
+    if isinstance(content, str):
+        return [{"type": "text", "text": content}]
+    if isinstance(content, list):
+        out = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                out.append({"type": "text", "text": str(block.get("text", ""))})
+            elif block.get("type") == "tool_use":
+                out.append({"type": "tool_use", "id": block.get("id"), "name": block.get("name"), "input": block.get("input") or {}})
+            elif block.get("type") == "tool_result":
+                out.append({"type": "tool_result", "tool_use_id": block.get("tool_use_id"), "content": str(block.get("content", "")), "is_error": block.get("is_error")})
+        return out
+    return []
+
+def _build_anthropic_beta_header(config: dict[str, Any]) -> str:
+    values = ["fine-grained-tool-streaming-2025-05-14"]
+    if config.get("authToken"):
+        values = ["claude-code-20250219", "oauth-2025-04-20", *values]
+    return ",".join(dict.fromkeys(values))

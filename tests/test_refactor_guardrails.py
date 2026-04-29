@@ -40,14 +40,9 @@ PUBLIC_MODULES = [
 ]
 
 LINE_BUDGET_ALLOWLIST = {
-    "agent_core/agent.py": 732,
     "agent_core/config.py": 878,
     "agent_core/daemon.py": 737,
     "agent_core/platform.py": 854,
-    "agent_core/providers/anthropic.py": 537,
-    "agent_core/providers/openai.py": 729,
-    "agent_core/runtime_events.py": 621,
-    "agent_core/runtime_state.py": 711,
     "agent_core/storage.py": 841,
     "product-planning/01-vision-architecture/04-workstreams.md": 600,
 }
