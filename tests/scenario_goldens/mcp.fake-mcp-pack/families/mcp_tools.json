@@ -1,0 +1,19 @@
+[
+  {
+    "description": "Plugin tool",
+    "inputSchema": {
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "variant": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "plugin_tool",
+    "runtimeName": "mcp__shared__plugin_tool",
+    "server": "shared"
+  }
+]

@@ -1,0 +1,9 @@
+[
+  {
+    "description": null,
+    "mimeType": "text/plain",
+    "name": "shared",
+    "server": "shared",
+    "uri": "memory://shared"
+  }
+]

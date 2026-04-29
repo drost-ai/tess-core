@@ -1,0 +1,58 @@
+[
+  {
+    "alias": "stdio",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "stdio"
+  },
+  {
+    "alias": "http",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "alias": "sse",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "sse"
+  },
+  {
+    "alias": "generated",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "alias": "protocol",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "driver": "create_mcp_runtime",
+    "servers": [
+      "stdio",
+      "http",
+      "sse",
+      "generated",
+      "protocol"
+    ],
+    "status": "passed"
+  },
+  {
+    "count": 5,
+    "driver": "list_mcp_tools",
+    "status": "passed"
+  },
+  {
+    "driver": "close_mcp_runtime",
+    "status": "passed"
+  },
+  {
+    "alias": "plugin-server",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  }
+]

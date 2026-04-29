@@ -1,0 +1,174 @@
+[
+  {
+    "data": {
+      "method": "notifications/logging/message",
+      "params": {
+        "data": "log-ready",
+        "level": "warning"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.channel_notification"
+  },
+  {
+    "data": {
+      "method": "notifications/message",
+      "params": {
+        "level": "info",
+        "text": "ready"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.channel_notification"
+  },
+  {
+    "data": {
+      "method": "notifications/progress",
+      "params": {
+        "payload": "halfway"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.channel_notification"
+  },
+  {
+    "data": {
+      "method": "notifications/resources/list_changed",
+      "params": {
+        "reason": "new-resource"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.channel_notification"
+  },
+  {
+    "data": {
+      "method": "notifications/tools/list_changed",
+      "params": {
+        "reason": "new-tool"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.channel_notification"
+  },
+  {
+    "data": {
+      "result": {
+        "registered": true,
+        "sessionId": "<uuid:2>"
+      },
+      "server": "sse",
+      "session_id": "<uuid:2>"
+    },
+    "event": "mcp.channel_registered"
+  },
+  {
+    "data": {
+      "level": "warning",
+      "message": "log-ready",
+      "method": "notifications/logging/message",
+      "params": {
+        "data": "log-ready",
+        "level": "warning"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.log"
+  },
+  {
+    "data": {
+      "level": "info",
+      "message": "ready",
+      "method": "notifications/message",
+      "params": {
+        "level": "info",
+        "text": "ready"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.log"
+  },
+  {
+    "data": {
+      "method": "notifications/resources/list_changed",
+      "params": {
+        "reason": "new-resource"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.resources_changed"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "generated",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "http",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "http",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "protocol",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "protocol",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "sse",
+      "tools": 1,
+      "transport": "sse"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "resources": 1,
+      "server": "stdio",
+      "tools": 1,
+      "transport": "stdio"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "method": "notifications/tools/list_changed",
+      "params": {
+        "reason": "new-tool"
+      },
+      "server": "sse"
+    },
+    "event": "mcp.tools_changed"
+  }
+]

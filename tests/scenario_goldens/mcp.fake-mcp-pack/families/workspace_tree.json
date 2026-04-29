@@ -1,0 +1,56 @@
+[
+  {
+    "path": ".harness",
+    "type": "dir"
+  },
+  {
+    "path": ".harness/mcp",
+    "type": "dir"
+  },
+  {
+    "path": ".harness/mcp/stdio_stdio_server.py",
+    "size": 9263,
+    "type": "file"
+  },
+  {
+    "path": ".harness/plugins",
+    "type": "dir"
+  },
+  {
+    "path": ".harness/plugins/conflict-plugin",
+    "type": "dir"
+  },
+  {
+    "json": {
+      "capabilities": {
+        "mcpServers": true
+      },
+      "id": "conflict",
+      "mcpServers": [
+        {
+          "commandOrUrl": "http://127.0.0.1:<port:1>/rpc",
+          "name": "shared",
+          "requestTimeoutSeconds": 3.0,
+          "transport": "http"
+        }
+      ],
+      "version": "1.0.0"
+    },
+    "path": ".harness/plugins/conflict-plugin/plugin.json",
+    "size": 266,
+    "type": "file"
+  },
+  {
+    "path": ".tess",
+    "type": "dir"
+  },
+  {
+    "path": ".tess/local",
+    "type": "dir"
+  },
+  {
+    "path": "README.md",
+    "size": 22,
+    "type": "file"
+  }
+]

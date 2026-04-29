@@ -12,6 +12,23 @@ from .debug_bundle import write_debug_bundle
 from .fake_providers import FakeProviderRuntime, assert_provider_capture, assert_provider_response
 from .goldens import compare_golden, expected_observations, render_diff, update_golden
 from .loader import load_scenario
+from .mcp_driver import (
+    assert_mcp_bootstrap,
+    assert_mcp_event,
+    assert_mcp_result,
+    assert_mcp_status,
+    bootstrap_mcp_plugin_runtime,
+    call_mcp_generated_tool,
+    call_mcp_tool,
+    close_mcp_driver,
+    close_mcp_runtime,
+    create_mcp_plugin_fixture,
+    create_mcp_runtime,
+    list_mcp_resources,
+    list_mcp_tools,
+    read_mcp_resource,
+    start_fake_mcp,
+)
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
 from .normalization import normalize_observations
 from .runtime_driver import (
@@ -103,6 +120,7 @@ async def run_scenario_async(
         provider_runtime = state.get("provider_runtime")
         if provider_runtime:
             provider_runtime.close()
+        await close_mcp_driver(state)
         await close_task_driver(state)
         await close_runtime_driver(state)
         sandbox.cleanup_sandbox(passed=failure is None)
@@ -172,6 +190,26 @@ async def _execute_step(
         return ["provider_response", "provider_requests", "provider_events"]
     if step_type == "bootstrap_runtime":
         return await bootstrap_runtime(data, sandbox, state)
+    if step_type == "start_fake_mcp":
+        return await start_fake_mcp(data, sandbox, state)
+    if step_type == "create_mcp_runtime":
+        return await create_mcp_runtime(data, sandbox, state)
+    if step_type == "list_mcp_tools":
+        return await list_mcp_tools(data, sandbox, state)
+    if step_type == "list_mcp_resources":
+        return await list_mcp_resources(data, sandbox, state)
+    if step_type == "read_mcp_resource":
+        return await read_mcp_resource(data, sandbox, state)
+    if step_type == "call_mcp_tool":
+        return await call_mcp_tool(data, sandbox, state)
+    if step_type == "call_mcp_generated_tool":
+        return await call_mcp_generated_tool(data, sandbox, state)
+    if step_type == "create_mcp_plugin_fixture":
+        return await create_mcp_plugin_fixture(data, sandbox, state)
+    if step_type == "bootstrap_mcp_plugin_runtime":
+        return await bootstrap_mcp_plugin_runtime(data, sandbox, state)
+    if step_type == "close_mcp_runtime":
+        return await close_mcp_runtime(data, sandbox, state)
     if step_type == "ensure_daemon":
         return await ensure_daemon(data, sandbox, state)
     if step_type == "daemon_subscribe":
@@ -230,6 +268,17 @@ async def _execute_step(
     if step_type == "assert_runtime_event":
         assert_runtime_event(state, data)
         return ["runtime_events"]
+    if step_type == "assert_mcp_status":
+        assert_mcp_status(state, data)
+        return ["mcp_status"]
+    if step_type == "assert_mcp_event":
+        return await assert_mcp_event(data, sandbox, state)
+    if step_type == "assert_mcp_result":
+        assert_mcp_result(state, data)
+        return ["mcp_results"]
+    if step_type == "assert_mcp_bootstrap":
+        assert_mcp_bootstrap(state, data)
+        return ["mcp_plugin_results"]
     if step_type == "capture":
         include = data.get("include") or scenario.capture.get("include") or []
         observations.clear()

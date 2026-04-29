@@ -1,0 +1,359 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 2,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 3,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 4,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 5,
+    "observationKeys": [
+      "mcp_events",
+      "mcp_status",
+      "mcp_tools",
+      "mcp_resources",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "create_mcp_runtime"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 6,
+    "observationKeys": [
+      "mcp_tools",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "list_mcp_tools"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 7,
+    "observationKeys": [
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 8,
+    "observationKeys": [
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 9,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status",
+      "mcp_tools"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 10,
+    "observationKeys": [
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 11,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status",
+      "mcp_tools"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 12,
+    "observationKeys": [
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_status"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 13,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status",
+      "mcp_tools"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 14,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status",
+      "mcp_tools"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 15,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_generated_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 16,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_generated_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 17,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status",
+      "mcp_tools"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 18,
+    "observationKeys": [
+      "mcp_results",
+      "mcp_status",
+      "mcp_tools"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "call_mcp_tool"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 19,
+    "observationKeys": [
+      "mcp_resources",
+      "mcp_results",
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "list_mcp_resources"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 20,
+    "observationKeys": [
+      "mcp_resources",
+      "mcp_results",
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "read_mcp_resource"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 21,
+    "observationKeys": [
+      "mcp_resources",
+      "mcp_results",
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "read_mcp_resource"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 22,
+    "observationKeys": [
+      "mcp_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 23,
+    "observationKeys": [
+      "mcp_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 24,
+    "observationKeys": [
+      "mcp_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_event"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 25,
+    "observationKeys": [
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "close_mcp_runtime"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 26,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 27,
+    "observationKeys": [
+      "mcp_plugin_results",
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "create_mcp_plugin_fixture"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 28,
+    "observationKeys": [
+      "mcp_plugin_results",
+      "mcp_status",
+      "mcp_tools",
+      "mcp_events"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "bootstrap_mcp_plugin_runtime"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 29,
+    "observationKeys": [
+      "mcp_plugin_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_bootstrap"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 30,
+    "observationKeys": [
+      "mcp_driver_results",
+      "mcp_events",
+      "mcp_plugin_results",
+      "mcp_resources",
+      "mcp_results",
+      "mcp_servers",
+      "mcp_status",
+      "mcp_tools",
+      "run",
+      "scenario",
+      "session",
+      "step_results",
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]

@@ -40,6 +40,22 @@ def collect_observations(
         }
     if "logs" in selected:
         observations["logs"] = tree_snapshot(sandbox.logs)
+    if "mcp_servers" in selected:
+        observations["mcp_servers"] = state.get("mcp_servers") or []
+    if "mcp_events" in selected:
+        observations["mcp_events"] = stable_mcp_events(state.get("mcp_events") or [])
+    if "mcp_status" in selected:
+        observations["mcp_status"] = state.get("mcp_status") or []
+    if "mcp_tools" in selected:
+        observations["mcp_tools"] = state.get("mcp_tools") or []
+    if "mcp_resources" in selected:
+        observations["mcp_resources"] = state.get("mcp_resources") or []
+    if "mcp_results" in selected:
+        observations["mcp_results"] = state.get("mcp_results") or []
+    if "mcp_plugin_results" in selected:
+        observations["mcp_plugin_results"] = state.get("mcp_plugin_results") or []
+    if "mcp_driver_results" in selected:
+        observations["mcp_driver_results"] = state.get("mcp_driver_results") or []
     if "daemon_state" in selected:
         observations["daemon_state"] = state.get("daemon_state")
     if "daemon_events" in selected:
@@ -120,3 +136,15 @@ def tree_snapshot(root: Path) -> list[dict[str, Any]]:
                 pass
         entries.append(item)
     return entries
+
+
+def stable_mcp_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        events,
+        key=lambda event: (
+            str(event.get("event") or ""),
+            str((event.get("data") or {}).get("server") or ""),
+            str((event.get("data") or {}).get("method") or ""),
+            json.dumps(event.get("data") or {}, sort_keys=True),
+        ),
+    )

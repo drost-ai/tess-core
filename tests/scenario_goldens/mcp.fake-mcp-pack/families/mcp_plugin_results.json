@@ -1,0 +1,79 @@
+[
+  {
+    "driver": "create_mcp_plugin_fixture",
+    "pluginId": "conflict",
+    "server": "shared",
+    "status": "passed"
+  },
+  {
+    "driver": "bootstrap_mcp_plugin_runtime",
+    "pluginIds": [
+      "conflict"
+    ],
+    "serverStatuses": [
+      {
+        "capabilities": {
+          "channelsSupported": false,
+          "resources": 1,
+          "tools": 1
+        },
+        "channelRegistration": {
+          "requested": false,
+          "status": "not_requested"
+        },
+        "connected": true,
+        "error": null,
+        "lastConnectedAt": "<timestamp>",
+        "lastErrorAt": null,
+        "lastNotificationAt": null,
+        "name": "shared",
+        "resources": 1,
+        "serverCapabilities": {
+          "logging": {},
+          "resources": {
+            "listChanged": true
+          },
+          "tools": {
+            "listChanged": true
+          }
+        },
+        "serverInfo": {
+          "name": "plugin-shared"
+        },
+        "state": "connected",
+        "tools": 1,
+        "transport": "http"
+      }
+    ],
+    "status": "passed",
+    "toolNames": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash",
+      "TodoWrite",
+      "WebFetch",
+      "WebSearch",
+      "SetStatus",
+      "Agent",
+      "AskUserQuestion",
+      "Config",
+      "ExitPlanMode",
+      "NotebookEdit",
+      "TaskOutput",
+      "TaskStop",
+      "TaskMonitorStart",
+      "TaskMonitorStop",
+      "TaskHealthCheckStart",
+      "TaskHealthCheckStop",
+      "Mcp",
+      "ListMcpResources",
+      "ReadMcpResource",
+      "EnterWorktree",
+      "ExitWorktree",
+      "mcp__shared__plugin_tool"
+    ]
+  }
+]

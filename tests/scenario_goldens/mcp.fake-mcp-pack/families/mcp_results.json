@@ -1,0 +1,148 @@
+[
+  {
+    "driver": "call_mcp_tool",
+    "error": "HTTP 500 from MCP server http",
+    "input": {
+      "value": "fail-first"
+    },
+    "server": "http",
+    "status": "failed",
+    "tool": "echo"
+  },
+  {
+    "driver": "call_mcp_tool",
+    "input": {
+      "value": "ok"
+    },
+    "result": {
+      "content": "http:ok",
+      "isError": false,
+      "meta": {
+        "mcp_server": "http",
+        "mcp_tool": "echo"
+      }
+    },
+    "server": "http",
+    "status": "passed",
+    "tool": "echo"
+  },
+  {
+    "driver": "call_mcp_tool",
+    "input": {
+      "value": "ok"
+    },
+    "result": {
+      "content": "stdio:ok",
+      "isError": false,
+      "meta": {
+        "mcp_server": "stdio",
+        "mcp_tool": "echo"
+      }
+    },
+    "server": "stdio",
+    "status": "passed",
+    "tool": "echo"
+  },
+  {
+    "driver": "call_mcp_tool",
+    "input": {
+      "value": "ok"
+    },
+    "result": {
+      "content": "sse:ok",
+      "isError": false,
+      "meta": {
+        "mcp_server": "sse",
+        "mcp_tool": "echo"
+      }
+    },
+    "server": "sse",
+    "status": "passed",
+    "tool": "echo"
+  },
+  {
+    "driver": "call_mcp_generated_tool",
+    "error": "pre-cancelled",
+    "errorName": "AbortError",
+    "status": "failed",
+    "tool": "mcp__generated__run"
+  },
+  {
+    "driver": "call_mcp_generated_tool",
+    "error": "post-cancelled",
+    "errorName": "AbortError",
+    "status": "failed",
+    "tool": "mcp__generated__run"
+  },
+  {
+    "driver": "call_mcp_tool",
+    "error": "MCP server returned a batch JSON-RPC response.",
+    "input": {
+      "variant": "batch"
+    },
+    "server": "protocol",
+    "status": "failed",
+    "tool": "edge"
+  },
+  {
+    "driver": "call_mcp_tool",
+    "input": {
+      "variant": "ok"
+    },
+    "result": {
+      "content": "ok",
+      "isError": false,
+      "meta": {
+        "mcp_server": "protocol",
+        "mcp_tool": "edge"
+      }
+    },
+    "server": "protocol",
+    "status": "passed",
+    "tool": "edge"
+  },
+  {
+    "driver": "list_mcp_resources",
+    "resources": [
+      {
+        "description": null,
+        "mimeType": "text/plain",
+        "name": "large.bin",
+        "server": "http",
+        "uri": "memory://blob/large.bin"
+      }
+    ],
+    "server": "http",
+    "status": "passed"
+  },
+  {
+    "driver": "read_mcp_resource",
+    "result": {
+      "contents": [
+        {
+          "blobSavedTo": "<runtime-home>/mcp-blobs/http/large-76934369dfaae07a.bin",
+          "mimeType": "application/octet-stream",
+          "uri": "memory://blob/large.bin"
+        }
+      ]
+    },
+    "server": "http",
+    "status": "passed",
+    "uri": "memory://blob/large.bin"
+  },
+  {
+    "driver": "read_mcp_resource",
+    "result": {
+      "contents": [
+        {
+          "blobSavedTo": "<runtime-home>/mcp-blobs/http/large-76934369dfaae07a.bin",
+          "mimeType": "application/octet-stream",
+          "uri": "memory://blob/large.bin"
+        }
+      ]
+    },
+    "server": "http",
+    "status": "passed",
+    "uri": "memory://blob/large.bin"
+  }
+]

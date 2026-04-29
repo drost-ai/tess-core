@@ -1,0 +1,59 @@
+[
+  {
+    "alias": "stdio",
+    "args": [
+      "<workspace>/.harness/mcp/stdio_stdio_server.py"
+    ],
+    "commandOrUrl": "/usr/local/opt/python@3.10/bin/python3.10",
+    "name": "stdio",
+    "profile": "normal",
+    "requestTimeoutSeconds": 3.0,
+    "transport": "stdio",
+    "updatedAt": "now"
+  },
+  {
+    "alias": "http",
+    "commandOrUrl": "http://127.0.0.1:<port:2>/rpc",
+    "name": "http",
+    "profile": "normal",
+    "requestTimeoutSeconds": 3.0,
+    "transport": "http",
+    "updatedAt": "now"
+  },
+  {
+    "alias": "sse",
+    "commandOrUrl": "http://127.0.0.1:<port:3>/sse",
+    "name": "sse",
+    "profile": "normal",
+    "requestTimeoutSeconds": 3.0,
+    "transport": "sse",
+    "updatedAt": "now"
+  },
+  {
+    "alias": "generated",
+    "commandOrUrl": "http://127.0.0.1:<port:4>/rpc",
+    "name": "generated",
+    "profile": "normal",
+    "requestTimeoutSeconds": 3.0,
+    "transport": "http",
+    "updatedAt": "now"
+  },
+  {
+    "alias": "protocol",
+    "commandOrUrl": "http://127.0.0.1:<port:5>/rpc",
+    "name": "protocol",
+    "profile": "protocol",
+    "requestTimeoutSeconds": 3.0,
+    "transport": "http",
+    "updatedAt": "now"
+  },
+  {
+    "alias": "plugin-server",
+    "commandOrUrl": "http://127.0.0.1:<port:1>/rpc",
+    "name": "shared",
+    "profile": "normal",
+    "requestTimeoutSeconds": 3.0,
+    "transport": "http",
+    "updatedAt": "now"
+  }
+]

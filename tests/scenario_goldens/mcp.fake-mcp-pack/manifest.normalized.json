@@ -1,0 +1,296 @@
+{
+  "area": "mcp",
+  "capture": {
+    "include": [
+      "session",
+      "mcp_servers",
+      "mcp_events",
+      "mcp_status",
+      "mcp_tools",
+      "mcp_resources",
+      "mcp_results",
+      "mcp_plugin_results",
+      "mcp_driver_results",
+      "workspace_tree",
+      "step_results"
+    ]
+  },
+  "id": "mcp.fake-mcp-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "mcp harness workspace\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "start_fake_mcp": {
+        "alias": "stdio",
+        "name": "stdio",
+        "resourceText": "stdio resource",
+        "textPrefix": "stdio:",
+        "transport": "stdio"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "http",
+        "failFirstToolCall": true,
+        "name": "http",
+        "resourceMode": "blob",
+        "textPrefix": "http:",
+        "transport": "http"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "sse",
+        "name": "sse",
+        "resourceText": "sse resource",
+        "textPrefix": "sse:",
+        "transport": "sse"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "generated",
+        "name": "generated",
+        "textPrefix": "generated:",
+        "toolName": "run",
+        "transport": "http"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "protocol",
+        "name": "protocol",
+        "profile": "protocol",
+        "toolName": "edge",
+        "transport": "http"
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "registeredChannels": [
+          "sse"
+        ],
+        "useSession": true
+      }
+    },
+    {
+      "list_mcp_tools": {}
+    },
+    {
+      "assert_mcp_status": {
+        "connected": true,
+        "minTools": 1,
+        "server": "stdio",
+        "serverInfoName": "stdio-fake",
+        "state": "connected"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "connected": true,
+        "minTools": 1,
+        "server": "sse",
+        "serverInfoName": "sse-fake",
+        "state": "connected"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "expectFailure": true,
+        "input": {
+          "value": "fail-first"
+        },
+        "resultAlias": "http-first-failure",
+        "server": "http",
+        "tool": "echo"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "connected": false,
+        "errorContains": "HTTP 500",
+        "server": "http",
+        "state": "degraded"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "input": {
+          "value": "ok"
+        },
+        "resultAlias": "http-reconnected",
+        "server": "http",
+        "tool": "echo"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "connected": true,
+        "server": "http",
+        "state": "connected"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "input": {
+          "value": "ok"
+        },
+        "resultAlias": "stdio-call",
+        "server": "stdio",
+        "tool": "echo"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "input": {
+          "value": "ok"
+        },
+        "resultAlias": "sse-call",
+        "server": "sse",
+        "tool": "echo"
+      }
+    },
+    {
+      "call_mcp_generated_tool": {
+        "abortMode": "pre",
+        "expectFailure": true,
+        "runtimeName": "mcp__generated__run"
+      }
+    },
+    {
+      "call_mcp_generated_tool": {
+        "abortMode": "post",
+        "expectFailure": true,
+        "runtimeName": "mcp__generated__run"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "expectFailure": true,
+        "input": {
+          "variant": "batch"
+        },
+        "resultAlias": "protocol-batch",
+        "server": "protocol",
+        "tool": "edge"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "input": {
+          "variant": "ok"
+        },
+        "resultAlias": "protocol-ok",
+        "server": "protocol",
+        "tool": "edge"
+      }
+    },
+    {
+      "list_mcp_resources": {
+        "server": "http"
+      }
+    },
+    {
+      "read_mcp_resource": {
+        "resultAlias": "blob-first",
+        "server": "http",
+        "uri": "memory://blob/large.bin"
+      }
+    },
+    {
+      "read_mcp_resource": {
+        "resultAlias": "blob-repeat",
+        "server": "http",
+        "uri": "memory://blob/large.bin"
+      }
+    },
+    {
+      "assert_mcp_result": {
+        "requiresBlobSavedTo": true,
+        "resultAlias": "blob-first"
+      }
+    },
+    {
+      "assert_mcp_result": {
+        "resultAlias": "blob-repeat",
+        "sameBlobPathAs": "blob-first"
+      }
+    },
+    {
+      "assert_mcp_event": {
+        "eventsInclude": [
+          "mcp.server_connected",
+          "mcp.channel_registered",
+          "mcp.channel_notification",
+          "mcp.tools_changed",
+          "mcp.resources_changed",
+          "mcp.log"
+        ],
+        "methodsInclude": [
+          "notifications/progress"
+        ],
+        "timeoutSeconds": 3
+      }
+    },
+    {
+      "close_mcp_runtime": {}
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "plugin-server",
+        "name": "shared",
+        "serverInfoName": "plugin-shared",
+        "textPrefix": "plugin:",
+        "toolDescription": "Plugin tool",
+        "toolName": "plugin_tool",
+        "transport": "http"
+      }
+    },
+    {
+      "create_mcp_plugin_fixture": {
+        "alias": "conflict-plugin",
+        "pluginId": "conflict",
+        "serverAlias": "plugin-server"
+      }
+    },
+    {
+      "bootstrap_mcp_plugin_runtime": {
+        "brokenConfigServerName": "shared"
+      }
+    },
+    {
+      "assert_mcp_bootstrap": {
+        "serverInfoName": "plugin-shared",
+        "toolNamesInclude": [
+          "mcp__shared__plugin_tool"
+        ]
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "mcp_servers",
+          "mcp_events",
+          "mcp_status",
+          "mcp_tools",
+          "mcp_resources",
+          "mcp_results",
+          "mcp_plugin_results",
+          "mcp_driver_results",
+          "workspace_tree",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Fake MCP Transport And Plugin Pack"
+}
