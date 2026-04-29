@@ -375,6 +375,8 @@ async def _execute_step(
         observations.clear()
         observations.update(collect_observations(scenario, sandbox, state, steps, include))
         return sorted(observations)
+    if step_type == "parity_action":
+        raise ScenarioAssertionError("parity_action steps must be run with the parity command", category="harness")
     if step_type == "run_python":
         return await _run_python_action(data, sandbox, state)
     raise ScenarioAssertionError(f"Unsupported step type: {step_type}", category="harness")

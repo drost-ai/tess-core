@@ -1,0 +1,37 @@
+{
+  "id": "parity.runtime-state-smoke",
+  "title": "Parity Runtime State Smoke",
+  "area": "parity",
+  "mode": ["parity"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "runtime state parity smoke\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "parity_action": {
+        "action": "runtime_state_smoke",
+        "name": "config-session-runtime",
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "sessionId": "parity-session",
+        "workspaceName": "Parity Workspace",
+        "prompt": "hello parity",
+        "assistantText": "hello from runtime",
+        "stopReason": "stop"
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "parity_summary",
+      "parity_python",
+      "parity_typescript",
+      "parity_comparison"
+    ]
+  }
+}

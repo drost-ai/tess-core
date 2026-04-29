@@ -1,0 +1,36 @@
+{
+  "classification": "matched",
+  "families": [
+    {
+      "classification": "matched",
+      "name": "config-session-runtime.capabilities",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "config-session-runtime.config",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "config-session-runtime.session",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "config-session-runtime.storage",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "config-session-runtime.runtimeEvents",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "config-session-runtime.runtimeState",
+      "status": "matched"
+    }
+  ],
+  "status": "matched"
+}
