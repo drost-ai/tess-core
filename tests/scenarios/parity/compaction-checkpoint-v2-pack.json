@@ -1,0 +1,56 @@
+{
+  "id": "parity.compaction-checkpoint-v2-pack",
+  "title": "Compaction Checkpoint V2 Parity Pack",
+  "area": "parity",
+  "mode": ["parity"],
+  "tags": ["ci", "parity", "compaction"],
+  "capabilities": ["node", "typescript_repo"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "checkpoint-v2 compaction parity\n",
+        "agent_core/context/compaction.py": "def checkpoint():\n    return 'v2 parity'\n",
+        "plans/compaction-v2.md": "# Compaction V2 Plan\n\n- Build fake model clients.\n- Compare checkpoint artifacts.\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "parity_action": {
+        "action": "compaction_run",
+        "name": "checkpoint-v2-happy-path",
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "sessionId": "compaction-checkpoint-v2-session",
+        "workspaceName": "Compaction Parity",
+        "trigger": "manual",
+        "force": true,
+        "script": {
+          "synthesis": [
+            {
+              "kind": "success",
+              "textFixture": "rich-working-context",
+              "usage": {"input_tokens": 100, "output_tokens": 40}
+            }
+          ],
+          "verification": [
+            {
+              "kind": "success",
+              "textFixture": "accept-rich",
+              "usage": {"input_tokens": 50, "output_tokens": 12}
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "parity_summary",
+      "parity_python",
+      "parity_typescript",
+      "parity_comparison"
+    ]
+  }
+}

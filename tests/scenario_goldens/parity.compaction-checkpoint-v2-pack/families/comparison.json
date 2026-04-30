@@ -1,0 +1,46 @@
+{
+  "classification": "matched",
+  "families": [
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.outcome",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.models",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.verification",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.artifacts",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.workingContext",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.checkpoint",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.sessionMetadata",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.modelCalls",
+      "status": "matched"
+    }
+  ],
+  "status": "matched"
+}

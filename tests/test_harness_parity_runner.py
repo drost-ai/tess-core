@@ -54,6 +54,28 @@ class HarnessParityRunnerTests(AgentCoreTestCase):
             self.assertEqual(result.status, "passed")
             self.assertEqual(result.golden["status"], "matched")
 
+    def test_compaction_checkpoint_v2_pack_matches_two_codebases(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.compaction-checkpoint-v2-pack", runs_dir=runs)
+            self.assertEqual(result.status, "passed")
+
+            observations = json.loads(Path(result.normalizedPath).read_text(encoding="utf-8"))
+            comparison = observations["comparison"]
+            python_case = observations["python"]["cases"][0]
+            typescript_case = observations["typescript"]["cases"][0]
+
+            self.assertEqual(comparison["status"], "matched")
+            self.assertEqual(python_case["outcome"]["status"], "completed")
+            self.assertEqual(python_case["workingContext"], typescript_case["workingContext"])
+            self.assertEqual(python_case["checkpoint"], typescript_case["checkpoint"])
+            self.assertEqual(python_case["modelCalls"], typescript_case["modelCalls"])
+
+    def test_committed_compaction_checkpoint_v2_golden_compares(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.compaction-checkpoint-v2-pack", runs_dir=runs, golden="compare", cleanup="success")
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
     def test_parity_mismatch_writes_debug_bundle(self):
         scenario = Scenario(
             "parity.runtime-mismatch",
