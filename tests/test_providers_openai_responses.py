@@ -86,6 +86,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertEqual(compatible_captured["options"]["baseURL"], "https://api.deepinfra.com/v1/openai")
             self.assertEqual(compatible_captured["options"]["defaultHeaders"], {"x-provider": "deepinfra"})
             self.assertNotIn("reasoning_effort", compatible_captured["params"])
+            self.assertNotIn("store", compatible_captured["params"])
             self.assertTrue(any(event == "provider.retrying" and data["category"] == "transport" and data["providerLabel"] == "OpenAI Chat Completions" for event, data in events))
             self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in events))
         finally:

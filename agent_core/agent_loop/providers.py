@@ -14,6 +14,7 @@ def _create_provider(config: dict[str, Any], runtime: dict[str, Any]) -> dict[st
                 mode=config.get("openaiApiMode"),
                 request=request,
                 runtime=runtime,
+                clientFactory=runtime.get("openaiClientFactory") or config.get("openaiClientFactory"),
             )
         }
     if not config.get("apiKey") and not config.get("authToken"):

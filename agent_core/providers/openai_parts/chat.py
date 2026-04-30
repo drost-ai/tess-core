@@ -30,7 +30,13 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             completions = get_value(chat, "completions") if chat else None
             if not completions:
                 raise RuntimeError("OpenAI Chat Completions client is unavailable.")
-            params = buildChatCompletionsCreateParams(args["request"], {"includeReasoningEffort": supportsOpenAiChatCompletionsReasoningEffort(base_url)})
+            params = buildChatCompletionsCreateParams(
+                args["request"],
+                {
+                    "includeReasoningEffort": supportsOpenAiChatCompletionsReasoningEffort(base_url),
+                    "includeStore": not base_url or supportsOpenAiChatCompletionsReasoningEffort(base_url),
+                },
+            )
             response = await _race_openai_activity(
                 maybe_await(get_value(completions, "create")(params)),
                 timeout_ms=request_start_timeout_ms,

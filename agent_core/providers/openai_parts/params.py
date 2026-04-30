@@ -31,8 +31,9 @@ def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, opti
         "max_tokens": 16384,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "store": False,
     }
+    if options.get("includeStore", True) is not False:
+        params["store"] = False
     if request.get("effort") and options.get("includeReasoningEffort", True) is not False:
         params["reasoning_effort"] = request["effort"]
     tools = _convert_chat_completion_tools(request.get("tools", []))
