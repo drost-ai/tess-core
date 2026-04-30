@@ -1,0 +1,36 @@
+{
+  "classification": "matched",
+  "families": [
+    {
+      "classification": "matched",
+      "name": "compaction-primitive-baseline.modelPlan",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "compaction-primitive-baseline.modelCandidates",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "compaction-primitive-baseline.tokenEstimates",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "compaction-primitive-baseline.autoCompact",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "compaction-primitive-baseline.workingMessages",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "compaction-primitive-baseline.systemPromptContext",
+      "status": "matched"
+    }
+  ],
+  "status": "matched"
+}

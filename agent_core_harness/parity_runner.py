@@ -18,6 +18,7 @@ from .goldens import compare_golden, expected_observations, render_diff, update_
 from .loader import load_scenario
 from .model import Scenario, ScenarioAssertionError, ScenarioValidationError
 from .normalization import normalize_observations
+from .parity_compaction import run_compaction_primitives
 from .paths import DEFAULT_RUNS_DIR, REPO_ROOT
 
 
@@ -109,7 +110,7 @@ def compare_parity_observations(python: dict[str, Any], typescript: dict[str, An
         if not py_case or not ts_case:
             families.append({"name": str(name), "status": "missing", "classification": "scenario_assumption_invalid"})
             continue
-        for family in ("capabilities", "config", "session", "storage", "runtimeEvents", "runtimeState"):
+        for family in _families_for(py_case, ts_case):
             families.append(_compare_family(str(name), family, py_case.get(family), ts_case.get(family)))
     mismatches = [family for family in families if family["status"] != "matched"]
     return {
@@ -136,6 +137,8 @@ async def _run_python_driver(actions: list[dict[str, Any]], paths: dict[str, Any
 
 async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
     data = {**action, **(action.get("python") or {})}
+    if data.get("action") == "compaction_primitives":
+        return await run_compaction_primitives(data, paths)
     if data.get("action") != "runtime_state_smoke":
         raise ScenarioAssertionError(f"unsupported parity action: {data.get('action')}", category="harness")
     config = await core.resolveConfig(
@@ -257,6 +260,26 @@ def _compare_family(case: str, family: str, python: Any, typescript: Any) -> dic
     if python == typescript:
         return {"name": f"{case}.{family}", "status": "matched", "classification": "matched"}
     return {"name": f"{case}.{family}", "status": "mismatched", "classification": "behavior_drift", "diff": render_diff(typescript, python, fromfile="typescript", tofile="python")}
+
+
+def _families_for(python: dict[str, Any], typescript: dict[str, Any]) -> list[str]:
+    preferred = [
+        "capabilities",
+        "config",
+        "session",
+        "storage",
+        "runtimeEvents",
+        "runtimeState",
+        "modelPlan",
+        "modelCandidates",
+        "tokenEstimates",
+        "autoCompact",
+        "workingMessages",
+        "systemPromptContext",
+    ]
+    available = set(python) | set(typescript)
+    families = [family for family in preferred if family in available]
+    return families + sorted(available - set(families) - {"name"})
 
 
 def _error_comparison(classification: str, error: Any) -> dict[str, Any]:

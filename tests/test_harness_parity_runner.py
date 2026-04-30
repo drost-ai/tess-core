@@ -32,6 +32,28 @@ class HarnessParityRunnerTests(AgentCoreTestCase):
             self.assertEqual(result.status, "passed")
             self.assertEqual(result.golden["status"], "matched")
 
+    def test_compaction_primitives_pack_matches_two_codebases(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.compaction-primitives-pack", runs_dir=runs)
+            self.assertEqual(result.status, "passed")
+
+            observations = json.loads(Path(result.normalizedPath).read_text(encoding="utf-8"))
+            comparison = observations["comparison"]
+            python_case = observations["python"]["cases"][0]
+            typescript_case = observations["typescript"]["cases"][0]
+
+            self.assertEqual(comparison["status"], "matched")
+            self.assertEqual(python_case["modelPlan"], typescript_case["modelPlan"])
+            self.assertEqual(python_case["tokenEstimates"], typescript_case["tokenEstimates"])
+            self.assertTrue(python_case["workingMessages"]["compacted"]["hasContinuationBridge"])
+            self.assertTrue(python_case["systemPromptContext"]["summaryFallback"]["containsPrimitiveParity"])
+
+    def test_committed_compaction_primitives_golden_compares(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.compaction-primitives-pack", runs_dir=runs, golden="compare", cleanup="success")
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
     def test_parity_mismatch_writes_debug_bundle(self):
         scenario = Scenario(
             "parity.runtime-mismatch",

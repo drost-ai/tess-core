@@ -1,0 +1,37 @@
+{
+  "id": "parity.compaction-primitives-pack",
+  "title": "Compaction Primitives Parity Pack",
+  "area": "parity",
+  "mode": ["parity"],
+  "tags": ["ci", "parity", "compaction"],
+  "capabilities": ["node", "typescript_repo"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "compaction primitives parity\n",
+        "agent_core/context/compaction.py": "def checkpoint():\n    return 'v2 parity'\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "parity_action": {
+        "action": "compaction_primitives",
+        "name": "compaction-primitive-baseline",
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions",
+        "sessionId": "compaction-primitives-session",
+        "workspaceName": "Compaction Parity"
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "parity_summary",
+      "parity_python",
+      "parity_typescript",
+      "parity_comparison"
+    ]
+  }
+}
