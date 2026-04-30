@@ -102,6 +102,30 @@ class HarnessParityRunnerTests(AgentCoreTestCase):
             self.assertEqual(result.status, "passed")
             self.assertEqual(result.golden["status"], "matched")
 
+    def test_continuation_relief_pack_matches_two_codebases(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.continuation-relief-pack", runs_dir=runs)
+            self.assertEqual(result.status, "passed")
+
+            observations = json.loads(Path(result.normalizedPath).read_text(encoding="utf-8"))
+            comparison = observations["comparison"]
+            cases = {case["name"]: case for case in observations["python"]["cases"]}
+
+            self.assertEqual(comparison["status"], "matched")
+            self.assertTrue(cases["lightweight-baseline"]["pressure"]["lightweight"]["applied"])
+            self.assertIn("api_microcompact", cases["api-repeated-payload"]["selection"]["appliedModes"])
+            self.assertTrue(cases["api-repeated-payload"]["messages"]["hasRepeatedFileOmission"])
+            self.assertIn("session_memory_compaction", cases["session-memory-reactive"]["selection"]["appliedModes"])
+            self.assertTrue(cases["session-memory-reactive"]["reinjection"]["hasDurableMemory"])
+            self.assertIn("partial_compaction", cases["partial-reactive"]["selection"]["appliedModes"])
+            self.assertTrue(cases["partial-reactive"]["messages"]["hasPartialSummary"])
+
+    def test_committed_continuation_relief_golden_compares(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.continuation-relief-pack", runs_dir=runs, golden="compare", cleanup="success")
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
     def test_parity_mismatch_writes_debug_bundle(self):
         scenario = Scenario(
             "parity.runtime-mismatch",

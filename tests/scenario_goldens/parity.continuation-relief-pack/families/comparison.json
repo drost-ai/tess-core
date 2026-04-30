@@ -1,0 +1,106 @@
+{
+  "classification": "matched",
+  "families": [
+    {
+      "classification": "matched",
+      "name": "api-repeated-payload.pressure",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "api-repeated-payload.selection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "api-repeated-payload.steps",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "api-repeated-payload.messages",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "api-repeated-payload.reinjection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "lightweight-baseline.pressure",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "lightweight-baseline.selection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "lightweight-baseline.steps",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "lightweight-baseline.messages",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "lightweight-baseline.reinjection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "partial-reactive.pressure",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "partial-reactive.selection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "partial-reactive.steps",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "partial-reactive.messages",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "partial-reactive.reinjection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "session-memory-reactive.pressure",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "session-memory-reactive.selection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "session-memory-reactive.steps",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "session-memory-reactive.messages",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "session-memory-reactive.reinjection",
+      "status": "matched"
+    }
+  ],
+  "status": "matched"
+}

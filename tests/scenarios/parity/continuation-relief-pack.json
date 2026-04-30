@@ -1,0 +1,63 @@
+{
+  "id": "parity.continuation-relief-pack",
+  "title": "Continuation Relief Parity Pack",
+  "area": "parity",
+  "mode": ["parity"],
+  "tags": ["ci", "parity", "continuation", "compaction"],
+  "capabilities": ["node", "typescript_repo"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "continuation relief parity\n",
+        "agent_core/context/continuation.py": "def relief():\n    return 'parity'\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "parity_action": {
+        "action": "continuation_relief",
+        "name": "lightweight-baseline",
+        "fixture": "plain-long",
+        "sessionId": "continuation-lightweight-session",
+        "reactiveAttempt": 0
+      }
+    },
+    {
+      "parity_action": {
+        "action": "continuation_relief",
+        "name": "api-repeated-payload",
+        "fixture": "tool-heavy",
+        "sessionId": "continuation-api-session",
+        "reactiveAttempt": 0
+      }
+    },
+    {
+      "parity_action": {
+        "action": "continuation_relief",
+        "name": "session-memory-reactive",
+        "fixture": "plain-long",
+        "sessionId": "continuation-memory-session",
+        "retrievedMemory": true,
+        "reactiveAttempt": 2
+      }
+    },
+    {
+      "parity_action": {
+        "action": "continuation_relief",
+        "name": "partial-reactive",
+        "fixture": "partial-long",
+        "sessionId": "continuation-partial-session",
+        "reactiveAttempt": 1
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "parity_summary",
+      "parity_python",
+      "parity_typescript",
+      "parity_comparison"
+    ]
+  }
+}
