@@ -8,6 +8,31 @@
     },
     {
       "classification": "matched",
+      "name": "checkpoint-v2-happy-path.attempts",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.finalOutcome",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.retryLineage",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.repair",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "checkpoint-v2-happy-path.skips",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
       "name": "checkpoint-v2-happy-path.models",
       "status": "matched"
     },

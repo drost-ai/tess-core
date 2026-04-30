@@ -76,6 +76,32 @@ class HarnessParityRunnerTests(AgentCoreTestCase):
             self.assertEqual(result.status, "passed")
             self.assertEqual(result.golden["status"], "matched")
 
+    def test_compaction_repair_fallback_pack_matches_two_codebases(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.compaction-repair-fallback-pack", runs_dir=runs)
+            self.assertEqual(result.status, "passed")
+
+            observations = json.loads(Path(result.normalizedPath).read_text(encoding="utf-8"))
+            comparison = observations["comparison"]
+            cases = {case["name"]: case for case in observations["python"]["cases"]}
+
+            self.assertEqual(comparison["status"], "matched")
+            self.assertEqual(cases["malformed-synthesis-recovers"]["attempts"]["synthesis"], ["malformed_json", "success"])
+            self.assertEqual(cases["incomplete-synthesis-recovers"]["attempts"]["synthesis"], ["incomplete_context", "success"])
+            self.assertEqual(cases["verifier-repair-accepted"]["repair"]["repairCount"], 1)
+            self.assertEqual(cases["retryable-synthesis-fallback"]["attempts"]["synthesis"], ["retryable_error", "success"])
+            self.assertEqual(cases["context-size-synthesis-fallback"]["attempts"]["synthesis"], ["context_size_error", "success"])
+            self.assertEqual(cases["verifier-reject-skips"]["skips"]["reason"], "verification_rejected")
+            self.assertEqual(cases["low-value-candidate-skips"]["skips"]["reason"], "quality_gate_failed")
+            self.assertEqual(cases["unsafe-cutoff-skips"]["skips"]["reason"], "no_legal_cutoff")
+            self.assertEqual(cases["unsafe-cutoff-skips"]["skips"]["modelCallCount"], 0)
+
+    def test_committed_compaction_repair_fallback_golden_compares(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario("parity.compaction-repair-fallback-pack", runs_dir=runs, golden="compare", cleanup="success")
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
     def test_parity_mismatch_writes_debug_bundle(self):
         scenario = Scenario(
             "parity.runtime-mismatch",

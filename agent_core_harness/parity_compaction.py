@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
+from agent_core.provider_errors import createProviderFailureRecord, createProviderRequestError
 
 
 async def run_compaction_primitives(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
@@ -68,6 +69,11 @@ async def run_compaction_run(data: dict[str, Any], paths: dict[str, Any]) -> dic
         {
             "name": data.get("name") or data.get("action"),
             "outcome": _project_outcome(outcome),
+            "attempts": _project_attempts(fake_client.records),
+            "finalOutcome": _project_final_outcome(outcome),
+            "retryLineage": _project_retry_lineage(fake_client.records),
+            "repair": _project_repair(artifacts.get("state") or {}),
+            "skips": _project_skip(outcome, fake_client.records),
             "models": {
                 "compaction": _project_model(outcome.get("compactionModel") or {}),
                 "verification": _project_model(outcome.get("verificationModel") or {}),
@@ -110,7 +116,7 @@ async def _build_session_for(data: dict[str, Any], paths: dict[str, Any], *, def
     )
     session["createdAt"] = "2026-01-01T00:00:00.000Z"
     session["updatedAt"] = "2026-01-01T00:00:01.000Z"
-    session["messages"] = _messages()
+    session["messages"] = _messages_for_fixture(data.get("fixture"))
     session["todos"] = [{"id": "todo-1", "text": "Build compaction parity primitives", "status": "in_progress"}]
     metadata = session.setdefault("metadata", {})
     metadata["workspaceName"] = data.get("workspaceName") or "Compaction Parity"
@@ -134,6 +140,19 @@ def _messages() -> list[dict[str, Any]]:
     messages.append({"role": "user", "content": "continue with live compaction parity checks"})
     messages.append({"role": "assistant", "content": "ready to compare primitive projections"})
     return messages
+
+
+def _messages_for_fixture(name: Any) -> list[dict[str, Any]]:
+    if name == "unsafe-cutoff-session":
+        messages = [{"role": "user", "content": "bootstrap context before unsafe tool tail"}]
+        for index in range(15):
+            tool_id = f"todo-{index}"
+            messages.append({"role": "assistant", "content": [{"type": "tool_use", "id": tool_id, "name": "TodoWrite", "input": {"items": [f"low-value update {index}"]}}]})
+            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": "ok"}]})
+        return messages
+    if name == "short-session":
+        return [{"role": "user", "content": "too short"}, {"role": "assistant", "content": "ack"}]
+    return _messages()
 
 
 def _with_compaction_state(session: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
@@ -190,7 +209,11 @@ class _FakeCompactionModelClient:
         if kind == "malformed_json":
             return {"text": "{not valid json", "usage": _usage(step, purpose), "model": model}
         if kind == "incomplete_context":
-            return {"text": json.dumps({"shouldCheckpoint": True, "workingContext": {"goals": {}}}), "usage": _usage(step, purpose), "model": model}
+            return {"text": json.dumps({"shouldCheckpoint": True, "quality": {"classification": "usable", "reason": "missing context"}, "workingContext": None}), "usage": _usage(step, purpose), "model": model}
+        if kind == "retryable_error":
+            raise _provider_error("server", "fake retryable compaction failure")
+        if kind == "context_size_error":
+            raise _provider_error("client_request", "maximum context length exceeded")
         if kind == "reject":
             return {"text": json.dumps(_verification_fixture("reject-needs-repair"), indent=2), "usage": _usage(step, purpose), "model": model}
         text = _fixture_text(str(step.get("textFixture") or ("rich-working-context" if purpose == "synthesis" else "accept-rich")))
@@ -205,17 +228,38 @@ def _script_step(script: dict[str, Any], purpose: str, offset: int) -> dict[str,
 
 
 def _fixture_text(name: str) -> str:
-    if name.startswith("accept") or name.startswith("reject"):
+    if name.startswith("accept") or name.startswith("reject") or name.startswith("repair"):
         return json.dumps(_verification_fixture(name), indent=2)
     return json.dumps(_synthesis_fixture(name), indent=2)
 
 
 def _synthesis_fixture(name: str) -> dict[str, Any]:
+    if name == "skip-low-value":
+        return {
+            "shouldCheckpoint": False,
+            "quality": {"classification": "thin", "reason": "Compacted slice is too thin to justify a checkpoint."},
+            "workingContext": _working_context_fields(),
+        }
     quality = "usable" if name == "usable-working-context" else "rich"
     return {"shouldCheckpoint": True, "quality": {"classification": quality, "reason": "Deterministic checkpoint fixture preserves implementation state."}, "workingContext": _working_context_fields()}
 
 
 def _verification_fixture(name: str) -> dict[str, Any]:
+    if name == "repair-rich":
+        repaired = _working_context_fields()
+        repaired["nextSteps"] = ["Persist the verifier-repaired checkpoint.", "Continue with Slice C fallback coverage."]
+        repaired["criticalContext"] = [*repaired["criticalContext"], "Verifier repair replaced stale next steps."]
+        return {
+            "verdict": "repair",
+            "confidence": "medium",
+            "reason": "Candidate had stale next steps; repaired checkpoint supplied.",
+            "issues": ["Stale next step"],
+            "notes": ["Repair keeps the active Slice C objective."],
+            "repairedCheckpoint": {
+                "quality": {"classification": "rich", "reason": "Verifier repaired stale continuation state."},
+                "workingContext": repaired,
+            },
+        }
     if name == "reject-needs-repair":
         return {"verdict": "reject", "confidence": "medium", "reason": "Checkpoint omitted the active Slice B next step.", "issues": ["Missing active next step"], "notes": []}
     return {
@@ -267,6 +311,22 @@ def _usage(step: dict[str, Any], purpose: str) -> dict[str, int]:
     return {**default, **usage}
 
 
+def _provider_error(category: str, raw_message: str) -> Exception:
+    record = {
+        "provider": "openai",
+        "providerLabel": "OpenAI",
+        "phase": "response_complete",
+        "category": category,
+        "retryable": category != "client_request",
+        "attempt": 1,
+        "hadAssistantOutput": False,
+        "hadToolUse": False,
+        "rawMessage": raw_message,
+        "rawBody": raw_message,
+    }
+    return createProviderRequestError(createProviderFailureRecord(record))
+
+
 def _project_prompt(prompt: str, system: str) -> dict[str, Any]:
     lines = prompt.splitlines()
     source_range = next((line for line in lines if line.startswith("Compacted source range:")), "")
@@ -298,8 +358,61 @@ def _load_compaction_artifacts(outcome: dict[str, Any]) -> dict[str, Any]:
 
 
 def _project_outcome(outcome: dict[str, Any]) -> dict[str, Any]:
-    keys = ("status", "trigger", "generation", "compactedThroughMessageIndex", "compactedMessageCount", "recentMessageCount", "rawTokenEstimate", "compactedContextTokenEstimate", "workingContextTokenEstimate", "qualityClassification")
+    keys = ("status", "trigger", "reason", "detail", "previousCutoff", "candidateCutoff", "generation", "compactedThroughMessageIndex", "compactedMessageCount", "recentMessageCount", "rawTokenEstimate", "compactedContextTokenEstimate", "workingContextTokenEstimate", "qualityClassification")
     return {key: outcome.get(key) for key in keys}
+
+
+def _project_attempts(records: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "total": len(records),
+        "synthesis": [record["outcome"] for record in records if record.get("purpose") == "synthesis"],
+        "verification": [record["outcome"] for record in records if record.get("purpose") == "verification"],
+    }
+
+
+def _project_final_outcome(outcome: dict[str, Any]) -> dict[str, Any]:
+    return _clean({key: outcome.get(key) for key in ("status", "reason", "trigger", "qualityClassification", "compactedThroughMessageIndex")})
+
+
+def _project_retry_lineage(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "purpose": record.get("purpose"),
+            "attemptIndex": record.get("attemptIndex"),
+            "outcome": record.get("outcome"),
+            "hasPreviousError": (record.get("prompt") or {}).get("hasPreviousError"),
+        }
+        for record in records
+    ]
+
+
+def _project_repair(state: dict[str, Any]) -> dict[str, Any]:
+    verification = state.get("verification") or {}
+    working_context = state.get("workingContext") or {}
+    return _clean(
+        {
+            "repairCount": verification.get("repairCount"),
+            "verdict": verification.get("verdict"),
+            "nextSteps": working_context.get("nextSteps"),
+            "criticalContext": working_context.get("criticalContext"),
+        }
+    )
+
+
+def _project_skip(outcome: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, Any]:
+    if outcome.get("status") != "skipped":
+        return {"skipped": False}
+    return _clean(
+        {
+            "skipped": True,
+            "reason": outcome.get("reason"),
+            "detail": outcome.get("detail"),
+            "previousCutoff": outcome.get("previousCutoff"),
+            "candidateCutoff": outcome.get("candidateCutoff"),
+            "qualityClassification": outcome.get("qualityClassification"),
+            "modelCallCount": len(records),
+        }
+    )
 
 
 def _project_verification(value: dict[str, Any]) -> dict[str, Any]:
@@ -324,7 +437,7 @@ def _project_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def _project_working_context(context: dict[str, Any]) -> dict[str, Any]:
-    return _clean(context)
+    return _clean(context) if context else None
 
 
 def _project_checkpoint(checkpoint: dict[str, Any]) -> dict[str, Any]:
@@ -333,8 +446,7 @@ def _project_checkpoint(checkpoint: dict[str, Any]) -> dict[str, Any]:
 
 def _project_compaction_metadata(session: dict[str, Any]) -> dict[str, Any]:
     metadata = session.get("metadata") or {}
-    state = metadata.get("compactionState") or {}
-    return _clean({"compactions": metadata.get("compactions"), "usage": metadata.get("usage"), "compactionState": state})
+    return _clean({"compactions": metadata.get("compactions"), "usage": metadata.get("usage"), "compactionState": metadata.get("compactionState")})
 
 
 def _read_text(path: str | None) -> str | None:
