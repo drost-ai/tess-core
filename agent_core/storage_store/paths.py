@@ -1,10 +1,44 @@
 from __future__ import annotations
 
+import contextvars
+
 from .shared import *
 
 Scope = Literal["user", "project", "local"]
 DEFAULT_RUNTIME_HOME = "~/.agent-core"
 _configured_runtime_home: str | None = None
+_active_runtime_home: contextvars.ContextVar[str | None] = contextvars.ContextVar("agent_core_runtime_home", default=None)
+
+
+class RuntimeHomeScope:
+    def __init__(self, runtimeHome: str):
+        self.runtimeHome = resolveRuntimeHome(None, runtimeHome)
+        self._token: contextvars.Token[str | None] | None = None
+
+    def __enter__(self) -> str:
+        self._token = _active_runtime_home.set(self.runtimeHome)
+        return self.runtimeHome
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._token is not None:
+            _active_runtime_home.reset(self._token)
+            self._token = None
+
+    async def __aenter__(self) -> str:
+        return self.__enter__()
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        self.__exit__(exc_type, exc, tb)
+
+
+def scopedRuntimeHome(runtimeHome: str) -> RuntimeHomeScope:
+    return RuntimeHomeScope(runtimeHome)
+
+
+def getContextRuntimeHome() -> str | None:
+    return _active_runtime_home.get()
+
+
 def expandHome(rawPath: str) -> str:
     if rawPath == "~":
         return str(Path.home())
@@ -29,7 +63,7 @@ def resetConfiguredRuntimeHome() -> None:
     _configured_runtime_home = None
 
 def getStateRoot() -> str:
-    return _configured_runtime_home or resolveRuntimeHome()
+    return _active_runtime_home.get() or _configured_runtime_home or resolveRuntimeHome()
 
 def findGitRoot(cwd: str) -> str | None:
     try:
@@ -134,6 +168,8 @@ expand_home = expandHome
 resolve_runtime_home = resolveRuntimeHome
 configure_runtime_home = configureRuntimeHome
 reset_configured_runtime_home = resetConfiguredRuntimeHome
+scoped_runtime_home = scopedRuntimeHome
+get_context_runtime_home = getContextRuntimeHome
 get_state_root = getStateRoot
 find_git_root = findGitRoot
 get_project_root = getProjectRoot

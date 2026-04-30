@@ -12,8 +12,13 @@ def _looks_like_claude_ai_token(value: str | None) -> bool:
 
 async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> dict[str, Any]:
     options = options or {}
-    runtime_home = resolveRuntimeHome(cwd, options.get("runtimeHome"))
-    configureRuntimeHome(runtime_home)
+    requested_runtime_home = options.get("runtimeHome")
+    context_runtime_home = getContextRuntimeHome()
+    runtime_home = resolveRuntimeHome(cwd, requested_runtime_home) if requested_runtime_home else context_runtime_home or resolveRuntimeHome(cwd)
+    if context_runtime_home and requested_runtime_home and runtime_home != context_runtime_home:
+        raise ValueError("runtimeHome conflicts with active scoped runtime home")
+    if not context_runtime_home:
+        configureRuntimeHome(runtime_home)
     await ensureBaseLayout(cwd)
 
     sources = _parse_setting_sources(options.get("settingSources"))
