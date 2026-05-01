@@ -12,7 +12,7 @@ def sessionTranscriptLogPath(sessionId: str) -> str:
     return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
 
 async def saveSession(session: dict[str, Any]) -> None:
-    await writeJsonFile(sessionPath(session["id"]), session)
+    await writeJsonFile(sessionPath(session["id"]), _redact_persisted_image_payloads(session))
 
 async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
     path = sessionTranscriptLogPath(sessionId)
@@ -20,9 +20,39 @@ async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) 
     if entries:
         with open(path, "a", encoding="utf-8") as handle:
             for entry in entries:
-                json.dump(entry, handle, ensure_ascii=False)
+                json.dump(_redact_persisted_image_payloads(entry), handle, ensure_ascii=False)
                 handle.write("\n")
     return path
+
+def _redact_persisted_image_payloads(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_redact_persisted_image_payloads(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    block_type = str(value.get("type") or "").strip().lower()
+    is_image = block_type in {"image", "input_image", "image_url"}
+    out: dict[str, Any] = {}
+    for key, item in value.items():
+        cleaned = str(key or "").strip()
+        if is_image and cleaned in {"data", "data_base64", "base64", "image_url", "url"}:
+            out[cleaned] = _persisted_image_placeholder(value)
+            continue
+        out[cleaned] = _redact_persisted_image_payloads(item)
+    return out
+
+def _persisted_image_placeholder(value: dict[str, Any]) -> str:
+    mime_type = str(value.get("mime_type") or value.get("mimeType") or value.get("mime") or "image").strip() or "image"
+    path = (
+        str(
+            value.get("path")
+            or value.get("file_path")
+            or value.get("filePath")
+            or value.get("source_path")
+            or ""
+        ).strip()
+    )
+    suffix = f":{path}" if path else ""
+    return f"<image:{mime_type}{suffix}:current-turn-only>"
 
 def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
     indexed: dict[int, dict[str, Any]] = {}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import agent_core as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
@@ -107,6 +108,68 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             self.assertEqual(str(home), core.getStateRoot())
             self.assertTrue((scoped_home / "sessions").exists())
             self.assertFalse((home / "sessions").exists())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_image_payloads_are_redacted_from_session_persistence(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            image_data = "aW1hZ2UtYnl0ZXM="
+            session = core.createEmptySession(
+                {
+                    "sessionId": "vision-session",
+                    "cwd": str(workspace),
+                    "provider": "openai",
+                    "model": "gpt-5.5",
+                    "systemPrompt": "test",
+                    "permissionMode": "default",
+                }
+            )
+            session["messages"].append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What is this?"},
+                        {
+                            "type": "image",
+                            "mime_type": "image/png",
+                            "path": "inbox/telegram/image.png",
+                            "data": image_data,
+                        },
+                    ],
+                }
+            )
+
+            async def persist():
+                await core.saveSession(session)
+                await core.appendSessionTranscriptLogEntries(
+                    session["id"],
+                    [
+                        {
+                            "type": "message",
+                            "session_id": session["id"],
+                            "message_index": 0,
+                            "persisted_at": "now",
+                            "role": "user",
+                            "content": session["messages"][0]["content"],
+                        }
+                    ],
+                )
+                return await core.loadSession(session["id"])
+
+            loaded = run(persist())
+
+            session_text = (home / "sessions" / "vision-session.json").read_text()
+            transcript_text = (
+                home / "sessions" / "vision-session" / "full-transcript-with-tools.jsonl"
+            ).read_text()
+            self.assertNotIn(image_data, session_text)
+            self.assertNotIn(image_data, transcript_text)
+            self.assertNotIn("data:image", session_text)
+            self.assertNotIn("data:image", transcript_text)
+            self.assertIn("inbox/telegram/image.png", session_text)
+            self.assertEqual(session["messages"][0]["content"][1]["data"], image_data)
+            self.assertIn("current-turn-only", json.dumps(loaded["messages"]))
         finally:
             self.restore_home(root, previous)
 
