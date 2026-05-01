@@ -44,6 +44,49 @@ class ConfigProfileTests(AgentCoreTestCase):
                 os.environ["DEEPINFRA_API_KEY"] = prev_key
             self.restore_home(root, previous)
 
+    def test_explicit_profile_uses_own_default_model_not_top_level_model(self):
+        root, home, workspace, previous = self.temp_context()
+        previous_env = {
+            "TESS_MODEL": os.environ.get("TESS_MODEL"),
+            "OPENAI_MODEL": os.environ.get("OPENAI_MODEL"),
+        }
+        os.environ.pop("TESS_MODEL", None)
+        os.environ["OPENAI_MODEL"] = "gpt-5.5"
+        try:
+            (home / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "provider": "openai-codex",
+                        "model": "gpt-5.5",
+                        "providerProfiles": {
+                            "openai-codex": {
+                                "kind": "openai",
+                                "apiMode": "codex",
+                                "defaultModel": "gpt-5.5",
+                            },
+                            "deepseek": {
+                                "kind": "openai",
+                                "apiMode": "chat_completions",
+                                "baseUrl": "https://api.deepseek.com",
+                                "defaultModel": "deepseek-v4-pro",
+                                "auth": {"kind": "custom_bearer", "envVar": "DEEPSEEK_API_KEY"},
+                            },
+                        },
+                    }
+                )
+            )
+            config = run(core.resolveConfig({"provider": "deepseek"}, str(workspace)))
+            self.assertEqual(config["providerProfileName"], "deepseek")
+            self.assertEqual(config["model"], "deepseek-v4-pro")
+            self.assertEqual(config["openaiBaseUrl"], "https://api.deepseek.com")
+        finally:
+            for key, value in previous_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+            self.restore_home(root, previous)
+
     def test_resolve_config_anthropic_auth_separation_and_alt_screen(self):
         root, home, workspace, previous = self.temp_context()
         prev_token = os.environ.get("ANTHROPIC_AUTH_TOKEN")

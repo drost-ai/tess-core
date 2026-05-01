@@ -28,16 +28,29 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> dict[str, A
     helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
     provider_profiles = resolveProviderProfiles(merged_settings.get("providerProfiles"))
 
-    requested_provider_name = options.get("provider") or os.environ.get("TESS_PROVIDER") or merged_settings.get("provider")
-    direct_model_input = options.get("model") or merged_settings.get("model") or os.environ.get("TESS_MODEL")
-    explicit_provider_kind = normalizeProviderName(requested_provider_name)
-    requested_model_input = direct_model_input or (
-        os.environ.get("OPENAI_MODEL")
-        if explicit_provider_kind == "openai"
-        else os.environ.get("ANTHROPIC_MODEL")
-        if explicit_provider_kind == "anthropic"
-        else os.environ.get("ANTHROPIC_MODEL") or os.environ.get("OPENAI_MODEL")
+    provider_override_name = options.get("provider") or os.environ.get("TESS_PROVIDER")
+    requested_provider_name = provider_override_name or merged_settings.get("provider")
+    override_profile_name = normalizeProviderProfileName(provider_override_name)
+    settings_profile_name = normalizeProviderProfileName(merged_settings.get("provider"))
+    provider_override_selects_profile = bool(
+        provider_override_name
+        and override_profile_name
+        and override_profile_name in provider_profiles
+        and override_profile_name != settings_profile_name
     )
+    settings_model_input = None if provider_override_selects_profile else merged_settings.get("model")
+    direct_model_input = options.get("model") or os.environ.get("TESS_MODEL") or settings_model_input
+    explicit_provider_kind = normalizeProviderName(requested_provider_name)
+    provider_env_model = None
+    if not provider_override_selects_profile:
+        provider_env_model = (
+            os.environ.get("OPENAI_MODEL")
+            if explicit_provider_kind == "openai"
+            else os.environ.get("ANTHROPIC_MODEL")
+            if explicit_provider_kind == "anthropic"
+            else os.environ.get("ANTHROPIC_MODEL") or os.environ.get("OPENAI_MODEL")
+        )
+    requested_model_input = direct_model_input or provider_env_model
 
     stored_anthropic_auth_token = _get_stored_anthropic_auth_token(auth)
     stored_anthropic_api_key = _get_stored_anthropic_api_key(auth)

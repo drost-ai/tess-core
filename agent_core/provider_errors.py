@@ -93,6 +93,23 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
         return createProviderRequestError(record)
     raw = str(error)
     lower = raw.lower()
+    sdk_http = _parse_openai_sdk_http_error(raw)
+    if sdk_http is not None:
+        return classifyProviderHttpFailure(
+            {
+                "provider": args["provider"],
+                "providerLabel": args["providerLabel"],
+                "phase": args["phase"],
+                "attempt": args["attempt"],
+                "hadAssistantOutput": args["hadAssistantOutput"],
+                "hadToolUse": args["hadToolUse"],
+                "status": sdk_http["status"],
+                "body": sdk_http["body"],
+                "errorType": sdk_http.get("errorType"),
+                "code": sdk_http.get("code"),
+                "streamEventType": args.get("streamEventType"),
+            }
+        )
     category = "unknown"
     retryable = False
     if _looks_like_timeout(lower):
@@ -187,3 +204,20 @@ def _looks_like_protocol(message: str) -> bool:
 
 def _looks_like_auth(message: str) -> bool:
     return bool(re.search(r"unauthorized|forbidden|invalid api key|authentication|auth token|insufficient permissions?|missing scopes?|insufficient_scope|permission denied", message))
+
+
+def _parse_openai_sdk_http_error(raw: str) -> dict[str, Any] | None:
+    match = re.search(r"Error code:\s*(\d{3})\s*-\s*(.*)", raw, re.S)
+    if not match:
+        return None
+    status = int(match.group(1))
+    body = (match.group(2) or "").strip()
+    error_type = None
+    code = None
+    type_match = re.search(r"['\"]type['\"]\s*:\s*['\"]([^'\"]+)['\"]", body)
+    if type_match:
+        error_type = type_match.group(1)
+    code_match = re.search(r"['\"]code['\"]\s*:\s*['\"]([^'\"]+)['\"]", body)
+    if code_match:
+        code = code_match.group(1)
+    return {"status": status, "body": body or raw, "errorType": error_type, "code": code}

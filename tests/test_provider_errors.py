@@ -169,6 +169,18 @@ class ProviderErrorTests(AgentCoreTestCase):
         self.assertFalse(protocol.record["retryable"])
         auth = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("invalid API key")})
         self.assertEqual(auth.record["category"], "auth")
+        sdk_400 = core.normalizeUnknownProviderFailure(
+            {
+                **base,
+                "error": RuntimeError(
+                    "Error code: 400 - {'error': {'message': 'bad model', "
+                    "'type': 'invalid_request_error', 'code': 'invalid_request_error'}}"
+                ),
+            }
+        )
+        self.assertEqual(sdk_400.record["category"], "client_request")
+        self.assertEqual(sdk_400.record["status"], 400)
+        self.assertEqual(sdk_400.record["errorType"], "invalid_request_error")
 
     def test_missing_provider_credentials_match_reference_diagnostics(self):
         request = {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}
