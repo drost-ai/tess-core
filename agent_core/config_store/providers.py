@@ -43,6 +43,8 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "defaultModel": record.get("defaultModel"),
         "auth": clone(record.get("auth") or {}),
         "headers": clone(record.get("headers") or {}),
+        "supportsVision": record.get("supportsVision"),
+        "capabilities": clone(record.get("capabilities") or {}),
         "description": record.get("description"),
     }
 
@@ -140,6 +142,8 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
             "headerName": ((record.get("auth") or {}).get("headerName") or "").strip() or None,
         },
         "headers": clone(record.get("headers") or {}),
+        "supportsVision": record.get("supportsVision"),
+        "capabilities": clone(record.get("capabilities") or {}),
         "description": (record.get("description") or "").strip() or None,
     }
 

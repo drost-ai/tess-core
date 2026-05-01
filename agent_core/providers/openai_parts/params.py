@@ -73,12 +73,16 @@ def convertMessagesToInput(messages: list[dict[str, Any]]) -> list[dict[str, Any
             if isinstance(content, str):
                 out.append({"type": "message", "role": "user", "content": content})
             elif isinstance(content, list):
-                user_text = "".join(block.get("text", "") for block in content if block.get("type") == "text")
-                if user_text:
-                    out.append({"type": "message", "role": "user", "content": user_text})
-                for block in content:
-                    if block.get("type") == "tool_result":
-                        out.append({"type": "function_call_output", "call_id": block.get("tool_use_id"), "output": block.get("content")})
+                user_content, function_outputs = _convert_responses_user_content(content)
+                if user_content:
+                    out.append(
+                        {
+                            "type": "message",
+                            "role": "user",
+                            "content": _collapse_responses_text_content(user_content),
+                        }
+                    )
+                out.extend(function_outputs)
             continue
         assistant_text = content if isinstance(content, str) else "".join(block.get("text", "") for block in content or [] if block.get("type") == "text")
         if assistant_text:
@@ -88,6 +92,48 @@ def convertMessagesToInput(messages: list[dict[str, Any]]) -> list[dict[str, Any
                 if block.get("type") == "tool_use":
                     out.append({"type": "function_call", "call_id": block.get("id"), "name": block.get("name"), "arguments": compact_json(block.get("input") or {})})
     return out
+
+def _convert_responses_user_content(content: list[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    user_content: list[dict[str, Any]] = []
+    function_outputs: list[dict[str, Any]] = []
+    for block in content:
+        if not isinstance(block, dict):
+            user_content.append({"type": "input_text", "text": str(block)})
+            continue
+        block_type = str(block.get("type") or "").strip()
+        if block_type in ("text", "input_text"):
+            user_content.append({"type": "input_text", "text": str(block.get("text") or "")})
+            continue
+        if block_type in ("image", "input_image"):
+            image_url = _image_data_url(block)
+            if image_url:
+                user_content.append({"type": "input_image", "detail": str(block.get("detail") or "auto"), "image_url": image_url})
+            continue
+        if block_type == "tool_result":
+            function_outputs.append({"type": "function_call_output", "call_id": block.get("tool_use_id"), "output": block.get("content")})
+            continue
+        user_content.append({"type": "input_text", "text": str(block)})
+    return user_content, function_outputs
+
+def _collapse_responses_text_content(content: list[dict[str, Any]]) -> str | list[dict[str, Any]]:
+    if any(block.get("type") == "input_image" for block in content):
+        return content
+    return "".join(str(block.get("text") or "") for block in content if block.get("type") == "input_text")
+
+def _image_data_url(block: dict[str, Any]) -> str:
+    existing = block.get("image_url") or block.get("url")
+    if isinstance(existing, dict):
+        existing = existing.get("url")
+    if isinstance(existing, str) and existing.strip():
+        return existing.strip()
+    data = block.get("data") or block.get("data_base64") or block.get("base64")
+    raw = str(data or "").strip()
+    if not raw:
+        return ""
+    if raw.lower().startswith("data:"):
+        return raw
+    mime_type = str(block.get("mime_type") or block.get("mimeType") or block.get("mime") or "image/jpeg").strip() or "image/jpeg"
+    return f"data:{mime_type};base64,{raw}"
 
 def convertMessagesToChatCompletions(system: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
@@ -99,12 +145,10 @@ def convertMessagesToChatCompletions(system: str, messages: list[dict[str, Any]]
             if isinstance(content, str):
                 out.append({"role": "user", "content": content})
             elif isinstance(content, list):
-                user_text = "".join(block.get("text", "") for block in content if block.get("type") == "text")
-                if user_text:
-                    out.append({"role": "user", "content": user_text})
-                for block in content:
-                    if block.get("type") == "tool_result":
-                        out.append({"role": "tool", "tool_call_id": block.get("tool_use_id"), "content": block.get("content")})
+                user_content, tool_messages = _convert_chat_user_content(content)
+                if user_content:
+                    out.append({"role": "user", "content": _collapse_chat_text_content(user_content)})
+                out.extend(tool_messages)
             continue
         if isinstance(content, str):
             out.append({"role": "assistant", "content": content})
@@ -125,3 +169,30 @@ def convertMessagesToChatCompletions(system: str, messages: list[dict[str, Any]]
             item["tool_calls"] = tool_calls
         out.append(item)
     return out
+
+def _convert_chat_user_content(content: list[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    user_content: list[dict[str, Any]] = []
+    tool_messages: list[dict[str, Any]] = []
+    for block in content:
+        if not isinstance(block, dict):
+            user_content.append({"type": "text", "text": str(block)})
+            continue
+        block_type = str(block.get("type") or "").strip()
+        if block_type in ("text", "input_text"):
+            user_content.append({"type": "text", "text": str(block.get("text") or "")})
+            continue
+        if block_type in ("image", "input_image"):
+            image_url = _image_data_url(block)
+            if image_url:
+                user_content.append({"type": "image_url", "image_url": {"url": image_url, "detail": str(block.get("detail") or "auto")}})
+            continue
+        if block_type == "tool_result":
+            tool_messages.append({"role": "tool", "tool_call_id": block.get("tool_use_id"), "content": block.get("content")})
+            continue
+        user_content.append({"type": "text", "text": str(block)})
+    return user_content, tool_messages
+
+def _collapse_chat_text_content(content: list[dict[str, Any]]) -> str | list[dict[str, Any]]:
+    if any(block.get("type") == "image_url" for block in content):
+        return content
+    return "".join(str(block.get("text") or "") for block in content if block.get("type") == "text")

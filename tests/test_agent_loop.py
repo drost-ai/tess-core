@@ -4,6 +4,146 @@ from tests.support.agent_core_case import *
 
 
 class AgentLoopTests(AgentCoreTestCase):
+    def test_run_agent_prompt_rejects_image_inputs_for_non_vision_profile(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-vision-") as cwd:
+            config = {
+                "cwd": cwd,
+                "runtimeHome": cwd,
+                "allowedRoots": [cwd],
+                "agents": {},
+                "provider": "openai",
+                "providerKind": "openai",
+                "providerProfileName": "deepseek",
+                "providerProfile": {
+                    "kind": "openai",
+                    "name": "deepseek",
+                    "baseUrl": "https://api.deepseek.com",
+                    "supportsVision": False,
+                },
+                "providerProfiles": {"deepseek": {"kind": "openai", "name": "deepseek"}},
+                "customHeaders": {},
+                "openaiApiMode": "chat_completions",
+                "openaiBaseUrl": "https://api.deepseek.com",
+                "model": "deepseek-v4-pro",
+                "effort": "medium",
+                "assistantName": "Test",
+                "assistantDescription": "",
+                "systemPrompt": "test",
+                "tools": [],
+                "allowedTools": [],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            session = core.createEmptySession(
+                cwd=cwd,
+                provider="openai",
+                model="deepseek-v4-pro",
+                effort="medium",
+                systemPrompt="test",
+                permissionMode="bypassPermissions",
+            )
+            session["messages"].append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What is this?"},
+                        {"type": "image", "mime_type": "image/png", "data": base64.b64encode(b"img").decode()},
+                    ],
+                }
+            )
+
+            async def send(_request):
+                raise AssertionError("provider should not be called for unsupported image input")
+
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []},
+                    prompt="",
+                    providerOverride={"send": send},
+                )
+            )
+
+            self.assertEqual(result["text"], core.IMAGE_INPUT_UNSUPPORTED_MESSAGE)
+            self.assertEqual(result["stopReason"], "unsupported_image_input")
+            self.assertEqual(session["messages"][-1]["content"][0]["text"], core.IMAGE_INPUT_UNSUPPORTED_MESSAGE)
+
+    def test_run_agent_prompt_sends_image_inputs_for_vision_profile(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-vision-") as cwd:
+            config = {
+                "cwd": cwd,
+                "runtimeHome": cwd,
+                "allowedRoots": [cwd],
+                "agents": {},
+                "provider": "openai",
+                "providerKind": "openai",
+                "providerProfileName": "local-vision",
+                "providerProfile": {
+                    "kind": "openai",
+                    "name": "local-vision",
+                    "baseUrl": "http://127.0.0.1:8080/v1",
+                    "supportsVision": True,
+                },
+                "providerProfiles": {"local-vision": {"kind": "openai", "name": "local-vision"}},
+                "customHeaders": {},
+                "openaiApiMode": "chat_completions",
+                "openaiBaseUrl": "http://127.0.0.1:8080/v1",
+                "model": "local-model",
+                "effort": "medium",
+                "assistantName": "Test",
+                "assistantDescription": "",
+                "systemPrompt": "test",
+                "tools": [],
+                "allowedTools": [],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            session = core.createEmptySession(
+                cwd=cwd,
+                provider="openai",
+                model="local-model",
+                effort="medium",
+                systemPrompt="test",
+                permissionMode="bypassPermissions",
+            )
+            session["messages"].append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What is this?"},
+                        {"type": "image", "mime_type": "image/png", "data": "aW1n"},
+                    ],
+                }
+            )
+            captured = {}
+
+            async def send(request):
+                captured["request"] = request
+                return {
+                    "model": "local-model",
+                    "stopReason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 2},
+                    "content": [{"type": "text", "text": "vision ok"}],
+                }
+
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []},
+                    prompt="",
+                    providerOverride={"send": send},
+                )
+            )
+
+            self.assertEqual(result["text"], "vision ok")
+            content = captured["request"]["messages"][0]["content"]
+            self.assertEqual(content[0], {"type": "text", "text": "What is this?"})
+            self.assertEqual(content[1]["type"], "image")
+
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:
             config = {

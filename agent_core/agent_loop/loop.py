@@ -70,7 +70,10 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         while True:
             try:
                 _throw_if_turn_cancelled(runtime)
-                response = await maybe_await(provider["send"](prepared_request["request"]))
+                if requestHasImageInputs(prepared_request["request"]) and not modelSupportsImageInputs(config, active_model):
+                    response = unsupportedImageInputResponse(active_model)
+                else:
+                    response = await maybe_await(provider["send"](prepared_request["request"]))
                 break
             except Exception as error:
                 if _is_turn_abort_error(error, runtime.get("abortSignal")):

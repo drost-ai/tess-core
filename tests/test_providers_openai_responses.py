@@ -4,6 +4,33 @@ from tests.support.agent_core_case import *
 
 
 class OpenAIResponsesProviderTests(AgentCoreTestCase):
+    def test_openai_response_and_chat_params_keep_image_inputs(self):
+        message = {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "What is in this image?"},
+                {"type": "image", "mime_type": "image/png", "data": "aW1n"},
+            ],
+        }
+
+        response_params = testing.buildResponsesCreateParams(
+            {"isCodexBackend": False, "request": {"model": "gpt-5.5", "system": "s", "messages": [message], "tools": []}}
+        )
+        response_content = response_params["input"][0]["content"]
+        self.assertEqual(response_content[0], {"type": "input_text", "text": "What is in this image?"})
+        self.assertEqual(response_content[1]["type"], "input_image")
+        self.assertEqual(response_content[1]["detail"], "auto")
+        self.assertEqual(response_content[1]["image_url"], "data:image/png;base64,aW1n")
+
+        chat_params = testing.buildChatCompletionsCreateParams(
+            {"model": "gpt-5.5", "system": "s", "messages": [message], "tools": []}
+        )
+        chat_content = chat_params["messages"][1]["content"]
+        self.assertEqual(chat_content[0], {"type": "text", "text": "What is in this image?"})
+        self.assertEqual(chat_content[1]["type"], "image_url")
+        self.assertEqual(chat_content[1]["image_url"]["url"], "data:image/png;base64,aW1n")
+        self.assertEqual(chat_content[1]["image_url"]["detail"], "auto")
+
     def test_openai_codex_transport_and_compatible_retry_edges(self):
         codex_captured = {}
 

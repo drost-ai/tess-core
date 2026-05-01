@@ -17,6 +17,25 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertEqual(payload["thinking"], {"type": "adaptive"})
         self.assertEqual(payload["output_config"], {"effort": "high"})
         self.assertEqual(payload["system"][1], {"type": "text", "text": "system prompt"})
+        multimodal_payload = testing.buildAnthropicMessagesPayload(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": "s",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "describe"},
+                            {"type": "image", "mime_type": "image/jpeg", "data": "aW1n"},
+                        ],
+                    }
+                ],
+                "tools": [],
+            }
+        )
+        image_block = multimodal_payload["messages"][0]["content"][1]
+        self.assertEqual(image_block["type"], "image")
+        self.assertEqual(image_block["source"], {"type": "base64", "media_type": "image/jpeg", "data": "aW1n"})
         count_payload = testing.buildAnthropicCountTokensPayload(request)
         self.assertNotIn("max_tokens", count_payload)
         self.assertNotIn("stream", count_payload)

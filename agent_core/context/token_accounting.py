@@ -65,7 +65,7 @@ def _estimate_text_tokens(value: str) -> int:
 def _estimate_request_tokens(request: dict[str, Any]) -> int:
     total = _estimate_text_tokens(request.get("system", ""))
     for message in request.get("messages", []):
-        total += _estimate_text_tokens(json.dumps(message, ensure_ascii=False))
+        total += _estimate_text_tokens(json.dumps(_redact_image_payloads(message), ensure_ascii=False))
     if request.get("tools"):
         total += _estimate_text_tokens(json.dumps(request["tools"], ensure_ascii=False))
     return total
@@ -98,7 +98,28 @@ def _estimate_openai_request_tokens(request: dict[str, Any], mode: str) -> int:
     params.pop("stream", None)
     params.pop("store", None)
     params.pop("max_output_tokens", None)
+    params = _redact_image_payloads(params)
     return _estimate_text_tokens(json.dumps(params, ensure_ascii=False))
+
+
+def _redact_image_payloads(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_redact_image_payloads(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    out: dict[str, Any] = {}
+    is_image = str(value.get("type") or "").strip().lower() in {"image", "input_image", "image_url"}
+    for key, item in value.items():
+        if is_image and key in {"data", "data_base64", "base64", "image_url", "url"}:
+            out[key] = _image_placeholder(value)
+        else:
+            out[key] = _redact_image_payloads(item)
+    return out
+
+
+def _image_placeholder(value: dict[str, Any]) -> str:
+    mime_type = value.get("mime_type") or value.get("mimeType") or value.get("mime") or "image"
+    return f"<image:{mime_type}>"
 
 
 def _compute_codex_safety_margin(session: dict[str, Any]) -> int:

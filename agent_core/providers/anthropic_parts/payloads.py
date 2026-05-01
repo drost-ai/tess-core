@@ -71,6 +71,11 @@ def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
                 continue
             if block.get("type") == "text":
                 out.append({"type": "text", "text": str(block.get("text", ""))})
+            elif block.get("type") == "image":
+                data = str(block.get("data") or block.get("data_base64") or block.get("base64") or "").strip()
+                mime_type = str(block.get("mime_type") or block.get("mimeType") or block.get("mime") or "image/jpeg").strip() or "image/jpeg"
+                if data:
+                    out.append({"type": "image", "source": {"type": "base64", "media_type": mime_type, "data": data}})
             elif block.get("type") == "tool_use":
                 out.append({"type": "tool_use", "id": block.get("id"), "name": block.get("name"), "input": block.get("input") or {}})
             elif block.get("type") == "tool_result":
