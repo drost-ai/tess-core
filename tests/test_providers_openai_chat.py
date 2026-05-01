@@ -23,6 +23,22 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
         params_no_effort = testing.buildChatCompletionsCreateParams({"model": "zai", "effort": "xhigh", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, {"includeReasoningEffort": False})
         self.assertNotIn("reasoning_effort", params_no_effort)
 
+        params_with_options = testing.buildChatCompletionsCreateParams(
+            {"model": "deepseek-v4-pro", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
+            {
+                "requestOptions": {
+                    "thinking": {"type": "enabled"},
+                    "reasoning_effort": "max",
+                    "model": "ignored",
+                    "messages": [],
+                }
+            },
+        )
+        self.assertEqual(params_with_options["thinking"], {"type": "enabled"})
+        self.assertEqual(params_with_options["reasoning_effort"], "max")
+        self.assertEqual(params_with_options["model"], "deepseek-v4-pro")
+        self.assertNotEqual(params_with_options["messages"], [])
+
         emitted = []
 
         async def create(_params):

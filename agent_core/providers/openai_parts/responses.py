@@ -36,7 +36,13 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
             responses = get_value(client, "responses")
             if not responses:
                 raise RuntimeError("OpenAI Responses client is unavailable.")
-            params = buildResponsesCreateParams({"isCodexBackend": mode == "codex", "request": args["request"]})
+            params = buildResponsesCreateParams(
+                {
+                    "isCodexBackend": mode == "codex",
+                    "request": args["request"],
+                    "requestOptions": args.get("requestOptions") or {},
+                }
+            )
             response = await _race_openai_activity(
                 maybe_await(get_value(responses, "create")(params)),
                 timeout_ms=request_start_timeout_ms,

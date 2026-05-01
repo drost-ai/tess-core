@@ -13,6 +13,7 @@ def _create_provider(config: dict[str, Any], runtime: dict[str, Any]) -> dict[st
                 headers=config.get("customHeaders"),
                 mode=config.get("openaiApiMode"),
                 request=request,
+                requestOptions=(config.get("providerProfile") or {}).get("requestOptions") or {},
                 runtime=runtime,
                 clientFactory=runtime.get("openaiClientFactory") or config.get("openaiClientFactory"),
             )

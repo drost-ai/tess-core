@@ -20,7 +20,7 @@ def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any
     tools = _convert_tools(request.get("tools", []))
     if tools:
         params["tools"] = tools
-    return params
+    return _merge_request_options(params, args.get("requestOptions"))
 
 def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     request = {**(request or {}), **kwargs}
@@ -39,7 +39,20 @@ def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, opti
     tools = _convert_chat_completion_tools(request.get("tools", []))
     if tools:
         params["tools"] = tools
-    return params
+    return _merge_request_options(params, options.get("requestOptions"))
+
+
+def _merge_request_options(params: dict[str, Any], request_options: Any) -> dict[str, Any]:
+    if not isinstance(request_options, dict) or not request_options:
+        return params
+    protected = {"model", "messages", "input", "instructions", "tools", "stream", "stream_options"}
+    merged = dict(params)
+    for key, value in request_options.items():
+        cleaned = str(key or "").strip()
+        if not cleaned or cleaned in protected:
+            continue
+        merged[cleaned] = value
+    return merged
 
 def resolveOpenAiBaseUrl(mode: str, baseUrl: str | None) -> str | None:
     trimmed = baseUrl.strip() if isinstance(baseUrl, str) else ""

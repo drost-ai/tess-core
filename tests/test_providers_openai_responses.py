@@ -14,8 +14,14 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         }
 
         response_params = testing.buildResponsesCreateParams(
-            {"isCodexBackend": False, "request": {"model": "gpt-5.5", "system": "s", "messages": [message], "tools": []}}
+            {
+                "isCodexBackend": False,
+                "request": {"model": "gpt-5.5", "system": "s", "messages": [message], "tools": []},
+                "requestOptions": {"metadata": {"route": "vision-test"}, "input": []},
+            }
         )
+        self.assertEqual(response_params["metadata"], {"route": "vision-test"})
+        self.assertNotEqual(response_params["input"], [])
         response_content = response_params["input"][0]["content"]
         self.assertEqual(response_content[0], {"type": "input_text", "text": "What is in this image?"})
         self.assertEqual(response_content[1]["type"], "input_image")

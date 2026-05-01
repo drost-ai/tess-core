@@ -70,6 +70,8 @@ class ConfigProfileTests(AgentCoreTestCase):
                                 "baseUrl": "https://api.deepseek.com",
                                 "defaultModel": "deepseek-v4-pro",
                                 "auth": {"kind": "custom_bearer", "envVar": "DEEPSEEK_API_KEY"},
+                                "requestOptions": {"thinking": {"type": "enabled"}},
+                                "capabilities": {"vision": False, "tools": True},
                             },
                         },
                     }
@@ -79,6 +81,8 @@ class ConfigProfileTests(AgentCoreTestCase):
             self.assertEqual(config["providerProfileName"], "deepseek")
             self.assertEqual(config["model"], "deepseek-v4-pro")
             self.assertEqual(config["openaiBaseUrl"], "https://api.deepseek.com")
+            self.assertEqual(config["providerProfile"]["requestOptions"], {"thinking": {"type": "enabled"}})
+            self.assertEqual(config["providerProfile"]["capabilities"]["tools"], True)
         finally:
             for key, value in previous_env.items():
                 if value is None:

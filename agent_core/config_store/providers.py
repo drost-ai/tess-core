@@ -45,6 +45,8 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "headers": clone(record.get("headers") or {}),
         "supportsVision": record.get("supportsVision"),
         "capabilities": clone(record.get("capabilities") or {}),
+        "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
+        "limits": clone(record.get("limits") or {}),
         "description": record.get("description"),
     }
 
@@ -144,6 +146,8 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         "headers": clone(record.get("headers") or {}),
         "supportsVision": record.get("supportsVision"),
         "capabilities": clone(record.get("capabilities") or {}),
+        "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
+        "limits": clone(record.get("limits") or {}),
         "description": (record.get("description") or "").strip() or None,
     }
 
