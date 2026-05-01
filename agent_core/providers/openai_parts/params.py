@@ -20,7 +20,7 @@ def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any
     tools = _convert_tools(request.get("tools", []))
     if tools:
         params["tools"] = tools
-    return _merge_request_options(params, args.get("requestOptions"))
+    return _merge_request_options(params, args.get("requestOptions"), _RESPONSES_TOP_LEVEL_REQUEST_OPTIONS)
 
 def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     request = {**(request or {}), **kwargs}
@@ -39,19 +39,86 @@ def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, opti
     tools = _convert_chat_completion_tools(request.get("tools", []))
     if tools:
         params["tools"] = tools
-    return _merge_request_options(params, options.get("requestOptions"))
+    return _merge_request_options(params, options.get("requestOptions"), _CHAT_TOP_LEVEL_REQUEST_OPTIONS)
 
 
-def _merge_request_options(params: dict[str, Any], request_options: Any) -> dict[str, Any]:
+_CHAT_TOP_LEVEL_REQUEST_OPTIONS = {
+    "audio",
+    "extra_headers",
+    "extra_query",
+    "frequency_penalty",
+    "function_call",
+    "functions",
+    "logit_bias",
+    "logprobs",
+    "max_completion_tokens",
+    "max_tokens",
+    "metadata",
+    "modalities",
+    "n",
+    "parallel_tool_calls",
+    "prediction",
+    "presence_penalty",
+    "reasoning_effort",
+    "response_format",
+    "seed",
+    "service_tier",
+    "stop",
+    "store",
+    "temperature",
+    "timeout",
+    "tool_choice",
+    "top_logprobs",
+    "top_p",
+    "user",
+}
+
+_RESPONSES_TOP_LEVEL_REQUEST_OPTIONS = {
+    "background",
+    "extra_headers",
+    "extra_query",
+    "include",
+    "max_output_tokens",
+    "metadata",
+    "parallel_tool_calls",
+    "previous_response_id",
+    "prompt",
+    "reasoning",
+    "service_tier",
+    "temperature",
+    "text",
+    "timeout",
+    "tool_choice",
+    "top_p",
+    "truncation",
+    "user",
+}
+
+
+def _merge_request_options(
+    params: dict[str, Any],
+    request_options: Any,
+    top_level_options: set[str],
+) -> dict[str, Any]:
     if not isinstance(request_options, dict) or not request_options:
         return params
     protected = {"model", "messages", "input", "instructions", "tools", "stream", "stream_options"}
     merged = dict(params)
+    extra_body = dict(merged.get("extra_body") or {}) if isinstance(merged.get("extra_body"), dict) else {}
     for key, value in request_options.items():
         cleaned = str(key or "").strip()
         if not cleaned or cleaned in protected:
             continue
-        merged[cleaned] = value
+        if cleaned == "extra_body":
+            if isinstance(value, dict):
+                extra_body.update(value)
+            continue
+        if cleaned in top_level_options:
+            merged[cleaned] = value
+            continue
+        extra_body[cleaned] = value
+    if extra_body:
+        merged["extra_body"] = extra_body
     return merged
 
 def resolveOpenAiBaseUrl(mode: str, baseUrl: str | None) -> str | None:

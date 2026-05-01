@@ -34,7 +34,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
                 }
             },
         )
-        self.assertEqual(params_with_options["thinking"], {"type": "enabled"})
+        self.assertEqual(params_with_options["extra_body"], {"thinking": {"type": "enabled"}})
         self.assertEqual(params_with_options["reasoning_effort"], "max")
         self.assertEqual(params_with_options["model"], "deepseek-v4-pro")
         self.assertNotEqual(params_with_options["messages"], [])
