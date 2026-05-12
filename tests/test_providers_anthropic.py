@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from tests.support.agent_core_case import *
 
 
@@ -172,6 +174,95 @@ class AnthropicProviderTests(AgentCoreTestCase):
             self.assertTrue(ctx.exception.record["retryable"])
         finally:
             anthropic_module._send_anthropic_messages_sync = original_send
+
+    def test_anthropic_streaming_emits_live_partials_before_response_completes(self):
+        partial_seen = threading.Event()
+        response_can_finish = threading.Event()
+        request_payload: dict[str, Any] = {}
+
+        class StreamingAnthropicHandler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                request_payload.update(json.loads(self.rfile.read(length).decode("utf-8")))
+                self.send_response(200)
+                self.send_header("content-type", "text/event-stream")
+                self.end_headers()
+                for frame in (
+                    'event: message_start\ndata: {"type":"message_start","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":5}}}\n\n',
+                    'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+                    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"early "}}\n\n',
+                ):
+                    self.wfile.write(frame.encode("utf-8"))
+                    self.wfile.flush()
+                response_can_finish.wait(1)
+                for frame in (
+                    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}\n\n',
+                    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}\n\n',
+                    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+                ):
+                    self.wfile.write(frame.encode("utf-8"))
+                    self.wfile.flush()
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), StreamingAnthropicHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            emitted: list[tuple[str, dict[str, Any]]] = []
+            finished = threading.Event()
+            result: dict[str, Any] = {}
+
+            def emit_event(event: str, data: dict[str, Any]):
+                emitted.append((event, data))
+                if event == "message.assistant.partial" and data.get("text_delta") == "early ":
+                    partial_seen.set()
+
+            def run_request():
+                try:
+                    result["response"] = run(
+                        core.sendAnthropicMessagesRequest(
+                            {
+                                "config": {
+                                    "provider": "anthropic",
+                                    "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
+                                    "apiKey": "test-key",
+                                    "customHeaders": {},
+                                },
+                                "request": {
+                                    "model": "claude-sonnet-4-6",
+                                    "system": "s",
+                                    "messages": [{"role": "user", "content": "Hello"}],
+                                    "tools": [],
+                                },
+                                "runtime": {
+                                    "includePartialMessages": True,
+                                    "streamProviderMessages": True,
+                                    "emitEvent": emit_event,
+                                },
+                                "maxAttempts": 1,
+                                "streamIdleTimeoutMs": 2000,
+                            }
+                        )
+                    )
+                finally:
+                    finished.set()
+
+            request_thread = threading.Thread(target=run_request, daemon=True)
+            request_thread.start()
+            self.assertTrue(partial_seen.wait(1), "expected first text delta before the SSE stream completed")
+            self.assertFalse(finished.is_set(), "request should still be open after the first partial")
+            response_can_finish.set()
+            request_thread.join(2)
+            self.assertTrue(finished.is_set())
+            self.assertEqual(request_payload["stream"], True)
+            self.assertEqual(result["response"]["content"], [{"type": "text", "text": "early done"}])
+            self.assertTrue(any(event == "provider.stream_event" and data["stream_event"] == "content_block_delta" for event, data in emitted))
+        finally:
+            response_can_finish.set()
+            server.shutdown()
+            server.server_close()
 
     def test_anthropic_blocking_http_transport_abort_returns_before_socket_finishes(self):
         signal = SimpleNamespace(aborted=False)

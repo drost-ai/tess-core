@@ -23,32 +23,39 @@ def parseAnthropicSseEvents(raw: str) -> list[dict[str, Any]]:
             events.append({"event": event, "data": data})
     return events
 
-def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: dict[str, Any] | None = None, attempt: int = 1) -> dict[str, Any]:
-    runtime = runtime or {}
-    blocks: list[dict[str, Any] | None] = []
-    usage: dict[str, Any] = {}
-    stop_reason = None
-    model = request["model"]
-    had_assistant_output = False
-    had_tool_use = False
-    for raw_event in parseAnthropicSseEvents(raw):
+class AnthropicSseAccumulator:
+    def __init__(self, request: dict[str, Any], runtime: dict[str, Any] | None = None, attempt: int = 1) -> None:
+        self.request = request
+        self.runtime = runtime or {}
+        self.attempt = attempt
+        self.blocks: list[dict[str, Any] | None] = []
+        self.usage: dict[str, Any] = {}
+        self.stop_reason = None
+        self.model = request["model"]
+        self.had_assistant_output = False
+        self.had_tool_use = False
+        self.stopped = False
+
+    def process_raw_event(self, raw_event: dict[str, Any]) -> None:
+        if self.stopped:
+            return
         if raw_event["data"] == "[DONE]":
-            continue
+            return
         try:
             payload = json.loads(raw_event["data"])
         except Exception:
             raise _create_anthropic_protocol_error(
                 f"Failed to parse streamed provider event: {raw_event['data']}",
-                attempt,
-                had_assistant_output,
-                had_tool_use,
+                self.attempt,
+                self.had_assistant_output,
+                self.had_tool_use,
                 raw_event.get("event"),
             )
         event_type = payload.get("type") or raw_event.get("event")
         if not event_type or event_type == "ping":
-            continue
-        if runtime.get("streamProviderMessages"):
-            runtime.get("emitEvent", lambda *_: None)("provider.stream_event", {"stream_event": event_type, "model": model, "payload": payload})
+            return
+        if self.runtime.get("streamProviderMessages"):
+            self.runtime.get("emitEvent", lambda *_: None)("provider.stream_event", {"stream_event": event_type, "model": self.model, "payload": payload})
         if event_type == "error":
             error = payload.get("error") or {}
             combined = f"{error.get('type') or ''} {error.get('message') or ''}".lower() if isinstance(error, dict) else json.dumps(payload).lower()
@@ -60,9 +67,9 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
                     phase="stream_read",
                     category=category,
                     retryable=category in {"rate_limit", "server"},
-                    attempt=attempt,
-                    hadAssistantOutput=had_assistant_output,
-                    hadToolUse=had_tool_use,
+                    attempt=self.attempt,
+                    hadAssistantOutput=self.had_assistant_output,
+                    hadToolUse=self.had_tool_use,
                     rawMessage=json.dumps(payload),
                     errorType=error.get("type") if isinstance(error, dict) and isinstance(error.get("type"), str) else None,
                     streamEventType=event_type,
@@ -70,47 +77,61 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
             )
         if event_type == "message_start":
             message = payload.get("message") or {}
-            model = message.get("model") or model
-            _apply_usage_snapshot(usage, message.get("usage") or {})
+            self.model = message.get("model") or self.model
+            _apply_usage_snapshot(self.usage, message.get("usage") or {})
         elif event_type == "content_block_start":
             index = payload.get("index")
             if not isinstance(index, int):
-                continue
-            while len(blocks) <= index:
-                blocks.append(None)
-            blocks[index] = _internal_block_from_anthropic(payload.get("content_block") or {})
-            if blocks[index].get("type") == "tool_use":
-                had_tool_use = True
-            if blocks[index].get("type") == "text" and blocks[index].get("text"):
-                had_assistant_output = True
+                return
+            while len(self.blocks) <= index:
+                self.blocks.append(None)
+            self.blocks[index] = _internal_block_from_anthropic(payload.get("content_block") or {})
+            if self.blocks[index].get("type") == "tool_use":
+                self.had_tool_use = True
+            if self.blocks[index].get("type") == "text" and self.blocks[index].get("text"):
+                self.had_assistant_output = True
         elif event_type == "content_block_delta":
             index = payload.get("index")
-            if not isinstance(index, int) or index >= len(blocks) or blocks[index] is None:
-                continue
-            block = blocks[index]
+            if not isinstance(index, int) or index >= len(self.blocks) or self.blocks[index] is None:
+                return
+            block = self.blocks[index]
             delta = payload.get("delta") or {}
             if block["type"] == "text" and delta.get("type") == "text_delta":
                 text_delta = delta.get("text") or ""
                 block["text"] += text_delta
                 if text_delta:
-                    had_assistant_output = True
-                if runtime.get("includePartialMessages") and text_delta:
-                    runtime.get("emitEvent", lambda *_: None)("message.assistant.partial", {"model": model, "text_delta": text_delta, "text": "".join(item.get("text", "") for item in blocks if item and item.get("type") == "text")})
+                    self.had_assistant_output = True
+                if self.runtime.get("includePartialMessages") and text_delta:
+                    self.runtime.get("emitEvent", lambda *_: None)("message.assistant.partial", {"model": self.model, "text_delta": text_delta, "text": "".join(item.get("text", "") for item in self.blocks if item and item.get("type") == "text")})
             elif block["type"] == "tool_use" and delta.get("type") == "input_json_delta":
                 block["_input_buffer"] = block.get("_input_buffer", "") + (delta.get("partial_json") or "")
         elif event_type == "content_block_stop":
             index = payload.get("index")
-            if isinstance(index, int) and index < len(blocks):
-                _finalize_tool_block(blocks[index], attempt=attempt, hadAssistantOutput=had_assistant_output, hadToolUse=had_tool_use)
+            if isinstance(index, int) and index < len(self.blocks):
+                _finalize_tool_block(self.blocks[index], attempt=self.attempt, hadAssistantOutput=self.had_assistant_output, hadToolUse=self.had_tool_use)
         elif event_type == "message_delta":
             delta = payload.get("delta") or {}
-            stop_reason = delta.get("stop_reason") or stop_reason
-            _apply_usage_snapshot(usage, payload.get("usage") or {})
+            self.stop_reason = delta.get("stop_reason") or self.stop_reason
+            _apply_usage_snapshot(self.usage, payload.get("usage") or {})
         elif event_type == "message_stop":
-            break
-    for block in blocks:
-        _finalize_tool_block(block, attempt=attempt, hadAssistantOutput=had_assistant_output, hadToolUse=had_tool_use)
-    return {"content": [_strip_internal_block(block) for block in blocks if block and block.get("type") in ("text", "tool_use")], "usage": usage, "model": model, "stopReason": stop_reason}
+            self.stopped = True
+
+    def finalize(self) -> dict[str, Any]:
+        for block in self.blocks:
+            _finalize_tool_block(block, attempt=self.attempt, hadAssistantOutput=self.had_assistant_output, hadToolUse=self.had_tool_use)
+        return {
+            "content": [_strip_internal_block(block) for block in self.blocks if block and block.get("type") in ("text", "tool_use")],
+            "usage": self.usage,
+            "model": self.model,
+            "stopReason": self.stop_reason,
+        }
+
+
+def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: dict[str, Any] | None = None, attempt: int = 1) -> dict[str, Any]:
+    accumulator = AnthropicSseAccumulator(request, runtime, attempt)
+    for raw_event in parseAnthropicSseEvents(raw):
+        accumulator.process_raw_event(raw_event)
+    return accumulator.finalize()
 
 def normalizeProviderBlocks(blocks: Any) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []

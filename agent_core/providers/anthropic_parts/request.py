@@ -27,31 +27,31 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
             )
             payload = buildAnthropicMessagesPayload(request, {"stream": stream})
-            raw, content_type = await _race_anthropic_activity(
-                _send_anthropic_messages_async(config, payload, timeout_ms, stream),
-                timeout_ms=timeout_ms,
-                attempt=attempt,
-                phase=phase,
-                hadAssistantOutput=had_assistant_output,
-                hadToolUse=had_tool_use,
-                abortSignal=runtime.get("abortSignal"),
-            )
-            phase = "parse"
-            if "text/event-stream" in content_type:
-                response = normalizeAnthropicSseResponse(raw, request, runtime, attempt=attempt)
+            if stream:
+                response = await _race_anthropic_activity(
+                    _send_anthropic_messages_streaming_async(config, payload, timeout_ms, request, runtime, attempt),
+                    timeout_ms=timeout_ms,
+                    attempt=attempt,
+                    phase=phase,
+                    hadAssistantOutput=had_assistant_output,
+                    hadToolUse=had_tool_use,
+                    abortSignal=runtime.get("abortSignal"),
+                )
             else:
-                parsed = json.loads(raw)
-                response = {
-                    "content": normalizeProviderBlocks(parsed.get("content", [])),
-                    "usage": {
-                        "input_tokens": (parsed.get("usage") or {}).get("input_tokens"),
-                        "output_tokens": (parsed.get("usage") or {}).get("output_tokens"),
-                        "cache_creation_input_tokens": (parsed.get("usage") or {}).get("cache_creation_input_tokens"),
-                        "cache_read_input_tokens": (parsed.get("usage") or {}).get("cache_read_input_tokens"),
-                    },
-                    "model": parsed.get("model") or request["model"],
-                    "stopReason": parsed.get("stop_reason"),
-                }
+                raw, content_type = await _race_anthropic_activity(
+                    _send_anthropic_messages_async(config, payload, timeout_ms, stream),
+                    timeout_ms=timeout_ms,
+                    attempt=attempt,
+                    phase=phase,
+                    hadAssistantOutput=had_assistant_output,
+                    hadToolUse=had_tool_use,
+                    abortSignal=runtime.get("abortSignal"),
+                )
+                phase = "parse"
+                if "text/event-stream" in content_type:
+                    response = normalizeAnthropicSseResponse(raw, request, runtime, attempt=attempt)
+                else:
+                    response = _normalize_anthropic_json_response(json.loads(raw), request)
             if attempt > 1:
                 runtime.get("emitEvent", lambda *_: None)(
                     "provider.recovered",
@@ -142,3 +142,124 @@ def _send_anthropic_messages_async(config: dict[str, Any], payload: dict[str, An
 
     threading.Thread(target=worker, name="agent-core-anthropic-request", daemon=True).start()
     return future
+
+
+def _send_anthropic_messages_streaming_async(
+    config: dict[str, Any],
+    payload: dict[str, Any],
+    timeout_ms: int,
+    request: dict[str, Any],
+    runtime: dict[str, Any],
+    attempt: int,
+) -> asyncio.Future[dict[str, Any]]:
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future[dict[str, Any]] = loop.create_future()
+
+    def complete_result(result: dict[str, Any]) -> None:
+        if not future.done():
+            future.set_result(result)
+
+    def complete_error(error: BaseException) -> None:
+        if not future.done():
+            future.set_exception(error)
+
+    def worker() -> None:
+        try:
+            result = _send_anthropic_messages_streaming_sync(
+                config,
+                payload,
+                timeout_ms,
+                request,
+                runtime,
+                attempt,
+                should_stop=lambda: future.cancelled(),
+            )
+        except BaseException as exc:
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(complete_error, exc)
+            return
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(complete_result, result)
+
+    threading.Thread(target=worker, name="agent-core-anthropic-stream", daemon=True).start()
+    return future
+
+
+def _send_anthropic_messages_streaming_sync(
+    config: dict[str, Any],
+    payload: dict[str, Any],
+    timeout_ms: int,
+    request: dict[str, Any],
+    runtime: dict[str, Any],
+    attempt: int,
+    should_stop: Any | None = None,
+) -> dict[str, Any]:
+    req = Request(
+        resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
+        data=json.dumps(payload).encode("utf-8"),
+        headers=buildAnthropicHeaders(config, {"stream": True}),
+        method="POST",
+    )
+    with urlopen(req, timeout=max(1, timeout_ms) / 1000) as response:
+        content_type = response.headers.get("content-type", "")
+        if "text/event-stream" not in content_type:
+            raw = response.read().decode("utf-8")
+            return _normalize_anthropic_json_response(json.loads(raw), request)
+        return _read_anthropic_sse_response_live(
+            response,
+            request=request,
+            runtime=runtime,
+            attempt=attempt,
+            should_stop=should_stop,
+        )
+
+
+def _read_anthropic_sse_response_live(
+    response: Any,
+    *,
+    request: dict[str, Any],
+    runtime: dict[str, Any],
+    attempt: int,
+    should_stop: Any | None = None,
+) -> dict[str, Any]:
+    accumulator = AnthropicSseAccumulator(request, runtime, attempt)
+    frame_lines: list[str] = []
+    while True:
+        if callable(should_stop) and should_stop():
+            break
+        line = response.readline()
+        if line == b"":
+            break
+        text = line.decode("utf-8", errors="replace")
+        if text.strip() == "":
+            _process_anthropic_sse_frame(frame_lines, accumulator)
+            frame_lines = []
+            continue
+        frame_lines.append(text)
+    _process_anthropic_sse_frame(frame_lines, accumulator)
+    return accumulator.finalize()
+
+
+def _process_anthropic_sse_frame(
+    frame_lines: list[str],
+    accumulator: Any,
+) -> None:
+    if not frame_lines:
+        return
+    frame = "".join(frame_lines)
+    for raw_event in parseAnthropicSseEvents(frame):
+        accumulator.process_raw_event(raw_event)
+
+
+def _normalize_anthropic_json_response(parsed: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "content": normalizeProviderBlocks(parsed.get("content", [])),
+        "usage": {
+            "input_tokens": (parsed.get("usage") or {}).get("input_tokens"),
+            "output_tokens": (parsed.get("usage") or {}).get("output_tokens"),
+            "cache_creation_input_tokens": (parsed.get("usage") or {}).get("cache_creation_input_tokens"),
+            "cache_read_input_tokens": (parsed.get("usage") or {}).get("cache_read_input_tokens"),
+        },
+        "model": parsed.get("model") or request["model"],
+        "stopReason": parsed.get("stop_reason"),
+    }
