@@ -2,15 +2,34 @@ from __future__ import annotations
 
 from .shared import *
 
+
+def _normalize_anthropic_api_base_url(baseUrl: str | None) -> str | None:
+    base = baseUrl.rstrip("/") if isinstance(baseUrl, str) and baseUrl.strip() else ""
+    if not base:
+        return None
+    if base.endswith("/messages"):
+        return base[: -len("/messages")]
+    if base.endswith("/v1"):
+        return base
+    return f"{base}/v1"
+
+
+def _is_kimi_anthropic_coding_backend(config: dict[str, Any]) -> bool:
+    base = str(config.get("anthropicBaseUrl") or "").strip().rstrip("/").lower()
+    return "api.kimi.com/coding" in base
+
+
 def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
-    if not baseUrl:
+    base = _normalize_anthropic_api_base_url(baseUrl)
+    if not base:
         return MESSAGES_API_URL
-    return f"{baseUrl.rstrip('/')}/messages?beta=true"
+    return f"{base}/messages?beta=true"
 
 def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
-    if not baseUrl:
+    base = _normalize_anthropic_api_base_url(baseUrl)
+    if not base:
         return MESSAGES_COUNT_TOKENS_API_URL
-    return f"{baseUrl.rstrip('/')}/messages/count_tokens"
+    return f"{base}/messages/count_tokens"
 
 def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
     options = options or {}
@@ -20,7 +39,11 @@ def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None
         "anthropic-version": "2023-06-01",
         "anthropic-beta": _build_anthropic_beta_header(config),
         "anthropic-dangerous-direct-browser-access": "true",
-        "user-agent": "tess/0.1.0 (sdk-cli)",
+        "user-agent": (
+            "claude-cli/2.1.2 (external, cli)"
+            if _is_kimi_anthropic_coding_backend(config)
+            else "tess/0.1.0 (sdk-cli)"
+        ),
         "x-app": "cli",
         **(config.get("customHeaders") or {}),
     }
@@ -87,4 +110,6 @@ def _build_anthropic_beta_header(config: dict[str, Any]) -> str:
     values = ["fine-grained-tool-streaming-2025-05-14"]
     if config.get("authToken"):
         values = ["claude-code-20250219", "oauth-2025-04-20", *values]
+    elif _is_kimi_anthropic_coding_backend(config):
+        values = ["claude-code-20250219", *values]
     return ",".join(dict.fromkeys(values))

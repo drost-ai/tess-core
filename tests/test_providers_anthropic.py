@@ -45,6 +45,8 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertEqual(count_payload["thinking"], {"type": "adaptive"})
         self.assertEqual(testing.resolveAnthropicMessagesUrl("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages?beta=true")
         self.assertEqual(testing.resolveAnthropicCountTokensUrl("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages/count_tokens")
+        self.assertEqual(testing.resolveAnthropicMessagesUrl("https://api.kimi.com/coding/"), "https://api.kimi.com/coding/v1/messages?beta=true")
+        self.assertEqual(testing.resolveAnthropicCountTokensUrl("https://api.kimi.com/coding/"), "https://api.kimi.com/coding/v1/messages/count_tokens")
         api_key_headers = testing.buildAnthropicHeaders({"apiKey": "api-key", "customHeaders": {"x-test": "1"}}, {"stream": True})
         self.assertEqual(api_key_headers["accept"], "text/event-stream")
         self.assertEqual(api_key_headers["x-api-key"], "api-key")
@@ -57,6 +59,17 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertNotIn("x-api-key", oauth_headers)
         self.assertIn("claude-code-20250219", oauth_headers["anthropic-beta"])
         self.assertIn("oauth-2025-04-20", oauth_headers["anthropic-beta"])
+        kimi_headers = testing.buildAnthropicHeaders(
+            {
+                "apiKey": "kimi-key",
+                "anthropicBaseUrl": "https://api.kimi.com/coding/",
+                "customHeaders": {},
+            }
+        )
+        self.assertIn("claude-code-20250219", kimi_headers["anthropic-beta"])
+        self.assertNotIn("oauth-2025-04-20", kimi_headers["anthropic-beta"])
+        self.assertEqual(kimi_headers["user-agent"], "claude-cli/2.1.2 (external, cli)")
+        self.assertEqual(kimi_headers["x-api-key"], "kimi-key")
 
         emitted = []
         raw = "\n\n".join(
