@@ -19,6 +19,38 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertEqual(payload["thinking"], {"type": "adaptive"})
         self.assertEqual(payload["output_config"], {"effort": "high"})
         self.assertEqual(payload["system"][1], {"type": "text", "text": "system prompt"})
+
+        nullable_tool_payload = testing.buildAnthropicMessagesPayload(
+            {
+                "model": "kimi-k2.6",
+                "system": "s",
+                "messages": [{"role": "user", "content": "hello"}],
+                "tools": [
+                    {
+                        "name": "runtime_introspection",
+                        "description": "Read runtime status.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "view": {
+                                    "type": ["string", "null"],
+                                    "enum": ["status", "all", None],
+                                },
+                                "limit": {"type": ["integer", "null"], "minimum": 1},
+                            },
+                            "required": [],
+                            "additionalProperties": False,
+                        },
+                    }
+                ],
+            }
+        )
+        normalized_schema = nullable_tool_payload["tools"][0]["input_schema"]
+        self.assertEqual(normalized_schema["properties"]["view"]["type"], "string")
+        self.assertEqual(normalized_schema["properties"]["view"]["enum"], ["status", "all"])
+        self.assertEqual(normalized_schema["properties"]["limit"]["type"], "integer")
+        self.assertEqual(normalized_schema["additionalProperties"], False)
+
         multimodal_payload = testing.buildAnthropicMessagesPayload(
             {
                 "model": "claude-sonnet-4-6",

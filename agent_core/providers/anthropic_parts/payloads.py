@@ -81,8 +81,40 @@ def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, An
         payload["output_config"] = {"effort": effort}
     tools = request.get("tools") or []
     if tools:
-        payload["tools"] = tools
+        payload["tools"] = [_normalize_anthropic_tool_definition(tool) for tool in tools]
     return payload
+
+def _normalize_anthropic_tool_definition(tool: Any) -> dict[str, Any]:
+    if not isinstance(tool, dict):
+        return {"name": "", "description": "", "input_schema": {"type": "object", "properties": {}}}
+    return {
+        "name": tool.get("name"),
+        "description": tool.get("description"),
+        "input_schema": _normalize_anthropic_tool_schema(tool.get("input_schema") or {}),
+    }
+
+def _normalize_anthropic_tool_schema(schema: Any) -> Any:
+    if isinstance(schema, list):
+        return [_normalize_anthropic_tool_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+
+    out: dict[str, Any] = {}
+    for key, value in schema.items():
+        if key == "type" and isinstance(value, list):
+            non_null_types = [item for item in value if item != "null"]
+            if len(non_null_types) == 1:
+                out[key] = non_null_types[0]
+            elif non_null_types:
+                out[key] = non_null_types
+            continue
+        if key == "enum" and isinstance(value, list):
+            enum_values = [item for item in value if item is not None]
+            if enum_values:
+                out[key] = [_normalize_anthropic_tool_schema(item) for item in enum_values]
+            continue
+        out[key] = _normalize_anthropic_tool_schema(value)
+    return out
 
 def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
     if isinstance(content, str):
