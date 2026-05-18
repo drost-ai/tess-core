@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from .shared import *
 
 async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -20,6 +22,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         phase = "request_start"
         had_assistant_output = False
         had_tool_use = False
+        stream_activity_state: dict[str, Any] | None = None
         try:
             _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             runtime.get("emitEvent", lambda *_: None)(
@@ -28,14 +31,31 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             )
             payload = buildAnthropicMessagesPayload(request, {"stream": stream})
             if stream:
+                stream_activity_state = {
+                    "last_activity": time.monotonic(),
+                    "had_assistant_output": False,
+                    "had_tool_use": False,
+                }
                 response = await _race_anthropic_activity(
-                    _send_anthropic_messages_streaming_async(config, payload, timeout_ms, request, runtime, attempt),
+                    _send_anthropic_messages_streaming_async(
+                        config,
+                        payload,
+                        timeout_ms,
+                        request,
+                        runtime,
+                        attempt,
+                        on_activity=lambda accumulator=None: _mark_anthropic_stream_activity(
+                            stream_activity_state,
+                            accumulator,
+                        ),
+                    ),
                     timeout_ms=timeout_ms,
                     attempt=attempt,
                     phase=phase,
                     hadAssistantOutput=had_assistant_output,
                     hadToolUse=had_tool_use,
                     abortSignal=runtime.get("abortSignal"),
+                    activityState=stream_activity_state,
                 )
             else:
                 raw, content_type = await _race_anthropic_activity(
@@ -76,8 +96,8 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                     "phase": phase,
                     "status": exc.code,
                     "attempt": attempt,
-                    "hadAssistantOutput": had_assistant_output,
-                    "hadToolUse": had_tool_use,
+                    "hadAssistantOutput": _activity_state_bool(stream_activity_state, "had_assistant_output", had_assistant_output),
+                    "hadToolUse": _activity_state_bool(stream_activity_state, "had_tool_use", had_tool_use),
                     "body": body,
                     "errorType": error_type,
                 }
@@ -90,8 +110,8 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                     "providerLabel": "Anthropic",
                     "phase": phase,
                     "attempt": attempt,
-                    "hadAssistantOutput": had_assistant_output,
-                    "hadToolUse": had_tool_use,
+                    "hadAssistantOutput": _activity_state_bool(stream_activity_state, "had_assistant_output", had_assistant_output),
+                    "hadToolUse": _activity_state_bool(stream_activity_state, "had_tool_use", had_tool_use),
                 }
             )
         last_failure = failure
@@ -151,6 +171,7 @@ def _send_anthropic_messages_streaming_async(
     request: dict[str, Any],
     runtime: dict[str, Any],
     attempt: int,
+    on_activity: Any | None = None,
 ) -> asyncio.Future[dict[str, Any]]:
     loop = asyncio.get_running_loop()
     future: asyncio.Future[dict[str, Any]] = loop.create_future()
@@ -173,6 +194,7 @@ def _send_anthropic_messages_streaming_async(
                 runtime,
                 attempt,
                 should_stop=lambda: future.cancelled(),
+                on_activity=on_activity,
             )
         except BaseException as exc:
             with contextlib.suppress(RuntimeError):
@@ -193,6 +215,7 @@ def _send_anthropic_messages_streaming_sync(
     runtime: dict[str, Any],
     attempt: int,
     should_stop: Any | None = None,
+    on_activity: Any | None = None,
 ) -> dict[str, Any]:
     req = Request(
         resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
@@ -211,6 +234,7 @@ def _send_anthropic_messages_streaming_sync(
             runtime=runtime,
             attempt=attempt,
             should_stop=should_stop,
+            on_activity=on_activity,
         )
 
 
@@ -221,6 +245,7 @@ def _read_anthropic_sse_response_live(
     runtime: dict[str, Any],
     attempt: int,
     should_stop: Any | None = None,
+    on_activity: Any | None = None,
 ) -> dict[str, Any]:
     accumulator = AnthropicSseAccumulator(request, runtime, attempt)
     frame_lines: list[str] = []
@@ -230,14 +255,29 @@ def _read_anthropic_sse_response_live(
         line = response.readline()
         if line == b"":
             break
+        _mark_anthropic_stream_activity(on_activity, accumulator)
         text = line.decode("utf-8", errors="replace")
         if text.strip() == "":
             _process_anthropic_sse_frame(frame_lines, accumulator)
+            _mark_anthropic_stream_activity(on_activity, accumulator)
             frame_lines = []
             continue
         frame_lines.append(text)
     _process_anthropic_sse_frame(frame_lines, accumulator)
+    _mark_anthropic_stream_activity(on_activity, accumulator)
     return accumulator.finalize()
+
+
+def _mark_anthropic_stream_activity(target: Any, accumulator: Any | None = None) -> None:
+    if callable(target):
+        target(accumulator)
+        return
+    if not isinstance(target, dict):
+        return
+    target["last_activity"] = time.monotonic()
+    if accumulator is not None:
+        target["had_assistant_output"] = bool(getattr(accumulator, "had_assistant_output", False))
+        target["had_tool_use"] = bool(getattr(accumulator, "had_tool_use", False))
 
 
 def _process_anthropic_sse_frame(

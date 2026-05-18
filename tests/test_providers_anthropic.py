@@ -309,6 +309,111 @@ class AnthropicProviderTests(AgentCoreTestCase):
             server.shutdown()
             server.server_close()
 
+    def test_anthropic_streaming_idle_timeout_resets_after_activity(self):
+        class ActiveStreamingAnthropicHandler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                self.rfile.read(length)
+                self.send_response(200)
+                self.send_header("content-type", "text/event-stream")
+                self.end_headers()
+                frames = [
+                    'event: message_start\ndata: {"type":"message_start","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":5}}}\n\n',
+                    'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+                    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"one "}}\n\n',
+                    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"two "}}\n\n',
+                    'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"three"}}\n\n',
+                    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}\n\n',
+                    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+                ]
+                for frame in frames:
+                    self.wfile.write(frame.encode("utf-8"))
+                    self.wfile.flush()
+                    time.sleep(0.05)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ActiveStreamingAnthropicHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            emitted: list[tuple[str, dict[str, Any]]] = []
+            response = run(
+                core.sendAnthropicMessagesRequest(
+                    {
+                        "config": {
+                            "provider": "anthropic",
+                            "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
+                            "apiKey": "test-key",
+                            "customHeaders": {},
+                        },
+                        "request": {
+                            "model": "claude-sonnet-4-6",
+                            "system": "s",
+                            "messages": [{"role": "user", "content": "Hello"}],
+                            "tools": [],
+                        },
+                        "runtime": {
+                            "includePartialMessages": True,
+                            "streamProviderMessages": True,
+                            "emitEvent": lambda event, data: emitted.append((event, data)),
+                        },
+                        "maxAttempts": 1,
+                        "streamIdleTimeoutMs": 120,
+                    }
+                )
+            )
+            self.assertEqual(response["content"], [{"type": "text", "text": "one two three"}])
+            partials = [data.get("text_delta") for event, data in emitted if event == "message.assistant.partial"]
+            self.assertEqual(partials, ["one ", "two ", "three"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_anthropic_streaming_timeout_after_partial_output_is_not_retried(self):
+        original_stream = anthropic_module._send_anthropic_messages_streaming_async
+        calls = {"count": 0}
+
+        class PartialAccumulator:
+            had_assistant_output = True
+            had_tool_use = False
+
+        def stalled_stream(*_args, **kwargs):
+            calls["count"] += 1
+            on_activity = kwargs.get("on_activity")
+            if callable(on_activity):
+                on_activity(PartialAccumulator())
+            loop = asyncio.get_running_loop()
+            future = loop.create_future()
+            return future
+
+        anthropic_module._send_anthropic_messages_streaming_async = stalled_stream
+        try:
+            with self.assertRaises(core.ProviderRequestError) as ctx:
+                run(
+                    core.sendAnthropicMessagesRequest(
+                        {
+                            "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
+                            "request": {
+                                "model": "claude-sonnet-4-6",
+                                "system": "s",
+                                "messages": [{"role": "user", "content": "Hello"}],
+                                "tools": [],
+                            },
+                            "runtime": {"includePartialMessages": True},
+                            "maxAttempts": 2,
+                            "streamIdleTimeoutMs": 1,
+                        }
+                    )
+                )
+            self.assertEqual(ctx.exception.record["category"], "timeout")
+            self.assertTrue(ctx.exception.record["hadAssistantOutput"])
+            self.assertFalse(ctx.exception.record["retryable"])
+            self.assertEqual(calls["count"], 1)
+        finally:
+            anthropic_module._send_anthropic_messages_streaming_async = original_stream
+
     def test_anthropic_blocking_http_transport_abort_returns_before_socket_finishes(self):
         signal = SimpleNamespace(aborted=False)
         request_started = threading.Event()

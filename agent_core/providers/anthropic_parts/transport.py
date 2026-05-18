@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from .shared import *
 
 async def _race_anthropic_activity(
@@ -11,11 +13,12 @@ async def _race_anthropic_activity(
     hadAssistantOutput: bool = False,
     hadToolUse: bool = False,
     abortSignal: Any = None,
+    activityState: dict[str, Any] | None = None,
 ) -> Any:
     _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
     task = asyncio.ensure_future(awaitable)
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + (max(1, timeout_ms) / 1000)
+    timeout_seconds = max(1, timeout_ms) / 1000
+    deadline = time.monotonic() + timeout_seconds
     poll_seconds = ANTHROPIC_ABORT_POLL_INTERVAL_MS / 1000
     while True:
         if task.done():
@@ -23,17 +26,35 @@ async def _race_anthropic_activity(
         if _signal_aborted(abortSignal):
             await _cancel_anthropic_activity_task(task)
             _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
-        remaining = deadline - loop.time()
+        if activityState is not None:
+            last_activity = activityState.get("last_activity")
+            if isinstance(last_activity, (int, float)):
+                deadline = float(last_activity) + timeout_seconds
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             await _cancel_anthropic_activity_task(task)
             _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
-            raise _create_anthropic_timeout(phase, attempt, hadAssistantOutput, hadToolUse, timeout_ms)
+            raise _create_anthropic_timeout(
+                phase,
+                attempt,
+                _activity_state_bool(activityState, "had_assistant_output", hadAssistantOutput),
+                _activity_state_bool(activityState, "had_tool_use", hadToolUse),
+                timeout_ms,
+            )
         try:
             return await asyncio.wait_for(asyncio.shield(task), timeout=min(poll_seconds, remaining))
         except asyncio.TimeoutError:
             if task.done():
                 return task.result()
             continue
+
+
+def _activity_state_bool(activityState: dict[str, Any] | None, key: str, fallback: bool) -> bool:
+    if not isinstance(activityState, dict):
+        return fallback
+    value = activityState.get(key)
+    return bool(value) if value is not None else fallback
+
 
 def _create_anthropic_timeout(phase: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, timeout_ms: int) -> Any:
     return createProviderRequestError(
