@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
 
 async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
@@ -28,6 +29,12 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         system = _apply_plan_mode_overlay(base_system_prompt, session)
         if request_context.get("systemContext"):
             system = f"{system}\n\n{request_context['systemContext']}"
+        request_context = _normalize_request_context_messages(
+            request_context,
+            config=config,
+            runtime=runtime,
+            session_id=session["id"],
+        )
         request = {
             "model": active_model,
             "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
@@ -86,6 +93,12 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     system = _apply_plan_mode_overlay(base_system_prompt, session)
     if request_context.get("systemContext"):
         system = f"{system}\n\n{request_context['systemContext']}"
+    request_context = _normalize_request_context_messages(
+        request_context,
+        config=config,
+        runtime=runtime,
+        session_id=session["id"],
+    )
     return {
         "request": {
             "model": active_model,
@@ -96,6 +109,34 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         },
         "continuity": request_context,
         "reactiveAttempt": reactive_attempt,
+    }
+
+def _normalize_request_context_messages(
+    request_context: dict[str, Any],
+    *,
+    config: dict[str, Any],
+    runtime: dict[str, Any],
+    session_id: str,
+) -> dict[str, Any]:
+    protocol_normalized = _normalize_provider_request_messages(
+        config["provider"],
+        request_context["messages"],
+    )
+    repair = protocol_normalized["repair"]
+    if repair.get("changed"):
+        _safe_emit(
+            runtime,
+            "provider.request_repaired",
+            {
+                "session_id": session_id,
+                "provider": config["provider"],
+                **repair,
+            },
+        )
+    return {
+        **request_context,
+        "messages": protocol_normalized["messages"],
+        "protocolRepair": repair,
     }
 
 async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None:
