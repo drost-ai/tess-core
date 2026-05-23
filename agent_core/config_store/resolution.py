@@ -211,7 +211,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> dict[str, A
         "compactionModel": resolved_compaction_model,
         "compactionVerificationProvider": resolved_verification_provider,
         "compactionVerificationModel": resolved_verification_model,
-        "effort": normalizeEffortLevel(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or merged_settings.get("effortLevel")) or getDefaultEffortForProvider(resolved_provider),
+        "effort": normalizeEffortLevel(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or getDefaultEffortForProvider(resolved_provider),
         "assistantName": assistant_name,
         "assistantDescription": assistant_description,
         "systemPrompt": system_prompt,

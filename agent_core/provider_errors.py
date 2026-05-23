@@ -62,7 +62,7 @@ def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: An
         category = "server"
         retryable = True
     elif status >= 400:
-        category = "client_request"
+        category = "quota" if _looks_like_quota(text) else "client_request"
     return createProviderRequestError(
         createProviderFailureRecord(
             {
@@ -204,6 +204,10 @@ def _looks_like_protocol(message: str) -> bool:
 
 def _looks_like_auth(message: str) -> bool:
     return bool(re.search(r"unauthorized|forbidden|invalid api key|authentication|auth token|insufficient permissions?|missing scopes?|insufficient_scope|permission denied", message))
+
+
+def _looks_like_quota(message: str) -> bool:
+    return bool(re.search(r"quota|credit|billing|insufficient funds|payment required|usage limit|out of extra usage", message))
 
 
 def _parse_openai_sdk_http_error(raw: str) -> dict[str, Any] | None:

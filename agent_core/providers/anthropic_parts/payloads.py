@@ -64,13 +64,16 @@ def buildAnthropicCountTokensPayload(request: dict[str, Any]) -> dict[str, Any]:
 
 def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
     options = options or {}
+    system_blocks = [
+        {"type": "text", "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;"},
+    ]
+    system_text = str(request.get("system") or "").strip()
+    if system_text:
+        system_blocks.append({"type": "text", "text": system_text})
     payload: dict[str, Any] = {
         "model": request["model"],
         "max_tokens": 16384,
-        "system": [
-            {"type": "text", "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;"},
-            {"type": "text", "text": request.get("system", "")},
-        ],
+        "system": system_blocks,
         "messages": [{"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))} for message in request.get("messages", [])],
     }
     if options.get("stream"):

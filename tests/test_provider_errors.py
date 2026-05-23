@@ -148,6 +148,7 @@ class ProviderErrorTests(AgentCoreTestCase):
             (429, "rate limit exceeded", None, "rate_limit", True),
             (429, "insufficient quota or billing", None, "quota", False),
             (400, "bad request", None, "client_request", False),
+            (400, "You're out of extra usage. Add more at claude.ai/settings/usage and keep going.", "invalid_request_error", "quota", False),
             (500, "server overloaded", None, "server", True),
         ]
         for status, body, error_type, category, retryable in cases:

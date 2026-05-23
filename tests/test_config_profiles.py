@@ -91,6 +91,31 @@ class ConfigProfileTests(AgentCoreTestCase):
                     os.environ[key] = value
             self.restore_home(root, previous)
 
+    def test_provider_profile_effort_level_is_used_as_route_default(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            (home / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "provider": "anthropic-oauth",
+                        "providerProfiles": {
+                            "anthropic-oauth": {
+                                "kind": "anthropic",
+                                "defaultModel": "claude-opus-4-7",
+                                "auth": {"kind": "anthropic_auth_token", "envVar": "ANTHROPIC_AUTH_TOKEN"},
+                                "effortLevel": "high",
+                            }
+                        },
+                    }
+                )
+            )
+            config = run(core.resolveConfig({}, str(workspace)))
+            self.assertEqual(config["providerProfileName"], "anthropic-oauth")
+            self.assertEqual(config["model"], "claude-opus-4-7")
+            self.assertEqual(config["effort"], "high")
+        finally:
+            self.restore_home(root, previous)
+
     def test_resolve_config_anthropic_auth_separation_and_alt_screen(self):
         root, home, workspace, previous = self.temp_context()
         prev_token = os.environ.get("ANTHROPIC_AUTH_TOKEN")
