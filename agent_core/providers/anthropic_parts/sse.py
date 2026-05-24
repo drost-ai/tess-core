@@ -119,6 +119,14 @@ class AnthropicSseAccumulator:
     def finalize(self) -> dict[str, Any]:
         for block in self.blocks:
             _finalize_tool_block(block, attempt=self.attempt, hadAssistantOutput=self.had_assistant_output, hadToolUse=self.had_tool_use)
+        if not self.stopped:
+            raise _create_anthropic_transport_error(
+                "Anthropic SSE stream ended before message_stop.",
+                self.attempt,
+                self.had_assistant_output,
+                self.had_tool_use,
+                "eof",
+            )
         return {
             "content": [_strip_internal_block(block) for block in self.blocks if block and block.get("type") in ("text", "tool_use")],
             "usage": self.usage,
@@ -196,6 +204,24 @@ def _create_anthropic_protocol_error(rawMessage: str, attempt: int, hadAssistant
             streamEventType=streamEventType,
         )
     )
+
+
+def _create_anthropic_transport_error(rawMessage: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, streamEventType: str | None = None) -> Any:
+    return createProviderRequestError(
+        createProviderFailureRecord(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            phase="stream_read",
+            category="transport",
+            retryable=True,
+            attempt=attempt,
+            hadAssistantOutput=hadAssistantOutput,
+            hadToolUse=hadToolUse,
+            rawMessage=rawMessage,
+            streamEventType=streamEventType,
+        )
+    )
+
 
 def _strip_internal_block(block: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in block.items() if not key.startswith("_")}
