@@ -53,6 +53,13 @@ def anthropicExplicitCacheEnabled(config: dict[str, Any], request: dict[str, Any
     return not isKimiAnthropicCodingBackend(config)
 
 
+def anthropicAutomaticCacheEnabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
+    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+    if not policy["enabled"] or policy["mode"] != "auto":
+        return False
+    return not isKimiAnthropicCodingBackend(config)
+
+
 def anthropicCacheControl(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
     policy = resolvePromptCachePolicy(config=config, request=request, options=options)
     control = {"type": "ephemeral"}

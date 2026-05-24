@@ -78,6 +78,8 @@ def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, An
         "system": system_blocks,
         "messages": [{"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))} for message in request.get("messages", [])],
     }
+    if anthropicAutomaticCacheEnabled(config, request, options):
+        payload["cache_control"] = anthropicCacheControl(config, request, options)
     if options.get("stream"):
         payload["stream"] = True
     effort = request.get("effort")

@@ -4,12 +4,14 @@ from tests.support.agent_core_case import *
 
 import agent_core.agent_loop.context as context_module
 from agent_core.providers.prompt_cache import (
+    anthropicAutomaticCacheEnabled,
     anthropicExplicitCacheEnabled,
     normalizeCacheUsageFields,
     openAiPromptCacheRequestOptions,
     providerAffinityKey,
     resolvePromptCachePolicy,
 )
+from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesPayload
 
 
 class ProviderPromptCacheTests(AgentCoreTestCase):
@@ -27,8 +29,15 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
             "5m",
         )
         self.assertTrue(anthropicExplicitCacheEnabled({}, {"model": "claude-opus-4-7"}))
+        self.assertTrue(anthropicAutomaticCacheEnabled({}, {"model": "claude-opus-4-7"}))
         self.assertFalse(
             anthropicExplicitCacheEnabled(
+                {"anthropicBaseUrl": "https://api.kimi.com/coding/"},
+                {"model": "kimi-k2.6"},
+            )
+        )
+        self.assertFalse(
+            anthropicAutomaticCacheEnabled(
                 {"anthropicBaseUrl": "https://api.kimi.com/coding/"},
                 {"model": "kimi-k2.6"},
             )
@@ -40,6 +49,12 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
                     "promptCache": {"explicit": True},
                 },
                 {"model": "kimi-k2.6"},
+            )
+        )
+        self.assertFalse(
+            anthropicAutomaticCacheEnabled(
+                {"promptCache": {"mode": "explicit"}},
+                {"model": "claude-opus-4-7"},
             )
         )
 
@@ -87,6 +102,47 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
                 "cache_miss_input_tokens": 30,
             },
         )
+
+    def test_anthropic_payload_combines_system_and_automatic_conversation_cache(self):
+        payload = buildAnthropicMessagesPayload(
+            {
+                "model": "claude-opus-4-7",
+                "system": "stable system",
+                "messages": [
+                    {"role": "user", "content": "first"},
+                    {"role": "assistant", "content": "second"},
+                    {"role": "user", "content": "third"},
+                ],
+            },
+            {"config": {"provider": "anthropic"}},
+        )
+
+        self.assertEqual(payload["cache_control"], {"type": "ephemeral"})
+        self.assertEqual(payload["system"][-1]["cache_control"], {"type": "ephemeral"})
+        self.assertNotIn("cache_control", payload["messages"][-1]["content"][-1])
+
+    def test_anthropic_payload_respects_explicit_and_kimi_cache_modes(self):
+        explicit_payload = buildAnthropicMessagesPayload(
+            {
+                "model": "claude-opus-4-7",
+                "system": "stable system",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+            {"config": {"provider": "anthropic", "promptCache": {"mode": "explicit"}}},
+        )
+        self.assertNotIn("cache_control", explicit_payload)
+        self.assertEqual(explicit_payload["system"][-1]["cache_control"], {"type": "ephemeral"})
+
+        kimi_payload = buildAnthropicMessagesPayload(
+            {
+                "model": "kimi-k2.6",
+                "system": "stable system",
+                "messages": [{"role": "user", "content": "hello"}],
+            },
+            {"config": {"provider": "anthropic", "anthropicBaseUrl": "https://api.kimi.com/coding/"}},
+        )
+        self.assertNotIn("cache_control", kimi_payload)
+        self.assertNotIn("cache_control", kimi_payload["system"][-1])
 
     def test_prompt_cache_moves_dynamic_system_context_into_latest_user_message(self):
         session = {
