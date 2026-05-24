@@ -72,7 +72,10 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
 
 
 def _build_compaction_runtime(args: dict[str, Any]) -> dict[str, Any]:
-    runtime = dict(args.get("runtime") or {})
+    source = args.get("runtime") or {}
+    runtime: dict[str, Any] = {}
+    if source.get("abortSignal") is not None:
+        runtime["abortSignal"] = source["abortSignal"]
     if args.get("abortSignal") is not None:
         runtime["abortSignal"] = args["abortSignal"]
     return runtime
@@ -84,9 +87,12 @@ def _resolve_openai_client_factory(
     options: dict[str, Any],
     config: dict[str, Any],
 ) -> Any:
+    source_runtime = args.get("runtime") or {}
     return (
         args.get("openaiClientFactory")
         or args.get("openAiClientFactory")
+        or source_runtime.get("openaiClientFactory")
+        or source_runtime.get("openAiClientFactory")
         or runtime.get("openaiClientFactory")
         or runtime.get("openAiClientFactory")
         or options.get("openaiClientFactory")

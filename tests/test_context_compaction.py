@@ -17,7 +17,7 @@ class ContextCompactionTests(AgentCoreTestCase):
 
             openai_factory = lambda _options: SimpleNamespace()
             abort_signal = object()
-            client = testing.createDefaultCompactionModelClient({"openAiRequestSender": sender, "openaiClientFactory": openai_factory})
+            client = testing.createDefaultCompactionModelClient({"openAiRequestSender": sender})
             result = run(
                 client.complete(
                     {
@@ -32,7 +32,12 @@ class ContextCompactionTests(AgentCoreTestCase):
                         "model": {"provider": "openai", "model": "gpt-5.3-codex-spark", "effort": "high", "selectionSource": "fixed", "purpose": "synthesis"},
                         "system": "You are the compaction synthesizer.",
                         "prompt": "Summarize this transcript.",
-                        "runtime": {"abortSignal": abort_signal},
+                        "runtime": {
+                            "abortSignal": abort_signal,
+                            "emitEvent": lambda *_: None,
+                            "includePartialMessages": True,
+                            "openaiClientFactory": openai_factory,
+                        },
                     }
                 )
             )
@@ -42,6 +47,8 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertIsNone(captured["headers"])
             self.assertIs(captured["clientFactory"], openai_factory)
             self.assertIs(captured["runtime"]["abortSignal"], abort_signal)
+            self.assertNotIn("emitEvent", captured["runtime"])
+            self.assertNotIn("includePartialMessages", captured["runtime"])
             self.assertEqual(result["text"], "Spark compaction output")
         finally:
             self.restore_home(root, previous)
