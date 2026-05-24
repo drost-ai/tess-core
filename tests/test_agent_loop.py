@@ -189,6 +189,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 core.ToolDefinition("fast", "fast tool", {"type": "object"}, fast_handler),
             ]
             calls = {"count": 0}
+            events = []
 
             async def send(_request):
                 calls["count"] += 1
@@ -196,8 +197,12 @@ class AgentLoopTests(AgentCoreTestCase):
                     return {"model": "claude-sonnet-4-6", "stopReason": "tool_use", "usage": {"input_tokens": 10, "output_tokens": 5}, "content": [{"type": "tool_use", "id": "use_slow", "name": "slow", "input": {}}, {"type": "tool_use", "id": "use_fast", "name": "fast", "input": {}}]}
                 return {"model": "claude-sonnet-4-6", "stopReason": "end_turn", "usage": {"input_tokens": 5, "output_tokens": 3}, "content": [{"type": "text", "text": "done"}]}
 
-            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": tools}, prompt="run", providerOverride={"send": send}))
+            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": tools}, prompt="run", providerOverride={"send": send}))
             self.assertEqual(result["toolCount"], 2)
+            provider_events = [data for event, data in events if event == "provider.response_completed"]
+            self.assertEqual([item["call_index"] for item in provider_events], [1, 2])
+            self.assertEqual(provider_events[0]["usage"]["input_tokens"], 10)
+            self.assertEqual(provider_events[1]["usage"]["output_tokens"], 3)
             starts = sorted(item[2] for item in log if item[1] == "start")
             ends = sorted(item[2] for item in log if item[1] == "end")
             self.assertLess(starts[1], ends[0])

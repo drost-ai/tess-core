@@ -23,6 +23,7 @@ KNOWN_RUNTIME_EVENTS = {
     "provider.recovered",
     "provider.failed",
     "provider.input_tokens",
+    "provider.response_completed",
     "provider.fallback",
     "tool.started",
     "tool.completed",

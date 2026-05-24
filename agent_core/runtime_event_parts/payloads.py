@@ -94,6 +94,22 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "baseInputTokens": _optional_number(_field(data, "base_input_tokens", "baseInputTokens")),
             "safetyMarginTokens": _optional_number(_field(data, "safety_margin_tokens", "safetyMarginTokens")),
         }
+    if event == "provider.response_completed":
+        return "provider.response_completed", {
+            "provider": _optional_string(_field(data, "provider")),
+            "providerProfile": _optional_string(_field(data, "provider_profile", "providerProfile")),
+            "model": _optional_string(_field(data, "model")),
+            "callIndex": _optional_number(_field(data, "call_index", "callIndex")),
+            "usage": _field(data, "usage"),
+            "stopReason": _optional_string(_field(data, "stop_reason", "stopReason")),
+            "requestEstimateTokens": _optional_number(_field(data, "request_estimate_tokens", "requestEstimateTokens")),
+            "requestEstimateSource": _optional_string(_field(data, "request_estimate_source", "requestEstimateSource")),
+            "contextReliefMode": _optional_string(_field(data, "context_relief_mode", "contextReliefMode")),
+            "contextReliefPressure": _optional_string(_field(data, "context_relief_pressure", "contextReliefPressure")),
+            "contextReliefKind": _optional_string(_field(data, "context_relief_kind", "contextReliefKind")),
+            "contextReliefProjectionHash": _optional_string(_field(data, "context_relief_projection_hash", "contextReliefProjectionHash")),
+            "contextReliefEscalationRequested": _optional_boolean(_field(data, "context_relief_escalation_requested", "contextReliefEscalationRequested")),
+        }
     if event == "provider.fallback":
         return "provider.fallback", {
             "provider": _optional_string(_field(data, "provider")),

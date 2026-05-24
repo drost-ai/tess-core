@@ -92,7 +92,7 @@
         "family": "continuation",
         "alias": "api",
         "modesInclude": ["api_microcompact"],
-        "textContains": "<context_relief>"
+        "textContains": "provider-aware aggressive microcompact"
       }
     },
     {

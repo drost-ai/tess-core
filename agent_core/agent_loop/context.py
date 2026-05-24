@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 from .shared import *
 from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
 from ..providers.prompt_cache import resolvePromptCachePolicy
@@ -202,7 +205,7 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
     runtime = args["runtime"]
     current_input_tokens = args.get("currentInputTokens")
     current_input_tokens_source = args.get("currentInputTokensSource")
-    decision = shouldAutoCompact(session, current_input_tokens)
+    decision = _context_relief_escalation_decision(session, current_input_tokens) or shouldAutoCompact(session, current_input_tokens)
     if not decision.get("shouldCompact") or not decision.get("trigger"):
         return None
 
@@ -217,6 +220,7 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
         },
     )
 
+    _mark_context_relief_escalation_attempt(session, decision)
     try:
         outcome = await runCompaction({"session": session, "config": config, "trigger": decision["trigger"]})
     except Exception as error:
@@ -286,6 +290,10 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
         "lastContextReliefReactiveAttempt": None,
         "lastContextReliefDetail": "full checkpoint compaction replaced older context with working-context artifacts",
         "lastContextReliefReinjectionSummary": "working context, decisions, todos, and recent raw tail were preserved after full checkpoint compaction",
+        "lastContextReliefKind": "full_checkpoint_compaction",
+        "recentContextReliefCount": 0,
+        "contextReliefEscalationRequested": False,
+        "contextReliefEscalationReason": "",
     }
     if metadata.get("compactionState"):
         metadata["compactionState"]["lastContextReliefMode"] = "full_checkpoint_compaction"
@@ -362,9 +370,20 @@ def emitContinuationRelief(runtime: dict[str, Any], session_id: str, continuity:
 def recordContinuationRelief(session: dict[str, Any], continuity: dict[str, Any]) -> None:
     relief = continuity.get("relief") or {}
     metadata = session.setdefault("metadata", {})
+    previous_restore = metadata.get("runtimeRestore") if isinstance(metadata.get("runtimeRestore"), dict) else {}
+    selected_mode = str(relief.get("selectedMode") or "none")
+    applied = bool(relief.get("applied") and selected_mode != "none")
+    previous_mode = str(previous_restore.get("lastContextReliefMode") or "none")
+    previous_count = _safe_int(previous_restore.get("recentContextReliefCount"))
+    recent_count = previous_count + 1 if applied and previous_mode not in {"", "none", "full_checkpoint_compaction"} else (1 if applied else 0)
+    relief_kind = "circuit_breaker" if applied else "none"
+    if selected_mode == "full_checkpoint_compaction":
+        relief_kind = "full_checkpoint_compaction"
+    projection_hash = _context_relief_projection_hash(relief)
+    escalation_requested = bool(applied and recent_count >= 2 and selected_mode != "full_checkpoint_compaction")
     metadata["runtimeRestore"] = {
         **(
-            metadata.get("runtimeRestore")
+            previous_restore
             or {
                 "savedAt": _now(),
                 "activeTasks": [],
@@ -372,11 +391,16 @@ def recordContinuationRelief(session: dict[str, Any], continuity: dict[str, Any]
             }
         ),
         "savedAt": _now(),
-        "lastContextReliefMode": relief.get("selectedMode"),
+        "lastContextReliefMode": selected_mode,
         "lastContextReliefPressureLevel": relief.get("pressureLevel"),
         "lastContextReliefReactiveAttempt": relief.get("reactiveAttempt"),
         "lastContextReliefDetail": relief.get("detail"),
         "lastContextReliefReinjectionSummary": relief.get("reinjectionSummary"),
+        "lastContextReliefKind": relief_kind,
+        "lastContextReliefProjectionHash": projection_hash,
+        "recentContextReliefCount": recent_count,
+        "contextReliefEscalationRequested": escalation_requested,
+        "contextReliefEscalationReason": "repeated_context_relief" if escalation_requested else "",
     }
     if metadata.get("compactionState"):
         metadata["compactionState"]["lastContextReliefMode"] = relief.get("selectedMode")
@@ -392,3 +416,53 @@ def isContextWindowFailure(error: BaseException) -> bool:
     record = getattr(error, "record", {})
     detail = f"{record.get('rawMessage') or ''} {record.get('rawBody') or ''} {error}".lower()
     return bool(re.search(r"context|input token|prompt token|max token|maximum context length|too large|too long|context_length|request exceeds|input is too long|input too long", detail))
+
+
+def _context_relief_projection_hash(relief: dict[str, Any]) -> str:
+    payload = {
+        "selectedMode": relief.get("selectedMode"),
+        "appliedModes": relief.get("appliedModes"),
+        "pressureLevel": relief.get("pressureLevel"),
+        "reactiveAttempt": relief.get("reactiveAttempt"),
+        "tokensSavedEstimate": relief.get("tokensSavedEstimate"),
+        "droppedMessageCount": relief.get("droppedMessageCount"),
+        "compactedMessageCount": relief.get("compactedMessageCount"),
+        "reinjectionSummary": relief.get("reinjectionSummary"),
+    }
+    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
+
+
+def _context_relief_escalation_decision(session: dict[str, Any], current_input_tokens: Any) -> dict[str, Any] | None:
+    metadata = session.setdefault("metadata", {})
+    restore = metadata.get("runtimeRestore") if isinstance(metadata.get("runtimeRestore"), dict) else {}
+    if not restore.get("contextReliefEscalationRequested"):
+        return None
+    projection_hash = str(restore.get("lastContextReliefProjectionHash") or "")
+    if projection_hash and str(restore.get("contextReliefEscalationAttemptedHash") or "") == projection_hash:
+        return None
+    token_tracking = metadata.get("tokenTracking") if isinstance(metadata.get("tokenTracking"), dict) else {}
+    last_preflight = token_tracking.get("lastPreflight") if isinstance(token_tracking.get("lastPreflight"), dict) else {}
+    token_estimate = _safe_int(current_input_tokens) or _safe_int(last_preflight.get("inputTokens"))
+    return {
+        "shouldCompact": True,
+        "trigger": "context_relief_escalation",
+        "currentTokenEstimate": token_estimate,
+        "reason": str(restore.get("contextReliefEscalationReason") or "repeated_context_relief"),
+    }
+
+
+def _mark_context_relief_escalation_attempt(session: dict[str, Any], decision: dict[str, Any]) -> None:
+    if str(decision.get("trigger") or "") != "context_relief_escalation":
+        return
+    restore = session.setdefault("metadata", {}).setdefault("runtimeRestore", {})
+    restore["contextReliefEscalationAttemptedAt"] = _now()
+    restore["contextReliefEscalationAttemptedHash"] = str(restore.get("lastContextReliefProjectionHash") or "")
+    restore["contextReliefEscalationAttemptedTokenEstimate"] = _safe_int(decision.get("currentTokenEstimate"))
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except Exception:
+        return 0

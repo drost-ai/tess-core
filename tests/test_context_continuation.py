@@ -42,8 +42,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         self.assertIn("api_microcompact", summary["appliedModes"])
         self.assertGreater(summary["tokensSavedEstimate"], 0)
         prompt = core.renderContextReliefPrompt(summary)
-        self.assertIn("<context_relief>", prompt)
-        self.assertIn("planned_mode=api_microcompact", prompt)
+        self.assertIsNone(prompt)
 
     def test_continuation_session_memory_reinjection_and_partial_summary(self):
         session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
@@ -204,10 +203,12 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.assertEqual(result["text"], "recovered")
             self.assertEqual(len(provider_requests), 2)
             self.assertNotIn("<context_relief>", provider_requests[1]["system"])
-            self.assertIn("<context_relief>", json.dumps(provider_requests[1]["messages"]))
+            self.assertNotIn("<context_relief>", json.dumps(provider_requests[1]["messages"]))
+            self.assertIn("context_reduction_summary", json.dumps(provider_requests[1]["messages"]))
             self.assertTrue(any(event == "context_relief.applied" and data["reactive_attempt"] == 1 for event, data in events))
             self.assertFalse(any(event == "provider.failed" for event, _ in events))
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefReactiveAttempt"], 1)
+            self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefKind"], "circuit_breaker")
         finally:
             agent_module.measureRequestInputTokens = original_measure
             self.restore_home(root, previous)

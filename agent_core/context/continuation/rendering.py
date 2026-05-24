@@ -58,21 +58,18 @@ def renderPartialCompactionSummary(summary: dict[str, list[str]], reactiveAttemp
 def renderContextReliefPrompt(summary: dict[str, Any]) -> str | None:
     if not summary.get("applied") or not summary.get("appliedModes"):
         return None
+    if not any(step.get("requiresReinjection") for step in summary.get("steps", []) if isinstance(step, dict)):
+        return None
     lines = [
-        "<context_relief>",
+        "<context_reduction_summary>",
         f"pressure_level={summary.get('pressureLevel')}",
         f"reactive_attempt={summary.get('reactiveAttempt')}",
         f"selected_mode={summary.get('selectedMode')}",
-        *[f"planned_mode={mode}" for mode in summary.get("plannedModes", [])],
-        *[f"applied_mode={mode}" for mode in summary.get("appliedModes", [])],
-        f"tokens_saved_estimate={summary.get('tokensSavedEstimate')}",
     ]
-    if summary.get("detail"):
-        lines.append(f"detail={summary['detail']}")
     if summary.get("reinjectionSummary"):
         lines.append(f"reinjection_summary={summary['reinjectionSummary']}")
     lines.extend(f"reinjection={line}" for line in summary.get("reinjectionLines", []))
-    lines.append("</context_relief>")
+    lines.append("</context_reduction_summary>")
     return "\n".join(lines)
 
 

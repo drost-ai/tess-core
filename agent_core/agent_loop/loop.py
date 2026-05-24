@@ -29,6 +29,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     active_model = args.get("modelOverride") or session["model"]
     cost = 0.0
     tool_count = 0
+    provider_call_index = 0
     last_stable_snapshot = copy.deepcopy(session)
 
     async def cancel_turn() -> dict[str, Any]:
@@ -116,6 +117,15 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 return await cancel_turn()
             raise
         active_model = response["model"]
+        provider_call_index += 1
+        _emit_provider_response_completed(
+            runtime=runtime,
+            session=session,
+            config=config,
+            response=response,
+            prepared_request=prepared_request,
+            call_index=provider_call_index,
+        )
         session["messages"].append({"role": "assistant", "content": response["content"]})
         merge_usage(total_usage, response.get("usage") or {})
         _merge_usage_into_session(session, response.get("usage") or {})
@@ -218,3 +228,41 @@ def extractAssistantText(message: dict[str, Any]) -> str:
     if isinstance(content, str):
         return content
     return "".join(block.get("text", "") for block in content or [] if block.get("type") == "text")
+
+
+def _emit_provider_response_completed(
+    *,
+    runtime: dict[str, Any],
+    session: dict[str, Any],
+    config: dict[str, Any],
+    response: dict[str, Any],
+    prepared_request: dict[str, Any],
+    call_index: int,
+) -> None:
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    token_tracking = metadata.get("tokenTracking") if isinstance(metadata.get("tokenTracking"), dict) else {}
+    preflight = token_tracking.get("lastPreflight") if isinstance(token_tracking.get("lastPreflight"), dict) else {}
+    runtime_restore = metadata.get("runtimeRestore") if isinstance(metadata.get("runtimeRestore"), dict) else {}
+    continuity = prepared_request.get("continuity") if isinstance(prepared_request, dict) else {}
+    relief = continuity.get("relief") if isinstance(continuity, dict) and isinstance(continuity.get("relief"), dict) else {}
+    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    _safe_emit(
+        runtime,
+        "provider.response_completed",
+        {
+            "session_id": session.get("id"),
+            "provider": config.get("provider"),
+            "provider_profile": session.get("providerProfileName") or config.get("providerProfileName"),
+            "model": response.get("model"),
+            "call_index": max(1, int(call_index or 1)),
+            "usage": copy.deepcopy(usage),
+            "stop_reason": response.get("stopReason"),
+            "request_estimate_tokens": preflight.get("inputTokens"),
+            "request_estimate_source": preflight.get("source"),
+            "context_relief_mode": runtime_restore.get("lastContextReliefMode") or relief.get("selectedMode"),
+            "context_relief_pressure": runtime_restore.get("lastContextReliefPressureLevel") or relief.get("pressureLevel"),
+            "context_relief_kind": runtime_restore.get("lastContextReliefKind"),
+            "context_relief_projection_hash": runtime_restore.get("lastContextReliefProjectionHash"),
+            "context_relief_escalation_requested": bool(runtime_restore.get("contextReliefEscalationRequested")),
+        },
+    )
