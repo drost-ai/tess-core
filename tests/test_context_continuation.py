@@ -203,7 +203,8 @@ class ContextContinuationTests(AgentCoreTestCase):
 
             self.assertEqual(result["text"], "recovered")
             self.assertEqual(len(provider_requests), 2)
-            self.assertIn("<context_relief>", provider_requests[1]["system"])
+            self.assertNotIn("<context_relief>", provider_requests[1]["system"])
+            self.assertIn("<context_relief>", json.dumps(provider_requests[1]["messages"]))
             self.assertTrue(any(event == "context_relief.applied" and data["reactive_attempt"] == 1 for event, data in events))
             self.assertFalse(any(event == "provider.failed" for event, _ in events))
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefReactiveAttempt"], 1)

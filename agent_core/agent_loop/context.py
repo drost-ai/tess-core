@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .shared import *
 from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
+from ..providers.prompt_cache import resolvePromptCachePolicy
 
 async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
@@ -27,10 +28,11 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         emitContinuationRelief(runtime, session["id"], request_context)
         recordContinuationRelief(session, request_context)
         system = _apply_plan_mode_overlay(base_system_prompt, session)
-        if request_context.get("systemContext"):
+        system_context = request_context.get("systemContext")
+        if system_context and not _dynamic_context_belongs_in_messages(config):
             system = f"{system}\n\n{request_context['systemContext']}"
         request_context = _normalize_request_context_messages(
-            request_context,
+            _inject_system_context_into_messages(request_context, system_context, config=config),
             config=config,
             runtime=runtime,
             session_id=session["id"],
@@ -92,10 +94,11 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     emitContinuationRelief(runtime, session["id"], request_context)
     recordContinuationRelief(session, request_context)
     system = _apply_plan_mode_overlay(base_system_prompt, session)
-    if request_context.get("systemContext"):
+    system_context = request_context.get("systemContext")
+    if system_context and not _dynamic_context_belongs_in_messages(config):
         system = f"{system}\n\n{request_context['systemContext']}"
     request_context = _normalize_request_context_messages(
-        request_context,
+        _inject_system_context_into_messages(request_context, system_context, config=config),
         config=config,
         runtime=runtime,
         session_id=session["id"],
@@ -111,6 +114,58 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         },
         "continuity": request_context,
         "reactiveAttempt": reactive_attempt,
+    }
+
+
+def _dynamic_context_belongs_in_messages(config: dict[str, Any]) -> bool:
+    return bool(resolvePromptCachePolicy(config=config).get("enabled"))
+
+
+def _inject_system_context_into_messages(
+    request_context: dict[str, Any],
+    system_context: Any,
+    *,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    if not system_context or not _dynamic_context_belongs_in_messages(config):
+        return request_context
+    messages = copy.deepcopy(request_context.get("messages") or [])
+    if not messages:
+        return {**request_context, "messages": [_dynamic_context_message(system_context)]}
+
+    dynamic_block = _dynamic_context_text_block(system_context)
+    for index in range(len(messages) - 1, -1, -1):
+        message = messages[index]
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            messages[index] = {**message, "content": f"{dynamic_block['text']}\n\n{content}"}
+        elif isinstance(content, list):
+            messages[index] = {**message, "content": [dynamic_block, *copy.deepcopy(content)]}
+        else:
+            messages[index] = {**message, "content": dynamic_block["text"]}
+        return {**request_context, "messages": messages}
+
+    messages.append(_dynamic_context_message(system_context))
+    return {**request_context, "messages": messages}
+
+
+def _dynamic_context_message(system_context: Any) -> dict[str, Any]:
+    return {"role": "user", "content": _dynamic_context_text_block(system_context)["text"]}
+
+
+def _dynamic_context_text_block(system_context: Any) -> dict[str, str]:
+    text = str(system_context or "").strip()
+    return {
+        "type": "text",
+        "text": "\n".join(
+            [
+                "[Dynamic continuation context]",
+                text,
+                "[/Dynamic continuation context]",
+            ]
+        ),
     }
 
 def _normalize_request_context_messages(
