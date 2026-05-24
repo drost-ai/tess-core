@@ -6,6 +6,7 @@ import json
 from typing import Any
 from urllib.parse import urlparse
 
+from ..prompt_cache import normalizeCacheUsageFields, openAiPromptCacheRequestOptions
 from ..._utils import compact_json, get_value, maybe_await, to_async_iter
 from ...provider_errors import (
     canRetryProviderFailure,

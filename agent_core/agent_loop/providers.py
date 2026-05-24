@@ -12,6 +12,7 @@ def _create_provider(config: dict[str, Any], runtime: dict[str, Any]) -> dict[st
                 baseUrl=config.get("openaiBaseUrl"),
                 headers=config.get("customHeaders"),
                 mode=config.get("openaiApiMode"),
+                config=config,
                 request=request,
                 requestOptions=(config.get("providerProfile") or {}).get("requestOptions") or {},
                 runtime=runtime,

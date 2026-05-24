@@ -9,6 +9,11 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from ..prompt_cache import (
+    anthropicCacheControl,
+    anthropicExplicitCacheEnabled,
+    isKimiAnthropicCodingBackend,
+)
 from ...provider_errors import (
     canRetryProviderFailure,
     classifyProviderHttpFailure,

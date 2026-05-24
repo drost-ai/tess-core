@@ -40,13 +40,18 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
         self.assertNotEqual(params_with_options["messages"], [])
 
         emitted = []
+        captured_streaming_params = {}
 
         async def create(_params):
+            captured_streaming_params["params"] = _params
             return AsyncChunks(
                 [
                     {"choices": [{"delta": {"content": "Planning"}, "finish_reason": None}]},
                     {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_1", "type": "function", "function": {"name": "Write", "arguments": '{"path":"'}}]}, "finish_reason": None}]},
-                    {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": 'a.txt"}'}}]}, "finish_reason": "tool_calls"}], "usage": {"prompt_tokens": 42, "completion_tokens": 7}},
+                    {
+                        "choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": 'a.txt"}'}}]}, "finish_reason": "tool_calls"}],
+                        "usage": {"prompt_tokens": 42, "completion_tokens": 7, "prompt_tokens_details": {"cached_tokens": 12}},
+                    },
                 ]
             )
 
@@ -54,6 +59,8 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
             testing.sendOpenAiChatCompletionsRequest(
                 {
                     "token": "test-token",
+                    "baseUrl": "https://api.fireworks.ai/inference/v1",
+                    "config": {"providerProfileName": "fireworks"},
                     "request": {"model": "gpt-5.4", "effort": "high", "system": "s", "messages": [{"role": "user", "content": "Write"}], "tools": []},
                     "runtime": {"includePartialMessages": True, "streamProviderMessages": True, "emitEvent": lambda event, data: emitted.append({"event": event, "data": data})},
                     "maxAttempts": 1,
@@ -63,7 +70,8 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
         )
         self.assertEqual(response["content"][0], {"type": "text", "text": "Planning"})
         self.assertEqual(response["content"][1]["input"], {"path": "a.txt"})
-        self.assertEqual(response["usage"], {"input_tokens": 42, "output_tokens": 7})
+        self.assertEqual(response["usage"], {"input_tokens": 42, "output_tokens": 7, "cache_read_input_tokens": 12, "cache_hit_input_tokens": 12})
+        self.assertIn("x-session-affinity", captured_streaming_params["params"]["extra_headers"])
         self.assertTrue(any(item["event"] == "message.assistant.partial" for item in emitted))
         self.assertTrue(any(item["event"] == "provider.request_started" and item["data"]["attempt"] == 1 for item in emitted))
         self.assertTrue(any(item["event"] == "provider.stream_event" and item["data"]["stream_event"] == "chat.completion.chunk" for item in emitted))

@@ -29,7 +29,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 "provider.request_started",
                 {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
             )
-            payload = buildAnthropicMessagesPayload(request, {"stream": stream})
+            payload = buildAnthropicMessagesPayload(request, {"stream": stream, "config": config})
             if stream:
                 stream_activity_state = {
                     "last_activity": time.monotonic(),

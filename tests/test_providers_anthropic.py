@@ -18,7 +18,10 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertEqual(payload["max_tokens"], 16384)
         self.assertEqual(payload["thinking"], {"type": "adaptive"})
         self.assertEqual(payload["output_config"], {"effort": "high"})
-        self.assertEqual(payload["system"][1], {"type": "text", "text": "system prompt"})
+        self.assertEqual(
+            payload["system"][1],
+            {"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}},
+        )
 
         nullable_tool_payload = testing.buildAnthropicMessagesPayload(
             {
@@ -126,7 +129,13 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertNotIn("stream", testing.buildAnthropicMessagesPayload({**request, "effort": None}))
         self.assertEqual(
             testing.buildAnthropicMessagesPayload({"model": "claude-sonnet-4-6", "messages": [], "tools": []})["system"],
-            [{"type": "text", "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;"}],
+            [
+                {
+                    "type": "text",
+                    "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
         )
 
         with self.assertRaises(core.ProviderRequestError) as ctx:

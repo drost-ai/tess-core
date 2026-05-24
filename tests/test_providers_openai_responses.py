@@ -42,7 +42,17 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
         async def create_codex(params):
             codex_captured["params"] = params
-            return AsyncChunks([{"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "codex-ok"}]}], "usage": {"input_tokens": 5, "output_tokens": 2}}}])
+            return AsyncChunks(
+                [
+                    {
+                        "type": "response.completed",
+                        "response": {
+                            "output": [{"type": "message", "content": [{"type": "output_text", "text": "codex-ok"}]}],
+                            "usage": {"input_tokens": 5, "output_tokens": 2, "input_tokens_details": {"cached_tokens": 4}},
+                        },
+                    }
+                ]
+            )
 
         def codex_factory(options):
             codex_captured["options"] = options
@@ -68,6 +78,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             )
         )
         self.assertEqual(codex_response["content"], [{"type": "text", "text": "codex-ok"}])
+        self.assertEqual(codex_response["usage"]["cache_read_input_tokens"], 4)
         self.assertEqual(codex_captured["options"]["apiKey"], "codex-token")
         self.assertEqual(codex_captured["options"]["baseURL"], testing.DEFAULT_CODEX_BASE_URL)
         self.assertEqual(codex_captured["options"]["defaultHeaders"], {"x-codex-test": "1"})
@@ -79,6 +90,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(codex_captured["params"]["reasoning"], {"effort": "high"})
         self.assertEqual(codex_captured["params"]["store"], False)
         self.assertEqual(codex_captured["params"]["stream"], True)
+        self.assertTrue(codex_captured["params"]["prompt_cache_key"].startswith("agent-core-"))
         self.assertNotIn("max_output_tokens", codex_captured["params"])
         self.assertEqual(codex_captured["params"]["tools"][0]["parameters"]["properties"]["path"], {"type": "string"})
 

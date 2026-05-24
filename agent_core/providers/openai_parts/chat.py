@@ -35,7 +35,13 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 {
                     "includeReasoningEffort": supportsOpenAiChatCompletionsReasoningEffort(base_url),
                     "includeStore": not base_url or supportsOpenAiChatCompletionsReasoningEffort(base_url),
-                    "requestOptions": args.get("requestOptions") or {},
+                    "requestOptions": openAiPromptCacheRequestOptions(
+                        mode="chat_completions",
+                        base_url=base_url,
+                        config=args.get("config") or {},
+                        request=args["request"],
+                        request_options=args.get("requestOptions") or {},
+                    ),
                 },
             )
             response = await _race_openai_activity(

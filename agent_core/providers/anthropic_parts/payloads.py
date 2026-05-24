@@ -15,8 +15,7 @@ def _normalize_anthropic_api_base_url(baseUrl: str | None) -> str | None:
 
 
 def _is_kimi_anthropic_coding_backend(config: dict[str, Any]) -> bool:
-    base = str(config.get("anthropicBaseUrl") or "").strip().rstrip("/").lower()
-    return "api.kimi.com/coding" in base
+    return isKimiAnthropicCodingBackend(config)
 
 
 def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
@@ -55,8 +54,8 @@ def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None
         raise RuntimeError("No Anthropic credential is configured.")
     return headers
 
-def buildAnthropicCountTokensPayload(request: dict[str, Any]) -> dict[str, Any]:
-    payload = buildAnthropicMessagesPayload(request, {"stream": False})
+def buildAnthropicCountTokensPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = buildAnthropicMessagesPayload(request, {"stream": False, **(options or {})})
     payload.pop("max_tokens", None)
     payload.pop("stream", None)
     payload.pop("output_config", None)
@@ -64,12 +63,15 @@ def buildAnthropicCountTokensPayload(request: dict[str, Any]) -> dict[str, Any]:
 
 def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
     options = options or {}
+    config = options.get("config") if isinstance(options.get("config"), dict) else {}
     system_blocks = [
         {"type": "text", "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;"},
     ]
     system_text = str(request.get("system") or "").strip()
     if system_text:
         system_blocks.append({"type": "text", "text": system_text})
+    if anthropicExplicitCacheEnabled(config, request, options):
+        _mark_last_text_block_for_cache(system_blocks, anthropicCacheControl(config, request, options))
     payload: dict[str, Any] = {
         "model": request["model"],
         "max_tokens": 16384,
@@ -86,6 +88,14 @@ def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, An
     if tools:
         payload["tools"] = [_normalize_anthropic_tool_definition(tool) for tool in tools]
     return payload
+
+def _mark_last_text_block_for_cache(blocks: list[dict[str, Any]], cache_control: dict[str, str]) -> None:
+    for index in range(len(blocks) - 1, -1, -1):
+        block = blocks[index]
+        if block.get("type") == "text":
+            blocks[index] = {**block, "cache_control": dict(cache_control)}
+            return
+    blocks.append({"type": "text", "text": "", "cache_control": dict(cache_control)})
 
 def _normalize_anthropic_tool_definition(tool: Any) -> dict[str, Any]:
     if not isinstance(tool, dict):

@@ -40,7 +40,13 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 {
                     "isCodexBackend": mode == "codex",
                     "request": args["request"],
-                    "requestOptions": args.get("requestOptions") or {},
+                    "requestOptions": openAiPromptCacheRequestOptions(
+                        mode=mode,
+                        base_url=base_url,
+                        config=args.get("config") or {},
+                        request=args["request"],
+                        request_options=args.get("requestOptions") or {},
+                    ),
                 }
             )
             response = await _race_openai_activity(

@@ -38,6 +38,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         request = {
             "model": active_model,
             "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
+            "sessionId": session["id"],
             "system": system,
             "messages": request_context["messages"],
             "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
@@ -103,6 +104,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         "request": {
             "model": active_model,
             "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
+            "sessionId": session["id"],
             "system": system,
             "messages": request_context["messages"],
             "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],

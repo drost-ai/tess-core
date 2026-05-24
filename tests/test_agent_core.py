@@ -12,6 +12,7 @@ DOMAIN_TEST_MODULES = [
     "tests.test_providers_openai_chat",
     "tests.test_providers_openai_responses",
     "tests.test_providers_anthropic",
+    "tests.test_provider_prompt_cache",
     "tests.test_provider_errors",
     "tests.test_agent_loop",
     "tests.test_compaction_models_fetch",

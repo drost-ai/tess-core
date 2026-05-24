@@ -72,7 +72,7 @@ def _estimate_request_tokens(request: dict[str, Any]) -> int:
 
 
 async def _measure_anthropic_count_tokens(config: dict[str, Any], request: dict[str, Any], timeout_seconds: float) -> int:
-    payload = buildAnthropicCountTokensPayload(request)
+    payload = buildAnthropicCountTokensPayload(request, {"config": config})
 
     def send() -> int:
         req = Request(
