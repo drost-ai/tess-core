@@ -34,9 +34,11 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
         args = {**(args or {}), **kwargs}
         config = args["config"]
         model = args["model"]
+        runtime = _build_compaction_runtime(args)
         if model["provider"] == "openai":
             transport = await _resolve_compaction_openai_transport(config, model)
             sender = options.get("openAiRequestSender") or sendOpenAiRequest
+            client_factory = _resolve_openai_client_factory(args, runtime, options, config)
             response = await _run_compaction_request_with_timeout(
                 provider="openai",
                 providerLabel=getOpenAiProviderLabel(transport["mode"], transport.get("baseUrl")),
@@ -49,7 +51,8 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
                         "headers": transport.get("headers"),
                         "mode": transport["mode"],
                         "request": {"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []},
-                        "runtime": {"abortSignal": args.get("abortSignal")},
+                        "runtime": runtime,
+                        "clientFactory": client_factory,
                     }
                 ),
             )
@@ -61,11 +64,36 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
             providerLabel="Anthropic",
             attempt=1,
             timeoutMs=COMPACTION_SYNTHESIS_TIMEOUT_MS if model.get("purpose") == "synthesis" else COMPACTION_VERIFICATION_TIMEOUT_MS,
-            run=lambda: sendAnthropicMessagesRequest(config=config, request={"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime={"abortSignal": args.get("abortSignal")}),
+            run=lambda: sendAnthropicMessagesRequest(config=config, request={"model": model["model"], "effort": model.get("effort"), "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime=runtime),
         )
         return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
 
     return CompactionModelClient(complete)
+
+
+def _build_compaction_runtime(args: dict[str, Any]) -> dict[str, Any]:
+    runtime = dict(args.get("runtime") or {})
+    if args.get("abortSignal") is not None:
+        runtime["abortSignal"] = args["abortSignal"]
+    return runtime
+
+
+def _resolve_openai_client_factory(
+    args: dict[str, Any],
+    runtime: dict[str, Any],
+    options: dict[str, Any],
+    config: dict[str, Any],
+) -> Any:
+    return (
+        args.get("openaiClientFactory")
+        or args.get("openAiClientFactory")
+        or runtime.get("openaiClientFactory")
+        or runtime.get("openAiClientFactory")
+        or options.get("openaiClientFactory")
+        or options.get("openAiClientFactory")
+        or config.get("openaiClientFactory")
+        or config.get("openAiClientFactory")
+    )
 
 
 def resolveCompactionExecutionPlan(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

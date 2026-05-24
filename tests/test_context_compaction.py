@@ -15,7 +15,9 @@ class ContextCompactionTests(AgentCoreTestCase):
                 captured.update(args)
                 return {"content": [{"type": "text", "text": "Spark compaction output"}], "usage": {"input_tokens": 12, "output_tokens": 4}, "model": args["request"]["model"], "stopReason": "stop"}
 
-            client = testing.createDefaultCompactionModelClient({"openAiRequestSender": sender})
+            openai_factory = lambda _options: SimpleNamespace()
+            abort_signal = object()
+            client = testing.createDefaultCompactionModelClient({"openAiRequestSender": sender, "openaiClientFactory": openai_factory})
             result = run(
                 client.complete(
                     {
@@ -30,6 +32,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                         "model": {"provider": "openai", "model": "gpt-5.3-codex-spark", "effort": "high", "selectionSource": "fixed", "purpose": "synthesis"},
                         "system": "You are the compaction synthesizer.",
                         "prompt": "Summarize this transcript.",
+                        "runtime": {"abortSignal": abort_signal},
                     }
                 )
             )
@@ -37,6 +40,8 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertEqual(captured["baseUrl"], testing.DEFAULT_CODEX_BASE_URL)
             self.assertEqual(captured["token"], "codex-access-token")
             self.assertIsNone(captured["headers"])
+            self.assertIs(captured["clientFactory"], openai_factory)
+            self.assertIs(captured["runtime"]["abortSignal"], abort_signal)
             self.assertEqual(result["text"], "Spark compaction output")
         finally:
             self.restore_home(root, previous)
@@ -96,12 +101,15 @@ class ContextCompactionTests(AgentCoreTestCase):
                 session["messages"].append({"role": role, "content": f"{role} message {index}"})
             session["todos"] = [{"content": "Finish compaction", "activeForm": "Implementing compaction", "status": "in_progress"}]
             client = FakeCompactionClient()
+            openai_factory = lambda _options: SimpleNamespace()
 
-            result = run(core.runCompaction({"session": session, "config": {}, "trigger": "manual", "force": True, "modelClient": client}))
+            result = run(core.runCompaction({"session": session, "config": {}, "runtime": {"openaiClientFactory": openai_factory}, "trigger": "manual", "force": True, "modelClient": client}))
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(result["qualityClassification"], "rich")
             self.assertEqual(len(client.calls), 2)
+            self.assertIs(client.calls[0]["runtime"]["openaiClientFactory"], openai_factory)
+            self.assertIs(client.calls[1]["runtime"]["openaiClientFactory"], openai_factory)
             self.assertIn("Compacted transcript evidence:", client.calls[0]["prompt"])
             self.assertIn("Candidate checkpoint:", client.calls[1]["prompt"])
             self.assertTrue(os.path.exists(result["artifacts"]["summary"]))
@@ -353,13 +361,15 @@ class ContextCompactionTests(AgentCoreTestCase):
                 provider_requests.append(request)
                 return {"model": request["model"], "content": [{"type": "text", "text": "done"}], "usage": {}, "stopReason": "end"}
 
+            openai_factory = lambda _options: SimpleNamespace()
             agent_module.measureRequestInputTokens = fake_measure
             agent_module.runCompaction = fake_run_compaction
-            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}, prompt="continue", providerOverride={"send": send}))
+            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}, prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "done")
             self.assertEqual(len(compaction_calls), 1)
             self.assertEqual(compaction_calls[0]["trigger"], "auto_hard_limit")
+            self.assertIs(compaction_calls[0]["runtime"]["openaiClientFactory"], openai_factory)
             self.assertEqual(measure_calls["count"], 2)
             self.assertEqual(provider_requests[0]["messages"][0]["content"], core.CONTINUATION_BRIDGE_MESSAGE)
             self.assertTrue(any(event == "compaction.completed" for event, _ in events))

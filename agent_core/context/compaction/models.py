@@ -50,6 +50,8 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
             args["modelClient"],
             {
                 "config": args.get("config") or {},
+                "runtime": args.get("runtime") or {},
+                "abortSignal": args.get("abortSignal"),
                 "model": model,
                 "system": COMPACTION_SYSTEM_PROMPT,
                 "prompt": buildCompactionSynthesisPrompt(
@@ -109,6 +111,8 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
             args["modelClient"],
             {
                 "config": args.get("config") or {},
+                "runtime": args.get("runtime") or {},
+                "abortSignal": args.get("abortSignal"),
                 "model": model,
                 "system": COMPACTION_VERIFICATION_SYSTEM_PROMPT,
                 "prompt": buildCompactionVerificationPrompt(

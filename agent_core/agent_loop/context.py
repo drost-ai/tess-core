@@ -222,7 +222,7 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
 
     _mark_context_relief_escalation_attempt(session, decision)
     try:
-        outcome = await runCompaction({"session": session, "config": config, "trigger": decision["trigger"]})
+        outcome = await runCompaction({"session": session, "config": config, "runtime": runtime, "trigger": decision["trigger"]})
     except Exception as error:
         provider_failure = error.record if isProviderRequestError(error) else None
         normalized_error = provider_failure.get("message") if provider_failure else str(error)

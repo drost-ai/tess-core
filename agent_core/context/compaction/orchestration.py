@@ -67,9 +67,12 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     args = {**(args or {}), **kwargs}
     session = args["session"]
     config = args.get("config") or {}
+    runtime = args.get("runtime") or {}
     trigger = args.get("trigger", "manual")
     force = bool(args.get("force", False))
-    model_client = args.get("modelClient") or args.get("model_client") or createDefaultCompactionModelClient()
+    model_client = args.get("modelClient") or args.get("model_client") or createDefaultCompactionModelClient(
+        {"openaiClientFactory": runtime.get("openaiClientFactory") or config.get("openaiClientFactory")}
+    )
     messages = session.get("messages", [])
     previous_cutoff = int(session.get("metadata", {}).get("compactionState", {}).get("compactedThroughMessageIndex") or 0)
 
@@ -120,6 +123,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         {
             "session": session,
             "config": config,
+            "runtime": runtime,
             "modelClient": model_client,
             "previousWorkingContext": previous_working_context,
             "latestPlan": latest_plan,
@@ -155,6 +159,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         {
             "session": session,
             "config": config,
+            "runtime": runtime,
             "modelClient": model_client,
             "previousWorkingContext": previous_working_context,
             "latestPlan": latest_plan,
@@ -188,6 +193,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             {
                 "session": session,
                 "config": config,
+                "runtime": runtime,
                 "modelClient": model_client,
                 "previousWorkingContext": previous_working_context,
                 "latestPlan": latest_plan,
