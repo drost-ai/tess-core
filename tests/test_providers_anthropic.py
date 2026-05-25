@@ -157,14 +157,16 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_bad","name":"Read","input":{}}}',
                 'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"\\"not-object\\""}}',
                 'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}',
+                'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":1}}',
+                'event: message_stop\ndata: {"type":"message_stop"}',
             ]
         )
-        with self.assertRaises(core.ProviderRequestError) as tool_ctx:
-            testing.normalizeAnthropicSseResponse(bad_tool_raw, request)
-        self.assertEqual(tool_ctx.exception.record["category"], "protocol")
-        self.assertTrue(tool_ctx.exception.record["hadToolUse"])
-        self.assertFalse(tool_ctx.exception.record["retryable"])
-        self.assertIn("Unable to parse tool parameter JSON from model", tool_ctx.exception.record["rawMessage"])
+        bad_tool_response = testing.normalizeAnthropicSseResponse(bad_tool_raw, request)
+        self.assertEqual(bad_tool_response["content"][0]["type"], "tool_use")
+        self.assertEqual(bad_tool_response["content"][0]["id"], "toolu_bad")
+        self.assertEqual(bad_tool_response["content"][0]["input"], {})
+        self.assertTrue(bad_tool_response["content"][0]["_agent_core_invalid_tool_input"])
+        self.assertIn("invalid JSON", bad_tool_response["content"][0]["_agent_core_invalid_tool_input_error"])
 
     def test_anthropic_count_tokens_measurement_and_fallback(self):
         root, home, workspace, previous = self.temp_context()
@@ -428,7 +430,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
         finally:
             anthropic_module._send_anthropic_messages_streaming_async = original_stream
 
-    def test_anthropic_streaming_eof_before_message_stop_is_failure(self):
+    def test_anthropic_streaming_eof_before_message_stop_returns_usable_partial_content(self):
         calls = {"count": 0}
 
         class TruncatedStreamingAnthropicHandler(http.server.BaseHTTPRequestHandler):
@@ -454,32 +456,30 @@ class AnthropicProviderTests(AgentCoreTestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            with self.assertRaises(core.ProviderRequestError) as ctx:
-                run(
-                    core.sendAnthropicMessagesRequest(
-                        {
-                            "config": {
-                                "provider": "anthropic",
-                                "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
-                                "apiKey": "test-key",
-                                "customHeaders": {},
-                            },
-                            "request": {
-                                "model": "claude-sonnet-4-6",
-                                "system": "s",
-                                "messages": [{"role": "user", "content": "Hello"}],
-                                "tools": [],
-                            },
-                            "runtime": {"includePartialMessages": True},
-                            "maxAttempts": 2,
-                            "streamIdleTimeoutMs": 2000,
-                        }
-                    )
+            response = run(
+                core.sendAnthropicMessagesRequest(
+                    {
+                        "config": {
+                            "provider": "anthropic",
+                            "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
+                            "apiKey": "test-key",
+                            "customHeaders": {},
+                        },
+                        "request": {
+                            "model": "claude-sonnet-4-6",
+                            "system": "s",
+                            "messages": [{"role": "user", "content": "Hello"}],
+                            "tools": [],
+                        },
+                        "runtime": {"includePartialMessages": True},
+                        "maxAttempts": 2,
+                        "streamIdleTimeoutMs": 2000,
+                    }
                 )
-            self.assertEqual(ctx.exception.record["category"], "transport")
-            self.assertEqual(ctx.exception.record["phase"], "stream_read")
-            self.assertTrue(ctx.exception.record["hadAssistantOutput"])
-            self.assertEqual(ctx.exception.record["streamEventType"], "eof")
+            )
+            self.assertEqual(response["content"], [{"type": "text", "text": "partial ans"}])
+            self.assertEqual(response["stopReason"], "stream_incomplete")
+            self.assertTrue(response["incomplete"])
             self.assertEqual(calls["count"], 1)
         finally:
             server.shutdown()

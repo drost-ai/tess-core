@@ -169,6 +169,12 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 message = f"{tool_use['name']} is not available while plan approval is still required."
                 _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": message, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
+            invalid_tool_input = _invalid_tool_input_message(tool_use)
+            if invalid_tool_input:
+                tool_count += 1
+                usage_totals["toolCalls"] += 1
+                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": invalid_tool_input, "error": True, "session_id": session["id"]})
+                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": invalid_tool_input}
             tool = next((entry for entry in tool_registry if entry.name == tool_use["name"]), None)
             if not tool:
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": f"Tool not available: {tool_use['name']}"}
@@ -228,6 +234,23 @@ def extractAssistantText(message: dict[str, Any]) -> str:
     if isinstance(content, str):
         return content
     return "".join(block.get("text", "") for block in content or [] if block.get("type") == "text")
+
+
+def _invalid_tool_input_message(tool_use: Any) -> str | None:
+    if not isinstance(tool_use, dict):
+        return None
+    if tool_use.get("_agent_core_invalid_tool_input") is True:
+        message = tool_use.get("_agent_core_invalid_tool_input_error")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+        return "The provider streamed incomplete or invalid JSON for this tool call. Retry the tool call with complete valid JSON arguments."
+    input_value = tool_use.get("input")
+    if not isinstance(input_value, dict) or input_value.get("__agent_core_invalid_tool_input") is not True:
+        return None
+    message = input_value.get("error")
+    if isinstance(message, str) and message.strip():
+        return message.strip()
+    return "The provider streamed incomplete or invalid JSON for this tool call. Retry the tool call with complete valid JSON arguments."
 
 
 def _emit_provider_response_completed(

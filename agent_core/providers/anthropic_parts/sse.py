@@ -108,7 +108,7 @@ class AnthropicSseAccumulator:
         elif event_type == "content_block_stop":
             index = payload.get("index")
             if isinstance(index, int) and index < len(self.blocks):
-                _finalize_tool_block(self.blocks[index], attempt=self.attempt, hadAssistantOutput=self.had_assistant_output, hadToolUse=self.had_tool_use)
+                _finalize_tool_block(self.blocks[index])
         elif event_type == "message_delta":
             delta = payload.get("delta") or {}
             self.stop_reason = delta.get("stop_reason") or self.stop_reason
@@ -118,8 +118,9 @@ class AnthropicSseAccumulator:
 
     def finalize(self) -> dict[str, Any]:
         for block in self.blocks:
-            _finalize_tool_block(block, attempt=self.attempt, hadAssistantOutput=self.had_assistant_output, hadToolUse=self.had_tool_use)
-        if not self.stopped:
+            _finalize_tool_block(block)
+        content = [_strip_internal_block(block) for block in self.blocks if block and block.get("type") in ("text", "tool_use")]
+        if not self.stopped and not content:
             raise _create_anthropic_transport_error(
                 "Anthropic SSE stream ended before message_stop.",
                 self.attempt,
@@ -127,11 +128,15 @@ class AnthropicSseAccumulator:
                 self.had_tool_use,
                 "eof",
             )
+        stop_reason = self.stop_reason
+        if not self.stopped:
+            stop_reason = stop_reason or "stream_incomplete"
         return {
-            "content": [_strip_internal_block(block) for block in self.blocks if block and block.get("type") in ("text", "tool_use")],
+            "content": content,
             "usage": self.usage,
             "model": self.model,
-            "stopReason": self.stop_reason,
+            "stopReason": stop_reason,
+            "incomplete": not self.stopped,
         }
 
 
@@ -173,10 +178,6 @@ def _internal_block_from_anthropic(block: dict[str, Any]) -> dict[str, Any]:
 
 def _finalize_tool_block(
     block: dict[str, Any] | None,
-    *,
-    attempt: int = 1,
-    hadAssistantOutput: bool = False,
-    hadToolUse: bool = False,
 ) -> None:
     if not block or block.get("type") != "tool_use" or not str(block.get("_input_buffer") or "").strip():
         return
@@ -184,10 +185,22 @@ def _finalize_tool_block(
     try:
         parsed = json.loads(raw)
     except Exception:
-        raise _create_anthropic_protocol_error(f"Unable to parse tool parameter JSON from model: {raw}", attempt, hadAssistantOutput, hadToolUse)
+        _mark_invalid_tool_input(block, raw)
+        return
     if not isinstance(parsed, dict):
-        raise _create_anthropic_protocol_error(f"Unable to parse tool parameter JSON from model: {raw}", attempt, hadAssistantOutput, hadToolUse)
+        _mark_invalid_tool_input(block, raw)
+        return
     block["input"] = parsed
+
+
+def _mark_invalid_tool_input(block: dict[str, Any], raw: str) -> None:
+    preview = raw[:500]
+    if len(raw) > 500:
+        preview += "...<truncated>"
+    block["input"] = {}
+    block["_agent_core_invalid_tool_input"] = True
+    block["_agent_core_invalid_tool_input_error"] = "The provider streamed incomplete or invalid JSON for this tool call. Do not assume the tool ran; retry the tool call with complete valid JSON arguments."
+    block["_agent_core_invalid_tool_input_raw_preview"] = preview
 
 def _create_anthropic_protocol_error(rawMessage: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, streamEventType: str | None = None) -> Any:
     return createProviderRequestError(
@@ -224,4 +237,8 @@ def _create_anthropic_transport_error(rawMessage: str, attempt: int, hadAssistan
 
 
 def _strip_internal_block(block: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in block.items() if not key.startswith("_")}
+    stripped = {key: value for key, value in block.items() if not key.startswith("_")}
+    if block.get("_agent_core_invalid_tool_input"):
+        stripped["_agent_core_invalid_tool_input"] = True
+        stripped["_agent_core_invalid_tool_input_error"] = block.get("_agent_core_invalid_tool_input_error")
+    return stripped

@@ -213,6 +213,76 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(blocks[1]["tool_use_id"], "use_fast")
             self.assertEqual(blocks[1]["content"], "FAST")
 
+    def test_run_agent_prompt_turns_invalid_streamed_tool_input_into_repairable_tool_result(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-invalid-tool-") as cwd:
+            config = {
+                "cwd": cwd,
+                "runtimeHome": cwd,
+                "allowedRoots": [cwd],
+                "agents": {},
+                "provider": "anthropic",
+                "providerKind": "anthropic",
+                "providerProfileName": "default",
+                "providerProfile": {"kind": "anthropic", "name": "default", "auth": {}},
+                "providerProfiles": {"default": {"kind": "anthropic", "name": "default"}},
+                "customHeaders": {},
+                "openaiApiMode": "responses",
+                "model": "claude-sonnet-4-6",
+                "effort": "medium",
+                "assistantName": "Test",
+                "assistantDescription": "",
+                "systemPrompt": "test",
+                "tools": ["Edit"],
+                "allowedTools": ["Edit"],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            session = core.createEmptySession(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
+            tool_ran = False
+            calls = {"count": 0}
+
+            async def edit_handler(_input, _context):
+                nonlocal tool_ran
+                tool_ran = True
+                return {"content": "edited", "isError": False}
+
+            tools = [core.ToolDefinition("Edit", "edit file", {"type": "object"}, edit_handler)]
+
+            async def send(request):
+                calls["count"] += 1
+                if calls["count"] == 1:
+                    return {
+                        "model": "claude-sonnet-4-6",
+                        "stopReason": "tool_use",
+                        "usage": {"input_tokens": 10, "output_tokens": 5},
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "bad_edit",
+                                "name": "Edit",
+                                "input": {},
+                                "_agent_core_invalid_tool_input": True,
+                                "_agent_core_invalid_tool_input_error": "The provider streamed incomplete or invalid JSON for this tool call.",
+                            }
+                        ],
+                    }
+                self.assertTrue(any(block.get("is_error") for message in request["messages"] if isinstance(message.get("content"), list) for block in message["content"] if block.get("type") == "tool_result"))
+                return {
+                    "model": "claude-sonnet-4-6",
+                    "stopReason": "end_turn",
+                    "usage": {"input_tokens": 5, "output_tokens": 3},
+                    "content": [{"type": "text", "text": "retrying with valid JSON next"}],
+                }
+
+            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": tools}, prompt="run", providerOverride={"send": send}))
+            self.assertFalse(tool_ran)
+            self.assertEqual(calls["count"], 2)
+            self.assertEqual(result["text"], "retrying with valid JSON next")
+            tool_result_message = next(message for message in session["messages"] if message["role"] == "user" and isinstance(message["content"], list))
+            self.assertTrue(tool_result_message["content"][0]["is_error"])
+            self.assertIn("invalid JSON", tool_result_message["content"][0]["content"])
+
     def test_run_agent_prompt_cancels_turn_and_restores_session(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-cancel-") as cwd:
             config = {
