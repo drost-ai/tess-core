@@ -73,6 +73,27 @@ class AnthropicProviderTests(AgentCoreTestCase):
         image_block = multimodal_payload["messages"][0]["content"][1]
         self.assertEqual(image_block["type"], "image")
         self.assertEqual(image_block["source"], {"type": "base64", "media_type": "image/jpeg", "data": "aW1n"})
+        redacted_image_payload = testing.buildAnthropicMessagesPayload(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": "s",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "describe"},
+                            {
+                                "type": "image",
+                                "mime_type": "image/jpeg",
+                                "data": "<image:image/jpeg:inbox/telegram/image.jpg:current-turn-only>",
+                            },
+                        ],
+                    }
+                ],
+                "tools": [],
+            }
+        )
+        self.assertEqual(redacted_image_payload["messages"][0]["content"], [{"type": "text", "text": "describe"}])
         count_payload = testing.buildAnthropicCountTokensPayload(request)
         self.assertNotIn("max_tokens", count_payload)
         self.assertNotIn("stream", count_payload)

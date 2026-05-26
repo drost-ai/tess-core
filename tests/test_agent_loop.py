@@ -144,6 +144,90 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(content[0], {"type": "text", "text": "What is this?"})
             self.assertEqual(content[1]["type"], "image")
 
+    def test_run_agent_prompt_textifies_persisted_current_turn_image_placeholders(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-vision-replay-") as cwd:
+            config = {
+                "cwd": cwd,
+                "runtimeHome": cwd,
+                "allowedRoots": [cwd],
+                "agents": {},
+                "provider": "openai",
+                "providerKind": "openai",
+                "providerProfileName": "codex",
+                "providerProfile": {
+                    "kind": "openai",
+                    "name": "codex",
+                    "baseUrl": "https://chatgpt.com/backend-api/codex",
+                    "supportsVision": True,
+                },
+                "providerProfiles": {"codex": {"kind": "openai", "name": "codex"}},
+                "customHeaders": {},
+                "openaiApiMode": "responses",
+                "openaiBaseUrl": "https://chatgpt.com/backend-api/codex",
+                "model": "gpt-5.5",
+                "effort": "medium",
+                "assistantName": "Test",
+                "assistantDescription": "",
+                "systemPrompt": "test",
+                "tools": [],
+                "allowedTools": [],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            session = core.createEmptySession(
+                cwd=cwd,
+                provider="openai",
+                model="gpt-5.5",
+                effort="medium",
+                systemPrompt="test",
+                permissionMode="bypassPermissions",
+            )
+            session["messages"].extend(
+                [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Here is the image."},
+                            {
+                                "type": "image",
+                                "mime_type": "image/jpeg",
+                                "path": "inbox/telegram/image.jpg",
+                                "data": "<image:image/jpeg:inbox/telegram/image.jpg:current-turn-only>",
+                            },
+                        ],
+                    },
+                    {"role": "assistant", "content": [{"type": "text", "text": "I saw it."}]},
+                ]
+            )
+            captured = {}
+
+            async def send(request):
+                captured["request"] = request
+                return {
+                    "model": "gpt-5.5",
+                    "stopReason": "end_turn",
+                    "usage": {"input_tokens": 10, "output_tokens": 2},
+                    "content": [{"type": "text", "text": "ok"}],
+                }
+
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []},
+                    prompt="Follow-up text only.",
+                    providerOverride={"send": send},
+                )
+            )
+
+            self.assertEqual(result["text"], "ok")
+            replay_content = captured["request"]["messages"][0]["content"]
+            self.assertEqual(replay_content[0], {"type": "text", "text": "Here is the image."})
+            self.assertEqual(replay_content[1]["type"], "text")
+            self.assertIn("current-turn-only", replay_content[1]["text"])
+            self.assertNotIn("image", {block.get("type") for block in replay_content if isinstance(block, dict)})
+
     def test_run_agent_prompt_concurrent_tool_dispatch_and_order(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-concurrent-") as cwd:
             config = {

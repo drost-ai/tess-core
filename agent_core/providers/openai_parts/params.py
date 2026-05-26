@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import re
+
 from .shared import *
 
 def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -208,15 +212,34 @@ def _image_data_url(block: dict[str, Any]) -> str:
     if isinstance(existing, dict):
         existing = existing.get("url")
     if isinstance(existing, str) and existing.strip():
-        return existing.strip()
+        value = existing.strip()
+        if value.lower().startswith("data:"):
+            return value if _valid_image_data_url(value) else ""
+        return value
     data = block.get("data") or block.get("data_base64") or block.get("base64")
     raw = str(data or "").strip()
     if not raw:
         return ""
     if raw.lower().startswith("data:"):
-        return raw
+        return raw if _valid_image_data_url(raw) else ""
+    if not _valid_base64_image_payload(raw):
+        return ""
     mime_type = str(block.get("mime_type") or block.get("mimeType") or block.get("mime") or "image/jpeg").strip() or "image/jpeg"
     return f"data:{mime_type};base64,{raw}"
+
+def _valid_image_data_url(value: str) -> bool:
+    prefix, marker, payload = value.partition(";base64,")
+    return bool(prefix.lower().startswith("data:image/") and marker == ";base64," and _valid_base64_image_payload(payload))
+
+def _valid_base64_image_payload(value: str) -> bool:
+    raw = re.sub(r"\s+", "", str(value or "").strip())
+    if not raw:
+        return False
+    try:
+        base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return True
 
 def convertMessagesToChatCompletions(system: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []

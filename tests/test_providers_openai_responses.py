@@ -37,6 +37,22 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(chat_content[1]["image_url"]["url"], "data:image/png;base64,aW1n")
         self.assertEqual(chat_content[1]["image_url"]["detail"], "auto")
 
+        redacted_message = {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Follow-up"},
+                {
+                    "type": "image",
+                    "mime_type": "image/png",
+                    "data": "<image:image/png:inbox/telegram/image.png:current-turn-only>",
+                },
+            ],
+        }
+        redacted_params = testing.buildResponsesCreateParams(
+            {"request": {"model": "gpt-5.5", "system": "s", "messages": [redacted_message], "tools": []}}
+        )
+        self.assertEqual(redacted_params["input"][0]["content"], "Follow-up")
+
     def test_openai_codex_transport_and_compatible_retry_edges(self):
         codex_captured = {}
 
