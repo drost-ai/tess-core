@@ -24,13 +24,9 @@ from ...storage import (
 
 COMPACTION_STRATEGY = "checkpoint-v2"
 MIN_RECENT_MESSAGE_COUNT = 20
-MIN_COMPACTABLE_MESSAGE_COUNT = 28
 RAW_TAIL_TOKEN_TARGET = 100_000
 RAW_TAIL_TOKEN_BUDGET = 40_000
-SOFT_WORKING_CONTEXT_TOKEN_LIMIT = 150_000
-HARD_WORKING_CONTEXT_TOKEN_LIMIT = 180_000
-AUTO_SOFT_RETRIGGER_MESSAGE_DELTA = 16
-AUTO_SOFT_RETRIGGER_TOKEN_DELTA = 64_000
+WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT = 200_000
 MAX_PRESERVED_TOOL_EXCHANGE_PAIRS = 10
 MIN_PRESERVED_TOOL_EXCHANGE_PAIRS = 3
 MAX_ACTIVITY_LINES = 16
@@ -63,6 +59,7 @@ Output rules:
 - Keep only information that still matters for continuation.
 - Remove stale asks, completed one-off requests, chit-chat, routine status chatter, and transient dead-end tool failures unless they still affect the current task.
 - Preserve the current user goal, completed implementation work, remaining work, key decisions, relevant files, durable discoveries, active blockers, and any critical repo or runtime facts.
+- For long agentic traces, preserve the active objective, scope constraints, exact target identifiers, payloads, commands, artifact paths, successful primitives, failed attempts with the reason they failed, hypotheses still worth testing, and the next concrete action.
 - Prefer exact file paths, exact command names, and exact task state when available.
 - Lists should be concise, deduplicated, current, and ordered by usefulness for continuation.
 - If the compacted slice is too thin to justify a checkpoint, set shouldCheckpoint to false and explain why.
@@ -122,6 +119,7 @@ Output rules:
 - Prefer rejecting or repairing a checkpoint over accepting a misleading one.
 - Remove stale requests, stale blockers, stale commit/push chatter, dead-end failures, and outdated next steps.
 - Preserve the active user goal, real completed work, current in-progress work, current blockers, relevant files, durable discoveries, and usable next steps.
+- For agentic traces with many tool calls, reject or repair checkpoints that omit the current exploit/debug path, important failed attempts and why they failed, exact commands/payloads/artifact paths still needed, or the next concrete step.
 - If repair is needed, return a fully repaired checkpoint in repairedCheckpoint.
 
 JSON shape:

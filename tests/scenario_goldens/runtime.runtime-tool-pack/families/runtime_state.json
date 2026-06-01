@@ -17,7 +17,36 @@
     "workers": []
   },
   "compaction": {
-    "status": "idle"
+    "lastDecision": {
+      "hasDurableCheckpoint": false,
+      "largestToolResultTokenEstimate": "<token-estimate>",
+      "latestCompactionAt": null,
+      "messageCount": 3,
+      "messagesSinceLastCheckpoint": 3,
+      "rawTokenDeltaSinceLastCheckpoint": "<token-estimate>",
+      "rawTokenEstimate": "<token-estimate>",
+      "reason": "raw session pressure is below the durable checkpoint token limit",
+      "shouldCheckpoint": false,
+      "toolResultTokenEstimateSinceLastCheckpoint": "<token-estimate>",
+      "toolResultsSinceLastCheckpoint": 1,
+      "trigger": null
+    },
+    "rawContext": {
+      "assistantToolUseCount": 1,
+      "elapsedMsSinceLastCheckpoint": "<duration-ms>",
+      "hasDurableCheckpoint": false,
+      "largestToolResultTokenEstimate": "<token-estimate>",
+      "latestCompactionAt": null,
+      "messageCount": 3,
+      "messagesSinceLastCheckpoint": 3,
+      "rawTokenDeltaSinceLastCheckpoint": "<token-estimate>",
+      "rawTokenEstimate": "<token-estimate>",
+      "toolResultCount": 1,
+      "toolResultTokenEstimateSinceLastCheckpoint": "<token-estimate>",
+      "toolResultsSinceLastCheckpoint": 1
+    },
+    "status": "idle",
+    "updatedAt": "<timestamp>"
   },
   "daemon": {
     "phase": "offline"

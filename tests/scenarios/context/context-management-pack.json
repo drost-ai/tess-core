@@ -84,7 +84,8 @@
       "apply_context_relief": {
         "alias": "api",
         "profile": "tool_heavy",
-        "messageCount": 18
+        "messageCount": 18,
+        "reactiveAttempt": 1
       }
     },
     {

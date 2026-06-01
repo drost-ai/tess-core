@@ -142,6 +142,52 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             next_state["turn"] = {**next_state.get("turn", {}), "liveStatus": {"message": _default_tool_status_message(name), "detail": _default_tool_status_detail(name), "source": "runtime", "updatedAt": timestamp}}
     elif typ == "tool.completed":
         next_state = _clear_runtime_live_status(next_state)
+    elif typ == "context.raw_pressure":
+        next_state["compaction"] = {
+            **next_state.get("compaction", {}),
+            "rawContext": {
+                "rawTokenEstimate": _field(data, "rawTokenEstimate", "raw_token_estimate"),
+                "messageCount": _field(data, "messageCount", "message_count"),
+                "assistantToolUseCount": _field(data, "assistantToolUseCount", "assistant_tool_use_count"),
+                "toolResultCount": _field(data, "toolResultCount", "tool_result_count"),
+                "messagesSinceLastCheckpoint": _field(data, "messagesSinceLastCheckpoint", "messages_since_last_checkpoint"),
+                "toolResultsSinceLastCheckpoint": _field(data, "toolResultsSinceLastCheckpoint", "tool_results_since_last_checkpoint"),
+                "rawTokenDeltaSinceLastCheckpoint": _field(data, "rawTokenDeltaSinceLastCheckpoint", "raw_token_delta_since_last_checkpoint"),
+                "toolResultTokenEstimateSinceLastCheckpoint": _field(
+                    data,
+                    "toolResultTokenEstimateSinceLastCheckpoint",
+                    "tool_result_token_estimate_since_last_checkpoint",
+                ),
+                "largestToolResultTokenEstimate": _field(data, "largestToolResultTokenEstimate", "largest_tool_result_token_estimate"),
+                "elapsedMsSinceLastCheckpoint": _field(data, "elapsedMsSinceLastCheckpoint", "elapsed_ms_since_last_checkpoint"),
+                "hasDurableCheckpoint": _field(data, "hasDurableCheckpoint", "has_durable_checkpoint"),
+                "latestCompactionAt": _field(data, "latestCompactionAt", "latest_compaction_at"),
+            },
+            "updatedAt": timestamp,
+        }
+    elif typ == "compaction.decision":
+        next_state["compaction"] = {
+            **next_state.get("compaction", {}),
+            "lastDecision": {
+                "shouldCheckpoint": _field(data, "shouldCheckpoint", "should_checkpoint"),
+                "trigger": _field(data, "trigger"),
+                "reason": _field(data, "reason"),
+                "rawTokenEstimate": _field(data, "rawTokenEstimate", "raw_token_estimate"),
+                "messageCount": _field(data, "messageCount", "message_count"),
+                "messagesSinceLastCheckpoint": _field(data, "messagesSinceLastCheckpoint", "messages_since_last_checkpoint"),
+                "toolResultsSinceLastCheckpoint": _field(data, "toolResultsSinceLastCheckpoint", "tool_results_since_last_checkpoint"),
+                "rawTokenDeltaSinceLastCheckpoint": _field(data, "rawTokenDeltaSinceLastCheckpoint", "raw_token_delta_since_last_checkpoint"),
+                "toolResultTokenEstimateSinceLastCheckpoint": _field(
+                    data,
+                    "toolResultTokenEstimateSinceLastCheckpoint",
+                    "tool_result_token_estimate_since_last_checkpoint",
+                ),
+                "largestToolResultTokenEstimate": _field(data, "largestToolResultTokenEstimate", "largest_tool_result_token_estimate"),
+                "hasDurableCheckpoint": _field(data, "hasDurableCheckpoint", "has_durable_checkpoint"),
+                "latestCompactionAt": _field(data, "latestCompactionAt", "latest_compaction_at"),
+            },
+            "updatedAt": timestamp,
+        }
     elif typ == "compaction.started":
         next_state["compaction"] = {
             **next_state.get("compaction", {}),
@@ -154,6 +200,7 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             "trigger": _field(data, "trigger"),
             "currentTokenEstimate": _field(data, "currentTokenEstimate", "current_token_estimate"),
             "currentTokenSource": _field(data, "currentTokenSource", "current_token_source"),
+            "decisionReason": _field(data, "decisionReason", "decision_reason"),
             "updatedAt": timestamp,
         }
         if (next_state.get("turn", {}).get("liveStatus") or {}).get("source") != "model":
@@ -165,6 +212,9 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             "pressureLevel": _normalize_pressure_level(_field(data, "pressureLevel", "pressure_level")),
             "reactiveAttempt": _field(data, "reactiveAttempt", "reactive_attempt"),
             "plannedModes": _field(data, "plannedModes", "planned_modes"),
+            "durableCheckpointAvailable": _field(data, "durableCheckpointAvailable", "durable_checkpoint_available"),
+            "compactions": _field(data, "compactions"),
+            "reliefWithoutCheckpoint": _field(data, "reliefWithoutCheckpoint", "relief_without_checkpoint"),
             "updatedAt": timestamp,
         }
     elif typ == "context_relief.applied":
@@ -178,6 +228,9 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             "reactiveAttempt": _field(data, "reactiveAttempt", "reactive_attempt") if _field(data, "reactiveAttempt", "reactive_attempt") is not None else next_state.get("compaction", {}).get("reactiveAttempt"),
             "lastDetail": _field(data, "detail"),
             "lastReinjectionSummary": _field(data, "reinjectionSummary", "reinjection_summary"),
+            "durableCheckpointAvailable": _field(data, "durableCheckpointAvailable", "durable_checkpoint_available"),
+            "compactions": _field(data, "compactions"),
+            "reliefWithoutCheckpoint": _field(data, "reliefWithoutCheckpoint", "relief_without_checkpoint"),
             "updatedAt": timestamp,
         }
     elif typ == "daemon.snapshot":

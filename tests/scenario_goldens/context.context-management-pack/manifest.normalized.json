@@ -100,7 +100,8 @@
       "apply_context_relief": {
         "alias": "api",
         "messageCount": 18,
-        "profile": "tool_heavy"
+        "profile": "tool_heavy",
+        "reactiveAttempt": 1
       }
     },
     {
@@ -110,7 +111,7 @@
         "modesInclude": [
           "api_microcompact"
         ],
-        "textContains": "<context_relief>"
+        "textContains": "provider-aware aggressive microcompact"
       }
     },
     {

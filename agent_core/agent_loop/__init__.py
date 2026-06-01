@@ -5,7 +5,7 @@ import sys as _sys
 import types as _types
 from importlib import import_module
 
-_MODULE_NAMES = ['shared', 'providers', 'usage', 'context', 'cancellation', 'loop']
+_MODULE_NAMES = ['shared', 'providers', 'usage', 'checkpoints', 'context', 'cancellation', 'loop']
 
 _modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
 _namespace = {}
@@ -17,7 +17,7 @@ for _module in _modules:
     vars(_module).update(_namespace)
 globals().update(_namespace)
 
-_PUBLIC_EXPORTS = ['Any', 'IMAGE_INPUT_UNSUPPORTED_MESSAGE', 'MODEL_PRICING', 'PLAN_SAFE_TOOL_NAMES', 'annotations', 'asyncio', 'buildContinuationContext', 'buildPlanModeSystemPrompt', 'copy', 'emitContinuationRelief', 'ensureProviderForModelSelection', 'extractAssistantText', 'fallbackEligibleProviderFailure', 'filterToolsByPolicy', 'isContextWindowFailure', 'isProviderRequestError', 'maybeAutoCompactSession', 'maybe_await', 'measureRequestInputTokens', 'merge_usage', 'modelSupportsImageInputs', 'normalizeEffortForModel', 'persistProviderFailure', 'persistProviderRecovery', 'persistSession', 'prepareProviderRequest', 're', 'recordActualTokenUsage', 'recordContinuationRelief', 'recordPreflightTokenMeasurement', 'repairSessionTranscript', 'requestHasImageInputs', 'resolveConfig', 'resolveFallbackProviderProfileName', 'runAgentPrompt', 'runCompaction', 'sendAnthropicMessagesRequest', 'sendOpenAiRequest', 'shouldAutoCompact', 'unsupportedImageInputResponse']
+_PUBLIC_EXPORTS = sorted(name for name in _namespace if not name.startswith("_"))
 __all__ = _PUBLIC_EXPORTS
 
 

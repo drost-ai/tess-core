@@ -27,6 +27,8 @@ KNOWN_RUNTIME_EVENTS = {
     "provider.fallback",
     "tool.started",
     "tool.completed",
+    "context.raw_pressure",
+    "compaction.decision",
     "permission.requested",
     "permission.decided",
     "plan.requested",
@@ -67,7 +69,6 @@ KNOWN_RUNTIME_EVENTS = {
 _CONTEXT_RELIEF_MODES = {
     "microcompact",
     "api_microcompact",
-    "time_based_microcompact",
     "partial_compaction",
     "session_memory_compaction",
     "full_checkpoint_compaction",

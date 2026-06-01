@@ -1,6 +1,6 @@
 [
   {
-    "afterCount": 55,
+    "afterCount": 4,
     "alias": "api",
     "beforeCount": 55,
     "driver": "apply_context_relief",
@@ -15,25 +15,29 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "tool_heavy",
-    "renderedPrompt": "<context_relief>\npressure_level=critical\nreactive_attempt=0\nselected_mode=api_microcompact\nplanned_mode=api_microcompact\nplanned_mode=partial_compaction\napplied_mode=api_microcompact\ntokens_saved_estimate=17320\ndetail=provider-aware aggressive microcompact trimmed tool-heavy context\n</context_relief>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nreinjection_summary=recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py\nreinjection=recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17\nreinjection=relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
-        "api_microcompact"
+        "api_microcompact",
+        "partial_compaction"
       ],
-      "compactedMessageCount": 54,
-      "detail": "provider-aware aggressive microcompact trimmed tool-heavy context",
-      "droppedMessageCount": 0,
+      "compactedMessageCount": 55,
+      "detail": "provider-aware aggressive microcompact trimmed tool-heavy context \u00b7 older continuation region collapsed into a bounded partial summary",
+      "droppedMessageCount": 51,
       "plannedModes": [
         "api_microcompact",
         "partial_compaction"
       ],
       "preservedRawStartIndex": 54,
-      "pressureLevel": "critical",
-      "reactiveAttempt": 0,
-      "reinjectionLines": [],
-      "reinjectionSummary": null,
-      "selectedMode": "api_microcompact",
+      "pressureLevel": "high",
+      "reactiveAttempt": 1,
+      "reinjectionLines": [
+        "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17",
+        "relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py"
+      ],
+      "reinjectionSummary": "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py",
+      "selectedMode": "partial_compaction",
       "steps": [
         {
           "applied": true,
@@ -42,10 +46,24 @@
           "droppedMessageCount": 0,
           "mode": "api_microcompact",
           "reinjectionLines": [],
-          "tokensSavedEstimate": 17320
+          "tokensSavedEstimate": "<token-estimate>"
+        },
+        {
+          "applied": true,
+          "compactedMessageCount": 1,
+          "detail": "older continuation region collapsed into a bounded partial summary",
+          "droppedMessageCount": 51,
+          "mode": "partial_compaction",
+          "reinjectionLines": [
+            "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17",
+            "relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py"
+          ],
+          "reinjectionSummary": "recent requests: inspect file 14 | inspect file 15 | inspect file 16 | inspect file 17 | relevant files: /tmp/workspace/file0.py, /tmp/workspace/file1.py",
+          "requiresReinjection": true,
+          "tokensSavedEstimate": "<token-estimate>"
         }
       ],
-      "tokensSavedEstimate": 17320
+      "tokensSavedEstimate": "<token-estimate>"
     }
   },
   {
@@ -64,7 +82,7 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "plain",
-    "renderedPrompt": "<context_relief>\npressure_level=critical\nreactive_attempt=2\nselected_mode=session_memory_compaction\nplanned_mode=api_microcompact\nplanned_mode=session_memory_compaction\nplanned_mode=partial_compaction\napplied_mode=session_memory_compaction\ntokens_saved_estimate=700\ndetail=older raw context collapsed into retrieved durable session memory\nreinjection_summary=Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026 | durable memory: Use pytest for focused parity validation.\nreinjection=Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.\nreinjection=recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\nreinjection=durable memory: Use pytest for focused parity validation.\nreinjection=durable memory: Continuation lives in agent_core/context/continuation.\nreinjection=durable memory: Preserve active plan and todo state.\n</context_relief>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=critical\nreactive_attempt=2\nselected_mode=session_memory_compaction\nreinjection_summary=Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026 | durable memory: Use pytest for focused parity validation.\nreinjection=Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.\nreinjection=recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\nreinjection=durable memory: Use pytest for focused parity validation.\nreinjection=durable memory: Continuation lives in agent_core/context/continuation.\nreinjection=durable memory: Preserve active plan and todo state.\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
@@ -108,10 +126,10 @@
           ],
           "reinjectionSummary": "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026 | durable memory: Use pytest for focused parity validation.",
           "requiresReinjection": true,
-          "tokensSavedEstimate": 700
+          "tokensSavedEstimate": "<token-estimate>"
         }
       ],
-      "tokensSavedEstimate": 700
+      "tokensSavedEstimate": "<token-estimate>"
     }
   },
   {
@@ -130,7 +148,7 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "plain",
-    "renderedPrompt": "<context_relief>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nplanned_mode=api_microcompact\nplanned_mode=partial_compaction\napplied_mode=partial_compaction\ntokens_saved_estimate=592\ndetail=older continuation region collapsed into a bounded partial summary\nreinjection_summary=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\n</context_relief>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=high\nreactive_attempt=1\nselected_mode=partial_compaction\nreinjection_summary=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
@@ -165,10 +183,10 @@
           ],
           "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026",
           "requiresReinjection": true,
-          "tokensSavedEstimate": 592
+          "tokensSavedEstimate": "<token-estimate>"
         }
       ],
-      "tokensSavedEstimate": 592
+      "tokensSavedEstimate": "<token-estimate>"
     }
   }
 ]

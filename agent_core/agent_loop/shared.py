@@ -15,6 +15,7 @@ from ..config import (
     resolveFallbackProviderProfileName,
 )
 from ..compaction import runCompaction, shouldAutoCompact
+from ..context_policy import decideDurableCheckpoint, estimateRawContextPressure
 from ..continuation import buildContinuationContext
 from ..provider_errors import fallbackEligibleProviderFailure, isProviderRequestError
 from ..providers.anthropic import sendAnthropicMessagesRequest

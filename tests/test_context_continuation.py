@@ -29,20 +29,26 @@ class ContextContinuationTests(AgentCoreTestCase):
         messages.append({"role": "user", "content": "continue from latest file inspection"})
 
         pressure = core.classifyContextPressure({"session": session, "messages": messages})
-        self.assertGreaterEqual(pressure["categories"]["currentTurnToolPayloadTokens"], core.RELIEF_PRESSURE_API_MICROCOMPACT_TOKENS)
+        self.assertGreater(pressure["categories"]["currentTurnToolPayloadTokens"], 0)
         self.assertGreater(pressure["categories"]["repeatedFileContentTokens"], 0)
 
-        idle_relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
-        self.assertIn("time_based_microcompact", idle_relief["summary"]["plannedModes"])
+        unscheduled_relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
+        self.assertEqual(unscheduled_relief["summary"]["plannedModes"], [])
+        self.assertFalse(unscheduled_relief["summary"]["applied"])
 
         session["updatedAt"] = "2999-01-01T00:00:00Z"
-        relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
+        scheduled_messages = [{"role": "user", "content": "x" * 810_000}, *messages]
+        relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": scheduled_messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
         summary = relief["summary"]
         self.assertIn("api_microcompact", summary["plannedModes"])
         self.assertIn("api_microcompact", summary["appliedModes"])
         self.assertGreater(summary["tokensSavedEstimate"], 0)
         prompt = core.renderContextReliefPrompt(summary)
         self.assertIsNone(prompt)
+
+        reactive_relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}, "reactiveAttempt": 1})
+        self.assertIn("api_microcompact", reactive_relief["summary"]["plannedModes"])
+        self.assertEqual(reactive_relief["summary"]["pressureLevel"], "high")
 
     def test_continuation_session_memory_reinjection_and_partial_summary(self):
         session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")

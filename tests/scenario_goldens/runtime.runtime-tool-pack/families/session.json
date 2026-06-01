@@ -114,12 +114,17 @@
     "prUrl": null,
     "runtimeRestore": {
       "activeTasks": [],
+      "contextReliefEscalationReason": "",
+      "contextReliefEscalationRequested": false,
       "lastContextReliefDetail": null,
+      "lastContextReliefKind": "none",
       "lastContextReliefMode": "none",
       "lastContextReliefPressureLevel": "low",
+      "lastContextReliefProjectionHash": "5cc2256acd42dce2",
       "lastContextReliefReactiveAttempt": 0,
       "lastContextReliefReinjectionSummary": null,
       "lastTaskEventAt": null,
+      "recentContextReliefCount": 0,
       "restoredTaskCount": 0,
       "savedAt": "<timestamp>"
     },

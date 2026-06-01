@@ -26,6 +26,8 @@
   {
     "event": "context_relief.selected",
     "payload": {
+      "compactions": null,
+      "durableCheckpointAvailable": null,
       "mode": "microcompact",
       "plannedModes": [
         "microcompact",
@@ -34,6 +36,7 @@
       "pressureLevel": "high",
       "reactiveAttempt": 1,
       "reason": null,
+      "reliefWithoutCheckpoint": null,
       "tokenEstimate": null
     }
   },
@@ -41,15 +44,18 @@
     "event": "context_relief.applied",
     "payload": {
       "compactedMessageCount": 2,
+      "compactions": null,
       "detail": "trimmed",
       "droppedMessageCount": 3,
+      "durableCheckpointAvailable": null,
       "mode": "api_microcompact",
       "modes": [],
       "pressureLevel": "not-a-pressure",
       "reactiveAttempt": 0,
       "reinjectionSectionCount": 2,
       "reinjectionSummary": "summary",
-      "tokensSavedEstimate": 42
+      "reliefWithoutCheckpoint": null,
+      "tokensSavedEstimate": "<token-estimate>"
     }
   },
   {
@@ -58,6 +64,42 @@
       "text": "continue"
     },
     "event": "message.user"
+  },
+  {
+    "data": {
+      "assistant_tool_use_count": 0,
+      "elapsed_ms_since_last_checkpoint": "<duration-ms>",
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "session_id": "<uuid:5>",
+      "tool_result_count": 0,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0
+    },
+    "event": "context.raw_pressure"
+  },
+  {
+    "data": {
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "reason": "raw session pressure is below the durable checkpoint token limit",
+      "session_id": "<uuid:5>",
+      "should_checkpoint": false,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0,
+      "trigger": null
+    },
+    "event": "compaction.decision"
   },
   {
     "data": {
@@ -86,7 +128,7 @@
         "reinjectionSummary": null,
         "selectedMode": "none",
         "steps": [],
-        "tokensSavedEstimate": 0
+        "tokensSavedEstimate": "<token-estimate>"
       },
       "input_tokens": 1000,
       "model": "gpt-5.4",
@@ -101,6 +143,44 @@
   },
   {
     "data": {
+      "assistant_tool_use_count": 0,
+      "elapsed_ms_since_last_checkpoint": "<duration-ms>",
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "session_id": "<uuid:5>",
+      "tool_result_count": 0,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0
+    },
+    "event": "context.raw_pressure"
+  },
+  {
+    "data": {
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "reason": "raw session pressure is below the durable checkpoint token limit",
+      "session_id": "<uuid:5>",
+      "should_checkpoint": false,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0,
+      "trigger": null
+    },
+    "event": "compaction.decision"
+  },
+  {
+    "data": {
+      "compactions": 0,
+      "durable_checkpoint_available": false,
       "mode": "partial_compaction",
       "planned_modes": [
         "api_microcompact",
@@ -109,6 +189,7 @@
       "pressure_level": "high",
       "reactive_attempt": 1,
       "reason": "older continuation region collapsed into a bounded partial summary",
+      "relief_without_checkpoint": true,
       "session_id": "<uuid:5>",
       "token_estimate": "<token-estimate>"
     },
@@ -117,8 +198,10 @@
   {
     "data": {
       "compacted_message_count": 1,
+      "compactions": 0,
       "detail": "older continuation region collapsed into a bounded partial summary",
       "dropped_message_count": 19,
+      "durable_checkpoint_available": false,
       "mode": "partial_compaction",
       "modes": [
         "partial_compaction"
@@ -127,8 +210,9 @@
       "reactive_attempt": 1,
       "reinjection_section_count": 2,
       "reinjection_summary": "recent requests: plain context message 12 for /tmp/workspace/app.py and pytest | plain context message 14 for /tmp/workspace/app.py and pytest | plain context message 16 for /tmp/workspace/app.py and pytest | plain context message 18 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 13 for /tmp/workspace/app.py and pytest | plain context message 15 for /tmp/workspace/app.py and pytest | plain context message 17 for /tmp/workspace/app.py and pytest | plain context message 19 for /tmp/workspace/app\u2026",
+      "relief_without_checkpoint": true,
       "session_id": "<uuid:5>",
-      "tokens_saved_estimate": 225
+      "tokens_saved_estimate": "<token-estimate>"
     },
     "event": "context_relief.applied"
   },
@@ -179,10 +263,10 @@
             ],
             "reinjectionSummary": "recent requests: plain context message 12 for /tmp/workspace/app.py and pytest | plain context message 14 for /tmp/workspace/app.py and pytest | plain context message 16 for /tmp/workspace/app.py and pytest | plain context message 18 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 13 for /tmp/workspace/app.py and pytest | plain context message 15 for /tmp/workspace/app.py and pytest | plain context message 17 for /tmp/workspace/app.py and pytest | plain context message 19 for /tmp/workspace/app\u2026",
             "requiresReinjection": true,
-            "tokensSavedEstimate": 225
+            "tokensSavedEstimate": "<token-estimate>"
           }
         ],
-        "tokensSavedEstimate": 225
+        "tokensSavedEstimate": "<token-estimate>"
       },
       "input_tokens": 1000,
       "model": "gpt-5.4",
@@ -194,6 +278,25 @@
       "source": "fake"
     },
     "event": "provider.input_tokens"
+  },
+  {
+    "data": {
+      "call_index": 1,
+      "context_relief_escalation_requested": false,
+      "context_relief_kind": "circuit_breaker",
+      "context_relief_mode": "partial_compaction",
+      "context_relief_pressure": "high",
+      "context_relief_projection_hash": "4a4e05555d1c2bc0",
+      "model": "gpt-5.4",
+      "provider": "openai",
+      "provider_profile": "codex",
+      "request_estimate_source": "fake",
+      "request_estimate_tokens": "<token-estimate>",
+      "session_id": "<uuid:5>",
+      "stop_reason": "end",
+      "usage": {}
+    },
+    "event": "provider.response_completed"
   },
   {
     "data": {
@@ -209,6 +312,42 @@
       "text": "continue"
     },
     "event": "message.user"
+  },
+  {
+    "data": {
+      "assistant_tool_use_count": 0,
+      "elapsed_ms_since_last_checkpoint": "<duration-ms>",
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "session_id": "<uuid:6>",
+      "tool_result_count": 0,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0
+    },
+    "event": "context.raw_pressure"
+  },
+  {
+    "data": {
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "reason": "raw session pressure is below the durable checkpoint token limit",
+      "session_id": "<uuid:6>",
+      "should_checkpoint": false,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0,
+      "trigger": null
+    },
+    "event": "compaction.decision"
   },
   {
     "data": {
@@ -237,7 +376,7 @@
         "reinjectionSummary": null,
         "selectedMode": "none",
         "steps": [],
-        "tokensSavedEstimate": 0
+        "tokensSavedEstimate": "<token-estimate>"
       },
       "input_tokens": 1000,
       "model": "gpt-5.4",
@@ -252,6 +391,44 @@
   },
   {
     "data": {
+      "assistant_tool_use_count": 0,
+      "elapsed_ms_since_last_checkpoint": "<duration-ms>",
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "session_id": "<uuid:6>",
+      "tool_result_count": 0,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0
+    },
+    "event": "context.raw_pressure"
+  },
+  {
+    "data": {
+      "has_durable_checkpoint": false,
+      "largest_tool_result_token_estimate": "<token-estimate>",
+      "latest_compaction_at": null,
+      "message_count": 23,
+      "messages_since_last_checkpoint": 23,
+      "raw_token_delta_since_last_checkpoint": "<token-estimate>",
+      "raw_token_estimate": "<token-estimate>",
+      "reason": "raw session pressure is below the durable checkpoint token limit",
+      "session_id": "<uuid:6>",
+      "should_checkpoint": false,
+      "tool_result_token_estimate_since_last_checkpoint": "<token-estimate>",
+      "tool_results_since_last_checkpoint": 0,
+      "trigger": null
+    },
+    "event": "compaction.decision"
+  },
+  {
+    "data": {
+      "compactions": 0,
+      "durable_checkpoint_available": false,
       "mode": "partial_compaction",
       "planned_modes": [
         "api_microcompact",
@@ -260,6 +437,7 @@
       "pressure_level": "high",
       "reactive_attempt": 1,
       "reason": "older continuation region collapsed into a bounded partial summary",
+      "relief_without_checkpoint": true,
       "session_id": "<uuid:6>",
       "token_estimate": "<token-estimate>"
     },
@@ -268,8 +446,10 @@
   {
     "data": {
       "compacted_message_count": 1,
+      "compactions": 0,
       "detail": "older continuation region collapsed into a bounded partial summary",
       "dropped_message_count": 19,
+      "durable_checkpoint_available": false,
       "mode": "partial_compaction",
       "modes": [
         "partial_compaction"
@@ -278,8 +458,9 @@
       "reactive_attempt": 1,
       "reinjection_section_count": 2,
       "reinjection_summary": "recent requests: plain context message 12 for /tmp/workspace/app.py and pytest | plain context message 14 for /tmp/workspace/app.py and pytest | plain context message 16 for /tmp/workspace/app.py and pytest | plain context message 18 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 13 for /tmp/workspace/app.py and pytest | plain context message 15 for /tmp/workspace/app.py and pytest | plain context message 17 for /tmp/workspace/app.py and pytest | plain context message 19 for /tmp/workspace/app\u2026",
+      "relief_without_checkpoint": true,
       "session_id": "<uuid:6>",
-      "tokens_saved_estimate": 225
+      "tokens_saved_estimate": "<token-estimate>"
     },
     "event": "context_relief.applied"
   },

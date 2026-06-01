@@ -14,18 +14,8 @@ def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
 
 def shouldAutoCompact(session: dict[str, Any], currentInputTokens: int | None = None) -> dict[str, Any]:
     current_token_estimate = currentInputTokens if currentInputTokens is not None else estimateWorkingContextTokens(session)
-    previous_state = session.get("metadata", {}).get("compactionState")
-    if current_token_estimate >= HARD_WORKING_CONTEXT_TOKEN_LIMIT:
+    if current_token_estimate >= WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT:
         return {"shouldCompact": True, "trigger": "auto_hard_limit", "currentTokenEstimate": current_token_estimate}
-    if current_token_estimate >= SOFT_WORKING_CONTEXT_TOKEN_LIMIT:
-        if previous_state:
-            message_delta = max(0, len(session.get("messages", [])) - int(previous_state.get("archiveMessageCount") or 0))
-            measurement = previous_state.get("workingContextTokenMeasurement") or {}
-            previous_tokens = int(measurement.get("inputTokens") or previous_state.get("workingContextTokenEstimate") or 0)
-            token_delta = max(0, current_token_estimate - previous_tokens)
-            if message_delta < AUTO_SOFT_RETRIGGER_MESSAGE_DELTA and token_delta < AUTO_SOFT_RETRIGGER_TOKEN_DELTA:
-                return {"shouldCompact": False, "currentTokenEstimate": current_token_estimate}
-        return {"shouldCompact": True, "trigger": "auto_soft_limit", "currentTokenEstimate": current_token_estimate}
     return {"shouldCompact": False, "currentTokenEstimate": current_token_estimate}
 
 
@@ -76,12 +66,12 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     messages = session.get("messages", [])
     previous_cutoff = int(session.get("metadata", {}).get("compactionState", {}).get("compactedThroughMessageIndex") or 0)
 
-    if len(messages) < (MIN_RECENT_MESSAGE_COUNT + 2 if force else MIN_COMPACTABLE_MESSAGE_COUNT):
+    if not messages:
         return {
             "status": "skipped",
             "trigger": trigger,
-            "reason": "below_threshold",
-            "detail": "Conversation does not yet have enough history to produce a useful checkpoint.",
+            "reason": "no_legal_cutoff",
+            "detail": "No safe compaction boundary is available yet.",
             "previousCutoff": previous_cutoff,
         }
 

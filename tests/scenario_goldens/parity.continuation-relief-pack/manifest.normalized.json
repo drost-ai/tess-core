@@ -39,7 +39,7 @@
         "action": "continuation_relief",
         "fixture": "tool-heavy",
         "name": "api-repeated-payload",
-        "reactiveAttempt": 0,
+        "reactiveAttempt": 1,
         "sessionId": "continuation-api-session"
       }
     },

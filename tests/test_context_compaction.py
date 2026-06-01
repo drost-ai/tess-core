@@ -200,15 +200,14 @@ class ContextCompactionTests(AgentCoreTestCase):
 
     def test_compaction_retrigger_policy_and_safe_tool_boundaries(self):
         session = {"messages": [{"role": "user", "content": str(index)} for index in range(110)], "metadata": {"compactionState": {"archiveMessageCount": 100, "workingContextTokenEstimate": 150_000}}}
-        suppressed = core.shouldAutoCompact(session, currentInputTokens=160_000)
-        self.assertFalse(suppressed["shouldCompact"])
-        hard = core.shouldAutoCompact(session, currentInputTokens=181_000)
+        below = core.shouldAutoCompact(session, currentInputTokens=199_999)
+        self.assertFalse(below["shouldCompact"])
+        hard = core.shouldAutoCompact(session, currentInputTokens=200_000)
         self.assertTrue(hard["shouldCompact"])
         self.assertEqual(hard["trigger"], "auto_hard_limit")
         session["messages"].extend({"role": "user", "content": str(index)} for index in range(20))
-        soft = core.shouldAutoCompact(session, currentInputTokens=160_000)
-        self.assertTrue(soft["shouldCompact"])
-        self.assertEqual(soft["trigger"], "auto_soft_limit")
+        message_delta_only = core.shouldAutoCompact(session, currentInputTokens=160_000)
+        self.assertFalse(message_delta_only["shouldCompact"])
 
         messages = [
             {"role": "user", "content": "start"},
@@ -217,7 +216,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "{\"file\":{\"filePath\":\"/tmp/a.py\",\"content\":\"x\"}}"}]},
             {"role": "user", "content": "safe restart"},
         ]
-        self.assertFalse(core.isSafeWorkingSetStart(messages, 2))
+        self.assertTrue(core.isSafeWorkingSetStart(messages, 2))
         self.assertFalse(core.isSafeWorkingSetStart(messages, 3))
         self.assertTrue(core.isSafeWorkingSetStart(messages, 4))
         evidence = core.buildCompactionEvidence({"sourceMessages": messages[2:4], "sourceStart": 2, "cwd": "/tmp", "tokenBudget": 10_000})
@@ -337,7 +336,7 @@ class ContextCompactionTests(AgentCoreTestCase):
 
             async def fake_measure(_args):
                 measure_calls["count"] += 1
-                return {"inputTokens": 181_000 if measure_calls["count"] == 1 else 1_000, "source": "fake"}
+                return {"inputTokens": 200_000 if measure_calls["count"] == 1 else 1_000, "source": "fake"}
 
             async def fake_run_compaction(args):
                 compaction_calls.append(args)
@@ -355,7 +354,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                     "compactedThroughMessageIndex": 11,
                     "compactedMessageCount": 11,
                     "recentMessageCount": len(args["session"].get("messages", [])) - 11,
-                    "rawTokenEstimate": 181_000,
+                    "rawTokenEstimate": 200_000,
                     "workingContextTokenEstimate": 1_000,
                     "qualityClassification": "usable",
                     "compactionModel": {"provider": "openai", "model": "gpt-5.3-codex-spark"},
@@ -384,5 +383,60 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastCompactionMode"], "full_checkpoint_compaction")
         finally:
             agent_module.measureRequestInputTokens = original_measure
+            agent_module.runCompaction = original_run_compaction
+            self.restore_home(root, previous)
+
+    def test_raw_session_checkpoint_runs_before_request_relief(self):
+        import agent_core.agent as agent_module
+
+        root, home, workspace, previous = self.temp_context()
+        original_run_compaction = agent_module.runCompaction
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session["messages"] = [{"role": "user", "content": "x" * 810_000}]
+            compaction_calls = []
+            events = []
+
+            async def fake_run_compaction(args):
+                compaction_calls.append(args)
+                args["session"].setdefault("metadata", {})["compactionState"] = {
+                    "latestCompactionAt": "2026-01-01T00:00:00Z",
+                    "compactedThroughMessageIndex": 1,
+                    "compactedContextTokenEstimate": 500,
+                    "workingContextTokenEstimate": 500,
+                    "archiveMessageCount": len(args["session"].get("messages", [])),
+                    "rawTokenEstimate": 202_500,
+                    "artifacts": {},
+                }
+                return {
+                    "status": "completed",
+                    "generation": 1,
+                    "trigger": args["trigger"],
+                    "compactedThroughMessageIndex": 1,
+                    "compactedMessageCount": 1,
+                    "recentMessageCount": 0,
+                    "rawTokenEstimate": 202_500,
+                    "workingContextTokenEstimate": 500,
+                    "qualityClassification": "usable",
+                    "compactionModel": {"provider": "openai", "model": "gpt-5.3-codex-spark"},
+                    "verificationModel": {"provider": "openai", "model": "gpt-5.3-codex-spark"},
+                    "verification": {"verdict": "accept", "confidence": "high", "reason": "ok", "issues": [], "notes": []},
+                    "artifacts": {"summary": "summary.md", "state": "state.json", "workingContext": "working-context.json", "checkpoint": "checkpoint.json"},
+                }
+
+            agent_module.runCompaction = fake_run_compaction
+            result = run(agent_module.maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}}))
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(len(compaction_calls), 1)
+            self.assertEqual(compaction_calls[0]["trigger"], "auto_raw_hard_limit")
+            self.assertTrue(any(event == "context.raw_pressure" and data["raw_token_estimate"] >= 200_000 for event, data in events))
+            decision = next(data for event, data in events if event == "compaction.decision")
+            self.assertTrue(decision["should_checkpoint"])
+            self.assertEqual(decision["trigger"], "auto_raw_hard_limit")
+            started = next(data for event, data in events if event == "compaction.started")
+            self.assertEqual(started["current_token_source"], "raw_session_estimate")
+        finally:
             agent_module.runCompaction = original_run_compaction
             self.restore_home(root, previous)

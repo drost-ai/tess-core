@@ -145,10 +145,9 @@ def _messages() -> list[dict[str, Any]]:
 def _messages_for_fixture(name: Any) -> list[dict[str, Any]]:
     if name == "unsafe-cutoff-session":
         messages = [{"role": "user", "content": "bootstrap context before unsafe tool tail"}]
-        for index in range(15):
+        for index in range(24):
             tool_id = f"todo-{index}"
             messages.append({"role": "assistant", "content": [{"type": "tool_use", "id": tool_id, "name": "TodoWrite", "input": {"items": [f"low-value update {index}"]}}]})
-            messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": "ok"}]})
         return messages
     if name == "short-session":
         return [{"role": "user", "content": "too short"}, {"role": "assistant", "content": "ack"}]

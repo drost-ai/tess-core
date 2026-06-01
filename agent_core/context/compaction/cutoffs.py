@@ -4,7 +4,7 @@ from .shared import *
 
 
 def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, previousCutoff: int = 0) -> int | None:
-    if len(messages) < (MIN_RECENT_MESSAGE_COUNT + 2 if force else MIN_COMPACTABLE_MESSAGE_COUNT):
+    if not messages:
         return None
     tool_aware_cutoff = chooseToolAwareCompactionCutoff(messages, previousCutoff)
     if tool_aware_cutoff is not None and tool_aware_cutoff > previousCutoff:
@@ -44,36 +44,63 @@ def chooseToolAwareCompactionCutoff(messages: list[dict[str, Any]], previousCuto
 
 
 def collectSubstantiveToolExchangeStarts(messages: list[dict[str, Any]], previousCutoff: int = 0) -> list[int]:
-    tool_uses: dict[str, dict[str, Any]] = {}
-    starts: set[int] = set()
+    tool_results = collectToolResultIds(messages)
+    starts: list[int] = []
     for message_index, message in enumerate(messages):
-        if message_index < previousCutoff or not isinstance(message.get("content"), list):
+        if message_index <= previousCutoff or message.get("role") != "assistant" or not isinstance(message.get("content"), list):
             continue
-        if message.get("role") == "assistant":
-            for block in message["content"]:
-                if block.get("type") == "tool_use":
-                    tool_uses[str(block.get("id"))] = {"name": block.get("name"), "messageIndex": message_index}
+        tool_uses = [block for block in message["content"] if isinstance(block, dict) and block.get("type") == "tool_use"]
+        if not tool_uses:
             continue
-        for block in message["content"]:
-            if block.get("type") != "tool_result":
-                continue
-            tool_use = tool_uses.get(str(block.get("tool_use_id")))
-            if not tool_use or tool_use.get("name") in LOW_VALUE_TAIL_TOOL_NAMES or int(tool_use.get("messageIndex") or 0) <= previousCutoff:
-                continue
-            starts.add(int(tool_use["messageIndex"]))
-    return sorted(starts)
+        has_substantive_tool = any(tool_use.get("name") not in LOW_VALUE_TAIL_TOOL_NAMES for tool_use in tool_uses)
+        if not has_substantive_tool:
+            continue
+        if all(str(tool_use.get("id") or "") in tool_results for tool_use in tool_uses):
+            starts.append(message_index)
+    return starts
+
+
+def collectToolResultIds(messages: list[dict[str, Any]]) -> set[str]:
+    result_ids: set[str] = set()
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_result":
+                result_ids.add(str(block.get("tool_use_id") or ""))
+    return result_ids
 
 
 def isSafeWorkingSetStart(messages: list[dict[str, Any]], index: int) -> bool:
     current = messages[index] if 0 <= index < len(messages) else None
-    if not current or current.get("role") != "user":
+    if not current:
         return False
-    if messageHasToolResults(current):
+    if current.get("role") == "user":
+        if messageHasToolResults(current):
+            return False
+        previous = messages[index - 1] if index > 0 else None
+        return not (previous and previous.get("role") == "assistant" and messageHasToolUses(previous))
+    if current.get("role") != "assistant":
         return False
-    previous = messages[index - 1] if index > 0 else None
-    if previous and previous.get("role") == "assistant" and messageHasToolUses(previous):
+    if not messageHasToolUses(current):
+        return True
+    return assistantToolUsesAreCompleted(messages, index)
+
+
+def assistantToolUsesAreCompleted(messages: list[dict[str, Any]], index: int) -> bool:
+    message = messages[index] if 0 <= index < len(messages) else None
+    if not message or not isinstance(message.get("content"), list):
         return False
-    return True
+    tool_use_ids = [
+        str(block.get("id") or "")
+        for block in message["content"]
+        if isinstance(block, dict) and block.get("type") == "tool_use"
+    ]
+    if not tool_use_ids:
+        return True
+    result_ids = collectToolResultIds(messages[index + 1 :])
+    return all(tool_id in result_ids for tool_id in tool_use_ids)
 
 
 def messageHasToolUses(message: dict[str, Any]) -> bool:

@@ -83,21 +83,19 @@
     },
     {
       "messages": {
-        "afterCount": 41,
+        "afterCount": 4,
         "beforeCount": 41,
         "hasLatestRawTail": true,
-        "hasPartialSummary": false,
+        "hasPartialSummary": true,
         "hasRepeatedFileOmission": true,
         "rolesHead": [
           "user",
-          "assistant",
           "user",
           "assistant",
           "user"
         ],
         "rolesTail": [
           "user",
-          "assistant",
           "user",
           "assistant",
           "user"
@@ -144,25 +142,32 @@
       },
       "reinjection": {
         "hasDurableMemory": false,
-        "hasRelevantFiles": false,
-        "lineCount": 0,
-        "lines": []
+        "hasRelevantFiles": true,
+        "lineCount": 3,
+        "lines": [
+          "recent requests: inspect repeated payload 6 | inspect repeated payload 7 | inspect repeated payload 8 | inspect repeated payload 9",
+          "relevant files: src/repeated.py",
+          "assistant findings: noted repeated payload 5 | noted repeated payload 6 | noted repeated payload 7 | noted repeated payload 8"
+        ],
+        "summary": "recent requests: inspect repeated payload 6 | inspect repeated payload 7 | inspect repeated payload 8 | inspect repeated payload 9 | relevant files: src/repeated.py | assistant findings: noted repeated payload 5 | noted repeated payload 6 | noted repeated payload 7 | noted repeated payload 8"
       },
       "selection": {
         "applied": true,
         "appliedModes": [
-          "api_microcompact"
+          "api_microcompact",
+          "partial_compaction"
         ],
-        "compactedMessageCount": 40,
-        "droppedMessageCount": 0,
+        "compactedMessageCount": 41,
+        "droppedMessageCount": 37,
         "plannedModes": [
-          "api_microcompact"
+          "api_microcompact",
+          "partial_compaction"
         ],
         "preservedRawStartIndex": 40,
-        "pressureLevel": "elevated",
-        "reactiveAttempt": 0,
-        "selectedMode": "api_microcompact",
-        "tokensSavedEstimate": "medium"
+        "pressureLevel": "high",
+        "reactiveAttempt": 1,
+        "selectedMode": "partial_compaction",
+        "tokensSavedEstimate": "large"
       },
       "steps": [
         {
@@ -171,6 +176,15 @@
           "detail": "provider-aware aggressive microcompact trimmed tool-heavy context",
           "droppedMessageCount": 0,
           "mode": "api_microcompact",
+          "tokensSavedEstimate": "medium"
+        },
+        {
+          "applied": true,
+          "compactedMessageCount": 1,
+          "detail": "older continuation region collapsed into a bounded partial summary",
+          "droppedMessageCount": 37,
+          "mode": "partial_compaction",
+          "requiresReinjection": true,
           "tokensSavedEstimate": "medium"
         }
       ]

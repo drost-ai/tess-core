@@ -8,13 +8,11 @@
         },
         "hard": {
           "currentTokenEstimate": "<token-estimate>",
-          "shouldCompact": true,
-          "trigger": "auto_hard_limit"
+          "shouldCompact": false
         },
         "soft": {
           "currentTokenEstimate": "<token-estimate>",
-          "shouldCompact": true,
-          "trigger": "auto_soft_limit"
+          "shouldCompact": false
         },
         "suppressed": {
           "currentTokenEstimate": "<token-estimate>",

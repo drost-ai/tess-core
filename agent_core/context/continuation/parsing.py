@@ -85,15 +85,3 @@ def _tool_result_content_string(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError):
         return str(value)
-
-
-def _idle_gap_ms(updated_at: Any) -> int:
-    if not isinstance(updated_at, str) or not updated_at:
-        return 0
-    try:
-        parsed = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-    except ValueError:
-        return 0
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return max(0, int((datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds() * 1000))

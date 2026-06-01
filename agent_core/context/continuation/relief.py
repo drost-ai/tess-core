@@ -132,36 +132,36 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
     pressure = args["pressure"]
     pressure_level = args["pressureLevel"]
     retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}
-    idle_gap_ms = _idle_gap_ms(session.get("updatedAt"))
-    tool_payload = pressure["categories"]["currentTurnToolPayloadTokens"]
     repeated_file_tokens = pressure["categories"]["repeatedFileContentTokens"]
     strong_session_memory = len(retrieved_memory.get("records") or []) >= 4 and int(retrieved_memory.get("tokenEstimate") or 0) >= 500
     aggressive = bool(args.get("aggressive"))
+    scheduled = pressure["totalTokenEstimate"] >= RELIEF_CONTEXT_TOKEN_LIMIT
+    reactive = aggressive or int(args.get("reactiveAttempt") or 0) >= 1
+    if not scheduled and not reactive:
+        return []
     high_pressure = pressure_level in {"high", "critical"}
     critical_pressure = pressure_level == "critical"
 
-    if idle_gap_ms >= RELIEF_IDLE_GAP_MS and tool_payload >= 3_000:
-        modes.append("time_based_microcompact")
-    elif (
-        tool_payload >= RELIEF_PRESSURE_API_MICROCOMPACT_TOKENS
+    if (
+        scheduled
         or repeated_file_tokens >= 8_000
         or aggressive
         or int(args.get("reactiveAttempt") or 0) >= 1
         or high_pressure
     ):
         modes.append("api_microcompact" if supportsApiMicrocompact(args.get("config") or {}) else "microcompact")
-    elif tool_payload >= RELIEF_PRESSURE_MICROCOMPACT_TOKENS or pressure["categories"]["lowValueTailTokens"] >= 2_000 or pressure_level == "elevated":
+    elif scheduled or pressure["categories"]["lowValueTailTokens"] >= 2_000:
         modes.append("microcompact")
 
     if strong_session_memory and (
-        pressure["totalTokenEstimate"] >= RELIEF_PRESSURE_SESSION_MEMORY_TOKENS
+        scheduled
         or high_pressure
         or int(args.get("reactiveAttempt") or 0) >= 2
     ):
         modes.append("session_memory_compaction")
 
     if (
-        pressure["totalTokenEstimate"] >= RELIEF_PRESSURE_PARTIAL_TOKENS
+        scheduled
         or high_pressure
         or (aggressive and pressure["totalTokenEstimate"] >= 70_000)
         or int(args.get("reactiveAttempt") or 0) >= 1
@@ -176,7 +176,7 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
 def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
     mode = args["mode"]
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
-    if mode in {"microcompact", "time_based_microcompact"}:
+    if mode == "microcompact":
         result = applyCompactPrefix(
             args["messages"],
             {
@@ -196,9 +196,7 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
                 "compactedMessageCount": result["summary"]["compactedMessageCount"],
                 "droppedMessageCount": result["summary"]["droppedMessageCount"],
                 "tokensSavedEstimate": result["summary"]["tokensSavedEstimate"],
-                "detail": "time gap and tool-heavy tail triggered cheap context relief"
-                if mode == "time_based_microcompact"
-                else "tool-heavy tail compacted with deterministic microcompact",
+                "detail": "tool-heavy tail compacted with deterministic microcompact",
                 "reinjectionLines": [],
             },
             "preservedRawStartIndex": result["summary"]["preservedRawStartIndex"],
@@ -277,27 +275,13 @@ def supportsApiMicrocompact(config: dict[str, Any]) -> bool:
 
 
 def classifyContextReliefPressure(pressure: dict[str, Any], reactiveAttempt: int) -> str:
-    categories = pressure["categories"]
     if (
         reactiveAttempt >= 2
-        or pressure["totalTokenEstimate"] >= RELIEF_PRESSURE_SESSION_MEMORY_TOKENS
-        or categories["currentTurnToolPayloadTokens"] >= 24_000
-        or categories["repeatedFileContentTokens"] >= 16_000
+        or pressure["totalTokenEstimate"] >= RELIEF_CONTEXT_TOKEN_LIMIT
     ):
         return "critical"
-    if (
-        reactiveAttempt >= 1
-        or pressure["totalTokenEstimate"] >= RELIEF_PRESSURE_PARTIAL_TOKENS
-        or categories["currentTurnToolPayloadTokens"] >= 14_000
-        or categories["repeatedFileContentTokens"] >= 10_000
-    ):
+    if reactiveAttempt >= 1:
         return "high"
-    if (
-        pressure["totalTokenEstimate"] >= 55_000
-        or categories["currentTurnToolPayloadTokens"] >= RELIEF_PRESSURE_MICROCOMPACT_TOKENS
-        or categories["lowValueTailTokens"] >= 2_000
-    ):
-        return "elevated"
     return "low"
 
 
@@ -306,9 +290,7 @@ def isContextPressureRelieved(pressure: dict[str, Any], originalPressureLevel: s
         return False
     current = classifyContextReliefPressure(pressure, 0)
     if originalPressureLevel == "critical":
-        return current in {"high", "elevated", "low"}
+        return current in {"high", "low"}
     if originalPressureLevel == "high":
-        return current in {"elevated", "low"}
-    if originalPressureLevel == "elevated":
         return current == "low"
     return True

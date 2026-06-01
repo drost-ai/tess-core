@@ -66,6 +66,9 @@ class NormalizationContext:
             for key in value:
                 if "tokens" in key.lower():
                     value[key] = "<token-estimate>"
+        for key in ("elapsed_ms_since_last_checkpoint", "elapsedMsSinceLastCheckpoint"):
+            if key in value:
+                value[key] = "<duration-ms>"
         return value
 
     def _normalize_int(self, value: int, key_path: tuple[str, ...]) -> Any:
@@ -148,7 +151,10 @@ def _is_estimated_token_record(value: dict[str, Any]) -> bool:
 
 def _is_token_estimate_key(key: str) -> bool:
     normalized = key.replace("_", "")
-    return "tokenestimate" in normalized
+    return "tokenestimate" in normalized or ("token" in normalized and "estimate" in normalized) or normalized in {
+        "rawtokendeltasincelastcheckpoint",
+        "rawtokendelta",
+    }
 
 
 _TIMESTAMP_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")

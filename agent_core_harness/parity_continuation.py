@@ -29,7 +29,7 @@ async def run_continuation_relief(data: dict[str, Any], paths: dict[str, Any]) -
             "pressure": {"before": _project_pressure(before), "after": _project_pressure(after), "lightweight": _project_summary(lightweight["summary"])},
             "selection": _project_summary(summary),
             "steps": [_project_step(step) for step in summary.get("steps", [])],
-            "messages": _project_messages(messages, relief["messages"]),
+            "messages": _project_messages(messages, relief["messages"], summary),
             "reinjection": {
                 "lines": summary.get("reinjectionLines") or [],
                 "summary": summary.get("reinjectionSummary"),
@@ -132,14 +132,14 @@ def _token_bucket(value: Any) -> str:
     return "large"
 
 
-def _project_messages(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> dict[str, Any]:
+def _project_messages(before: list[dict[str, Any]], after: list[dict[str, Any]], summary: dict[str, Any]) -> dict[str, Any]:
     after_text = json.dumps(after, sort_keys=True)
     return {
         "beforeCount": len(before),
         "afterCount": len(after),
         "rolesHead": [message.get("role") for message in after[:5]],
         "rolesTail": [message.get("role") for message in after[-5:]],
-        "hasPartialSummary": "Partial continuation summary" in after_text,
+        "hasPartialSummary": "partial_compaction" in (summary.get("appliedModes") or []),
         "hasRepeatedFileOmission": "Repeated file content omitted" in after_text,
         "hasLatestRawTail": any("continue with continuation relief parity" in str(message.get("content")) for message in after[-4:]),
     }

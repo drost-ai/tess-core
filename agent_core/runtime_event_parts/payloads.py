@@ -124,6 +124,40 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "output": _field(data, "output"),
             "error": _optional_boolean(_field(data, "error")),
         }
+    if event == "context.raw_pressure":
+        return "context.raw_pressure", {
+            "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),
+            "messageCount": _optional_number(_field(data, "message_count", "messageCount")),
+            "assistantToolUseCount": _optional_number(_field(data, "assistant_tool_use_count", "assistantToolUseCount")),
+            "toolResultCount": _optional_number(_field(data, "tool_result_count", "toolResultCount")),
+            "messagesSinceLastCheckpoint": _optional_number(_field(data, "messages_since_last_checkpoint", "messagesSinceLastCheckpoint")),
+            "toolResultsSinceLastCheckpoint": _optional_number(_field(data, "tool_results_since_last_checkpoint", "toolResultsSinceLastCheckpoint")),
+            "rawTokenDeltaSinceLastCheckpoint": _optional_number(_field(data, "raw_token_delta_since_last_checkpoint", "rawTokenDeltaSinceLastCheckpoint")),
+            "toolResultTokenEstimateSinceLastCheckpoint": _optional_number(
+                _field(data, "tool_result_token_estimate_since_last_checkpoint", "toolResultTokenEstimateSinceLastCheckpoint")
+            ),
+            "largestToolResultTokenEstimate": _optional_number(_field(data, "largest_tool_result_token_estimate", "largestToolResultTokenEstimate")),
+            "elapsedMsSinceLastCheckpoint": _optional_number(_field(data, "elapsed_ms_since_last_checkpoint", "elapsedMsSinceLastCheckpoint")),
+            "hasDurableCheckpoint": _optional_boolean(_field(data, "has_durable_checkpoint", "hasDurableCheckpoint")),
+            "latestCompactionAt": _optional_string(_field(data, "latest_compaction_at", "latestCompactionAt")),
+        }
+    if event == "compaction.decision":
+        return "compaction.decision", {
+            "shouldCheckpoint": _optional_boolean(_field(data, "should_checkpoint", "shouldCheckpoint")),
+            "trigger": _optional_string(_field(data, "trigger")),
+            "reason": _optional_string(_field(data, "reason")),
+            "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),
+            "messageCount": _optional_number(_field(data, "message_count", "messageCount")),
+            "messagesSinceLastCheckpoint": _optional_number(_field(data, "messages_since_last_checkpoint", "messagesSinceLastCheckpoint")),
+            "toolResultsSinceLastCheckpoint": _optional_number(_field(data, "tool_results_since_last_checkpoint", "toolResultsSinceLastCheckpoint")),
+            "rawTokenDeltaSinceLastCheckpoint": _optional_number(_field(data, "raw_token_delta_since_last_checkpoint", "rawTokenDeltaSinceLastCheckpoint")),
+            "toolResultTokenEstimateSinceLastCheckpoint": _optional_number(
+                _field(data, "tool_result_token_estimate_since_last_checkpoint", "toolResultTokenEstimateSinceLastCheckpoint")
+            ),
+            "largestToolResultTokenEstimate": _optional_number(_field(data, "largest_tool_result_token_estimate", "largestToolResultTokenEstimate")),
+            "hasDurableCheckpoint": _optional_boolean(_field(data, "has_durable_checkpoint", "hasDurableCheckpoint")),
+            "latestCompactionAt": _optional_string(_field(data, "latest_compaction_at", "latestCompactionAt")),
+        }
     if event == "permission.requested":
         return "permission.requested", {"summary": _optional_string(_field(data, "summary"))}
     if event == "permission.decided":
@@ -147,6 +181,10 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "trigger": _optional_string(_field(data, "trigger")),
             "currentTokenEstimate": _optional_number(_field(data, "current_token_estimate", "currentTokenEstimate")),
             "currentTokenSource": _optional_string(_field(data, "current_token_source", "currentTokenSource")),
+            "decisionReason": _optional_string(_field(data, "decision_reason", "decisionReason")),
+            "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),
+            "messagesSinceLastCheckpoint": _optional_number(_field(data, "messages_since_last_checkpoint", "messagesSinceLastCheckpoint")),
+            "toolResultsSinceLastCheckpoint": _optional_number(_field(data, "tool_results_since_last_checkpoint", "toolResultsSinceLastCheckpoint")),
         }
     if event == "compaction.skipped":
         return "compaction.skipped", {
@@ -195,6 +233,9 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "pressureLevel": _optional_string(_field(data, "pressure_level", "pressureLevel")),
             "reactiveAttempt": _optional_number(_field(data, "reactive_attempt", "reactiveAttempt")),
             "plannedModes": _context_relief_mode_array(_field(data, "planned_modes", "plannedModes")),
+            "durableCheckpointAvailable": _optional_boolean(_field(data, "durable_checkpoint_available", "durableCheckpointAvailable")),
+            "compactions": _optional_number(_field(data, "compactions")),
+            "reliefWithoutCheckpoint": _optional_boolean(_field(data, "relief_without_checkpoint", "reliefWithoutCheckpoint")),
         }
     if event == "context_relief.applied":
         return "context_relief.applied", {
@@ -208,6 +249,9 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "reactiveAttempt": _optional_number(_field(data, "reactive_attempt", "reactiveAttempt")),
             "reinjectionSummary": _optional_string(_field(data, "reinjection_summary", "reinjectionSummary")),
             "reinjectionSectionCount": _optional_number(_field(data, "reinjection_section_count", "reinjectionSectionCount")),
+            "durableCheckpointAvailable": _optional_boolean(_field(data, "durable_checkpoint_available", "durableCheckpointAvailable")),
+            "compactions": _optional_number(_field(data, "compactions")),
+            "reliefWithoutCheckpoint": _optional_boolean(_field(data, "relief_without_checkpoint", "reliefWithoutCheckpoint")),
         }
     if event == "daemon.snapshot":
         return "daemon.snapshot", {
