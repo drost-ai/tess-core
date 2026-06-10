@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import time
 
+from ...contracts.providers import ProviderResponse
+
 from .shared import *
 
-async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
     config = args["config"]
     request = args["request"]

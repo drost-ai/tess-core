@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from ...contracts.providers import ProviderResponse
+
 from .shared import *
 
-async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
     if args["mode"] == "chat_completions":
         return await sendOpenAiChatCompletionsRequest(args)

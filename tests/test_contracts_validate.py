@@ -253,6 +253,35 @@ class ContractSyncTests(unittest.TestCase):
 
         self.assertEqual(validate(getDefaultAutoMode(), AutoModePolicy, strict=True), [])
 
+    def test_provider_failure_record_validates_strict(self) -> None:
+        from agent_core.contracts import ProviderFailureRecord
+        from agent_core.provider_errors import classifyProviderHttpFailure, createProviderFailureRecord
+
+        record = createProviderFailureRecord(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            phase="request_start",
+            category="server",
+            retryable=True,
+            attempt=1,
+            hadAssistantOutput=False,
+            hadToolUse=False,
+            rawMessage="boom",
+        )
+        self.assertEqual(validate(record, ProviderFailureRecord, strict=True), [])
+
+        error = classifyProviderHttpFailure(
+            provider="openai",
+            providerLabel="OpenAI",
+            phase="request_start",
+            status=429,
+            body="rate limited",
+            attempt=2,
+            hadAssistantOutput=False,
+            hadToolUse=False,
+        )
+        self.assertEqual(validate(error.record, ProviderFailureRecord, strict=True), [])
+
     def test_empty_session_record_validates_strict(self) -> None:
         from agent_core.storage import createEmptySession
 

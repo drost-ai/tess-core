@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from ._utils import now_iso
+from .contracts.providers import ProviderFailureRecord
 
 
 class ProviderRequestError(Exception):
@@ -18,7 +19,7 @@ def isProviderRequestError(error: BaseException | Any) -> bool:
     return isinstance(error, ProviderRequestError)
 
 
-def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderFailureRecord:
     args = {**(args or {}), **kwargs}
     return {
         "provider": args["provider"],
