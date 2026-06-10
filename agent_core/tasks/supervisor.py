@@ -4,6 +4,7 @@ import sys as _sys
 import types as _types
 
 from .supervisor_parts import *
+from ..contracts.records import launch_task_id
 from .supervisor_parts import _modules as _SUPERVISOR_PART_MODULES
 
 
@@ -254,7 +255,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "title": source.get("title"),
                 }
             )
-            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
             return retried
         if kind == "main_session":
             prompt = source.get("command")
@@ -268,14 +269,14 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "title": source.get("title"),
                 }
             )
-            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
             return retried
         if kind == "health_check":
             health = await loadHealthCheckTask(task_id)
             if not health:
                 raise RuntimeError(f"Health check metadata not found: {task_id}")
             retried = await start_health_check(health)
-            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
             return retried
         if kind == "subagent":
             metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
@@ -296,7 +297,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "parentTaskId": child.get("parentTaskId"),
                 }
             )
-            await _annotate_retry_lineage(task_id, retried.get("taskId") or retried.get("task_id"), source)
+            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
             return retried
         raise RuntimeError(f"Retry is not supported for task kind: {kind}")
 

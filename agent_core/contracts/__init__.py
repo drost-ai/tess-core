@@ -79,6 +79,9 @@ from .records import (
     TaskOwner,
     TaskRecord,
     TaskStatus,
+    launch_output_file,
+    launch_task_id,
+    task_meta_id,
 )
 from .tools import (
     ActivityDescriptor,
@@ -148,5 +151,8 @@ __all__ = [
     "event_payload",
     "event_session_id",
     "event_time",
+    "launch_output_file",
+    "launch_task_id",
+    "task_meta_id",
     "validate",
 ]

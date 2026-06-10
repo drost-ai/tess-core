@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...contracts.records import task_meta_id
 
 
 def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
@@ -153,7 +154,7 @@ def _build_remote_task_record(session: dict[str, Any], remote: dict[str, Any], b
 
 def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[str, Any] | None = None) -> dict[str, Any]:
     now = now_iso()
-    task_id = meta.get("taskId") or meta.get("task_id") or meta.get("id")
+    task_id = task_meta_id(meta)
     output_file = meta.get("outputFile") or taskOutputPath(task_id)
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
     output_preview = _read_output_preview(output_file)

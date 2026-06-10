@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...contracts.records import launch_output_file, launch_task_id
 
 
 async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -26,8 +27,8 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
         )
     else:
         launched = await _start_local_background_subagent(prepared)
-    task_id = launched.get("taskId") or launched.get("task_id")
-    output_file = launched.get("outputFile") or launched.get("output_file") or (taskOutputPath(task_id) if task_id else None)
+    task_id = launch_task_id(launched)
+    output_file = launch_output_file(launched) or (taskOutputPath(task_id) if task_id else None)
     started_at = now_iso()
     await saveChildAgent(
         {

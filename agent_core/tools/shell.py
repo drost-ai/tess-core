@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.records import launch_output_file, launch_task_id
 from ..contracts.tools import ToolResult
 
 import asyncio
@@ -48,8 +49,8 @@ def _bash_tool() -> ToolDefinition:
                         "title": title,
                     }
                 )
-                task_id = started.get("taskId") or started.get("task_id")
-                output_path = started.get("outputFile") or started.get("output_file") or taskOutputPath(task_id)
+                task_id = launch_task_id(started)
+                output_path = launch_output_file(started) or taskOutputPath(task_id)
                 task_record = await readTaskMeta(task_id) or {
                     "taskId": task_id,
                     "id": task_id,

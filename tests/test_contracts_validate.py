@@ -168,6 +168,64 @@ class ContractsValidateTests(unittest.TestCase):
         self.assertEqual(validate(meta, TaskMeta, strict=True), [])
 
 
+class CanonicalAccessorTests(unittest.TestCase):
+    def test_launch_accessors_prefer_canonical_spelling(self) -> None:
+        from agent_core.contracts import launch_output_file, launch_task_id
+
+        both = {"taskId": "camel", "task_id": "snake", "outputFile": "/camel", "output_file": "/snake"}
+        self.assertEqual(launch_task_id(both), "camel")
+        self.assertEqual(launch_output_file(both), "/camel")
+        self.assertEqual(launch_task_id({"task_id": "snake"}), "snake")
+        self.assertEqual(launch_output_file({"output_file": "/snake"}), "/snake")
+        self.assertIsNone(launch_task_id({}))
+        self.assertIsNone(launch_output_file({}))
+
+    def test_task_meta_id_absorbs_finalizer_spelling(self) -> None:
+        from agent_core.contracts import task_meta_id
+
+        self.assertEqual(task_meta_id({"taskId": "a", "task_id": "b", "id": "c"}), "a")
+        self.assertEqual(task_meta_id({"task_id": "b", "id": "c"}), "b")
+        self.assertEqual(task_meta_id({"id": "c"}), "c")
+        self.assertIsNone(task_meta_id({}))
+
+    def test_event_accessors_mirror_reader_order(self) -> None:
+        from agent_core.contracts import (
+            event_body,
+            event_kind,
+            event_name,
+            event_payload,
+            event_session_id,
+            event_time,
+        )
+
+        envelope = {
+            "event": "task.updated",
+            "type": "task.updated",
+            "kind": "task.updated",
+            "data": {"session_id": "s-1", "raw": True},
+            "payload": {"sessionId": "s-1", "typed": True},
+            "createdAt": "2026-06-10T00:00:00Z",
+            "timestamp": "2026-06-10T00:00:00Z",
+            "sessionId": "s-1",
+            "legacyEvent": "task.updated",
+            "legacyData": {"raw": True},
+        }
+        self.assertEqual(event_kind(envelope), "task.updated")
+        self.assertEqual(event_name(envelope), "task.updated")
+        self.assertTrue(event_payload(envelope)["typed"])
+        self.assertTrue(event_body(envelope)["raw"])
+        self.assertEqual(event_time(envelope), "2026-06-10T00:00:00Z")
+        self.assertEqual(event_session_id(envelope), "s-1")
+        # typed view prefers kind/payload; raw view prefers event/data
+        partial = {"kind": "k", "event": "e", "payload": {"p": 1}, "data": {"d": 1}}
+        self.assertEqual(event_kind(partial), "k")
+        self.assertEqual(event_name(partial), "e")
+        self.assertEqual(event_payload(partial), {"p": 1})
+        self.assertEqual(event_body(partial), {"d": 1})
+        self.assertEqual(event_session_id({"data": {"session_id": "fallback"}}), "fallback")
+        self.assertIsNone(event_session_id({}))
+
+
 class ContractSyncTests(unittest.TestCase):
     """Literal annotations must stay identical to the runtime constant sets."""
 

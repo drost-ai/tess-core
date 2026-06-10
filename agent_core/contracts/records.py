@@ -15,7 +15,7 @@ be ``None`` at construction time is optional here.
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, Mapping, TypedDict
 
 
 # Mirrors _TASK_STATUSES in runtime_event_parts/shared.py (sync-tested).
@@ -86,6 +86,26 @@ class TaskLaunchResult(_TaskLaunchResultRequired, total=False):
     outputFile: str
     output_file: str  # DEPRECATED duplicate of outputFile
     pid: int
+
+
+def launch_task_id(result: Mapping[str, Any]) -> str | None:
+    """Canonical task id from a TaskLaunchResult (``taskId``; legacy ``task_id``)."""
+    return result.get("taskId") or result.get("task_id") or None
+
+
+def launch_output_file(result: Mapping[str, Any]) -> str | None:
+    """Canonical output file from a TaskLaunchResult (``outputFile``; legacy ``output_file``)."""
+    return result.get("outputFile") or result.get("output_file") or None
+
+
+def task_meta_id(meta: Mapping[str, Any]) -> str | None:
+    """Canonical task id from TaskMeta.
+
+    Supervisor launchers write ``taskId`` and ``id``; the subagent finalizer
+    writes only ``task_id``. This accessor is the single absorption point for
+    that drift.
+    """
+    return meta.get("taskId") or meta.get("task_id") or meta.get("id") or None
 
 
 class _TaskMetaRequired(TypedDict):

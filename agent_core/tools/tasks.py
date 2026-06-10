@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.records import launch_task_id
 from ..contracts.tools import ToolResult
 
 import asyncio
@@ -205,7 +206,7 @@ def _task_health_check_start_tool() -> ToolDefinition:
                 "expectedBodySubstring": input.get("expected_body_substring") if isinstance(input.get("expected_body_substring"), str) and input.get("expected_body_substring").strip() else None,
             }
         )
-        task_id = started.get("taskId") or started.get("task_id")
+        task_id = launch_task_id(started)
         _append_unique_metadata_list(context["session"], "taskIds", task_id)
         await maybe_await(context.get("persistSession", lambda: None)())
         context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": title, "owner": "daemon"})
