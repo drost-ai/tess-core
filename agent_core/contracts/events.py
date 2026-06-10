@@ -103,6 +103,19 @@ class RuntimeEventEnvelope(TypedDict):
     legacyData: dict[str, Any]  # duplicate of data (legacy)
 
 
+class RuntimeSubscriberEnvelope(TypedDict):
+    """What ``bootstrapRuntime``'s ``subscribeEvents`` subscribers receive.
+
+    The full typed envelope is nested under ``typedEvent``; ``event``/``data``
+    repeat the raw name and body for legacy subscribers (runtime.py
+    ``emit_runtime_event``).
+    """
+
+    event: str
+    data: dict[str, Any]
+    typedEvent: RuntimeEventEnvelope
+
+
 def event_kind(event: Mapping[str, Any]) -> str:
     """Typed event kind, preferring the typed projection.
 

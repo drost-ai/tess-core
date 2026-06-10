@@ -15,7 +15,7 @@ async def bootstrap_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, stat
     session, config = await ensure_session_config(data, sandbox, state)
     events = state.setdefault("runtime_events", [])
     runtime = await core.bootstrapRuntime({"session": session, "config": config, "cwd": str(sandbox.workspace)})
-    runtime["subscribeEvents"](lambda envelope: events.append(_json_safe(envelope)))
+    runtime["subscribeEvents"](lambda envelope: events.append(_json_safe(_validated_envelope(envelope))))
     runtime["emitEvent"]("session.activated", core.activeSessionPayload(session, config))
     state["runtime"] = runtime
     state.setdefault("driver_results", []).append(
@@ -253,6 +253,18 @@ def _append_tool_transcript(session: dict[str, Any], name: str, input_data: dict
 
 def _text_response(text: str) -> dict[str, Any]:
     return {"model": "gpt-5.4", "stopReason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}, "content": [{"type": "text", "text": text}]}
+
+
+def _validated_envelope(envelope: Any) -> Any:
+    from agent_core.contracts import RuntimeSubscriberEnvelope, validate
+
+    errors = validate(envelope, RuntimeSubscriberEnvelope, strict=True)
+    if errors:
+        raise ScenarioAssertionError(
+            "runtime event envelope contract violation: " + "; ".join(errors),
+            category="contract",
+        )
+    return envelope
 
 
 def _json_safe(value: Any) -> Any:

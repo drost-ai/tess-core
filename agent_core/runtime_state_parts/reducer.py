@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from ..contracts.events import event_kind, event_payload, event_time
+
 from .shared import *
 
 def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     next_state = copy.deepcopy(state)
-    typ = event.get("kind") or event.get("type") or event.get("event")
-    data = event.get("payload") if isinstance(event.get("payload"), dict) else event.get("data") or {}
-    timestamp = event.get("timestamp") or event.get("createdAt") or now_iso()
+    typ = event_kind(event)
+    data = event_payload(event)
+    timestamp = event_time(event) or now_iso()
 
     if typ == "session.activated":
         summary = data.get("session") or data
