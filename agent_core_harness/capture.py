@@ -6,10 +6,36 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
+from agent_core.contracts import (
+    MonitorRecord,
+    SessionRecord,
+    TaskMeta,
+    TaskRecord,
+    validate,
+)
 
-from .model import Scenario, StepResult
+from .model import Scenario, ScenarioAssertionError, StepResult
 from .normalization import normalize_observations
 from .sandbox import ScenarioSandbox
+
+
+def _assert_contract(records: Any, schema: type, label: str) -> None:
+    """Fail the scenario at the capture boundary when a record drifts.
+
+    Non-strict: unknown keys are allowed (fixtures and future writers may add
+    fields); missing required keys, wrong types, and out-of-set Literal values
+    fail with a precise message instead of a downstream behavioral mismatch.
+    """
+    items = records if isinstance(records, list) else [records]
+    for index, record in enumerate(items):
+        if not record:
+            continue
+        errors = validate(record, schema, strict=False)
+        if errors:
+            raise ScenarioAssertionError(
+                f"{label}[{index}] contract violation: " + "; ".join(errors),
+                category="contract",
+            )
 
 
 def collect_observations(
@@ -26,6 +52,7 @@ def collect_observations(
     selected = set(include or [])
     if "session" in selected and state.get("session"):
         observations["session"] = state["session"]
+        _assert_contract(observations["session"], SessionRecord, "session")
     if "storage_tree" in selected:
         observations["storage_tree"] = tree_snapshot(sandbox.home)
     if "workspace_tree" in selected:
@@ -111,8 +138,10 @@ def collect_observations(
         observations["daemon_bootstrap"] = state.get("daemon_bootstrap") or []
     if "task_records" in selected:
         observations["task_records"] = state.get("task_records") or []
+        _assert_contract(observations["task_records"], TaskRecord, "task_records")
     if "task_metadata" in selected:
         observations["task_metadata"] = state.get("task_metadata") or []
+        _assert_contract(observations["task_metadata"], TaskMeta, "task_metadata")
     if "task_outputs" in selected:
         observations["task_outputs"] = state.get("task_outputs") or []
     if "task_driver_results" in selected:
@@ -121,6 +150,7 @@ def collect_observations(
         observations["health_checks"] = state.get("health_checks") or []
     if "monitor_records" in selected:
         observations["monitor_records"] = state.get("monitor_records") or []
+        _assert_contract(observations["monitor_records"], MonitorRecord, "monitor_records")
     if "worker_results" in selected:
         observations["worker_results"] = state.get("worker_results") or []
     if "runtime_events" in selected:

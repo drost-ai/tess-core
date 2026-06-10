@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from ..contracts.records import (
+    ChildAgentRecord,
+    MonitorRecord,
+    PlanApprovalRecord,
+    TaskMeta,
+    TaskRecord,
+)
+
 from .shared import *
 
 def taskDir(taskId: str) -> str:
@@ -48,26 +56,26 @@ async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
             records.append(value)
     return records
 
-async def saveChildAgent(record: dict[str, Any]) -> None:
+async def saveChildAgent(record: ChildAgentRecord) -> None:
     await _save_by_path(childAgentPath(record["agentId"]), _omit_none_fields(record))
 
-async def loadChildAgent(agentId: str) -> dict[str, Any] | None:
+async def loadChildAgent(agentId: str) -> ChildAgentRecord | None:
     return await _load_by_path(childAgentPath(agentId))
 
-async def listChildAgents() -> list[dict[str, Any]]:
+async def listChildAgents() -> list[ChildAgentRecord]:
     records = await _list_json_records(os.path.join(getStateRoot(), "agents"), loadChildAgent)
     return sorted(records, key=lambda item: item.get("startedAt", ""), reverse=True)
 
 def planApprovalPath(requestId: str) -> str:
     return os.path.join(getStateRoot(), "plan-approvals", f"{requestId}.json")
 
-async def savePlanApproval(record: dict[str, Any]) -> None:
+async def savePlanApproval(record: PlanApprovalRecord) -> None:
     await _save_by_path(planApprovalPath(record["requestId"]), record)
 
-async def loadPlanApproval(requestId: str) -> dict[str, Any] | None:
+async def loadPlanApproval(requestId: str) -> PlanApprovalRecord | None:
     return await _load_by_path(planApprovalPath(requestId))
 
-async def listPlanApprovals() -> list[dict[str, Any]]:
+async def listPlanApprovals() -> list[PlanApprovalRecord]:
     records = await _list_json_records(os.path.join(getStateRoot(), "plan-approvals"), loadPlanApproval)
     return sorted(records, key=lambda item: item.get("createdAt", ""), reverse=True)
 
@@ -106,45 +114,45 @@ async def writePlanFile(args: dict[str, Any] | None = None, **kwargs: Any) -> st
     with open(file_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
     return file_path
-async def writeTaskMeta(taskId: str, value: dict[str, Any]) -> None:
+async def writeTaskMeta(taskId: str, value: TaskMeta) -> None:
     await writeJsonFile(taskMetaPath(taskId), value)
 
-async def readTaskMeta(taskId: str) -> dict[str, Any] | None:
+async def readTaskMeta(taskId: str) -> TaskMeta | None:
     return await readJsonFile(taskMetaPath(taskId), None)
 
-async def saveTaskRecord(record: dict[str, Any]) -> None:
+async def saveTaskRecord(record: TaskRecord) -> None:
     await writeJsonFile(taskRecordPath(record["id"]), record)
 
-async def loadTaskRecord(taskId: str) -> dict[str, Any] | None:
+async def loadTaskRecord(taskId: str) -> TaskRecord | None:
     return await readJsonFile(taskRecordPath(taskId), None)
 
-async def listTaskRecords() -> list[dict[str, Any]]:
+async def listTaskRecords() -> list[TaskRecord]:
     records = await _list_json_records(os.path.join(getStateRoot(), "task-records"), loadTaskRecord)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-async def listSessionTaskRecords(sessionId: str) -> list[dict[str, Any]]:
+async def listSessionTaskRecords(sessionId: str) -> list[TaskRecord]:
     return [task for task in await listTaskRecords() if task.get("sessionId") == sessionId]
 
-async def saveMonitor(record: dict[str, Any]) -> None:
+async def saveMonitor(record: MonitorRecord) -> None:
     await writeJsonFile(monitorPath(record["id"]), record)
 
-async def loadMonitor(monitorId: str) -> dict[str, Any] | None:
+async def loadMonitor(monitorId: str) -> MonitorRecord | None:
     return await readJsonFile(monitorPath(monitorId), None)
 
-async def listMonitors() -> list[dict[str, Any]]:
+async def listMonitors() -> list[MonitorRecord]:
     records = await _list_json_records(os.path.join(getStateRoot(), "monitors"), loadMonitor)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-async def listSessionMonitors(sessionId: str) -> list[dict[str, Any]]:
+async def listSessionMonitors(sessionId: str) -> list[MonitorRecord]:
     return [monitor for monitor in await listMonitors() if monitor.get("sessionId") == sessionId]
 
-async def saveHealthCheckTask(record: dict[str, Any]) -> None:
+async def saveHealthCheckTask(record: TaskMeta) -> None:
     await writeJsonFile(healthCheckMetaPath(record["taskId"]), record)
 
-async def loadHealthCheckTask(taskId: str) -> dict[str, Any] | None:
+async def loadHealthCheckTask(taskId: str) -> TaskMeta | None:
     return await readJsonFile(healthCheckMetaPath(taskId), None)
 
-async def listHealthCheckTasks() -> list[dict[str, Any]]:
+async def listHealthCheckTasks() -> list[TaskMeta]:
     directory = os.path.join(getStateRoot(), "tasks")
     try:
         names = [name for name in os.listdir(directory) if os.path.isdir(os.path.join(directory, name))]
