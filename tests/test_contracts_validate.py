@@ -215,6 +215,44 @@ class ContractSyncTests(unittest.TestCase):
         )
         self.assertEqual(validate(envelope, RuntimeEventEnvelope, strict=True), [])
 
+    def test_resolved_config_validates_strict(self) -> None:
+        import asyncio
+        import os
+        import tempfile
+
+        from agent_core.config import resolveConfig
+        from agent_core.contracts import ResolvedConfig
+
+        with tempfile.TemporaryDirectory(prefix="agent-core-contracts-") as root:
+            home = os.path.join(root, "home")
+            workspace = os.path.join(root, "workspace")
+            os.makedirs(workspace)
+            previous = os.environ.get("AGENT_CORE_HOME")
+            os.environ["AGENT_CORE_HOME"] = home
+            try:
+                config = asyncio.run(resolveConfig({"runtimeHome": home}, workspace))
+            finally:
+                if previous is None:
+                    os.environ.pop("AGENT_CORE_HOME", None)
+                else:
+                    os.environ["AGENT_CORE_HOME"] = previous
+        self.assertEqual(validate(config, ResolvedConfig, strict=True), [])
+
+    def test_builtin_agents_and_profiles_validate(self) -> None:
+        from agent_core.config_store.shared import BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES
+        from agent_core.contracts import AgentDefinition, ProviderProfile
+
+        for name, definition in BUILTIN_AGENTS.items():
+            self.assertEqual(validate(definition, AgentDefinition, strict=True), [], name)
+        for name, profile in BUILTIN_PROVIDER_PROFILES.items():
+            self.assertEqual(validate(profile, ProviderProfile, strict=True), [], name)
+
+    def test_default_auto_mode_validates_strict(self) -> None:
+        from agent_core.contracts import AutoModePolicy
+        from agent_core.storage_store.settings import getDefaultAutoMode
+
+        self.assertEqual(validate(getDefaultAutoMode(), AutoModePolicy, strict=True), [])
+
     def test_empty_session_record_validates_strict(self) -> None:
         from agent_core.storage import createEmptySession
 

@@ -36,17 +36,28 @@ class AutoModePolicy(TypedDict, total=False):
 
 
 class ProviderProfile(TypedDict, total=False):
-    """Provider profile shape (config_store/shared.py BUILTIN_PROVIDER_PROFILES)."""
+    """Provider profile shape.
+
+    Builtin profiles (config_store/shared.py BUILTIN_PROVIDER_PROFILES) carry
+    the kind/apiMode/defaultModel/auth/description subset; the resolved and
+    normalized profile (config_store/providers.py resolveProviderProfile)
+    additionally always carries name/headers/supportsVision/capabilities/
+    effortLevel/requestOptions/limits.
+    """
 
     kind: ProviderKind
     name: str
     description: str | None
-    defaultModel: str
-    apiMode: OpenAiApiMode
+    defaultModel: str | None
+    apiMode: OpenAiApiMode | None
     auth: dict[str, Any]
     baseUrl: str | None
     headers: dict[str, str]
-    effortLevel: str
+    effortLevel: str | None
+    supportsVision: bool | None
+    capabilities: dict[str, Any]
+    requestOptions: dict[str, Any]
+    limits: dict[str, Any]
 
 
 class SettingsRecord(TypedDict, total=False):

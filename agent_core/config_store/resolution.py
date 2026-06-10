@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.config import ResolvedConfig
+
 from .shared import *
 
 def _opt(options: dict[str, Any] | None, key: str, default: Any = None) -> Any:
@@ -10,7 +12,7 @@ def _opt(options: dict[str, Any] | None, key: str, default: Any = None) -> Any:
 def _looks_like_claude_ai_token(value: str | None) -> bool:
     return bool(value and re.match(r"^sk-ant-o", value, re.I))
 
-async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> dict[str, Any]:
+async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
     options = options or {}
     requested_runtime_home = options.get("runtimeHome")
     context_runtime_home = getContextRuntimeHome()

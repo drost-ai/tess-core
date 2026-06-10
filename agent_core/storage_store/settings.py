@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.config import AutoModePolicy, SettingsRecord
+
 from .shared import *
 
 DEFAULT_AUTO_MODE = {
@@ -21,13 +23,13 @@ def _settings_path(source: Scope, cwd: str, filename: str = "settings.json") -> 
         return os.path.join(getStateRoot(), filename)
     return os.path.join(getProjectStateDir(cwd) if source == "project" else getLocalStateDir(cwd), filename)
 
-async def loadSettings(source: Scope, cwd: str) -> dict[str, Any]:
+async def loadSettings(source: Scope, cwd: str) -> SettingsRecord:
     return await readJsonFile(_settings_path(source, cwd), {})
 
-async def saveSettings(source: Scope, cwd: str, settings: dict[str, Any]) -> None:
+async def saveSettings(source: Scope, cwd: str, settings: SettingsRecord) -> None:
     await writeJsonFile(_settings_path(source, cwd), settings)
 
-async def loadSettingsBySources(sources: list[Scope], cwd: str) -> dict[str, Any]:
+async def loadSettingsBySources(sources: list[Scope], cwd: str) -> SettingsRecord:
     merged: dict[str, Any] = {}
     for source in sources:
         merged.update(await loadSettings(source, cwd))
@@ -57,13 +59,13 @@ async def loadMarketplaces() -> list[dict[str, Any]]:
 async def saveMarketplaces(records: list[dict[str, Any]]) -> None:
     await writeJsonFile(os.path.join(getStateRoot(), "marketplaces.json"), records)
 
-async def loadAutoMode(cwd: str) -> dict[str, Any]:
+async def loadAutoMode(cwd: str) -> AutoModePolicy:
     return await readJsonFile(os.path.join(getProjectStateDir(cwd), "auto-mode.json"), clone(DEFAULT_AUTO_MODE))
 
-async def saveAutoMode(cwd: str, config: dict[str, Any]) -> None:
+async def saveAutoMode(cwd: str, config: AutoModePolicy) -> None:
     await writeJsonFile(os.path.join(getProjectStateDir(cwd), "auto-mode.json"), config)
 
-def getDefaultAutoMode() -> dict[str, Any]:
+def getDefaultAutoMode() -> AutoModePolicy:
     return clone(DEFAULT_AUTO_MODE)
 
 def resolveScope(scope: str | None) -> Scope:

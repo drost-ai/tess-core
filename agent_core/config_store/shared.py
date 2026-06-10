@@ -6,6 +6,8 @@ import re
 import subprocess
 from typing import Any
 
+from ..contracts.config import AgentDefinition, ProviderProfile
+
 from .._utils import clone
 from ..providers.openai import isCodexBaseUrl
 from ..storage import (
@@ -42,7 +44,7 @@ PROVIDER_MODELS = {
 PROVIDER_DEFAULT_MODEL = {"anthropic": DEFAULT_MODEL, "openai": "gpt-5.4"}
 PROVIDER_DEFAULT_EFFORT = {"anthropic": "high", "openai": "xhigh"}
 
-BUILTIN_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
+BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
     "openai": {
         "kind": "openai",
         "apiMode": "responses",
@@ -71,7 +73,7 @@ BUILTIN_PROVIDER_PROFILES: dict[str, dict[str, Any]] = {
     },
 }
 
-BUILTIN_AGENTS = {
+BUILTIN_AGENTS: dict[str, AgentDefinition] = {
     "default": {
         "description": "General-purpose coding agent",
         "prompt": "You are a pragmatic software engineer. Solve the user's task end to end, inspect the codebase before changing it, and verify your work.",
