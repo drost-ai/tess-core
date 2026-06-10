@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.records import SessionRecord
+
 from .shared import *
 
 def sessionPath(sessionId: str) -> str:
@@ -11,7 +13,7 @@ def sessionArchiveDir(sessionId: str) -> str:
 def sessionTranscriptLogPath(sessionId: str) -> str:
     return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
 
-async def saveSession(session: dict[str, Any]) -> None:
+async def saveSession(session: SessionRecord) -> None:
     await writeJsonFile(sessionPath(session["id"]), _redact_persisted_image_payloads(session))
 
 async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
@@ -80,7 +82,7 @@ def _latest_archived_timestamp(raw: str) -> str | None:
             latest = entry["persisted_at"]
     return latest
 
-async def loadSession(sessionId: str) -> dict[str, Any] | None:
+async def loadSession(sessionId: str) -> SessionRecord | None:
     path = sessionPath(sessionId)
     record = await readJsonFile(path, None)
     if not record:
@@ -112,7 +114,7 @@ async def saveCompactionManifest(manifest: dict[str, Any]) -> None:
 async def saveCompactionCheckpoint(checkpoint: dict[str, Any]) -> None:
     await writeJsonFile(compactionCheckpointPath(checkpoint["sessionId"], int(checkpoint["generation"])), checkpoint)
 
-def hasPersistableSessionMessages(session: dict[str, Any]) -> bool:
+def hasPersistableSessionMessages(session: SessionRecord) -> bool:
     for message in session.get("messages", []):
         if message.get("role") != "user":
             continue
@@ -125,7 +127,7 @@ def hasPersistableSessionMessages(session: dict[str, Any]) -> bool:
                     return True
     return False
 
-async def listSessions() -> list[dict[str, Any]]:
+async def listSessions() -> list[SessionRecord]:
     directory = os.path.join(getStateRoot(), "sessions")
     try:
         names = [name for name in os.listdir(directory) if name.endswith(".json")]
@@ -138,7 +140,7 @@ async def listSessions() -> list[dict[str, Any]]:
             records.append(record)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> SessionRecord:
     params = {**(params or {}), **kwargs}
     timestamp = now_iso()
     return {

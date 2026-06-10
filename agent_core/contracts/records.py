@@ -327,8 +327,12 @@ class CompactionState(TypedDict):
     workingContextTokenMeasurement: dict[str, Any] | None
     lastTrigger: str
     qualityClassification: str
-    compactionModel: str
-    verificationModel: str
+    # Either the model id string echoed by the model client, or the model
+    # *selection record* dict ({provider, model, effort, purpose,
+    # selectionSource}) when the client does not report a model. Both shapes
+    # exist on disk today (context/compaction/models.py).
+    compactionModel: str | dict[str, Any]
+    verificationModel: str | dict[str, Any]
     verification: dict[str, Any]
     artifacts: dict[str, Any]
 
