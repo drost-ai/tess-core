@@ -4,8 +4,12 @@ import random
 import re
 from typing import Any
 
+import typing as _typing
+
 from ._utils import now_iso
-from .contracts.providers import ProviderFailureRecord
+
+if _typing.TYPE_CHECKING:
+    from .contracts.providers import ProviderFailureRecord
 
 
 class ProviderRequestError(Exception):

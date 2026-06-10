@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from ..contracts.context import ToolContext
+import typing as _typing
+
+if _typing.TYPE_CHECKING:
+    from ..contracts.context import ToolContext
 
 from .shared import *
 

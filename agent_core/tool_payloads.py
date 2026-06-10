@@ -6,9 +6,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import typing as _typing
+
 from ._utils import now_iso
-from .contracts.tools import ToolArtifactRef
 from .storage import toolArtifactDataPath, toolArtifactMetaPath, writeJsonFile
+
+if _typing.TYPE_CHECKING:
+    from .contracts.tools import ToolArtifactRef
 
 
 TOOL_PAYLOAD_POLICIES = {
