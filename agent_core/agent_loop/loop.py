@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 from .shared import *
 
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -146,7 +148,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         paused_for_approval = False
         paused_message = ""
 
-        def build_context() -> dict[str, Any]:
+        def build_context() -> ToolContext:
             return {
                 "cwd": session["cwd"],
                 "allowedRoots": config.get("allowedRoots", []),

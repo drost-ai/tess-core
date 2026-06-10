@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 from typing import Any
 
 from .cancellation import _throw_if_tool_cancelled
@@ -10,7 +12,7 @@ from .validation import _require_string
 
 
 def _agent_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         if int(context["session"].get("metadata", {}).get("depth") or 0) >= 2:
             return {"content": "Delegation depth limit reached.", "isError": True}
         _throw_if_tool_cancelled(context)

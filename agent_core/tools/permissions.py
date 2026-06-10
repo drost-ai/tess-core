@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 import re
 from typing import Any
 
@@ -10,7 +12,7 @@ from ..storage import loadAutoMode, loadSession
 PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
 
 
-async def _ensure_tool_permission(context: dict[str, Any], tool_name: str, category: str, summary: str, always_ask: bool = False, command: str | None = None) -> None:
+async def _ensure_tool_permission(context: ToolContext, tool_name: str, category: str, summary: str, always_ask: bool = False, command: str | None = None) -> None:
     mode = await _get_effective_permission_mode(context)
     resolution = await _resolve_tool_permission(context, tool_name, category, mode, always_ask, command)
     output_json = context.get("outputJson", lambda *_: None)
@@ -46,7 +48,7 @@ async def _ensure_tool_permission(context: dict[str, Any], tool_name: str, categ
     raise PermissionError(f"Permission denied for {tool_name}. Use /permissions to change modes.")
 
 
-async def _get_effective_permission_mode(context: dict[str, Any]) -> str:
+async def _get_effective_permission_mode(context: ToolContext) -> str:
     mode = context["session"].get("permissionMode") or context["config"].get("permissionMode", "default")
     parent_session_id = context["session"].get("metadata", {}).get("parentSessionId") if context.get("interactive") else None
     if not parent_session_id:
@@ -61,7 +63,7 @@ async def _get_effective_permission_mode(context: dict[str, Any]) -> str:
     return inherited
 
 
-async def _resolve_tool_permission(context: dict[str, Any], tool_name: str, category: str, mode: str, always_ask: bool, command: str | None) -> dict[str, str]:
+async def _resolve_tool_permission(context: ToolContext, tool_name: str, category: str, mode: str, always_ask: bool, command: str | None) -> dict[str, str]:
     if mode == "bypassPermissions":
         return {"decision": "allow", "source": "mode"}
     if mode == "plan":

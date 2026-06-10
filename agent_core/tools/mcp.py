@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 from typing import Any
 
 from .._utils import pretty_json
@@ -12,7 +14,7 @@ from .web import _facade_fetch, _header_value
 
 
 def _mcp_tool(runtime: Any) -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         _throw_if_tool_cancelled(context)
         if not runtime:
             return {
@@ -48,7 +50,7 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
 
 
 def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         server = input.get("server") if isinstance(input.get("server"), str) else None
         if runtime:
             _throw_if_tool_cancelled(context)
@@ -62,7 +64,7 @@ def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
 
 
 def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         server = _require_string(input.get("server"), "server")
         uri = _require_string(input.get("uri"), "uri")
         if runtime:

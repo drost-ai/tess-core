@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 import agent_core as core
+from agent_core.contracts import ToolContext
 
 from .model import ScenarioAssertionError
 from .sandbox import ScenarioSandbox
@@ -229,7 +230,7 @@ class SlashHooks:
         self.refresh_count += 1
 
 
-def _tool_context(sandbox: ScenarioSandbox, state: dict[str, Any], session: dict[str, Any], config: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
+def _tool_context(sandbox: ScenarioSandbox, state: dict[str, Any], session: dict[str, Any], config: dict[str, Any], runtime: dict[str, Any]) -> ToolContext:
     return {
         "cwd": str(sandbox.workspace),
         "allowedRoots": config.get("allowedRoots", [str(sandbox.workspace)]),

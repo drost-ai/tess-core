@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 import base64
 import html
 import re
@@ -45,7 +47,7 @@ def _facade_fetch():
 
 
 def _web_fetch_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         url = _require_string(input.get("url"), "url")
         prompt = _require_string(input.get("prompt"), "prompt")
         _throw_if_tool_cancelled(context)
@@ -62,7 +64,7 @@ def _web_fetch_tool() -> ToolDefinition:
 
 
 def _web_search_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         query = _require_string(input.get("query"), "query")
         _throw_if_tool_cancelled(context)
         allowed = [item for item in input.get("allowed_domains", []) if isinstance(item, str)]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 from typing import Any
 
 from .._utils import maybe_await, pretty_json
@@ -12,7 +14,7 @@ from .validation import _without_none_values
 
 
 def _enter_worktree_tool(controller: Any) -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         requested_name = input.get("name").strip() if isinstance(input.get("name"), str) and input.get("name").strip() else f"tess-{int(__import__('time').time() * 1000)}"
         await _ensure_tool_permission(context, "EnterWorktree", "worktree", f"Create git worktree for {requested_name}")
         metadata = context["session"].setdefault("metadata", {})
@@ -45,7 +47,7 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
 
 
 def _exit_worktree_tool(controller: Any) -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
         metadata = context["session"].setdefault("metadata", {})
         original = metadata.get("originalCwd")
         await maybe_await(context.get("updateCwd", lambda next_cwd: context["session"].__setitem__("cwd", next_cwd))(original))

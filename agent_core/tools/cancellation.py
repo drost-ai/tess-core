@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 from typing import Any
 
 
-def _throw_if_tool_cancelled(context: dict[str, Any]) -> None:
+def _throw_if_tool_cancelled(context: ToolContext) -> None:
     if _signal_aborted(context.get("abortSignal")):
         raise _create_tool_abort_error()
 

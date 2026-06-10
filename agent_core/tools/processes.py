@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..contracts.context import ToolContext
+
 import asyncio
 import os
 import subprocess
@@ -62,7 +64,7 @@ async def _wait_for_tracked_background_runner(pid: int, timeout: float = 2) -> N
     _BACKGROUND_RUNNERS[:] = [process for process in _BACKGROUND_RUNNERS if process.poll() is None]
 
 
-async def _communicate_shell_process(proc: asyncio.subprocess.Process, timeout_ms: int, context: dict[str, Any]) -> tuple[bytes, bytes, bool]:
+async def _communicate_shell_process(proc: asyncio.subprocess.Process, timeout_ms: int, context: ToolContext) -> tuple[bytes, bytes, bool]:
     communicate = asyncio.create_task(proc.communicate())
     deadline = asyncio.get_running_loop().time() + (timeout_ms / 1000)
     timed_out = False
