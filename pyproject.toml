@@ -15,3 +15,23 @@ include = ["agent_core*", "agent_core_harness*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+# Typed-contract-boundaries lane (package 22). Dev/CI tool only; the runtime
+# stays dependency-free. Run: python3 -m mypy --config-file pyproject.toml
+# Enforced (blocking) by tests/test_contracts_typecheck.py when mypy is
+# installed; the test skips gracefully when it is not.
+[tool.mypy]
+files = ["agent_core/contracts"]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+
+# The lane is scoped to the typed boundaries: the rest of the runtime is
+# deliberately Any-shaped (TypeScript-port idiom) and stays out of the gate.
+[[tool.mypy.overrides]]
+module = "agent_core.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "agent_core.contracts.*"
+ignore_errors = false
