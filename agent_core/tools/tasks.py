@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.tools import ToolResult
 
 import asyncio
 import os
@@ -22,7 +23,7 @@ from .validation import _require_string, _without_none_values
 
 
 def _task_output_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         if input.get("block"):
             started = asyncio.get_running_loop().time()
@@ -52,7 +53,7 @@ def _task_output_tool() -> ToolDefinition:
 
 
 def _task_stop_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         supervisor = context.get("daemon") or context.get("taskSupervisor")
         if supervisor:
@@ -102,7 +103,7 @@ def _task_stop_tool() -> ToolDefinition:
 
 
 def _task_monitor_start_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         goal = _require_string(input.get("goal"), "goal")
         task = await readTaskMeta(task_id)
@@ -157,7 +158,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
 
 
 def _task_monitor_stop_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         monitor_id = _require_string(input.get("monitor_id"), "monitor_id")
         monitor = await loadMonitor(monitor_id)
         if not monitor or monitor.get("sessionId") != context["session"]["id"]:
@@ -181,7 +182,7 @@ def _task_monitor_stop_tool() -> ToolDefinition:
 
 
 def _task_health_check_start_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         supervisor = context.get("daemon")
         if not supervisor:
             raise RuntimeError("Health checks require the local task supervisor daemon.")
@@ -214,7 +215,7 @@ def _task_health_check_start_tool() -> ToolDefinition:
 
 
 def _task_health_check_stop_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         supervisor = context.get("daemon")
         if not supervisor:
             raise RuntimeError("Health checks require the local task supervisor daemon.")

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ._utils import now_iso
+from .contracts.tools import ToolArtifactRef
 from .storage import toolArtifactDataPath, toolArtifactMetaPath, writeJsonFile
 
 
@@ -125,7 +126,7 @@ def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: i
     return {"text": excerpt, "truncated": excerpt != text, "strategy": "inline_full" if excerpt == text else "inline_head_tail"}
 
 
-async def _persist_artifact(args: dict[str, Any]) -> dict[str, Any]:
+async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
     artifact_id = str(uuid.uuid4())
     content = args["content"]
     extension = ".json" if args.get("contentType") == "json" else ".txt"

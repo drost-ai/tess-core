@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.tools import ToolResult
 
 import base64
 import json
@@ -20,7 +21,7 @@ from .validation import _require_string
 
 
 def _read_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context)
         data = Path(file_path).read_bytes()
         ext = Path(file_path).suffix.lower()
@@ -46,7 +47,7 @@ def _read_tool() -> ToolDefinition:
 
 
 def _write_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context, True)
         content = _require_string(input.get("content"), "content")
         await _ensure_tool_permission(context, "Write", "edit", f"Write {_display_path(context, file_path)} ({len(content)} bytes)")
@@ -59,7 +60,7 @@ def _write_tool() -> ToolDefinition:
 
 
 def _edit_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context)
         old = _require_string(input.get("old_string"), "old_string")
         new = _require_string(input.get("new_string"), "new_string")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.tools import ToolResult
 
 import asyncio
 import re
@@ -22,7 +23,7 @@ from .validation import _require_string
 
 
 def _bash_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         command = _require_string(input.get("command"), "command")
         timeout = _normalize_bash_timeout(command, input.get("timeout"))
         run_in_background = bool(input.get("run_in_background"))

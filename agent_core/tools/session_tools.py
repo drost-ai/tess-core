@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.tools import ToolResult
 
 import re
 import uuid
@@ -15,7 +16,7 @@ from .validation import _require_list, _require_string
 
 
 def _todo_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         todos = [_normalize_todo_item(item) for item in _require_list(input.get("todos"), "todos")]
         context["session"]["todos"] = todos
         await maybe_await(context.get("persistSession", lambda: None)())
@@ -25,7 +26,7 @@ def _todo_tool() -> ToolDefinition:
 
 
 def _set_status_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         message = _require_string(input.get("message"), "message").strip()
         detail = input.get("detail") if isinstance(input.get("detail"), str) and input.get("detail").strip() else None
         context.get("outputJson", lambda *_: None)("status.updated", {"message": message, "detail": detail, "session_id": context["session"]["id"]})
@@ -35,7 +36,7 @@ def _set_status_tool() -> ToolDefinition:
 
 
 def _ask_user_question_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         if not context.get("interactive"):
             return {"content": "Cannot ask the user a question in print mode.", "isError": True}
         answers = []
@@ -58,7 +59,7 @@ def _ask_user_question_tool() -> ToolDefinition:
 
 
 def _config_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         config = context["config"]
         session = context["session"]
         public = {
@@ -78,7 +79,7 @@ def _config_tool() -> ToolDefinition:
 
 
 def _exit_plan_mode_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         session = context["session"]
         config = context["config"]
         if session.get("permissionMode") != "plan":

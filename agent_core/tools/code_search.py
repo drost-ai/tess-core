@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.context import ToolContext
+from ..contracts.tools import ToolResult
 
 import asyncio
 import os
@@ -20,7 +21,7 @@ from .validation import _require_optional_number, _require_string
 
 
 def _glob_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         pattern = _require_string(input.get("pattern"), "pattern")
         cwd = context.get("cwd") or context["session"]["cwd"]
         search_path = _authorize_path(_require_string(input.get("path"), "path"), context) if input.get("path") else cwd
@@ -38,7 +39,7 @@ def _glob_tool() -> ToolDefinition:
 
 
 def _grep_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         pattern = _require_string(input.get("pattern"), "pattern")
         cwd = context.get("cwd") or context["session"]["cwd"]
         search_path = _authorize_path(_require_string(input.get("path"), "path"), context) if input.get("path") else cwd
