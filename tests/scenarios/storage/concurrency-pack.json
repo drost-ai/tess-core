@@ -1,0 +1,169 @@
+{
+  "id": "storage.concurrency-pack",
+  "title": "Storage Concurrency Pack",
+  "area": "storage",
+  "mode": ["python"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "storage concurrency harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "create_session": {
+        "provider": "openai",
+        "model": "gpt-5.4",
+        "permissionMode": "bypassPermissions"
+      }
+    },
+    {
+      "save_session": {}
+    },
+    {
+      "ensure_daemon": {
+        "inProcess": true
+      }
+    },
+    {
+      "start_background_task": {
+        "alias": "writer-1",
+        "title": "concurrent writer 1",
+        "script": "print('writer-1 ok')"
+      }
+    },
+    {
+      "start_background_task": {
+        "alias": "writer-2",
+        "title": "concurrent writer 2",
+        "script": "print('writer-2 ok')"
+      }
+    },
+    {
+      "start_background_task": {
+        "alias": "writer-3",
+        "title": "concurrent writer 3",
+        "script": "print('writer-3 ok')"
+      }
+    },
+    {
+      "start_background_task": {
+        "alias": "writer-4",
+        "title": "concurrent writer 4",
+        "script": "print('writer-4 ok')"
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "writer-1",
+        "status": "completed",
+        "timeoutSeconds": 8
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "writer-2",
+        "status": "completed",
+        "timeoutSeconds": 8
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "writer-3",
+        "status": "completed",
+        "timeoutSeconds": 8
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "writer-4",
+        "status": "completed",
+        "timeoutSeconds": 8
+      }
+    },
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-c",
+          "import json, os\nfrom pathlib import Path\nsessions = sorted((Path(os.environ['AGENT_CORE_HOME']) / 'sessions').glob('*.json'))\nrecord = json.loads(sessions[0].read_text(encoding='utf-8'))\ntask_ids = record.get('metadata', {}).get('taskIds') or []\nprint(f'session-task-ids={len(task_ids)}')"
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "status": "passed",
+        "stdoutContains": "session-task-ids=4"
+      }
+    },
+    {
+      "start_health_check": {
+        "alias": "health",
+        "title": "stop stickiness health",
+        "mode": "command",
+        "command": "printf health-ok",
+        "intervalMs": 250,
+        "timeoutMs": 1000,
+        "failureThreshold": 3,
+        "backoffMultiplier": 1,
+        "maxIntervalMs": 250
+      }
+    },
+    {
+      "wait_health_check": {
+        "alias": "health",
+        "status": "active",
+        "requireSuccess": true,
+        "timeoutSeconds": 10
+      }
+    },
+    {
+      "stop_task": {
+        "alias": "health"
+      }
+    },
+    {
+      "wait_task_status": {
+        "alias": "health",
+        "status": "stopped",
+        "timeoutSeconds": 5
+      }
+    },
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-c",
+          "import json, os, time\nfrom pathlib import Path\ntime.sleep(0.6)\nchecks = sorted((Path(os.environ['AGENT_CORE_HOME']) / 'tasks').glob('*/health-check.json'))\nrecord = json.loads(checks[0].read_text(encoding='utf-8'))\nprint(f\"health-stop-sticky={record.get('status')}\")"
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "status": "passed",
+        "stdoutContains": "health-stop-sticky=stopped"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "task_driver_results",
+          "subprocess_results",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "session",
+      "task_driver_results",
+      "subprocess_results",
+      "step_results"
+    ]
+  }
+}

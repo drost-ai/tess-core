@@ -1,0 +1,75 @@
+[
+  {
+    "driver": "ensure_daemon",
+    "state": {
+      "activeTasks": 0,
+      "attachedClients": 0,
+      "supervisorId": "<uuid:2>",
+      "watchedSessions": 0
+    },
+    "status": "passed"
+  },
+  {
+    "command": "<python> -c 'print('\"'\"'writer-1 ok'\"'\"')'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:3>/output.log",
+      "taskId": "<uuid:3>",
+      "task_id": "<uuid:3>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:3>"
+  },
+  {
+    "command": "<python> -c 'print('\"'\"'writer-2 ok'\"'\"')'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "taskId": "<uuid:4>",
+      "task_id": "<uuid:4>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:4>"
+  },
+  {
+    "command": "<python> -c 'print('\"'\"'writer-3 ok'\"'\"')'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
+      "task_id": "<uuid:5>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:5>"
+  },
+  {
+    "command": "<python> -c 'print('\"'\"'writer-4 ok'\"'\"')'",
+    "driver": "start_background_task",
+    "result": {
+      "outputFile": "<runtime-home>/tasks/<uuid:6>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:6>/output.log",
+      "taskId": "<uuid:6>",
+      "task_id": "<uuid:6>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:6>"
+  },
+  {
+    "driver": "start_health_check",
+    "result": {
+      "taskId": "<uuid:7>",
+      "task_id": "<uuid:7>"
+    },
+    "status": "passed",
+    "taskId": "<uuid:7>"
+  },
+  {
+    "driver": "stop_task",
+    "status": "passed",
+    "stopped": true,
+    "taskId": "<uuid:7>"
+  }
+]

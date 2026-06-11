@@ -198,6 +198,10 @@ def tree_snapshot(root: Path) -> list[dict[str, Any]]:
         return []
     entries: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*")):
+        if path.name.endswith(".json.lock"):
+            # Transient advisory-lock sidecars (storage_store.fileLock) are
+            # infrastructure, not observable state; keep goldens stable.
+            continue
         rel = path.relative_to(root).as_posix()
         if path.is_dir():
             entries.append({"path": rel, "type": "dir"})
