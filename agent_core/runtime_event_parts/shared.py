@@ -62,6 +62,7 @@ KNOWN_RUNTIME_EVENTS = {
     "remote.status_changed",
     "bridge.status_changed",
     "bridge.message",
+    "storage.lock_timeout",
 }
 
 

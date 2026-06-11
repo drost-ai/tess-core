@@ -12,7 +12,7 @@ from .remote import createBridgeRuntime
 from .runtime_events import createRuntimeEvent
 from .runtime_state import createInitialRuntimeState, createRuntimeStateStore
 from .session_runtime import createSessionRuntimeController
-from .storage import configureRuntimeHome
+from .storage import configureRuntimeHome, registerStorageLockObserver
 from .task_runtime import createTaskRuntime
 from .tools import createBuiltinTools
 from .workspace import createWorkspaceController
@@ -46,6 +46,10 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             fn(envelope)
         for fn in list(legacy_subscribers):
             fn(event, data or {})
+
+    storage_lock_unsubscribe = registerStorageLockObserver(
+        lambda payload: emit_runtime_event("storage.lock_timeout", dict(payload))
+    )
 
     def subscribe(fn):
         legacy_subscribers.append(fn)
@@ -162,6 +166,7 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             _run_background(subscribe_next())
 
     async def close():
+        storage_lock_unsubscribe()
         if daemon_unsubscribe:
             daemon_unsubscribe()
         if daemon and daemon.get("close"):

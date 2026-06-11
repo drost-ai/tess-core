@@ -411,6 +411,13 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "platform.event", {"eventName": event}
     if event.startswith("subagent."):
         return "subagent.event", {"eventName": event}
+    if event == "storage.lock_timeout":
+        return "storage.lock_timeout", {
+            "path": _string_field(_field(data, "path")),
+            "layer": _optional_string(_field(data, "layer")),
+            "timeoutMs": _optional_number(_field(data, "timeout_ms", "timeoutMs")),
+            "action": _optional_string(_field(data, "action")),
+        }
     if event == "budget.exceeded":
         return "budget.exceeded", {
             "estimatedCostUsd": _optional_number(_field(data, "estimated_cost_usd", "estimatedCostUsd")),

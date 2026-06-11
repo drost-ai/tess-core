@@ -76,6 +76,7 @@ RuntimeEventName = Literal[
     "remote.status_changed",
     "bridge.status_changed",
     "bridge.message",
+    "storage.lock_timeout",
 ]
 
 # Mirrors _CONTEXT_RELIEF_MODES in runtime_event_parts/shared.py (sync-tested).
