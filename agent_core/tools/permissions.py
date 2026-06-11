@@ -26,6 +26,17 @@ async def _ensure_tool_permission(context: ToolContext, tool_name: str, category
 
     if not context.get("interactive"):
         switch = resolution.get("switchMode") or "bypassPermissions"
+        output_json(
+            "permission.decided",
+            {
+                "tool": tool_name,
+                "mode": mode,
+                "decision": "deny",
+                "summary": summary,
+                "source": "non_interactive",
+                "reason": resolution.get("reason") or f"{tool_name} requires approval in {mode} mode.",
+            },
+        )
         raise PermissionError(f"{tool_name} requires approval in {mode} mode. Re-run with --permission-mode {switch} or switch modes interactively with /permissions.")
 
     approve_label = "Approve once"

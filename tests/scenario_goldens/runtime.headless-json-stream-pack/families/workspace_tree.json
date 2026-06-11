@@ -1,0 +1,15 @@
+[
+  {
+    "path": ".tess",
+    "type": "dir"
+  },
+  {
+    "path": ".tess/local",
+    "type": "dir"
+  },
+  {
+    "path": "README.md",
+    "size": 28,
+    "type": "file"
+  }
+]

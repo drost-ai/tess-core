@@ -1,0 +1,70 @@
+{
+  "area": "runtime",
+  "capture": {
+    "include": [
+      "subprocess_results",
+      "driver_results",
+      "workspace_tree",
+      "step_results"
+    ]
+  },
+  "id": "runtime.headless-json-stream-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "hello from headless harness\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-m",
+          "agent_core",
+          "run",
+          "-p",
+          "Say hello from the headless stream.",
+          "--output-format",
+          "stream-json",
+          "--provider",
+          "openai",
+          "--model",
+          "gpt-5.4",
+          "--permission-mode",
+          "bypassPermissions",
+          "--tools",
+          "Read",
+          "--allowed-tools",
+          "Read"
+        ],
+        "env": {
+          "AGENT_CORE_HEADLESS_PROVIDER_RESPONSES": "{\"model\":\"gpt-5.4\",\"stopReason\":\"end_turn\",\"usage\":{\"input_tokens\":1,\"output_tokens\":2},\"content\":[{\"type\":\"text\",\"text\":\"hello from stream\"}]}"
+        }
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "returnCode": 0,
+        "status": "passed",
+        "stdoutContains": "\"event\":\"result\""
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "subprocess_results",
+          "driver_results",
+          "workspace_tree",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Headless JSON Stream CLI Pack"
+}

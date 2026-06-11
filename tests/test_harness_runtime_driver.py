@@ -34,6 +34,22 @@ class HarnessRuntimeDriverTests(AgentCoreTestCase):
             self.assertEqual(result.status, "passed")
             self.assertEqual(result.golden["status"], "matched")
 
+    def test_headless_json_stream_pack_runs(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_scenario("runtime.headless-json-stream-pack", runs_dir=runs)
+            self.assertEqual(result.status, "passed")
+            observations = json.loads(Path(result.observationsPath).read_text(encoding="utf-8"))
+            stdout = observations["subprocess_results"][0]["stdout"]
+            self.assertIn('"event":"system.init"', stdout)
+            self.assertIn('"event":"result"', stdout)
+            self.assertIn('"text":"hello from stream"', stdout)
+
+    def test_committed_headless_json_stream_golden_compares(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_scenario("runtime.headless-json-stream-pack", runs_dir=runs, golden="compare", cleanup="success")
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
     def test_unexpected_driver_failure_writes_debug_bundle(self):
         scenario = Scenario(
             "runtime.subprocess-failure",

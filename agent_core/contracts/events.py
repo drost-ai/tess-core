@@ -21,6 +21,7 @@ from typing import Any, Literal, Mapping, TypedDict
 # asserts the two sets are identical. The envelope's name fields stay ``str``
 # because createRuntimeEvent accepts arbitrary event names.
 RuntimeEventName = Literal[
+    "system.init",
     "session.activated",
     "message.user",
     "message.assistant",
@@ -79,6 +80,7 @@ RuntimeEventName = Literal[
     "bridge.status_changed",
     "bridge.message",
     "storage.lock_timeout",
+    "result",
 ]
 
 # Mirrors _CONTEXT_RELIEF_MODES in runtime_event_parts/shared.py (sync-tested).

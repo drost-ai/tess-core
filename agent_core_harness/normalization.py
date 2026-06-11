@@ -89,6 +89,10 @@ class NormalizationContext:
         if _TIMESTAMP_PATTERN.fullmatch(normalized):
             return "<timestamp>"
         normalized = _TIMESTAMP_PATTERN.sub("<timestamp>", normalized)
+        normalized = _EMBEDDED_DURATION_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<duration-ms>"', normalized)
+        normalized = _EMBEDDED_WORKSPACE_NAME_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<workspace-name>"', normalized)
+        normalized = _EMBEDDED_GIT_ROOT_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<git-root>"', normalized)
+        normalized = _EMBEDDED_GIT_BRANCH_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<git-branch>"', normalized)
         normalized = _PYTHON_EXECUTABLE_PATTERN.sub("<python>", normalized)
         normalized = re.sub(r"\bpreflight\s+\d+\s+via\b", "preflight <token-estimate> via", normalized)
         normalized = self._replace_labeled_numbers(normalized, r"\b(pid|ppid|process_id|processId)[=:\s]+(\d+)\b", self.pid_map, "pid")
@@ -102,13 +106,15 @@ class NormalizationContext:
         return normalized
 
     def _replace_paths(self, value: str) -> str:
-        replacements = [
-            (str(self.sandbox.home), "<runtime-home>"),
-            (str(self.sandbox.workspace), "<workspace>"),
-            (str(self.sandbox.run_dir), "<run-dir>"),
-            (str(REPO_ROOT), "<repo>"),
-            (tempfile.gettempdir(), "<tmp>"),
-        ]
+        replacements = _path_replacements(
+            [
+                (Path(self.sandbox.home), "<runtime-home>"),
+                (Path(self.sandbox.workspace), "<workspace>"),
+                (Path(self.sandbox.run_dir), "<run-dir>"),
+                (Path(REPO_ROOT), "<repo>"),
+                (Path(tempfile.gettempdir()), "<tmp>"),
+            ]
+        )
         normalized = value
         for raw, marker in replacements:
             normalized = _replace_path_prefix(normalized, raw, marker)
@@ -146,6 +152,18 @@ def _replace_path_prefix(value: str, raw: str, marker: str) -> str:
     return normalized.replace(raw_path.replace("\\", "/"), marker)
 
 
+def _path_replacements(items: list[tuple[Path, str]]) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for path, marker in items:
+        for candidate in (path, path.resolve()):
+            key = (str(candidate), marker)
+            if key[0] and key not in seen:
+                seen.add(key)
+                out.append(key)
+    return sorted(out, key=lambda item: len(item[0]), reverse=True)
+
+
 def _is_estimated_token_record(value: dict[str, Any]) -> bool:
     return value.get("source") == "openai_responses_estimate" or value.get("inputTokenSource") == "openai_responses_estimate"
 
@@ -159,6 +177,10 @@ def _is_token_estimate_key(key: str) -> bool:
 
 
 _TIMESTAMP_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
+_EMBEDDED_DURATION_FIELD_PATTERN = re.compile(r'("(?:elapsed_ms_since_last_checkpoint|elapsedMsSinceLastCheckpoint)":)(?:\d+)')
+_EMBEDDED_WORKSPACE_NAME_FIELD_PATTERN = re.compile(r'("(?:workspace_name|workspaceName)":)"[^"]*"')
+_EMBEDDED_GIT_ROOT_FIELD_PATTERN = re.compile(r'("(?:git_root|gitRoot)":)(?:"[^"]*"|null)')
+_EMBEDDED_GIT_BRANCH_FIELD_PATTERN = re.compile(r'("(?:git_branch|gitBranch)":)(?:"[^"]*"|null)')
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 _PYTHON_EXECUTABLE_PATTERN = re.compile(
     r"(?<![\w<])(?:<repo>/\.venv/bin/python\d+(?:\.\d+)?|/(?:[\w.+@-]+/)*python\d+(?:\.\d+)?)(?![\w.])"

@@ -7,6 +7,7 @@ from .._utils import now_iso
 
 
 KNOWN_RUNTIME_EVENTS = {
+    "system.init",
     "session.activated",
     "message.user",
     "message.assistant",
@@ -65,6 +66,7 @@ KNOWN_RUNTIME_EVENTS = {
     "bridge.status_changed",
     "bridge.message",
     "storage.lock_timeout",
+    "result",
 }
 
 

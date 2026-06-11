@@ -33,3 +33,9 @@ from .continuation import *
 from .token_accounting import *
 from .providers.anthropic import *
 from .providers.openai import *
+
+__all__ = sorted(name for name in globals() if not name.startswith("_") and name != "headless")
+
+
+def __dir__():
+    return sorted(name for name in globals() if not name.startswith("_") and name != "headless")

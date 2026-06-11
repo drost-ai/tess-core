@@ -9,6 +9,7 @@ import agent_core as core
 from agent_core.contracts import ToolContext
 
 from .model import ScenarioAssertionError
+from .paths import REPO_ROOT
 from .sandbox import ScenarioSandbox
 
 
@@ -59,10 +60,12 @@ async def run_subprocess(data: dict[str, Any], sandbox: ScenarioSandbox, state: 
     command = data.get("command")
     if not isinstance(command, list) or not command or any(not isinstance(item, str) for item in command):
         raise ScenarioAssertionError("run_subprocess.command must be a non-empty string list", category="harness")
+    env = {**os.environ, **(data.get("env") or {})}
+    env["PYTHONPATH"] = str(REPO_ROOT) if not env.get("PYTHONPATH") else f"{REPO_ROOT}{os.pathsep}{env['PYTHONPATH']}"
     proc = await asyncio.create_subprocess_exec(
         *command,
         cwd=str(sandbox.workspace),
-        env={**os.environ, **(data.get("env") or {})},
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

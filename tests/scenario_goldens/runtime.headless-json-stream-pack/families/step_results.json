@@ -1,0 +1,38 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "subprocess_results",
+      "driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_subprocess"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_driver_result"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 2,
+    "observationKeys": [
+      "driver_results",
+      "run",
+      "scenario",
+      "step_results",
+      "subprocess_results",
+      "workspace_tree"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]
