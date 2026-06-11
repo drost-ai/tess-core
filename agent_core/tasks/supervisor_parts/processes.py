@@ -44,12 +44,20 @@ def _spawn_shell(
         handle.close()
 
 
-def _spawn_main_session_worker(task_id: str, session_id: str, prompt: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
+def _spawn_main_session_worker(
+    task_id: str,
+    session_id: str,
+    prompt: str,
+    cwd: str,
+    output_file: str,
+    *,
+    runtime_home: str | None = None,
+) -> subprocess.Popen[Any]:
     handle = open(output_file, "ab")
     kwargs: dict[str, Any] = {}
     if hasattr(os, "setsid"):
         kwargs["preexec_fn"] = os.setsid
-    env = _worker_env()
+    env = _worker_env({"AGENT_CORE_HOME": runtime_home} if runtime_home else None)
     try:
         return subprocess.Popen(
             [
@@ -74,7 +82,15 @@ def _spawn_main_session_worker(task_id: str, session_id: str, prompt: str, cwd: 
         handle.close()
 
 
-def _spawn_subagent_worker(task_id: str, session_id: str, agent_id: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
+def _spawn_subagent_worker(
+    task_id: str,
+    session_id: str,
+    agent_id: str,
+    cwd: str,
+    output_file: str,
+    *,
+    runtime_home: str | None = None,
+) -> subprocess.Popen[Any]:
     handle = open(output_file, "ab")
     kwargs: dict[str, Any] = {}
     if hasattr(os, "setsid"):
@@ -84,6 +100,7 @@ def _spawn_subagent_worker(task_id: str, session_id: str, agent_id: str, cwd: st
             "TESS_CHILD_AGENT_ID": agent_id,
             "TESS_CHILD_TASK_ID": task_id,
             "TESS_CHILD_SESSION_ID": session_id,
+            **({"AGENT_CORE_HOME": runtime_home} if runtime_home else {}),
         }
     )
     try:

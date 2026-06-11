@@ -83,19 +83,21 @@
     },
     {
       "messages": {
-        "afterCount": 4,
+        "afterCount": 5,
         "beforeCount": 41,
         "hasLatestRawTail": true,
         "hasPartialSummary": true,
         "hasRepeatedFileOmission": true,
         "rolesHead": [
           "user",
+          "assistant",
           "user",
           "assistant",
           "user"
         ],
         "rolesTail": [
           "user",
+          "assistant",
           "user",
           "assistant",
           "user"
@@ -158,7 +160,7 @@
           "partial_compaction"
         ],
         "compactedMessageCount": 41,
-        "droppedMessageCount": 37,
+        "droppedMessageCount": 36,
         "plannedModes": [
           "api_microcompact",
           "partial_compaction"
@@ -182,7 +184,7 @@
           "applied": true,
           "compactedMessageCount": 1,
           "detail": "older continuation region collapsed into a bounded partial summary",
-          "droppedMessageCount": 37,
+          "droppedMessageCount": 36,
           "mode": "partial_compaction",
           "requiresReinjection": true,
           "tokensSavedEstimate": "medium"

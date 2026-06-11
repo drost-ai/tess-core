@@ -103,7 +103,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
 
         await mutateSessionRecord(session_id, _append_main_session_task)
         command = prompt
-        proc = _spawn_main_session_worker(task_id, session_id, prompt, task_cwd, output_file)
+        proc = _spawn_main_session_worker(task_id, session_id, prompt, task_cwd, output_file, runtime_home=task_args.get("runtimeHome"))
         _PROCESS_REGISTRY[task_id] = proc
         meta = {
             "type": "main_session",
@@ -163,7 +163,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             child_metadata["subagentRuntimeContract"] = runtime_contract
         await saveSession(child_session)
         command = f"{sys.executable} -m agent_core.background_subagent_runner --session-id {session_id} --agent-id {agent_id} --task-id {task_id}"
-        proc = _spawn_subagent_worker(task_id, session_id, agent_id, task_cwd, output_file)
+        proc = _spawn_subagent_worker(task_id, session_id, agent_id, task_cwd, output_file, runtime_home=task_args.get("runtimeHome"))
         _PROCESS_REGISTRY[task_id] = proc
         meta = {
             "type": "subagent",
@@ -190,6 +190,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "owner": "daemon",
             "supervisorId": supervisor_id,
             "runtimeContract": runtime_contract if isinstance(runtime_contract, dict) else None,
+            "runtimeHome": task_args.get("runtimeHome"),
             "concurrencyGroup": runtime_contract.get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
             "timeoutMs": runtime_contract.get("timeoutMs") if isinstance(runtime_contract, dict) else None,
             "metadata": {
