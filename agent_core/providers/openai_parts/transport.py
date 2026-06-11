@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib
+from types import SimpleNamespace
+
 from .shared import *
 
 def _infer_openai_responses_mode(base_url: str | None) -> str:
@@ -7,14 +10,52 @@ def _infer_openai_responses_mode(base_url: str | None) -> str:
 
 def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
     factory = args.get("clientFactory") or args.get("client_factory")
-    if not factory:
-        raise RuntimeError("A clientFactory is required unless the optional OpenAI SDK transport is added by the application.")
     options = {"apiKey": args.get("token"), "dangerouslyAllowBrowser": False, "fetch": _build_openai_fetch(args.get("runtime") or {})}
     if args.get("headers"):
         options["defaultHeaders"] = args["headers"]
     if base_url:
         options["baseURL"] = base_url
+    if not factory:
+        return _create_openai_sdk_client(options)
     return factory(options)
+
+
+class _OpenAiResponsesSdkAdapter:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    async def create(self, params: dict[str, Any]) -> Any:
+        return await maybe_await(self._client.responses.create(**params))
+
+
+class _OpenAiChatCompletionsSdkAdapter:
+    def __init__(self, client: Any) -> None:
+        self._client = client
+
+    async def create(self, params: dict[str, Any]) -> Any:
+        return await maybe_await(self._client.chat.completions.create(**params))
+
+
+def _create_openai_sdk_client(options: dict[str, Any]) -> Any:
+    try:
+        openai_module = importlib.import_module("openai")
+    except Exception as exc:
+        raise RuntimeError(
+            "A clientFactory is required unless the optional OpenAI SDK transport is available."
+        ) from exc
+    async_openai = getattr(openai_module, "AsyncOpenAI", None)
+    if async_openai is None:
+        raise RuntimeError("The optional OpenAI SDK transport is unavailable because AsyncOpenAI is missing.")
+    kwargs: dict[str, Any] = {"api_key": options.get("apiKey")}
+    if options.get("baseURL"):
+        kwargs["base_url"] = options["baseURL"]
+    if options.get("defaultHeaders"):
+        kwargs["default_headers"] = options["defaultHeaders"]
+    client = async_openai(**kwargs)
+    return SimpleNamespace(
+        responses=_OpenAiResponsesSdkAdapter(client),
+        chat=SimpleNamespace(completions=_OpenAiChatCompletionsSdkAdapter(client)),
+    )
 
 def _build_openai_fetch(runtime: dict[str, Any]):
     async def fetch(_input: Any, init: dict[str, Any] | None = None) -> Any:
