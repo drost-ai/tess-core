@@ -144,6 +144,29 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             next_state["turn"] = {**next_state.get("turn", {}), "liveStatus": {"message": _default_tool_status_message(name), "detail": _default_tool_status_detail(name), "source": "runtime", "updatedAt": timestamp}}
     elif typ == "tool.completed":
         next_state = _clear_runtime_live_status(next_state)
+    elif typ == "sandbox.applied":
+        next_state["sandbox"] = {
+            **next_state.get("sandbox", {}),
+            "backend": _field(data, "backend"),
+            "enforcement": _field(data, "enforcement"),
+            "writableRoots": _field(data, "writableRoots", "writable_roots"),
+            "allowNetwork": _field(data, "allowNetwork", "allow_network"),
+            "lastAppliedAt": timestamp,
+        }
+    elif typ == "sandbox.downgraded":
+        next_state["sandbox"] = {
+            **next_state.get("sandbox", {}),
+            "backend": _field(data, "backend"),
+            "enforcement": _field(data, "actual"),
+            "lastDowngrade": {
+                "requested": _field(data, "requested"),
+                "actual": _field(data, "actual"),
+                "backend": _field(data, "backend"),
+                "reason": _field(data, "reason"),
+                "updatedAt": timestamp,
+            },
+            "updatedAt": timestamp,
+        }
     elif typ == "context.raw_pressure":
         next_state["compaction"] = {
             **next_state.get("compaction", {}),

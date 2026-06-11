@@ -17,6 +17,7 @@ def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str
         "turn": {"status": "idle", "lastOutcome": deriveStoredTurnOutcome(session) if session else None},
         "provider": {"phase": "idle"},
         "compaction": {"status": "idle"},
+        "sandbox": {},
         "daemon": {"phase": "offline"},
         "tasks": {"total": 0, "tasks": [], "activeCount": 0, "backgroundedCount": 0, "awaitingInputCount": 0, "failedCount": 0, "labels": []},
         "monitors": {"snapshot": {"total": 0, "active": 0, "failed": 0, "stopped": 0, "muted": 0, "labels": []}, "activeMonitorIds": [], "recentAssistantUpdates": []},

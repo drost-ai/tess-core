@@ -17,7 +17,7 @@ from ..tool_payloads import shapeTextToolResult
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
-from .processes import _communicate_shell_process, _resolve_shell, _spawn_background_task_runner, _track_background_runner
+from .processes import _communicate_shell_process, _prepare_sandboxed_argv, _resolve_shell, _spawn_background_task_runner, _track_background_runner
 from .schemas import _tool_description, _tool_schema
 from .session_metadata import _append_unique_metadata_list
 from .validation import _require_string
@@ -47,6 +47,8 @@ def _bash_tool() -> ToolDefinition:
                         "command": command,
                         "cwd": context["session"]["cwd"],
                         "title": title,
+                        "sandbox": context.get("config", {}).get("sandbox"),
+                        "runtimeHome": context.get("config", {}).get("runtimeHome"),
                     }
                 )
                 task_id = launch_task_id(started)
@@ -82,7 +84,7 @@ def _bash_tool() -> ToolDefinition:
                     "description": title,
                     "owner": "client",
                 }
-                runner = _spawn_background_task_runner(task_id, command, context["session"]["cwd"], output_path)
+                runner = _spawn_background_task_runner(task_id, command, context["session"]["cwd"], output_path, context)
                 _track_background_runner(runner)
                 task_record["runnerPid"] = runner.pid
                 await writeTaskMeta(task_id, task_record)
@@ -140,7 +142,8 @@ def _bash_tool() -> ToolDefinition:
                 ),
                 "meta": {"execution": execution},
             }
-        proc = await asyncio.create_subprocess_exec(_resolve_shell(), "-lc", command, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        argv = _prepare_sandboxed_argv([_resolve_shell(), "-lc", command], context, context["session"]["cwd"])
+        proc = await asyncio.create_subprocess_exec(*argv, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr, timed_out = await _communicate_shell_process(proc, timeout, context)
         if _signal_aborted(context.get("abortSignal")):
             raise _create_tool_abort_error()

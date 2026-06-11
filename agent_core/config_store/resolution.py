@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.config import ResolvedConfig
+from ..sandbox import normalizeSandboxConfig
 
 from .shared import *
 
@@ -188,6 +189,9 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     assistant_name = options.get("assistantName") or merged_settings.get("assistantName") or DEFAULT_ASSISTANT_NAME
     assistant_description = options.get("assistantDescription") or merged_settings.get("assistantDescription") or DEFAULT_ASSISTANT_DESCRIPTION
     system_prompt = options.get("systemPrompt") or merged_settings.get("systemPrompt") or buildDefaultSystemPrompt({"assistantName": assistant_name, "assistantDescription": assistant_description})
+    settings_sandbox = merged_settings.get("sandbox") if isinstance(merged_settings.get("sandbox"), dict) else {}
+    options_sandbox = options.get("sandbox") if isinstance(options.get("sandbox"), dict) else {}
+    sandbox_config = normalizeSandboxConfig({**settings_sandbox, **options_sandbox}, cwd)
 
     return {
         "cwd": cwd,
@@ -218,6 +222,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "assistantDescription": assistant_description,
         "systemPrompt": system_prompt,
         "appendSystemPrompt": options.get("appendSystemPrompt") or merged_settings.get("appendSystemPrompt"),
+        "sandbox": sandbox_config,
         "tools": tools,
         "allowedTools": allowed_tools,
         "disallowedTools": disallowed_tools,

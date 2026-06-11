@@ -1,16 +1,39 @@
 from __future__ import annotations
 
 from .shared import *
+from ...sandbox import prepareSandboxedArgv
 
 
-def _spawn_shell(command: str, cwd: str, output_file: str) -> subprocess.Popen[Any]:
-    handle = open(output_file, "ab")
+def _spawn_shell(
+    command: str,
+    cwd: str,
+    output_file: str,
+    *,
+    sandbox_config: dict[str, Any] | None = None,
+    runtime_home: str | None = None,
+    sandbox_events: list[dict[str, Any]] | None = None,
+) -> subprocess.Popen[Any]:
     kwargs: dict[str, Any] = {}
     if hasattr(os, "setsid"):
         kwargs["preexec_fn"] = os.setsid
+    argv = [_resolve_shell(), "-lc", command]
+    if sandbox_config:
+        def emit_sandbox_event(event: str, data: dict[str, Any]) -> None:
+            if sandbox_events is not None:
+                sandbox_events.append({"event": event, "data": data})
+
+        launch = prepareSandboxedArgv(
+            argv,
+            config={"sandbox": sandbox_config, "runtimeHome": runtime_home},
+            cwd=cwd,
+            extraWritableRoots=[root for root in (os.path.dirname(output_file), runtime_home) if root],
+            emit=emit_sandbox_event,
+        )
+        argv = launch["argv"]
+    handle = open(output_file, "ab")
     try:
         return subprocess.Popen(
-            [_resolve_shell(), "-lc", command],
+            argv,
             cwd=cwd,
             stdout=handle,
             stderr=subprocess.STDOUT,

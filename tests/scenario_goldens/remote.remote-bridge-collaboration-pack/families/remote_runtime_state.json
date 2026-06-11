@@ -194,6 +194,7 @@
   "provider": {
     "phase": "idle"
   },
+  "sandbox": {},
   "session": {
     "activeSessionId": "<uuid:1>",
     "lastActivatedAt": "<timestamp>",

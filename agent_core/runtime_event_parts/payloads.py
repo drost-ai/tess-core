@@ -165,6 +165,22 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "decision": _optional_string(_field(data, "decision")),
             "summary": _optional_string(_field(data, "summary")),
         }
+    if event == "sandbox.applied":
+        return "sandbox.applied", {
+            "backend": _optional_string(_field(data, "backend")),
+            "enforcement": _optional_string(_field(data, "enforcement")),
+            "writableRoots": _string_array(_field(data, "writable_roots", "writableRoots")),
+            "allowNetwork": _optional_boolean(_field(data, "allow_network", "allowNetwork")),
+        }
+    if event == "sandbox.downgraded":
+        return "sandbox.downgraded", {
+            "requested": _optional_string(_field(data, "requested")),
+            "actual": _optional_string(_field(data, "actual")),
+            "backend": _optional_string(_field(data, "backend")),
+            "reason": _optional_string(_field(data, "reason")),
+            "writableRoots": _string_array(_field(data, "writable_roots", "writableRoots")),
+            "allowNetwork": _optional_boolean(_field(data, "allow_network", "allowNetwork")),
+        }
     if event == "plan.requested":
         return "plan.requested", {
             "plan": _optional_string(_field(data, "plan")),

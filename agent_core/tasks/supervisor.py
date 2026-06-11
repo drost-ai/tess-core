@@ -34,7 +34,15 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         started_at = now_iso()
-        proc = _spawn_shell(command, task_cwd, output_file)
+        sandbox_events: list[dict[str, Any]] = []
+        proc = _spawn_shell(
+            command,
+            task_cwd,
+            output_file,
+            sandbox_config=task_args.get("sandbox"),
+            runtime_home=task_args.get("runtimeHome"),
+            sandbox_events=sandbox_events,
+        )
         _PROCESS_REGISTRY[task_id] = proc
         meta = {
             "type": "background_command",
@@ -57,6 +65,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         await writeTaskMeta(task_id, meta)
         record = _build_task_record(meta, "Background command launched by daemon.")
         await saveTaskRecord(record)
+        for sandbox_event in sandbox_events:
+            await emit(sandbox_event["event"], sandbox_event["data"], session_id)
 
         def _append_task_id(record_session: dict[str, Any]) -> dict[str, Any]:
             metadata = record_session.setdefault("metadata", {})

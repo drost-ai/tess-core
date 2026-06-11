@@ -9,27 +9,36 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ..sandbox import prepareSandboxedArgv
 from .cancellation import _create_tool_abort_error, _signal_aborted
 
 
 _BACKGROUND_RUNNERS: list[subprocess.Popen[Any]] = []
 
 
-def _spawn_background_task_runner(task_id: str, command: str, cwd: str, output_path: str) -> subprocess.Popen[Any]:
-    return subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "agent_core.background_task_runner",
-            "--task-id",
-            task_id,
-            "--command",
-            command,
-            "--cwd",
+def _spawn_background_task_runner(task_id: str, command: str, cwd: str, output_path: str, context: ToolContext | None = None) -> subprocess.Popen[Any]:
+    argv = [
+        sys.executable,
+        "-m",
+        "agent_core.background_task_runner",
+        "--task-id",
+        task_id,
+        "--command",
+        command,
+        "--cwd",
+        cwd,
+        "--output-path",
+        output_path,
+    ]
+    if context:
+        argv = _prepare_sandboxed_argv(
+            argv,
+            context,
             cwd,
-            "--output-path",
-            output_path,
-        ],
+            extra_writable_roots=[os.path.dirname(output_path), context.get("config", {}).get("runtimeHome")],
+        )
+    return subprocess.Popen(
+        argv,
         cwd=cwd,
         env=_background_runner_env(),
         stdin=subprocess.DEVNULL,
@@ -37,6 +46,24 @@ def _spawn_background_task_runner(task_id: str, command: str, cwd: str, output_p
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
+
+
+def _prepare_sandboxed_argv(
+    argv: list[str],
+    context: ToolContext,
+    cwd: str,
+    *,
+    extra_writable_roots: list[str | None] | None = None,
+) -> list[str]:
+    launch = prepareSandboxedArgv(
+        argv,
+        config=context.get("config") or {},
+        session=context.get("session"),
+        cwd=cwd,
+        extraWritableRoots=[root for root in (extra_writable_roots or []) if root],
+        emit=context.get("outputJson"),
+    )
+    return launch["argv"]
 
 
 def _background_runner_env() -> dict[str, str]:

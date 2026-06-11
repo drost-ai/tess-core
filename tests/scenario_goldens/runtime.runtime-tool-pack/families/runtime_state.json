@@ -73,6 +73,7 @@
     "provider": "openai",
     "safetyMarginTokens": null
   },
+  "sandbox": {},
   "session": {
     "activeSessionId": "<uuid:1>",
     "lastActivatedAt": "<timestamp>",

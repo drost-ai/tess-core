@@ -45,6 +45,8 @@ RuntimeEventName = Literal[
     "compaction.decision",
     "permission.requested",
     "permission.decided",
+    "sandbox.applied",
+    "sandbox.downgraded",
     "plan.requested",
     "plan.approved",
     "plan.rejected",
