@@ -16,7 +16,8 @@ def sessionTranscriptLogPath(sessionId: str) -> str:
 async def saveSession(session: SessionRecord) -> None:
     path = sessionPath(session["id"])
     async with fileLock(path):
-        await writeJsonFile(path, _redact_persisted_image_payloads(session))
+        current = await readJsonFile(path, None)
+        await writeJsonFile(path, _redact_persisted_image_payloads(_merge_session_for_full_save(current, session)))
 
 
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
@@ -78,6 +79,123 @@ def _persisted_image_placeholder(value: dict[str, Any]) -> str:
     )
     suffix = f":{path}" if path else ""
     return f"<image:{mime_type}{suffix}:current-turn-only>"
+
+
+_ADDITIVE_SESSION_METADATA_LISTS = {
+    "backgroundSessionIds",
+    "childAgentIds",
+    "childSessionIds",
+    "monitorIds",
+    "taskIds",
+}
+
+
+def _merge_session_for_full_save(current: dict[str, Any] | None, incoming: dict[str, Any]) -> dict[str, Any]:
+    """Preserve cross-process metadata when a caller saves a full session.
+
+    The active session owner remains authoritative for messages, todos, prompt,
+    permission mode, and other top-level fields. Background subsystems mutate a
+    small set of metadata fields independently; stale full-session snapshots
+    must not erase those append-only or monotonic updates.
+    """
+    if not isinstance(current, dict) or current.get("id") != incoming.get("id"):
+        return incoming
+    merged = {**current, **incoming}
+    current_metadata = current.get("metadata") if isinstance(current.get("metadata"), dict) else {}
+    incoming_metadata = incoming.get("metadata") if isinstance(incoming.get("metadata"), dict) else {}
+    metadata = {**current_metadata, **incoming_metadata}
+    for key in _ADDITIVE_SESSION_METADATA_LISTS:
+        if key in current_metadata or key in incoming_metadata:
+            metadata[key] = _dedupe_list([*(incoming_metadata.get(key) or []), *(current_metadata.get(key) or [])])
+    if "usage" in current_metadata or "usage" in incoming_metadata:
+        metadata["usage"] = _merge_numeric_record(current_metadata.get("usage"), incoming_metadata.get("usage"))
+    if "compactions" in current_metadata or "compactions" in incoming_metadata:
+        metadata["compactions"] = _max_number(current_metadata.get("compactions"), incoming_metadata.get("compactions"))
+    if "fullTranscriptLog" in current_metadata or "fullTranscriptLog" in incoming_metadata:
+        metadata["fullTranscriptLog"] = _choose_full_transcript_log(
+            current_metadata.get("fullTranscriptLog"),
+            incoming_metadata.get("fullTranscriptLog"),
+        )
+    if "runtimeRestore" in current_metadata or "runtimeRestore" in incoming_metadata:
+        metadata["runtimeRestore"] = _choose_newer_saved_at(
+            current_metadata.get("runtimeRestore"),
+            incoming_metadata.get("runtimeRestore"),
+        )
+    if "compactionState" in current_metadata or "compactionState" in incoming_metadata:
+        metadata["compactionState"] = _choose_newer_compaction_state(
+            current_metadata.get("compactionState"),
+            incoming_metadata.get("compactionState"),
+        )
+    if "providerFailureCount" in current_metadata or "providerFailureCount" in incoming_metadata:
+        metadata["providerFailureCount"] = _max_number(
+            current_metadata.get("providerFailureCount"),
+            incoming_metadata.get("providerFailureCount"),
+        )
+    merged["metadata"] = metadata
+    return merged
+
+
+def _dedupe_list(values: list[Any]) -> list[Any]:
+    out: list[Any] = []
+    seen = set()
+    for value in values:
+        if not isinstance(value, str) or not value:
+            continue
+        if value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _merge_numeric_record(current: Any, incoming: Any) -> dict[str, Any]:
+    if not isinstance(current, dict):
+        return dict(incoming) if isinstance(incoming, dict) else {}
+    if not isinstance(incoming, dict):
+        return dict(current)
+    merged = {**current, **incoming}
+    for key in set(current) | set(incoming):
+        if isinstance(current.get(key), (int, float)) and isinstance(incoming.get(key), (int, float)):
+            merged[key] = max(current[key], incoming[key])
+    return merged
+
+
+def _max_number(current: Any, incoming: Any) -> Any:
+    if isinstance(current, (int, float)) and isinstance(incoming, (int, float)):
+        return max(current, incoming)
+    return incoming if incoming is not None else current
+
+
+def _choose_full_transcript_log(current: Any, incoming: Any) -> Any:
+    if not isinstance(current, dict):
+        return incoming
+    if not isinstance(incoming, dict):
+        return current
+    current_count = current.get("archivedMessageCount")
+    incoming_count = incoming.get("archivedMessageCount")
+    if isinstance(current_count, int) and isinstance(incoming_count, int) and current_count > incoming_count:
+        return current
+    return incoming
+
+
+def _choose_newer_saved_at(current: Any, incoming: Any) -> Any:
+    if not isinstance(current, dict):
+        return incoming
+    if not isinstance(incoming, dict):
+        return current
+    return current if str(current.get("savedAt") or "") > str(incoming.get("savedAt") or "") else incoming
+
+
+def _choose_newer_compaction_state(current: Any, incoming: Any) -> Any:
+    if not isinstance(current, dict):
+        return incoming
+    if not isinstance(incoming, dict):
+        return current
+    current_generation = current.get("latestCompactionGeneration")
+    incoming_generation = incoming.get("latestCompactionGeneration")
+    if isinstance(current_generation, int) and isinstance(incoming_generation, int):
+        return current if current_generation > incoming_generation else incoming
+    return current if str(current.get("latestCompactionAt") or "") > str(incoming.get("latestCompactionAt") or "") else incoming
 
 def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
     indexed: dict[int, dict[str, Any]] = {}

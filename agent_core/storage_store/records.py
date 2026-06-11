@@ -44,6 +44,63 @@ def _omit_none_fields(value: Any) -> Any:
         return [_omit_none_fields(item) for item in value]
     return value
 
+
+_CHILD_AGENT_STATUS_RANK = {
+    "queued": 1,
+    "running": 1,
+    "backgrounded": 1,
+    "awaiting_input": 2,
+    "awaiting_plan_approval": 2,
+    "completed": 3,
+    "failed": 3,
+    "cancelled": 3,
+    "stopped": 3,
+    "truncated": 3,
+}
+
+_CHILD_AGENT_COMPLETION_FIELDS = {
+    "completedAt",
+    "completionReason",
+    "error",
+    "lastSummary",
+    "lastUpdatedAt",
+    "latestResultAt",
+    "recoveryState",
+    "resultSummary",
+    "retryable",
+    "status",
+    "stoppable",
+    "stopReason",
+    "waitingReason",
+}
+
+_CHILD_AGENT_LAUNCH_FIELDS = {
+    "attachableSessionId",
+    "owner",
+    "pid",
+    "runInBackground",
+    "taskId",
+}
+
+
+def _merge_child_agent_for_full_save(current: dict[str, Any] | None, incoming: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(current, dict) or current.get("agentId") != incoming.get("agentId"):
+        return incoming
+    current_rank = _CHILD_AGENT_STATUS_RANK.get(str(current.get("status")), 0)
+    incoming_rank = _CHILD_AGENT_STATUS_RANK.get(str(incoming.get("status")), 0)
+    if current_rank > incoming_rank:
+        merged = {**incoming, **current}
+        for key in _CHILD_AGENT_LAUNCH_FIELDS:
+            if (merged.get(key) is None or merged.get(key) == "") and incoming.get(key) is not None:
+                merged[key] = incoming[key]
+        return merged
+    merged = {**current, **incoming}
+    if current_rank == incoming_rank:
+        for key in _CHILD_AGENT_COMPLETION_FIELDS:
+            if incoming.get(key) is None and current.get(key) is not None:
+                merged[key] = current[key]
+    return merged
+
 async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
     try:
         names = [name for name in os.listdir(directory) if name.endswith(".json")]
@@ -59,7 +116,8 @@ async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
 async def saveChildAgent(record: ChildAgentRecord) -> None:
     path = childAgentPath(record["agentId"])
     async with fileLock(path):
-        await writeJsonFile(path, _omit_none_fields(record))
+        current = await _load_by_path(path)
+        await writeJsonFile(path, _omit_none_fields(_merge_child_agent_for_full_save(current, record)))
 
 
 async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:

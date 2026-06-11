@@ -27,7 +27,10 @@ async def loadSettings(source: Scope, cwd: str) -> SettingsRecord:
     return await readJsonFile(_settings_path(source, cwd), {})
 
 async def saveSettings(source: Scope, cwd: str, settings: SettingsRecord) -> None:
-    await writeJsonFile(_settings_path(source, cwd), settings)
+    await mutateJsonFile(_settings_path(source, cwd), lambda _current: settings, {})
+
+async def mutateSettings(source: Scope, cwd: str, mutate) -> SettingsRecord:
+    return await mutateJsonFile(_settings_path(source, cwd), mutate, {})
 
 async def loadSettingsBySources(sources: list[Scope], cwd: str) -> SettingsRecord:
     merged: dict[str, Any] = {}
@@ -39,31 +42,46 @@ async def loadProjectMemoryRecords(cwd: str) -> list[dict[str, Any]]:
     return await readJsonFile(getProjectMemoryRecordsPath(cwd), [])
 
 async def saveProjectMemoryRecords(cwd: str, records: list[dict[str, Any]]) -> None:
-    await writeJsonFile(getProjectMemoryRecordsPath(cwd), records)
+    await mutateJsonFile(getProjectMemoryRecordsPath(cwd), lambda _current: records, [])
+
+async def mutateProjectMemoryRecords(cwd: str, mutate) -> list[dict[str, Any]]:
+    return await mutateJsonFile(getProjectMemoryRecordsPath(cwd), mutate, [])
 
 async def loadMcpServers(scope: Scope, cwd: str) -> list[dict[str, Any]]:
     return await readJsonFile(_settings_path(scope, cwd, "mcp.json"), [])
 
 async def saveMcpServers(scope: Scope, cwd: str, servers: list[dict[str, Any]]) -> None:
-    await writeJsonFile(_settings_path(scope, cwd, "mcp.json"), servers)
+    await mutateJsonFile(_settings_path(scope, cwd, "mcp.json"), lambda _current: servers, [])
+
+async def mutateMcpServers(scope: Scope, cwd: str, mutate) -> list[dict[str, Any]]:
+    return await mutateJsonFile(_settings_path(scope, cwd, "mcp.json"), mutate, [])
 
 async def loadPlugins(scope: Scope, cwd: str) -> list[dict[str, Any]]:
     return await readJsonFile(_settings_path(scope, cwd, "plugins.json"), [])
 
 async def savePlugins(scope: Scope, cwd: str, records: list[dict[str, Any]]) -> None:
-    await writeJsonFile(_settings_path(scope, cwd, "plugins.json"), records)
+    await mutateJsonFile(_settings_path(scope, cwd, "plugins.json"), lambda _current: records, [])
+
+async def mutatePlugins(scope: Scope, cwd: str, mutate) -> list[dict[str, Any]]:
+    return await mutateJsonFile(_settings_path(scope, cwd, "plugins.json"), mutate, [])
 
 async def loadMarketplaces() -> list[dict[str, Any]]:
     return await readJsonFile(os.path.join(getStateRoot(), "marketplaces.json"), [])
 
 async def saveMarketplaces(records: list[dict[str, Any]]) -> None:
-    await writeJsonFile(os.path.join(getStateRoot(), "marketplaces.json"), records)
+    await mutateJsonFile(os.path.join(getStateRoot(), "marketplaces.json"), lambda _current: records, [])
+
+async def mutateMarketplaces(mutate) -> list[dict[str, Any]]:
+    return await mutateJsonFile(os.path.join(getStateRoot(), "marketplaces.json"), mutate, [])
 
 async def loadAutoMode(cwd: str) -> AutoModePolicy:
     return await readJsonFile(os.path.join(getProjectStateDir(cwd), "auto-mode.json"), clone(DEFAULT_AUTO_MODE))
 
 async def saveAutoMode(cwd: str, config: AutoModePolicy) -> None:
-    await writeJsonFile(os.path.join(getProjectStateDir(cwd), "auto-mode.json"), config)
+    await mutateJsonFile(os.path.join(getProjectStateDir(cwd), "auto-mode.json"), lambda _current: config, clone(DEFAULT_AUTO_MODE))
+
+async def mutateAutoMode(cwd: str, mutate) -> AutoModePolicy:
+    return await mutateJsonFile(os.path.join(getProjectStateDir(cwd), "auto-mode.json"), mutate, clone(DEFAULT_AUTO_MODE))
 
 def getDefaultAutoMode() -> AutoModePolicy:
     return clone(DEFAULT_AUTO_MODE)

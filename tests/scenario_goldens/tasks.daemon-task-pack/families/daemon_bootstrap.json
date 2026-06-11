@@ -76,7 +76,7 @@
         },
         {
           "attachableSessionId": null,
-          "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+          "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
           "completedAt": "<timestamp>",
           "createdAt": "<timestamp>",
           "cwd": "<workspace>",

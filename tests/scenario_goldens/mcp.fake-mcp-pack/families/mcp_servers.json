@@ -4,7 +4,7 @@
     "args": [
       "<workspace>/.harness/mcp/stdio_stdio_server.py"
     ],
-    "commandOrUrl": "/usr/local/opt/python@3.10/bin/python3.10",
+    "commandOrUrl": "<python>",
     "name": "stdio",
     "profile": "normal",
     "requestTimeoutSeconds": 3.0,

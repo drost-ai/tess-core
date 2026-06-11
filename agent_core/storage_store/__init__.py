@@ -21,6 +21,7 @@ _PUBLIC_EXPORTS = ['Any', 'DEFAULT_AUTO_MODE', 'DEFAULT_RUNTIME_HOME', 'Literal'
 _PUBLIC_EXPORTS += ['RuntimeHomeScope', 'getContextRuntimeHome', 'get_context_runtime_home', 'scopedRuntimeHome', 'scoped_runtime_home']
 _PUBLIC_EXPORTS += ['STORAGE_LOCK_TIMEOUT_MS', 'fileLock', 'file_lock', 'mutateJsonFile', 'mutate_json_file', 'registerStorageLockObserver']
 _PUBLIC_EXPORTS += ['mutateChildAgent', 'mutateHealthCheckTask', 'mutateSessionRecord', 'mutateTaskMeta']
+_PUBLIC_EXPORTS += ['mutateAutoMode', 'mutateMarketplaces', 'mutateMcpServers', 'mutatePlugins', 'mutateProjectMemoryRecords', 'mutateSettings']
 _PUBLIC_EXPORTS = sorted(set(_PUBLIC_EXPORTS))
 __all__ = _PUBLIC_EXPORTS
 

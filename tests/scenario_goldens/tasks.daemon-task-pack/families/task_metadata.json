@@ -1,6 +1,6 @@
 [
   {
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+    "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
     "cwd": "<workspace>",
     "description": "scenario background",
     "detailStatus": "launching",
@@ -21,7 +21,7 @@
     "updatedAt": "<timestamp>"
   },
   {
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
+    "command": "<python> -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
     "cwd": "<workspace>",
     "description": "scenario stoppable",
     "detailStatus": "launching",
@@ -68,7 +68,7 @@
   },
   {
     "backoffMultiplier": 1,
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c '\nfrom pathlib import Path\np = Path('\"'\"'<workspace>/health-count.txt'\"'\"')\nn = int(p.read_text()) if p.exists() else 0\np.write_text(str(n + 1))\nprint(f\"health-attempt-{n + 1}\")\nraise SystemExit(1 if n < 2 else 0)\n'",
+    "command": "<python> -c '\nfrom pathlib import Path\np = Path('\"'\"'<workspace>/health-count.txt'\"'\"')\nn = int(p.read_text()) if p.exists() else 0\np.write_text(str(n + 1))\nprint(f\"health-attempt-{n + 1}\")\nraise SystemExit(1 if n < 2 else 0)\n'",
     "consecutiveFailures": 0,
     "createdAt": "<timestamp>",
     "currentIntervalMs": 250,

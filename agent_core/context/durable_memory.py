@@ -6,7 +6,8 @@ import re
 from typing import Any
 
 from .._utils import now_iso
-from ..storage import getProjectMemoryPath, getProjectRoot, loadProjectMemoryRecords, saveProjectMemoryRecords
+from ..storage import getProjectMemoryPath, getProjectRoot, loadProjectMemoryRecords as _loadProjectMemoryRecords
+from ..storage import mutateProjectMemoryRecords
 
 
 MANUAL_MEMORY_RECORD_ID = "manual-project-memory"
@@ -17,37 +18,39 @@ MAX_RETRIEVED_MEMORY_TOKEN_BUDGET = 1_600
 
 
 async def synchronizeManualProjectMemory(cwd: str) -> list[dict[str, Any]]:
-    records = await loadProjectMemoryRecords(cwd)
     path = getProjectMemoryPath(cwd)
     try:
         with open(path, encoding="utf-8") as handle:
             manual_text = handle.read().strip()
     except FileNotFoundError:
         manual_text = ""
-    without_manual = [record for record in records if record.get("id") != MANUAL_MEMORY_RECORD_ID]
-    if not manual_text:
-        if len(without_manual) == len(records):
-            return records
-        await saveProjectMemoryRecords(cwd, without_manual)
-        return without_manual
 
-    now = now_iso()
-    previous = next((record for record in records if record.get("id") == MANUAL_MEMORY_RECORD_ID), None)
-    manual = {
-        "id": MANUAL_MEMORY_RECORD_ID,
-        "workspaceRoot": getProjectRoot(cwd),
-        "createdAt": (previous or {}).get("createdAt") or now,
-        "updatedAt": now,
-        "kind": "user_preference",
-        "source": "manual",
-        "text": manual_text,
-        "sourceDetail": "Project memory notes",
-        "confidence": "high",
-        "tags": deriveTagsFromText(manual_text),
-    }
-    next_records = [manual, *without_manual][:MAX_DURABLE_MEMORY_RECORDS]
-    await saveProjectMemoryRecords(cwd, next_records)
-    return next_records
+    if not manual_text:
+        current = await _loadProjectMemoryRecords(cwd)
+        if not any(record.get("id") == MANUAL_MEMORY_RECORD_ID for record in current):
+            return current
+
+    def sync(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        without_manual = [record for record in records if record.get("id") != MANUAL_MEMORY_RECORD_ID]
+        if not manual_text:
+            return without_manual
+        now = now_iso()
+        previous = next((record for record in records if record.get("id") == MANUAL_MEMORY_RECORD_ID), None)
+        manual = {
+            "id": MANUAL_MEMORY_RECORD_ID,
+            "workspaceRoot": getProjectRoot(cwd),
+            "createdAt": (previous or {}).get("createdAt") or now,
+            "updatedAt": now,
+            "kind": "user_preference",
+            "source": "manual",
+            "text": manual_text,
+            "sourceDetail": "Project memory notes",
+            "confidence": "high",
+            "tags": deriveTagsFromText(manual_text),
+        }
+        return [manual, *without_manual][:MAX_DURABLE_MEMORY_RECORDS]
+
+    return await mutateProjectMemoryRecords(cwd, sync)
 
 
 async def updateDurableMemoryFromWorkingContext(*positional: Any, **kwargs: Any) -> list[dict[str, Any]]:
@@ -63,40 +66,42 @@ async def updateDurableMemoryFromWorkingContext(*positional: Any, **kwargs: Any)
     if not cwd or not isinstance(working_context, dict):
         return []
 
-    existing = await synchronizeManualProjectMemory(cwd)
+    await synchronizeManualProjectMemory(cwd)
     now = now_iso()
     workspace_root = getProjectRoot(cwd)
-    next_records = {record.get("id"): record for record in existing if record.get("id")}
-    for candidate in extractDurableMemoryCandidates(session or {}, working_context):
-        record_id = durableMemoryId(candidate["kind"], candidate["text"])
-        previous = next_records.get(record_id) or {}
-        record = {
-            "id": record_id,
-            "workspaceRoot": workspace_root,
-            "createdAt": previous.get("createdAt") or now,
-            "updatedAt": now,
-            "kind": candidate["kind"],
-            "source": "compaction",
-            "text": candidate["text"],
-            "sourceDetail": candidate.get("sourceDetail"),
-            "confidence": candidate["confidence"],
-        }
-        if (session or {}).get("id") is not None:
-            record["sessionId"] = (session or {}).get("id")
-        if candidate.get("filePaths") is not None:
-            record["filePaths"] = candidate.get("filePaths")
-        if candidate.get("tags") is not None:
-            record["tags"] = candidate.get("tags")
-        if previous.get("lastUsedAt") is not None:
-            record["lastUsedAt"] = previous.get("lastUsedAt")
-        next_records[record_id] = record
+    candidates = extractDurableMemoryCandidates(session or {}, working_context)
 
-    persisted = list(next_records.values())
-    persisted.sort(key=lambda record: record.get("updatedAt", ""), reverse=True)
-    persisted.sort(key=lambda record: 0 if record.get("id") == MANUAL_MEMORY_RECORD_ID else 1)
-    persisted = persisted[:MAX_DURABLE_MEMORY_RECORDS]
-    await saveProjectMemoryRecords(cwd, persisted)
-    return persisted
+    def update(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        next_records = {record.get("id"): record for record in records if record.get("id")}
+        for candidate in candidates:
+            record_id = durableMemoryId(candidate["kind"], candidate["text"])
+            previous = next_records.get(record_id) or {}
+            record = {
+                "id": record_id,
+                "workspaceRoot": workspace_root,
+                "createdAt": previous.get("createdAt") or now,
+                "updatedAt": now,
+                "kind": candidate["kind"],
+                "source": "compaction",
+                "text": candidate["text"],
+                "sourceDetail": candidate.get("sourceDetail"),
+                "confidence": candidate["confidence"],
+            }
+            if (session or {}).get("id") is not None:
+                record["sessionId"] = (session or {}).get("id")
+            if candidate.get("filePaths") is not None:
+                record["filePaths"] = candidate.get("filePaths")
+            if candidate.get("tags") is not None:
+                record["tags"] = candidate.get("tags")
+            if previous.get("lastUsedAt") is not None:
+                record["lastUsedAt"] = previous.get("lastUsedAt")
+            next_records[record_id] = record
+        persisted = list(next_records.values())
+        persisted.sort(key=lambda record: record.get("updatedAt", ""), reverse=True)
+        persisted.sort(key=lambda record: 0 if record.get("id") == MANUAL_MEMORY_RECORD_ID else 1)
+        return persisted[:MAX_DURABLE_MEMORY_RECORDS]
+
+    return await mutateProjectMemoryRecords(cwd, update)
 
 
 async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -139,8 +144,13 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
     if selected:
         selected_ids = {record["id"] for record in selected}
         now = now_iso()
-        updated = [{**record, "lastUsedAt": now} if record.get("id") in selected_ids else record for record in records]
-        await saveProjectMemoryRecords(cwd, updated)
+        await mutateProjectMemoryRecords(
+            cwd,
+            lambda current: [
+                {**record, "lastUsedAt": now} if record.get("id") in selected_ids else record
+                for record in current
+            ],
+        )
 
     return {"records": selected, "tokenEstimate": token_estimate}
 

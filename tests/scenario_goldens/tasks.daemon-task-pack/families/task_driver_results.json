@@ -15,7 +15,7 @@
     "status": "passed"
   },
   {
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+    "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
     "driver": "start_background_task",
     "result": {
       "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
@@ -94,7 +94,7 @@
     "status": "passed"
   },
   {
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
+    "command": "<python> -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
     "driver": "start_background_task",
     "result": {
       "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",

@@ -89,6 +89,7 @@ class NormalizationContext:
         if _TIMESTAMP_PATTERN.fullmatch(normalized):
             return "<timestamp>"
         normalized = _TIMESTAMP_PATTERN.sub("<timestamp>", normalized)
+        normalized = _PYTHON_EXECUTABLE_PATTERN.sub("<python>", normalized)
         normalized = re.sub(r"\bpreflight\s+\d+\s+via\b", "preflight <token-estimate> via", normalized)
         normalized = self._replace_labeled_numbers(normalized, r"\b(pid|ppid|process_id|processId)[=:\s]+(\d+)\b", self.pid_map, "pid")
         normalized = self._replace_labeled_numbers(normalized, r"\b(port)[=:\s]+(\d+)\b", self.port_map, "port")
@@ -159,6 +160,9 @@ def _is_token_estimate_key(key: str) -> bool:
 
 _TIMESTAMP_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z")
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+_PYTHON_EXECUTABLE_PATTERN = re.compile(
+    r"(?<![\w<])(?:<repo>/\.venv/bin/python\d+(?:\.\d+)?|/(?:[\w.+@-]+/)*python\d+(?:\.\d+)?)(?![\w.])"
+)
 
 
 def _is_empty_project_config_dir(item: Any) -> bool:

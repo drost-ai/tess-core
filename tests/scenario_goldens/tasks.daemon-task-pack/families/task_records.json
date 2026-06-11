@@ -1,7 +1,7 @@
 [
   {
     "attachableSessionId": null,
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c '\nfrom pathlib import Path\np = Path('\"'\"'<workspace>/health-count.txt'\"'\"')\nn = int(p.read_text()) if p.exists() else 0\np.write_text(str(n + 1))\nprint(f\"health-attempt-{n + 1}\")\nraise SystemExit(1 if n < 2 else 0)\n'",
+    "command": "<python> -c '\nfrom pathlib import Path\np = Path('\"'\"'<workspace>/health-count.txt'\"'\"')\nn = int(p.read_text()) if p.exists() else 0\np.write_text(str(n + 1))\nprint(f\"health-attempt-{n + 1}\")\nraise SystemExit(1 if n < 2 else 0)\n'",
     "completedAt": null,
     "createdAt": "<timestamp>",
     "cwd": "<workspace>",
@@ -61,7 +61,7 @@
   },
   {
     "attachableSessionId": null,
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
+    "command": "<python> -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
     "completedAt": "<timestamp>",
     "createdAt": "<timestamp>",
     "cwd": "<workspace>",
@@ -142,7 +142,7 @@
   },
   {
     "attachableSessionId": null,
-    "command": "/usr/local/opt/python@3.10/bin/python3.10 -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
+    "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
     "completedAt": "<timestamp>",
     "createdAt": "<timestamp>",
     "cwd": "<workspace>",

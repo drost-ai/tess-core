@@ -24,7 +24,8 @@ from .shared import *
 #                       placeholder also write -> locked save + mutateTaskMeta
 #   Health-check meta   supervisor-owned       -> locked save + mutateHealthCheckTask
 #   Monitor record      parent-owned           -> locked save (cheap insurance)
-#   Settings/auto-mode  single process, low contention -> unlocked (helper available)
+#   Settings/auto-mode/project memory/MCP/plugin records
+#                       low-contention multi-writer -> locked helper available
 #   Daemon state/events cursor-based + append-only     -> unchanged by design
 #
 # Default bound for acquiring a record lock before falling back to a

@@ -18,8 +18,10 @@ SKIPPED_DIR_NAMES = {
     ".git",
     ".mypy_cache",
     ".pytest_cache",
+    ".venv",
     ".scenario-runs",
     "__pycache__",
+    "agent_core_python.egg-info",
     "build",
     "dist",
 }
