@@ -13,6 +13,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
     summary = (result.get("text") or "").strip()[:280] or None
     retryable = status in {"failed", "stopped", "truncated", "cancelled"}
     completed_like = status in {"completed", "failed", "truncated", "cancelled", "stopped"}
+    structured_fields = await _background_structured_result_fields(task_id, session, result.get("text") or "")
 
     def _finalize_success(current: dict[str, Any] | None) -> dict[str, Any]:
         existing = current or {
@@ -56,10 +57,22 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
             "recoveryState": None,
             "lastUpdatedAt": completed_at,
             "lastSummary": summary,
+            **structured_fields,
         }
 
     await mutateChildAgent(agent_id, _finalize_success)
-    await writeTaskMeta(task_id, {"type": "subagent", "task_id": task_id, "agent_id": agent_id, "session_id": session["id"], "cwd": session.get("cwd"), "startedAt": session.get("createdAt"), "status": status, "completedAt": completed_at if completed_like else None, "outputFile": taskOutputPath(task_id), "stopReason": result.get("stopReason"), "summary": summary, "resultSummary": summary, "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")), "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")), "attachableSessionId": session["id"], "retryable": retryable, "stoppable": False, "owner": "daemon"})
+    await writeTaskMeta(task_id, {"type": "subagent", "task_id": task_id, "agent_id": agent_id, "session_id": session["id"], "cwd": session.get("cwd"), "startedAt": session.get("createdAt"), "status": status, "completedAt": completed_at if completed_like else None, "outputFile": taskOutputPath(task_id), "stopReason": result.get("stopReason"), "summary": summary, "resultSummary": summary, "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")), "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")), "attachableSessionId": session["id"], "retryable": retryable, "stoppable": False, "owner": "daemon", "runtimeContract": (session.get("metadata") or {}).get("subagentRuntimeContract"), **structured_fields})
+    await append_task_event(
+        task_id,
+        {
+            "type": "task.subagent.completed" if status == "completed" else "task.subagent.failed",
+            "agentId": agent_id,
+            "childSessionId": session["id"],
+            "status": status,
+            "stopReason": result.get("stopReason"),
+            "structuredResultStatus": structured_fields.get("structuredResultStatus"),
+        },
+    )
 
 
 async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
@@ -87,3 +100,22 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
 
     await mutateChildAgent(agent_id, _finalize_failure)
     await writeTaskMeta(task_id, {"type": "subagent", "task_id": task_id, "agent_id": agent_id, "session_id": session_id, "status": "failed", "completedAt": completed_at, "outputFile": taskOutputPath(task_id), "error": message, "summary": message, "resultSummary": message, "completionReason": "worker_failed", "attachableSessionId": session_id, "retryable": True, "stoppable": False, "owner": "daemon"})
+    await append_task_event(
+        task_id,
+        {"type": "task.subagent.failed", "agentId": agent_id, "childSessionId": session_id, "status": "failed", "error": message},
+    )
+
+
+async def _background_structured_result_fields(task_id: str, session: dict[str, Any], text: str) -> dict[str, Any]:
+    contract = (session.get("metadata") or {}).get("subagentRuntimeContract")
+    schema = contract.get("responseSchema") if isinstance(contract, dict) else None
+    if not isinstance(schema, dict):
+        return {}
+    evaluation = evaluate_subagent_result(text, schema)
+    path = await persist_structured_subagent_result(task_id, evaluation)
+    return {
+        "structuredResultStatus": evaluation.get("status"),
+        "structuredResult": evaluation.get("data"),
+        "structuredResultErrors": evaluation.get("errors") or [],
+        "structuredResultPath": path,
+    }

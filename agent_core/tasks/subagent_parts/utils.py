@@ -17,6 +17,7 @@ def _subagent_started_payload(prepared: dict[str, Any], args: dict[str, Any], ba
         "description": args.get("description"),
         "status": "running",
         "run_in_background": background,
+        "runtime_contract": prepared.get("runtimeContractSummary"),
         "worktree_path": prepared.get("worktreePath"),
     }
 

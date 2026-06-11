@@ -10,6 +10,7 @@ _MODULE_NAMES = [
     "records",
     "processes",
     "health",
+    "communication",
     "projection",
     "reconciliation",
 ]

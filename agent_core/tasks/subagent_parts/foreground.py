@@ -22,6 +22,7 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
         event_summary = (result.get("text") or "").strip()[:280]
         summary = event_summary or None
         completed_at = now_iso()
+        structured_fields = _foreground_structured_result_fields(prepared, result.get("text") or "")
         await saveChildAgent(
             {
                 **child_record,
@@ -30,6 +31,7 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "stopReason": result.get("stopReason"),
                 "lastUpdatedAt": completed_at,
                 "lastSummary": summary,
+                **structured_fields,
             }
         )
         _output(
@@ -44,6 +46,9 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "stop_reason": result.get("stopReason"),
                 "summary": event_summary,
                 "duration_ms": _monotonic_ms() - started_at,
+                "runtime_contract": prepared.get("runtimeContractSummary"),
+                "structured_result_status": structured_fields.get("structuredResultStatus"),
+                "structured_result_errors": structured_fields.get("structuredResultErrors"),
             },
         )
         return {
@@ -59,6 +64,9 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                         "tool_count": result.get("toolCount"),
                         "duration_ms": _monotonic_ms() - started_at,
                         "stop_reason": result.get("stopReason"),
+                        "runtime_contract": prepared.get("runtimeContractSummary"),
+                        "structured_result_status": structured_fields.get("structuredResultStatus"),
+                        "structured_result_errors": structured_fields.get("structuredResultErrors"),
                         "worktree_path": prepared.get("worktreePath"),
                     }
                 )
@@ -103,10 +111,11 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                         "agent_id": agent_id,
                         "session_id": child_session["id"],
                         "status": status,
-                        "error": message,
-                        "stop_reason": "cancelled" if cancelled else None,
-                        "worktree_path": prepared.get("worktreePath"),
-                    }
+                    "error": message,
+                    "stop_reason": "cancelled" if cancelled else None,
+                    "runtime_contract": prepared.get("runtimeContractSummary"),
+                    "worktree_path": prepared.get("worktreePath"),
+                }
                 )
             ),
             "isError": True,
@@ -148,3 +157,16 @@ async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str,
 def _emit_child_event(context: dict[str, Any], event: str, data: dict[str, Any], agent_id: str, session_id: str) -> None:
     if event.startswith("permission."):
         _output(context, event, {**data, "agent_id": agent_id, "child_session_id": session_id})
+
+
+def _foreground_structured_result_fields(prepared: dict[str, Any], text: str) -> dict[str, Any]:
+    contract = prepared.get("runtimeContract")
+    schema = contract.get("responseSchema") if isinstance(contract, dict) else None
+    if not isinstance(schema, dict):
+        return {}
+    evaluation = evaluate_subagent_result(text, schema)
+    return {
+        "structuredResultStatus": evaluation.get("status"),
+        "structuredResult": evaluation.get("data"),
+        "structuredResultErrors": evaluation.get("errors") or [],
+    }

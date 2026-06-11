@@ -9,6 +9,7 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..storage import savePlanApproval, writePlanFile
+from ..task_communication import create_task_question, read_task_questions
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema
@@ -37,6 +38,57 @@ def _set_status_tool() -> ToolDefinition:
 
 def _ask_user_question_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
+        session = context["session"]
+        metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+        contract = metadata.get("subagentRuntimeContract") if isinstance(metadata, dict) else {}
+        communication = contract.get("communication") if isinstance(contract, dict) and isinstance(contract.get("communication"), dict) else {}
+        task_id = metadata.get("subagentTaskId") if isinstance(metadata, dict) else None
+        if isinstance(task_id, str) and communication.get("allowChildQuestions"):
+            pending = [question for question in await read_task_questions(task_id) if question.get("status") == "pending"]
+            max_pending = int(communication.get("maxPendingQuestions") or 25)
+            created = []
+            questions = input.get("questions") if isinstance(input.get("questions"), list) else []
+            for index, raw_question in enumerate(questions):
+                _throw_if_tool_cancelled(context)
+                if not isinstance(raw_question, dict):
+                    continue
+                if len(pending) + len(created) >= max_pending:
+                    break
+                question = _require_string(raw_question.get("question"), f"questions[{index}].question")
+                options = []
+                if isinstance(raw_question.get("options"), list):
+                    for option in raw_question["options"]:
+                        label = option.get("label") if isinstance(option, dict) else option
+                        if isinstance(label, str) and label.strip():
+                            options.append(label.strip())
+                created.append(
+                    await create_task_question(
+                        task_id,
+                        {
+                            "childSessionId": session.get("id"),
+                            "question": question,
+                            "options": options,
+                        },
+                    )
+                )
+            if created:
+                await maybe_await(context.get("persistSession", lambda: None)())
+            return {
+                "content": pretty_json(
+                    {
+                        "status": "awaiting_parent",
+                        "task_id": task_id,
+                        "questions": [
+                            {
+                                "question_id": question.get("questionId"),
+                                "question": question.get("question"),
+                                "options": question.get("options") or [],
+                            }
+                            for question in created
+                        ],
+                    }
+                )
+            }
         if not context.get("interactive"):
             return {"content": "Cannot ask the user a question in print mode.", "isError": True}
         answers = []

@@ -20,7 +20,12 @@ from .session import *
 from .session_runtime import *
 from .shell import *
 from .storage import *
+from .subagent_capacity import *
+from .subagent_contract import *
+from .subagent_limits import *
+from .subagent_result import *
 from .subagents import *
+from .task_communication import *
 from .task_runtime import *
 from .task_supervisor import *
 from .tool_payloads import *

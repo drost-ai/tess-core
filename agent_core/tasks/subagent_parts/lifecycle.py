@@ -23,6 +23,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
                 "cwd": child_session["cwd"],
                 "label": child_record.get("name") or child_record.get("agentType") or agent_id,
                 "parentTaskId": child_record.get("parentTaskId"),
+                "runtimeContract": prepared.get("runtimeContract"),
             }
         )
     else:
@@ -63,9 +64,10 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             "status": "backgrounded",
             "label": child_record.get("name") or child_record.get("agentType") or agent_id,
             "worktree_path": prepared.get("worktreePath"),
+            "runtime_contract": prepared.get("runtimeContractSummary"),
         },
     )
-    return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "task_id": task_id, "status": "running", "run_in_background": True, "output_file": output_file, "worktree_path": prepared.get("worktreePath")}))}
+    return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "task_id": task_id, "status": "running", "run_in_background": True, "output_file": output_file, "runtime_contract": prepared.get("runtimeContractSummary"), "worktree_path": prepared.get("worktreePath")}))}
 
 
 async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
@@ -90,6 +92,8 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     child_provider = resolveProviderForModelSelection(parent_provider, child_model) or parent_provider
     child_system = buildSystemPromptForAgent(config, agent_type) if agent_type else (parent.get("systemPrompt") if parent.get("systemPrompt") is not None else config.get("systemPrompt"))
     child_name = name or description.strip()
+    runtime_contract = runtime_contract_for_agent(config, agent_type)
+    runtime_contract_summary = summarize_subagent_runtime_contract(runtime_contract)
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     child_cwd = worktree_path or parent["cwd"]
     parent_metadata = parent.setdefault("metadata", {})
@@ -122,6 +126,8 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     metadata["agentType"] = agent_type
     metadata["teamName"] = team_name
     metadata["worktreePath"] = worktree_path
+    if runtime_contract:
+        metadata["subagentRuntimeContract"] = runtime_contract
     metadata["childSessionIds"] = []
     metadata["childAgentIds"] = []
     child_session["messages"].append({"role": "user", "content": prompt})
@@ -135,6 +141,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "permissionMode": child_mode,
         "name": child_name,
         "systemPrompt": child_system,
+        "subagentRuntimeContract": runtime_contract,
         "appendSystemPrompt": None,
         "allowedRoots": _dedupe([*(config.get("allowedRoots") or []), child_cwd]),
     }
@@ -161,6 +168,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "isolation": isolation,
         "worktreePath": worktree_path,
         "runInBackground": run_in_background,
+        "runtimeContract": runtime_contract,
         "status": "queued" if run_in_background else "running",
         "startedAt": now,
         "owner": "daemon" if run_in_background and context.get("daemon") else "client",
@@ -176,4 +184,12 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "lastSummary": "Queued for background execution." if run_in_background else "Starting foreground execution.",
     }
     await saveChildAgent(child_record)
-    return {"agentId": agent_id, "childSession": child_session, "childConfig": child_config, "childRecord": child_record, "worktreePath": worktree_path}
+    return {
+        "agentId": agent_id,
+        "childSession": child_session,
+        "childConfig": child_config,
+        "childRecord": child_record,
+        "runtimeContract": runtime_contract,
+        "runtimeContractSummary": runtime_contract_summary,
+        "worktreePath": worktree_path,
+    }

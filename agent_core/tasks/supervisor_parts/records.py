@@ -75,17 +75,23 @@ def _build_monitor_task_record(session: dict[str, Any], monitor: dict[str, Any])
 async def _build_child_agent_task_record(session: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     task_id = child.get("taskId")
     task_meta = await readTaskMeta(task_id) if isinstance(task_id, str) and task_id else None
+    questions = await read_task_questions(task_id) if isinstance(task_id, str) and task_id else []
+    pending_questions = [question for question in questions if question.get("status") == "pending"]
     child_session = await loadSession(child.get("sessionId")) if isinstance(child.get("sessionId"), str) else None
     latest_assistant = _summarize_latest_message(child_session or {}, "assistant")
     latest_user = _summarize_latest_message(child_session or {}, "user")
     result_summary = child.get("resultSummary") or child.get("lastSummary") or latest_assistant or child.get("error") or child.get("waitingReason")
     owner = child.get("owner") or ((task_meta or {}).get("owner") if (task_meta or {}).get("owner") in {"daemon", "client"} else None)
+    task_status = _map_child_agent_status_to_task_status(child.get("status"))
+    if pending_questions:
+        task_status = "awaiting_input"
+    runtime_contract = child.get("runtimeContract") or (task_meta or {}).get("runtimeContract")
     return {
         "id": task_id or child.get("agentId"),
         "sessionId": session.get("id"),
         "sourceId": child.get("agentId"),
         "kind": "subagent",
-        "status": _map_child_agent_status_to_task_status(child.get("status")),
+        "status": task_status,
         "title": child.get("name") or child.get("agentType") or child.get("agentId"),
         "summary": _summarize_child_agent_task(child, latest_assistant, latest_user, result_summary),
         "createdAt": child.get("startedAt"),
@@ -101,7 +107,7 @@ async def _build_child_agent_task_record(session: dict[str, Any], child: dict[st
         "owner": owner,
         "foregroundMode": "background" if child.get("runInBackground") else "foreground",
         "taskFamily": "subagent",
-        "detailStatus": _describe_child_agent_detail_status(child),
+        "detailStatus": "child_question" if pending_questions else _describe_child_agent_detail_status(child),
         "attachableSessionId": child.get("attachableSessionId") or child.get("sessionId"),
         "retrieveOnly": False,
         "resultSummary": result_summary,
@@ -118,6 +124,13 @@ async def _build_child_agent_task_record(session: dict[str, Any], child: dict[st
             "owner": owner,
             "recovery_state": child.get("recoveryState"),
             "daemon_status": (task_meta or {}).get("status") if isinstance((task_meta or {}).get("status"), str) else None,
+            "runtime_contract": runtime_contract,
+            "concurrency_group": (runtime_contract or {}).get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
+            "pending_questions": len(pending_questions),
+            "pending_question_ids": [question.get("questionId") for question in pending_questions],
+            "structured_result_status": child.get("structuredResultStatus") or (task_meta or {}).get("structuredResultStatus"),
+            "structured_result_path": child.get("structuredResultPath") or (task_meta or {}).get("structuredResultPath"),
+            "structured_result_errors": child.get("structuredResultErrors") or (task_meta or {}).get("structuredResultErrors"),
         },
     }
 
@@ -217,12 +230,18 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
             }
         )
     if is_subagent:
+        runtime_contract = meta.get("runtimeContract") or metadata.get("runtime_contract")
         metadata.update(
             {
                 "agent_id": meta.get("agent_id"),
                 "child_session_id": meta.get("session_id") or meta.get("sessionId"),
                 "parent_session_id": meta.get("parent_session_id"),
                 "parent_task_id": meta.get("parent_task_id"),
+                "runtime_contract": runtime_contract,
+                "concurrency_group": meta.get("concurrencyGroup") or metadata.get("concurrency_group"),
+                "structured_result_status": meta.get("structuredResultStatus"),
+                "structured_result_path": meta.get("structuredResultPath"),
+                "structured_result_errors": meta.get("structuredResultErrors"),
             }
         )
     task_family = "health_check" if is_health_check else "subagent" if is_subagent else "detached_session" if is_main_session else "shell"

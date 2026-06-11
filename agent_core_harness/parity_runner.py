@@ -18,6 +18,7 @@ from .goldens import compare_golden, expected_observations, render_diff, update_
 from .loader import load_scenario
 from .model import Scenario, ScenarioAssertionError, ScenarioValidationError
 from .normalization import normalize_observations
+from .parity_model_policy import normalize_compaction_model_policy
 from .parity_compaction import run_compaction_primitives, run_compaction_run
 from .parity_continuation import run_continuation_relief
 from .paths import DEFAULT_RUNS_DIR, REPO_ROOT
@@ -361,7 +362,8 @@ def _comparison_failure(comparison: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_side(value: dict[str, Any], paths: dict[str, Any], side: str) -> dict[str, Any]:
-    return normalize_observations(value, _view(paths, side))
+    normalized = normalize_observations(value, _view(paths, side))
+    return normalize_compaction_model_policy(normalized)
 
 
 def _view(paths: dict[str, Any], side: str) -> SimpleNamespace:

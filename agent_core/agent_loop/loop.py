@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import time as _time
 import typing as _typing
 
 if _typing.TYPE_CHECKING:
     from ..contracts.context import ToolContext
 
 from .shared import *
+from ..subagent_contract import filter_tools_for_subagent
+from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
+from ..task_communication import deliver_queued_task_messages_to_session
 
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
@@ -24,8 +28,11 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     provider_profile_name = resolveFallbackProviderProfileName(effective_provider, config.get("providerProfiles", {}), session.get("providerProfileName") or config.get("providerProfileName"))
     session["providerProfileName"] = provider_profile_name
 
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    runtime_contract = metadata.get("subagentRuntimeContract") if isinstance(metadata, dict) else None
     tool_names = set(filterToolsByPolicy(config))
-    tool_registry = [tool for tool in runtime.get("tools", []) if tool.name in tool_names]
+    runtime_tools = filter_tools_for_subagent(runtime.get("tools", []), runtime_contract)
+    tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
     provider = provider_override or _create_provider(config, runtime)
     base_system_prompt = args.get("systemPromptOverride") or session["systemPrompt"]
     text_parts: list[str] = []
@@ -35,7 +42,34 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     cost = 0.0
     tool_count = 0
     provider_call_index = 0
+    turn_started_ms = int(_time.monotonic() * 1000)
+    subagent_limits = resolve_subagent_runtime_limits(session, config)
     last_stable_snapshot = copy.deepcopy(session)
+
+    def subagent_limit_state(tool_calls: int | None = None) -> dict[str, Any]:
+        return {
+            "providerCalls": provider_call_index,
+            "toolCalls": tool_count if tool_calls is None else tool_calls,
+            "costUsd": cost,
+            "elapsedMs": int(_time.monotonic() * 1000) - turn_started_ms,
+        }
+
+    async def finish_subagent_limit(exceeded: dict[str, Any]) -> dict[str, Any]:
+        text = "\n\n".join(text_parts).strip()
+        _safe_emit(
+            runtime,
+            "subagent.limit_exceeded",
+            {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")},
+        )
+        await persistSession(session, config)
+        return {
+            "text": text,
+            "toolCount": tool_count,
+            "usage": total_usage,
+            "model": active_model,
+            "estimatedCostUsd": _round_usd(cost),
+            "stopReason": exceeded.get("reason") or "subagent_limit",
+        }
 
     async def cancel_turn() -> dict[str, Any]:
         _restore_session_state(session, last_stable_snapshot)
@@ -56,6 +90,21 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     while True:
         if _is_turn_cancelled(runtime):
             return await cancel_turn()
+        exceeded = check_subagent_runtime_limits(subagent_limits, subagent_limit_state())
+        if exceeded and exceeded.get("reason") != "max_tool_calls":
+            return await finish_subagent_limit(exceeded)
+        delivered_messages = await deliver_queued_task_messages_to_session(session, config)
+        if delivered_messages:
+            _safe_emit(
+                runtime,
+                "subagent.mailbox.delivered",
+                {
+                    "session_id": session["id"],
+                    "task_id": metadata.get("subagentTaskId") if isinstance(metadata, dict) else None,
+                    "message_ids": [message.get("messageId") for message in delivered_messages],
+                    "count": len(delivered_messages),
+                },
+            )
         try:
             prepared_request = await prepareProviderRequest(
                 {
@@ -182,7 +231,14 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": invalid_tool_input}
             tool = next((entry for entry in tool_registry if entry.name == tool_use["name"]), None)
             if not tool:
+                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": f"Tool not available: {tool_use['name']}", "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": f"Tool not available: {tool_use['name']}"}
+            exceeded = check_subagent_runtime_limits(subagent_limits, subagent_limit_state())
+            if exceeded and exceeded.get("reason") == "max_tool_calls":
+                result = build_subagent_tool_limit_result(tool_use, exceeded)
+                _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": result["content"], "error": True, "session_id": session["id"]})
+                _safe_emit(runtime, "subagent.limit_exceeded", {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")})
+                return result
             tool_count += 1
             usage_totals["toolCalls"] += 1
             _safe_emit(runtime, "tool.started", {"name": tool.name, "input": tool_use.get("input") or {}, "session_id": session["id"]})

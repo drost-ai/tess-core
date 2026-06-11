@@ -9,7 +9,8 @@ def _task_event_payload(meta: dict[str, Any]) -> dict[str, Any]:
 
 
 def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:
-    return {
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    payload = {
         "session_id": record.get("sessionId"),
         "task_id": record.get("id"),
         "kind": record.get("kind"),
@@ -22,7 +23,14 @@ def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:
         "attachable_session_id": record.get("attachableSessionId"),
         "retrieve_only": record.get("retrieveOnly"),
         "result_summary": record.get("resultSummary"),
+        "pending_questions": metadata.get("pending_questions"),
+        "structured_result_status": metadata.get("structured_result_status"),
+        "runtime_contract": metadata.get("runtime_contract"),
     }
+    for key in ("pending_questions", "structured_result_status", "runtime_contract"):
+        if payload.get(key) is None:
+            payload.pop(key, None)
+    return payload
 
 
 def _map_status(value: Any) -> str:

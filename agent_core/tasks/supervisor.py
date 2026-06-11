@@ -5,6 +5,8 @@ import types as _types
 
 from .supervisor_parts import *
 from ..contracts.records import launch_task_id
+from ..subagent_capacity import check_subagent_capacity, resolve_subagent_concurrency_policy
+from ..task_communication import append_task_event
 from .supervisor_parts import _modules as _SUPERVISOR_PART_MODULES
 
 
@@ -141,10 +143,25 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         child_session = await loadSession(session_id)
         if not child_session:
             raise RuntimeError(f"Subagent session not found: {session_id}")
+        child_metadata = child_session.setdefault("metadata", {})
+        runtime_contract = task_args.get("runtimeContract") or task_args.get("runtime_contract") or child_metadata.get("subagentRuntimeContract")
+        capacity = check_subagent_capacity(
+            resolve_subagent_concurrency_policy(),
+            await listTaskRecords(),
+            runtime_contract if isinstance(runtime_contract, dict) else None,
+        )
+        if capacity:
+            raise RuntimeError(
+                f"Subagent capacity exceeded: {capacity.get('reason')} ({capacity.get('active')}/{capacity.get('limit')})"
+            )
         task_id = str(uuid.uuid4())
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         started_at = now_iso()
+        child_metadata["subagentTaskId"] = task_id
+        if isinstance(runtime_contract, dict) and runtime_contract:
+            child_metadata["subagentRuntimeContract"] = runtime_contract
+        await saveSession(child_session)
         command = f"{sys.executable} -m agent_core.background_subagent_runner --session-id {session_id} --agent-id {agent_id} --task-id {task_id}"
         proc = _spawn_subagent_worker(task_id, session_id, agent_id, task_cwd, output_file)
         _PROCESS_REGISTRY[task_id] = proc
@@ -172,8 +189,25 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "detailStatus": "worker_running",
             "owner": "daemon",
             "supervisorId": supervisor_id,
+            "runtimeContract": runtime_contract if isinstance(runtime_contract, dict) else None,
+            "concurrencyGroup": runtime_contract.get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
+            "timeoutMs": runtime_contract.get("timeoutMs") if isinstance(runtime_contract, dict) else None,
+            "metadata": {
+                "runtime_contract": runtime_contract if isinstance(runtime_contract, dict) else None,
+                "concurrency_group": runtime_contract.get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
+            },
         }
         await writeTaskMeta(task_id, meta)
+        await append_task_event(
+            task_id,
+            {
+                "type": "task.subagent.started",
+                "agentId": agent_id,
+                "childSessionId": session_id,
+                "parentSessionId": parent_session_id,
+                "pid": proc.pid,
+            },
+        )
         record = _build_task_record(meta, "Background subagent is running under daemon supervision.")
         await saveTaskRecord(record)
         await emit("task.updated", _task_record_event_payload(record), parent_session_id)
@@ -181,25 +215,6 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         _WATCHERS.add(watcher)
         watcher.start()
         return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
-
-    async def read_task_output(task_id: str, tailBytes: int | None = 12000) -> dict[str, Any]:
-        meta = await readTaskMeta(task_id)
-        output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
-        path = Path(output_file)
-        if not path.exists():
-            return {"taskId": task_id, "output": "", "truncated": False, "outputFile": output_file}
-        data = path.read_bytes()
-        truncated = False
-        effective_tail_bytes = 12000 if tailBytes is None else max(1, int(tailBytes))
-        if len(data) > effective_tail_bytes:
-            data = data[-effective_tail_bytes:]
-            truncated = True
-        return {
-            "taskId": task_id,
-            "output": data.decode("utf-8", errors="replace"),
-            "truncated": truncated,
-            "outputFile": output_file,
-        }
 
     async def stop_task(task_id: str) -> bool:
         proc = _PROCESS_REGISTRY.get(task_id)
@@ -317,6 +332,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "cwd": child_session.get("cwd") or cwd,
                     "label": child.get("name") or child.get("agentType") or child.get("agentId"),
                     "parentTaskId": child.get("parentTaskId"),
+                    "runtimeContract": child.get("runtimeContract") or (child_session.get("metadata") or {}).get("subagentRuntimeContract"),
                 }
             )
             await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
@@ -447,7 +463,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         "getBootstrap": get_bootstrap,
         "listTasks": list_tasks,
         "inspectTask": inspect_task,
-        "readTaskOutput": read_task_output,
+        "readTaskOutput": readTaskOutput,
+        **createTaskCommunicationApi(emit),
         "stopTask": stop_task,
         "retryTask": retry_task,
         "startBackgroundCommand": start_background_command,

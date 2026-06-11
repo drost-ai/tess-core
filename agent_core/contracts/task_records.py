@@ -46,6 +46,61 @@ ChildAgentStatus = Literal[
     "awaiting_plan_approval",
 ]
 HealthCheckStatus = Literal["active", "unhealthy", "failed", "stopped"]
+TaskQuestionStatus = Literal["pending", "answered", "skipped"]
+SubagentStructuredResultStatus = Literal["not_configured", "valid", "invalid"]
+
+
+class SubagentCommunicationPolicy(TypedDict, total=False):
+    allowChildQuestions: bool
+    maxPendingQuestions: int
+
+
+class SubagentRuntimeContract(TypedDict, total=False):
+    tools: list[str]
+    maxBudgetUsd: float
+    maxTurns: int
+    timeoutMs: int
+    maxToolCalls: int
+    responseSchema: dict[str, Any]
+    communication: SubagentCommunicationPolicy
+    concurrencyGroup: str
+
+
+class TaskMailboxMessage(TypedDict, total=False):
+    messageId: str
+    taskId: str
+    childSessionId: str
+    sender: str
+    kind: str
+    content: str
+    status: Literal["queued", "delivered"]
+    createdAt: str
+    deliveredAt: str | None
+    metadata: dict[str, Any]
+
+
+class TaskEventRecord(TypedDict, total=False):
+    eventId: str
+    taskId: str
+    type: str
+    createdAt: str
+    messageId: str
+    questionId: str
+    childSessionId: str
+    metadata: dict[str, Any]
+
+
+class TaskQuestionRecord(TypedDict, total=False):
+    questionId: str
+    taskId: str
+    childSessionId: str
+    question: str
+    options: list[Any]
+    status: TaskQuestionStatus
+    createdAt: str
+    answeredAt: str | None
+    answer: str | None
+    metadata: dict[str, Any]
 
 
 class _TaskLaunchResultRequired(TypedDict):
@@ -94,6 +149,8 @@ class TaskMeta(_TaskMetaRequired, total=False):
     agent_id: str
     parent_session_id: str | None
     parent_task_id: str | None
+    runtimeContract: SubagentRuntimeContract | None
+    concurrencyGroup: str | None
     command: str | None
     url: str | None
     mode: str
@@ -146,6 +203,9 @@ class TaskMeta(_TaskMetaRequired, total=False):
     lastTerminated: bool
     lastError: str | None
     lastResponseSnippet: str | None
+    structuredResultStatus: SubagentStructuredResultStatus
+    structuredResultPath: str
+    structuredResultErrors: list[str]
 
 
 class _TaskRecordRequired(TypedDict):
@@ -224,6 +284,11 @@ class ChildAgentRecord(_ChildAgentRecordRequired, total=False):
     lastSummary: str
     stopReason: str
     error: str
+    runtimeContract: SubagentRuntimeContract | None
+    structuredResultStatus: SubagentStructuredResultStatus
+    structuredResult: dict[str, Any] | list[Any] | str | int | float | bool | None
+    structuredResultPath: str
+    structuredResultErrors: list[str]
 
 
 __all__ = [
@@ -234,9 +299,16 @@ __all__ = [
     "TaskFamily",
     "TaskKind",
     "TaskLaunchResult",
+    "SubagentCommunicationPolicy",
+    "SubagentRuntimeContract",
+    "SubagentStructuredResultStatus",
+    "TaskEventRecord",
+    "TaskMailboxMessage",
     "TaskMeta",
     "TaskMetaType",
     "TaskOwner",
+    "TaskQuestionRecord",
+    "TaskQuestionStatus",
     "TaskRecord",
     "TaskStatus",
     "launch_output_file",

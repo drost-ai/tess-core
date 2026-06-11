@@ -9,6 +9,11 @@ async def _start_local_background_subagent(prepared: dict[str, Any]) -> dict[str
     task_id = str(uuid.uuid4())
     output_file = taskOutputPath(task_id)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    metadata = child_session.setdefault("metadata", {})
+    metadata["subagentTaskId"] = task_id
+    if prepared.get("runtimeContract"):
+        metadata["subagentRuntimeContract"] = prepared["runtimeContract"]
+    await saveSession(child_session)
     proc = _spawn_local_subagent_worker(task_id, child_session["id"], agent_id, child_session["cwd"], output_file)
     started_at = now_iso()
     await writeTaskMeta(
@@ -24,6 +29,8 @@ async def _start_local_background_subagent(prepared: dict[str, Any]) -> dict[str
             "status": "running",
             "outputFile": output_file,
             "owner": "client",
+            "runtimeContract": prepared.get("runtimeContract"),
+            "concurrencyGroup": (prepared.get("runtimeContract") or {}).get("concurrencyGroup"),
         },
     )
     return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file, "pid": proc.pid}
