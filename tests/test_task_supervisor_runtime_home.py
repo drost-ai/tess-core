@@ -9,10 +9,31 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
         wrong_home = Path(root.name) / "wrong-agent-core-home"
         supervisor = None
         try:
+            settings_path = home / "settings.json"
+            settings_path.write_text(
+                json.dumps(
+                    {
+                        "provider": "openai-codex",
+                        "providerProfiles": {
+                            "openai-codex": {
+                                "kind": "openai",
+                                "defaultModel": "gpt-5.5",
+                                "auth": {
+                                    "kind": "openai_api_key",
+                                    "envVar": "AGENT_CORE_TEST_MISSING_OPENAI_KEY",
+                                },
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            os.environ.pop("AGENT_CORE_TEST_MISSING_OPENAI_KEY", None)
             config = run(
                 core.resolveConfig(
                     {
-                        "provider": "openai",
+                        "provider": "openai-codex",
+                        "settings": str(settings_path),
                         "runtimeHome": str(home),
                         "permissionMode": "bypassPermissions",
                     },
@@ -40,6 +61,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             child["messages"].append({"role": "user", "content": "finish without tools"})
             child["metadata"]["parentSessionId"] = parent["id"]
             child["metadata"]["agentId"] = "agent-runtime-home"
+            child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
             run(core.saveSession(parent))
             run(core.saveSession(child))
             os.environ["AGENT_CORE_HOME"] = str(wrong_home)
@@ -82,7 +104,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             meta, output = run(_read_final())
             self.assertEqual(meta["status"], "completed")
             self.assertIn('"ok": true', output["output"])
-            self.assertIn("No credential is configured", output["output"])
+            self.assertIn("provider profile 'openai-codex'", output["output"])
             self.assertFalse((wrong_home / "sessions" / f"{child['id']}.json").exists())
         finally:
             if supervisor:

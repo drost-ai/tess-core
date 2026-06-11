@@ -20,7 +20,7 @@ async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
     session = await loadSession(args["sessionId"])
     if not session:
         raise RuntimeError(f"Session not found: {args['sessionId']}")
-    config = await resolveConfig({"runtimeHome": runtime_home, "provider": session.get("provider"), "model": session.get("model")}, session["cwd"])
+    config = await resolveConfig(_session_config_options(session, runtime_home), session["cwd"])
     _apply_session_overrides(config, session)
     events = []
 
@@ -68,6 +68,19 @@ def _apply_session_overrides(config: dict[str, Any], session: dict[str, Any]) ->
         if session.get(key) is not None:
             config[key] = session[key]
     config["providerKind"] = config.get("provider")
+
+
+def _session_config_options(session: dict[str, Any], runtime_home: str | None) -> dict[str, Any]:
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    settings = (metadata.get("agentCoreSettingsPath") or metadata.get("settingsPath")) if isinstance(metadata, dict) else None
+    options = {
+        "runtimeHome": runtime_home,
+        "provider": session.get("providerProfileName") or session.get("provider"),
+        "model": session.get("model"),
+    }
+    if settings:
+        options["settings"] = settings
+    return options
 
 
 if __name__ == "__main__":
