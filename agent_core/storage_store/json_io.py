@@ -12,6 +12,21 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
 
 from .shared import *
 
+# Record ownership matrix (package 21, workstream D). Locking is applied only
+# where multiple processes genuinely mutate the same file; single-writer
+# records stay unlocked-fast with owner discipline:
+#
+#   Session JSON        multi-writer (parent loop, supervisor task-id updates,
+#                       child prep)            -> locked save + mutateSessionRecord
+#   Child-agent record  multi-writer (parent create, child-runner finalize,
+#                       supervisor reconcile)  -> locked save + mutateChildAgent
+#   Task meta           supervisor-owned; child finalizer and local Bash
+#                       placeholder also write -> locked save + mutateTaskMeta
+#   Health-check meta   supervisor-owned       -> locked save + mutateHealthCheckTask
+#   Monitor record      parent-owned           -> locked save (cheap insurance)
+#   Settings/auto-mode  single process, low contention -> unlocked (helper available)
+#   Daemon state/events cursor-based + append-only     -> unchanged by design
+#
 # Default bound for acquiring a record lock before falling back to a
 # best-effort unlocked write (liveness over strict mutual exclusion).
 STORAGE_LOCK_TIMEOUT_MS = 5000

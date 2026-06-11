@@ -225,5 +225,116 @@ class MutateJsonFileTests(AgentCoreTestCase):
         self.assertIn("storage.lock_timeout", KNOWN_RUNTIME_EVENTS)
 
 
+class RecordMutationHelperTests(AgentCoreTestCase):
+    def test_concurrent_child_agent_mutations_preserve_both_writers(self):
+        """Finalizer-vs-reconciler shape: merge updates from two coroutines survive."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            base = {
+                "agentId": "agent-x",
+                "sessionId": "child-1",
+                "parentSessionId": "parent-1",
+                "name": "x",
+                "description": "x",
+                "status": "running",
+                "startedAt": "2026-06-10T00:00:00.000Z",
+            }
+            run(core.saveChildAgent(base))
+
+            async def finalize() -> None:
+                await core.mutateChildAgent(
+                    "agent-x", lambda current: {**current, "status": "completed", "resultSummary": "done"}
+                )
+
+            async def reconcile() -> None:
+                await core.mutateChildAgent(
+                    "agent-x", lambda current: {**current, "recoveryState": "recovered_after_daemon_restart"}
+                )
+
+            async def main() -> None:
+                await asyncio.gather(finalize(), reconcile())
+
+            run(main())
+            record = run(core.loadChildAgent("agent-x"))
+            self.assertEqual(record["status"], "completed")
+            self.assertEqual(record["resultSummary"], "done")
+            self.assertEqual(record["recoveryState"], "recovered_after_daemon_restart")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mutate_child_agent_skips_when_missing_and_mutator_declines(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            result = run(core.mutateChildAgent("agent-missing", lambda current: None))
+            self.assertIsNone(result)
+            self.assertIsNone(run(core.loadChildAgent("agent-missing")))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mutate_child_agent_creates_when_mutator_supplies_record(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            created = run(
+                core.mutateChildAgent(
+                    "agent-new",
+                    lambda current: current
+                    or {
+                        "agentId": "agent-new",
+                        "sessionId": "s",
+                        "parentSessionId": "p",
+                        "name": "n",
+                        "description": "d",
+                        "status": "failed",
+                        "startedAt": "2026-06-10T00:00:00.000Z",
+                        "error": None,
+                    },
+                )
+            )
+            self.assertEqual(created["status"], "failed")
+            record = run(core.loadChildAgent("agent-new"))
+            # None-valued fields are omitted exactly like saveChildAgent.
+            self.assertNotIn("error", record)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mutate_session_record_merges_metadata_under_lock(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="anthropic",
+                model="claude-sonnet-4-6",
+                systemPrompt="prompt",
+                permissionMode="default",
+            )
+            run(core.saveSession(session))
+
+            async def add_task(task_id: str) -> None:
+                def mutator(record):
+                    metadata = record.setdefault("metadata", {})
+                    metadata["taskIds"] = [*(metadata.get("taskIds") or []), task_id]
+                    return record
+
+                await core.mutateSessionRecord(session["id"], mutator)
+
+            async def main() -> None:
+                await asyncio.gather(*(add_task(f"task-{index}") for index in range(8)))
+
+            run(main())
+            loaded = run(core.loadSession(session["id"]))
+            self.assertEqual(
+                sorted(loaded["metadata"]["taskIds"]), sorted(f"task-{index}" for index in range(8))
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mutate_session_record_returns_none_for_missing_session(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            self.assertIsNone(run(core.mutateSessionRecord("missing-session", lambda record: record)))
+        finally:
+            self.restore_home(root, previous)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,30 @@ def sessionTranscriptLogPath(sessionId: str) -> str:
     return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
 
 async def saveSession(session: SessionRecord) -> None:
-    await writeJsonFile(sessionPath(session["id"]), _redact_persisted_image_payloads(session))
+    path = sessionPath(session["id"])
+    async with fileLock(path):
+        await writeJsonFile(path, _redact_persisted_image_payloads(session))
+
+
+async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
+    """Locked read-modify-write for cross-process session metadata updates.
+
+    Loads through ``loadSession`` (so archived-transcript merging matches the
+    unlocked path), applies ``mutate`` (return the record, or ``None`` after
+    mutating in place), and persists with the same redaction as
+    ``saveSession``. Returns ``None`` without writing when the session does
+    not exist.
+    """
+    path = sessionPath(sessionId)
+    async with fileLock(path):
+        session = await loadSession(sessionId)
+        if session is None:
+            return None
+        updated = mutate(session)
+        if updated is None:
+            updated = session
+        await writeJsonFile(path, _redact_persisted_image_payloads(updated))
+        return updated
 
 async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
     path = sessionTranscriptLogPath(sessionId)

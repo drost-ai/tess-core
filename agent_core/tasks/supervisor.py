@@ -57,11 +57,13 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         await writeTaskMeta(task_id, meta)
         record = _build_task_record(meta, "Background command launched by daemon.")
         await saveTaskRecord(record)
-        session = await loadSession(session_id)
-        if session:
-            metadata = session.setdefault("metadata", {})
+
+        def _append_task_id(record_session: dict[str, Any]) -> dict[str, Any]:
+            metadata = record_session.setdefault("metadata", {})
             metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
-            await saveSession(session)
+            return record_session
+
+        await mutateSessionRecord(session_id, _append_task_id)
         await emit("task.updated", _task_record_event_payload(record), session_id)
         watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
         _WATCHERS.add(watcher)
@@ -81,10 +83,13 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         started_at = now_iso()
-        metadata = session.setdefault("metadata", {})
-        metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
-        metadata["backgroundSessionIds"] = _dedupe([*(metadata.get("backgroundSessionIds") or []), session_id])
-        await saveSession(session)
+        def _append_main_session_task(record_session: dict[str, Any]) -> dict[str, Any]:
+            metadata = record_session.setdefault("metadata", {})
+            metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
+            metadata["backgroundSessionIds"] = _dedupe([*(metadata.get("backgroundSessionIds") or []), session_id])
+            return record_session
+
+        await mutateSessionRecord(session_id, _append_main_session_task)
         command = prompt
         proc = _spawn_main_session_worker(task_id, session_id, prompt, task_cwd, output_file)
         _PROCESS_REGISTRY[task_id] = proc
@@ -340,11 +345,13 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         await writeTaskMeta(task_id, record)
         await saveTaskRecord(_build_task_record(record, "Health check is running."))
         if isinstance(session_id, str) and session_id:
-            session = await loadSession(session_id)
-            if session:
-                metadata = session.setdefault("metadata", {})
+
+            def _append_health_check_task(record_session: dict[str, Any]) -> dict[str, Any]:
+                metadata = record_session.setdefault("metadata", {})
                 metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
-                await saveSession(session)
+                return record_session
+
+            await mutateSessionRecord(session_id, _append_health_check_task)
         watcher = asyncio.create_task(_run_health_check(record, emit))
         _WATCHERS.add(watcher)
         watcher.add_done_callback(_WATCHERS.discard)

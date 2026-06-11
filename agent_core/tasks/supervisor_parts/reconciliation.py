@@ -76,9 +76,11 @@ async def _mark_recovered_process(
     await saveTaskRecord(next_record)
     if record.get("kind") == "subagent":
         agent_id = meta.get("agent_id") or metadata.get("agent_id") or record.get("sourceId")
-        child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
-        if child:
-            await saveChildAgent({**child, "recoveryState": "recovered_after_daemon_restart", "lastUpdatedAt": now})
+        if isinstance(agent_id, str) and agent_id:
+            await mutateChildAgent(
+                agent_id,
+                lambda current: {**current, "recoveryState": "recovered_after_daemon_restart", "lastUpdatedAt": now} if current else None,
+            )
     await maybe_await(emit("task.updated", _task_record_event_payload(next_record), record.get("sessionId")))
     watcher = asyncio.create_task(_watch_recovered_process(task_id, pid, record.get("sessionId"), emit))
     _WATCHERS.add(watcher)
@@ -241,19 +243,24 @@ async def _recover_completed_subagent_task(
         },
     )
     updated_at = next_record.get("updatedAt") or now_iso()
-    await saveChildAgent({**child, "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at})
+    await mutateChildAgent(
+        agent_id,
+        lambda current: {**(current or child), "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at},
+    )
     await maybe_await(emit(_event_name_for_task_status(next_record.get("status")), _task_record_event_payload(next_record), session_id or next_record.get("sessionId")))
     return True
 
 
 async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str, stopped_at: str) -> None:
     agent_id = meta.get("agent_id")
-    child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
-    if not child:
+    if not isinstance(agent_id, str) or not agent_id:
         return
     summary = "Stopped by request."
-    await saveChildAgent(
-        {
+
+    def _cancel(child: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not child:
+            return None
+        return {
             **child,
             "status": "cancelled",
             "completedAt": stopped_at,
@@ -268,7 +275,8 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
             "lastUpdatedAt": stopped_at,
             "lastSummary": summary,
         }
-    )
+
+    await mutateChildAgent(agent_id, _cancel)
 
 
 def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:

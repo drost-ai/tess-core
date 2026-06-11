@@ -8,7 +8,7 @@ from typing import Any
 
 from ..._utils import maybe_await, now_iso, pretty_json
 from ...config import buildSystemPromptForAgent, normalizeModelName, resolveModelForAgent, resolveProviderForModelSelection
-from ...storage import createEmptySession, loadChildAgent, saveChildAgent, saveSession, taskOutputPath, writeTaskMeta
+from ...storage import createEmptySession, loadChildAgent, mutateChildAgent, mutateTaskMeta, saveChildAgent, saveSession, taskOutputPath, writeTaskMeta
 from ...workspace import createGitWorktree
 
 

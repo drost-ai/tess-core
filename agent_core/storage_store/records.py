@@ -57,7 +57,30 @@ async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
     return records
 
 async def saveChildAgent(record: ChildAgentRecord) -> None:
-    await _save_by_path(childAgentPath(record["agentId"]), _omit_none_fields(record))
+    path = childAgentPath(record["agentId"])
+    async with fileLock(path):
+        await writeJsonFile(path, _omit_none_fields(record))
+
+
+async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:
+    """Locked read-modify-write for the multi-writer child-agent record.
+
+    ``mutate`` receives the current record (or ``None`` when missing) and
+    returns the record to persist; returning ``None`` skips the write when no
+    record exists, or persists the received record after in-place mutation.
+    The persisted value passes through the same ``None``-field omission as
+    ``saveChildAgent``.
+    """
+    path = childAgentPath(agentId)
+    async with fileLock(path):
+        current = await _load_by_path(path)
+        updated = mutate(current)
+        if updated is None:
+            updated = current
+        if updated is None:
+            return None
+        await writeJsonFile(path, _omit_none_fields(updated))
+        return updated
 
 async def loadChildAgent(agentId: str) -> ChildAgentRecord | None:
     return await _load_by_path(childAgentPath(agentId))
@@ -115,13 +138,37 @@ async def writePlanFile(args: dict[str, Any] | None = None, **kwargs: Any) -> st
         handle.write("\n".join(lines))
     return file_path
 async def writeTaskMeta(taskId: str, value: TaskMeta) -> None:
-    await writeJsonFile(taskMetaPath(taskId), value)
+    path = taskMetaPath(taskId)
+    async with fileLock(path):
+        await writeJsonFile(path, value)
+
+
+async def mutateTaskMeta(taskId: str, mutate, fallback: TaskMeta | None = None) -> TaskMeta | None:
+    """Locked read-modify-write for task meta (supervisor-owned record).
+
+    ``mutate`` receives the current meta (or ``fallback`` when missing) and
+    returns the meta to persist; returning ``None`` skips the write when
+    nothing was loaded, or persists the received value after in-place
+    mutation.
+    """
+    path = taskMetaPath(taskId)
+    async with fileLock(path):
+        current = await readJsonFile(path, fallback)
+        updated = mutate(current)
+        if updated is None:
+            updated = current
+        if updated is None:
+            return None
+        await writeJsonFile(path, updated)
+        return updated
 
 async def readTaskMeta(taskId: str) -> TaskMeta | None:
     return await readJsonFile(taskMetaPath(taskId), None)
 
 async def saveTaskRecord(record: TaskRecord) -> None:
-    await writeJsonFile(taskRecordPath(record["id"]), record)
+    path = taskRecordPath(record["id"])
+    async with fileLock(path):
+        await writeJsonFile(path, record)
 
 async def loadTaskRecord(taskId: str) -> TaskRecord | None:
     return await readJsonFile(taskRecordPath(taskId), None)
@@ -134,7 +181,9 @@ async def listSessionTaskRecords(sessionId: str) -> list[TaskRecord]:
     return [task for task in await listTaskRecords() if task.get("sessionId") == sessionId]
 
 async def saveMonitor(record: MonitorRecord) -> None:
-    await writeJsonFile(monitorPath(record["id"]), record)
+    path = monitorPath(record["id"])
+    async with fileLock(path):
+        await writeJsonFile(path, record)
 
 async def loadMonitor(monitorId: str) -> MonitorRecord | None:
     return await readJsonFile(monitorPath(monitorId), None)
@@ -147,7 +196,23 @@ async def listSessionMonitors(sessionId: str) -> list[MonitorRecord]:
     return [monitor for monitor in await listMonitors() if monitor.get("sessionId") == sessionId]
 
 async def saveHealthCheckTask(record: TaskMeta) -> None:
-    await writeJsonFile(healthCheckMetaPath(record["taskId"]), record)
+    path = healthCheckMetaPath(record["taskId"])
+    async with fileLock(path):
+        await writeJsonFile(path, record)
+
+
+async def mutateHealthCheckTask(taskId: str, mutate) -> TaskMeta | None:
+    """Locked read-modify-write for the health-check meta record."""
+    path = healthCheckMetaPath(taskId)
+    async with fileLock(path):
+        current = await readJsonFile(path, None)
+        updated = mutate(current)
+        if updated is None:
+            updated = current
+        if updated is None:
+            return None
+        await writeJsonFile(path, updated)
+        return updated
 
 async def loadHealthCheckTask(taskId: str) -> TaskMeta | None:
     return await readJsonFile(healthCheckMetaPath(taskId), None)
