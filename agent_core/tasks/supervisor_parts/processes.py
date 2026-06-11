@@ -107,35 +107,41 @@ def _watch_process_thread(
     code = proc.wait()
     _PROCESS_REGISTRY.pop(task_id, None)
     now = now_iso()
-    previous = asyncio.run(readTaskMeta(task_id)) or {}
-    previous_status = previous.get("status")
-    if _is_terminal_worker_status(previous_status):
-        status = str(previous_status)
-    else:
-        status = "completed" if code == 0 else "failed"
-        if code is not None and code < 0:
-            status = "terminated" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
-    exit_code = previous.get("exitCode") if _is_terminal_worker_status(previous_status) else None if status == "terminated" else code
-    signal_name = previous.get("signal")
-    if signal_name is None and code is not None and code < 0:
-        signal_name = _signal_name(abs(code))
-    meta = {
-        **previous,
-        "type": previous.get("type") or "background_command",
-        "taskId": task_id,
-        "id": task_id,
-        "command": previous.get("command") or command,
-        "cwd": previous.get("cwd") or cwd,
-        "outputFile": previous.get("outputFile") or output_file,
-        "status": status,
-        "exitCode": exit_code,
-        "signal": signal_name,
-        "finishedAt": previous.get("finishedAt") or previous.get("completedAt") or now,
-        "updatedAt": now,
-        "detailStatus": previous.get("detailStatus") or previous.get("completionReason") or previous.get("waitingReason") or status,
-    }
-    asyncio.run(writeTaskMeta(task_id, meta))
-    summary = None if _is_terminal_worker_status(previous_status) else _process_exit_summary(status, code)
+    previous_status_seen: list[Any] = [None]
+
+    def _finalize_exit(previous_raw: dict[str, Any] | None) -> dict[str, Any]:
+        previous = previous_raw or {}
+        previous_status = previous.get("status")
+        previous_status_seen[0] = previous_status
+        if _is_terminal_worker_status(previous_status):
+            status = str(previous_status)
+        else:
+            status = "completed" if code == 0 else "failed"
+            if code is not None and code < 0:
+                status = "terminated" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
+        exit_code = previous.get("exitCode") if _is_terminal_worker_status(previous_status) else None if status == "terminated" else code
+        signal_name = previous.get("signal")
+        if signal_name is None and code is not None and code < 0:
+            signal_name = _signal_name(abs(code))
+        return {
+            **previous,
+            "type": previous.get("type") or "background_command",
+            "taskId": task_id,
+            "id": task_id,
+            "command": previous.get("command") or command,
+            "cwd": previous.get("cwd") or cwd,
+            "outputFile": previous.get("outputFile") or output_file,
+            "status": status,
+            "exitCode": exit_code,
+            "signal": signal_name,
+            "finishedAt": previous.get("finishedAt") or previous.get("completedAt") or now,
+            "updatedAt": now,
+            "detailStatus": previous.get("detailStatus") or previous.get("completionReason") or previous.get("waitingReason") or status,
+        }
+
+    meta = asyncio.run(mutateTaskMeta(task_id, _finalize_exit, fallback={}))
+    previous_status = previous_status_seen[0]
+    summary = None if _is_terminal_worker_status(previous_status) else _process_exit_summary(str(meta.get("status")), code)
     record = _build_task_record(meta, summary)
     asyncio.run(saveTaskRecord(record))
     event_session_id = meta.get("parent_session_id") if meta.get("type") == "subagent" else meta.get("sessionId")

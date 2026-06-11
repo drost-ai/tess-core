@@ -13,7 +13,7 @@ from .config import ensureProviderForModelSelection, normalizeEffortForModel
 from .providers.anthropic import sendAnthropicMessagesRequest
 from .providers.openai import sendOpenAiRequest
 from .session import persistSession
-from .storage import listSessionMonitors, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
+from .storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 
 
 MONITOR_TICK_MS = 1500
@@ -246,9 +246,18 @@ async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
         return None
     if task.get("status") == "running" and isinstance(task.get("pid"), int) and not _is_process_alive(task["pid"]):
         now = now_iso()
-        reconciled = {**task, "taskId": task_id, "updatedAt": now, "finishedAt": task.get("finishedAt") or now, "status": "completed" if task.get("exitCode") == 0 else "failed" if task.get("exitCode") is not None else "unknown"}
-        await writeTaskMeta(task_id, reconciled)
-        return reconciled
+
+        def _reconcile_dead_pid(current: dict[str, Any] | None) -> dict[str, Any]:
+            base = current or task
+            return {
+                **base,
+                "taskId": task_id,
+                "updatedAt": now,
+                "finishedAt": base.get("finishedAt") or now,
+                "status": "completed" if base.get("exitCode") == 0 else "failed" if base.get("exitCode") is not None else "unknown",
+            }
+
+        return await mutateTaskMeta(task_id, _reconcile_dead_pid, fallback=task)
     return task
 
 

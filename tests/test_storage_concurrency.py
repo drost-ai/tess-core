@@ -335,6 +335,86 @@ class RecordMutationHelperTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_concurrent_task_meta_mutations_preserve_both_writers(self):
+        """Exit-watcher-vs-stop shape: field updates from both writers survive."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            base = {
+                "type": "background_command",
+                "taskId": "task-x",
+                "id": "task-x",
+                "status": "running",
+                "startedAt": "2026-06-10T00:00:00.000Z",
+                "outputFile": "/tmp/out.log",
+            }
+            run(core.writeTaskMeta("task-x", base))
+
+            async def finalize_exit() -> None:
+                await core.mutateTaskMeta(
+                    "task-x", lambda current: {**current, "status": "completed", "exitCode": 0}
+                )
+
+            async def annotate() -> None:
+                await core.mutateTaskMeta(
+                    "task-x", lambda current: {**current, "retryOfTaskId": "task-w"}
+                )
+
+            async def main() -> None:
+                await asyncio.gather(finalize_exit(), annotate())
+
+            run(main())
+            meta = run(core.readTaskMeta("task-x"))
+            self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["exitCode"], 0)
+            self.assertEqual(meta["retryOfTaskId"], "task-w")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mutate_task_meta_skips_when_missing_and_mutator_declines(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            result = run(core.mutateTaskMeta("task-missing", lambda current: None))
+            self.assertIsNone(result)
+            self.assertIsNone(run(core.readTaskMeta("task-missing")))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_health_check_stop_is_not_resurrected_by_in_flight_tick(self):
+        """The stop-vs-tick race: a tick computed before the stop must not
+        overwrite the stopped status when it lands after the stop."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            record = {
+                "type": "health_check",
+                "taskId": "hc-1",
+                "id": "hc-1",
+                "status": "active",
+                "startedAt": "2026-06-10T00:00:00.000Z",
+                "outputFile": str(home / "tasks" / "hc-1" / "output.log"),
+                "intervalMs": 1000,
+            }
+            run(core.saveHealthCheckTask(record))
+            # Simulate the stop landing first.
+            run(
+                core.mutateHealthCheckTask(
+                    "hc-1",
+                    lambda current: {**current, "status": "stopped", "stoppedAt": "2026-06-10T00:00:01.000Z"},
+                )
+            )
+
+            # A tick that loaded `record` before the stop now tries to write.
+            def tick(latest):
+                if latest is not None and latest.get("status") not in {"active", "unhealthy", "running"}:
+                    return latest
+                return {**(latest or record), "status": "active", "lastRunAt": "2026-06-10T00:00:02.000Z"}
+
+            run(core.mutateHealthCheckTask("hc-1", tick))
+            final = run(core.loadHealthCheckTask("hc-1"))
+            self.assertEqual(final["status"], "stopped")
+            self.assertNotIn("lastRunAt", final)
+        finally:
+            self.restore_home(root, previous)
+
 
 if __name__ == "__main__":
     unittest.main()

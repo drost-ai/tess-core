@@ -197,23 +197,30 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         meta_type = meta.get("type") if meta else None
         if proc and proc.poll() is None and meta_type != "subagent":
             return _terminate_process(proc.pid)
-        health = await loadHealthCheckTask(task_id)
+        stop_time = now_iso()
+        health = await mutateHealthCheckTask(
+            task_id,
+            lambda current: {**current, "status": "stopped", "updatedAt": stop_time, "stoppedAt": stop_time} if current else None,
+        )
         if health:
-            now = now_iso()
-            health.update({"status": "stopped", "updatedAt": now, "stoppedAt": now})
-            await saveHealthCheckTask(health)
-            await writeTaskMeta(task_id, {**health, "type": "health_check", "updatedAt": now})
+            await writeTaskMeta(task_id, {**health, "type": "health_check", "updatedAt": stop_time})
             return True
         if meta and meta_type != "subagent" and isinstance(meta.get("pid"), int) and _is_process_alive(meta["pid"]):
             return _terminate_process(meta["pid"])
         stopped = False
         if meta:
             now = now_iso()
-            meta.update({"status": "stopped", "updatedAt": now, "stoppedAt": now, "detailStatus": "stopped"})
+            stop_updates: dict[str, Any] = {"status": "stopped", "updatedAt": now, "stoppedAt": now, "detailStatus": "stopped"}
             if meta.get("type") == "subagent":
-                meta.update({"completionReason": "cancelled", "resultSummary": "Stopped by request.", "retryable": True, "stoppable": False})
+                stop_updates.update({"completionReason": "cancelled", "resultSummary": "Stopped by request.", "retryable": True, "stoppable": False})
+            loaded_meta = meta
+
+            def _apply_stop(current: dict[str, Any] | None) -> dict[str, Any]:
+                return {**(current or loaded_meta), **stop_updates}
+
+            meta = await mutateTaskMeta(task_id, _apply_stop, fallback=loaded_meta)
+            if meta.get("type") == "subagent":
                 await _mark_subagent_cancelled_from_stop(meta, task_id, now)
-            await writeTaskMeta(task_id, meta)
             await saveTaskRecord(_build_task_record(meta, "Task stopped by request."))
         if proc and proc.poll() is None:
             stopped = _terminate_process(proc.pid)

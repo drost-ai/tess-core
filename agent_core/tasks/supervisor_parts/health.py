@@ -15,31 +15,43 @@ async def _run_health_check(record: dict[str, Any], emit: Callable[[str, dict[st
         failure_threshold = max(1, int(current.get("failureThreshold") or 2))
         consecutive_failures = 0 if result.get("ok") else int(current.get("consecutiveFailures") or 0) + 1
         next_status = "active" if result.get("ok") else "failed" if consecutive_failures >= failure_threshold else "unhealthy"
-        current.update(
-            {
-                "lastRunAt": now,
-                "lastResult": result,
-                "updatedAt": now,
-                "status": next_status,
-                "consecutiveFailures": consecutive_failures,
-                "currentIntervalMs": int(current.get("intervalMs") or 10000) if result.get("ok") else _next_backoff_interval_ms(current, consecutive_failures),
-                "lastSuccessAt": now if result.get("ok") else current.get("lastSuccessAt"),
-                "lastFailureAt": current.get("lastFailureAt") if result.get("ok") else now,
-                "lastError": None if result.get("ok") else result.get("error") or result.get("summary"),
-                "lastExitCode": result.get("exitCode", current.get("lastExitCode")),
-                "lastStatusCode": result.get("status", current.get("lastStatusCode")),
-                "lastResponseSnippet": result.get("snippet", current.get("lastResponseSnippet")),
-                "lastSignal": result.get("signal", current.get("lastSignal")),
-                "lastTimedOut": bool(result.get("timedOut")),
-                "lastTerminated": bool(result.get("terminated")),
-            }
-        )
+        updates = {
+            "lastRunAt": now,
+            "lastResult": result,
+            "updatedAt": now,
+            "status": next_status,
+            "consecutiveFailures": consecutive_failures,
+            "currentIntervalMs": int(current.get("intervalMs") or 10000) if result.get("ok") else _next_backoff_interval_ms(current, consecutive_failures),
+            "lastSuccessAt": now if result.get("ok") else current.get("lastSuccessAt"),
+            "lastFailureAt": current.get("lastFailureAt") if result.get("ok") else now,
+            "lastError": None if result.get("ok") else result.get("error") or result.get("summary"),
+            "lastExitCode": result.get("exitCode", current.get("lastExitCode")),
+            "lastStatusCode": result.get("status", current.get("lastStatusCode")),
+            "lastResponseSnippet": result.get("snippet", current.get("lastResponseSnippet")),
+            "lastSignal": result.get("signal", current.get("lastSignal")),
+            "lastTimedOut": bool(result.get("timedOut")),
+            "lastTerminated": bool(result.get("terminated")),
+        }
         output_file = current.get("outputFile") or taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         with open(output_file, "a", encoding="utf-8") as handle:
             handle.write(f"[{now}] {result.get('output') or result.get('summary') or ''}\n")
-        current["outputFile"] = output_file
-        await saveHealthCheckTask(current)
+
+        declined: list[bool] = [False]
+
+        def _apply_tick(latest: dict[str, Any] | None) -> dict[str, Any] | None:
+            if latest is not None and latest.get("status") not in {"active", "unhealthy", "running"}:
+                # A concurrent stop won between this tick's check and its
+                # write; keep the stop's record instead of resurrecting the
+                # check (persisting `latest` unchanged is a no-op rewrite).
+                declined[0] = True
+                return latest
+            return {**(latest or current), **updates, "outputFile": output_file}
+
+        merged = await mutateHealthCheckTask(task_id, _apply_tick)
+        if merged is None or declined[0]:
+            return
+        current = merged
         await writeTaskMeta(task_id, current)
         await saveTaskRecord(_build_task_record(current, result.get("summary")))
         if next_status == "unhealthy":
