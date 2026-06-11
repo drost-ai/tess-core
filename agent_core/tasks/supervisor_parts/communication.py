@@ -10,7 +10,9 @@ from ...task_communication import (
 )
 
 
-async def readTaskOutput(task_id: str, tailBytes: int | None = 12000) -> dict[str, Any]:
+async def readTaskOutput(task_id: str, tailBytes: int | None = 12000, **kwargs: Any) -> dict[str, Any]:
+    if "tail_bytes" in kwargs:
+        tailBytes = kwargs["tail_bytes"]
     meta = await readTaskMeta(task_id)
     output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
     path = Path(output_file)

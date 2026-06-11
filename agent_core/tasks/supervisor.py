@@ -477,7 +477,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     }
 
 
-_PUBLIC_EXPORTS = ['Any', 'Callable', 'Path', 'annotations', 'asyncio', 'contextlib', 'createTaskSupervisor', 'ensureBaseLayout', 'listChildAgents', 'listHealthCheckTasks', 'listSessionMonitors', 'listTaskRecords', 'loadBridge', 'loadChildAgent', 'loadHealthCheckTask', 'loadRemoteSession', 'loadSession', 'loadTaskRecord', 'maybe_await', 'now_iso', 'os', 'readTaskMeta', 'saveChildAgent', 'saveHealthCheckTask', 'saveSession', 'saveTaskRecord', 'signal', 'subprocess', 'sys', 'taskOutputPath', 'threading', 'uuid', 'writeTaskMeta']
+_PUBLIC_EXPORTS = ['Any', 'Callable', 'Path', 'annotations', 'asyncio', 'contextlib', 'createTaskSupervisor', 'ensureBaseLayout', 'listChildAgents', 'listHealthCheckTasks', 'listSessionMonitors', 'listTaskRecords', 'loadBridge', 'loadChildAgent', 'loadHealthCheckTask', 'loadRemoteSession', 'loadSession', 'loadTaskRecord', 'maybe_await', 'now_iso', 'os', 'readTaskMeta', 'readTaskOutput', 'saveChildAgent', 'saveHealthCheckTask', 'saveSession', 'saveTaskRecord', 'signal', 'subprocess', 'sys', 'taskOutputPath', 'threading', 'uuid', 'writeTaskMeta']
 
 __all__ = _PUBLIC_EXPORTS
 
