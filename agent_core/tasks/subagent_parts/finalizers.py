@@ -60,8 +60,56 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
             **structured_fields,
         }
 
-    await mutateChildAgent(agent_id, _finalize_success)
-    await writeTaskMeta(task_id, {"type": "subagent", "task_id": task_id, "agent_id": agent_id, "session_id": session["id"], "cwd": session.get("cwd"), "startedAt": session.get("createdAt"), "status": status, "completedAt": completed_at if completed_like else None, "outputFile": taskOutputPath(task_id), "stopReason": result.get("stopReason"), "summary": summary, "resultSummary": summary, "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")), "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")), "attachableSessionId": session["id"], "retryable": retryable, "stoppable": False, "owner": "daemon", "runtimeContract": (session.get("metadata") or {}).get("subagentRuntimeContract"), **structured_fields})
+    child_record = await mutateChildAgent(agent_id, _finalize_success)
+    metadata = session.get("metadata") or {}
+    task_meta = {
+        "type": "subagent",
+        "task_id": task_id,
+        "agent_id": agent_id,
+        "session_id": session["id"],
+        "parent_session_id": metadata.get("parentSessionId"),
+        "parent_task_id": metadata.get("parentTaskId"),
+        "parent_tool_use_id": metadata.get("parentToolUseId"),
+        "parent_turn_id": metadata.get("parentTurnId"),
+        "launch_group_id": metadata.get("launchGroupId"),
+        "cwd": session.get("cwd"),
+        "startedAt": session.get("createdAt"),
+        "status": status,
+        "completedAt": completed_at if completed_like else None,
+        "outputFile": taskOutputPath(task_id),
+        "stopReason": result.get("stopReason"),
+        "summary": summary,
+        "resultSummary": summary,
+        "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")),
+        "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")),
+        "attachableSessionId": session["id"],
+        "retryable": retryable,
+        "stoppable": False,
+        "owner": "daemon",
+        "runtimeContract": metadata.get("subagentRuntimeContract"),
+        **structured_fields,
+    }
+    await writeTaskMeta(task_id, task_meta)
+    reconciliation = await createSubagentReconciliationForTerminalChild(
+        childRecord=child_record,
+        taskMeta=task_meta,
+        session=session,
+        result=result,
+        source="background_finalizer",
+    )
+    if reconciliation:
+        await append_task_event(
+            task_id,
+            {
+                "type": "subagent.reconciliation.created",
+                "agentId": agent_id,
+                "childSessionId": session["id"],
+                "parentSessionId": reconciliation.get("parentSessionId"),
+                "reconciliationId": reconciliation.get("id"),
+                "launchGroupId": reconciliation.get("launchGroupId"),
+                "terminalStatus": reconciliation.get("terminalStatus"),
+            },
+        )
     await append_task_event(
         task_id,
         {
@@ -98,8 +146,50 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         }
         return {**existing, "agentId": agent_id, "sessionId": session_id, "runInBackground": True, "status": "failed", "completedAt": completed_at, "taskId": task_id, "error": message, "attachableSessionId": session_id, "owner": existing.get("owner") or "daemon", "completionReason": "worker_failed", "resultSummary": message, "latestResultAt": completed_at, "retryable": True, "stoppable": False, "recoveryState": None, "lastUpdatedAt": completed_at, "lastSummary": message}
 
-    await mutateChildAgent(agent_id, _finalize_failure)
-    await writeTaskMeta(task_id, {"type": "subagent", "task_id": task_id, "agent_id": agent_id, "session_id": session_id, "status": "failed", "completedAt": completed_at, "outputFile": taskOutputPath(task_id), "error": message, "summary": message, "resultSummary": message, "completionReason": "worker_failed", "attachableSessionId": session_id, "retryable": True, "stoppable": False, "owner": "daemon"})
+    child_record = await mutateChildAgent(agent_id, _finalize_failure)
+    child_record = child_record or {}
+    task_meta = {
+        "type": "subagent",
+        "task_id": task_id,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        "parent_session_id": child_record.get("parentSessionId"),
+        "parent_task_id": child_record.get("parentTaskId"),
+        "parent_tool_use_id": child_record.get("parentToolUseId"),
+        "parent_turn_id": child_record.get("parentTurnId"),
+        "launch_group_id": child_record.get("launchGroupId"),
+        "status": "failed",
+        "completedAt": completed_at,
+        "outputFile": taskOutputPath(task_id),
+        "error": message,
+        "summary": message,
+        "resultSummary": message,
+        "completionReason": "worker_failed",
+        "attachableSessionId": session_id,
+        "retryable": True,
+        "stoppable": False,
+        "owner": "daemon",
+    }
+    await writeTaskMeta(task_id, task_meta)
+    reconciliation = await createSubagentReconciliationForTerminalChild(
+        childRecord=child_record,
+        taskMeta=task_meta,
+        error=message,
+        source="background_failure_finalizer",
+    )
+    if reconciliation:
+        await append_task_event(
+            task_id,
+            {
+                "type": "subagent.reconciliation.created",
+                "agentId": agent_id,
+                "childSessionId": session_id,
+                "parentSessionId": reconciliation.get("parentSessionId"),
+                "reconciliationId": reconciliation.get("id"),
+                "launchGroupId": reconciliation.get("launchGroupId"),
+                "terminalStatus": reconciliation.get("terminalStatus"),
+            },
+        )
     await append_task_event(
         task_id,
         {"type": "task.subagent.failed", "agentId": agent_id, "childSessionId": session_id, "status": "failed", "error": message},

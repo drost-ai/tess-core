@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import re
+import uuid
 from typing import Any
 
 from .._utils import maybe_await, merge_usage
@@ -21,6 +22,7 @@ from ..provider_errors import fallbackEligibleProviderFailure, isProviderRequest
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
 from ..session import persistProviderFailure, persistProviderRecovery, persistSession, repairSessionTranscript
+from ..subagent_reconciliation import appendPendingSubagentReconciliationsToSession, consumeAppendedSubagentReconciliations
 from ..token_accounting import measureRequestInputTokens, recordActualTokenUsage, recordPreflightTokenMeasurement
 
 

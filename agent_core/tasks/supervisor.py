@@ -145,15 +145,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             raise RuntimeError(f"Subagent session not found: {session_id}")
         child_metadata = child_session.setdefault("metadata", {})
         runtime_contract = task_args.get("runtimeContract") or task_args.get("runtime_contract") or child_metadata.get("subagentRuntimeContract")
-        capacity = check_subagent_capacity(
-            resolve_subagent_concurrency_policy(),
-            await listTaskRecords(),
-            runtime_contract if isinstance(runtime_contract, dict) else None,
-        )
+        capacity = check_subagent_capacity(resolve_subagent_concurrency_policy(), await listTaskRecords(), runtime_contract if isinstance(runtime_contract, dict) else None)
         if capacity:
-            raise RuntimeError(
-                f"Subagent capacity exceeded: {capacity.get('reason')} ({capacity.get('active')}/{capacity.get('limit')})"
-            )
+            raise RuntimeError(f"Subagent capacity exceeded: {capacity.get('reason')} ({capacity.get('active')}/{capacity.get('limit')})")
         task_id = str(uuid.uuid4())
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -174,6 +168,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "session_id": session_id,
             "parent_session_id": parent_session_id,
             "parent_task_id": task_args.get("parentTaskId") or task_args.get("parent_task_id"),
+            "parent_tool_use_id": task_args.get("parentToolUseId") or task_args.get("parent_tool_use_id"),
+            "parent_turn_id": task_args.get("parentTurnId") or task_args.get("parent_turn_id"),
+            "launch_group_id": task_args.get("launchGroupId") or task_args.get("launch_group_id"),
             "command": command,
             "cwd": task_cwd,
             "pid": proc.pid,
@@ -196,18 +193,15 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "metadata": {
                 "runtime_contract": runtime_contract if isinstance(runtime_contract, dict) else None,
                 "concurrency_group": runtime_contract.get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
+                "launch_group_id": task_args.get("launchGroupId") or task_args.get("launch_group_id"),
+                "parent_tool_use_id": task_args.get("parentToolUseId") or task_args.get("parent_tool_use_id"),
+                "parent_turn_id": task_args.get("parentTurnId") or task_args.get("parent_turn_id"),
             },
         }
         await writeTaskMeta(task_id, meta)
         await append_task_event(
             task_id,
-            {
-                "type": "task.subagent.started",
-                "agentId": agent_id,
-                "childSessionId": session_id,
-                "parentSessionId": parent_session_id,
-                "pid": proc.pid,
-            },
+            {"type": "task.subagent.started", "agentId": agent_id, "childSessionId": session_id, "parentSessionId": parent_session_id, "launchGroupId": task_args.get("launchGroupId") or task_args.get("launch_group_id"), "pid": proc.pid},
         )
         record = _build_task_record(meta, "Background subagent is running under daemon supervision.")
         await saveTaskRecord(record)
@@ -333,6 +327,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     "cwd": child_session.get("cwd") or cwd,
                     "label": child.get("name") or child.get("agentType") or child.get("agentId"),
                     "parentTaskId": child.get("parentTaskId"),
+                    "parentToolUseId": child.get("parentToolUseId"),
+                    "parentTurnId": child.get("parentTurnId"),
+                    "launchGroupId": child.get("launchGroupId"),
                     "runtimeContract": child.get("runtimeContract") or (child_session.get("metadata") or {}).get("subagentRuntimeContract"),
                 }
             )

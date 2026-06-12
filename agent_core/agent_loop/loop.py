@@ -42,6 +42,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     cost = 0.0
     tool_count = 0
     provider_call_index = 0
+    parent_turn_id = f"turn-{uuid.uuid4()}"
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
     last_stable_snapshot = copy.deepcopy(session)
@@ -79,6 +80,15 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 
     if _is_turn_cancelled(runtime):
         return await cancel_turn()
+
+    appended_reconciliations = await appendPendingSubagentReconciliationsToSession(
+        session,
+        runtime=runtime,
+        parentTurnId=parent_turn_id,
+    )
+    if appended_reconciliations.get("records"):
+        await persistSession(session, config)
+        await consumeAppendedSubagentReconciliations(session, appended_reconciliations, runtime=runtime)
 
     if prompt.strip():
         session.setdefault("messages", []).append({"role": "user", "content": prompt})
@@ -200,7 +210,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         paused_for_approval = False
         paused_message = ""
 
-        def build_context() -> ToolContext:
+        def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
             return {
                 "cwd": session["cwd"],
                 "allowedRoots": config.get("allowedRoots", []),
@@ -214,6 +224,9 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 "getTools": lambda: runtime.get("tools", []),
                 "daemon": runtime.get("daemon"),
                 "abortSignal": runtime.get("abortSignal"),
+                "currentToolUseId": tool_use.get("id") if isinstance(tool_use, dict) else None,
+                "parentTurnId": parent_turn_id,
+                "subagentLaunchGroupId": parent_turn_id,
             }
 
         async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
@@ -243,7 +256,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             usage_totals["toolCalls"] += 1
             _safe_emit(runtime, "tool.started", {"name": tool.name, "input": tool_use.get("input") or {}, "session_id": session["id"]})
             try:
-                result = await tool.handler(tool_use.get("input") or {}, build_context())
+                result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
                 _throw_if_turn_cancelled(runtime)
                 _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
                 block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": result.get("isError"), "content": result.get("content", "")}

@@ -86,6 +86,7 @@ _ADDITIVE_SESSION_METADATA_LISTS = {
     "childAgentIds",
     "childSessionIds",
     "monitorIds",
+    "subagentLaunchGroups",
     "taskIds",
 }
 
@@ -131,6 +132,11 @@ def _merge_session_for_full_save(current: dict[str, Any] | None, incoming: dict[
             current_metadata.get("providerFailureCount"),
             incoming_metadata.get("providerFailureCount"),
         )
+    if "subagentLaunchGroupRecords" in current_metadata or "subagentLaunchGroupRecords" in incoming_metadata:
+        metadata["subagentLaunchGroupRecords"] = _merge_launch_group_records(
+            current_metadata.get("subagentLaunchGroupRecords"),
+            incoming_metadata.get("subagentLaunchGroupRecords"),
+        )
     merged["metadata"] = metadata
     return merged
 
@@ -157,6 +163,20 @@ def _merge_numeric_record(current: Any, incoming: Any) -> dict[str, Any]:
     for key in set(current) | set(incoming):
         if isinstance(current.get(key), (int, float)) and isinstance(incoming.get(key), (int, float)):
             merged[key] = max(current[key], incoming[key])
+    return merged
+
+
+def _merge_launch_group_records(current: Any, incoming: Any) -> dict[str, Any]:
+    current_records = current if isinstance(current, dict) else {}
+    incoming_records = incoming if isinstance(incoming, dict) else {}
+    merged: dict[str, Any] = {**current_records, **incoming_records}
+    for group_id in set(current_records) | set(incoming_records):
+        current_group = current_records.get(group_id) if isinstance(current_records.get(group_id), dict) else {}
+        incoming_group = incoming_records.get(group_id) if isinstance(incoming_records.get(group_id), dict) else {}
+        group = {**current_group, **incoming_group}
+        group["childAgentIds"] = _dedupe_list([*(incoming_group.get("childAgentIds") or []), *(current_group.get("childAgentIds") or [])])
+        group["taskIds"] = _dedupe_list([*(incoming_group.get("taskIds") or []), *(current_group.get("taskIds") or [])])
+        merged[group_id] = group
     return merged
 
 

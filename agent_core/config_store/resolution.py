@@ -192,6 +192,12 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     settings_sandbox = merged_settings.get("sandbox") if isinstance(merged_settings.get("sandbox"), dict) else {}
     options_sandbox = options.get("sandbox") if isinstance(options.get("sandbox"), dict) else {}
     sandbox_config = normalizeSandboxConfig({**settings_sandbox, **options_sandbox}, cwd)
+    settings_subagents = merged_settings.get("subagents") if isinstance(merged_settings.get("subagents"), dict) else {}
+    options_subagents = options.get("subagents") if isinstance(options.get("subagents"), dict) else {}
+    subagents_config = {**settings_subagents, **options_subagents}
+    max_subagent_depth = options.get("maxSubagentDepth") or merged_settings.get("maxSubagentDepth")
+    if max_subagent_depth is not None and "maxDepth" not in subagents_config:
+        subagents_config["maxDepth"] = max_subagent_depth
 
     return {
         "cwd": cwd,
@@ -223,6 +229,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "systemPrompt": system_prompt,
         "appendSystemPrompt": options.get("appendSystemPrompt") or merged_settings.get("appendSystemPrompt"),
         "sandbox": sandbox_config,
+        "subagents": subagents_config,
         "tools": tools,
         "allowedTools": allowed_tools,
         "disallowedTools": disallowed_tools,

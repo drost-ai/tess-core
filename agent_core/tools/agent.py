@@ -10,12 +10,17 @@ from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission, _parse_permission_mode_value
 from .schemas import _tool_description, _tool_schema
 from .validation import _require_string
+from ..subagent_depth_policy import checkSubagentDepthAllowed
 
 
 def _agent_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        if int(context["session"].get("metadata", {}).get("depth") or 0) >= 2:
-            return {"content": "Delegation depth limit reached.", "isError": True}
+        depth = checkSubagentDepthAllowed(context["session"], context.get("config"))
+        if not depth["allowed"]:
+            output = context.get("outputJson")
+            if callable(output):
+                output("subagent.depth_blocked", depth)
+            return {"content": depth["message"], "isError": True}
         _throw_if_tool_cancelled(context)
         description = _require_string(input.get("description"), "description")
         prompt = _require_string(input.get("prompt"), "prompt")
@@ -38,6 +43,9 @@ def _agent_tool() -> ToolDefinition:
             "teamName": input.get("team_name") if isinstance(input.get("team_name"), str) else None,
             "mode": _parse_permission_mode_value(input.get("mode")),
             "isolation": "worktree" if input.get("isolation") == "worktree" else None,
+            "parentToolUseId": context.get("currentToolUseId"),
+            "parentTurnId": context.get("parentTurnId"),
+            "launchGroupId": context.get("subagentLaunchGroupId"),
         }
         if input.get("run_in_background"):
             return await startBackgroundSubagent(agent_args)

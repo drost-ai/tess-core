@@ -219,7 +219,9 @@ class ToolAgentTests(AgentCoreTestCase):
             self.assertEqual(meta["session_id"], payload["session_id"])
             self.assertEqual(meta["pid"], 4321)
             self.assertEqual(meta["owner"], "client")
-            self.assertNotIn("parent_session_id", meta)
+            self.assertEqual(meta["parent_session_id"], parent["id"])
+            self.assertEqual(meta["launch_group_id"], f"session-{parent['id']}")
+            self.assertEqual(parent["metadata"]["subagentLaunchGroupRecords"][f"session-{parent['id']}"]["taskIds"], [payload["task_id"]])
             self.assertTrue(any(event == "subagent.backgrounded" and data["pid"] == 4321 for event, data in events))
         finally:
             subagents_module._spawn_local_subagent_worker = original_spawn

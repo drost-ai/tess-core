@@ -86,6 +86,7 @@ class SettingsRecord(TypedDict, total=False):
     openaiBaseUrl: str
     openaiCodexAuthPath: str
     sandbox: dict[str, Any]
+    subagents: dict[str, Any]
 
 
 class _ResolvedConfigRequired(TypedDict):
@@ -130,6 +131,7 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     assistantDescription: str
     appendSystemPrompt: str | None
     sandbox: dict[str, Any]
+    subagents: dict[str, Any]
     allowedTools: list[str]
     disallowedTools: list[str]
     inputFormat: str

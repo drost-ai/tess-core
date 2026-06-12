@@ -221,33 +221,55 @@ async def _recover_completed_subagent_task(
     next_record = _build_recovered_subagent_task_record(record, child)
     await saveTaskRecord(next_record)
     meta = await readTaskMeta(task_id) or {}
-    await writeTaskMeta(
-        task_id,
-        {
-            **meta,
-            "type": "subagent",
-            "task_id": task_id,
-            "agent_id": child.get("agentId") or agent_id,
-            "session_id": child.get("sessionId"),
-            "status": next_record.get("status"),
-            "updatedAt": next_record.get("updatedAt"),
-            "finishedAt": next_record.get("completedAt"),
-            "summary": next_record.get("summary"),
-            "resultSummary": next_record.get("resultSummary"),
-            "completionReason": child.get("completionReason"),
-            "waitingReason": child.get("waitingReason"),
-            "attachableSessionId": child.get("attachableSessionId") or child.get("sessionId"),
-            "retryable": child.get("retryable"),
-            "stoppable": child.get("stoppable"),
-            "owner": "daemon",
-        },
-    )
+    task_meta = {
+        **meta,
+        "type": "subagent",
+        "task_id": task_id,
+        "agent_id": child.get("agentId") or agent_id,
+        "session_id": child.get("sessionId"),
+        "parent_session_id": child.get("parentSessionId") or meta.get("parent_session_id"),
+        "parent_tool_use_id": child.get("parentToolUseId") or meta.get("parent_tool_use_id"),
+        "parent_turn_id": child.get("parentTurnId") or meta.get("parent_turn_id"),
+        "launch_group_id": child.get("launchGroupId") or meta.get("launch_group_id"),
+        "status": next_record.get("status"),
+        "updatedAt": next_record.get("updatedAt"),
+        "finishedAt": next_record.get("completedAt"),
+        "summary": next_record.get("summary"),
+        "resultSummary": next_record.get("resultSummary"),
+        "completionReason": child.get("completionReason"),
+        "waitingReason": child.get("waitingReason"),
+        "attachableSessionId": child.get("attachableSessionId") or child.get("sessionId"),
+        "retryable": child.get("retryable"),
+        "stoppable": child.get("stoppable"),
+        "owner": "daemon",
+    }
+    await writeTaskMeta(task_id, task_meta)
     updated_at = next_record.get("updatedAt") or now_iso()
-    await mutateChildAgent(
+    updated_child = await mutateChildAgent(
         agent_id,
         lambda current: {**(current or child), "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at},
     )
+    reconciliation = await createSubagentReconciliationForTerminalChild(
+        childRecord=updated_child or child,
+        taskMeta=task_meta,
+        source="supervisor_recovery",
+    )
     await maybe_await(emit(_event_name_for_task_status(next_record.get("status")), _task_record_event_payload(next_record), session_id or next_record.get("sessionId")))
+    if reconciliation:
+        await maybe_await(
+            emit(
+                "subagent.reconciliation.created",
+                {
+                    "taskId": task_id,
+                    "agentId": agent_id,
+                    "parentSessionId": reconciliation.get("parentSessionId"),
+                    "reconciliationId": reconciliation.get("id"),
+                    "launchGroupId": reconciliation.get("launchGroupId"),
+                    "terminalStatus": reconciliation.get("terminalStatus"),
+                },
+                reconciliation.get("parentSessionId"),
+            )
+        )
     return True
 
 
@@ -276,7 +298,30 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
             "lastSummary": summary,
         }
 
-    await mutateChildAgent(agent_id, _cancel)
+    child = await mutateChildAgent(agent_id, _cancel)
+    task_meta = {
+        **meta,
+        "type": "subagent",
+        "task_id": task_id,
+        "agent_id": agent_id,
+        "session_id": (child or {}).get("sessionId") or meta.get("session_id") or meta.get("sessionId"),
+        "parent_session_id": (child or {}).get("parentSessionId") or meta.get("parent_session_id"),
+        "parent_tool_use_id": (child or {}).get("parentToolUseId") or meta.get("parent_tool_use_id"),
+        "parent_turn_id": (child or {}).get("parentTurnId") or meta.get("parent_turn_id"),
+        "launch_group_id": (child or {}).get("launchGroupId") or meta.get("launch_group_id"),
+        "status": "cancelled",
+        "completedAt": stopped_at,
+        "summary": summary,
+        "resultSummary": summary,
+        "completionReason": "cancelled",
+        "outputFile": meta.get("outputFile") or taskOutputPath(task_id),
+    }
+    await createSubagentReconciliationForTerminalChild(
+        childRecord=child,
+        taskMeta=task_meta,
+        error=summary,
+        source="supervisor_stop",
+    )
 
 
 def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
