@@ -34,7 +34,8 @@ async def requestParentContinuationForReconciliations(
     if launchGroupId:
         records = [record for record in records if record.get("launchGroupId") == launchGroupId]
         unconsumed_records = [record for record in unconsumed_records if record.get("launchGroupId") == launchGroupId]
-    ready = evaluateParentContinuationReadiness(records, {"waitFor": waitFor})
+    readiness_records = records if launchGroupId else unconsumed_records
+    ready = evaluateParentContinuationReadiness(readiness_records, {"waitFor": waitFor})
     if not ready["ready"]:
         return {"requested": False, **ready}
     requested_at = now_iso()
@@ -42,7 +43,7 @@ async def requestParentContinuationForReconciliations(
     path = subagentReconciliationLogPath(parentSessionId)
     wanted = {record.get("id") for record in unconsumed_records if record.get("id")}
     if not wanted:
-        return {"requested": False, "reason": "satisfied_intent", **ready}
+        return {"requested": False, **ready, "reason": "satisfied_intent"}
     async with fileLock(path):
         current = await _read_records(path)
         next_records = []
@@ -186,6 +187,8 @@ async def _maybe_start_group_continuation(
     )
     if not ready.get("ready"):
         return {"started": False, "launchGroupId": group_id, **ready}
+    if not unconsumed_for_group:
+        return {"started": False, "launchGroupId": group_id, **ready, "reason": "satisfied_intent"}
     prompt = _string(policy.get("prompt")) or defaultParentContinuationPrompt()
     run_id = _string(group.get("continuationRunId")) or f"continuation-{uuid.uuid4()}"
     parent = await loadSession(parent_session_id)
