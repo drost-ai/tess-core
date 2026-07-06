@@ -7,6 +7,9 @@ from typing import Any, Mapping
 
 from .storage import taskDir, writeJsonFile
 
+_SUPPORTED_SCHEMA_KEYS = {"type", "enum", "required", "properties", "additionalProperties", "items"}
+_IGNORED_SCHEMA_ANNOTATION_KEYS = {"$schema", "$id", "title", "description", "default", "examples"}
+
 
 def structured_result_path(task_id: str) -> str:
     return os.path.join(taskDir(task_id), "structured-result.json")
@@ -27,6 +30,23 @@ def extract_structured_result_json(text: str) -> Any:
     if start < 0:
         raise ValueError("No JSON object or array found.")
     return json.loads(source[start:].strip())
+
+
+def _find_unsupported_schema_keywords(schema: Mapping[str, Any], path: str = "$") -> list[str]:
+    errors: list[str] = []
+    for key, value in schema.items():
+        if key in _SUPPORTED_SCHEMA_KEYS or key in _IGNORED_SCHEMA_ANNOTATION_KEYS:
+            continue
+        errors.append(f"{path}: unsupported schema keyword {key!r}")
+    properties = schema.get("properties")
+    if isinstance(properties, Mapping):
+        for key, child_schema in properties.items():
+            if isinstance(child_schema, Mapping):
+                errors.extend(_find_unsupported_schema_keywords(child_schema, f"{path}.properties.{key}"))
+    items = schema.get("items")
+    if isinstance(items, Mapping):
+        errors.extend(_find_unsupported_schema_keywords(items, f"{path}.items"))
+    return errors
 
 
 def _schema_errors(value: Any, schema: Mapping[str, Any], path: str = "$") -> list[str]:
@@ -79,6 +99,9 @@ def _schema_errors(value: Any, schema: Mapping[str, Any], path: str = "$") -> li
 def evaluate_subagent_result(text: str, response_schema: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(response_schema, Mapping):
         return {"status": "not_configured", "data": None, "errors": []}
+    unsupported = _find_unsupported_schema_keywords(response_schema)
+    if unsupported:
+        return {"status": "unsupported_schema", "data": None, "errors": unsupported}
     try:
         data = extract_structured_result_json(text)
     except Exception as exc:

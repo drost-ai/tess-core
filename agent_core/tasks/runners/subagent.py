@@ -15,6 +15,13 @@ from ...tools import createBuiltinTools
 
 
 async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:
+    session, result, payload = await _execute_background_subagent(args)
+    await finalizeBackgroundSubagentSuccessFromEnv(session, result)
+    await saveSession(session)
+    return payload
+
+
+async def _execute_background_subagent(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     runtime_home = os.environ.get("AGENT_CORE_HOME")
     if runtime_home:
         configureRuntimeHome(runtime_home)
@@ -35,9 +42,8 @@ async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:
         "tools": createBuiltinTools(),
     }
     result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
-    await finalizeBackgroundSubagentSuccessFromEnv(session, result)
-    await saveSession(session)
-    return {"ok": True, "session_id": session["id"], "agent_id": args["agentId"], "task_id": args["taskId"], "result": {"text": result.get("text"), "stopReason": result.get("stopReason"), "toolCount": result.get("toolCount"), "usage": result.get("usage")}, "events": events[-20:]}
+    payload = {"ok": True, "session_id": session["id"], "agent_id": args["agentId"], "task_id": args["taskId"], "result": {"text": result.get("text"), "stopReason": result.get("stopReason"), "toolCount": result.get("toolCount"), "usage": result.get("usage")}, "events": events[-20:]}
+    return session, result, payload
 
 
 def main() -> None:
@@ -47,8 +53,10 @@ def main() -> None:
     parser.add_argument("--task-id", required=True)
     parsed = parser.parse_args()
     try:
-        result = asyncio.run(run_background_subagent({"sessionId": parsed.session_id, "agentId": parsed.agent_id, "taskId": parsed.task_id}))
-        print(json.dumps(result, indent=2))
+        session, result, payload = asyncio.run(_execute_background_subagent({"sessionId": parsed.session_id, "agentId": parsed.agent_id, "taskId": parsed.task_id}))
+        print(json.dumps(payload, indent=2), flush=True)
+        asyncio.run(finalizeBackgroundSubagentSuccessFromEnv(session, result))
+        asyncio.run(saveSession(session))
     except Exception as exc:
         asyncio.run(finalizeBackgroundSubagentFailureFromEnv(exc))
         print(json.dumps({"ok": False, "error": str(exc), "session_id": parsed.session_id, "agent_id": parsed.agent_id, "task_id": parsed.task_id}, indent=2), file=sys.stderr)

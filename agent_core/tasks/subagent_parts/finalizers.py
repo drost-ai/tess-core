@@ -110,6 +110,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
                 "terminalStatus": reconciliation.get("terminalStatus"),
             },
         )
+    await _upsert_and_maybe_continue_parent(session, child_record or {}, task_meta)
     await append_task_event(
         task_id,
         {
@@ -190,6 +191,7 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
                 "terminalStatus": reconciliation.get("terminalStatus"),
             },
         )
+    await _upsert_and_maybe_continue_parent(None, child_record, task_meta)
     await append_task_event(
         task_id,
         {"type": "task.subagent.failed", "agentId": agent_id, "childSessionId": session_id, "status": "failed", "error": message},
@@ -209,3 +211,22 @@ async def _background_structured_result_fields(task_id: str, session: dict[str, 
         "structuredResultErrors": evaluation.get("errors") or [],
         "structuredResultPath": path,
     }
+
+
+async def _upsert_and_maybe_continue_parent(session: dict[str, Any] | None, child_record: dict[str, Any], task_meta: dict[str, Any]) -> None:
+    metadata = session.get("metadata") if isinstance(session, dict) and isinstance(session.get("metadata"), dict) else {}
+    parent_session_id = metadata.get("parentSessionId") or child_record.get("parentSessionId") or task_meta.get("parent_session_id")
+    launch_group_id = metadata.get("launchGroupId") or child_record.get("launchGroupId") or task_meta.get("launch_group_id")
+    if not isinstance(parent_session_id, str) or not parent_session_id or not isinstance(launch_group_id, str) or not launch_group_id:
+        return
+    await _upsert_subagent_launch_group(
+        parent_session_id,
+        {
+            "id": launch_group_id,
+            "label": metadata.get("teamName") or child_record.get("teamName") or child_record.get("name") or child_record.get("agentType") or child_record.get("agentId"),
+            "childAgentIds": [child_record.get("agentId") or task_meta.get("agent_id")],
+            "taskIds": [task_meta.get("task_id")],
+        },
+    )
+    policy = metadata.get("parentContinuation") if isinstance(metadata.get("parentContinuation"), dict) else child_record.get("parentContinuation")
+    await _maybe_start_ready_parent_continuations(parent_session_id, launchGroupId=launch_group_id, policy=policy if isinstance(policy, dict) else None)

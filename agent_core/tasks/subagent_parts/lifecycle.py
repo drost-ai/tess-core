@@ -35,6 +35,15 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
     output_file = launch_output_file(launched) or (taskOutputPath(task_id) if task_id else None)
     started_at = now_iso()
     appendLaunchGroupMetadata(context["session"], child_record.get("launchGroupId") or prepared.get("launchGroupId"), agent_id, task_id)
+    await _upsert_subagent_launch_group(
+        context["session"]["id"],
+        {
+            "id": child_record.get("launchGroupId") or prepared.get("launchGroupId"),
+            "label": child_record.get("teamName") or child_record.get("name") or child_record.get("agentType") or agent_id,
+            "childAgentIds": [agent_id],
+            "taskIds": [task_id] if task_id else [],
+        },
+    )
     await maybe_await(context.get("persistSession", lambda: None)())
     await saveChildAgent(
         {
@@ -138,6 +147,8 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     metadata["teamName"] = team_name
     metadata["launchGroupId"] = launch_group_id
     metadata["worktreePath"] = worktree_path
+    if isinstance(config.get("parentContinuation"), dict):
+        metadata["parentContinuation"] = dict(config["parentContinuation"])
     if runtime_contract:
         metadata["subagentRuntimeContract"] = runtime_contract
     metadata["childSessionIds"] = []
@@ -161,6 +172,14 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
     parent_metadata["subagentLaunchGroups"] = _dedupe([*(parent_metadata.get("subagentLaunchGroups") or []), launch_group_id])
     appendLaunchGroupMetadata(parent, launch_group_id, agent_id)
+    await _upsert_subagent_launch_group(
+        parent["id"],
+        {
+            "id": launch_group_id,
+            "label": team_name or child_name,
+            "childAgentIds": [agent_id],
+        },
+    )
     if run_in_background:
         parent_metadata["backgroundSessionIds"] = _dedupe([*(parent_metadata.get("backgroundSessionIds") or []), child_session["id"]])
     await maybe_await(context.get("persistSession", lambda: None)())
@@ -185,6 +204,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "worktreePath": worktree_path,
         "runInBackground": run_in_background,
         "runtimeContract": runtime_contract,
+        "parentContinuation": metadata.get("parentContinuation"),
         "status": "queued" if run_in_background else "running",
         "startedAt": now,
         "owner": "daemon" if run_in_background and context.get("daemon") else "client",

@@ -61,6 +61,20 @@ class SubagentV2Tests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_structured_result_unsupported_schema_keywords_fail_closed(self):
+        evaluation = core.evaluate_subagent_result(
+            '{"summary":"done"}',
+            {
+                "type": "object",
+                "required": ["summary"],
+                "properties": {"summary": {"type": "string", "pattern": "^done$"}},
+                "additionalProperties": False,
+            },
+        )
+        self.assertEqual(evaluation["status"], "unsupported_schema")
+        self.assertIsNone(evaluation["data"])
+        self.assertEqual(evaluation["errors"], ["$.properties.summary: unsupported schema keyword 'pattern'"])
+
     def test_run_agent_prompt_filters_subagent_tools_before_dispatch(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -188,6 +202,74 @@ class SubagentV2Tests(AgentCoreTestCase):
             self.assertEqual(run(core.read_undelivered_task_messages("task-mailbox")), [])
             events = run(core.read_task_events("task-mailbox"))
             self.assertEqual([event["type"] for event in events], ["message.queued", "message.delivered"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_mailbox_and_question_record_shapes_are_pinned(self):
+        # Characterization pins for audit B6: these capture current durable shapes,
+        # not a claim that the final API contract is settled.
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.writeTaskMeta("task-contract-pin", {"type": "subagent", "task_id": "task-contract-pin", "session_id": session["id"], "status": "running", "startedAt": "2026-07-05T00:00:00Z", "outputFile": core.taskOutputPath("task-contract-pin")}))
+            message = run(
+                core.send_task_message(
+                    "task-contract-pin",
+                    {
+                        "messageId": "msg-contract-pin",
+                        "childSessionId": session["id"],
+                        "sender": "supervisor",
+                        "kind": "answer",
+                        "content": "Use the verified path.",
+                        "createdAt": "2026-07-05T00:00:01Z",
+                        "metadata": {"questionId": "q-contract-pin"},
+                    },
+                )
+            )
+            question = run(
+                core.create_task_question(
+                    "task-contract-pin",
+                    {
+                        "questionId": "q-contract-pin",
+                        "childSessionId": session["id"],
+                        "question": "Which path should I edit?",
+                        "options": ["A", "B"],
+                        "createdAt": "2026-07-05T00:00:02Z",
+                        "metadata": {"source": "test"},
+                    },
+                )
+            )
+            self.assertEqual(
+                message,
+                {
+                    "messageId": "msg-contract-pin",
+                    "taskId": "task-contract-pin",
+                    "childSessionId": session["id"],
+                    "sender": "supervisor",
+                    "kind": "answer",
+                    "content": "Use the verified path.",
+                    "status": "queued",
+                    "createdAt": "2026-07-05T00:00:01Z",
+                    "deliveredAt": None,
+                    "metadata": {"questionId": "q-contract-pin"},
+                },
+            )
+            self.assertEqual(
+                question,
+                {
+                    "questionId": "q-contract-pin",
+                    "taskId": "task-contract-pin",
+                    "childSessionId": session["id"],
+                    "question": "Which path should I edit?",
+                    "options": ["A", "B"],
+                    "status": "pending",
+                    "createdAt": "2026-07-05T00:00:02Z",
+                    "answeredAt": None,
+                    "answer": None,
+                    "metadata": {"source": "test"},
+                },
+            )
         finally:
             self.restore_home(root, previous)
 
