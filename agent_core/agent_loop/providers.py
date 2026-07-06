@@ -3,8 +3,9 @@ from __future__ import annotations
 from .shared import *
 from ..provider_timeouts import resolveProviderTimeoutPolicy
 
-def _create_provider(config: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
-    timeout_policy = resolveProviderTimeoutPolicy({"config": config})
+def _create_provider(config: dict[str, Any], runtime: dict[str, Any], session: dict[str, Any] | None = None) -> dict[str, Any]:
+    metadata = session.get("metadata") if isinstance(session, dict) and isinstance(session.get("metadata"), dict) else {}
+    timeout_policy = resolveProviderTimeoutPolicy({"config": config, "runtimeContract": metadata.get("subagentRuntimeContract")})
     if config.get("provider") == "openai":
         if not config.get("openaiToken"):
             return {"send": lambda request: _missing_openai_credential_response(config, request)}
