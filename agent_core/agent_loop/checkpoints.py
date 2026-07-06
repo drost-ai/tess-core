@@ -7,7 +7,8 @@ async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] 
     session = args["session"]
     config = args["config"]
     runtime = args["runtime"]
-    decision = decideDurableCheckpoint(session)
+    compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
+    decision = decideDurableCheckpoint(session, tokenLimit=compaction_policy.get("compactionThresholdTokens"))
     raw_context = decision.get("rawContext") or {}
     _emit_raw_context_pressure(runtime, session["id"], raw_context)
     _safe_emit(runtime, "compaction.decision", _decision_event_payload(session["id"], decision, raw_context))
@@ -28,7 +29,8 @@ async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] 
 
 async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None:
     session = args["session"]
-    decision = shouldAutoCompact(session, args.get("currentInputTokens"))
+    compaction_policy = resolveCompactionPolicy(args["config"].get("providerProfile") or {})
+    decision = shouldAutoCompact(session, args.get("currentInputTokens"), compaction_policy.get("compactionThresholdTokens"))
     if not decision.get("shouldCompact") or not decision.get("trigger"):
         return None
     return await _run_auto_compaction(

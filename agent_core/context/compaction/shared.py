@@ -41,13 +41,13 @@ COMPACTION_SYNTHESIS_MAX_RETRIES = 3
 COMPACTION_VERIFICATION_MAX_RETRIES = 3
 COMPACTION_EVIDENCE_TOKEN_BUDGET = 90_000
 COMPACTION_EVIDENCE_FALLBACK_BUDGETS = [COMPACTION_EVIDENCE_TOKEN_BUDGET, 60_000, 40_000]
-COMPACTION_MESSAGE_TEXT_CHAR_LIMIT = 2_400
-COMPACTION_TOOL_INPUT_CHAR_LIMIT = 1_200
-COMPACTION_TOOL_RESULT_CHAR_LIMIT = 2_000
+COMPACTION_MESSAGE_TEXT_CHAR_LIMIT = 8_000
+COMPACTION_TOOL_INPUT_CHAR_LIMIT = 2_400
+COMPACTION_TOOL_RESULT_CHAR_LIMIT = 8_000
 COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT = 600
-COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT = 1_200
-COMPACTION_FILE_PREVIEW_LINES = 8
-COMPACTION_MATCH_PREVIEW_LIMIT = 8
+COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT = 6_000
+COMPACTION_FILE_PREVIEW_LINES = 48
+COMPACTION_MATCH_PREVIEW_LIMIT = 32
 
 COMPACTION_SYSTEM_PROMPT = """You synthesize durable working context for a coding agent.
 
@@ -119,7 +119,7 @@ Output rules:
 - Prefer rejecting or repairing a checkpoint over accepting a misleading one.
 - Remove stale requests, stale blockers, stale commit/push chatter, dead-end failures, and outdated next steps.
 - Preserve the active user goal, real completed work, current in-progress work, current blockers, relevant files, durable discoveries, and usable next steps.
-- For agentic traces with many tool calls, reject or repair checkpoints that omit the current exploit/debug path, important failed attempts and why they failed, exact commands/payloads/artifact paths still needed, or the next concrete step.
+- For agentic traces with many tool calls, reject or repair checkpoints that omit the current debug path, important failed attempts and why they failed, exact commands/payloads/artifact paths still needed, or the next concrete step.
 - If repair is needed, return a fully repaired checkpoint in repairedCheckpoint.
 
 JSON shape:

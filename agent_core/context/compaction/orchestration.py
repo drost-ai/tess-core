@@ -12,9 +12,10 @@ def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
     return int(state.get("compactedContextTokenEstimate") or 0) + estimateMessageTokens(recent_messages)
 
 
-def shouldAutoCompact(session: dict[str, Any], currentInputTokens: int | None = None) -> dict[str, Any]:
+def shouldAutoCompact(session: dict[str, Any], currentInputTokens: int | None = None, tokenLimit: int | None = None) -> dict[str, Any]:
     current_token_estimate = currentInputTokens if currentInputTokens is not None else estimateWorkingContextTokens(session)
-    if current_token_estimate >= WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT:
+    limit = int(tokenLimit or WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT)
+    if current_token_estimate >= limit:
         return {"shouldCompact": True, "trigger": "auto_hard_limit", "currentTokenEstimate": current_token_estimate}
     return {"shouldCompact": False, "currentTokenEstimate": current_token_estimate}
 
@@ -177,6 +178,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
                 "latestPlan": latest_plan,
                 "sourceRange": source_range,
                 "candidate": {**repaired, "model": synthesized["model"]},
+                "preservedTraceEvidence": verification.get("evidence"),
             }
         )
         verification = await runCompactionCheckpointVerificationWithFallback(

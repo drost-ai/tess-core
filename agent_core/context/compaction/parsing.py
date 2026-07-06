@@ -111,6 +111,7 @@ def coerceWorkingContextDocument(value: Any) -> dict[str, Any] | None:
         else None,
         "todos": {"open": asStringArray(todos.get("open")), "completed": asStringArray(todos.get("completed"))},
         "activity": {"commands": asStringArray(activity.get("commands")), "searches": asStringArray(activity.get("searches")), "web": asStringArray(activity.get("web")), "failures": asStringArray(activity.get("failures"))},
+        "preservedTrace": coercePreservedTrace(record.get("preservedTrace")),
         "nextSteps": asStringArray(record.get("nextSteps")),
         "criticalContext": asStringArray(record.get("criticalContext")),
     }
@@ -128,30 +129,60 @@ def coerceSynthesizedWorkingContextFields(value: Any) -> dict[str, Any] | None:
         "project": {
             "description": collapseWhitespace(project["description"]) if isinstance(project.get("description"), str) else None,
             "facts": coerceProjectFacts(project.get("facts")),
-            "keyFiles": coerceRelevantFiles(project.get("keyFiles"))[:18],
+            "keyFiles": coerceRelevantFiles(project.get("keyFiles"))[:96],
         },
         "goals": {
-            "active": asStringArray(goals.get("active"))[:8],
-            "recentRequests": asStringArray(goals.get("recentRequests"))[:10],
-            "constraints": asStringArray(goals.get("constraints"))[:10],
-            "preferences": asStringArray(goals.get("preferences"))[:10],
+            "active": asStringArray(goals.get("active"))[:24],
+            "recentRequests": asStringArray(goals.get("recentRequests"))[:48],
+            "constraints": asStringArray(goals.get("constraints"))[:48],
+            "preferences": asStringArray(goals.get("preferences"))[:48],
         },
         "currentState": {
-            "completed": asStringArray(current_state.get("completed"))[:16],
-            "inProgress": asStringArray(current_state.get("inProgress"))[:12],
-            "blocked": asStringArray(current_state.get("blocked"))[:10],
+            "completed": asStringArray(current_state.get("completed"))[:96],
+            "inProgress": asStringArray(current_state.get("inProgress"))[:64],
+            "blocked": asStringArray(current_state.get("blocked"))[:48],
         },
-        "decisions": asStringArray(record.get("decisions"))[:12],
-        "discoveries": asStringArray(record.get("discoveries"))[:14],
+        "decisions": asStringArray(record.get("decisions"))[:96],
+        "discoveries": asStringArray(record.get("discoveries"))[:128],
         "activity": {
             "commands": asStringArray(activity.get("commands"))[:MAX_ACTIVITY_LINES],
             "searches": asStringArray(activity.get("searches"))[:MAX_ACTIVITY_LINES],
             "web": asStringArray(activity.get("web"))[:MAX_ACTIVITY_LINES],
             "failures": asStringArray(activity.get("failures"))[:MAX_FAILURES],
         },
-        "nextSteps": asStringArray(record.get("nextSteps"))[:8],
-        "criticalContext": asStringArray(record.get("criticalContext"))[:16],
+        "nextSteps": asStringArray(record.get("nextSteps"))[:64],
+        "criticalContext": asStringArray(record.get("criticalContext"))[:128],
     }
+
+
+def coercePreservedTrace(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    traces = []
+    for entry in value:
+        record = asRecord(entry)
+        if not record:
+            continue
+        source = asRecord(record.get("sourceRange")) or {}
+        traces.append(
+            {
+                "sourceRange": {
+                    "generation": source.get("generation") if isinstance(source.get("generation"), int) else 1,
+                    "start": source.get("start") if isinstance(source.get("start"), int) else 0,
+                    "end": source.get("end") if isinstance(source.get("end"), int) else 0,
+                    "messageCount": source.get("messageCount") if isinstance(source.get("messageCount"), int) else 0,
+                    "createdAt": source.get("createdAt") if isinstance(source.get("createdAt"), str) else now_iso(),
+                },
+                "entryCount": record.get("entryCount") if isinstance(record.get("entryCount"), int) else 0,
+                "includedEntryCount": record.get("includedEntryCount") if isinstance(record.get("includedEntryCount"), int) else 0,
+                "omittedEntryCount": record.get("omittedEntryCount") if isinstance(record.get("omittedEntryCount"), int) else 0,
+                "tokenEstimate": record.get("tokenEstimate") if isinstance(record.get("tokenEstimate"), int) else 0,
+                "tokenBudget": record.get("tokenBudget") if isinstance(record.get("tokenBudget"), int) else 0,
+                "truncated": bool(record.get("truncated")),
+                "content": record.get("content") if isinstance(record.get("content"), str) else "",
+            }
+        )
+    return traces
 
 
 def coerceRepairedCheckpoint(value: Any) -> dict[str, Any] | None:

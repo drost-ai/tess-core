@@ -38,23 +38,27 @@ def estimateRawContextPressure(session: dict[str, Any], now: datetime | None = N
     }
 
 
-def decideDurableCheckpoint(session: dict[str, Any], pressure: dict[str, Any] | None = None) -> dict[str, Any]:
+def decideDurableCheckpoint(session: dict[str, Any], pressure: dict[str, Any] | None = None, tokenLimit: int | None = None) -> dict[str, Any]:
     raw_context = pressure or estimateRawContextPressure(session)
+    limit = _safe_int(tokenLimit) or RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT
     if not raw_context.get("hasDurableCheckpoint"):
-        if _safe_int(raw_context.get("rawTokenEstimate")) >= RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT:
+        if _safe_int(raw_context.get("rawTokenEstimate")) >= limit:
             return _checkpoint(
                 "auto_raw_hard_limit",
                 "raw session token estimate exceeded the durable checkpoint token limit",
                 raw_context,
+                limit,
             )
-    elif _safe_int(raw_context.get("rawTokenDeltaSinceLastCheckpoint")) >= RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT:
+    elif _safe_int(raw_context.get("rawTokenDeltaSinceLastCheckpoint")) >= limit:
         return _checkpoint(
             "auto_raw_hard_limit",
             "raw session token delta since the last durable checkpoint exceeded the token limit",
             raw_context,
+            limit,
         )
     return {
         "shouldCheckpoint": False,
+        "tokenLimit": limit,
         "reason": "raw token delta since the last durable checkpoint is below the checkpoint token limit"
         if raw_context.get("hasDurableCheckpoint")
         else "raw session pressure is below the durable checkpoint token limit",
@@ -62,11 +66,12 @@ def decideDurableCheckpoint(session: dict[str, Any], pressure: dict[str, Any] | 
     }
 
 
-def _checkpoint(trigger: str, reason: str, raw_context: dict[str, Any]) -> dict[str, Any]:
+def _checkpoint(trigger: str, reason: str, raw_context: dict[str, Any], token_limit: int) -> dict[str, Any]:
     return {
         "shouldCheckpoint": True,
         "trigger": trigger,
         "reason": reason,
+        "tokenLimit": token_limit,
         "rawContext": raw_context,
     }
 

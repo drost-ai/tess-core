@@ -132,7 +132,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertIn("Archived working context", prompt_context)
             self.assertIn("active_goals:", prompt_context)
             memory = run(core.loadProjectMemoryRecords(str(workspace)))
-            self.assertTrue(any(record["source"] == "compaction" and "Use fixed Codex Spark" in record["text"] for record in memory))
+            self.assertTrue(any(record["source"] == "compaction" and "Use fixed Codex Spark compaction" in record["text"] for record in memory))
 
             bridged = dict(session)
             bridged["metadata"] = {"compactionState": {"compactedThroughMessageIndex": 13}}
@@ -312,7 +312,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             expected_id = core.durableMemoryId("workflow", "Use fixed Codex Spark compaction model selection")
             self.assertEqual(workflow["id"], expected_id)
             self.assertEqual(sum(1 for record in second if record["id"] == expected_id), 1)
-            retrieved = run(core.retrieveRelevantDurableMemory({"session": session, "prompt": "Codex Spark compaction"}))
+            retrieved = run(core.retrieveRelevantDurableMemory({"session": session, "prompt": "fixed Codex Spark compaction"}))
             prompt = core.renderRetrievedMemoryPrompt(retrieved)
             self.assertIn("<retrieved_memory>", prompt)
             self.assertIn("[workflow | compaction | agent_core/compaction.py]", prompt)

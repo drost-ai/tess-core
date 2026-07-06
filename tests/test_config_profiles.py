@@ -44,6 +44,21 @@ class ConfigProfileTests(AgentCoreTestCase):
                 os.environ["DEEPINFRA_API_KEY"] = prev_key
             self.restore_home(root, previous)
 
+    def test_default_system_prompt_layers_between_settings_and_engine_fallback(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], "product prompt")
+
+            (home / "settings.json").write_text(json.dumps({"systemPrompt": "settings prompt"}), encoding="utf-8")
+            settings_config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            self.assertEqual(settings_config["systemPrompt"], "settings prompt")
+
+            explicit_config = run(core.resolveConfig({"runtimeHome": str(home), "systemPrompt": "explicit prompt", "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            self.assertEqual(explicit_config["systemPrompt"], "explicit prompt")
+        finally:
+            self.restore_home(root, previous)
+
     def test_explicit_profile_uses_own_default_model_not_top_level_model(self):
         root, home, workspace, previous = self.temp_context()
         previous_env = {
@@ -89,6 +104,51 @@ class ConfigProfileTests(AgentCoreTestCase):
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
+            self.restore_home(root, previous)
+
+    def test_provider_profile_token_limits_timeouts_and_compaction_binding(self):
+        root, home, workspace, previous = self.temp_context()
+        prev_key = os.environ.get("LOCAL_API_KEY")
+        os.environ["LOCAL_API_KEY"] = "local-token"
+        try:
+            (home / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "provider": "local-small",
+                        "compactionProviderProfile": "local-small",
+                        "providerProfiles": {
+                            "local-small": {
+                                "kind": "openai",
+                                "apiMode": "chat_completions",
+                                "baseUrl": "http://127.0.0.1:8080/v1",
+                                "defaultModel": "llamacpp",
+                                "auth": {"kind": "custom_bearer", "envVar": "LOCAL_API_KEY"},
+                                "maxContextLength": 32_000,
+                                "maxOutputTokens": 4_096,
+                                "compactionThresholdTokens": 28_000,
+                                "compactionOutputTokens": 3_000,
+                                "requestStartTimeoutMs": 7_000,
+                                "streamIdleTimeoutMs": 8_000,
+                            }
+                        },
+                    }
+                )
+            )
+            config = run(core.resolveConfig({}, str(workspace)))
+            profile = config["providerProfile"]
+            self.assertEqual(profile["maxContextLength"], 32_000)
+            self.assertEqual(profile["maxOutputTokens"], 4_096)
+            self.assertEqual(profile["compactionThresholdTokens"], 28_000)
+            self.assertEqual(profile["compactionOutputTokens"], 3_000)
+            self.assertEqual(profile["requestStartTimeoutMs"], 7_000)
+            self.assertEqual(profile["streamIdleTimeoutMs"], 8_000)
+            self.assertEqual(config["compactionProviderProfile"]["profileName"], "local-small")
+            self.assertEqual(config["compactionProviderProfile"]["openaiToken"], "local-token")
+        finally:
+            if prev_key is None:
+                os.environ.pop("LOCAL_API_KEY", None)
+            else:
+                os.environ["LOCAL_API_KEY"] = prev_key
             self.restore_home(root, previous)
 
     def test_provider_profile_effort_level_is_used_as_route_default(self):

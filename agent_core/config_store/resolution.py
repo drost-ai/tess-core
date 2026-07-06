@@ -102,11 +102,16 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         {"requestedOpenAiApiMode": requested_openai_api_mode, "openaiBaseUrl": openai_base_url},
     )
     resolved_provider = selected_profile["kind"]
-    openai_api_mode = selected_profile.get("apiMode") if resolved_provider == "openai" else DEFAULT_OPENAI_API_MODE
     resolved_model = normalizeModelName(
         requested_model_input or selected_profile.get("defaultModel") or getDefaultModelForProvider(resolved_provider),
         resolved_provider,
     )
+    selected_profile = resolveProviderProfile(
+        selected_name,
+        provider_profiles.get(selected_name) or BUILTIN_PROVIDER_PROFILES[DEFAULT_PROVIDER_PROFILE_NAME],
+        {"requestedOpenAiApiMode": requested_openai_api_mode, "openaiBaseUrl": openai_base_url, "model": resolved_model},
+    )
+    openai_api_mode = selected_profile.get("apiMode") if resolved_provider == "openai" else DEFAULT_OPENAI_API_MODE
 
     requested_compaction_provider = normalizeProviderName(
         os.environ.get("TESS_COMPACTION_PROVIDER")
@@ -159,6 +164,40 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         **selected_profile.get("headers", {}),
         **(anthropic_headers if resolved_provider == "anthropic" else {}),
     }
+    compaction_provider_profile = resolveCompactionProviderProfileBinding(
+        {
+            "requestedProfileName": os.environ.get("TESS_COMPACTION_PROVIDER_PROFILE")
+            or settings_env.get("TESS_COMPACTION_PROVIDER_PROFILE")
+            or merged_settings.get("compactionProviderProfile"),
+            "providerProfiles": provider_profiles,
+            "settingsEnv": settings_env,
+            "openaiStoredToken": openai_stored_token,
+            "openaiEnvToken": openai_env_token,
+            "openaiCodexToken": openai_codex_token,
+            "explicitApiKey": explicit_api_key,
+            "explicitAuthToken": explicit_auth_token,
+            "storedAnthropicApiKey": stored_anthropic_api_key,
+            "storedAnthropicAuthToken": stored_anthropic_auth_token,
+            "anthropicHeaders": anthropic_headers,
+        }
+    )
+    compaction_verification_provider_profile = resolveCompactionProviderProfileBinding(
+        {
+            "requestedProfileName": os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
+            or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
+            or merged_settings.get("compactionVerificationProviderProfile"),
+            "providerProfiles": provider_profiles,
+            "settingsEnv": settings_env,
+            "openaiStoredToken": openai_stored_token,
+            "openaiEnvToken": openai_env_token,
+            "openaiCodexToken": openai_codex_token,
+            "explicitApiKey": explicit_api_key,
+            "explicitAuthToken": explicit_auth_token,
+            "storedAnthropicApiKey": stored_anthropic_api_key,
+            "storedAnthropicAuthToken": stored_anthropic_auth_token,
+            "anthropicHeaders": anthropic_headers,
+        }
+    )
     anthropic_creds = _resolve_anthropic_credentials(
         {
             "profile": selected_profile,
@@ -188,7 +227,13 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     agents = {**clone(BUILTIN_AGENTS), **(merged_settings.get("agents") or {}), **(_parse_inline_agents(options.get("agents")) or {})}
     assistant_name = options.get("assistantName") or merged_settings.get("assistantName") or DEFAULT_ASSISTANT_NAME
     assistant_description = options.get("assistantDescription") or merged_settings.get("assistantDescription") or DEFAULT_ASSISTANT_DESCRIPTION
-    system_prompt = options.get("systemPrompt") or merged_settings.get("systemPrompt") or buildDefaultSystemPrompt({"assistantName": assistant_name, "assistantDescription": assistant_description})
+    system_prompt = (
+        options.get("systemPrompt")
+        or merged_settings.get("systemPrompt")
+        or options.get("defaultSystemPrompt")
+        or merged_settings.get("defaultSystemPrompt")
+        or buildDefaultSystemPrompt({"assistantName": assistant_name, "assistantDescription": assistant_description})
+    )
     settings_sandbox = merged_settings.get("sandbox") if isinstance(merged_settings.get("sandbox"), dict) else {}
     options_sandbox = options.get("sandbox") if isinstance(options.get("sandbox"), dict) else {}
     sandbox_config = normalizeSandboxConfig({**settings_sandbox, **options_sandbox}, cwd)
@@ -211,6 +256,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "providerProfile": selected_profile,
         "providerProfiles": {name: resolveProviderProfile(name, record) for name, record in provider_profiles.items()},
         "compactionProvider": resolved_compaction_provider,
+        "compactionProviderProfile": compaction_provider_profile,
         "apiKey": anthropic_creds.get("apiKey"),
         "authToken": anthropic_creds.get("authToken"),
         "customHeaders": custom_headers,
@@ -223,6 +269,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "compactionModel": resolved_compaction_model,
         "compactionVerificationProvider": resolved_verification_provider,
         "compactionVerificationModel": resolved_verification_model,
+        "compactionVerificationProviderProfile": compaction_verification_provider_profile,
         "effort": normalizeEffortLevel(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or getDefaultEffortForProvider(resolved_provider),
         "assistantName": assistant_name,
         "assistantDescription": assistant_description,

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from ..provider_token_budget import (
+    normalizePositiveInteger,
+    resolveCompactionPolicy,
+    resolveProviderProfileTokenLimits,
+)
+
+from .defaults import normalizeEffortLevel
 from .shared import *
 
 def resolveOpenAiApiMode(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
@@ -35,6 +42,26 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         if record.get("kind") == "openai"
         else None
     )
+    token_limits = resolveProviderProfileTokenLimits(
+        {
+            "profileName": name,
+            "profile": record,
+            "apiMode": api_mode,
+            "model": overrides.get("model"),
+        }
+    )
+    compaction_policy = resolveCompactionPolicy(
+        {
+            "profileName": name,
+            "kind": record.get("kind"),
+            "apiMode": api_mode,
+            "model": overrides.get("model") or record.get("defaultModel"),
+            "maxContextLength": token_limits["maxContextLength"],
+            "maxOutputTokens": token_limits["maxOutputTokens"],
+            "compactionThresholdTokens": record.get("compactionThresholdTokens"),
+            "compactionOutputTokens": record.get("compactionOutputTokens"),
+        }
+    )
     return {
         "name": name,
         "kind": record["kind"],
@@ -46,6 +73,18 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "supportsVision": record.get("supportsVision"),
         "capabilities": clone(record.get("capabilities") or {}),
         "effortLevel": record.get("effortLevel") or record.get("effort"),
+        "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
+        "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
+        "openAiChatReasoning": clone(record.get("openAiChatReasoning") or {}),
+        "openAiChatReasoningSummary": _normalize_openai_reasoning_summary(record.get("openAiChatReasoningSummary")),
+        "anthropicThinkingDisplay": _normalize_anthropic_thinking_display(record.get("anthropicThinkingDisplay")),
+        "chatTemplateKwargs": clone(record.get("chatTemplateKwargs") or {}),
+        "requestStartTimeoutMs": normalizePositiveInteger(record.get("requestStartTimeoutMs")),
+        "streamIdleTimeoutMs": normalizePositiveInteger(record.get("streamIdleTimeoutMs")),
+        "maxContextLength": token_limits["maxContextLength"],
+        "maxOutputTokens": token_limits["maxOutputTokens"],
+        "compactionThresholdTokens": compaction_policy["compactionThresholdTokens"],
+        "compactionOutputTokens": compaction_policy["compactionOutputTokens"],
         "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
         "limits": clone(record.get("limits") or {}),
         "description": record.get("description"),
@@ -92,11 +131,11 @@ def ensureProviderForModelSelection(provider: str | None, model: str | None, fal
 def modelSupportsEffort(provider: str, model: str) -> bool:
     normalized = model.strip().lower()
     if provider == "anthropic":
-        return "opus-4-6" in normalized or "sonnet-4-6" in normalized
+        return "opus-4-" in normalized or "sonnet-4-" in normalized
     return normalized.startswith("gpt-5.4") or normalized.startswith("gpt-5")
 
 def modelSupportsMaxEffort(provider: str, model: str) -> bool:
-    return provider == "anthropic" and "opus-4-6" in model.strip().lower()
+    return provider == "anthropic" and "opus-4-" in model.strip().lower()
 
 def modelSupportsXhighEffort(provider: str, model: str) -> bool:
     return provider == "openai" and model.strip().lower().startswith("gpt-5.4")
@@ -148,10 +187,77 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         "supportsVision": record.get("supportsVision"),
         "capabilities": clone(record.get("capabilities") or {}),
         "effortLevel": (record.get("effortLevel") or record.get("effort") or "").strip().lower() or None,
+        "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
+        "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
+        "openAiChatReasoning": _normalize_object_record(record.get("openAiChatReasoning")),
+        "openAiChatReasoningSummary": _normalize_openai_reasoning_summary(record.get("openAiChatReasoningSummary")),
+        "anthropicThinkingDisplay": _normalize_anthropic_thinking_display(record.get("anthropicThinkingDisplay")),
+        "chatTemplateKwargs": _normalize_object_record(record.get("chatTemplateKwargs")),
+        "requestStartTimeoutMs": normalizePositiveInteger(record.get("requestStartTimeoutMs")),
+        "streamIdleTimeoutMs": normalizePositiveInteger(record.get("streamIdleTimeoutMs")),
+        "maxContextLength": normalizePositiveInteger(record.get("maxContextLength")),
+        "maxOutputTokens": normalizePositiveInteger(record.get("maxOutputTokens")),
+        "compactionThresholdTokens": normalizePositiveInteger(record.get("compactionThresholdTokens")),
+        "compactionOutputTokens": normalizePositiveInteger(record.get("compactionOutputTokens")),
         "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
         "limits": clone(record.get("limits") or {}),
         "description": (record.get("description") or "").strip() or None,
     }
+
+def resolveCompactionProviderProfileBinding(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
+    args = {**(args or {}), **kwargs}
+    profile_name = normalizeProviderProfileName(args.get("requestedProfileName"))
+    if not profile_name:
+        return None
+    provider_profiles = args.get("providerProfiles") or {}
+    record = provider_profiles.get(profile_name)
+    if not record:
+        available = ", ".join(sorted(provider_profiles))
+        raise ValueError(f'Unknown compaction provider profile "{profile_name}". Available profiles: {available}')
+    profile = resolveProviderProfile(profile_name, record)
+    if profile.get("kind") == "openai":
+        return {
+            "profileName": profile_name,
+            "profile": profile,
+            "openaiToken": _resolve_openai_credential(
+                {
+                    "profile": profile,
+                    "settingsEnv": args.get("settingsEnv") or {},
+                    "storedToken": args.get("openaiStoredToken"),
+                    "envDefaultToken": args.get("openaiEnvToken"),
+                    "codexToken": args.get("openaiCodexToken"),
+                }
+            ),
+            "customHeaders": clone(profile.get("headers") or {}),
+        }
+    credentials = _resolve_anthropic_credentials(
+        {
+            "profile": profile,
+            "explicitApiKey": args.get("explicitApiKey"),
+            "explicitAuthToken": args.get("explicitAuthToken"),
+            "storedApiKey": args.get("storedAnthropicApiKey"),
+            "storedAuthToken": args.get("storedAnthropicAuthToken"),
+            "settingsEnv": args.get("settingsEnv") or {},
+        }
+    )
+    return {
+        "profileName": profile_name,
+        "profile": profile,
+        "apiKey": credentials.get("apiKey"),
+        "authToken": credentials.get("authToken"),
+        "customHeaders": {**clone(profile.get("headers") or {}), **clone(args.get("anthropicHeaders") or {})},
+    }
+
+def _normalize_object_record(value: Any) -> dict[str, Any] | None:
+    return clone(value) if isinstance(value, dict) else None
+
+def _normalize_openai_reasoning_summary(value: Any) -> str | None:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"auto", "concise", "detailed"} else None
+
+def _normalize_anthropic_thinking_display(value: Any) -> str | None:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"auto", "summarized", "hidden"} else None
 
 def _get_stored_anthropic_auth_token(auth: dict[str, Any] | None) -> str | None:
     if not auth:

@@ -74,7 +74,7 @@ def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, An
         _mark_last_text_block_for_cache(system_blocks, anthropicCacheControl(config, request, options))
     payload: dict[str, Any] = {
         "model": request["model"],
-        "max_tokens": 16384,
+        "max_tokens": _resolve_max_output_tokens(request),
         "system": system_blocks,
         "messages": [{"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))} for message in request.get("messages", [])],
     }
@@ -98,6 +98,17 @@ def _mark_last_text_block_for_cache(blocks: list[dict[str, Any]], cache_control:
             blocks[index] = {**block, "cache_control": dict(cache_control)}
             return
     blocks.append({"type": "text", "text": "", "cache_control": dict(cache_control)})
+
+def _resolve_max_output_tokens(request: dict[str, Any]) -> int:
+    for key in ("maxOutputTokens", "max_output_tokens", "maxTokens", "max_tokens"):
+        value = request.get(key)
+        try:
+            parsed = int(float(str(value).strip())) if str(value).strip() else 0
+        except Exception:
+            continue
+        if parsed > 0:
+            return parsed
+    return 16384
 
 def _normalize_anthropic_tool_definition(tool: Any) -> dict[str, Any]:
     if not isinstance(tool, dict):

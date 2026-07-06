@@ -55,6 +55,7 @@ def buildSynthesizedWorkingContextDocument(args: dict[str, Any]) -> dict[str, An
                 "workingContext": args["synthesized"]["workingContext"],
                 "model": args["synthesized"]["model"],
             },
+            "preservedTraceEvidence": args["synthesized"].get("evidence"),
         }
     )
 
@@ -95,8 +96,25 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
         "plan": args.get("latestPlan") or previous.get("plan"),
         "todos": {"open": open_todos, "completed": completed_todos},
         "activity": working_context["activity"],
+        "preservedTrace": [
+            *(previous.get("preservedTrace") or []),
+            *([buildPreservedTraceRecord(args["sourceRange"], args["preservedTraceEvidence"])] if args.get("preservedTraceEvidence") else []),
+        ][-12:],
         "nextSteps": working_context["nextSteps"],
         "criticalContext": working_context["criticalContext"],
+    }
+
+
+def buildPreservedTraceRecord(sourceRange: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sourceRange": sourceRange,
+        "entryCount": evidence.get("entryCount"),
+        "includedEntryCount": evidence.get("includedEntryCount"),
+        "omittedEntryCount": evidence.get("omittedEntryCount"),
+        "tokenEstimate": evidence.get("tokenEstimate"),
+        "tokenBudget": evidence.get("tokenBudget"),
+        "truncated": evidence.get("truncated"),
+        "content": evidence.get("transcript"),
     }
 
 

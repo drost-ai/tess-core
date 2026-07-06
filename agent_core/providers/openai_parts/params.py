@@ -20,7 +20,7 @@ def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any
     if request.get("effort"):
         params["reasoning"] = {"effort": request["effort"]}
     if not is_codex:
-        params["max_output_tokens"] = 16384
+        params["max_output_tokens"] = _resolve_max_output_tokens(request)
     tools = _convert_tools(request.get("tools", []))
     if tools:
         params["tools"] = tools
@@ -32,7 +32,7 @@ def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, opti
     params: dict[str, Any] = {
         "model": request["model"],
         "messages": convertMessagesToChatCompletions(request.get("system", ""), request.get("messages", [])),
-        "max_tokens": 16384,
+        "max_tokens": _resolve_max_output_tokens(request),
         "stream": True,
         "stream_options": {"include_usage": True},
     }
@@ -127,6 +127,17 @@ def _merge_request_options(
     if extra_body:
         merged["extra_body"] = extra_body
     return merged
+
+def _resolve_max_output_tokens(request: dict[str, Any]) -> int:
+    for key in ("maxOutputTokens", "max_output_tokens", "maxTokens", "max_tokens"):
+        value = request.get(key)
+        try:
+            parsed = int(float(str(value).strip())) if str(value).strip() else 0
+        except Exception:
+            continue
+        if parsed > 0:
+            return parsed
+    return 16384
 
 def resolveOpenAiBaseUrl(mode: str, baseUrl: str | None) -> str | None:
     trimmed = baseUrl.strip() if isinstance(baseUrl, str) else ""

@@ -57,13 +57,15 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
     retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}
     reactive_attempt = max(0, int(args.get("reactiveAttempt") if args.get("reactiveAttempt") is not None else (1 if args.get("aggressive") else 0)))
     pressure = classifyContextPressure({"session": session, "messages": messages})
-    pressure_level = classifyContextReliefPressure(pressure, reactive_attempt)
+    token_limit = resolveCompactionPolicy((args.get("config") or {}).get("providerProfile") or {}).get("compactionThresholdTokens")
+    pressure_level = classifyContextReliefPressure(pressure, reactive_attempt, tokenLimit=token_limit)
     modes = chooseContextReliefModes(
         {
             "session": session,
             "config": args.get("config") or {},
             "pressure": pressure,
             "pressureLevel": pressure_level,
+            "tokenLimit": token_limit,
             "retrievedMemory": retrieved_memory,
             "aggressive": args.get("aggressive"),
             "reactiveAttempt": reactive_attempt,
@@ -131,11 +133,12 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
     session = args["session"]
     pressure = args["pressure"]
     pressure_level = args["pressureLevel"]
+    token_limit = _token_limit_or_default(args.get("tokenLimit"))
     retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}
     repeated_file_tokens = pressure["categories"]["repeatedFileContentTokens"]
     strong_session_memory = len(retrieved_memory.get("records") or []) >= 4 and int(retrieved_memory.get("tokenEstimate") or 0) >= 500
     aggressive = bool(args.get("aggressive"))
-    scheduled = pressure["totalTokenEstimate"] >= RELIEF_CONTEXT_TOKEN_LIMIT
+    scheduled = pressure["totalTokenEstimate"] >= token_limit
     reactive = aggressive or int(args.get("reactiveAttempt") or 0) >= 1
     if not scheduled and not reactive:
         return []
@@ -274,10 +277,10 @@ def supportsApiMicrocompact(config: dict[str, Any]) -> bool:
     return config.get("provider") in {"openai", "anthropic"}
 
 
-def classifyContextReliefPressure(pressure: dict[str, Any], reactiveAttempt: int) -> str:
+def classifyContextReliefPressure(pressure: dict[str, Any], reactiveAttempt: int, tokenLimit: int | None = None) -> str:
     if (
         reactiveAttempt >= 2
-        or pressure["totalTokenEstimate"] >= RELIEF_CONTEXT_TOKEN_LIMIT
+        or pressure["totalTokenEstimate"] >= _token_limit_or_default(tokenLimit)
     ):
         return "critical"
     if reactiveAttempt >= 1:
@@ -294,3 +297,11 @@ def isContextPressureRelieved(pressure: dict[str, Any], originalPressureLevel: s
     if originalPressureLevel == "high":
         return current == "low"
     return True
+
+
+def _token_limit_or_default(value: Any) -> int:
+    try:
+        parsed = int(value or 0)
+    except Exception:
+        parsed = 0
+    return parsed if parsed > 0 else RELIEF_CONTEXT_TOKEN_LIMIT

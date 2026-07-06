@@ -39,6 +39,13 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
         f"Evidence token estimate: {evidence['tokenEstimate']}",
         f"Evidence truncated: {str(evidence['truncated']).lower()}",
         "",
+        "Compaction preservation policy:",
+        f"- Source token estimate: {args.get('sourceTokenEstimate')}",
+        f"- Compaction output budget: {args.get('outputTokenBudget')}",
+        f"- Target preserved checkpoint tokens: about {args.get('targetPreservationTokens')} (10% of compacted source)",
+        "- Use the available budget to preserve trace fidelity. Do not produce a tiny executive summary when the source range is large.",
+        "- If you cannot preserve the important trace details within the output budget, set shouldCheckpoint to false and explain the missing fidelity.",
+        "",
         "Exact current todo snapshot:",
         json.dumps(todo_snapshot, indent=2, ensure_ascii=False),
         "",
@@ -54,8 +61,9 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
         "Important guidance:",
         "- The recent raw transcript after the cutoff remains available to the live agent separately. Focus this checkpoint on compacted history and durable continuation context.",
         "- Keep only still-relevant blockers. Do not carry forward stale grep failures, formatting misses, or completed commit/push requests unless they remain actionable.",
+        "- Agentic tool traces often contain the only durable reasoning path. Preserve useful failed attempts with their failure reason, exact commands/payloads, target identifiers, artifact paths, current hypotheses, and the next concrete action when they remain relevant.",
         "- Prefer current objectives over superseded earlier asks.",
-        "- Treat the todo snapshot and latest saved plan state as authoritative.",
+        "- Treat the todo snapshot, active task, and latest saved plan state as authoritative.",
         "- Return JSON only.",
     ]
     if args.get("previousError"):
@@ -96,6 +104,13 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
         f"Evidence token estimate: {evidence['tokenEstimate']}",
         f"Evidence truncated: {str(evidence['truncated']).lower()}",
         "",
+        "Compaction preservation policy:",
+        f"- Source token estimate: {args.get('sourceTokenEstimate')}",
+        f"- Compaction output budget: {args.get('outputTokenBudget')}",
+        f"- Target preserved checkpoint tokens: about {args.get('targetPreservationTokens')} (10% of compacted source)",
+        "- Reject or repair checkpoints that over-compress the source into a tiny summary.",
+        "- A valid checkpoint should use enough of the available budget to preserve goals, decisions, evidence, commands, outputs, failures, artifacts, and chronology needed for continuation.",
+        "",
         "Latest saved plan state:",
         json.dumps(args.get("latestPlan"), indent=2, ensure_ascii=False),
         "",
@@ -118,7 +133,10 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
         "Important guidance:",
         "- Reject or repair checkpoints that carry stale goals, stale blockers, stale commit/push asks, or incorrect next steps.",
         "- Prefer the current active user goal and durable implementation state.",
+        "- Reject or repair checkpoints that flatten an active agentic trace into a vague summary without the current path, material failed attempts, exact commands/payloads/artifact paths, and next concrete step.",
+        "- Reject or repair checkpoints that omit important trace evidence merely to be concise.",
         "- If you repair, return a fully repaired checkpoint in repairedCheckpoint.",
+        "- If you cannot provide a fully repaired checkpoint, return reject instead of repair.",
         "- Return JSON only.",
     ]
     if args.get("previousError"):
@@ -185,8 +203,28 @@ def renderWorkingContextPromptContext(context: dict[str, Any]) -> str:
     appendPromptList(lines, "recent_failures", activity.get("failures") or [])
     appendPromptList(lines, "next_steps", context.get("nextSteps") or [])
     appendPromptList(lines, "critical_context", context.get("criticalContext") or [])
+    appendPreservedTrace(lines, context)
     lines.append("</working_context>")
     return "\n".join(lines)
+
+
+def appendPreservedTrace(lines: list[str], context: dict[str, Any]) -> None:
+    traces = context.get("preservedTrace") or []
+    if not isinstance(traces, list) or not traces:
+        return
+    lines.append("preserved_trace:")
+    for trace in traces:
+        if not isinstance(trace, dict):
+            continue
+        source_range = trace.get("sourceRange") or {}
+        lines.append(
+            f"<trace source_start=\"{source_range.get('start')}\" source_end=\"{source_range.get('end')}\" "
+            f"messages=\"{source_range.get('messageCount')}\" tokens=\"{trace.get('tokenEstimate')}\" "
+            f"included_entries=\"{trace.get('includedEntryCount')}\" omitted_entries=\"{trace.get('omittedEntryCount')}\" "
+            f"truncated=\"{str(bool(trace.get('truncated'))).lower()}\">"
+        )
+        lines.append(str(trace.get("content") or ""))
+        lines.append("</trace>")
 
 
 def appendProjectFactsSection(lines: list[str], context: dict[str, Any]) -> None:

@@ -56,6 +56,18 @@ class ProviderProfile(TypedDict, total=False):
     effortLevel: str | None
     supportsVision: bool | None
     capabilities: dict[str, Any]
+    maxContextLength: int
+    maxOutputTokens: int
+    compactionThresholdTokens: int
+    compactionOutputTokens: int
+    reasoningEffortEnabled: bool | None
+    reasoningEffort: str | None
+    openAiChatReasoning: dict[str, Any]
+    openAiChatReasoningSummary: str | None
+    anthropicThinkingDisplay: str | None
+    chatTemplateKwargs: dict[str, Any]
+    requestStartTimeoutMs: int | None
+    streamIdleTimeoutMs: int | None
     requestOptions: dict[str, Any]
     limits: dict[str, Any]
 
@@ -70,6 +82,7 @@ class SettingsRecord(TypedDict, total=False):
     assistantName: str
     assistantDescription: str
     systemPrompt: str
+    defaultSystemPrompt: str
     appendSystemPrompt: str
     tools: list[str]
     allowedTools: list[str]
@@ -79,8 +92,10 @@ class SettingsRecord(TypedDict, total=False):
     env: dict[str, str]
     compactionProvider: str
     compactionModel: str
+    compactionProviderProfile: str
     compactionVerificationProvider: str
     compactionVerificationModel: str
+    compactionVerificationProviderProfile: str
     screenMode: str
     openaiApiMode: OpenAiApiMode
     openaiBaseUrl: str
@@ -116,8 +131,10 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     providerProfiles: dict[str, ProviderProfile]
     compactionProvider: str | None
     compactionModel: str | None
+    compactionProviderProfile: dict[str, Any] | None
     compactionVerificationProvider: str | None
     compactionVerificationModel: str | None
+    compactionVerificationProviderProfile: dict[str, Any] | None
     apiKey: str | None
     authToken: str | None
     customHeaders: dict[str, str]

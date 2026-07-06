@@ -64,6 +64,10 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         )
         if compacted:
             continue
+        budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
+        compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
+        request = _apply_provider_token_budget(request, budget, config)
+        prepared_request = {"request": request, "continuity": request_context, "reactiveAttempt": reactive_attempt}
         recordPreflightTokenMeasurement(session, measurement)
         _safe_emit(
             runtime,
@@ -76,6 +80,15 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "source": measurement["source"],
                 "base_input_tokens": measurement.get("baseInputTokens"),
                 "safety_margin_tokens": measurement.get("safetyMarginTokens"),
+                "output_budget_safety_margin_tokens": budget.get("safetyMarginTokens"),
+                "max_context_length": budget.get("maxContextLength"),
+                "compaction_threshold_tokens": compaction_policy.get("compactionThresholdTokens"),
+                "compaction_output_tokens": compaction_policy.get("compactionOutputTokens"),
+                "configured_max_output_tokens": budget.get("configuredMaxOutputTokens"),
+                "effective_max_output_tokens": budget.get("effectiveMaxOutputTokens"),
+                "remaining_output_tokens": budget.get("remainingOutputTokens"),
+                "output_budget_clamped": budget.get("clamped"),
+                "min_useful_output_tokens": budget.get("minUsefulOutputTokens"),
                 "continuity_pressure": request_context.get("pressure"),
                 "continuity_relief": request_context.get("relief"),
                 "retrieved_memory_count": len((request_context.get("retrievedMemory") or {}).get("records", [])),
@@ -109,18 +122,43 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         runtime=runtime,
         session_id=session["id"],
     )
-    return {
-        "request": {
-            "model": active_model,
-            "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
-            "sessionId": session["id"],
-            "system": system,
-            "messages": request_context["messages"],
-            "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
-        },
-        "continuity": request_context,
-        "reactiveAttempt": reactive_attempt,
+    request = {
+        "model": active_model,
+        "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
+        "sessionId": session["id"],
+        "system": system,
+        "messages": request_context["messages"],
+        "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
     }
+    measurement = await measureRequestInputTokens({"config": config, "request": request, "session": session, "abortSignal": runtime.get("abortSignal")})
+    budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
+    recordPreflightTokenMeasurement(session, measurement)
+    return {"request": _apply_provider_token_budget(request, budget, config), "continuity": request_context, "reactiveAttempt": reactive_attempt}
+
+
+def _apply_provider_token_budget(request: dict[str, Any], budget: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    if budget.get("insufficient"):
+        raise createProviderRequestError(
+            createProviderFailureRecord(
+                {
+                    "provider": config.get("provider"),
+                    "providerLabel": config.get("providerProfileName"),
+                    "phase": "request_build",
+                    "category": "client_request",
+                    "retryable": False,
+                    "attempt": 1,
+                    "hadAssistantOutput": False,
+                    "hadToolUse": False,
+                    "rawMessage": (
+                        f"Provider profile '{config.get('providerProfileName')}' has maxContextLength={budget.get('maxContextLength')}, "
+                        f"estimated input tokens={budget.get('estimatedInputTokens')}, safety margin={budget.get('safetyMarginTokens')}, "
+                        f"and only {budget.get('remainingOutputTokens')} output tokens remaining. "
+                        f"At least {budget.get('minUsefulOutputTokens')} output tokens are required before dispatch."
+                    ),
+                }
+            )
+        )
+    return {**request, "maxOutputTokens": budget.get("effectiveMaxOutputTokens")}
 
 
 def _dynamic_context_belongs_in_messages(config: dict[str, Any]) -> bool:

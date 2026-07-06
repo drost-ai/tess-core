@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from .shared import *
+from ..provider_timeouts import resolveProviderTimeoutPolicy
 
 def _create_provider(config: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
+    timeout_policy = resolveProviderTimeoutPolicy({"config": config})
     if config.get("provider") == "openai":
         if not config.get("openaiToken"):
             return {"send": lambda request: _missing_openai_credential_response(config, request)}
@@ -17,11 +19,12 @@ def _create_provider(config: dict[str, Any], runtime: dict[str, Any]) -> dict[st
                 requestOptions=(config.get("providerProfile") or {}).get("requestOptions") or {},
                 runtime=runtime,
                 clientFactory=runtime.get("openaiClientFactory") or config.get("openaiClientFactory"),
+                **timeout_policy,
             )
         }
     if not config.get("apiKey") and not config.get("authToken"):
         return {"send": lambda request: _missing_anthropic_credential_response(config, request)}
-    return {"send": lambda request: sendAnthropicMessagesRequest(config=config, request=request, runtime=runtime)}
+    return {"send": lambda request: sendAnthropicMessagesRequest(config=config, request=request, runtime=runtime, **timeout_policy)}
 
 def _missing_openai_credential_response(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
     env_var = (((config.get("providerProfile") or {}).get("auth") or {}).get("envVar")) or "the required bearer token env var"

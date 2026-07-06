@@ -28,6 +28,7 @@
           "effort": "high",
           "model": "gpt-5.3-codex-spark",
           "provider": "openai",
+          "providerProfileName": null,
           "purpose": "synthesis",
           "selectionSource": "fixed"
         },
@@ -51,6 +52,7 @@
           "effort": "high",
           "model": "gpt-5.3-codex-spark",
           "provider": "openai",
+          "providerProfileName": null,
           "purpose": "verification",
           "selectionSource": "fixed"
         },
@@ -104,6 +106,7 @@
           "effort": "high",
           "model": "gpt-5.3-codex-spark",
           "provider": "openai",
+          "providerProfileName": null,
           "purpose": "synthesis",
           "selectionSource": "fixed"
         },
@@ -127,6 +130,7 @@
           "effort": "high",
           "model": "gpt-5.3-codex-spark",
           "provider": "openai",
+          "providerProfileName": null,
           "purpose": "verification",
           "selectionSource": "fixed"
         },

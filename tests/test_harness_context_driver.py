@@ -21,7 +21,7 @@ class HarnessContextDriverTests(AgentCoreTestCase):
             self.assertEqual(compactions[0]["result"]["qualityClassification"], "rich")
             self.assertEqual(compactions[2]["result"]["qualityClassification"], "usable")
             self.assertEqual(compactions[1]["clientCallCount"], 2)
-            self.assertIn("Use fixed Codex Spark", json.dumps(observations["durable_memory"]))
+            self.assertIn("Use fixed Codex Spark compaction", json.dumps(observations["durable_memory"]))
             self.assertTrue(any("session_memory_compaction" in item["summary"]["appliedModes"] for item in continuations))
             self.assertTrue(any("partial_compaction" in item["summary"]["appliedModes"] for item in continuations))
             self.assertIn("context_relief.applied", event_names)
