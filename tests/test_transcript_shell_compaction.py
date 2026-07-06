@@ -52,6 +52,23 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
         self.assertEqual(tool_entry["payload"]["outputs"], [read_payload_a, read_payload_b])
         self.assertNotIn("ignored", tool_entry["body"])
 
+    def test_transcript_adjacent_text_blocks_keep_paragraph_boundary(self):
+        session = {
+            "name": "Assistant",
+            "messages": [
+                {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "First update."},
+                        {"type": "text", "text": "Second update."},
+                    ],
+                }
+            ],
+        }
+
+        entries = core.buildTranscriptSnapshot(session)
+        self.assertEqual(entries[0]["body"], "First update.\n\nSecond update.")
+
     def test_transcript_plan_compaction_and_bug_command_match_reference(self):
         plan_text = "Implement shell parity.\nRun the focused tests."
         session = {

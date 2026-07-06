@@ -4,6 +4,53 @@ from tests.support.agent_core_case import *
 
 
 class ToolPayloadSearchTests(AgentCoreTestCase):
+    def test_default_glob_excludes_python_dependency_caches(self):
+        excludes = core.getDefaultGlobExcludes()
+        self.assertIn(".venv/**", excludes)
+        self.assertIn("venv/**", excludes)
+        self.assertIn("__pycache__/**", excludes)
+        self.assertIn(".gradle/**", excludes)
+
+        self.assertEqual(
+            core.filterDefaultIgnoredGlobMatches(
+                [
+                    "/repo/src/app.py",
+                    "/repo/.venv/lib/python/site-packages/pkg.py",
+                    "/repo/venv/lib/python/site-packages/pkg.py",
+                    "/repo/src/__pycache__/app.cpython-312.pyc",
+                    "/repo/.gradle/caches/modules.lock",
+                    "/repo/src/domain/model.py",
+                ]
+            ),
+            ["/repo/src/app.py", "/repo/src/domain/model.py"],
+        )
+
+    def test_glob_tool_absolute_patterns_and_root_refusal(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            plan_dir = workspace / "product-planning" / "02-offensive-ceiling"
+            plan_dir.mkdir(parents=True)
+            (plan_dir / "README.md").write_text("# Plan\n", encoding="utf-8")
+            (plan_dir / "tier1.md").write_text("# Tier 1\n", encoding="utf-8")
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}
+            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "Glob")
+
+            result = run(tool.handler({"pattern": str(plan_dir / "**" / "*"), "path": os.path.abspath(os.path.sep)}, context))
+            self.assertFalse(result.get("isError"), result.get("content"))
+            payload = json.loads(result["content"])
+            self.assertEqual(payload["pattern"], "**/*")
+            self.assertEqual(payload["path"], str(plan_dir))
+            self.assertEqual(payload["totalMatches"], 2)
+            self.assertEqual(sorted(payload["matches"]), sorted([str(plan_dir / "README.md"), str(plan_dir / "tier1.md")]))
+
+            root_result = run(tool.handler({"pattern": "**/*", "path": os.path.abspath(os.path.sep)}, context))
+            self.assertTrue(root_result.get("isError"))
+            self.assertIn("refuses to search the filesystem root", root_result["content"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_search_payload_sampling_truncation_and_artifacts_match_reference(self):
         root, home, workspace, previous = self.temp_context()
         try:
@@ -26,16 +73,16 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             self.assertEqual(glob_payload["type"], "glob")
             self.assertEqual(glob_payload["totalMatches"], 131)
             self.assertTrue(glob_payload["truncated"])
-            self.assertEqual(glob_payload["matches"][:7], [
+            self.assertEqual(glob_payload["offset"], 0)
+            self.assertEqual(glob_payload["limit"], 80)
+            self.assertEqual(glob_payload["returnedMatches"], 80)
+            self.assertEqual(glob_payload["nextOffset"], 80)
+            self.assertEqual(glob_payload["matches"][:3], [
                 "src/a/file-000.py",
-                "src/b/file-000.py",
-                "README.md",
                 "src/a/file-001.py",
-                "src/b/file-001.py",
                 "src/a/file-002.py",
-                "src/b/file-002.py",
             ])
-            self.assertEqual(len(glob_payload["matches"]), 120)
+            self.assertEqual(len(glob_payload["matches"]), 80)
             self.assertEqual(glob_payload["directoryCounts"][:3], [
                 {"directory": "src/a", "count": 80},
                 {"directory": "src/b", "count": 50},
@@ -43,7 +90,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             ])
             self.assertEqual(glob_payload["transcriptView"]["strategy"], "count_and_sample")
             self.assertEqual(glob_payload["transcriptView"]["originalLines"], 131)
-            self.assertEqual(glob_payload["transcriptView"]["returnedLines"], 120)
+            self.assertEqual(glob_payload["transcriptView"]["returnedLines"], 80)
             glob_artifact = glob_payload["artifact"]
             self.assertEqual(glob_artifact["toolName"], "Glob")
             self.assertEqual(glob_artifact["family"], "glob")
@@ -51,6 +98,12 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             self.assertEqual(glob_artifact["itemCount"], 131)
             self.assertEqual(glob_artifact["lines"], 131)
             self.assertEqual(Path(glob_artifact["filePath"]).read_text(encoding="utf-8").splitlines(), glob_matches)
+
+            next_glob_payload = run(core.shapeGlobPayload(config=payload_config, sessionId=session["id"], pattern="*.py", searchPath=str(workspace), matches=glob_matches, offset=glob_payload["nextOffset"], requestedLimit=10))
+            self.assertEqual(next_glob_payload["offset"], 80)
+            self.assertEqual(next_glob_payload["limit"], 10)
+            self.assertEqual(next_glob_payload["matches"][0], "src/b/file-000.py")
+            self.assertEqual(next_glob_payload["returnedMatches"], 10)
 
             grep_matches = [f"src/a.py:{line}:needle line {line}" for line in range(75)]
             grep_payload = run(core.shapeGrepPayload(config=payload_config, sessionId=session["id"], pattern="needle", searchPath=str(workspace), outputMode="content", matches=grep_matches, offset=10, requestedHeadLimit=0))
@@ -152,8 +205,11 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
             tool = next(tool for tool in core.createBuiltinTools() if tool.name == "WebSearch")
-            result = run(tool.handler({"query": "OpenAI Chat Completions API", "allowed_domains": ["openai.com"]}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
+            result = run(tool.handler({"query": '\\"OpenAI\\" Chat Completions API', "allowed_domains": ["openai.com"]}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(result["content"])
+            self.assertEqual(payload["provider"], "scraper")
+            self.assertEqual(payload["query"], '"OpenAI" Chat Completions API')
+            self.assertEqual(payload["raw_query"], '\\"OpenAI\\" Chat Completions API')
             self.assertEqual(payload["results"][0]["url"], "https://developers.openai.com/api/reference/chat-completions/overview")
 
             calls = {"count": 0}
@@ -172,6 +228,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             tools_module.fetch = fallback_fetch
             result = run(tool.handler({"query": "fallback test"}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(result["content"])
+            self.assertEqual(payload["fallback_reason"], "duckduckgo_empty_or_blocked")
             self.assertEqual(payload["results"][0]["url"], "https://example.com/research")
             self.assertEqual(calls["count"], 2)
         finally:

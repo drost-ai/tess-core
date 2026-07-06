@@ -1,6 +1,7 @@
 {
   "description": "Read files from disk, including partial line ranges for large text files.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "file_path": {
         "type": "string"

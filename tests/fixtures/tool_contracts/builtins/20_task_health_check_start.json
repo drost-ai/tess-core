@@ -1,6 +1,7 @@
 {
   "description": "Start a daemon-backed periodic health check for a URL or shell command.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "backoff_multiplier": {
         "type": "number"

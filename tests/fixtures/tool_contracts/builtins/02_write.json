@@ -1,6 +1,7 @@
 {
   "description": "Write full file contents to disk, creating parent directories when needed.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "content": {
         "type": "string"

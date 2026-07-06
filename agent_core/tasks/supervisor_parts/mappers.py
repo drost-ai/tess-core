@@ -102,8 +102,10 @@ def _is_related_child_agent(session: dict[str, Any], child: dict[str, Any]) -> b
 def _event_name_for_task_status(status: Any) -> str:
     if status == "completed":
         return "task.completed"
-    if status in {"failed", "stopped"}:
+    if status == "failed":
         return "task.failed"
+    if status == "stopped":
+        return "task.stopped"
     return "task.updated"
 
 

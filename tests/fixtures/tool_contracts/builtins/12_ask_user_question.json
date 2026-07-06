@@ -1,6 +1,7 @@
 {
   "description": "Ask the interactive user one or more multiple-choice questions.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "questions": {
         "maxItems": 4,

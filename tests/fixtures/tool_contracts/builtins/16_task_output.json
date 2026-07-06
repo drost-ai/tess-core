@@ -1,6 +1,7 @@
 {
   "description": "Read output from a background task. This is a pull-based inspection tool, not proactive monitoring.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "block": {
         "type": "boolean"

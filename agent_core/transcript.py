@@ -58,7 +58,8 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
             if not isinstance(block, dict):
                 continue
             if block.get("type") == "text":
-                text_buffer += str(block.get("text") or "")
+                text = str(block.get("text") or "")
+                text_buffer = f"{text_buffer.rstrip()}\n\n{text.lstrip()}" if text_buffer else text
                 continue
             flush_text()
             if block.get("type") == "tool_use":

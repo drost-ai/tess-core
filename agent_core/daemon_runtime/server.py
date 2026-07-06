@@ -6,17 +6,19 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
     await ensureBaseLayout(cwd)
     socket_path = daemonSocketPath()
     await _cleanup_stale_daemon_artifacts()
+    await rotateDaemonEventsIfOversized()
     try:
         os.remove(socket_path)
     except FileNotFoundError:
         pass
 
     subscribers: dict[str, dict[str, Any]] = {}
-    cursor = _last_daemon_event_cursor(await loadDaemonEvents())
+    cursor = await readLastDaemonEventCursor()
     daemon_epoch = str(uuid.uuid4())
     daemon_started_at = now_iso()
     daemon_phase = "recovering"
     supervisor: dict[str, Any] | None = None
+    rotation_task: asyncio.Task[Any] | None = None
 
     async def write_daemon_state(phase: str | None = None) -> None:
         nonlocal daemon_phase
@@ -63,6 +65,7 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
 
     supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
     shutdown = asyncio.Event()
+    rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(shutdown))
 
     async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         subscriber_id: str | None = None
@@ -123,6 +126,10 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
         async with server:
             await shutdown.wait()
     finally:
+        if rotation_task:
+            rotation_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await rotation_task
         await write_daemon_state("shutting_down")
         server.close()
         await server.wait_closed()
@@ -135,3 +142,11 @@ async def runTaskSupervisorDaemon(cwd: str) -> None:
                 writer.close()
         await supervisor["close"]()
         await clearDaemonState()
+
+
+async def _rotate_daemon_events_periodically(shutdown: asyncio.Event) -> None:
+    while not shutdown.is_set():
+        try:
+            await asyncio.wait_for(shutdown.wait(), timeout=5 * 60)
+        except asyncio.TimeoutError:
+            await rotateDaemonEventsIfOversized()

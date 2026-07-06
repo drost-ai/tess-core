@@ -1,6 +1,7 @@
 {
   "description": "Perform a lightweight web search and return ranked results.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "allowed_domains": {
         "items": {

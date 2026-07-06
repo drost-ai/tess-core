@@ -66,12 +66,14 @@ def _web_fetch_tool() -> ToolDefinition:
 
 def _web_search_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        query = _require_string(input.get("query"), "query")
+        raw_query = _require_string(input.get("query"), "query")
+        query = normalizeWebSearchQuery(raw_query)
         _throw_if_tool_cancelled(context)
         allowed = [item for item in input.get("allowed_domains", []) if isinstance(item, str)]
         blocked = [item for item in input.get("blocked_domains", []) if isinstance(item, str)]
         results = []
-        for result in await searchWeb(query, context.get("abortSignal")):
+        response = await searchWebResponse(query, context.get("abortSignal"))
+        for result in response["results"]:
             _throw_if_tool_cancelled(context)
             hostname = _safe_hostname(result["url"])
             if not hostname:
@@ -80,21 +82,38 @@ def _web_search_tool() -> ToolDefinition:
                 continue
             if any(hostname.endswith(domain) for domain in blocked):
                 continue
-            results.append(result)
+            results.append(_compact_web_result(result))
             if len(results) >= 8:
                 break
-        return {"content": pretty_json({"query": query, "results": results})}
+        return {
+            "content": pretty_json(
+                {
+                    "provider": response["provider"],
+                    "query": query,
+                    "raw_query": raw_query,
+                    "fallback_reason": response.get("fallback_reason"),
+                    "results": results,
+                }
+            )
+        }
 
     return ToolDefinition("WebSearch", _tool_description("WebSearch"), _tool_schema("WebSearch"), handler)
 
 
 async def searchWeb(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
+    response = await searchWebResponse(query, abortSignal)
+    return response["results"]
+
+
+async def searchWebResponse(query: str, abortSignal: Any = None) -> dict[str, Any]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     duck = await searchDuckDuckGo(query, abortSignal)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
-    return duck if duck else await searchBing(query, abortSignal)
+    if duck:
+        return {"provider": "scraper", "results": duck, "fallback_reason": None}
+    return {"provider": "scraper", "results": await searchBing(query, abortSignal), "fallback_reason": "duckduckgo_empty_or_blocked"}
 
 
 async def searchDuckDuckGo(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
@@ -192,6 +211,25 @@ def decodeBingRedirectTarget(value: str) -> str | None:
         except Exception:
             return None
     return None
+
+
+def normalizeWebSearchQuery(query: str) -> str:
+    return query.replace('\\"', '"').strip()
+
+
+def _compact_web_result(result: dict[str, str]) -> dict[str, str]:
+    return {
+        "url": result.get("url", ""),
+        "title": _truncate_text(result.get("title", ""), 200),
+        "snippet": _truncate_text(result.get("snippet", ""), 600),
+    }
+
+
+def _truncate_text(value: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", value or "").strip()
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit].rstrip()}\u2026"
 
 
 def _strip_html(raw: str) -> str:

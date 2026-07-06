@@ -128,14 +128,48 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             record = run(supervisor["inspectTask"](task_id))
             self.assertEqual(record["status"], "stopped")
             self.assertEqual(record["summary"], "Task was terminated.")
-            failed_events = [event for event in events if event["event"] == "task.failed" and event["data"]["task_id"] == task_id]
-            self.assertEqual(len(failed_events), 1)
-            self.assertEqual(failed_events[0]["data"]["summary"], "Task was terminated.")
-            self.assertNotIn("updated_at", failed_events[0]["data"])
+            stopped_events = [event for event in events if event["event"] == "task.stopped" and event["data"]["task_id"] == task_id]
+            self.assertEqual(len(stopped_events), 1)
+            self.assertEqual(stopped_events[0]["data"]["summary"], "Task was terminated.")
+            self.assertNotIn("updated_at", stopped_events[0]["data"])
         finally:
             if supervisor:
                 run(supervisor["close"]())
             run(core.stopTaskSupervisorDaemon())
+            self.restore_home(root, previous)
+
+    def test_daemon_socket_path_falls_back_for_deep_runtime_home(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            deep_home = home / ("nested-" + "x" * 80) / ("more-" + "y" * 80)
+            deep_home.mkdir(parents=True)
+            core.configureRuntimeHome(str(deep_home))
+            socket_path = core.daemonSocketPath()
+            self.assertLessEqual(len(socket_path.encode("utf-8")), 100)
+            self.assertEqual(socket_path, core.daemonSocketPath())
+            self.assertFalse(socket_path.startswith(str(deep_home)))
+            self.assertEqual(Path(socket_path).parent, Path(tempfile.gettempdir()))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_daemon_event_cursor_reads_tail_and_rotated_log(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            run(core.ensureBaseLayout(str(workspace)))
+            events_path = Path(core.daemonEventsPath())
+            records = [{"cursor": index, "event": "daemon.test"} for index in range(1, 40)]
+            events_path.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
+            self.assertEqual(run(core.readLastDaemonEventCursor()), 39)
+
+            with events_path.open("a", encoding="utf-8") as handle:
+                handle.write('{"cursor": 999')
+            self.assertEqual(run(core.readLastDaemonEventCursor()), 39)
+
+            self.assertTrue(run(core.rotateDaemonEventsIfOversized(capBytes=1)))
+            self.assertFalse(events_path.exists())
+            self.assertTrue(Path(f"{events_path}.1").exists())
+            self.assertEqual(run(core.readLastDaemonEventCursor()), 39)
+        finally:
             self.restore_home(root, previous)
 
     def test_daemon_connection_cleans_stale_state_and_socket(self):

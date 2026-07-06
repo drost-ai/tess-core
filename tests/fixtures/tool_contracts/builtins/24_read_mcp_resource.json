@@ -1,6 +1,7 @@
 {
   "description": "Read a resource published by a connected MCP server.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "server": {
         "type": "string"

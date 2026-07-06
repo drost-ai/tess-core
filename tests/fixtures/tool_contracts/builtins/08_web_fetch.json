@@ -1,6 +1,7 @@
 {
   "description": "Fetch a URL and return a text snapshot of its contents.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "prompt": {
         "type": "string"

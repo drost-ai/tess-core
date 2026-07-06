@@ -69,7 +69,7 @@
         "task_id": "<uuid:4>",
         "title": "scenario stoppable"
       },
-      "event": "task.failed",
+      "event": "task.stopped",
       "sessionId": "<uuid:1>"
     },
     {
@@ -102,6 +102,14 @@
     }
   ],
   "persisted": [
+    {
+      "createdAt": "<timestamp>",
+      "data": {
+        "mode": "in_process_fallback",
+        "reason": "detached_daemon_unavailable"
+      },
+      "event": "daemon.unavailable"
+    },
     {
       "createdAt": "<timestamp>",
       "data": {
@@ -162,6 +170,14 @@
     {
       "createdAt": "<timestamp>",
       "data": {
+        "mode": "in_process_fallback",
+        "reason": "detached_daemon_unavailable"
+      },
+      "event": "daemon.unavailable"
+    },
+    {
+      "createdAt": "<timestamp>",
+      "data": {
         "attachable_session_id": null,
         "detail_status": "launching",
         "foreground_mode": "background",
@@ -194,7 +210,7 @@
         "task_id": "<uuid:4>",
         "title": "scenario stoppable"
       },
-      "event": "task.failed",
+      "event": "task.stopped",
       "sessionId": "<uuid:1>"
     },
     {

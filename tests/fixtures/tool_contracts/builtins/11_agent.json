@@ -1,11 +1,17 @@
 {
   "description": "Spawn a delegated subagent to work on a focused task.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "description": {
         "type": "string"
       },
       "isolation": {
+        "enum": [
+          "shared",
+          "worktree",
+          "none"
+        ],
         "type": "string"
       },
       "mode": {

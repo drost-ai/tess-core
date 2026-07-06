@@ -20,7 +20,8 @@ TOOL_PAYLOAD_POLICIES = {
         "readDefaultLines": 140,
         "readInlineLines": 180,
         "readInlineBytes": 8000,
-        "globInlineItems": 120,
+        "globInlineItems": 80,
+        "globInlineBytes": 6000,
         "grepInlineMatches": 60,
         "grepInlineBytes": 8000,
         "textInlineLines": 140,
@@ -34,7 +35,8 @@ TOOL_PAYLOAD_POLICIES = {
         "readDefaultLines": 220,
         "readInlineLines": 260,
         "readInlineBytes": 12000,
-        "globInlineItems": 180,
+        "globInlineItems": 100,
+        "globInlineBytes": 8000,
         "grepInlineMatches": 100,
         "grepInlineBytes": 12000,
         "textInlineLines": 220,
@@ -48,7 +50,8 @@ TOOL_PAYLOAD_POLICIES = {
         "readDefaultLines": 320,
         "readInlineLines": 420,
         "readInlineBytes": 18000,
-        "globInlineItems": 260,
+        "globInlineItems": 120,
+        "globInlineBytes": 10000,
         "grepInlineMatches": 160,
         "grepInlineBytes": 18000,
         "textInlineLines": 320,
@@ -73,13 +76,48 @@ DEFAULT_GLOB_EXCLUDES = [
     ".turbo/**",
     ".cache/**",
     ".yarn/**",
+    ".venv/**",
+    "venv/**",
+    "env/**",
+    "__pycache__/**",
+    ".pytest_cache/**",
+    ".mypy_cache/**",
+    ".ruff_cache/**",
+    ".tox/**",
+    ".gradle/**",
     "tmp/**",
     "temp/**",
     "vendor/**",
     "target/**",
     ".DS_Store",
 ]
-DEFAULT_IGNORED_DIRECTORIES = {".git", ".svn", ".hg", "node_modules", "dist", "build", "coverage", ".next", ".nuxt", ".turbo", ".cache", ".yarn", "tmp", "temp", "vendor", "target"}
+DEFAULT_IGNORED_DIRECTORIES = {
+    ".git",
+    ".svn",
+    ".hg",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".cache",
+    ".yarn",
+    ".venv",
+    "venv",
+    "env",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".gradle",
+    "tmp",
+    "temp",
+    "vendor",
+    "target",
+}
 
 
 def _byte_len(value: str) -> int:
@@ -112,6 +150,13 @@ def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
         selected.append(line)
         current = candidate
     return selected
+
+
+def _fit_lines_within_bytes_with_progress(lines: list[str], max_bytes: int) -> list[str]:
+    selected = _fit_lines_within_bytes(lines, max_bytes)
+    if selected or not lines:
+        return selected
+    return [lines[0]]
 
 
 def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: int) -> dict[str, Any]:
@@ -308,9 +353,17 @@ async def shapeGlobPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
     args = {**(args or {}), **kwargs}
     policy = getToolPayloadPolicy(args["config"])
     matches = args.get("matches", [])
-    sample = _sample_paths_by_directory(matches, policy["globInlineItems"])
+    offset = max(int(args.get("offset") or 0), 0)
+    requested_limit = int(args.get("requestedLimit") or policy["globInlineItems"])
+    limit = min(max(requested_limit, 1), policy["globInlineItems"])
+    page = matches[offset:offset + limit]
+    sample = _fit_lines_within_bytes_with_progress(page, policy["globInlineBytes"])
     full = "\n".join(matches)
-    artifact = await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Glob", "family": "glob", "content": full, "contentType": "paths", "itemCount": len(matches)}) if len(matches) > len(sample) else None
+    artifact = (
+        await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Glob", "family": "glob", "content": full, "contentType": "paths", "itemCount": len(matches)})
+        if offset < len(matches) and (len(matches) > len(sample) or _byte_len(full) > policy["globInlineBytes"])
+        else None
+    )
     counts: dict[str, int] = {}
     for match in matches:
         directory = os.path.dirname(match) or "(root)"
@@ -322,13 +375,17 @@ async def shapeGlobPayload(args: dict[str, Any] | None = None, **kwargs: Any) ->
         "path": args["searchPath"],
         "matches": sample,
         "totalMatches": len(matches),
-        "truncated": len(sample) < len(matches),
+        "offset": offset,
+        "limit": limit,
+        "returnedMatches": len(sample),
+        "truncated": offset + len(sample) < len(matches),
+        "nextOffset": offset + len(sample) if offset + len(sample) < len(matches) else None,
         "ignoredDefaultsApplied": args.get("ignoredDefaultsApplied", True),
         "directoryCounts": directory_counts,
         "artifact": artifact,
         "transcriptView": {
-            "strategy": "count_and_sample" if len(sample) < len(matches) else "inline_full",
-            "truncated": len(sample) < len(matches),
+            "strategy": "count_and_sample" if offset + len(sample) < len(matches) else "inline_full",
+            "truncated": offset + len(sample) < len(matches),
             "originalBytes": _byte_len(full),
             "originalLines": len(matches),
             "returnedBytes": _byte_len("\n".join(sample)),

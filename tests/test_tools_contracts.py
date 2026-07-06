@@ -18,6 +18,14 @@ class ToolContractTests(AgentCoreTestCase):
         self.assertEqual(second_read.inputSchema["properties"]["file_path"]["type"], "string")
         self.assertEqual(core.BUILTIN_TOOL_INPUT_SCHEMAS["Read"]["properties"]["file_path"]["type"], "string")
 
+    def test_builtin_tool_schemas_are_provider_strict(self):
+        for tool in core.createBuiltinTools():
+            self.assertIs(tool.inputSchema.get("additionalProperties"), False, tool.name)
+        grep = next(tool for tool in core.createBuiltinTools() if tool.name == "Grep")
+        self.assertEqual(grep.inputSchema["properties"]["output_mode"]["enum"], ["files_with_matches", "content", "count"])
+        agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+        self.assertEqual(agent.inputSchema["properties"]["isolation"]["enum"], ["shared", "worktree", "none"])
+
     def test_builtin_tool_behavior_parity_for_questions_status_config_todo_and_mcp(self):
         root, home, workspace, previous = self.temp_context()
         try:

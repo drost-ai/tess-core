@@ -22,17 +22,29 @@ from .validation import _require_optional_number, _require_string
 
 def _glob_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        pattern = _require_string(input.get("pattern"), "pattern")
         cwd = context.get("cwd") or context["session"]["cwd"]
-        search_path = _authorize_path(_require_string(input.get("path"), "path"), context) if input.get("path") else cwd
+        query = _resolve_glob_search(_require_string(input.get("pattern"), "pattern"), input.get("path"), context)
+        pattern = query["pattern"]
+        search_path = query["searchPath"]
         rg_path = await _facade_resolve_ripgrep_binary()
         if not rg_path:
             return {"content": "ripgrep is required for Glob and was not found.", "isError": True}
+        if _is_filesystem_root(search_path):
+            return {"content": "Glob refuses to search the filesystem root. Provide a narrower path or an absolute glob inside the target directory.", "isError": True}
         args = applyDefaultGlobExcludes(["--files", "-g", pattern])
         args.append(search_path)
         stdout, _stderr = await _facade_exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
         matches = filterDefaultIgnoredGlobMatches([line for line in stdout.strip().splitlines() if line])
-        payload = await shapeGlobPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, matches=matches, ignoredDefaultsApplied=True)
+        payload = await shapeGlobPayload(
+            config=context["config"],
+            sessionId=context["session"]["id"],
+            pattern=pattern,
+            searchPath=search_path,
+            matches=matches,
+            offset=int(input.get("offset") or 0),
+            requestedLimit=input.get("limit"),
+            ignoredDefaultsApplied=True,
+        )
         return {"content": pretty_json(payload)}
 
     return ToolDefinition("Glob", _tool_description("Glob"), _tool_schema("Glob"), handler)
@@ -59,7 +71,7 @@ def _grep_tool() -> ToolDefinition:
             args.extend(["--glob", _require_string(input.get("glob"), "glob")])
         if input.get("type"):
             args.extend(["--type", _require_string(input.get("type"), "type")])
-        if input.get("-i"):
+        if input.get("ignore_case") or input.get("-i"):
             args.append("-i")
         context_lines = _require_optional_number(input.get("context"))
         if context_lines is None:
@@ -67,8 +79,12 @@ def _grep_tool() -> ToolDefinition:
         if context_lines is not None:
             args.extend(["-C", str(context_lines)])
         else:
-            before = _require_optional_number(input.get("-B"))
-            after = _require_optional_number(input.get("-A"))
+            before = _require_optional_number(input.get("before_context"))
+            if before is None:
+                before = _require_optional_number(input.get("-B"))
+            after = _require_optional_number(input.get("after_context"))
+            if after is None:
+                after = _require_optional_number(input.get("-A"))
             if after is not None:
                 args.extend(["-A", str(after)])
             if before is not None:
@@ -133,3 +149,36 @@ async def _facade_exec_ripgrep_allowing_no_matches(rg_path: str, args: list[str]
     if callable(current) and current is not _exec_ripgrep_allowing_no_matches:
         return await current(rg_path, args, cwd=cwd)
     return await _exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
+
+
+def _resolve_glob_search(pattern: str, requested_path: Any, context: ToolContext) -> dict[str, str]:
+    if os.path.isabs(pattern):
+        split = _split_absolute_glob_pattern(pattern)
+        return {"pattern": split["pattern"], "searchPath": _authorize_path(split["searchPath"], context)}
+    return {
+        "pattern": pattern,
+        "searchPath": _authorize_path(_require_string(requested_path, "path"), context) if requested_path else (context.get("cwd") or context["session"]["cwd"]),
+    }
+
+
+def _split_absolute_glob_pattern(pattern: str) -> dict[str, str]:
+    normalized = os.path.normpath(pattern)
+    drive, tail = os.path.splitdrive(normalized)
+    root = drive + os.path.sep if normalized.startswith(os.path.sep) or drive else os.path.sep
+    parts = [part for part in normalized[len(root):].split(os.path.sep) if part]
+    first_glob = next((index for index, part in enumerate(parts) if _has_glob_magic(part)), -1)
+    if first_glob == -1:
+        return {"pattern": os.path.basename(normalized), "searchPath": os.path.dirname(normalized)}
+    static_parts = parts[:first_glob]
+    glob_parts = parts[first_glob:]
+    search_path = os.path.join(root, *static_parts) if static_parts else root
+    return {"pattern": "/".join(glob_parts), "searchPath": search_path}
+
+
+def _has_glob_magic(value: str) -> bool:
+    return bool(any(char in value for char in "*?[]{}"))
+
+
+def _is_filesystem_root(value: str) -> bool:
+    resolved = os.path.abspath(value)
+    return resolved == os.path.abspath(os.path.sep)

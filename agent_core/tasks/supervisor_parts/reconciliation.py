@@ -11,23 +11,33 @@ async def _reconcile_persisted_tasks(
     active_statuses = {"backgrounded", "running", "reconciling", "degraded"}
     recoverable_kinds = {"background_command", "main_session", "subagent"}
     for record in records:
-        if record.get("owner") != "daemon":
-            continue
-        if record.get("kind") not in recoverable_kinds or record.get("status") not in active_statuses:
-            continue
-        task_id = record.get("id") or record.get("taskId")
-        if not isinstance(task_id, str) or not task_id:
-            continue
-        meta = await readTaskMeta(task_id)
-        if not meta:
-            continue
-        process_state = _classify_persisted_process(task_id, record, meta)
-        if process_state["state"] in {"completed", "failed"}:
-            await _mark_terminal_process_from_meta(task_id, record, meta, supervisor_id, emit, process_state)
-        elif process_state["state"] in {"running", "orphaned"} and isinstance(process_state.get("pid"), int):
-            await _mark_recovered_process(task_id, int(process_state["pid"]), record, meta, supervisor_id, emit, process_state)
-        else:
-            await _mark_lost_process(task_id, record, meta, supervisor_id, emit, process_state)
+        try:
+            if record.get("owner") != "daemon":
+                continue
+            if record.get("kind") not in recoverable_kinds or record.get("status") not in active_statuses:
+                continue
+            task_id = record.get("id") or record.get("taskId")
+            if not isinstance(task_id, str) or not task_id:
+                continue
+            meta = await readTaskMeta(task_id)
+            if not meta:
+                continue
+            process_state = _classify_persisted_process(task_id, record, meta)
+            if process_state["state"] in {"completed", "failed"}:
+                await _mark_terminal_process_from_meta(task_id, record, meta, supervisor_id, emit, process_state)
+            elif process_state["state"] in {"running", "orphaned"} and isinstance(process_state.get("pid"), int):
+                await _mark_recovered_process(task_id, int(process_state["pid"]), record, meta, supervisor_id, emit, process_state)
+            else:
+                await _mark_lost_process(task_id, record, meta, supervisor_id, emit, process_state)
+        except Exception as exc:
+            task_id = record.get("id") or record.get("taskId")
+            await maybe_await(
+                emit(
+                    "task.reconcile_skipped",
+                    {"task_id": task_id, "reason": str(exc), "status": record.get("status"), "kind": record.get("kind")},
+                    record.get("sessionId"),
+                )
+            )
 
 
 async def _mark_recovered_process(

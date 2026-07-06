@@ -7,8 +7,8 @@ _DAEMON_PROCESS: subprocess.Popen[Any] | None = None
 
 async def connectTaskSupervisorDaemonClient(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
     args = {**(args or {}), **kwargs}
-    socket_path = args.get("socketPath") or daemonSocketPath()
     state = await loadDaemonState()
+    socket_path = args.get("socketPath") or (state or {}).get("socketPath") or daemonSocketPath()
     pid = state.get("pid") if state else None
     if isinstance(pid, int) and not _is_process_alive(pid):
         await _cleanup_stale_daemon_artifacts()
@@ -37,11 +37,24 @@ async def ensureTaskSupervisorDaemon(args: dict[str, Any] | None = None, **kwarg
         _SUPERVISOR = existing
         return existing
 
+    state = await loadDaemonState()
+    pid = state.get("pid") if state else None
+    if isinstance(pid, int) and _is_process_alive(pid) and _daemon_state_is_wedged(state):
+        await _terminate_wedged_daemon(pid)
+        await clearDaemonState()
+
     await _spawn_detached_daemon(cwd)
-    deadline = asyncio.get_running_loop().time() + float(args.get("startupTimeoutSeconds") or 5)
+    deadline = asyncio.get_running_loop().time() + _resolve_startup_timeout_seconds(args)
     last_error: Exception | None = None
     while asyncio.get_running_loop().time() < deadline:
         await asyncio.sleep(0.05)
+        if _DAEMON_PROCESS and _DAEMON_PROCESS.poll() is not None:
+            code = _DAEMON_PROCESS.returncode
+            message = f"Task supervisor daemon exited during startup with code {code}; see {os.path.join(daemonLogsDir(), 'bootstrap.log')}"
+            if args.get("allowInProcessFallback", True):
+                await _record_daemon_unavailable("spawn_exited", message)
+                return await _ensure_in_process_supervisor(cwd)
+            raise RuntimeError(message)
         try:
             client = await connectTaskSupervisorDaemonClient()
             if client is not None:
@@ -101,14 +114,15 @@ async def _ensure_in_process_supervisor(cwd: str) -> dict[str, Any]:
         await appendDaemonEvent({"createdAt": now_iso(), **event})
 
     _SUPERVISOR = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
-    await saveDaemonState({"pid": os.getpid(), "cwd": cwd, "startedAt": now_iso(), "mode": "in_process_python", "status": "running"})
+    await saveDaemonState({"pid": os.getpid(), "cwd": cwd, "startedAt": now_iso(), "mode": "in_process_fallback", "status": "degraded", "daemonUnavailable": {"mode": "in_process_fallback", "reason": "detached_daemon_unavailable"}})
+    await appendDaemonEvent({"createdAt": now_iso(), "event": "daemon.unavailable", "data": {"mode": "in_process_fallback", "reason": "detached_daemon_unavailable"}})
     return _SUPERVISOR
 
 async def _spawn_detached_daemon(cwd: str) -> None:
     global _DAEMON_PROCESS
     await ensureBaseLayout(cwd)
     os.makedirs(daemonLogsDir(), exist_ok=True)
-    log_path = os.path.join(daemonLogsDir(), "daemon.log")
+    log_path = os.path.join(daemonLogsDir(), "bootstrap.log")
     env = dict(os.environ)
     env["AGENT_CORE_HOME"] = getStateRoot()
     repo_root = str(Path(__file__).resolve().parents[2])
@@ -136,11 +150,78 @@ async def _cleanup_stale_daemon_artifacts() -> None:
         pid = state.get("pid")
         if not isinstance(pid, int) or not _is_process_alive(pid):
             await clearDaemonState()
-            return
+            state = None
+    await _reap_daemon_tmp_artifacts()
     socket_path = daemonSocketPath()
     if os.path.exists(socket_path) and not state:
         with contextlib.suppress(FileNotFoundError):
             os.remove(socket_path)
+
+async def _reap_daemon_tmp_artifacts() -> None:
+    try:
+        names = os.listdir(getDaemonDir())
+    except FileNotFoundError:
+        return
+    cutoff = time.time() - 60 * 60
+    for name in names:
+        if not re.match(r"^state\.json\..+\.tmp$", name):
+            continue
+        path = os.path.join(getDaemonDir(), name)
+        with contextlib.suppress(OSError):
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+
+def _resolve_startup_timeout_seconds(args: dict[str, Any]) -> float:
+    env_value = os.environ.get("AGENT_CORE_DAEMON_START_TIMEOUT_MS")
+    try:
+        env_ms = float(env_value) if env_value else 0
+    except ValueError:
+        env_ms = 0
+    if env_ms > 0:
+        return env_ms / 1000
+    if args.get("startupTimeoutSeconds") is not None:
+        return float(args.get("startupTimeoutSeconds") or 0)
+    if args.get("startTimeoutMs") is not None:
+        return float(args.get("startTimeoutMs") or 0) / 1000
+    return 30.0
+
+def _daemon_state_is_wedged(state: dict[str, Any] | None) -> bool:
+    if not state:
+        return False
+    phase = state.get("phase")
+    started_at = state.get("startedAt")
+    try:
+        import datetime
+
+        started = datetime.datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+        age_seconds = (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds()
+    except Exception:
+        age_seconds = 60 * 60
+    return phase == "running" or age_seconds > 5 * 60
+
+async def _terminate_wedged_daemon(pid: int) -> None:
+    if not await _is_daemon_run_process(pid):
+        return
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.kill(pid, signal.SIGTERM)
+    await _wait_for_process_exit(pid, 2)
+    if _is_process_alive(pid):
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(pid, signal.SIGKILL)
+
+async def _is_daemon_run_process(pid: int) -> bool:
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["ps", "-p", str(pid), "-o", "command="], text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    try:
+        result = await asyncio.to_thread(run)
+    except Exception:
+        return False
+    command = result.stdout.strip()
+    return result.returncode == 0 and "agent_core.daemon_worker" in command
+
+async def _record_daemon_unavailable(reason: str, detail: str) -> None:
+    await appendDaemonEvent({"createdAt": now_iso(), "event": "daemon.unavailable", "data": {"mode": "in_process_fallback", "reason": reason, "detail": detail}})
 
 async def _wait_for_process_exit(pid: int, timeout_seconds: float) -> None:
     deadline = asyncio.get_running_loop().time() + timeout_seconds

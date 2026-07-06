@@ -234,31 +234,31 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             _throw_if_turn_cancelled(runtime)
             if _requires_plan_approval(session) and tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
                 message = f"{tool_use['name']} is not available while plan approval is still required."
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": message, "error": True, "session_id": session["id"]})
+                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
             invalid_tool_input = _invalid_tool_input_message(tool_use)
             if invalid_tool_input:
                 tool_count += 1
                 usage_totals["toolCalls"] += 1
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": invalid_tool_input, "error": True, "session_id": session["id"]})
+                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": invalid_tool_input, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": invalid_tool_input}
             tool = next((entry for entry in tool_registry if entry.name == tool_use["name"]), None)
             if not tool:
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "output": f"Tool not available: {tool_use['name']}", "error": True, "session_id": session["id"]})
+                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": f"Tool not available: {tool_use['name']}", "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": f"Tool not available: {tool_use['name']}"}
             exceeded = check_subagent_runtime_limits(subagent_limits, subagent_limit_state())
             if exceeded and exceeded.get("reason") == "max_tool_calls":
                 result = build_subagent_tool_limit_result(tool_use, exceeded)
-                _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": result["content"], "error": True, "session_id": session["id"]})
+                _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": result["content"], "error": True, "session_id": session["id"]})
                 _safe_emit(runtime, "subagent.limit_exceeded", {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")})
                 return result
             tool_count += 1
             usage_totals["toolCalls"] += 1
-            _safe_emit(runtime, "tool.started", {"name": tool.name, "input": tool_use.get("input") or {}, "session_id": session["id"]})
+            _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
             try:
                 result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
                 _throw_if_turn_cancelled(runtime)
-                _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
+                _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
                 block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": result.get("isError"), "content": result.get("content", "")}
                 if result.get("pause") == "approval":
                     block["_pauseMessage"] = (result.get("content") or "").strip() or "Approval required before continuing."
@@ -267,7 +267,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 if _is_turn_abort_error(exc, runtime.get("abortSignal")):
                     raise
                 message = str(exc)
-                _safe_emit(runtime, "tool.completed", {"name": tool.name, "output": message, "error": True, "session_id": session["id"]})
+                _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
 
         try:

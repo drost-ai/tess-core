@@ -249,7 +249,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         elif meta and isinstance(meta.get("pid"), int):
             stopped = _terminate_process(meta["pid"])
         if meta:
-            await emit("task.failed", _task_event_payload(meta), meta.get("sessionId"))
+            await emit(_event_name_for_task_status(_map_status(meta.get("status"))), _task_event_payload(meta), meta.get("sessionId"))
         _PROCESS_REGISTRY.pop(task_id, None)
         return stopped
 

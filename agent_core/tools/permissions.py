@@ -45,7 +45,15 @@ async def _ensure_tool_permission(context: ToolContext, tool_name: str, category
     options = [label for label in (approve_label, switch_label, deny_label) if label]
     prompt = "\n".join(part for part in (f"{tool_name} wants permission", "", summary, "", f"mode: {mode}", f"policy: {resolution.get('reason')}" if resolution.get("reason") else "") if part is not None)
     output_json("permission.requested", {"tool": tool_name, "mode": mode, "summary": summary, "options": options})
-    answer = await maybe_await(context.get("askQuestion", lambda *_: deny_label)(prompt, options))
+    detail = {
+        "kind": "permission",
+        "tool": tool_name,
+        "mode": mode,
+        "summary": summary,
+        "reason": resolution.get("reason"),
+        "category": category,
+    }
+    answer = await _ask_question_with_detail(context, prompt, options, detail, deny_label)
     if answer == approve_label:
         output_json("permission.decided", {"tool": tool_name, "mode": mode, "decision": "allow", "summary": summary, "source": "prompt"})
         return
@@ -154,3 +162,11 @@ def _matches_command_policy(command: str, patterns: list[str]) -> bool:
 
 def _normalize_shell_command(command: str) -> str:
     return re.sub(r"\s+", " ", command).strip().lower()
+
+
+async def _ask_question_with_detail(context: ToolContext, prompt: str, options: list[str], detail: dict[str, Any], fallback: str) -> str:
+    ask = context.get("askQuestion", lambda *_: fallback)
+    try:
+        return await maybe_await(ask(prompt, options, detail))
+    except TypeError:
+        return await maybe_await(ask(prompt, options))

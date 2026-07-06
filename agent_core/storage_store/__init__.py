@@ -22,6 +22,7 @@ _PUBLIC_EXPORTS += ['RuntimeHomeScope', 'getContextRuntimeHome', 'get_context_ru
 _PUBLIC_EXPORTS += ['STORAGE_LOCK_TIMEOUT_MS', 'fileLock', 'file_lock', 'mutateJsonFile', 'mutate_json_file', 'registerStorageLockObserver']
 _PUBLIC_EXPORTS += ['mutateChildAgent', 'mutateHealthCheckTask', 'mutateSessionRecord', 'mutateTaskMeta']
 _PUBLIC_EXPORTS += ['mutateAutoMode', 'mutateMarketplaces', 'mutateMcpServers', 'mutatePlugins', 'mutateProjectMemoryRecords', 'mutateSettings']
+_PUBLIC_EXPORTS += ['DAEMON_EVENTS_ROTATE_BYTES', 'DAEMON_EVENTS_TAIL_BYTES', 'MAX_DAEMON_SOCKET_PATH_BYTES', 'readLastDaemonEventCursor', 'rotateDaemonEventsIfOversized']
 _PUBLIC_EXPORTS = sorted(set(_PUBLIC_EXPORTS))
 __all__ = _PUBLIC_EXPORTS
 

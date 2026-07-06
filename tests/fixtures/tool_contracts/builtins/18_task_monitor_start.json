@@ -1,6 +1,7 @@
 {
   "description": "Start proactive monitoring for a background task so the assistant can keep watching it and update the user without another prompt.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "check_interval_ms": {
         "type": "number"

@@ -13,30 +13,42 @@ async def _project_session_task_records(session_id: str, session: dict[str, Any]
     task_ids.extend(monitor.get("taskId") for monitor in monitors if monitor.get("taskId"))
     task_ids.extend(task.get("taskId") for task in await listHealthCheckTasks() if task.get("sessionId") == session_id and task.get("taskId"))
     for task_id in _dedupe([item for item in task_ids if isinstance(item, str) and item]):
-        meta = await readTaskMeta(task_id)
-        if meta:
-            record = _build_task_record(meta, None, session)
-            related_monitor_ids = [monitor.get("id") for monitor in monitors if monitor.get("taskId") == task_id and monitor.get("id")]
-            if related_monitor_ids:
-                record["relatedMonitorIds"] = related_monitor_ids
-            records_by_id[task_id] = record
+        try:
+            meta = await readTaskMeta(task_id)
+            if meta:
+                record = _build_task_record(meta, None, session)
+                related_monitor_ids = [monitor.get("id") for monitor in monitors if monitor.get("taskId") == task_id and monitor.get("id")]
+                if related_monitor_ids:
+                    record["relatedMonitorIds"] = related_monitor_ids
+                records_by_id[task_id] = record
+        except Exception:
+            continue
 
     for monitor in monitors:
         monitor_id = monitor.get("id")
         if monitor_id:
-            records_by_id[f"monitor:{monitor_id}"] = _build_monitor_task_record(session, monitor)
+            try:
+                records_by_id[f"monitor:{monitor_id}"] = _build_monitor_task_record(session, monitor)
+            except Exception:
+                continue
 
     for child in await listChildAgents():
         if _is_related_child_agent(session, child):
-            child_record = await _build_child_agent_task_record(session, child)
-            if child_record.get("id"):
-                records_by_id[str(child_record["id"])] = child_record
+            try:
+                child_record = await _build_child_agent_task_record(session, child)
+                if child_record.get("id"):
+                    records_by_id[str(child_record["id"])] = child_record
+            except Exception:
+                continue
 
     remote_id = metadata.get("remoteSessionId")
     remote = await loadRemoteSession(remote_id) if isinstance(remote_id, str) and remote_id else None
     if remote:
-        bridge = await loadBridge(remote.get("bridgeId")) if isinstance(remote.get("bridgeId"), str) else None
-        records_by_id[f"remote:{remote['id']}"] = _build_remote_task_record(session, remote, (bridge or {}).get("status"))
+        try:
+            bridge = await loadBridge(remote.get("bridgeId")) if isinstance(remote.get("bridgeId"), str) else None
+            records_by_id[f"remote:{remote['id']}"] = _build_remote_task_record(session, remote, (bridge or {}).get("status"))
+        except Exception:
+            pass
 
     records = sorted(records_by_id.values(), key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
     await _sync_projected_task_metadata(session, records)

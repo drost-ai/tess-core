@@ -1,7 +1,14 @@
 {
   "description": "List files that match a glob pattern.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
+      "limit": {
+        "type": "number"
+      },
+      "offset": {
+        "type": "number"
+      },
       "path": {
         "type": "string"
       },

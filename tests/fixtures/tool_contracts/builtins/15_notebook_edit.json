@@ -1,14 +1,25 @@
 {
   "description": "Edit Jupyter notebook cells by ID.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "cell_id": {
         "type": "string"
       },
       "cell_type": {
+        "enum": [
+          "code",
+          "markdown",
+          "raw"
+        ],
         "type": "string"
       },
       "edit_mode": {
+        "enum": [
+          "replace",
+          "insert",
+          "delete"
+        ],
         "type": "string"
       },
       "new_source": {

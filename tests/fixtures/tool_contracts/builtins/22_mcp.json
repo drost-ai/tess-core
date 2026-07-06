@@ -1,7 +1,7 @@
 {
   "description": "Inspect the connected MCP runtime and discovered capabilities.",
   "inputSchema": {
-    "additionalProperties": true,
+    "additionalProperties": false,
     "type": "object"
   },
   "name": "Mcp"

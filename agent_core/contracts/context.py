@@ -15,6 +15,15 @@ from __future__ import annotations
 from typing import Any, Callable, TypedDict
 
 
+class AskQuestionDetail(TypedDict, total=False):
+    kind: str
+    tool: str
+    mode: str
+    summary: str
+    reason: str | None
+    category: str | None
+
+
 class ToolContext(TypedDict, total=False):
     cwd: str
     allowedRoots: list[str]
@@ -22,7 +31,7 @@ class ToolContext(TypedDict, total=False):
     session: dict[str, Any]           # session record (contracts.records SessionRecord, step 5)
     interactive: bool
     outputJson: Callable[..., Any]    # event emitter: (event_type, data) -> None
-    askQuestion: Callable[..., Any]   # (question, options) -> answer string
+    askQuestion: Callable[..., Any]   # (question, options, detail?) -> answer string
     persistSession: Callable[[], Any]
     updateCwd: Callable[[str], Any]
     getTools: Callable[[], list[Any]]

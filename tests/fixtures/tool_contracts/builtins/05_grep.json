@@ -1,6 +1,7 @@
 {
   "description": "Search file contents with ripgrep.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "-A": {
         "type": "number"
@@ -17,31 +18,57 @@
       "-n": {
         "type": "boolean"
       },
+      "after_context": {
+        "description": "Number of lines to include after each match.",
+        "type": "number"
+      },
+      "before_context": {
+        "description": "Number of lines to include before each match.",
+        "type": "number"
+      },
       "context": {
+        "description": "Number of context lines to include before and after each match.",
         "type": "number"
       },
       "glob": {
+        "description": "Optional glob filter, such as '*.py' or 'src/**/*.ts'.",
         "type": "string"
       },
       "head_limit": {
+        "description": "Maximum number of returned matches. Use 0 only when full output is required.",
         "type": "number"
       },
+      "ignore_case": {
+        "description": "Whether the search should be case-insensitive.",
+        "type": "boolean"
+      },
       "multiline": {
+        "description": "Enable multiline regular-expression search.",
         "type": "boolean"
       },
       "offset": {
+        "description": "Match offset for paginating large result sets.",
         "type": "number"
       },
       "output_mode": {
+        "description": "Use files_with_matches for filenames, content for matching lines with line numbers, or count for match counts per file.",
+        "enum": [
+          "files_with_matches",
+          "content",
+          "count"
+        ],
         "type": "string"
       },
       "path": {
+        "description": "File or directory to search. Defaults to the current working directory.",
         "type": "string"
       },
       "pattern": {
+        "description": "The regular expression to search for.",
         "type": "string"
       },
       "type": {
+        "description": "Optional ripgrep file type, such as 'py', 'ts', 'js', or 'md'.",
         "type": "string"
       }
     },

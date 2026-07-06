@@ -1,6 +1,7 @@
 {
   "description": "Apply exact string replacements inside a file.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "file_path": {
         "type": "string"

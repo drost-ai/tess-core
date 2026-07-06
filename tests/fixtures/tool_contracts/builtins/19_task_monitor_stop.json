@@ -1,6 +1,7 @@
 {
   "description": "Stop proactive monitoring for a background task without stopping the underlying task itself.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "monitor_id": {
         "type": "string"

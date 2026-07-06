@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import contextvars
+import hashlib
+import tempfile
 
 from .shared import *
 
@@ -101,8 +103,14 @@ def getPlansDir() -> str:
 def getDaemonDir() -> str:
     return os.path.join(getStateRoot(), "daemon")
 
+MAX_DAEMON_SOCKET_PATH_BYTES = 100
+
 def daemonSocketPath() -> str:
-    return os.path.join(getDaemonDir(), "socket.sock")
+    preferred = os.path.join(getDaemonDir(), "socket.sock")
+    if len(preferred.encode("utf-8")) <= MAX_DAEMON_SOCKET_PATH_BYTES:
+        return preferred
+    home_hash = hashlib.sha256(getStateRoot().encode("utf-8")).hexdigest()[:12]
+    return os.path.join(tempfile.gettempdir(), f"agent-core-{home_hash}.sock")
 
 def daemonPidPath() -> str:
     return os.path.join(getDaemonDir(), "pid")

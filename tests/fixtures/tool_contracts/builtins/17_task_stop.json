@@ -1,6 +1,7 @@
 {
   "description": "Stop a running background task.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "task_id": {
         "type": "string"

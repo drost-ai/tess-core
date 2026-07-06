@@ -1,6 +1,7 @@
 {
   "description": "Create and enter a git worktree for isolated work.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "name": {
         "type": "string"

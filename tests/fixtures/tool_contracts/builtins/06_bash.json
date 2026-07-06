@@ -1,6 +1,7 @@
 {
   "description": "Run shell commands in the current workspace. When you launch a long-running background task and promise to keep watching it, call TaskMonitorStart immediately afterward.",
   "inputSchema": {
+    "additionalProperties": false,
     "properties": {
       "command": {
         "type": "string"

@@ -59,9 +59,21 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
                             "output_cursor": record.get("outputCursor"),
                         },
                     )
-                if record.get("status") != old.get("status") or record.get("summary") != old.get("summary") or record.get("title") != old.get("title"):
-                    event = "task.completed" if record.get("status") == "completed" else "task.failed" if record.get("status") in ("failed", "stopped") else "task.updated"
+                status_changed = record.get("status") != old.get("status")
+                detail_changed = record.get("summary") != old.get("summary") or record.get("title") != old.get("title")
+                if status_changed:
+                    event = (
+                        "task.completed"
+                        if record.get("status") == "completed"
+                        else "task.failed"
+                        if record.get("status") == "failed"
+                        else "task.stopped"
+                        if record.get("status") == "stopped"
+                        else "task.updated"
+                    )
                     emit(event, _task_record_event_payload(record))
+                elif detail_changed and record.get("status") not in {"completed", "failed", "stopped"}:
+                    emit("task.updated", _task_record_event_payload(record))
 
             previous = next_map
             next_snapshot = _summarize(records)
@@ -99,8 +111,8 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
     def _run_tick_once() -> None:
         try:
             asyncio.run(tick())
-        except Exception:
-            pass
+        except Exception as exc:
+            emit("task.tick_failed", {"session_id": session_ref.get("id"), "error": str(exc)})
 
     def _run_loop() -> None:
         while not stop_event.wait(tick_interval):
