@@ -17,6 +17,17 @@ from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_t
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema
 from .validation import _require_string
+from .web_search_api import (
+    coerceResultCount,
+    configuredAllowedDomains,
+    hostnameMatchesRule,
+    joinFallbackReasons,
+    optionalString,
+    resolveSearchApiProvider,
+    searchBrave,
+    searchExa,
+    webSearchSettings,
+)
 
 
 class FetchResponse:
@@ -69,21 +80,35 @@ def _web_search_tool() -> ToolDefinition:
         raw_query = _require_string(input.get("query"), "query")
         query = normalizeWebSearchQuery(raw_query)
         _throw_if_tool_cancelled(context)
+        web_settings = webSearchSettings(context.get("config"))
+        configured_allowed = configuredAllowedDomains(web_settings)
         allowed = [item for item in input.get("allowed_domains", []) if isinstance(item, str)]
         blocked = [item for item in input.get("blocked_domains", []) if isinstance(item, str)]
+        count = coerceResultCount(input.get("count") or input.get("max_results") or input.get("limit"))
         results = []
-        response = await searchWebResponse(query, context.get("abortSignal"))
+        response = await searchWebResponse(
+            query,
+            context.get("abortSignal"),
+            config=context.get("config"),
+            count=count,
+            country=optionalString(input.get("country")) or "US",
+            freshness=optionalString(input.get("freshness")),
+            category=optionalString(input.get("category")),
+            provider=optionalString(input.get("provider")),
+        )
         for result in response["results"]:
             _throw_if_tool_cancelled(context)
             hostname = _safe_hostname(result["url"])
             if not hostname:
                 continue
-            if allowed and not any(hostname.endswith(domain) for domain in allowed):
+            if configured_allowed and not any(hostnameMatchesRule(hostname, domain) for domain in configured_allowed):
                 continue
-            if any(hostname.endswith(domain) for domain in blocked):
+            if allowed and not any(hostnameMatchesRule(hostname, domain) for domain in allowed):
+                continue
+            if any(hostnameMatchesRule(hostname, domain) for domain in blocked):
                 continue
             results.append(_compact_web_result(result))
-            if len(results) >= 8:
+            if len(results) >= count:
                 break
         return {
             "content": pretty_json(
@@ -105,15 +130,69 @@ async def searchWeb(query: str, abortSignal: Any = None) -> list[dict[str, str]]
     return response["results"]
 
 
-async def searchWebResponse(query: str, abortSignal: Any = None) -> dict[str, Any]:
+async def searchWebResponse(
+    query: str,
+    abortSignal: Any = None,
+    *,
+    config: dict[str, Any] | None = None,
+    count: int = 8,
+    country: str = "US",
+    freshness: str | None = None,
+    category: str | None = None,
+    provider: str | None = None,
+) -> dict[str, Any]:
+    if _signal_aborted(abortSignal):
+        raise _create_tool_abort_error()
+    api_provider = resolveSearchApiProvider(config, provider)
+    api_fallback_reason = None
+    if api_provider:
+        try:
+            if api_provider["provider"] == "brave":
+                brave = await searchBrave(
+                    query,
+                    api_key=api_provider["api_key"],
+                    fetch_func=_facade_fetch(),
+                    count=count,
+                    country=country,
+                    freshness=freshness,
+                    abortSignal=abortSignal,
+                )
+                if brave:
+                    return {"provider": "brave", "results": brave, "fallback_reason": None}
+                api_fallback_reason = "brave_empty"
+            elif api_provider["provider"] == "exa":
+                exa = await searchExa(
+                    query,
+                    api_key=api_provider["api_key"],
+                    count=count,
+                    freshness=freshness,
+                    category=category,
+                    abortSignal=abortSignal,
+                )
+                if exa:
+                    return {"provider": "exa", "results": exa, "fallback_reason": None}
+                api_fallback_reason = "exa_empty"
+        except Exception as exc:
+            api_fallback_reason = f"{api_provider['provider']}_error:{type(exc).__name__}"
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     duck = await searchDuckDuckGo(query, abortSignal)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     if duck:
-        return {"provider": "scraper", "results": duck, "fallback_reason": None}
-    return {"provider": "scraper", "results": await searchBing(query, abortSignal), "fallback_reason": "duckduckgo_empty_or_blocked"}
+        return {"provider": "scraper", "results": duck, "fallback_reason": api_fallback_reason}
+    bing = await searchBing(query, abortSignal)
+    if bing:
+        return {
+            "provider": "scraper",
+            "results": bing,
+            "fallback_reason": joinFallbackReasons(api_fallback_reason, "duckduckgo_empty"),
+        }
+    return {
+        "provider": "scraper",
+        "results": [],
+        "fallback_reason": joinFallbackReasons(api_fallback_reason, "scraper_empty"),
+    }
 
 
 async def searchDuckDuckGo(query: str, abortSignal: Any = None) -> list[dict[str, str]]:

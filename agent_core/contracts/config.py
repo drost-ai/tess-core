@@ -35,6 +35,15 @@ class AutoModePolicy(TypedDict, total=False):
     environment: dict[str, str]
 
 
+class WebSearchSettings(TypedDict, total=False):
+    """Non-secret web search settings for the built-in WebSearch tool."""
+
+    provider: str
+    braveApiKeyEnv: str
+    exaApiKeyEnv: str
+    urlAllowlist: list[str]
+
+
 class ProviderProfile(TypedDict, total=False):
     """Provider profile shape.
 
@@ -102,6 +111,7 @@ class SettingsRecord(TypedDict, total=False):
     openaiCodexAuthPath: str
     sandbox: dict[str, Any]
     subagents: dict[str, Any]
+    webSearch: WebSearchSettings
 
 
 class _ResolvedConfigRequired(TypedDict):
@@ -149,6 +159,7 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     appendSystemPrompt: str | None
     sandbox: dict[str, Any]
     subagents: dict[str, Any]
+    webSearch: WebSearchSettings
     allowedTools: list[str]
     disallowedTools: list[str]
     inputFormat: str

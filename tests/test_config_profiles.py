@@ -44,6 +44,35 @@ class ConfigProfileTests(AgentCoreTestCase):
                 os.environ["DEEPINFRA_API_KEY"] = prev_key
             self.restore_home(root, previous)
 
+    def test_resolve_config_preserves_web_search_settings(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            (home / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "webSearch": {
+                            "provider": "exa",
+                            "exaApiKeyEnv": "EXA_API_KEY",
+                            "braveApiKeyEnv": "BRAVE_API_KEY",
+                            "urlAllowlist": ["openai.com"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            self.assertEqual(
+                config["webSearch"],
+                {
+                    "provider": "exa",
+                    "exaApiKeyEnv": "EXA_API_KEY",
+                    "braveApiKeyEnv": "BRAVE_API_KEY",
+                    "urlAllowlist": ["openai.com"],
+                },
+            )
+        finally:
+            self.restore_home(root, previous)
+
     def test_default_system_prompt_layers_between_settings_and_engine_fallback(self):
         root, home, workspace, previous = self.temp_context()
         try:

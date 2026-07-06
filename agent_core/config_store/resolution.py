@@ -243,6 +243,9 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     max_subagent_depth = options.get("maxSubagentDepth") or merged_settings.get("maxSubagentDepth")
     if max_subagent_depth is not None and "maxDepth" not in subagents_config:
         subagents_config["maxDepth"] = max_subagent_depth
+    settings_web_search = merged_settings.get("webSearch") if isinstance(merged_settings.get("webSearch"), dict) else merged_settings.get("web_search") if isinstance(merged_settings.get("web_search"), dict) else {}
+    options_web_search = options.get("webSearch") if isinstance(options.get("webSearch"), dict) else options.get("web_search") if isinstance(options.get("web_search"), dict) else {}
+    web_search_config = {**settings_web_search, **options_web_search}
 
     return {
         "cwd": cwd,
@@ -277,6 +280,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "appendSystemPrompt": options.get("appendSystemPrompt") or merged_settings.get("appendSystemPrompt"),
         "sandbox": sandbox_config,
         "subagents": subagents_config,
+        "webSearch": web_search_config,
         "tools": tools,
         "allowedTools": allowed_tools,
         "disallowedTools": disallowed_tools,

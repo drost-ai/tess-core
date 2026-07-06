@@ -192,6 +192,8 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
     def test_websearch_decodes_redirects_and_bing_fallback(self):
         root, home, workspace, previous = self.temp_context()
         original_fetch = tools_module.fetch
+        previous_brave = os.environ.pop("BRAVE_API_KEY", None)
+        previous_exa = os.environ.pop("EXA_API_KEY", None)
         try:
             async def ddg_fetch(*args, **kwargs):
                 return Response(
@@ -228,9 +230,62 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             tools_module.fetch = fallback_fetch
             result = run(tool.handler({"query": "fallback test"}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(result["content"])
-            self.assertEqual(payload["fallback_reason"], "duckduckgo_empty_or_blocked")
+            self.assertEqual(payload["fallback_reason"], "duckduckgo_empty")
             self.assertEqual(payload["results"][0]["url"], "https://example.com/research")
             self.assertEqual(calls["count"], 2)
         finally:
             tools_module.fetch = original_fetch
+            if previous_brave is not None:
+                os.environ["BRAVE_API_KEY"] = previous_brave
+            if previous_exa is not None:
+                os.environ["EXA_API_KEY"] = previous_exa
+            self.restore_home(root, previous)
+
+    def test_websearch_prefers_brave_api_when_configured(self):
+        root, home, workspace, previous = self.temp_context()
+        original_fetch = tools_module.fetch
+        previous_brave = os.environ.get("BRAVE_API_KEY")
+        previous_exa = os.environ.pop("EXA_API_KEY", None)
+        os.environ["BRAVE_API_KEY"] = "test-brave-key"
+        try:
+            seen = {}
+
+            async def brave_fetch(url, *, headers=None, signal=None):
+                seen["url"] = url
+                seen["headers"] = headers or {}
+                return Response(
+                    json.dumps(
+                        {
+                            "web": {
+                                "results": [
+                                    {
+                                        "title": "OpenAI Agents SDK",
+                                        "url": "https://openai.github.io/openai-agents-python/",
+                                        "description": "Build agents with tools and handoffs.",
+                                    }
+                                ]
+                            }
+                        }
+                    )
+                )
+
+            tools_module.fetch = brave_fetch
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
+            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "WebSearch")
+            result = run(tool.handler({"query": "OpenAI Agents SDK", "count": 3}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
+            payload = json.loads(result["content"])
+            self.assertEqual(payload["provider"], "brave")
+            self.assertIsNone(payload["fallback_reason"])
+            self.assertEqual(payload["results"][0]["url"], "https://openai.github.io/openai-agents-python/")
+            self.assertIn("api.search.brave.com", seen["url"])
+            self.assertEqual(seen["headers"]["X-Subscription-Token"], "test-brave-key")
+        finally:
+            tools_module.fetch = original_fetch
+            if previous_brave is None:
+                os.environ.pop("BRAVE_API_KEY", None)
+            else:
+                os.environ["BRAVE_API_KEY"] = previous_brave
+            if previous_exa is not None:
+                os.environ["EXA_API_KEY"] = previous_exa
             self.restore_home(root, previous)
