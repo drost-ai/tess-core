@@ -39,7 +39,6 @@ class WebSearchSettings(TypedDict, total=False):
     """Non-secret web search settings for the built-in WebSearch tool."""
 
     provider: str
-    braveApiKeyEnv: str
     exaApiKeyEnv: str
     urlAllowlist: list[str]
 
@@ -160,6 +159,7 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     sandbox: dict[str, Any]
     subagents: dict[str, Any]
     webSearch: WebSearchSettings
+    settingsEnv: dict[str, str]
     allowedTools: list[str]
     disallowedTools: list[str]
     inputFormat: str

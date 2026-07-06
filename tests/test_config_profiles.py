@@ -53,9 +53,9 @@ class ConfigProfileTests(AgentCoreTestCase):
                         "webSearch": {
                             "provider": "exa",
                             "exaApiKeyEnv": "EXA_API_KEY",
-                            "braveApiKeyEnv": "BRAVE_API_KEY",
                             "urlAllowlist": ["openai.com"],
-                        }
+                        },
+                        "env": {"EXA_API_KEY": "settings-exa-key", "TESS_WEB_SEARCH_PROVIDER": "exa"},
                     }
                 ),
                 encoding="utf-8",
@@ -66,10 +66,11 @@ class ConfigProfileTests(AgentCoreTestCase):
                 {
                     "provider": "exa",
                     "exaApiKeyEnv": "EXA_API_KEY",
-                    "braveApiKeyEnv": "BRAVE_API_KEY",
                     "urlAllowlist": ["openai.com"],
                 },
             )
+            self.assertEqual(config["settingsEnv"]["EXA_API_KEY"], "settings-exa-key")
+            self.assertEqual(config["settingsEnv"]["TESS_WEB_SEARCH_PROVIDER"], "exa")
         finally:
             self.restore_home(root, previous)
 

@@ -281,6 +281,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "sandbox": sandbox_config,
         "subagents": subagents_config,
         "webSearch": web_search_config,
+        "settingsEnv": settings_env,
         "tools": tools,
         "allowedTools": allowed_tools,
         "disallowedTools": disallowed_tools,

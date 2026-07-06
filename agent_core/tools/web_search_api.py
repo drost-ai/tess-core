@@ -4,54 +4,10 @@ import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Awaitable, Callable
-from urllib.parse import urlencode
+from typing import Any
 from urllib.request import Request, urlopen
 
 from .cancellation import _create_tool_abort_error, _signal_aborted
-
-FetchCallable = Callable[..., Awaitable[Any]]
-
-
-async def searchBrave(
-    query: str,
-    *,
-    api_key: str,
-    fetch_func: FetchCallable,
-    count: int = 8,
-    country: str = "US",
-    freshness: str | None = None,
-    abortSignal: Any = None,
-) -> list[dict[str, str]]:
-    if _signal_aborted(abortSignal):
-        raise _create_tool_abort_error()
-    params = {"q": query, "count": str(max(1, min(10, int(count)))), "country": str(country or "US").upper()[:2] or "US"}
-    if freshness:
-        params["freshness"] = freshness
-    url = f"https://api.search.brave.com/res/v1/web/search?{urlencode(params)}"
-    response = await fetch_func(url, headers={"X-Subscription-Token": api_key, "Accept": "application/json"}, signal=abortSignal)
-    if _signal_aborted(abortSignal):
-        raise _create_tool_abort_error()
-    if not response.ok:
-        raise RuntimeError(f"Brave Search returned status {response.status}")
-    payload = json.loads(await response.text())
-    web = payload.get("web") if isinstance(payload, dict) else None
-    raw_results = web.get("results") if isinstance(web, dict) else []
-    out: list[dict[str, str]] = []
-    for item in raw_results if isinstance(raw_results, list) else []:
-        if not isinstance(item, dict):
-            continue
-        url_value = str(item.get("url") or "").strip()
-        if not url_value:
-            continue
-        out.append(
-            {
-                "url": url_value,
-                "title": str(item.get("title") or url_value),
-                "snippet": str(item.get("description") or item.get("snippet") or ""),
-            }
-        )
-    return out
 
 
 async def searchExa(
@@ -61,6 +17,8 @@ async def searchExa(
     count: int = 8,
     freshness: str | None = None,
     category: str | None = None,
+    allowedDomains: list[str] | None = None,
+    blockedDomains: list[str] | None = None,
     abortSignal: Any = None,
 ) -> list[dict[str, str]]:
     if _signal_aborted(abortSignal):
@@ -73,6 +31,12 @@ async def searchExa(
     }
     if category:
         payload["category"] = category
+    include_domains = normalizeSearchDomains(allowedDomains)
+    exclude_domains = normalizeSearchDomains(blockedDomains)
+    if include_domains:
+        payload["includeDomains"] = include_domains
+    if exclude_domains:
+        payload["excludeDomains"] = exclude_domains
     start_published = _exa_start_published_date(freshness)
     if start_published:
         payload["startPublishedDate"] = start_published
@@ -98,6 +62,7 @@ async def searchExa(
             continue
         out.append(
             {
+                "source": "exa",
                 "url": url_value,
                 "title": str(item.get("title") or url_value),
                 "snippet": _exa_summary(item),
@@ -107,35 +72,38 @@ async def searchExa(
 
 
 def resolveSearchApiProvider(config: dict[str, Any] | None, provider: str | None = None) -> dict[str, str] | None:
+    configured = resolveSearchProviderPreference(config, provider)
+    if configured == "scraper":
+        return None
+    api_key = searchApiKey(config)
+    if configured == "exa":
+        return {"provider": "exa", "api_key": api_key} if api_key else None
+    if not configured and api_key:
+        return {"provider": "exa", "api_key": api_key}
+    return None
+
+
+def resolveSearchProviderPreference(config: dict[str, Any] | None, provider: str | None = None) -> str:
     configured = normalizeSearchProvider(provider)
     web_settings = webSearchSettings(config)
     if not configured:
+        settings_env = settingsEnv(config)
         configured = normalizeSearchProvider(
-            web_settings.get("provider")
+            os.environ.get("TESS_WEB_SEARCH_PROVIDER")
+            or os.environ.get("WEB_SEARCH_PROVIDER")
+            or settings_env.get("TESS_WEB_SEARCH_PROVIDER")
+            or settings_env.get("WEB_SEARCH_PROVIDER")
+            or web_settings.get("provider")
             or configLookup(config, "webSearchProvider", "web_search_provider")
-            or os.environ.get("AGENT_CORE_WEB_SEARCH_PROVIDER")
-            or os.environ.get("HOST_WEB_SEARCH_PROVIDER")
         )
-    if not configured:
-        configured = "brave" if searchApiKey("brave", web_settings) else "exa" if searchApiKey("exa", web_settings) else ""
-    if configured not in {"brave", "exa"}:
-        return None
-    api_key = searchApiKey(configured, web_settings)
-    if not api_key:
-        alternate = "exa" if configured == "brave" else "brave"
-        alternate_key = searchApiKey(alternate, web_settings)
-        if alternate_key:
-            return {"provider": alternate, "api_key": alternate_key}
-        return None
-    return {"provider": configured, "api_key": api_key}
+    return configured
 
 
-def searchApiKey(provider: str, web_settings: dict[str, Any]) -> str:
-    if provider == "exa":
-        env_name = optionalString(web_settings.get("exaApiKeyEnv") or web_settings.get("exa_api_key_env")) or "EXA_API_KEY"
-        return os.environ.get(env_name) or os.environ.get("EXA_API_KEY") or ""
-    env_name = optionalString(web_settings.get("braveApiKeyEnv") or web_settings.get("brave_api_key_env")) or "BRAVE_API_KEY"
-    return os.environ.get(env_name) or os.environ.get("BRAVE_API_KEY") or ""
+def searchApiKey(config: dict[str, Any] | None) -> str:
+    web_settings = webSearchSettings(config)
+    settings_env = settingsEnv(config)
+    env_name = optionalString(web_settings.get("exaApiKeyEnv") or web_settings.get("exa_api_key_env")) or "EXA_API_KEY"
+    return os.environ.get(env_name) or os.environ.get("EXA_API_KEY") or settings_env.get(env_name) or settings_env.get("EXA_API_KEY") or ""
 
 
 def webSearchSettings(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -160,11 +128,46 @@ def webSearchSettings(config: dict[str, Any] | None) -> dict[str, Any]:
     return {}
 
 
+def settingsEnv(config: dict[str, Any] | None) -> dict[str, str]:
+    if not isinstance(config, dict):
+        return {}
+    value = config.get("settingsEnv") or config.get("settings_env")
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): str(item) for key, item in value.items() if item is not None}
+
+
 def configuredAllowedDomains(web_settings: dict[str, Any]) -> list[str]:
     raw = web_settings.get("urlAllowlist") or web_settings.get("url_allowlist") or []
     if not isinstance(raw, list):
         return []
     return [str(item).strip().lower() for item in raw if str(item).strip()]
+
+
+def normalizeSearchDomains(values: list[str] | None) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values or []:
+        normalized = normalizeSearchDomain(value)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            out.append(normalized)
+    return out
+
+
+def normalizeSearchDomain(value: str) -> str | None:
+    trimmed = str(value or "").strip()
+    trimmed = re.sub(r"^\*\.", "", trimmed)
+    trimmed = re.sub(r"^\.", "", trimmed)
+    if not trimmed:
+        return None
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(trimmed if "://" in trimmed else f"https://{trimmed}")
+        return parsed.hostname or None
+    except Exception:
+        return trimmed.split("/", 1)[0] or None
 
 
 def hostnameMatchesRule(hostname: str, domain: str) -> bool:
@@ -188,7 +191,11 @@ def configLookup(config: dict[str, Any] | None, *keys: str) -> Any:
 
 def normalizeSearchProvider(value: Any) -> str:
     cleaned = str(value or "").strip().lower()
-    return cleaned if cleaned in {"brave", "exa", "scraper"} else ""
+    if cleaned == "exa":
+        return "exa"
+    if cleaned in {"scraper", "duckduckgo", "bing"}:
+        return "scraper"
+    return ""
 
 
 def coerceResultCount(value: Any) -> int:

@@ -104,7 +104,7 @@ BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
             "country": {"type": "string", "description": "Two-letter country code for providers that support it."},
             "freshness": {"type": "string", "description": "Optional freshness filter such as pd, pw, pm, or py."},
             "category": {"type": "string", "description": "Optional provider category, such as news, pdf, github, or research paper."},
-            "provider": {"type": "string", "enum": ["brave", "exa", "scraper"]},
+            "provider": {"type": "string", "enum": ["exa", "scraper"]},
             "allowed_domains": {"type": "array", "items": {"type": "string"}},
             "blocked_domains": {"type": "array", "items": {"type": "string"}},
         },

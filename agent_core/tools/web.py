@@ -24,8 +24,8 @@ from .web_search_api import (
     joinFallbackReasons,
     optionalString,
     resolveSearchApiProvider,
-    searchBrave,
     searchExa,
+    resolveSearchProviderPreference,
     webSearchSettings,
 )
 
@@ -95,6 +95,8 @@ def _web_search_tool() -> ToolDefinition:
             freshness=optionalString(input.get("freshness")),
             category=optionalString(input.get("category")),
             provider=optionalString(input.get("provider")),
+            allowed_domains=allowed,
+            blocked_domains=blocked,
         )
         for result in response["results"]:
             _throw_if_tool_cancelled(context)
@@ -140,40 +142,34 @@ async def searchWebResponse(
     freshness: str | None = None,
     category: str | None = None,
     provider: str | None = None,
+    allowed_domains: list[str] | None = None,
+    blocked_domains: list[str] | None = None,
 ) -> dict[str, Any]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     api_provider = resolveSearchApiProvider(config, provider)
+    preferred_provider = resolveSearchProviderPreference(config, provider)
     api_fallback_reason = None
     if api_provider:
         try:
-            if api_provider["provider"] == "brave":
-                brave = await searchBrave(
-                    query,
-                    api_key=api_provider["api_key"],
-                    fetch_func=_facade_fetch(),
-                    count=count,
-                    country=country,
-                    freshness=freshness,
-                    abortSignal=abortSignal,
-                )
-                if brave:
-                    return {"provider": "brave", "results": brave, "fallback_reason": None}
-                api_fallback_reason = "brave_empty"
-            elif api_provider["provider"] == "exa":
+            if api_provider["provider"] == "exa":
                 exa = await searchExa(
                     query,
                     api_key=api_provider["api_key"],
                     count=count,
                     freshness=freshness,
                     category=category,
+                    allowedDomains=allowed_domains,
+                    blockedDomains=blocked_domains,
                     abortSignal=abortSignal,
                 )
                 if exa:
                     return {"provider": "exa", "results": exa, "fallback_reason": None}
-                api_fallback_reason = "exa_empty"
+                api_fallback_reason = "exa_unavailable" if preferred_provider == "exa" else None
         except Exception as exc:
-            api_fallback_reason = f"{api_provider['provider']}_error:{type(exc).__name__}"
+            api_fallback_reason = "exa_unavailable" if preferred_provider == "exa" else None
+    elif preferred_provider == "exa":
+        api_fallback_reason = "exa_unavailable"
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     duck = await searchDuckDuckGo(query, abortSignal)
@@ -228,7 +224,7 @@ def parseDuckDuckGoResults(raw: str) -> list[dict[str, str]]:
     for match in pattern.finditer(raw):
         url = normalizeDuckDuckGoResultUrl(match.group(1))
         if url:
-            out.append({"url": url, "title": _strip_html(html.unescape(match.group(2))), "snippet": _strip_html(html.unescape(match.group(3)))})
+            out.append({"source": "duckduckgo", "url": url, "title": _strip_html(html.unescape(match.group(2))), "snippet": _strip_html(html.unescape(match.group(3)))})
     return out
 
 
@@ -259,7 +255,7 @@ def parseBingResults(raw: str) -> list[dict[str, str]]:
         if not url:
             continue
         snippet_match = re.search(r"<p[^>]*>([\s\S]*?)</p>", section, re.I)
-        out.append({"url": url, "title": _strip_html(html.unescape(title_match.group(2))), "snippet": _strip_html(html.unescape(snippet_match.group(1) if snippet_match else ""))})
+        out.append({"source": "bing", "url": url, "title": _strip_html(html.unescape(title_match.group(2))), "snippet": _strip_html(html.unescape(snippet_match.group(1) if snippet_match else ""))})
     return out
 
 
@@ -293,15 +289,18 @@ def decodeBingRedirectTarget(value: str) -> str | None:
 
 
 def normalizeWebSearchQuery(query: str) -> str:
-    return query.replace('\\"', '"').strip()
+    return re.sub(r"\s+", " ", re.sub(r"\\([\"'])", r"\1", query)).strip()
 
 
 def _compact_web_result(result: dict[str, str]) -> dict[str, str]:
-    return {
+    payload = {
         "url": result.get("url", ""),
         "title": _truncate_text(result.get("title", ""), 200),
         "snippet": _truncate_text(result.get("snippet", ""), 600),
     }
+    if result.get("source"):
+        payload["source"] = result.get("source", "")
+    return payload
 
 
 def _truncate_text(value: str, limit: int) -> str:
