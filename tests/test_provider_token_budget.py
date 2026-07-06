@@ -18,6 +18,9 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
         anthropic = resolveProviderTokenLimits({"kind": "anthropic", "model": "claude-opus-4-8"})
         self.assertEqual(anthropic, {"maxContextLength": 1_000_000, "maxOutputTokens": 128_000})
 
+        kimi = resolveProviderTokenLimits({"profileName": "kimi", "kind": "anthropic", "model": "kimi-k2.6"})
+        self.assertEqual(kimi, {"maxContextLength": 262_144, "maxOutputTokens": 262_144})
+
         policy = resolveCompactionPolicy({"kind": "openai", "model": "llamacpp", "maxContextLength": 32_000, "maxOutputTokens": 4_096})
         self.assertEqual(policy["compactionThresholdTokens"], 32_000)
         self.assertEqual(policy["compactionOutputTokens"], 3_200)

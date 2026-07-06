@@ -148,6 +148,7 @@ _MODEL_LIMIT_RULES = [
     _rule(262_144, 65_536, lambda item: "nemotron-3-ultra" in item["profileName"] or "nemotron-3-ultra" in item["model"]),
     _rule(512_000, 512_000, lambda item: "minimax-3" in item["profileName"] or "minimax-m3" in item["model"]),
     _rule(262_144, 262_144, lambda item: "kimi-2-5" in item["profileName"] or "kimi-k2p5" in item["model"]),
+    _rule(262_144, 262_144, lambda item: "kimi-2-6" in item["profileName"] or "kimi-k2.6" in item["model"]),
     _rule(1_000_000, 1_000_000, lambda item: "grok-4-3" in item["profileName"] or "grok-4.3" in item["model"]),
     _rule(256_000, 256_000, lambda item: "grok-build-0-1" in item["profileName"] or "grok-build-0.1" in item["model"]),
     _rule(262_144, 262_144, lambda item: "kimi-2-7-coding" in item["profileName"] or "kimi-k2.7-coding" in item["model"]),
