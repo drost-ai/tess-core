@@ -53,7 +53,14 @@ class NormalizationContext:
             if key in value:
                 value[key] = "<workspace-root>"
         if _is_estimated_token_record(value):
-            for key in ("base_input_tokens", "input_tokens", "baseInputTokens", "inputTokens"):
+            for key in (
+                "base_input_tokens",
+                "input_tokens",
+                "remaining_output_tokens",
+                "baseInputTokens",
+                "inputTokens",
+                "remainingOutputTokens",
+            ):
                 if key in value:
                     value[key] = "<token-estimate>"
         if key_path and key_path[-1] in {"continuity_pressure", "continuityPressure"}:

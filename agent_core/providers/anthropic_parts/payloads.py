@@ -160,7 +160,10 @@ def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
             elif block.get("type") == "tool_use":
                 out.append({"type": "tool_use", "id": block.get("id"), "name": block.get("name"), "input": block.get("input") or {}})
             elif block.get("type") == "tool_result":
-                out.append({"type": "tool_result", "tool_use_id": block.get("tool_use_id"), "content": str(block.get("content", "")), "is_error": block.get("is_error")})
+                tool_result = {"type": "tool_result", "tool_use_id": block.get("tool_use_id"), "content": str(block.get("content", ""))}
+                if isinstance(block.get("is_error"), bool):
+                    tool_result["is_error"] = block["is_error"]
+                out.append(tool_result)
         return out
     return []
 

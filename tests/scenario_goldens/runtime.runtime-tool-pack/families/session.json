@@ -25,7 +25,7 @@
       "content": [
         {
           "content": "{\n  \"type\": \"text\",\n  \"file\": {\n    \"filePath\": \"<workspace>/README.md\",\n    \"content\": \"hello from runtime harness\\n\",\n    \"numLines\": 2,\n    \"startLine\": 1,\n    \"totalLines\": 2,\n    \"selectedNumLines\": 2,\n    \"selectedBytes\": 27,\n    \"truncated\": false,\n    \"requestedLimit\": 320,\n    \"transcriptView\": {\n      \"strategy\": \"inline_full\",\n      \"truncated\": false,\n      \"originalBytes\": 27,\n      \"originalLines\": 2,\n      \"returnedBytes\": 27,\n      \"returnedLines\": 2\n    }\n  }\n}",
-          "is_error": null,
+          "is_error": false,
           "tool_use_id": "read_readme",
           "type": "tool_result"
         }

@@ -259,7 +259,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
                 _throw_if_turn_cancelled(runtime)
                 _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
-                block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": result.get("isError"), "content": result.get("content", "")}
+                block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": bool(result.get("isError")), "content": result.get("content", "")}
                 if result.get("pause") == "approval":
                     block["_pauseMessage"] = (result.get("content") or "").strip() or "Approval required before continuing."
                 return block

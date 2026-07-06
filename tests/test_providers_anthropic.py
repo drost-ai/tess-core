@@ -94,6 +94,27 @@ class AnthropicProviderTests(AgentCoreTestCase):
             }
         )
         self.assertEqual(redacted_image_payload["messages"][0]["content"], [{"type": "text", "text": "describe"}])
+        tool_result_payload = testing.buildAnthropicMessagesPayload(
+            {
+                "model": "claude-sonnet-4-6",
+                "system": "s",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "tool_result", "tool_use_id": "tool-null", "content": "ok", "is_error": None},
+                            {"type": "tool_result", "tool_use_id": "tool-false", "content": "ok", "is_error": False},
+                            {"type": "tool_result", "tool_use_id": "tool-true", "content": "bad", "is_error": True},
+                        ],
+                    }
+                ],
+                "tools": [],
+            }
+        )
+        tool_result_blocks = tool_result_payload["messages"][0]["content"]
+        self.assertNotIn("is_error", tool_result_blocks[0])
+        self.assertIs(tool_result_blocks[1]["is_error"], False)
+        self.assertIs(tool_result_blocks[2]["is_error"], True)
         count_payload = testing.buildAnthropicCountTokensPayload(request)
         self.assertNotIn("max_tokens", count_payload)
         self.assertNotIn("stream", count_payload)
