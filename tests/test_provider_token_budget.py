@@ -21,6 +21,9 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
         kimi = resolveProviderTokenLimits({"profileName": "kimi", "kind": "anthropic", "model": "kimi-k2.6"})
         self.assertEqual(kimi, {"maxContextLength": 262_144, "maxOutputTokens": 262_144})
 
+        minimax = resolveProviderTokenLimits({"profileName": "fireworks_minimax", "kind": "openai", "model": "accounts/fireworks/models/minimax-m2p7"})
+        self.assertEqual(minimax, {"maxContextLength": 512_000, "maxOutputTokens": 512_000})
+
         policy = resolveCompactionPolicy({"kind": "openai", "model": "llamacpp", "maxContextLength": 32_000, "maxOutputTokens": 4_096})
         self.assertEqual(policy["compactionThresholdTokens"], 32_000)
         self.assertEqual(policy["compactionOutputTokens"], 3_200)
