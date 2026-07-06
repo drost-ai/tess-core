@@ -49,6 +49,8 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "sessionId": "session-11111111-2222-3333-4444-555555555555",
                     "path": str(sandbox.workspace / "README.md"),
                     "repo": str(Path.cwd() / "agent_core_harness"),
+                    "python": f"{Path.cwd()}/.venv/bin/python",
+                    "python3": f"{Path.cwd()}/.venv/bin/python3",
                     "tokens": {"input_tokens": 54321},
                 }
                 normalized = normalize_observations(raw, sandbox)
@@ -61,6 +63,8 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(normalized["sessionId"], "session-<uuid:1>")
                 self.assertEqual(normalized["path"], "<workspace>/README.md")
                 self.assertEqual(normalized["repo"], "<repo>/agent_core_harness")
+                self.assertEqual(normalized["python"], "<python>")
+                self.assertEqual(normalized["python3"], "<python>")
                 self.assertEqual(normalized["tokens"]["input_tokens"], 54321)
             finally:
                 sandbox.cleanup_sandbox(passed=True)

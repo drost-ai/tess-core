@@ -183,7 +183,7 @@ _EMBEDDED_GIT_ROOT_FIELD_PATTERN = re.compile(r'("(?:git_root|gitRoot)":)(?:"[^"
 _EMBEDDED_GIT_BRANCH_FIELD_PATTERN = re.compile(r'("(?:git_branch|gitBranch)":)(?:"[^"]*"|null)')
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 _PYTHON_EXECUTABLE_PATTERN = re.compile(
-    r"(?<![\w<])(?:<repo>/\.venv/bin/python\d+(?:\.\d+)?|/(?:[\w.+@-]+/)*python\d+(?:\.\d+)?)(?![\w.])"
+    r"(?<![\w<])(?:<repo>/\.venv/bin/python\d*(?:\.\d+)?|/(?:[\w.+@-]+/)*python\d*(?:\.\d+)?)(?![\w.])"
 )
 
 

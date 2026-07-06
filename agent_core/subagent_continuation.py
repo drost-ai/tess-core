@@ -16,6 +16,7 @@ from .subagent_reconciliation import (
     _read_records,
     _sort_records,
     _write_records,
+    readSubagentReconciliations,
     listUnconsumedSubagentReconciliations,
     subagentReconciliationLogPath,
 )
@@ -28,16 +29,20 @@ async def requestParentContinuationForReconciliations(
     prompt: str | None = None,
     launchGroupId: str | None = None,
 ) -> dict[str, Any]:
-    records = await listUnconsumedSubagentReconciliations(parentSessionId)
+    records = await readSubagentReconciliations(parentSessionId)
+    unconsumed_records = await listUnconsumedSubagentReconciliations(parentSessionId)
     if launchGroupId:
         records = [record for record in records if record.get("launchGroupId") == launchGroupId]
+        unconsumed_records = [record for record in unconsumed_records if record.get("launchGroupId") == launchGroupId]
     ready = evaluateParentContinuationReadiness(records, {"waitFor": waitFor})
     if not ready["ready"]:
         return {"requested": False, **ready}
     requested_at = now_iso()
     run_id = f"continuation-{uuid.uuid4()}"
     path = subagentReconciliationLogPath(parentSessionId)
-    wanted = {record.get("id") for record in records if record.get("id")}
+    wanted = {record.get("id") for record in unconsumed_records if record.get("id")}
+    if not wanted:
+        return {"requested": False, "reason": "satisfied_intent", **ready}
     async with fileLock(path):
         current = await _read_records(path)
         next_records = []
@@ -133,13 +138,15 @@ async def _maybe_start_ready_parent_continuations(
     groups = await _read_subagent_launch_groups(parentSessionId)
     if launchGroupId:
         groups = [group for group in groups if group.get("id") == launchGroupId]
-    records = await listUnconsumedSubagentReconciliations(parentSessionId)
+    records = await readSubagentReconciliations(parentSessionId)
+    unconsumed_records = await listUnconsumedSubagentReconciliations(parentSessionId)
     started: list[dict[str, Any]] = []
     for group in groups:
         outcome = await _maybe_start_group_continuation(
             parentSessionId,
             group,
             records,
+            unconsumed_records,
             policy=policy,
             starter=starter,
             runtime=runtime,
@@ -153,6 +160,7 @@ async def _maybe_start_group_continuation(
     parent_session_id: str,
     group: dict[str, Any],
     records: list[dict[str, Any]],
+    unconsumed_records: list[dict[str, Any]],
     *,
     policy: dict[str, Any],
     starter: Any = None,
@@ -161,7 +169,7 @@ async def _maybe_start_group_continuation(
     group_id = _string(group.get("id"))
     if not group_id:
         return None
-    unconsumed_for_group = [record for record in records if _record_belongs_to_group(record, group)]
+    unconsumed_for_group = [record for record in unconsumed_records if _record_belongs_to_group(record, group)]
     if group.get("continuationTaskId"):
         return {"started": False, "reason": "already_requested", "launchGroupId": group_id, "continuationTaskId": group.get("continuationTaskId")}
     if group.get("continuationRequestedAt") and not unconsumed_for_group:
@@ -180,8 +188,6 @@ async def _maybe_start_group_continuation(
         return {"started": False, "launchGroupId": group_id, **ready}
     prompt = _string(policy.get("prompt")) or defaultParentContinuationPrompt()
     run_id = _string(group.get("continuationRunId")) or f"continuation-{uuid.uuid4()}"
-    await _mark_subagent_launch_group_continuation_requested(parent_session_id, group_id, prompt=prompt, runId=run_id)
-    _emit(runtime, "subagent.continuation.requested", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, **ready})
     parent = await loadSession(parent_session_id)
     if not parent:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "Parent session not found."})
@@ -190,6 +196,8 @@ async def _maybe_start_group_continuation(
     if not task_starter:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "No task supervisor available."})
         return {"started": False, "reason": "supervisor_unavailable", "launchGroupId": group_id, "continuationRunId": run_id}
+    await _mark_subagent_launch_group_continuation_requested(parent_session_id, group_id, prompt=prompt, runId=run_id)
+    _emit(runtime, "subagent.continuation.requested", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, **ready})
     try:
         launched = await task_starter(
             {
