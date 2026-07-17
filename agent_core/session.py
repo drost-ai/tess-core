@@ -11,6 +11,7 @@ from .storage import (
     createEmptySession,
     hasPersistableSessionMessages,
     listSessions,
+    loadSession,
     saveSession,
 )
 from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
@@ -21,7 +22,8 @@ async def resolveSession(options: dict[str, Any], config: dict[str, Any], launch
     sessions = await listSessions()
     existing = await _resolve_existing_session(options, sessions, launch)
     if existing:
-        return _fork_or_reuse_session(existing, options, config, launch)
+        selected = await loadSession(existing["id"])
+        return _fork_or_reuse_session(selected or existing, options, config, launch)
     created = createEmptySession(
         cwd=launch["cwd"],
         provider=config["provider"],
@@ -42,14 +44,21 @@ async def resolveSession(options: dict[str, Any], config: dict[str, Any], launch
     return created
 
 
-async def persistSession(session: dict[str, Any], config: dict[str, Any]) -> None:
+async def persistSession(
+    session: dict[str, Any],
+    config: dict[str, Any],
+    options: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> None:
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
         return
     snapshot = copy.deepcopy(session)
     repair = repairSessionTranscript(snapshot)
     await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
-    snapshot["updatedAt"] = now_iso()
-    transcript_log = await _persist_session_transcript_log(snapshot, repair)
+    persist_options = {**(options or {}), **kwargs}
+    if persist_options.get("touch", True):
+        snapshot["updatedAt"] = now_iso()
+    transcript_log, _appended = await _persist_session_transcript_log(snapshot, repair)
     snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
     await saveSession(snapshot)
     session.setdefault("metadata", {})["fullTranscriptLog"] = copy.deepcopy(transcript_log)
@@ -118,8 +127,13 @@ async def findSessionsForWorkspace(sessions: list[dict[str, Any]], cwd: str) -> 
     return [session for session in sessions if _matches_workspace(session, resolved_cwd, resolved_git)]
 
 
-async def _persist_session_transcript_log(session: dict[str, Any], repair: dict[str, Any]) -> dict[str, Any]:
-    previous = session.get("metadata", {}).get("fullTranscriptLog", {}).get("archivedMessageCount", 0)
+async def _persist_session_transcript_log(
+    session: dict[str, Any], repair: dict[str, Any]
+) -> tuple[dict[str, Any], bool]:
+    raw_previous_log = session.get("metadata", {}).get("fullTranscriptLog", {})
+    previous_log = raw_previous_log if isinstance(raw_previous_log, dict) else {}
+    previous_count = previous_log.get("archivedMessageCount", 0)
+    previous = previous_count if isinstance(previous_count, int) and previous_count >= 0 else 0
     archived_at = now_iso()
     entries = []
     if repair.get("repaired") and previous > len(session.get("messages", [])):
@@ -128,7 +142,15 @@ async def _persist_session_transcript_log(session: dict[str, Any], repair: dict[
         message = session["messages"][index]
         entries.append({"type": "message", "session_id": session["id"], "message_index": index, "persisted_at": archived_at, "role": message.get("role"), "content": message.get("content")})
     path = await appendSessionTranscriptLogEntries(session["id"], entries)
-    return {"path": path, "archivedMessageCount": len(session.get("messages", [])), "lastArchivedAt": archived_at}
+    appended = bool(entries)
+    return (
+        {
+            "path": path,
+            "archivedMessageCount": len(session.get("messages", [])),
+            "lastArchivedAt": archived_at if appended else previous_log.get("lastArchivedAt"),
+        },
+        appended,
+    )
 
 
 def _find_invalid_tool_use_boundary(messages: list[dict[str, Any]]) -> dict[str, Any] | None:

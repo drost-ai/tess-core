@@ -14,6 +14,7 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
     daemon = await loadDaemonState()
     workspace = await captureWorkspaceSnapshot(cwd)
     capabilities = summarizeWorkspaceCapabilities(workspace)
+    session_hygiene = await buildSessionHygieneReport()
     mcp_records = []
     plugin_records = []
     for scope in ("user", "project", "local"):
@@ -35,6 +36,22 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
             chrome.get("nativeHostManifest") or {},
         ),
         _doctor_check("daemon", _daemon_check_status(daemon), _daemon_check_message(daemon), "Start the task supervisor daemon when background task, monitor, or bridge features are needed.", {"phase": (daemon or {}).get("phase"), "pid": (daemon or {}).get("pid"), "socketPath": (daemon or {}).get("socketPath"), "updatedAt": (daemon or {}).get("updatedAt")}),
+        _doctor_check(
+            "session_hygiene",
+            "warn"
+            if session_hygiene.get("damagedTimestampCount")
+            or session_hygiene.get("staleMarkerSessionCount")
+            or session_hygiene.get("malformedRecords")
+            or session_hygiene.get("oversizedRecords")
+            else "pass",
+            (
+                f"Session store has {session_hygiene.get('sessionCount', 0)} valid records, "
+                f"{session_hygiene.get('staleMarkerSessionCount', 0)} stale marker sessions, and "
+                f"{session_hygiene.get('damagedTimestampCount', 0)} proven timestamp repair candidates."
+            ),
+            "Run repairSessionTimestamps() for an exact dry-run; stop the daemon before explicitly applying repairs.",
+            session_hygiene,
+        ),
         _doctor_check("git", "pass" if capabilities.get("hasGit") else "warn", "A git project root is available." if capabilities.get("hasGit") else "This directory is not inside a git repository.", "Run inside a git repository for worktree and PR-aware flows.", {"projectRoot": project_root}),
         _doctor_check("workspace", "pass" if capabilities.get("hasGit") or workspace.get("mode") else "warn", f"Workspace {workspace.get('workspaceName')} is running in {workspace.get('mode')} mode.", "Use worktree mode when isolated execution is required.", {"workspaceId": workspace.get("workspaceId"), "workspaceRoot": workspace.get("workspaceRoot"), "mode": workspace.get("mode")}),
         _doctor_check("extensions", "pass", f"Loaded config includes {len(mcp_records)} MCP server declarations and {len(plugin_records)} plugin records.", details={"mcpCount": len(mcp_records), "enabledPluginCount": len([record for record in plugin_records if record.get('enabled')]), "totalPluginCount": len(plugin_records)}),

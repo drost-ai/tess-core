@@ -14,6 +14,7 @@ from typing import Any, Callable
 from ..._utils import maybe_await, now_iso
 from ...storage import (
     ensureBaseLayout,
+    hasPersistableSessionMessages,
     listTaskRecords,
     listChildAgents,
     listHealthCheckTasks,

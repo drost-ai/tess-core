@@ -16,6 +16,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     on_event: Callable[[dict[str, Any]], Any] = args.get("onEvent") or (lambda _event: None)
     await ensureBaseLayout(cwd)
     supervisor_id = str(uuid.uuid4())
+    live_work_cache = _create_live_work_verdict_cache()
     subscribers: set[Callable[[dict[str, Any]], Any]] = set()
     attached_all_count = 0
     attached_sessions: dict[str, int] = {}
@@ -76,6 +77,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             return record_session
 
         await mutateSessionRecord(session_id, _append_task_id)
+        _invalidate_live_work_cache(live_work_cache, session_id)
         await emit("task.updated", _task_record_event_payload(record), session_id)
         watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
         _WATCHERS.add(watcher)
@@ -102,6 +104,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             return record_session
 
         await mutateSessionRecord(session_id, _append_main_session_task)
+        _invalidate_live_work_cache(live_work_cache, session_id)
         command = prompt
         proc = _spawn_main_session_worker(task_id, session_id, prompt, task_cwd, output_file, runtime_home=task_args.get("runtimeHome"))
         _PROCESS_REGISTRY[task_id] = proc
@@ -205,6 +208,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         )
         record = _build_task_record(meta, "Background subagent is running under daemon supervision.")
         await saveTaskRecord(record)
+        _invalidate_live_work_cache(live_work_cache, parent_session_id, session_id)
         await emit("task.updated", _task_record_event_payload(record), parent_session_id)
         watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
         _WATCHERS.add(watcher)
@@ -214,9 +218,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     async def stop_task(task_id: str) -> bool:
         proc = _PROCESS_REGISTRY.get(task_id)
         meta = await readTaskMeta(task_id)
+        affected_session_ids = _task_session_ids(meta)
         meta_type = meta.get("type") if meta else None
         if proc and proc.poll() is None and meta_type != "subagent":
-            return _terminate_process(proc.pid)
+            stopped = _terminate_process(proc.pid)
+            _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
+            return stopped
         stop_time = now_iso()
         health = await mutateHealthCheckTask(
             task_id,
@@ -224,9 +231,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         )
         if health:
             await writeTaskMeta(task_id, {**health, "type": "health_check", "updatedAt": stop_time})
+            _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
             return True
         if meta and meta_type != "subagent" and isinstance(meta.get("pid"), int) and _is_process_alive(meta["pid"]):
-            return _terminate_process(meta["pid"])
+            stopped = _terminate_process(meta["pid"])
+            _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
+            return stopped
         stopped = False
         if meta:
             now = now_iso()
@@ -251,6 +261,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         if meta:
             await emit(_event_name_for_task_status(_map_status(meta.get("status"))), _task_event_payload(meta), meta.get("sessionId"))
         _PROCESS_REGISTRY.pop(task_id, None)
+        _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
         return stopped
 
     async def inspect_task(task_id: str) -> dict[str, Any] | None:
@@ -383,6 +394,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                 return record_session
 
             await mutateSessionRecord(session_id, _append_health_check_task)
+            _invalidate_live_work_cache(live_work_cache, session_id)
         watcher = asyncio.create_task(_run_health_check(record, emit))
         _WATCHERS.add(watcher)
         watcher.add_done_callback(_WATCHERS.discard)
@@ -438,20 +450,11 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         _PROCESS_REGISTRY.clear()
 
     def get_state() -> dict[str, Any]:
-        return {
-            "supervisorId": supervisor_id,
-            "watchedSessions": len(attached_sessions),
-            "activeTasks": sum(1 for proc in _PROCESS_REGISTRY.values() if proc.poll() is None),
-            "attachedClients": attached_all_count + sum(attached_sessions.values()),
-        }
+        return {"supervisorId": supervisor_id, "watchedSessions": len(attached_sessions), "activeTasks": sum(1 for proc in _PROCESS_REGISTRY.values() if proc.poll() is None), "attachedClients": attached_all_count + sum(attached_sessions.values())}
 
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
-        records = await _project_session_task_records(session_id)
-        return {
-            "taskSnapshot": _task_snapshot(records),
-            "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)),
-            "collaborationSnapshot": await _collaboration_snapshot(session_id),
-        }
+        records = await _project_session_task_records(session_id, live_work_cache=live_work_cache)
+        return {"taskSnapshot": _task_snapshot(records), "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)), "collaborationSnapshot": await _collaboration_snapshot(session_id)}
 
     await _reconcile_persisted_tasks(supervisor_id, emit)
 

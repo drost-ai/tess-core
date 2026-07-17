@@ -17,16 +17,7 @@
         "Remote QA"
       ],
       "pendingBridgeMessages": 0,
-      "recentAssistantUpdates": [
-        {
-          "label": "Remote QA",
-          "sourceId": "remote-main",
-          "sourceKind": "remote",
-          "status": "active",
-          "text": "Remote QA: bridge.reconnected",
-          "timestamp": "<timestamp>"
-        }
-      ],
+      "recentAssistantUpdates": [],
       "remoteStatus": "active",
       "remoteTitle": "<workspace-name>",
       "workers": [
@@ -50,7 +41,7 @@
           "sessionId": "<uuid:1>",
           "status": "active",
           "stoppable": null,
-          "summary": "I started monitoring Watch remote tests. I will keep watching the background task and update you when something meaningful changes.",
+          "summary": "Remote tests are still running.",
           "taskId": "task-monitor",
           "updatedAt": "<timestamp>",
           "waitingReason": null

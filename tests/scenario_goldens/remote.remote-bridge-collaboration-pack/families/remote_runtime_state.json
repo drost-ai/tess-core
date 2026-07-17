@@ -229,11 +229,7 @@
   },
   "turn": {
     "agentName": null,
-    "lastOutcome": {
-      "kind": "completed",
-      "message": "Previous turn complete.",
-      "updatedAt": "<timestamp>"
-    },
+    "lastOutcome": null,
     "liveStatus": null,
     "model": "gpt-5.4",
     "prompt": null,

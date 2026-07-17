@@ -3,8 +3,19 @@ from __future__ import annotations
 from .shared import *
 
 
-async def _project_session_task_records(session_id: str, session: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+async def _project_session_task_records(
+    session_id: str,
+    session: dict[str, Any] | None = None,
+    live_work_cache: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     session = session or await loadSession(session_id) or {"id": session_id, "metadata": {}}
+    # Projection is also the existing restoration/attachment boundary. Verify
+    # marker authority first so dead records converge before snapshots are
+    # built; the verdict itself never reads the session transcript archive.
+    if live_work_cache:
+        await live_work_cache["resolve"](session)
+    else:
+        await _resolve_session_live_work(session)
     metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
     records_by_id: dict[str, dict[str, Any]] = {}
 
@@ -130,7 +141,16 @@ async def _sync_projected_task_metadata(session: dict[str, Any], records: list[d
         return
     metadata["taskIds"] = task_ids
     metadata["runtimeRestore"] = restore
-    await saveSession(session)
+    # Observer projection is bookkeeping, not semantic session activity.
+    # Import locally to avoid a package initialization cycle.
+    from ...session import persistSession
+
+    if hasPersistableSessionMessages(session):
+        await persistSession(session, {"sessionPersistence": True}, touch=False)
+    else:
+        # Empty child/bootstrap sessions still need their restore projection,
+        # and saveSession already preserves their semantic timestamp.
+        await saveSession(session)
 
 
 def _task_snapshot(records: list[dict[str, Any]]) -> dict[str, Any]:

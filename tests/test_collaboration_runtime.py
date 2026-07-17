@@ -294,16 +294,17 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                 "model": "gpt-5.4",
                 "mode": "bypassPermissions",
                 "runInBackground": True,
-                "status": "completed",
+                "status": "backgrounded",
                 "startedAt": "2026-01-01T00:00:00Z",
-                "completedAt": "2026-01-01T00:00:02Z",
-                "lastUpdatedAt": "2026-01-01T00:00:02Z",
-                "resultSummary": "Collected the evidence.",
+                "lastUpdatedAt": "2026-01-01T00:00:01Z",
             }
             run(core.saveChildAgent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
             events = []
             runtime = run(core.createCollaborationRuntime({"session": session, "config": config, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
+            self.assertFalse(any(event == "collaboration.assistant_update" for event, _ in events))
+            run(core.saveChildAgent({**child, "status": "completed", "completedAt": "2026-01-01T00:00:02Z", "lastUpdatedAt": "2026-01-01T00:00:02Z", "resultSummary": "Collected the evidence."}))
+            run(runtime["refresh"]())
             update = next(data for event, data in events if event == "collaboration.assistant_update")
             self.assertEqual(update["source_kind"], "subagent")
             self.assertEqual(update["source_id"], child["agentId"])

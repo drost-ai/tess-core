@@ -1,13 +1,11 @@
 [
   {
     "collaborationSnapshot": {
-      "activeCount": 1,
+      "activeCount": 0,
       "awaitingInputCount": 0,
       "backgroundCount": 1,
       "bridgeStatus": null,
-      "labels": [
-        "watch background completion"
-      ],
+      "labels": [],
       "pendingBridgeMessages": null,
       "remoteStatus": null,
       "remoteTitle": "<workspace-name>",
@@ -18,43 +16,39 @@
           "label": "watch background completion",
           "monitorId": "<uuid:2>",
           "sessionId": "<uuid:1>",
-          "status": "active",
-          "summary": null,
+          "status": "completed",
+          "summary": "completed",
           "taskId": "<uuid:3>",
           "updatedAt": "<timestamp>"
         }
       ]
     },
     "monitorSnapshot": {
-      "active": 1,
+      "active": 0,
       "failed": 0,
-      "labels": [
-        "watch background completion"
-      ],
+      "labels": [],
       "muted": 0,
-      "nextCheckInMs": 0,
+      "nextCheckInMs": null,
       "stopped": 0,
       "total": 1
     },
     "taskSnapshot": {
-      "active": 1,
+      "active": 0,
       "awaitingInput": 0,
       "backgrounded": 0,
       "failed": 0,
-      "labels": [
-        "Monitor watch background completion"
-      ],
+      "labels": [],
       "tasks": [
         {
-          "completedAt": null,
+          "completedAt": "<timestamp>",
           "createdAt": "<timestamp>",
-          "detailStatus": "active",
+          "detailStatus": "completed",
           "foregroundable": false,
           "id": "monitor:<uuid:2>",
           "kind": "monitor",
           "metadata": {
             "goal": "watch background completion",
-            "last_task_status": null,
+            "last_task_status": "completed",
             "muted": null,
             "task_id": "<uuid:3>"
           },
@@ -68,8 +62,8 @@
           "sessionId": "<uuid:1>",
           "sourceId": "<uuid:2>",
           "startedAt": "<timestamp>",
-          "status": "running",
-          "summary": "0 bytes observed",
+          "status": "completed",
+          "summary": "task completed \u00b7 0 bytes observed",
           "taskFamily": "monitor",
           "title": "Monitor watch background completion",
           "updatedAt": "<timestamp>"

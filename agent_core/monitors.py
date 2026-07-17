@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from ._utils import now_iso
 from .config import ensureProviderForModelSelection, normalizeEffortForModel
+from .monitor_bootstrap import _MonitorBootstrapBaseline
 from .providers.anthropic import sendAnthropicMessagesRequest
 from .providers.openai import sendOpenAiRequest
 from .session import persistSession
@@ -34,6 +35,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     foreground_busy = False
     tick_in_flight = False
     snapshot = _empty_snapshot()
+    bootstrap_baseline = _MonitorBootstrapBaseline()
 
     async def tick() -> None:
         nonlocal snapshot, tick_in_flight
@@ -42,6 +44,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         tick_in_flight = True
         try:
             monitors = await listSessionMonitors(session_ref["id"])
+            is_bootstrap_tick = bootstrap_baseline.begin(monitors)
             now_ms = _now_ms()
             next_snapshot = _compute_snapshot(monitors, now_ms)
             if next_snapshot != snapshot:
@@ -51,11 +54,11 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
                 if closed:
                     return
                 if _should_check_monitor(monitor, now_ms):
-                    await process_monitor(monitor, now_ms)
+                    await process_monitor(monitor, now_ms, is_bootstrap_tick and bootstrap_baseline.includes(monitor.get("id")))
         finally:
             tick_in_flight = False
 
-    async def process_monitor(monitor: dict[str, Any], now_ms: int) -> None:
+    async def process_monitor(monitor: dict[str, Any], now_ms: int, bootstrap_observation: bool = False) -> None:
         nonlocal snapshot
         task = await _load_task_record(monitor.get("taskId"))
         output_size = _get_output_size(monitor.get("taskId"))
@@ -64,6 +67,9 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         task_transitioned = observed_task_status != monitor.get("lastObservedTaskStatus")
         output_changed = output_size != int(monitor.get("lastObservedOutputSize") or 0)
         reason = _monitor_update_reason(monitor, final_status, output_changed, output_size, now_ms)
+        monitor_id = monitor.get("id") if isinstance(monitor.get("id"), str) else ""
+        observation = (final_status, output_size, observed_task_status)
+        reason = bootstrap_baseline.resolve_reason(monitor, observation, reason, bootstrap_observation)
         now = now_iso()
         next_monitor = {
             **monitor,
@@ -115,6 +121,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         )
         if reason == "heartbeat":
             next_monitor["lastHeartbeatAt"] = update_time
+        bootstrap_baseline.narrated(monitor_id)
         await saveMonitor(next_monitor)
         _sync_session_monitor_metadata(session_ref, await listSessionMonitors(session_ref["id"]))
         with _suppress():
@@ -157,9 +164,11 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
             _schedule_tick()
 
     def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
-        nonlocal session_ref, config_ref
+        nonlocal session_ref, config_ref, snapshot
         session_ref = session
         config_ref = config or config_ref
+        snapshot = _empty_snapshot()
+        bootstrap_baseline.reset()
         _schedule_tick()
 
     def _schedule_tick() -> None:

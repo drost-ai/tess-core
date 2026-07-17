@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+
 from ..contracts.records import SessionRecord
 
 from .shared import *
@@ -23,17 +25,18 @@ async def saveSession(session: SessionRecord) -> None:
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
     """Locked read-modify-write for cross-process session metadata updates.
 
-    Loads through ``loadSession`` (so archived-transcript merging matches the
-    unlocked path), applies ``mutate`` (return the record, or ``None`` after
-    mutating in place), and persists with the same redaction as
-    ``saveSession``. Returns ``None`` without writing when the session does
-    not exist.
+    Reconciles the archived transcript while holding the same record lock,
+    applies ``mutate`` (return the record, or ``None`` after mutating in
+    place), and persists with the same redaction as ``saveSession``. Returns
+    ``None`` without writing when the session does not exist.
     """
     path = sessionPath(sessionId)
     async with fileLock(path):
-        session = await loadSession(sessionId)
+        session = await readJsonFile(path, None)
         if session is None:
             return None
+        reconciliation = await _reconcile_session_record(sessionId, session)
+        session = reconciliation["record"]
         updated = mutate(session)
         if updated is None:
             updated = session
@@ -243,28 +246,97 @@ def _latest_archived_timestamp(raw: str) -> str | None:
             latest = entry["persisted_at"]
     return latest
 
-async def loadSession(sessionId: str) -> SessionRecord | None:
+def parseLatestArchivedTimestamp(raw: str) -> str | None:
+    return _latest_archived_timestamp(raw)
+
+
+async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
+    """Full selected-session load with an explicit, convergent repair verdict."""
+
     path = sessionPath(sessionId)
-    record = await readJsonFile(path, None)
-    if not record:
-        return None
-    transcript_path = sessionTranscriptLogPath(sessionId)
+    async with fileLock(path):
+        record = await readJsonFile(path, None)
+        if not record:
+            return {"record": None, "changed": False, "reason": None}
+        result = await _reconcile_session_record(sessionId, record)
+        if result["changed"]:
+            await writeJsonFile(path, _redact_persisted_image_payloads(result["record"]))
+        return result
+
+
+async def loadSession(sessionId: str) -> SessionRecord | None:
+    result = await loadSessionWithReconciliation(sessionId)
+    return result["record"]
+
+
+async def _reconcile_session_record(session_id: str, record: SessionRecord) -> dict[str, Any]:
+    transcript_path = sessionTranscriptLogPath(session_id)
     try:
         with open(transcript_path, "r", encoding="utf-8") as handle:
             raw = handle.read()
     except FileNotFoundError:
-        return record
+        return {"record": record, "changed": False, "reason": None}
     archived = _parse_archived_messages(raw)
     latest = _latest_archived_timestamp(raw)
-    if len(archived) > len(record.get("messages", [])):
-        record["messages"] = archived
-    metadata = record.setdefault("metadata", {})
-    metadata["fullTranscriptLog"] = {
+    messages = record.get("messages") if isinstance(record.get("messages"), list) else []
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    previous_log = metadata.get("fullTranscriptLog") if isinstance(metadata.get("fullTranscriptLog"), dict) else {}
+    next_log = {
         "path": transcript_path,
-        "archivedMessageCount": max(len(archived), len(record.get("messages", []))),
-        "lastArchivedAt": latest or metadata.get("fullTranscriptLog", {}).get("lastArchivedAt") or record.get("updatedAt"),
+        "archivedMessageCount": len(archived),
+        "lastArchivedAt": latest or previous_log.get("lastArchivedAt") or record.get("updatedAt"),
     }
+    archive_ahead = len(archived) > len(messages)
+    metadata_mismatch = any(
+        previous_log.get(key) != value for key, value in next_log.items()
+    )
+    updated_at_behind = bool(
+        latest and str(record.get("updatedAt") or "") < latest
+    )
+    if not archive_ahead and not metadata_mismatch and not updated_at_behind:
+        return {"record": record, "changed": False, "reason": None}
+    repaired = copy.deepcopy(record)
+    if archive_ahead:
+        repaired["messages"] = archived
+    repaired.setdefault("metadata", {})["fullTranscriptLog"] = next_log
+    if updated_at_behind:
+        repaired["updatedAt"] = latest
+    return {
+        "record": repaired,
+        "changed": True,
+        "reason": "archive_ahead" if archive_ahead else "metadata_mismatch",
+    }
+
+
+MAX_SHALLOW_SESSION_BYTES = 16 * 1024 * 1024
+
+async def loadSessionRecordShallow(sessionId: str) -> SessionRecord | None:
+    """Read only the bounded session JSON record; never open its archive."""
+
+    path = sessionPath(sessionId)
+    try:
+        stat_result = os.stat(path)
+        if stat_result.st_size > MAX_SHALLOW_SESSION_BYTES:
+            return None
+        with open(path, "r", encoding="utf-8") as handle:
+            record = json.load(handle)
+    except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
+        return None
+    if not _valid_shallow_session(record, sessionId):
+        return None
     return record
+
+
+def _valid_shallow_session(value: Any, expected_id: str) -> bool:
+    return bool(
+        isinstance(value, dict)
+        and value.get("id") == expected_id
+        and isinstance(value.get("cwd"), str)
+        and isinstance(value.get("createdAt"), str)
+        and isinstance(value.get("updatedAt"), str)
+        and isinstance(value.get("metadata"), dict)
+        and isinstance(value.get("messages"), list)
+    )
 
 async def loadCompactionManifest(sessionId: str) -> dict[str, Any] | None:
     return await readJsonFile(compactionManifestPath(sessionId), None)
@@ -296,10 +368,99 @@ async def listSessions() -> list[SessionRecord]:
         return []
     records: list[dict[str, Any]] = []
     for name in names:
-        record = await loadSession(name[:-5])
+        record = await loadSessionRecordShallow(name[:-5])
         if record and hasPersistableSessionMessages(record):
             records.append(record)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
+
+
+def createSessionListCache() -> dict[str, Any]:
+    """Create an instance-owned summary cache keyed by path/mtime/size."""
+
+    entries: dict[str, dict[str, Any]] = {}
+    stats = {"scanned": 0, "parsed": 0, "cacheHits": 0, "invalid": 0}
+
+    async def list_cached() -> list[dict[str, Any]]:
+        directory = os.path.join(getStateRoot(), "sessions")
+        try:
+            names = [name for name in os.listdir(directory) if name.endswith(".json")]
+        except FileNotFoundError:
+            names = []
+        seen: set[str] = set()
+        summaries: list[dict[str, Any]] = []
+        stats["scanned"] += len(names)
+        for name in names:
+            path = os.path.realpath(os.path.join(directory, name))
+            try:
+                file_stat = os.stat(path)
+            except OSError:
+                continue
+            seen.add(path)
+            fingerprint = (file_stat.st_mtime_ns, file_stat.st_size)
+            cached = entries.get(path)
+            if cached and cached.get("fingerprint") == fingerprint:
+                stats["cacheHits"] += 1
+                if cached.get("summary"):
+                    summaries.append(copy.deepcopy(cached["summary"]))
+                continue
+            session_id = name[:-5]
+            stats["parsed"] += 1
+            record = await loadSessionRecordShallow(session_id)
+            summary = _session_list_summary(record) if record and hasPersistableSessionMessages(record) else None
+            if record is None:
+                stats["invalid"] += 1
+            entries[path] = {"fingerprint": fingerprint, "summary": summary}
+            if summary:
+                summaries.append(copy.deepcopy(summary))
+        for path in list(entries):
+            if path not in seen:
+                entries.pop(path, None)
+        return sorted(summaries, key=lambda item: item.get("updatedAt", ""), reverse=True)
+
+    def get_stats() -> dict[str, int]:
+        return {**stats, "entries": len(entries)}
+
+    def invalidate(session_id: str | None = None) -> None:
+        if session_id is None:
+            entries.clear()
+            return
+        entries.pop(os.path.realpath(sessionPath(session_id)), None)
+
+    return {"list": list_cached, "getStats": get_stats, "invalidate": invalidate}
+
+
+def _session_list_summary(record: SessionRecord) -> dict[str, Any]:
+    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+    summary_metadata = {
+        key: copy.deepcopy(metadata[key])
+        for key in (
+            "originalCwd",
+            "gitRoot",
+            "workspaceName",
+            "prNumber",
+            "prUrl",
+            "taskIds",
+            "monitorIds",
+            "childAgentIds",
+            "childSessionIds",
+            "backgroundSessionIds",
+            "remoteSessionId",
+            "bridgeId",
+        )
+        if key in metadata
+    }
+    return {
+        "id": record.get("id"),
+        "cwd": record.get("cwd"),
+        "name": record.get("name"),
+        "createdAt": record.get("createdAt"),
+        "updatedAt": record.get("updatedAt"),
+        "provider": record.get("provider"),
+        "model": record.get("model"),
+        "permissionMode": record.get("permissionMode"),
+        "metadata": summary_metadata,
+        "hasPersistableContent": True,
+    }
 
 def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> SessionRecord:
     params = {**(params or {}), **kwargs}

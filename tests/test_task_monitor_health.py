@@ -68,7 +68,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_monitor_runtime_emits_snapshot_status_and_assistant_update(self):
+    def test_monitor_runtime_bootstrap_emits_state_without_assistant_update(self):
         root, home, workspace, previous = self.temp_context()
         runtime = None
         try:
@@ -87,12 +87,10 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertEqual(runtime["getSnapshot"]()["active"], 1)
             self.assertTrue(any(event == "monitor.snapshot" for event, _ in events))
             self.assertTrue(any(event == "monitor.status_changed" and data["task_id"] == task_id for event, data in events))
-            update = next(data for event, data in events if event == "monitor.assistant_update")
-            self.assertEqual(update["reason"], "start")
-            self.assertIn("watch runtime monitor", update["text"])
-            self.assertIn("watch runtime monitor", session["messages"][-1]["content"])
+            self.assertFalse(any(event == "monitor.assistant_update" for event, _ in events))
+            self.assertEqual(session["messages"], [])
             saved = run(core.loadMonitor(monitor["id"]))
-            self.assertEqual(saved["lastAssistantUpdateSummary"], update["text"])
+            self.assertNotIn("lastAssistantUpdateSummary", saved)
             self.assertIn(monitor["id"], session["metadata"]["monitorIds"])
         finally:
             if runtime:
@@ -115,6 +113,9 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             Path(output_file).write_text("pytest started\n", encoding="utf-8")
             run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "pytest", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch provider monitor", "summaryStyle": "brief", "checkIntervalMs": 2000})
+            monitor["checkIntervalMs"] = 1
+            monitor["createdAt"] = "2026-01-01T00:00:00Z"
+            monitor["updatedAt"] = "2026-01-01T00:00:00Z"
             run(core.saveMonitor(monitor))
             calls = {}
 
@@ -124,16 +125,27 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
 
             monitors_module.sendOpenAiRequest = fake_send
             events = []
-            runtime = run(core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
+            async def exercise_runtime():
+                created = await core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
+                self.assertNotIn("args", calls)
+                with Path(output_file).open("a", encoding="utf-8") as handle:
+                    handle.write("x" * 256 + "\n")
+                for _ in range(100):
+                    if "args" in calls:
+                        break
+                    await asyncio.sleep(0.02)
+                return created
+
+            runtime = run(exercise_runtime())
             update = next(data for event, data in events if event == "monitor.assistant_update")
             self.assertEqual(update["text"], "Provider says the build monitor is live.")
             request = calls["args"]["request"]
             self.assertEqual(request["tools"], [])
             payload = json.loads(request["messages"][0]["content"])
-            self.assertEqual(payload["reason"], "start")
+            self.assertEqual(payload["reason"], "progress")
             self.assertEqual(payload["goal"], "watch provider monitor")
             self.assertEqual(payload["summary_style"], "brief")
-            self.assertEqual(payload["new_output_excerpt"], "pytest started")
+            self.assertIn("x" * 64, payload["new_output_excerpt"])
             self.assertEqual(session["metadata"]["usage"]["inputTokens"], 7)
             self.assertEqual(session["metadata"]["usage"]["outputTokens"], 3)
             self.assertEqual(session["metadata"]["usage"]["cacheCreationInputTokens"], 2)

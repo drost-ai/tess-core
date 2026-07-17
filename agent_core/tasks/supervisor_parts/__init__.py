@@ -9,6 +9,7 @@ _MODULE_NAMES = [
     "summaries",
     "records",
     "processes",
+    "live_work",
     "health",
     "communication",
     "projection",

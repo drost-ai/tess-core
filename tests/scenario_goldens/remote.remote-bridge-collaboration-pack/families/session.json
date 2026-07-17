@@ -3,16 +3,7 @@
   "cwd": "<workspace>",
   "effort": "xhigh",
   "id": "<uuid:1>",
-  "messages": [
-    {
-      "content": "I started monitoring Watch remote tests. I will keep watching the background task and update you when something meaningful changes.",
-      "role": "assistant"
-    },
-    {
-      "content": "Remote QA: bridge.reconnected",
-      "role": "assistant"
-    }
-  ],
+  "messages": [],
   "metadata": {
     "assistantDescription": null,
     "assistantName": null,
@@ -47,10 +38,10 @@
           "foregroundMode": null,
           "id": "monitor:monitor-remote",
           "kind": "monitor",
-          "resultSummary": "I started monitoring Watch remote tests. I will keep watching the background task and update you when something meaningful changes.",
+          "resultSummary": "Remote tests are still running.",
           "retrieveOnly": true,
           "status": "running",
-          "summary": "I started monitoring Watch remote tests. I will keep watching the background task and update you when something meaningful changes.",
+          "summary": "Remote tests are still running.",
           "taskFamily": "monitor",
           "title": "Monitor Watch remote tests",
           "updatedAt": "<timestamp>"

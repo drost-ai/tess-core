@@ -26,7 +26,15 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     refresh_lock = threading.Lock()
     stop_event = threading.Event()
     tick_thread: threading.Thread | None = None
-    state = {"closed": False, "foregroundBusy": False, "snapshot": emptyCollaborationSnapshot(), "previousWorkers": {}, "previousRemoteSignature": "", "lastAssistantUpdateAt": 0}
+    state = {
+        "closed": False,
+        "foregroundBusy": False,
+        "snapshot": emptyCollaborationSnapshot(),
+        "previousWorkers": {},
+        "previousRemoteSignature": "",
+        "lastAssistantUpdateAt": 0,
+        "bootstrapTick": True,
+    }
 
     async def refresh() -> dict[str, Any]:
         if state["closed"]:
@@ -48,7 +56,9 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             state["previousRemoteSignature"] = serializeRemote(remote, bridge)
             for candidate in candidates:
                 emit(candidate["rawEvent"], candidate["payload"])
-            if not state["foregroundBusy"] and candidates:
+            is_bootstrap_tick = state["bootstrapTick"]
+            state["bootstrapTick"] = False
+            if not is_bootstrap_tick and not state["foregroundBusy"] and candidates:
                 now_ms = int(time.time() * 1000)
                 if now_ms - int(state["lastAssistantUpdateAt"]) >= min_update_spacing_ms:
                     narratable = next((candidate for candidate in candidates if shouldNarrateWorker(candidate.get("worker") or {})), None)
@@ -88,6 +98,11 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
         nonlocal session_ref, config_ref
         session_ref = session
         config_ref = config or config_ref
+        state["snapshot"] = emptyCollaborationSnapshot()
+        state["previousWorkers"] = {}
+        state["previousRemoteSignature"] = ""
+        state["lastAssistantUpdateAt"] = 0
+        state["bootstrapTick"] = True
         if not state["closed"]:
             threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
 

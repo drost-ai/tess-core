@@ -108,10 +108,11 @@ async def _mark_lost_process(
     if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
         return
     now = now_iso()
-    if record.get("kind") == "subagent":
+    is_subagent = record.get("kind") == "subagent"
+    if is_subagent:
         summary = "Daemon restarted while this worker was active and the worker process is no longer running."
     else:
-        summary = "Daemon restarted while this task was active and the process is no longer running."
+        summary = "Worker process is no longer running; reconciled during projection. Final completion details were unavailable."
     state = (process_state or {}).get("state") or "failed"
     meta_metadata = dict(meta.get("metadata") or {})
     meta_metadata.update(_process_state_metadata(process_state))
@@ -121,8 +122,7 @@ async def _mark_lost_process(
         **meta,
         "type": record.get("kind"),
         "taskId": task_id,
-        "status": "failed",
-        "error": summary,
+        "status": "failed" if is_subagent else "terminated",
         "updatedAt": now,
         "finishedAt": now,
         "owner": "daemon",
@@ -131,10 +131,18 @@ async def _mark_lost_process(
         "processState": state,
         "processReconciledAt": now,
     }
+    if is_subagent:
+        next_meta["error"] = meta.get("error") or summary
+        next_meta["summary"] = meta.get("summary") or summary
+        next_meta["completionReason"] = meta.get("completionReason") or "worker_lost"
+        next_meta["completedAt"] = meta.get("completedAt") or now
+    else:
+        next_meta.pop("error", None)
+        next_meta["summary"] = meta.get("summary") or summary
     next_record = {
         **_build_task_record(next_meta, summary),
         **record,
-        "status": "failed",
+        "status": "failed" if is_subagent else "stopped",
         "summary": summary,
         "updatedAt": now,
         "completedAt": now,
@@ -144,7 +152,25 @@ async def _mark_lost_process(
     }
     await writeTaskMeta(task_id, next_meta)
     await saveTaskRecord(next_record)
-    await maybe_await(emit("task.failed", _task_record_event_payload(next_record), record.get("sessionId")))
+    if is_subagent:
+        agent_id = meta.get("agent_id") or record_metadata.get("agent_id") or record.get("sourceId")
+        if isinstance(agent_id, str) and agent_id:
+            await mutateChildAgent(
+                agent_id,
+                lambda current: {
+                    **current,
+                    "status": "failed",
+                    "error": current.get("error") or summary,
+                    "completionReason": current.get("completionReason") or "worker_lost",
+                    "completedAt": current.get("completedAt") or now,
+                    "lastUpdatedAt": now,
+                }
+                if current and _is_active_child_agent_status(current.get("status"))
+                else current,
+            )
+    await maybe_await(
+        emit("task.failed" if is_subagent else "task.stopped", _task_record_event_payload(next_record), record.get("sessionId"))
+    )
 
 
 async def _mark_terminal_process_from_meta(

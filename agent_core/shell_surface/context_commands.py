@@ -90,8 +90,9 @@ async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str
     if not callable(request_resume):
         return _error(hooks, "/resume switching is only available in the full-screen TUI.")
     await _persist(hooks)
-    request_resume(matches[0])
-    return _handled(f"resuming {matches[0].get('id')}")
+    selected = await loadSession(matches[0]["id"]) or matches[0]
+    request_resume(selected)
+    return _handled(f"resuming {selected.get('id')}")
 
 
 async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
