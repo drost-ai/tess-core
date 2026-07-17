@@ -7,6 +7,7 @@ from typing import Any
 import agent_core as core
 
 from .mcp_fakes import start_fake_mcp_server
+from .mcp_package28 import MemoryMcpTokenStore
 from .model import ScenarioAssertionError
 from .runtime_driver import ensure_session_config
 from .sandbox import ScenarioSandbox
@@ -35,6 +36,9 @@ async def create_mcp_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, sta
         session, _config = await ensure_session_config(data, sandbox, state)
         session_id = session_id or session["id"]
     events = state.setdefault("mcp_events", [])
+    token_store = None
+    if data.get("memoryTokenStore"):
+        token_store = state.setdefault("mcp_token_store", MemoryMcpTokenStore())
     runtime = await core.createMcpRuntime(
         {
             "cwd": str(sandbox.workspace),
@@ -42,6 +46,7 @@ async def create_mcp_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, sta
             "sessionId": session_id,
             "registeredChannels": data.get("registeredChannels") or [],
             "onRuntimeEvent": lambda event, payload: events.append({"event": event, "data": _json_safe(payload)}),
+            **({"mcpTokenStore": token_store} if token_store is not None else {}),
         }
     )
     state["mcp_runtime"] = runtime
@@ -211,7 +216,7 @@ def assert_mcp_status(state: dict[str, Any], data: dict[str, Any]) -> None:
     status = _latest_server_status(state, server)
     if not status:
         raise ScenarioAssertionError(f"MCP status not found for server: {server}")
-    for key in ("state", "connected"):
+    for key in ("state", "connected", "protocolVersion"):
         if key in data and status.get(key) != data[key]:
             raise ScenarioAssertionError(f"MCP status {key} expected {data[key]!r}, got {status.get(key)!r}")
     if data.get("serverInfoName") and (status.get("serverInfo") or {}).get("name") != data["serverInfoName"]:

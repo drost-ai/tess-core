@@ -192,6 +192,45 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "plan.rejected", {"summary": _optional_string(_field(data, "summary"))}
     if event == "plan.contract_enforced":
         return "plan.contract_enforced", {"reason": _optional_string(_field(data, "reason"))}
+    if event in {"plan.mcp_tool_allowed", "plan.mcp_tool_blocked"}:
+        return event, {
+            "server": _bounded_optional_string(_field(data, "server"), 256),
+            "tool": _bounded_optional_string(_field(data, "tool"), 256),
+            "reason": _bounded_optional_string(_field(data, "reason"), 64),
+        }
+    if event == "mcp.authorization_required":
+        return event, {
+            "server": _bounded_optional_string(_field(data, "server"), 256),
+            "transport": _bounded_optional_string(_field(data, "transport"), 32),
+            "authorizationUrl": _bounded_optional_string(_field(data, "authorization_url", "authorizationUrl"), 4096),
+            "continuationId": _bounded_optional_string(_field(data, "continuation_id", "continuationId"), 128),
+        }
+    if event == "mcp.catalog_changed_applied":
+        return event, {
+            "servers": [_bounded_optional_string(item, 256) for item in _string_array(_field(data, "servers"))[:64]],
+            "generation": _optional_number(_field(data, "generation")),
+            "toolsChanged": _optional_boolean(_field(data, "tools_changed", "toolsChanged")),
+            "resourcesChanged": _optional_boolean(_field(data, "resources_changed", "resourcesChanged")),
+        }
+    if event == "mcp.catalog_refresh_failed":
+        return event, {
+            "server": _bounded_optional_string(_field(data, "server"), 256),
+            "catalog": _bounded_optional_string(_field(data, "catalog"), 32),
+        }
+    if event == "mcp.server_connected":
+        return event, {
+            "server": _bounded_optional_string(_field(data, "server"), 256),
+            "transport": _bounded_optional_string(_field(data, "transport"), 32),
+            "tools": _optional_number(_field(data, "tools")),
+            "resources": _optional_number(_field(data, "resources")),
+            "protocolVersion": _bounded_optional_string(_field(data, "protocol_version", "protocolVersion"), 32),
+        }
+    if event == "mcp.server_connection_failed":
+        return event, {
+            "server": _bounded_optional_string(_field(data, "server"), 256),
+            "transport": _bounded_optional_string(_field(data, "transport"), 32),
+            "reason": _bounded_optional_string(_field(data, "reason"), 512),
+        }
     if event == "compaction.started":
         return "compaction.started", {
             "trigger": _optional_string(_field(data, "trigger")),

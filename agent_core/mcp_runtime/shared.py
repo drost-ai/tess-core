@@ -22,5 +22,4 @@ from ..storage import getStateRoot
 from ..tools import ToolDefinition
 
 
-PROTOCOL_VERSION = "2024-11-05"
-
+PROTOCOL_VERSION = "2025-06-18"

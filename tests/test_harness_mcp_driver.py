@@ -7,6 +7,30 @@ from agent_core_harness.model import Scenario, ScenarioStep
 
 
 class HarnessMcpDriverTests(AgentCoreTestCase):
+    def test_package28_hardening_pack_runs_and_matches_golden(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_scenario(
+                "mcp.package28-hardening-pack",
+                runs_dir=runs,
+                golden="compare",
+                cleanup="never",
+            )
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
+            observations = json.loads(
+                Path(result.observationsPath).read_text(encoding="utf-8")
+            )
+            probes = {
+                item["probe"]: item for item in observations["mcp_package28_results"]
+            }
+            self.assertEqual(
+                set(probes),
+                {"plan_gate", "dispatch", "protocol", "catalog_boundary", "headless_auth"},
+            )
+            self.assertTrue(probes["dispatch"]["parallelOverlapped"])
+            self.assertEqual(probes["headless_auth"]["afterState"], "connected")
+
     def test_fake_mcp_pack_runs_and_captures_evidence(self):
         with tempfile.TemporaryDirectory() as runs:
             result = run_scenario("mcp.fake-mcp-pack", runs_dir=runs)

@@ -269,8 +269,8 @@ class AgentLoopTests(AgentCoreTestCase):
                 return {"content": "FAST", "isError": False}
 
             tools = [
-                core.ToolDefinition("slow", "slow tool", {"type": "object"}, slow_handler),
-                core.ToolDefinition("fast", "fast tool", {"type": "object"}, fast_handler),
+                core.ToolDefinition("slow", "slow tool", {"type": "object"}, slow_handler, concurrency="parallel"),
+                core.ToolDefinition("fast", "fast tool", {"type": "object"}, fast_handler, concurrency="parallel"),
             ]
             calls = {"count": 0}
             events = []

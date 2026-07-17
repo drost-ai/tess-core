@@ -11,8 +11,13 @@ def _dedupe_servers(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return list(out.values())
 
 
-def _create_state(config: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _create_state(
+    config: dict[str, Any],
+    token_store: Any = None,
+    on_event: Callable[..., Any] | None = None,
+    authorization_callback: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    state = {
         "config": config,
         "connected": False,
         "state": "disconnected",
@@ -26,7 +31,19 @@ def _create_state(config: dict[str, Any]) -> dict[str, Any]:
         "serverInfo": {},
         "lastNotificationAt": None,
         "channelRegistration": {"requested": False, "status": "not_requested"},
+        "toolsStale": False,
+        "resourcesStale": False,
+        "notificationGeneration": 0,
+        "catalogGeneration": 0,
     }
+    if config.get("transport") != "stdio" and token_store is not None:
+        state["oauth"] = createMcpOAuthRuntime(
+            config=config,
+            store=token_store,
+            on_runtime_event=on_event,
+            authorization_callback=authorization_callback,
+        )
+    return state
 
 
 async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> None:
@@ -39,13 +56,38 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
     try:
         client = _create_client(state["config"], cwd, on_event, state)
         await client.initialize()
-        state.update({"client": client, "connected": True, "state": "connected", "lastConnectedAt": now_iso(), "serverCapabilities": client.server_capabilities, "serverInfo": client.server_info})
-        state["tools"] = await _refresh_tools(state)
-        state["resources"] = await _refresh_resources(state)
-        on_event("mcp.server_connected", {"server": state["config"]["name"], "transport": state["config"].get("transport"), "tools": len(state["tools"]), "resources": len(state["resources"])})
+        # Discover into candidates so a partial refresh cannot replace the
+        # previous known-good catalog on reconnect failure.
+        state["client"] = client
+        candidate_tools = await _refresh_tools(state)
+        candidate_resources = await _refresh_resources(state)
+        state.update(
+            {
+                "client": client,
+                "connected": True,
+                "state": "connected",
+                "lastConnectedAt": now_iso(),
+                "serverCapabilities": client.server_capabilities,
+                "serverInfo": client.server_info,
+                "protocolVersion": client.negotiated_protocol_version,
+                "tools": candidate_tools,
+                "resources": candidate_resources,
+                "toolsStale": False,
+                "resourcesStale": False,
+                "catalogGeneration": int(state.get("catalogGeneration") or 0) + 1,
+                "authorizationUrl": None,
+                "authorizationContinuationId": None,
+            }
+        )
+        on_event("mcp.server_connected", {"server": state["config"]["name"], "transport": state["config"].get("transport"), "tools": len(state["tools"]), "resources": len(state["resources"]), "protocol_version": state.get("protocolVersion")})
     except Exception as exc:
+        if 'client' in locals():
+            try:
+                await client.close()
+            except Exception:
+                pass
         _mark_state_failure(state, exc)
-        on_event("mcp.server_connection_failed", {"server": state["config"].get("name"), "transport": state["config"].get("transport"), "reason": state.get("error")})
+        on_event("mcp.server_connection_failed", {"server": state["config"].get("name"), "transport": state["config"].get("transport"), "reason": "authorization_required" if isinstance(exc, McpAuthorizationRequiredError) else state.get("error")})
 
 
 def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any], state: dict[str, Any] | None = None) -> JsonRpcClient:
@@ -55,16 +97,21 @@ def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any
     if config.get("transport") == "stdio":
         return StdioMcpClient(config, cwd, notification)
     if config.get("transport") == "sse":
-        return SseMcpClient(config, cwd, notification)
-    return HttpMcpClient(config, cwd, notification)
+        return SseMcpClient(config, cwd, notification, state.get("oauth") if state else None)
+    return HttpMcpClient(config, cwd, notification, state.get("oauth") if state else None)
 
 
 async def _ensure_connected(state: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> dict[str, Any]:
     if state.get("connected") and state.get("client"):
         return state
+    if state.get("state") == "authorization_required" and state.get("oauth"):
+        if not await state["oauth"].has_usable_token():
+            raise RuntimeError(f"MCP server requires authorization: {state['config'].get('name')}")
     await _connect_state(state, cwd, on_event)
     if state.get("connected") and state.get("client"):
         return state
+    if state.get("state") == "authorization_required":
+        raise RuntimeError(f"MCP server requires authorization: {state['config'].get('name')}")
     detail = f" ({state.get('error')})" if state.get("error") else ""
     raise RuntimeError(f"MCP server is not connected: {state['config'].get('name')}{detail}")
 
@@ -102,9 +149,22 @@ async def _refresh_tools(state: dict[str, Any]) -> list[dict[str, Any]]:
                 "description": tool.get("description"),
                 "inputSchema": tool.get("inputSchema") or tool.get("input_schema") or {"type": "object"},
                 "runtimeName": _runtime_tool_name(state["config"]["name"], tool["name"]),
+                **({"annotations": annotations} if (annotations := _normalize_tool_annotations(tool.get("annotations"))) is not None else {}),
             }
         )
     return out
+
+
+def _normalize_tool_annotations(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    annotations: dict[str, Any] = {}
+    if isinstance(value.get("title"), str):
+        annotations["title"] = value["title"]
+    for key in ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"):
+        if isinstance(value.get(key), bool):
+            annotations[key] = value[key]
+    return annotations or None
 
 
 async def _refresh_resources(state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -154,10 +214,23 @@ def _server_status(state: dict[str, Any]) -> dict[str, Any]:
         "lastConnectedAt": state.get("lastConnectedAt"),
         "lastErrorAt": state.get("lastErrorAt"),
         "channelRegistration": state["channelRegistration"],
+        "protocolVersion": state.get("protocolVersion"),
+        "catalogGeneration": state.get("catalogGeneration", 0),
+        "toolsStale": bool(state.get("toolsStale")),
+        "authorizationUrl": state.get("authorizationUrl"),
+        "authorizationContinuationId": state.get("authorizationContinuationId"),
     }
 
 
 def _mark_state_failure(state: dict[str, Any], error: Exception) -> None:
+    if isinstance(error, McpAuthorizationRequiredError):
+        state["connected"] = False
+        state["state"] = "authorization_required"
+        state["error"] = str(error)
+        state["authorizationUrl"] = error.authorization_url
+        state["authorizationContinuationId"] = error.continuation_id
+        state["lastErrorAt"] = now_iso()
+        return
     state["connected"] = False
     state["state"] = "degraded" if state["tools"] or state["resources"] else "disconnected"
     state["error"] = str(error)

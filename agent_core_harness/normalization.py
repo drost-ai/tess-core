@@ -13,6 +13,7 @@ class NormalizationContext:
     def __init__(self, sandbox: ScenarioSandbox) -> None:
         self.sandbox = sandbox
         self.uuid_map: dict[str, str] = {}
+        self.continuation_map: dict[str, str] = {}
         self.pid_map: dict[str, str] = {}
         self.port_map: dict[str, str] = {}
 
@@ -105,6 +106,9 @@ class NormalizationContext:
         normalized = self._replace_labeled_numbers(normalized, r"\b(pid|ppid|process_id|processId)[=:\s]+(\d+)\b", self.pid_map, "pid")
         normalized = self._replace_labeled_numbers(normalized, r"\b(port)[=:\s]+(\d+)\b", self.port_map, "port")
         normalized = self._replace_localhost_ports(normalized)
+        key = key_path[-1].lower() if key_path else ""
+        if key in {"continuation_id", "continuationid", "authorizationcontinuationid"}:
+            return self._placeholder(self.continuation_map, normalized, "continuation")
         normalized = _UUID_PATTERN.sub(lambda match: self._placeholder(self.uuid_map, match.group(0), "uuid"), normalized)
         if key_path and ("port" in key_path[-1].lower()) and normalized.isdigit():
             return self._placeholder(self.port_map, normalized, "port")

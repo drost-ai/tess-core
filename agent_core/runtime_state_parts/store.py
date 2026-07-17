@@ -18,6 +18,7 @@ def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str
         "provider": {"phase": "idle"},
         "compaction": {"status": "idle"},
         "sandbox": {},
+        "mcp": {"servers": {}, "catalogGeneration": 0, "lastPlanDecision": None},
         "daemon": {"phase": "offline"},
         "tasks": {"total": 0, "tasks": [], "activeCount": 0, "backgroundedCount": 0, "awaitingInputCount": 0, "failedCount": 0, "labels": []},
         "monitors": {"snapshot": {"total": 0, "active": 0, "failed": 0, "stopped": 0, "muted": 0, "labels": []}, "activeMonitorIds": [], "recentAssistantUpdates": []},

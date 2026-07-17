@@ -1,0 +1,44 @@
+[
+  {
+    "body": "exercise MCP plan policy",
+    "timestamp": "saved",
+    "title": "You",
+    "tone": "user"
+  },
+  {
+    "body": "policy:",
+    "payload": {
+      "failed": false,
+      "label": "mcp__policy__read",
+      "outputs": [
+        "policy:"
+      ],
+      "toolName": "mcp__policy__read",
+      "type": "tool_result"
+    },
+    "timestamp": "saved",
+    "title": "mcp__policy__read",
+    "tone": "tool"
+  },
+  {
+    "body": "MCP tool policy/mutate is blocked while plan approval is required (not_read_only).",
+    "payload": {
+      "failed": true,
+      "label": "mcp__policy__mutate",
+      "outputs": [
+        "MCP tool policy/mutate is blocked while plan approval is required (not_read_only)."
+      ],
+      "toolName": "mcp__policy__mutate",
+      "type": "tool_result"
+    },
+    "timestamp": "saved",
+    "title": "mcp__policy__mutate",
+    "tone": "tool"
+  },
+  {
+    "body": "plan probe complete",
+    "timestamp": "saved",
+    "title": "Assistant",
+    "tone": "assistant"
+  }
+]

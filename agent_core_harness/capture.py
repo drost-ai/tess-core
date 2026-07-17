@@ -127,6 +127,10 @@ def collect_observations(
         observations["mcp_plugin_results"] = state.get("mcp_plugin_results") or []
     if "mcp_driver_results" in selected:
         observations["mcp_driver_results"] = state.get("mcp_driver_results") or []
+    if "mcp_package28_results" in selected:
+        observations["mcp_package28_results"] = state.get("mcp_package28_results") or []
+    if "mcp_package28_events" in selected:
+        observations["mcp_package28_events"] = state.get("mcp_package28_events") or []
     if "daemon_state" in selected:
         observations["daemon_state"] = state.get("daemon_state")
     if "daemon_events" in selected:

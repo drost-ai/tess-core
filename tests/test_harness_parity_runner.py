@@ -7,6 +7,17 @@ from agent_core_harness.parity_runner import run_parity_scenario
 
 
 class HarnessParityRunnerTests(AgentCoreTestCase):
+    def test_package28_tool_dispatch_parity_matches_golden(self):
+        with tempfile.TemporaryDirectory() as runs:
+            result = run_parity_scenario(
+                "parity.package28-tool-dispatch",
+                runs_dir=runs,
+                golden="compare",
+                cleanup="success",
+            )
+            self.assertEqual(result.status, "passed")
+            self.assertEqual(result.golden["status"], "matched")
+
     def test_runtime_state_parity_pack_matches_two_codebases(self):
         with tempfile.TemporaryDirectory() as runs:
             result = run_parity_scenario("parity.runtime-state-smoke", runs_dir=runs)

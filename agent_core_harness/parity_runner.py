@@ -21,6 +21,7 @@ from .normalization import normalize_observations
 from .parity_model_policy import normalize_compaction_model_policy
 from .parity_compaction import run_compaction_primitives, run_compaction_run
 from .parity_continuation import run_continuation_relief
+from .parity_dispatch import run_tool_dispatch_parity
 from .paths import DEFAULT_RUNS_DIR, REPO_ROOT
 
 
@@ -145,6 +146,8 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
         return await run_compaction_run(data, paths)
     if data.get("action") == "continuation_relief":
         return await run_continuation_relief(data, paths)
+    if data.get("action") == "tool_dispatch":
+        return await run_tool_dispatch_parity(data)
     if data.get("action") != "runtime_state_smoke":
         raise ScenarioAssertionError(f"unsupported parity action: {data.get('action')}", category="harness")
     config = await core.resolveConfig(

@@ -7,6 +7,11 @@ if _typing.TYPE_CHECKING:
     from ..contracts.context import ToolContext
 
 from .shared import *
+from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
+from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
+from .tool_dispatch import create_serial_queue as _create_serial_queue
+from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
+from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
@@ -30,6 +35,9 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     runtime_contract = metadata.get("subagentRuntimeContract") if isinstance(metadata, dict) else None
+    apply_pending_mcp = runtime.get("applyPendingMcpCatalogChanges")
+    if callable(apply_pending_mcp):
+        await maybe_await(apply_pending_mcp())
     tool_names = set(filterToolsByPolicy(config))
     runtime_tools = filter_tools_for_subagent(runtime.get("tools", []), runtime_contract)
     tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
@@ -209,6 +217,14 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         tool_results: list[dict[str, Any] | None] = [None] * len(tool_uses)
         paused_for_approval = False
         paused_message = ""
+        persist_queue = _create_serial_queue()
+        tools_by_name = {tool.name: tool for tool in tool_registry}
+
+        async def persist_tool_session() -> None:
+            async def commit() -> None:
+                await persistSession(session, config)
+
+            await persist_queue.run(commit)
 
         def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
             return {
@@ -219,7 +235,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 "interactive": runtime.get("interactive", False),
                 "outputJson": runtime.get("emitEvent", lambda *_: None),
                 "askQuestion": runtime.get("askQuestion", lambda *_: ""),
-                "persistSession": lambda: persistSession(session, config),
+                "persistSession": persist_tool_session,
                 "updateCwd": lambda next_cwd: session.__setitem__("cwd", next_cwd),
                 "getTools": lambda: runtime.get("tools", []),
                 "daemon": runtime.get("daemon"),
@@ -232,17 +248,61 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
             nonlocal tool_count
             _throw_if_turn_cancelled(runtime)
-            if _requires_plan_approval(session) and tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
-                message = f"{tool_use['name']} is not available while plan approval is still required."
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
-                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
+            tool = tools_by_name.get(tool_use["name"])
+            if _requires_plan_approval(session):
+                is_mcp_candidate = bool(tool and getattr(tool, "mcp", None) is not None) or str(tool_use["name"]).startswith("mcp__")
+                if is_mcp_candidate:
+                    if tool is None:
+                        verdict = {"decision": "block", "reason": "unresolved_target"}
+                        server, mcp_tool_name = "unknown", "unknown"
+                    else:
+                        verdict = await _resolve_plan_mode_mcp_verdict(
+                            tool=tool,
+                            repository_identity=str(
+                                runtime.get("repositoryIdentity")
+                                or config.get("repositoryIdentity")
+                                or session.get("cwd")
+                                or ""
+                            ),
+                            resolve_operator_policy=runtime.get("resolveMcpOperatorPolicy")
+                            or runtime.get("resolve_mcp_operator_policy"),
+                        )
+                        server, mcp_tool_name = _bounded_mcp_identity(tool)
+                    event_name = "plan.mcp_tool_allowed" if verdict["decision"] == "allow" else "plan.mcp_tool_blocked"
+                    _safe_emit(
+                        runtime,
+                        event_name,
+                        {"server": server, "tool": mcp_tool_name, "reason": verdict["reason"]},
+                    )
+                    if verdict["decision"] != "allow":
+                        message = (
+                            f"MCP tool {server}/{mcp_tool_name} is blocked while plan approval is required "
+                            f"({verdict['reason']})."
+                        )
+                        _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
+                        return {
+                            "type": "tool_result",
+                            "tool_use_id": tool_use["id"],
+                            "is_error": True,
+                            "content": message,
+                            "_blockedByPlanContract": True,
+                        }
+                elif tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
+                    message = f"{tool_use['name']} is not available while plan approval is still required."
+                    _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
+                    return {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use["id"],
+                        "is_error": True,
+                        "content": message,
+                        "_blockedByPlanContract": True,
+                    }
             invalid_tool_input = _invalid_tool_input_message(tool_use)
             if invalid_tool_input:
                 tool_count += 1
                 usage_totals["toolCalls"] += 1
                 _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": invalid_tool_input, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": invalid_tool_input}
-            tool = next((entry for entry in tool_registry if entry.name == tool_use["name"]), None)
             if not tool:
                 _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": f"Tool not available: {tool_use['name']}", "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": f"Tool not available: {tool_use['name']}"}
@@ -270,26 +330,26 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
                 return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
 
+        async def dispatch_single(tool_use: dict[str, Any]) -> dict[str, Any]:
+            result = await run_single(tool_use)
+            pause = result.pop("_pauseMessage", None)
+            blocked = bool(result.pop("_blockedByPlanContract", False))
+            return {
+                "result": result,
+                **({"pauseMessage": pause} if pause else {}),
+                **({"blockedByPlanContract": True} if blocked else {}),
+            }
+
         try:
-            if _requires_plan_approval(session):
-                for index, tool_use in enumerate(tool_uses):
-                    result = await run_single(tool_use)
-                    pause = result.pop("_pauseMessage", None)
-                    tool_results[index] = result
-                    if pause:
-                        paused_for_approval = True
-                        paused_message = pause
-                        for skipped in range(index + 1, len(tool_uses)):
-                            tool_results[skipped] = {"type": "tool_result", "tool_use_id": tool_uses[skipped]["id"], "is_error": True, "content": "Skipped: previous tool in the batch paused for approval."}
-                        break
-            else:
-                outcomes = await asyncio.gather(*(run_single(tool_use) for tool_use in tool_uses))
-                for index, result in enumerate(outcomes):
-                    pause = result.pop("_pauseMessage", None)
-                    if pause and not paused_for_approval:
-                        paused_for_approval = True
-                        paused_message = pause
-                    tool_results[index] = result
+            batch = await _run_tool_dispatch_batch(
+                tool_uses=tool_uses,
+                sequential=_requires_plan_approval(session),
+                concurrency_of=lambda tool_use: _resolve_tool_concurrency(tools_by_name.get(tool_use["name"])),
+                run=dispatch_single,
+            )
+            tool_results = batch["results"]
+            paused_for_approval = batch["pausedForApproval"]
+            paused_message = batch["pausedMessage"]
             _throw_if_turn_cancelled(runtime)
         except Exception as error:
             if _is_turn_abort_error(error, runtime.get("abortSignal")):

@@ -1,0 +1,40 @@
+{
+  "area": "parity",
+  "capabilities": [
+    "node",
+    "typescript_repo"
+  ],
+  "capture": {
+    "include": [
+      "parity_summary",
+      "parity_python",
+      "parity_typescript",
+      "parity_comparison"
+    ]
+  },
+  "id": "parity.package28-tool-dispatch",
+  "mode": [
+    "parity"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "package 28 tool dispatch parity\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "parity_action": {
+        "action": "tool_dispatch",
+        "name": "mixed-dispatch"
+      }
+    }
+  ],
+  "tags": [
+    "ci",
+    "parity",
+    "package-28"
+  ],
+  "title": "Package 28 Tool Dispatch Parity"
+}

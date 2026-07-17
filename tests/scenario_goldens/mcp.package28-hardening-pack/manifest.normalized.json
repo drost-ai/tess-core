@@ -1,0 +1,291 @@
+{
+  "area": "mcp",
+  "capture": {
+    "include": [
+      "session",
+      "transcript",
+      "mcp_events",
+      "mcp_status",
+      "mcp_tools",
+      "mcp_results",
+      "mcp_driver_results",
+      "mcp_package28_results",
+      "mcp_package28_events",
+      "workspace_tree",
+      "step_results"
+    ]
+  },
+  "id": "mcp.package28-hardening-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "package 28 deterministic harness workspace\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "start_fake_mcp": {
+        "alias": "policy",
+        "name": "policy",
+        "protocolVersion": "2025-06-18",
+        "tools": [
+          {
+            "annotations": {
+              "destructiveHint": false,
+              "readOnlyHint": true
+            },
+            "description": "read-only probe",
+            "inputSchema": {
+              "type": "object"
+            },
+            "name": "read"
+          },
+          {
+            "annotations": {
+              "destructiveHint": true,
+              "readOnlyHint": false
+            },
+            "description": "mutation probe",
+            "inputSchema": {
+              "type": "object"
+            },
+            "name": "mutate"
+          }
+        ],
+        "transport": "http"
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "permissionMode": "plan",
+        "servers": [
+          "policy"
+        ],
+        "useSession": true
+      }
+    },
+    {
+      "run_mcp_plan_probe": {
+        "expectedReasons": [
+          "read_only_hint",
+          "not_read_only"
+        ],
+        "runtimeNames": [
+          "mcp__policy__read",
+          "mcp__policy__mutate"
+        ]
+      }
+    },
+    {
+      "run_mcp_dispatch_probe": {}
+    },
+    {
+      "close_mcp_runtime": {}
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "current",
+        "name": "current",
+        "protocolVersion": "2025-06-18",
+        "structuredContent": {
+          "kind": "structured",
+          "ok": true
+        },
+        "toolName": "edge",
+        "transport": "http"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "legacy",
+        "name": "legacy",
+        "protocolVersion": "2024-11-05",
+        "toolName": "edge",
+        "transport": "stdio"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "future",
+        "name": "future",
+        "protocolVersion": "2099-01-01",
+        "toolName": "edge",
+        "transport": "http"
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "servers": [
+          "current",
+          "legacy",
+          "future"
+        ]
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "connected": true,
+        "protocolVersion": "2025-06-18",
+        "server": "current",
+        "state": "connected"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "connected": true,
+        "protocolVersion": "2024-11-05",
+        "server": "legacy",
+        "state": "connected"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "connected": false,
+        "errorContains": "unsupported protocol version",
+        "server": "future",
+        "state": "disconnected"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "input": {
+          "value": "current"
+        },
+        "resultAlias": "current-structured",
+        "server": "current",
+        "tool": "edge"
+      }
+    },
+    {
+      "assert_mcp_result": {
+        "contentContains": "structuredContent",
+        "resultAlias": "current-structured",
+        "status": "passed"
+      }
+    },
+    {
+      "record_mcp_protocol_probe": {
+        "aliases": [
+          "current",
+          "legacy",
+          "future"
+        ]
+      }
+    },
+    {
+      "close_mcp_runtime": {}
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "catalog",
+        "initialNotifications": false,
+        "name": "catalog",
+        "protocolVersion": "2025-06-18",
+        "tools": [
+          {
+            "annotations": {
+              "readOnlyHint": true
+            },
+            "description": "old catalog",
+            "inputSchema": {
+              "type": "object"
+            },
+            "name": "old"
+          }
+        ],
+        "transport": "sse"
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "servers": [
+          "catalog"
+        ]
+      }
+    },
+    {
+      "apply_mcp_catalog_change": {
+        "alias": "catalog",
+        "expectedRuntimeNames": [
+          "mcp__catalog__new"
+        ],
+        "tools": [
+          {
+            "annotations": {
+              "readOnlyHint": false
+            },
+            "description": "new catalog",
+            "inputSchema": {
+              "type": "object"
+            },
+            "name": "new"
+          }
+        ]
+      }
+    },
+    {
+      "close_mcp_runtime": {}
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "oauth",
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "name": "oauth",
+        "oauthProtected": true,
+        "protocolVersion": "2025-06-18",
+        "structuredContent": {
+          "authorized": true
+        },
+        "toolName": "read",
+        "transport": "http"
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "memoryTokenStore": true,
+        "servers": [
+          "oauth"
+        ]
+      }
+    },
+    {
+      "recover_mcp_headless_auth": {
+        "alias": "oauth",
+        "token": "package-28-headless-secret",
+        "tool": "read"
+      }
+    },
+    {
+      "close_mcp_runtime": {}
+    },
+    {
+      "capture": {
+        "include": [
+          "session",
+          "transcript",
+          "mcp_events",
+          "mcp_status",
+          "mcp_tools",
+          "mcp_results",
+          "mcp_driver_results",
+          "mcp_package28_results",
+          "mcp_package28_events",
+          "workspace_tree",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "tags": [
+    "ci",
+    "mcp",
+    "package-28"
+  ],
+  "title": "Package 28 MCP Policy Dispatch Protocol Catalog And OAuth"
+}

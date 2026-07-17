@@ -81,6 +81,8 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 "sessionId": (session or {}).get("id") or args.get("sessionId"),
                 "registeredChannels": args.get("registeredChannels") or config.get("channels") or [],
                 "onRuntimeEvent": emit_runtime_event,
+                "mcpTokenStore": args.get("mcpTokenStore"),
+                "mcpAuthorizationCallback": args.get("mcpAuthorizationCallback"),
             }
         )
         owned_mcp_close = mcp_runtime["close"]
@@ -127,7 +129,8 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 emit_runtime_event("daemon.snapshot", _daemon_snapshot_payload(daemon_status))
 
     tool_options = {**args, "mcpRuntime": mcp_runtime, "workspaceController": workspace_controller}
-    tools = _dedupe_tools([*createBuiltinTools(tool_options), *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []), *(plugins.get("tools") or [])])
+    plugin_tools = plugins.get("tools") or []
+    tools = _dedupe_tools([*createBuiltinTools(tool_options), *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []), *plugin_tools])
     slash_commands = _dedupe_slash_commands(plugins.get("commands") or [])
     _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
 
@@ -138,6 +141,17 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             task_runtime["setForegroundBusy"](busy)
         if collaboration_runtime and collaboration_runtime.get("setForegroundBusy"):
             collaboration_runtime["setForegroundBusy"](busy)
+
+    async def apply_pending_mcp_catalog_changes() -> dict[str, Any]:
+        if not mcp_runtime or not mcp_runtime.get("applyPendingCatalogChanges"):
+            return {"changed": False, "servers": [], "generation": 0}
+        result = await maybe_await(mcp_runtime["applyPendingCatalogChanges"]())
+        if result.get("changed"):
+            tools[:] = _dedupe_tools(
+                [*createBuiltinTools(tool_options), *mcp_runtime["createToolDefinitions"](), *plugin_tools]
+            )
+            _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
+        return result
 
     def set_active_session(next_session: dict[str, Any], next_config: dict[str, Any]) -> None:
         nonlocal session, config, daemon_unsubscribe
@@ -202,6 +216,7 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         "getState": state_store["getState"],
         "stateStore": state_store,
         "setForegroundBusy": set_foreground_busy,
+        "applyPendingMcpCatalogChanges": apply_pending_mcp_catalog_changes,
         "getMonitorSnapshot": lambda: state_store["getState"]().get("monitors", {}).get("snapshot"),
         "getTaskSnapshot": lambda: task_runtime["getSnapshot"]() if task_runtime and task_runtime.get("getSnapshot") else _task_snapshot_from_state(state_store["getState"]),
         "getCollaborationSnapshot": lambda: state_store["getState"]().get("collaboration"),

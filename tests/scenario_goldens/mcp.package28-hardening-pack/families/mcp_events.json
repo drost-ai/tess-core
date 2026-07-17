@@ -1,0 +1,108 @@
+[
+  {
+    "data": {
+      "authorization_url": "http://127.0.0.1:<port:1>/authorize",
+      "continuation_id": "<continuation:1>",
+      "server": "oauth",
+      "transport": "http"
+    },
+    "event": "mcp.authorization_required"
+  },
+  {
+    "data": {
+      "generation": 2,
+      "resources_changed": false,
+      "servers": [
+        "catalog"
+      ],
+      "tools_changed": true
+    },
+    "event": "mcp.catalog_changed_applied"
+  },
+  {
+    "data": {
+      "method": "notifications/tools/list_changed",
+      "params": {
+        "reason": "package-28-harness"
+      },
+      "server": "catalog"
+    },
+    "event": "mcp.channel_notification"
+  },
+  {
+    "data": {
+      "protocol_version": "2025-06-18",
+      "resources": 1,
+      "server": "catalog",
+      "tools": 1,
+      "transport": "sse"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "protocol_version": "2025-06-18",
+      "resources": 1,
+      "server": "current",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "protocol_version": "2024-11-05",
+      "resources": 1,
+      "server": "legacy",
+      "tools": 1,
+      "transport": "stdio"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "protocol_version": "2025-06-18",
+      "resources": 1,
+      "server": "oauth",
+      "tools": 1,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "protocol_version": "2025-06-18",
+      "resources": 1,
+      "server": "policy",
+      "tools": 2,
+      "transport": "http"
+    },
+    "event": "mcp.server_connected"
+  },
+  {
+    "data": {
+      "reason": "MCP server requires unsupported protocol version 2099-01-01; this runtime supports 2025-06-18, 2025-03-26, 2024-11-05.",
+      "server": "future",
+      "transport": "http"
+    },
+    "event": "mcp.server_connection_failed"
+  },
+  {
+    "data": {
+      "reason": "authorization_required",
+      "server": "oauth",
+      "transport": "http"
+    },
+    "event": "mcp.server_connection_failed"
+  },
+  {
+    "data": {
+      "method": "notifications/tools/list_changed",
+      "params": {
+        "reason": "package-28-harness"
+      },
+      "server": "catalog"
+    },
+    "event": "mcp.tools_changed"
+  }
+]

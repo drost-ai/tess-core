@@ -1,0 +1,84 @@
+[
+  {
+    "alias": "policy",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "driver": "create_mcp_runtime",
+    "servers": [
+      "policy"
+    ],
+    "status": "passed"
+  },
+  {
+    "driver": "close_mcp_runtime",
+    "status": "passed"
+  },
+  {
+    "alias": "current",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "alias": "legacy",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "stdio"
+  },
+  {
+    "alias": "future",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "driver": "create_mcp_runtime",
+    "servers": [
+      "current",
+      "legacy",
+      "future"
+    ],
+    "status": "passed"
+  },
+  {
+    "driver": "close_mcp_runtime",
+    "status": "passed"
+  },
+  {
+    "alias": "catalog",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "sse"
+  },
+  {
+    "driver": "create_mcp_runtime",
+    "servers": [
+      "catalog"
+    ],
+    "status": "passed"
+  },
+  {
+    "driver": "close_mcp_runtime",
+    "status": "passed"
+  },
+  {
+    "alias": "oauth",
+    "driver": "start_fake_mcp",
+    "status": "passed",
+    "transport": "http"
+  },
+  {
+    "driver": "create_mcp_runtime",
+    "servers": [
+      "oauth"
+    ],
+    "status": "passed"
+  },
+  {
+    "driver": "close_mcp_runtime",
+    "status": "passed"
+  }
+]

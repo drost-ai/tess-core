@@ -12,11 +12,14 @@
     ],
     "serverStatuses": [
       {
+        "authorizationContinuationId": null,
+        "authorizationUrl": null,
         "capabilities": {
           "channelsSupported": false,
           "resources": 1,
           "tools": 1
         },
+        "catalogGeneration": 1,
         "channelRegistration": {
           "requested": false,
           "status": "not_requested"
@@ -27,6 +30,7 @@
         "lastErrorAt": null,
         "lastNotificationAt": null,
         "name": "shared",
+        "protocolVersion": "2024-11-05",
         "resources": 1,
         "serverCapabilities": {
           "logging": {},
@@ -42,6 +46,7 @@
         },
         "state": "connected",
         "tools": 1,
+        "toolsStale": false,
         "transport": "http"
       }
     ],

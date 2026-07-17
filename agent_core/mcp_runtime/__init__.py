@@ -4,7 +4,7 @@ import sys as _sys
 import types as _types
 from importlib import import_module
 
-_MODULE_NAMES = ['shared', 'runtime', 'clients', 'state', 'notifications', 'normalization', 'blobs', 'protocol', 'cancellation']
+_MODULE_NAMES = ['shared', 'negotiation', 'token_store', 'auth_loopback', 'auth', 'runtime', 'clients', 'state', 'notifications', 'normalization', 'blobs', 'protocol', 'cancellation']
 
 _modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
 _namespace = {}
@@ -16,7 +16,7 @@ for _module in _modules:
     vars(_module).update(_namespace)
 globals().update(_namespace)
 
-_PUBLIC_EXPORTS = ['Any', 'Callable', 'HTTPError', 'HttpMcpClient', 'JsonRpcClient', 'PROTOCOL_VERSION', 'Path', 'Request', 'SseMcpClient', 'StdioMcpClient', 'ToolDefinition', 'annotations', 'asyncio', 'base64', 'contextlib_suppress', 'createMcpRuntime', 'getStateRoot', 'hashlib', 'json', 'now_iso', 'os', 'pretty_json', 'queue', 're', 'socket', 'subprocess', 'threading', 'unquote', 'urlopen', 'urlparse', 'uuid']
+_PUBLIC_EXPORTS = ['Any', 'Callable', 'FileMcpTokenStore', 'HTTPError', 'HttpMcpClient', 'JsonRpcClient', 'McpAuthorizationRequiredError', 'McpOAuthRuntime', 'PROTOCOL_VERSION', 'Path', 'Request', 'SseMcpClient', 'StdioMcpClient', 'ToolDefinition', 'annotations', 'asyncio', 'base64', 'contextlib_suppress', 'createFileMcpTokenStore', 'createMcpOAuthRuntime', 'createMcpRuntime', 'create_file_mcp_token_store', 'getStateRoot', 'hashlib', 'json', 'mcpTokenStoreKey', 'mcp_token_store_key', 'now_iso', 'os', 'pretty_json', 'queue', 're', 'socket', 'subprocess', 'threading', 'unquote', 'urlopen', 'urlparse', 'uuid']
 
 __all__ = _PUBLIC_EXPORTS
 

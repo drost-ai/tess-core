@@ -179,6 +179,11 @@
   "daemon": {
     "phase": "offline"
   },
+  "mcp": {
+    "catalogGeneration": 0,
+    "lastPlanDecision": null,
+    "servers": {}
+  },
   "monitors": {
     "activeMonitorIds": [],
     "recentAssistantUpdates": [],

@@ -1,10 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Literal, TypedDict
 
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
+
+
+ToolConcurrency = Literal["parallel", "exclusive"]
+
+
+class McpToolAnnotations(TypedDict, total=False):
+    title: str
+    readOnlyHint: bool
+    destructiveHint: bool
+    idempotentHint: bool
+    openWorldHint: bool
+
+
+class McpToolIdentity(TypedDict, total=False):
+    server: str
+    name: str
+    annotations: McpToolAnnotations
 
 
 @dataclass
@@ -13,6 +30,12 @@ class ToolDefinition:
     description: str
     inputSchema: dict[str, Any]
     handler: Callable[[dict[str, Any], ToolContext], Awaitable[ToolResult]]
+    # Missing and invalid declarations are deliberately resolved as exclusive
+    # by the dispatch scheduler.  This keeps older custom/plugin tools safe.
+    concurrency: ToolConcurrency | None = None
+    # Internal provenance for definitions generated from MCP discovery.  This
+    # is policy input, not model-supplied identity.
+    mcp: McpToolIdentity | None = None
 
     @property
     def input_schema(self) -> dict[str, Any]:

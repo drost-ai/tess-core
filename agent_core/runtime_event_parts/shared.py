@@ -38,6 +38,13 @@ KNOWN_RUNTIME_EVENTS = {
     "plan.approved",
     "plan.rejected",
     "plan.contract_enforced",
+    "plan.mcp_tool_allowed",
+    "plan.mcp_tool_blocked",
+    "mcp.authorization_required",
+    "mcp.catalog_changed_applied",
+    "mcp.catalog_refresh_failed",
+    "mcp.server_connected",
+    "mcp.server_connection_failed",
     "compaction.started",
     "compaction.skipped",
     "compaction.completed",
@@ -116,6 +123,12 @@ def _field(data: dict[str, Any], *names: str) -> Any:
 
 def _optional_string(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None
+
+def _bounded_optional_string(value: Any, limit: int = 512) -> str | None:
+    text = _optional_string(value)
+    if text is None:
+        return None
+    return text.encode("utf-8")[:limit].decode("utf-8", errors="ignore")
 
 def _string_field(value: Any) -> str:
     return value if isinstance(value, str) else ""

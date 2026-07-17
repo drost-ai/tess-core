@@ -1,0 +1,220 @@
+{
+  "id": "mcp.package28-hardening-pack",
+  "title": "Package 28 MCP Policy Dispatch Protocol Catalog And OAuth",
+  "area": "mcp",
+  "mode": ["python"],
+  "tags": ["ci", "mcp", "package-28"],
+  "setup": {
+    "workspace": {
+      "files": {
+        "README.md": "package 28 deterministic harness workspace\n"
+      }
+    }
+  },
+  "steps": [
+    {
+      "start_fake_mcp": {
+        "alias": "policy",
+        "name": "policy",
+        "transport": "http",
+        "protocolVersion": "2025-06-18",
+        "tools": [
+          {
+            "name": "read",
+            "description": "read-only probe",
+            "inputSchema": {"type": "object"},
+            "annotations": {"readOnlyHint": true, "destructiveHint": false}
+          },
+          {
+            "name": "mutate",
+            "description": "mutation probe",
+            "inputSchema": {"type": "object"},
+            "annotations": {"readOnlyHint": false, "destructiveHint": true}
+          }
+        ]
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "servers": ["policy"],
+        "useSession": true,
+        "permissionMode": "plan"
+      }
+    },
+    {
+      "run_mcp_plan_probe": {
+        "runtimeNames": ["mcp__policy__read", "mcp__policy__mutate"],
+        "expectedReasons": ["read_only_hint", "not_read_only"]
+      }
+    },
+    {"run_mcp_dispatch_probe": {}},
+    {"close_mcp_runtime": {}},
+    {
+      "start_fake_mcp": {
+        "alias": "current",
+        "name": "current",
+        "transport": "http",
+        "protocolVersion": "2025-06-18",
+        "toolName": "edge",
+        "structuredContent": {"kind": "structured", "ok": true}
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "legacy",
+        "name": "legacy",
+        "transport": "stdio",
+        "protocolVersion": "2024-11-05",
+        "toolName": "edge"
+      }
+    },
+    {
+      "start_fake_mcp": {
+        "alias": "future",
+        "name": "future",
+        "transport": "http",
+        "protocolVersion": "2099-01-01",
+        "toolName": "edge"
+      }
+    },
+    {
+      "create_mcp_runtime": {"servers": ["current", "legacy", "future"]}
+    },
+    {
+      "assert_mcp_status": {
+        "server": "current",
+        "state": "connected",
+        "connected": true,
+        "protocolVersion": "2025-06-18"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "server": "legacy",
+        "state": "connected",
+        "connected": true,
+        "protocolVersion": "2024-11-05"
+      }
+    },
+    {
+      "assert_mcp_status": {
+        "server": "future",
+        "state": "disconnected",
+        "connected": false,
+        "errorContains": "unsupported protocol version"
+      }
+    },
+    {
+      "call_mcp_tool": {
+        "server": "current",
+        "tool": "edge",
+        "input": {"value": "current"},
+        "resultAlias": "current-structured"
+      }
+    },
+    {
+      "assert_mcp_result": {
+        "resultAlias": "current-structured",
+        "status": "passed",
+        "contentContains": "structuredContent"
+      }
+    },
+    {
+      "record_mcp_protocol_probe": {
+        "aliases": ["current", "legacy", "future"]
+      }
+    },
+    {"close_mcp_runtime": {}},
+    {
+      "start_fake_mcp": {
+        "alias": "catalog",
+        "name": "catalog",
+        "transport": "sse",
+        "protocolVersion": "2025-06-18",
+        "initialNotifications": false,
+        "tools": [
+          {
+            "name": "old",
+            "description": "old catalog",
+            "inputSchema": {"type": "object"},
+            "annotations": {"readOnlyHint": true}
+          }
+        ]
+      }
+    },
+    {"create_mcp_runtime": {"servers": ["catalog"]}},
+    {
+      "apply_mcp_catalog_change": {
+        "alias": "catalog",
+        "tools": [
+          {
+            "name": "new",
+            "description": "new catalog",
+            "inputSchema": {"type": "object"},
+            "annotations": {"readOnlyHint": false}
+          }
+        ],
+        "expectedRuntimeNames": ["mcp__catalog__new"]
+      }
+    },
+    {"close_mcp_runtime": {}},
+    {
+      "start_fake_mcp": {
+        "alias": "oauth",
+        "name": "oauth",
+        "transport": "http",
+        "oauthProtected": true,
+        "protocolVersion": "2025-06-18",
+        "toolName": "read",
+        "annotations": {"readOnlyHint": true},
+        "structuredContent": {"authorized": true}
+      }
+    },
+    {
+      "create_mcp_runtime": {
+        "servers": ["oauth"],
+        "memoryTokenStore": true
+      }
+    },
+    {
+      "recover_mcp_headless_auth": {
+        "alias": "oauth",
+        "tool": "read",
+        "token": "package-28-headless-secret"
+      }
+    },
+    {"close_mcp_runtime": {}},
+    {
+      "capture": {
+        "include": [
+          "session",
+          "transcript",
+          "mcp_events",
+          "mcp_status",
+          "mcp_tools",
+          "mcp_results",
+          "mcp_driver_results",
+          "mcp_package28_results",
+          "mcp_package28_events",
+          "workspace_tree",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "capture": {
+    "include": [
+      "session",
+      "transcript",
+      "mcp_events",
+      "mcp_status",
+      "mcp_tools",
+      "mcp_results",
+      "mcp_driver_results",
+      "mcp_package28_results",
+      "mcp_package28_events",
+      "workspace_tree",
+      "step_results"
+    ]
+  }
+}

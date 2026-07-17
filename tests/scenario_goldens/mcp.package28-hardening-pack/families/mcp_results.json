@@ -1,0 +1,23 @@
+[
+  {
+    "driver": "call_mcp_tool",
+    "input": {
+      "value": "current"
+    },
+    "result": {
+      "content": "{\n  \"type\": \"mcp_tool_result\",\n  \"text\": \"current:current\",\n  \"structured\": {\n    \"kind\": \"structured\",\n    \"ok\": true\n  }\n}",
+      "isError": false,
+      "meta": {
+        "mcp_server": "current",
+        "mcp_tool": "edge"
+      },
+      "structuredContent": {
+        "kind": "structured",
+        "ok": true
+      }
+    },
+    "server": "current",
+    "status": "passed",
+    "tool": "edge"
+  }
+]

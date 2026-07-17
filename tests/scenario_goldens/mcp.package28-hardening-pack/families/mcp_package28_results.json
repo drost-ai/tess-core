@@ -1,0 +1,116 @@
+[
+  {
+    "decisions": [
+      {
+        "data": {
+          "reason": "read_only_hint",
+          "server": "policy",
+          "tool": "read"
+        },
+        "event": "plan.mcp_tool_allowed"
+      },
+      {
+        "data": {
+          "reason": "not_read_only",
+          "server": "policy",
+          "tool": "mutate"
+        },
+        "event": "plan.mcp_tool_blocked"
+      }
+    ],
+    "probe": "plan_gate",
+    "status": "passed",
+    "toolResults": [
+      {
+        "isError": false,
+        "toolUseId": "plan-0"
+      },
+      {
+        "isError": true,
+        "toolUseId": "plan-1"
+      }
+    ]
+  },
+  {
+    "defaultConcurrency": "exclusive",
+    "exclusiveSerialized": true,
+    "execution": [
+      "parallel:start",
+      "exclusive-1:start",
+      "exclusive-1:end",
+      "exclusive-2:start",
+      "exclusive-2:end",
+      "parallel:end"
+    ],
+    "parallelOverlapped": true,
+    "probe": "dispatch",
+    "resultOrder": [
+      "exclusive-1",
+      "parallel",
+      "exclusive-2"
+    ],
+    "status": "passed"
+  },
+  {
+    "probe": "protocol",
+    "servers": [
+      {
+        "alias": "current",
+        "protocolHeaders": [
+          "2025-06-18",
+          "2025-06-18",
+          "2025-06-18",
+          "2025-06-18"
+        ],
+        "protocolVersion": "2025-06-18",
+        "state": "connected"
+      },
+      {
+        "alias": "legacy",
+        "protocolHeaders": [],
+        "protocolVersion": "2024-11-05",
+        "state": "connected"
+      },
+      {
+        "alias": "future",
+        "protocolHeaders": [],
+        "protocolVersion": null,
+        "state": "disconnected"
+      }
+    ],
+    "status": "passed"
+  },
+  {
+    "afterNames": [
+      "mcp__catalog__new"
+    ],
+    "applied": {
+      "changed": true,
+      "generation": 2,
+      "resourcesChanged": false,
+      "servers": [
+        "catalog"
+      ],
+      "toolsChanged": true
+    },
+    "beforeNames": [
+      "mcp__catalog__old"
+    ],
+    "duringNames": [
+      "mcp__catalog__old"
+    ],
+    "generationAfter": 2,
+    "generationBefore": 1,
+    "probe": "catalog_boundary",
+    "status": "passed"
+  },
+  {
+    "afterState": "connected",
+    "authorizationUrlHasQuery": false,
+    "beforeState": "authorization_required",
+    "failFast": true,
+    "probe": "headless_auth",
+    "resultHasStructuredContent": true,
+    "status": "passed"
+  }
+]

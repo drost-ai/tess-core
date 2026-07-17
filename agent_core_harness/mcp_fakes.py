@@ -8,6 +8,7 @@ import sys
 import textwrap
 import threading
 from typing import Any
+from urllib.parse import urlsplit
 
 from .sandbox import ScenarioSandbox
 
@@ -24,15 +25,54 @@ def start_fake_mcp_server(data: dict[str, Any], sandbox: ScenarioSandbox, alias:
 def _start_http_server(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     calls = {"tool": 0}
     payload = _server_payload(data)
+    accepted_tokens = set(str(item) for item in data.get("acceptedTokens") or [])
+    protocol_headers: list[str | None] = []
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_args: Any) -> None:
             return
 
+        def do_GET(self) -> None:
+            path = urlsplit(self.path).path
+            origin = f"http://127.0.0.1:{self.server.server_address[1]}"
+            if payload["oauth_protected"] and path == "/.well-known/oauth-protected-resource/rpc":
+                _send_json(
+                    self,
+                    {"resource": f"{origin}/rpc", "authorization_servers": [origin]},
+                )
+                return
+            if payload["oauth_protected"] and path in {
+                "/.well-known/oauth-authorization-server",
+                "/.well-known/openid-configuration",
+            }:
+                _send_json(
+                    self,
+                    {
+                        "issuer": origin,
+                        "authorization_endpoint": f"{origin}/authorize",
+                        "token_endpoint": f"{origin}/token",
+                    },
+                )
+                return
+            self.send_error(404)
+
         def do_POST(self) -> None:
+            origin = f"http://127.0.0.1:{self.server.server_address[1]}"
+            if payload["oauth_protected"]:
+                authorization = self.headers.get("authorization") or ""
+                if authorization.removeprefix("Bearer ") not in accepted_tokens:
+                    self.send_response(401)
+                    self.send_header(
+                        "WWW-Authenticate",
+                        f'Bearer resource_metadata="{origin}/.well-known/oauth-protected-resource/rpc"',
+                    )
+                    self.end_headers()
+                    return
             request = _read_json_request(self)
             method = request.get("method")
             request_id = request.get("id")
+            if method != "initialize":
+                protocol_headers.append(self.headers.get("MCP-Protocol-Version"))
             if method == "notifications/initialized":
                 _send_empty(self)
                 return
@@ -54,7 +94,13 @@ def _start_http_server(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
-    return _server_config(data, "http", url), {"server": server, "thread": thread}
+    return _server_config(data, "http", url), {
+        "server": server,
+        "thread": thread,
+        "payload": payload,
+        "accepted_tokens": accepted_tokens,
+        "protocol_headers": protocol_headers,
+    }
 
 
 def _start_sse_server(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -63,6 +109,7 @@ def _start_sse_server(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     stop_event = threading.Event()
     queues: list[queue.Queue[dict[str, Any]]] = []
     queues_lock = threading.Lock()
+    protocol_headers: list[str | None] = []
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *_args: Any) -> None:
@@ -98,13 +145,15 @@ def _start_sse_server(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
                 return
             request = _read_json_request(self)
             request_id = request.get("id")
+            if request.get("method") != "initialize":
+                protocol_headers.append(self.headers.get("MCP-Protocol-Version"))
             if request_id is not None:
                 result = _rpc_result(payload, request, calls)
                 with queues_lock:
                     active_queues = list(queues)
                 for item in active_queues:
                     item.put({"jsonrpc": "2.0", "id": request_id, "result": result})
-                    if request.get("method") == "initialize":
+                    if request.get("method") == "initialize" and payload["initial_notifications"]:
                         for notification in _notifications():
                             item.put(notification)
             _send_empty(self)
@@ -113,7 +162,15 @@ def _start_sse_server(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_address[1]}/sse"
-    return _server_config(data, "sse", url), {"server": server, "thread": thread, "stop_event": stop_event}
+    return _server_config(data, "sse", url), {
+        "server": server,
+        "thread": thread,
+        "stop_event": stop_event,
+        "payload": payload,
+        "queues": queues,
+        "queues_lock": queues_lock,
+        "protocol_headers": protocol_headers,
+    }
 
 
 def _start_stdio_server(data: dict[str, Any], sandbox: ScenarioSandbox, alias: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -131,12 +188,24 @@ def _server_payload(data: dict[str, Any]) -> dict[str, Any]:
     default_uri = "memory://blob/large.bin" if data.get("resourceMode") == "blob" else f"memory://{name}"
     resource_uri = str(data.get("resourceUri") or default_uri)
     blob_text = str(data.get("blobText") or ("blob-data-" * 512))
+    default_tool = {
+        "name": tool_name,
+        "description": str(data.get("toolDescription") or f"{tool_name} input"),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"value": {"type": "string"}, "variant": {"type": "string"}},
+        },
+    }
+    if isinstance(data.get("annotations"), dict):
+        default_tool["annotations"] = dict(data["annotations"])
+    tools = data.get("tools") if isinstance(data.get("tools"), list) else [default_tool]
     return {
         "name": name,
         "server_info_name": str(data.get("serverInfoName") or f"{name}-fake"),
         "profile": str(data.get("profile") or "normal"),
         "tool_name": tool_name,
         "tool_description": str(data.get("toolDescription") or f"{tool_name} input"),
+        "tools": tools,
         "text_prefix": str(data.get("textPrefix") or f"{name}:"),
         "resource_uri": resource_uri,
         "resource_name": str(data.get("resourceName") or resource_uri.rsplit("/", 1)[-1]),
@@ -144,6 +213,10 @@ def _server_payload(data: dict[str, Any]) -> dict[str, Any]:
         "resource_mode": str(data.get("resourceMode") or "text"),
         "blob": base64.b64encode(blob_text.encode("utf-8")).decode("ascii"),
         "fail_first_tool_call": bool(data.get("failFirstToolCall")),
+        "oauth_protected": bool(data.get("oauthProtected")),
+        "protocol_version": data.get("protocolVersion"),
+        "structured_content": data.get("structuredContent"),
+        "initial_notifications": data.get("initialNotifications", True) is not False,
         "capabilities": data.get("capabilities") or {"tools": {"listChanged": True}, "resources": {"listChanged": True}, "logging": {}},
     }
 
@@ -158,23 +231,20 @@ def _server_config(data: dict[str, Any], transport: str, command_or_url: str, ar
     }
     if args:
         config["args"] = args
+    if data.get("oauthProtected"):
+        config["oauth"] = dict(data.get("oauth") or {"clientId": "headless-harness"})
     return config
 
 
 def _rpc_result(payload: dict[str, Any], request: dict[str, Any], calls: dict[str, int]) -> Any:
     method = request.get("method")
     if method == "initialize":
-        return {"serverInfo": {"name": payload["server_info_name"]}, "capabilities": payload["capabilities"]}
+        result = {"serverInfo": {"name": payload["server_info_name"]}, "capabilities": payload["capabilities"]}
+        if isinstance(payload.get("protocol_version"), str):
+            result["protocolVersion"] = payload["protocol_version"]
+        return result
     if method == "tools/list":
-        return {
-            "tools": [
-                {
-                    "name": payload["tool_name"],
-                    "description": payload["tool_description"],
-                    "inputSchema": {"type": "object", "properties": {"value": {"type": "string"}, "variant": {"type": "string"}}},
-                }
-            ]
-        }
+        return {"tools": payload["tools"]}
     if method == "resources/list":
         return {"resources": [{"uri": payload["resource_uri"], "name": payload["resource_name"], "mimeType": "text/plain"}]}
     if method == "resources/read":
@@ -186,7 +256,10 @@ def _rpc_result(payload: dict[str, Any], request: dict[str, Any], calls: dict[st
         args = (request.get("params") or {}).get("arguments") or {}
         if payload["profile"] == "protocol" and args.get("variant") == "ok":
             return {"content": [{"type": "text", "text": "ok"}]}
-        return {"content": [{"type": "text", "text": payload["text_prefix"] + str(args.get("value", ""))}]}
+        result = {"content": [{"type": "text", "text": payload["text_prefix"] + str(args.get("value", ""))}]}
+        if payload.get("structured_content") is not None:
+            result["structuredContent"] = payload["structured_content"]
+        return result
     if method == "channels/register":
         return {"registered": True, "sessionId": (request.get("params") or {}).get("sessionId")}
     return {}
@@ -267,9 +340,12 @@ def _stdio_server_script(payload: dict[str, Any]) -> str:
         def result_for(request):
             method = request.get("method")
             if method == "initialize":
-                return {{"serverInfo": {{"name": PAYLOAD["server_info_name"]}}, "capabilities": PAYLOAD["capabilities"]}}
+                result = {{"serverInfo": {{"name": PAYLOAD["server_info_name"]}}, "capabilities": PAYLOAD["capabilities"]}}
+                if isinstance(PAYLOAD.get("protocol_version"), str):
+                    result["protocolVersion"] = PAYLOAD["protocol_version"]
+                return result
             if method == "tools/list":
-                return {{"tools": [{{"name": PAYLOAD["tool_name"], "description": PAYLOAD["tool_description"], "inputSchema": {{"type": "object", "properties": {{"value": {{"type": "string"}}}}}}}}]}}
+                return {{"tools": PAYLOAD["tools"]}}
             if method == "resources/list":
                 return {{"resources": [{{"uri": PAYLOAD["resource_uri"], "name": PAYLOAD["resource_name"], "mimeType": "text/plain"}}]}}
             if method == "resources/read":
@@ -277,7 +353,10 @@ def _stdio_server_script(payload: dict[str, Any]) -> str:
             if method == "tools/call":
                 CALLS["tool"] += 1
                 args = (request.get("params") or {{}}).get("arguments") or {{}}
-                return {{"content": [{{"type": "text", "text": PAYLOAD["text_prefix"] + str(args.get("value", ""))}}]}}
+                result = {{"content": [{{"type": "text", "text": PAYLOAD["text_prefix"] + str(args.get("value", ""))}}]}}
+                if PAYLOAD.get("structured_content") is not None:
+                    result["structuredContent"] = PAYLOAD["structured_content"]
+                return result
             if method == "channels/register":
                 return {{"registered": True}}
             return {{}}

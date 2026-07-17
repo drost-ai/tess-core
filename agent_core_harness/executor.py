@@ -41,6 +41,13 @@ from .mcp_driver import (
     read_mcp_resource,
     start_fake_mcp,
 )
+from .mcp_package28 import (
+    apply_mcp_catalog_change,
+    record_mcp_protocol_probe,
+    recover_mcp_headless_auth,
+    run_mcp_dispatch_probe,
+    run_mcp_plan_probe,
+)
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
 from .normalization import normalize_observations
 from .remote_driver import (
@@ -274,6 +281,16 @@ async def _execute_step(
         return await call_mcp_tool(data, sandbox, state)
     if step_type == "call_mcp_generated_tool":
         return await call_mcp_generated_tool(data, sandbox, state)
+    if step_type == "run_mcp_plan_probe":
+        return await run_mcp_plan_probe(data, sandbox, state)
+    if step_type == "run_mcp_dispatch_probe":
+        return await run_mcp_dispatch_probe(data, sandbox, state)
+    if step_type == "apply_mcp_catalog_change":
+        return await apply_mcp_catalog_change(data, sandbox, state)
+    if step_type == "record_mcp_protocol_probe":
+        return await record_mcp_protocol_probe(data, sandbox, state)
+    if step_type == "recover_mcp_headless_auth":
+        return await recover_mcp_headless_auth(data, sandbox, state)
     if step_type == "create_mcp_plugin_fixture":
         return await create_mcp_plugin_fixture(data, sandbox, state)
     if step_type == "bootstrap_mcp_plugin_runtime":

@@ -7,9 +7,16 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     args = {**(args or {}), **kwargs}
     cwd = args.get("cwd") or os.getcwd()
     on_event = args.get("onRuntimeEvent") or (lambda *_: None)
-    states = [_create_state(config) for config in _dedupe_servers(args.get("servers") or args.get("mcpConfig") or [])]
+    token_store = args.get("tokenStore") or args.get("mcpTokenStore") or createFileMcpTokenStore()
+    authorization_callback = args.get("authorizationCallback") or args.get("mcpAuthorizationCallback")
+    states = [
+        _create_state(config, token_store, on_event, authorization_callback)
+        for config in _dedupe_servers(args.get("servers") or args.get("mcpConfig") or [])
+    ]
     await asyncio.gather(*(_connect_state(state, cwd, on_event) for state in states))
     await _register_requested_channels(states, args.get("registeredChannels") or [], args.get("sessionId"), on_event)
+    catalog_lock = asyncio.Lock()
+    tool_registry_generation = 1 if any(state.get("connected") for state in states) else 0
 
     def list_server_status() -> list[dict[str, Any]]:
         return [_server_status(state) for state in states]
@@ -66,12 +73,81 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                         f"MCP {tool['server']}: {tool['description']}" if tool.get("description") else f"MCP {tool['server']} tool {tool['name']}",
                         tool.get("inputSchema") or {"type": "object"},
                         handler,
+                        concurrency="parallel" if (tool.get("annotations") or {}).get("readOnlyHint") is True else "exclusive",
+                        mcp={
+                            "server": tool["server"],
+                            "name": tool["name"],
+                            **({"annotations": tool["annotations"]} if tool.get("annotations") else {}),
+                        },
                     )
                 )
         return definitions
 
+    def has_pending_catalog_changes() -> bool:
+        return any(state.get("toolsStale") or state.get("resourcesStale") for state in states)
+
+    async def apply_pending_catalog_changes() -> dict[str, Any]:
+        nonlocal tool_registry_generation
+        async with catalog_lock:
+            changed_servers: list[str] = []
+            tools_changed = False
+            resources_changed = False
+            for state in states:
+                refresh_tools = bool(state.get("toolsStale"))
+                refresh_resources = bool(state.get("resourcesStale"))
+                if not refresh_tools and not refresh_resources:
+                    continue
+                if not state.get("connected") or not state.get("client"):
+                    continue
+                state["toolsStale"] = False if refresh_tools else state.get("toolsStale", False)
+                state["resourcesStale"] = False if refresh_resources else state.get("resourcesStale", False)
+                try:
+                    candidate_tools = await _refresh_tools(state) if refresh_tools else state["tools"]
+                    candidate_resources = await _refresh_resources(state) if refresh_resources else state["resources"]
+                except Exception as exc:
+                    if refresh_tools:
+                        state["toolsStale"] = True
+                    if refresh_resources:
+                        state["resourcesStale"] = True
+                    _mark_state_failure(state, exc)
+                    on_event(
+                        "mcp.catalog_refresh_failed",
+                        {"server": state["config"].get("name"), "catalog": "tools" if refresh_tools else "resources"},
+                    )
+                    continue
+                if refresh_tools:
+                    state["tools"] = candidate_tools
+                    tools_changed = True
+                if refresh_resources:
+                    state["resources"] = candidate_resources
+                    resources_changed = True
+                state["catalogGeneration"] = int(state.get("catalogGeneration") or 0) + 1
+                changed_servers.append(state["config"]["name"])
+            if changed_servers:
+                tool_registry_generation += 1
+                on_event(
+                    "mcp.catalog_changed_applied",
+                    {
+                        "servers": changed_servers[:64],
+                        "generation": tool_registry_generation,
+                        "tools_changed": tools_changed,
+                        "resources_changed": resources_changed,
+                    },
+                )
+            return {
+                "changed": bool(changed_servers),
+                "servers": changed_servers,
+                "generation": tool_registry_generation,
+                "toolsChanged": tools_changed,
+                "resourcesChanged": resources_changed,
+            }
+
     async def close() -> None:
-        await asyncio.gather(*(state["client"].close() for state in states if state.get("client")), return_exceptions=True)
+        await asyncio.gather(
+            *(state["client"].close() for state in states if state.get("client")),
+            *(state["oauth"].close() for state in states if state.get("oauth")),
+            return_exceptions=True,
+        )
 
     return {
         "tools": list_tools(),
@@ -85,5 +161,10 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         "readResource": read_resource,
         "callTool": call_tool,
         "createToolDefinitions": create_tool_definitions,
+        "hasPendingCatalogChanges": has_pending_catalog_changes,
+        "hasPendingToolChanges": has_pending_catalog_changes,
+        "applyPendingCatalogChanges": apply_pending_catalog_changes,
+        "applyPendingToolChanges": apply_pending_catalog_changes,
+        "toolRegistryGeneration": lambda: tool_registry_generation,
         "close": close,
     }

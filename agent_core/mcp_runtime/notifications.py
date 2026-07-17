@@ -20,10 +20,12 @@ def _emit_mcp_notification(config: dict[str, Any], payload: dict[str, Any], on_e
     if method in {"notifications/tools/list_changed", "tools/list_changed"}:
         if state is not None:
             state["toolsStale"] = True
+            state["notificationGeneration"] = int(state.get("notificationGeneration") or 0) + 1
         on_event("mcp.tools_changed", {"server": config.get("name"), "method": method, "params": normalized_params})
     elif method in {"notifications/resources/list_changed", "resources/list_changed"}:
         if state is not None:
             state["resourcesStale"] = True
+            state["notificationGeneration"] = int(state.get("notificationGeneration") or 0) + 1
         on_event("mcp.resources_changed", {"server": config.get("name"), "method": method, "params": normalized_params})
     elif method in {"notifications/message", "notifications/logging/message", "logging/message"}:
         level = normalized_params.get("level") or normalized_params.get("severity")

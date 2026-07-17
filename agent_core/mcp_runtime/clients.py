@@ -4,23 +4,38 @@ from .shared import *
 
 
 class JsonRpcClient:
-    def __init__(self, config: dict[str, Any], cwd: str, on_notification: Callable[[dict[str, Any]], Any] | None = None):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        cwd: str,
+        on_notification: Callable[[dict[str, Any]], Any] | None = None,
+        auth: Any = None,
+    ):
         self.config = config
         self.cwd = cwd
         self.on_notification = on_notification
         self.next_id = 1
         self.server_info: dict[str, Any] = {}
         self.server_capabilities: dict[str, Any] = {}
+        self.negotiated_protocol_version: str | None = None
+        self.auth = auth
 
     async def initialize(self) -> None:
         result = await self.request(
             "initialize",
-            {"protocolVersion": PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": "tess", "version": "0.1.0"}},
+            {"protocolVersion": PREFERRED_PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": "tess", "version": "0.1.0"}},
         )
         if isinstance(result, dict):
-            self.server_info = result.get("serverInfo") if isinstance(result.get("serverInfo"), dict) else {}
-            self.server_capabilities = result.get("capabilities") if isinstance(result.get("capabilities"), dict) else {}
+            self.server_info = bounded_capabilities(result.get("serverInfo"))
+            self.server_capabilities = bounded_capabilities(result.get("capabilities"))
+        self.negotiated_protocol_version = resolve_negotiated_protocol(result)
         await self.notify("notifications/initialized")
+
+    def _http_headers(self, base: dict[str, str]) -> dict[str, str]:
+        headers = {**base, **(self.config.get("headers") or {})}
+        if self.negotiated_protocol_version:
+            headers["MCP-Protocol-Version"] = self.negotiated_protocol_version
+        return headers
 
     async def request(self, method: str, params: Any = None) -> Any:
         request_id = self.next_id
@@ -40,11 +55,26 @@ class JsonRpcClient:
 
 class HttpMcpClient(JsonRpcClient):
     async def _send(self, request: dict[str, Any]) -> dict[str, Any]:
-        return await asyncio.to_thread(self._send_sync, request)
+        resource_url = self.config["commandOrUrl"]
+        auth_headers = await self.auth.authorize_headers(resource_url) if self.auth else {}
+        try:
+            return await asyncio.to_thread(self._send_sync, request, auth_headers)
+        except _McpHttpUnauthorized as exc:
+            if not self.auth:
+                raise RuntimeError(f"HTTP 401 from MCP server {self.config.get('name')}") from None
+            retry = await self.auth.handle_unauthorized(
+                www_authenticate=exc.www_authenticate,
+                resource_url=resource_url,
+                sent_authorization=auth_headers.get("Authorization"),
+            )
+            if not retry:
+                raise RuntimeError(f"HTTP 401 from MCP server {self.config.get('name')}") from None
+            auth_headers = await self.auth.authorize_headers(resource_url)
+            return await asyncio.to_thread(self._send_sync, request, auth_headers)
 
-    def _send_sync(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _send_sync(self, request: dict[str, Any], auth_headers: dict[str, str] | None = None) -> dict[str, Any]:
         body = json.dumps(request).encode("utf-8")
-        headers = {"content-type": "application/json", "accept": "application/json, text/event-stream", **(self.config.get("headers") or {})}
+        headers = {**self._http_headers({"content-type": "application/json", "accept": "application/json, text/event-stream"}), **(auth_headers or {})}
         req = Request(self.config["commandOrUrl"], data=body, headers=headers, method="POST")
         try:
             with urlopen(req, timeout=float(self.config.get("requestTimeoutSeconds") or 30)) as response:
@@ -53,12 +83,23 @@ class HttpMcpClient(JsonRpcClient):
                 raw = response.read().decode("utf-8", errors="replace")
                 return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id"))
         except HTTPError as exc:
+            if exc.code == 401:
+                challenge = exc.headers.get("WWW-Authenticate")
+                with contextlib_suppress():
+                    exc.close()
+                raise _McpHttpUnauthorized(challenge) from None
             raise RuntimeError(f"HTTP {exc.code} from MCP server {self.config.get('name')}") from exc
 
 
 class SseMcpClient(JsonRpcClient):
-    def __init__(self, config: dict[str, Any], cwd: str, on_notification: Callable[[dict[str, Any]], Any] | None = None):
-        super().__init__(config, cwd, on_notification)
+    def __init__(
+        self,
+        config: dict[str, Any],
+        cwd: str,
+        on_notification: Callable[[dict[str, Any]], Any] | None = None,
+        auth: Any = None,
+    ):
+        super().__init__(config, cwd, on_notification, auth)
         self.post_url = config["commandOrUrl"]
         self.pending: dict[int, queue.Queue[dict[str, Any] | BaseException]] = {}
         self.stop_event = threading.Event()
@@ -66,9 +107,23 @@ class SseMcpClient(JsonRpcClient):
         self.stream_thread: threading.Thread | None = None
         self.stream_response: Any = None
         self.post_lock = threading.Lock()
+        self.stream_auth_headers: dict[str, str] = {}
+        self.stream_unauthorized: _McpHttpUnauthorized | None = None
 
     async def initialize(self) -> None:
+        self.stream_auth_headers = await self.auth.authorize_headers(self.config["commandOrUrl"]) if self.auth else {}
         await asyncio.to_thread(self._start_event_stream)
+        if self.stream_unauthorized and self.auth:
+            retry = await self.auth.handle_unauthorized(
+                www_authenticate=self.stream_unauthorized.www_authenticate,
+                resource_url=self.config["commandOrUrl"],
+                sent_authorization=self.stream_auth_headers.get("Authorization"),
+            )
+            if retry:
+                if self.stream_thread and self.stream_thread.is_alive():
+                    await asyncio.to_thread(self.stream_thread.join, 1)
+                self.stream_auth_headers = await self.auth.authorize_headers(self.config["commandOrUrl"])
+                await asyncio.to_thread(self._start_event_stream)
         await super().initialize()
 
     async def close(self) -> None:
@@ -88,7 +143,21 @@ class SseMcpClient(JsonRpcClient):
             response_queue = queue.Queue(maxsize=1)
             self.pending[request_id] = response_queue
         try:
-            response, empty_ack = await asyncio.to_thread(self._post_sync, request)
+            auth_headers = await self.auth.authorize_headers(self.post_url) if self.auth else {}
+            try:
+                response, empty_ack = await asyncio.to_thread(self._post_sync, request, auth_headers)
+            except _McpHttpUnauthorized as exc:
+                if not self.auth:
+                    raise RuntimeError(f"HTTP 401 from MCP SSE server {self.config.get('name')}") from None
+                retry = await self.auth.handle_unauthorized(
+                    www_authenticate=exc.www_authenticate,
+                    resource_url=self.post_url,
+                    sent_authorization=auth_headers.get("Authorization"),
+                )
+                if not retry:
+                    raise RuntimeError(f"HTTP 401 from MCP SSE server {self.config.get('name')}") from None
+                auth_headers = await self.auth.authorize_headers(self.post_url)
+                response, empty_ack = await asyncio.to_thread(self._post_sync, request, auth_headers)
             if not empty_ack or not response_queue:
                 if isinstance(request_id, int):
                     self.pending.pop(request_id, None)
@@ -109,9 +178,9 @@ class SseMcpClient(JsonRpcClient):
                 self.pending.pop(request_id, None)
             raise
 
-    def _post_sync(self, request: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    def _post_sync(self, request: dict[str, Any], auth_headers: dict[str, str] | None = None) -> tuple[dict[str, Any], bool]:
         body = json.dumps(request).encode("utf-8")
-        headers = {"content-type": "application/json", "accept": "application/json, text/event-stream", **(self.config.get("headers") or {})}
+        headers = {**self._http_headers({"content-type": "application/json", "accept": "application/json, text/event-stream"}), **(auth_headers or {})}
         with self.post_lock:
             post_url = self.post_url
         req = Request(post_url, data=body, headers=headers, method="POST")
@@ -123,11 +192,18 @@ class SseMcpClient(JsonRpcClient):
                 empty_ack = response.status in (202, 204) or not raw.strip()
                 return _parse_http_rpc_response(response.status, raw, response.headers.get("content-type", ""), request.get("id")), empty_ack
         except HTTPError as exc:
+            if exc.code == 401:
+                challenge = exc.headers.get("WWW-Authenticate")
+                with contextlib_suppress():
+                    exc.close()
+                raise _McpHttpUnauthorized(challenge) from None
             raise RuntimeError(f"HTTP {exc.code} from MCP SSE server {self.config.get('name')}") from exc
 
     def _start_event_stream(self) -> None:
         if self.stream_thread and self.stream_thread.is_alive():
             return
+        self.endpoint_ready.clear()
+        self.stream_unauthorized = None
         self.stream_thread = threading.Thread(target=self._event_stream_loop, daemon=True)
         self.stream_thread.start()
         self.endpoint_ready.wait(timeout=float(self.config.get("startupTimeoutSeconds") or 2))
@@ -136,9 +212,19 @@ class SseMcpClient(JsonRpcClient):
         event_name: str | None = None
         data_parts: list[str] = []
         try:
-            headers = {"accept": "text/event-stream", **(self.config.get("headers") or {})}
+            headers = {**self._http_headers({"accept": "text/event-stream"}), **self.stream_auth_headers}
             req = Request(self.config["commandOrUrl"], headers=headers, method="GET")
-            with urlopen(req, timeout=float(self.config.get("streamTimeoutSeconds") or 30)) as response:
+            try:
+                response_context = urlopen(req, timeout=float(self.config.get("streamTimeoutSeconds") or 30))
+            except HTTPError as exc:
+                if exc.code == 401:
+                    challenge = exc.headers.get("WWW-Authenticate")
+                    with contextlib_suppress():
+                        exc.close()
+                    self.stream_unauthorized = _McpHttpUnauthorized(challenge)
+                    return
+                raise
+            with response_context as response:
                 self.stream_response = response
                 while not self.stop_event.is_set():
                     raw_line = response.readline()
@@ -358,3 +444,9 @@ class contextlib_suppress:
 
     def __exit__(self, *_exc):
         return True
+
+
+class _McpHttpUnauthorized(RuntimeError):
+    def __init__(self, www_authenticate: str | None):
+        super().__init__("MCP HTTP request requires authorization.")
+        self.www_authenticate = www_authenticate

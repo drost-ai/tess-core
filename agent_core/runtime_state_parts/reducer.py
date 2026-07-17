@@ -3,6 +3,8 @@ from __future__ import annotations
 from ..contracts.events import event_kind, event_payload, event_time
 
 from .shared import *
+from .mcp import MCP_RUNTIME_STATE_EVENTS as _MCP_RUNTIME_STATE_EVENTS
+from .mcp import reduce_mcp_runtime_state as _reduce_mcp_runtime_state
 
 def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     next_state = copy.deepcopy(state)
@@ -144,6 +146,8 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             next_state["turn"] = {**next_state.get("turn", {}), "liveStatus": {"message": _default_tool_status_message(name), "detail": _default_tool_status_detail(name), "source": "runtime", "updatedAt": timestamp}}
     elif typ == "tool.completed":
         next_state = _clear_runtime_live_status(next_state)
+    elif typ in _MCP_RUNTIME_STATE_EVENTS:
+        next_state = _reduce_mcp_runtime_state(next_state, typ, data, timestamp)
     elif typ == "sandbox.applied":
         next_state["sandbox"] = {
             **next_state.get("sandbox", {}),

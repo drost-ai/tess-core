@@ -4,7 +4,7 @@ from typing import Any
 
 from .agent import _agent_tool
 from .code_search import _glob_tool, _grep_tool
-from .definitions import ToolDefinition
+from .definitions import ToolConcurrency, ToolDefinition
 from .files import _edit_tool, _read_tool, _write_tool
 from .mcp import _list_mcp_resources_tool, _mcp_tool, _read_mcp_resource_tool
 from .notebook import _notebook_edit_tool
@@ -27,7 +27,7 @@ create_builtin_tool_contract_snapshot = createBuiltinToolContractSnapshot
 
 def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefinition]:
     options = options or {}
-    return [
+    tools = [
         _read_tool(),
         _write_tool(),
         _edit_tool(),
@@ -55,6 +55,41 @@ def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefini
         _enter_worktree_tool(options.get("workspaceController")),
         _exit_worktree_tool(options.get("workspaceController")),
     ]
+    for tool in tools:
+        # Centralizing this reviewed table keeps the wire-contract fixtures
+        # unchanged while making every builtin's execution safety explicit.
+        tool.concurrency = _BUILTIN_TOOL_CONCURRENCY[tool.name]
+    return tools
 
 
 create_builtin_tools = createBuiltinTools
+
+
+_BUILTIN_TOOL_CONCURRENCY: dict[str, ToolConcurrency] = {
+    "Read": "parallel",
+    "Write": "exclusive",
+    "Edit": "exclusive",
+    "Glob": "parallel",
+    "Grep": "parallel",
+    "Bash": "exclusive",
+    "TodoWrite": "parallel",
+    "WebFetch": "parallel",
+    "WebSearch": "parallel",
+    "SetStatus": "parallel",
+    "Agent": "exclusive",
+    "AskUserQuestion": "exclusive",
+    "Config": "parallel",
+    "ExitPlanMode": "exclusive",
+    "NotebookEdit": "exclusive",
+    "TaskOutput": "parallel",
+    "TaskStop": "exclusive",
+    "TaskMonitorStart": "parallel",
+    "TaskMonitorStop": "parallel",
+    "TaskHealthCheckStart": "exclusive",
+    "TaskHealthCheckStop": "exclusive",
+    "Mcp": "exclusive",
+    "ListMcpResources": "parallel",
+    "ReadMcpResource": "parallel",
+    "EnterWorktree": "exclusive",
+    "ExitWorktree": "exclusive",
+}
