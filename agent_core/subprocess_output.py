@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import uuid
 from pathlib import Path
@@ -70,6 +71,7 @@ class SubprocessOutputCollector:
         stderr_content_type: str = "text",
         max_spool_bytes: int = SUBPROCESS_SPOOL_MAX_BYTES,
         max_ring_bytes: int = SUBPROCESS_RING_MAX_BYTES,
+        metadata_writer: Callable[[str, Any], Any] | None = None,
     ):
         self.session_id = session_id
         self.tool_name = tool_name
@@ -80,6 +82,7 @@ class SubprocessOutputCollector:
         }
         self.max_spool_bytes = _positive(max_spool_bytes, SUBPROCESS_SPOOL_MAX_BYTES)
         self.max_ring_bytes = _positive(max_ring_bytes, SUBPROCESS_RING_MAX_BYTES)
+        self.metadata_writer = metadata_writer or writeJsonFile
         per_stream = max(1, self.max_ring_bytes // 2)
         self.rings = {"stdout": _HeadTailRing(per_stream), "stderr": _HeadTailRing(per_stream)}
         self.bytes = {"stdout": 0, "stderr": 0}
@@ -101,7 +104,7 @@ class SubprocessOutputCollector:
             return
         try:
             for kind in ("stdout", "stderr"):
-                path = toolArtifactDataPath(self.session_id, self.ids[kind], ".txt")
+                path = toolArtifactDataPath(self.session_id, self.ids[kind], f".{kind}.txt")
                 Path(path).parent.mkdir(parents=True, exist_ok=True)
                 self.paths[kind] = path
                 self.handles[kind] = open(path, "xb")
@@ -174,16 +177,14 @@ class SubprocessOutputCollector:
                     "contentType": self.content_types[kind],
                     "createdAt": now_iso(),
                     **({"truncated": True} if self.output_limit_exceeded else {}),
-                    **(
-                        {"sourceBytes": self.bytes[kind]}
-                        if self.output_limit_exceeded
-                        else {}
-                    ),
+                    "sourceBytes": self.bytes[kind],
                 }
                 try:
-                    await writeJsonFile(
+                    pending = self.metadata_writer(
                         toolArtifactMetaPath(self.session_id, self.ids[kind]), record
                     )
+                    if inspect.isawaitable(pending):
+                        await pending
                     artifacts[kind] = record
                 except Exception:
                     self.artifact_unavailable = True
@@ -232,6 +233,7 @@ async def createSubprocessOutputCollector(**kwargs: Any) -> SubprocessOutputColl
         "stderr_content_type": kwargs.get("stderrContentType", "text"),
         "max_spool_bytes": kwargs.get("maxSpoolBytes", SUBPROCESS_SPOOL_MAX_BYTES),
         "max_ring_bytes": kwargs.get("maxRingBytes", SUBPROCESS_RING_MAX_BYTES),
+        "metadata_writer": kwargs.get("metadataWriter"),
     }
     return SubprocessOutputCollector(**translated)
 

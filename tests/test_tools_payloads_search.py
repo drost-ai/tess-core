@@ -181,12 +181,16 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             task_payload = json.loads(task_result["content"])
             self.assertEqual(task_payload["output_manifest"]["strategy"], "inline_head_tail")
             self.assertTrue(task_payload["output_manifest"]["truncated"])
-            self.assertFalse(task_payload["output_truncated"])
-            task_artifact = task_payload["output_manifest"]["artifact"]
-            self.assertEqual(task_artifact["toolName"], "TaskOutput")
-            self.assertEqual(task_artifact["family"], "bash")
-            self.assertEqual(task_artifact["taskId"], task_id)
-            self.assertEqual(Path(task_artifact["filePath"]).read_text(encoding="utf-8"), long_output)
+            self.assertTrue(task_payload["output_truncated"])
+            self.assertTrue(task_payload["output_manifest"]["sourceTruncated"])
+            self.assertEqual(task_payload["output_manifest"]["originalBytes"], len(long_output.encode()))
+            self.assertEqual(task_payload["output_manifest"]["sourceFile"], output_path)
+            self.assertNotIn("artifact", task_payload["output_manifest"])
+            self.assertEqual(
+                task_payload["output_manifest"]["recovery"],
+                {"type": "task_output_file", "filePath": output_path, "taskId": task_id},
+            )
+            self.assertEqual(Path(task_payload["output_manifest"]["recovery"]["filePath"]).read_text(), long_output)
             self.assertEqual(task_result["meta"]["execution"]["metadata"]["output_file"], output_path)
         finally:
             self.restore_home(root, previous)
@@ -262,8 +266,8 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
                 def __exit__(self, *_args):
                     return False
 
-                def read(self):
-                    return json.dumps(
+                def read(self, size=-1):
+                    raw = json.dumps(
                         {
                             "results": [
                                 {
@@ -274,6 +278,10 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
                             ]
                         }
                     ).encode("utf-8")
+                    if getattr(self, "_read", False):
+                        return b""
+                    self._read = True
+                    return raw if size < 0 else raw[:size]
 
             def exa_urlopen(request, timeout=0):
                 seen["url"] = request.full_url

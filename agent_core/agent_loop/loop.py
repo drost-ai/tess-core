@@ -11,15 +11,18 @@ from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
 from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
 from .providers import _emit_provider_response_completed
 from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
+from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
+from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
+from .tool_hooks import run_pre_tool_hook as _run_pre_tool_hook
 from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
+from ..hooks import fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
-from ..hooks import fireToolHooks
 from ..permission_rules import findDispatchDenyRule
 from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from ..subagent_contract import filter_tools_for_subagent
@@ -386,51 +389,45 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 )
             tool_count += 1
             usage_totals["toolCalls"] += 1
-            _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
-            try:
-                hook_fire = {
-                    "cwd": session["cwd"],
-                    "sessionId": session["id"],
-                    "config": config,
-                    "permissionMode": session.get("permissionMode") or config.get("permissionMode"),
-                    "authority": authority,
-                }
-                pre_hook = await fireToolHooks(
-                    {
-                        "event": "PreToolUse",
-                        "toolName": tool.name,
-                        "toolInput": tool_use.get("input") or {},
-                        "fire": hook_fire,
-                        "emit": runtime.get("emitEvent"),
-                    }
-                )
-                if pre_hook["decision"] == "deny":
-                    raise PermissionError(pre_hook.get("reason") or "Blocked by PreToolUse hook.")
-                result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
-                _throw_if_turn_cancelled(runtime)
-                await fireToolHooks(
-                    {
-                        "event": "PostToolUse",
-                        "toolName": tool.name,
-                        "toolInput": tool_use.get("input") or {},
-                        "fire": hook_fire,
-                        "emit": runtime.get("emitEvent"),
-                    }
-                )
+            hook_fire = _build_tool_hook_context(session, config, authority)
+            pre_hook = await _run_pre_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
+            if pre_hook["decision"] == "deny":
+                message = f"{tool.name} call blocked by PreToolUse hook"
+                if pre_hook.get("reason"):
+                    message = f"{message}: {pre_hook['reason']}"
+                else:
+                    message = f"{message}."
                 return await finish_tool_result(
                     tool_use,
-                    {"kind": "returned", "result": result},
+                    {"kind": "synthesized", "content": message, "isError": True},
                     tool_name=tool.name,
-                    side_effects_may_have_occurred=True,
+                    rejected=True,
                 )
+
+            _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
+            side_effects_may_have_occurred = _resolve_tool_concurrency(tool) == "exclusive"
+            try:
+                result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
             except Exception as exc:
                 if _is_turn_abort_error(exc, runtime.get("abortSignal")):
                     raise
-                return await finish_tool_result(
+                completed = await finish_tool_result(
                     tool_use,
                     {"kind": "thrown", "error": exc},
                     tool_name=tool.name,
+                    side_effects_may_have_occurred=side_effects_may_have_occurred,
                 )
+                await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
+                return completed
+            completed = await finish_tool_result(
+                tool_use,
+                {"kind": "returned", "result": result},
+                tool_name=tool.name,
+                side_effects_may_have_occurred=side_effects_may_have_occurred,
+            )
+            _throw_if_turn_cancelled(runtime)
+            await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
+            return completed
 
         async def dispatch_single(tool_use: dict[str, Any]) -> dict[str, Any]:
             try:

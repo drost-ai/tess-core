@@ -138,7 +138,7 @@ def toolArtifactMetaPath(sessionId: str, artifactId: str) -> str:
 
 def toolArtifactDataPath(sessionId: str, artifactId: str, extension: str) -> str:
     ext = extension if extension.startswith(".") else f".{extension}"
-    if not re.fullmatch(r"\.[A-Za-z0-9]{1,16}", ext):
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,16}(?:\.[A-Za-z0-9]{1,8})?", ext):
         raise ValueError("Invalid artifact extension")
     return os.path.join(
         getSessionToolArtifactsDir(sessionId),

@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+from tests.support.agent_core_case import *
+
+import agent_core.bounded_io as bounded_io_module
+from agent_core.bounded_io import readFilePrefixBounded, readFileTailBounded
+from agent_core.utf8_bounds import utf8ByteLength
+
+
+class _ObservedFile:
+    def __init__(self, handle, read_sizes: list[int]):
+        self._handle = handle
+        self._read_sizes = read_sizes
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self._handle.close()
+
+    def fileno(self):
+        return self._handle.fileno()
+
+    def seek(self, *args):
+        return self._handle.seek(*args)
+
+    def read(self, size=-1):
+        self._read_sizes.append(size)
+        return self._handle.read(size)
+
+
+class Package31BoundedTaskOutputTests(AgentCoreTestCase):
+    def test_tail_reader_never_reads_or_allocates_the_full_multimegabyte_file(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-bounded-tail-") as directory:
+            path = Path(directory) / "large.log"
+            raw = (b"prefix-" * 600_000) + ("最后🙂terminal\n".encode("utf-8"))
+            path.write_bytes(raw)
+            limit = 12_000
+            read_sizes: list[int] = []
+            builtin_open = open
+
+            def observed_open(*args, **kwargs):
+                return _ObservedFile(builtin_open(*args, **kwargs), read_sizes)
+
+            with mock.patch.object(bounded_io_module, "open", observed_open, create=True):
+                result = run(readFileTailBounded(filePath=str(path), maxBytes=limit))
+
+            self.assertTrue(result["truncated"])
+            self.assertEqual(result["originalBytes"], len(raw))
+            self.assertLessEqual(result["returnedBytes"], limit)
+            self.assertEqual(result["returnedBytes"], utf8ByteLength(result["text"]))
+            self.assertTrue(result["text"].endswith("最后🙂terminal\n"))
+            self.assertTrue(read_sizes)
+            self.assertNotIn(-1, read_sizes)
+            self.assertLessEqual(sum(read_sizes), limit + 4)
+            self.assertLessEqual(max(read_sizes), limit + 4)
+
+            read_sizes.clear()
+            with mock.patch.object(bounded_io_module, "open", observed_open, create=True):
+                prefix = run(readFilePrefixBounded(filePath=str(path), maxBytes=limit))
+            self.assertTrue(prefix["truncated"])
+            self.assertEqual(prefix["originalBytes"], len(raw))
+            self.assertLessEqual(prefix["returnedBytes"], limit)
+            self.assertTrue(prefix["text"].startswith("prefix-prefix-"))
+            self.assertLessEqual(sum(read_sizes), limit + 4)
+            self.assertLessEqual(max(read_sizes), limit + 4)
+
+    def test_supervisor_and_task_tool_return_a_bounded_tail_with_full_log_recovery(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(
+                core.resolveConfig(
+                    {
+                        "provider": "openai",
+                        "runtimeHome": str(home),
+                        "permissionMode": "bypassPermissions",
+                        "openaiBaseUrl": "http://compatible.test",
+                        "openaiApiMode": "chat",
+                        "model": "tiny-model",
+                    },
+                    str(workspace),
+                )
+            )
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="bypassPermissions",
+            )
+            task_id = "bounded-task-output"
+            output_path = core.taskOutputPath(task_id)
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            raw = (b"old-output\n" * 350_000) + "最后🙂terminal\n".encode("utf-8")
+            Path(output_path).write_bytes(raw)
+            run(
+                core.writeTaskMeta(
+                    task_id,
+                    {
+                        "taskId": task_id,
+                        "id": task_id,
+                        "sessionId": session["id"],
+                        "command": "large task",
+                        "cwd": str(workspace),
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "status": "completed",
+                        "outputFile": output_path,
+                    },
+                )
+            )
+            session["metadata"]["taskIds"] = [task_id]
+
+            supervisor_result = run(core.readTaskOutput(task_id, tail_bytes=4096))
+            self.assertTrue(supervisor_result["truncated"])
+            self.assertLessEqual(utf8ByteLength(supervisor_result["output"]), 4096)
+            self.assertTrue(supervisor_result["output"].endswith("最后🙂terminal\n"))
+
+            context = {
+                "session": session,
+                "config": config,
+                "interactive": False,
+                "askQuestion": lambda *_: "",
+                "outputJson": lambda *_: None,
+                "cwd": str(workspace),
+                "persistSession": lambda: None,
+            }
+            task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
+            result = run(task_output.handler({"task_id": task_id, "block": False}, context))
+            payload = json.loads(result["content"])
+            manifest = payload["output_manifest"]
+            self.assertTrue(payload["output_truncated"])
+            self.assertTrue(manifest["truncated"])
+            self.assertTrue(manifest["sourceTruncated"])
+            self.assertEqual(manifest["originalBytes"], len(raw))
+            self.assertEqual(manifest["sourceFile"], output_path)
+            self.assertEqual(
+                manifest["recovery"],
+                {"type": "task_output_file", "filePath": output_path, "taskId": task_id},
+            )
+            self.assertNotIn("artifact", manifest)
+            self.assertLessEqual(utf8ByteLength(payload["output"]), 8000)
+            self.assertTrue(payload["output"].endswith("最后🙂terminal"))
+            self.assertEqual(Path(manifest["recovery"]["filePath"]).stat().st_size, len(raw))
+        finally:
+            self.restore_home(root, previous)

@@ -10,6 +10,7 @@ import typing as _typing
 
 from ._utils import now_iso
 from .storage import toolArtifactDataPath, toolArtifactMetaPath, writeJsonFile
+from .utf8_bounds import sliceUtf8Suffix as _slice_utf8_suffix
 
 if _typing.TYPE_CHECKING:
     from .contracts.tools import ToolArtifactRef
@@ -169,9 +170,9 @@ def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: i
         separator = f"\n...[omitted {omitted} lines]...\n" if omitted else "\n...\n"
         excerpt = f"{excerpt}{separator}{chr(10).join(tail)}".strip()
     if not excerpt:
-        return {"text": text[-max_bytes:].strip(), "truncated": True, "strategy": "inline_truncated_tail"}
+        return {"text": _slice_utf8_suffix(text, max_bytes).strip(), "truncated": True, "strategy": "inline_truncated_tail"}
     if _byte_len(excerpt) > max_bytes:
-        return {"text": excerpt[-max_bytes:].strip(), "truncated": True, "strategy": "inline_truncated_tail"}
+        return {"text": _slice_utf8_suffix(excerpt, max_bytes).strip(), "truncated": True, "strategy": "inline_truncated_tail"}
     return {"text": excerpt, "truncated": excerpt != text, "strategy": "inline_full" if excerpt == text else "inline_head_tail"}
 
 
@@ -195,6 +196,8 @@ async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
         "itemCount": args.get("itemCount"),
         "contentType": args.get("contentType", "text"),
         "createdAt": now_iso(),
+        "truncated": True if args.get("truncated") else None,
+        "sourceBytes": args.get("sourceBytes"),
     })
     await writeJsonFile(toolArtifactMetaPath(args["sessionId"], artifact_id), record)
     return record
@@ -243,19 +246,31 @@ async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any)
     args = {**(args or {}), **kwargs}
     policy = getToolPayloadPolicy(args["config"])
     text = args.get("text", "")
-    original_bytes = _byte_len(text)
-    original_lines = _count_lines(text)
-    if original_bytes <= policy["textInlineBytes"] and original_lines <= policy["textInlineLines"]:
+    text_bytes = _byte_len(text)
+    text_lines = _count_lines(text)
+    original_bytes = max(text_bytes, int(args.get("originalBytes") or text_bytes))
+    original_lines = max(text_lines, int(args.get("originalLines") or text_lines))
+    source_already_truncated = bool(
+        args.get("sourceTruncated") or original_bytes > text_bytes or original_lines > text_lines
+    )
+    needs_truncation = bool(
+        source_already_truncated
+        or text_bytes > policy["textInlineBytes"]
+        or text_lines > policy["textInlineLines"]
+    )
+    if not needs_truncation:
         return {
             "text": text,
-            "view": {
+            "view": _without_none_values({
                 "strategy": "inline_full",
                 "truncated": False,
                 "originalBytes": original_bytes,
                 "originalLines": original_lines,
                 "returnedBytes": original_bytes,
                 "returnedLines": original_lines,
-            },
+                "artifact": args.get("existingArtifact"),
+                "artifactUnavailable": True if args.get("artifactUnavailable") else None,
+            }),
         }
     strategy = args.get("strategy") or "head"
     if strategy == "tail":
@@ -266,19 +281,44 @@ async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any)
         lines = _fit_lines_within_bytes(splitToolTextLines(text)[: policy["textInlineLines"]], policy["textInlineBytes"])
         next_text = "\n".join(lines).strip()
         excerpt = {"text": next_text, "truncated": next_text != text, "strategy": "inline_full" if next_text == text else "inline_truncated_head"}
-    artifact = None
-    if original_bytes > policy["artifactThresholdBytes"] or original_lines > policy["artifactThresholdLines"]:
-        artifact = await _persist_artifact({**args, "content": text, "contentType": args.get("contentType", "text")})
+    artifact = args.get("existingArtifact")
+    artifact_unavailable = bool(args.get("artifactUnavailable"))
+    artifact_needed = bool(
+        not artifact
+        and args.get("persistArtifact") is not False
+        and (
+            original_bytes > policy["artifactThresholdBytes"]
+            or original_lines > policy["artifactThresholdLines"]
+        )
+    )
+    if artifact_needed:
+        try:
+            artifact = await _persist_artifact(
+                {
+                    **args,
+                    "content": text,
+                    "contentType": args.get("contentType", "text"),
+                    "truncated": args.get("artifactTruncated"),
+                    "sourceBytes": args.get("artifactSourceBytes"),
+                }
+            )
+        except Exception:
+            artifact_unavailable = True
     return _without_none_values({
         "text": excerpt["text"],
         "view": {
-            "strategy": excerpt["strategy"],
-            "truncated": excerpt["truncated"],
+            "strategy": (
+                "inline_head_tail"
+                if source_already_truncated and excerpt["strategy"] == "inline_full"
+                else excerpt["strategy"]
+            ),
+            "truncated": source_already_truncated or excerpt["truncated"],
             "originalBytes": original_bytes,
             "originalLines": original_lines,
             "returnedBytes": _byte_len(excerpt["text"]),
             "returnedLines": _count_lines(excerpt["text"]),
             "artifact": artifact,
+            "artifactUnavailable": True if artifact_unavailable else None,
         },
     })
 

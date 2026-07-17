@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...bounded_io import readFileTailBounded as _read_file_tail_bounded
 from ...task_communication import (
     answer_task_question as _answer_task_question,
     read_task_events as _read_task_events,
@@ -15,19 +16,15 @@ async def readTaskOutput(task_id: str, tailBytes: int | None = 12000, **kwargs: 
         tailBytes = kwargs["tail_bytes"]
     meta = await readTaskMeta(task_id)
     output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
-    path = Path(output_file)
-    if not path.exists():
+    effective_tail_bytes = 12000 if tailBytes is None else max(0, int(tailBytes))
+    try:
+        tail = await _read_file_tail_bounded(filePath=output_file, maxBytes=effective_tail_bytes)
+    except (OSError, ValueError):
         return {"taskId": task_id, "output": "", "truncated": False, "outputFile": output_file}
-    data = path.read_bytes()
-    truncated = False
-    effective_tail_bytes = 12000 if tailBytes is None else max(1, int(tailBytes))
-    if len(data) > effective_tail_bytes:
-        data = data[-effective_tail_bytes:]
-        truncated = True
     return {
         "taskId": task_id,
-        "output": data.decode("utf-8", errors="replace"),
-        "truncated": truncated,
+        "output": tail["text"],
+        "truncated": tail["truncated"],
         "outputFile": output_file,
     }
 

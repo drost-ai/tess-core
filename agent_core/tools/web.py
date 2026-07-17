@@ -9,10 +9,12 @@ import re
 import sys
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
-from urllib.request import Request, urlopen
 
 from .._utils import pretty_json
+from ..bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
+from ..permission_rules import findDispatchDenyRule
 from ..tool_payloads import shapeTextToolResult
+from ..utf8_bounds import sliceUtf8Prefix
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema
@@ -31,10 +33,11 @@ from .web_search_api import (
 
 
 class FetchResponse:
-    def __init__(self, status: int, body: str, headers: dict[str, str] | None = None):
+    def __init__(self, status: int, body: str, headers: dict[str, str] | None = None, acquisition: dict[str, Any] | None = None):
         self.status = status
         self.body = body
         self.headers = headers or {}
+        self.acquisition = acquisition
         self.ok = 200 <= status < 300
 
     async def text(self) -> str:
@@ -44,12 +47,10 @@ class FetchResponse:
 async def fetch(url: str, *, headers: dict[str, str] | None = None, signal: Any = None) -> FetchResponse:
     if _signal_aborted(signal):
         raise _create_tool_abort_error()
-    req = Request(url, headers=headers or {})
-    with urlopen(req, timeout=30) as response:
-        body = response.read().decode("utf-8", errors="replace")
-        if _signal_aborted(signal):
-            raise _create_tool_abort_error()
-        return FetchResponse(response.status, body, dict(response.headers))
+    result = await boundedWebFetch(url=url, headers=headers or {}, abortSignal=signal)
+    if _signal_aborted(signal):
+        raise _create_tool_abort_error()
+    return FetchResponse(int(result.get("statusCode") or 0), result["body"], acquisition=result)
 
 
 def _facade_fetch():
@@ -63,16 +64,116 @@ def _web_fetch_tool() -> ToolDefinition:
         url = _require_string(input.get("url"), "url")
         prompt = _require_string(input.get("prompt"), "prompt")
         _throw_if_tool_cancelled(context)
-        response = await _facade_fetch()(url, headers={"user-agent": "tess/0.1"}, signal=context.get("abortSignal"))
-        if not response.ok:
-            return {"content": f"Fetch failed with status {response.status}", "isError": True}
+        facade_fetch = _facade_fetch()
+        if facade_fetch is not fetch:
+            response = await facade_fetch(
+                url, headers={"user-agent": "tess/0.1"}, signal=context.get("abortSignal")
+            )
+            if not response.ok:
+                return {"content": f"Fetch failed with status {response.status}", "isError": True}
+            raw_body = await response.text()
+            fetched = {
+                "outcome": "ok", "requestedUrl": url, "finalUrl": url,
+                "statusCode": response.status, "body": raw_body,
+                "compressedBytes": len(raw_body.encode("utf-8")),
+                "decodedBytes": len(raw_body.encode("utf-8")),
+                "redirects": [], "truncated": False,
+            }
+        else:
+            try:
+                fetched = await boundedWebFetch(
+                    url=url,
+                    abortSignal=context.get("abortSignal"),
+                    authorizeHop=lambda hop: _authorize_web_fetch_hop(context, hop),
+                )
+            except Exception as error:
+                if _signal_aborted(context.get("abortSignal")):
+                    raise _create_tool_abort_error()
+                message = sliceUtf8Prefix(str(error) or "WebFetch failed", 1_000)
+                return {
+                    "content": pretty_json(
+                        {
+                            "type": "web_fetch_error",
+                            "status": "failed",
+                            "reason": "policy" if isinstance(error, WebFetchPolicyError) else "request_failed",
+                            "message": message,
+                        }
+                    ),
+                    "isError": True,
+                }
+        if fetched["outcome"] in {"http_error", "refused", "timeout"}:
+            return {
+                "content": pretty_json(
+                    {
+                        "type": "web_fetch_result",
+                        "status": fetched["outcome"],
+                        "url": fetched["finalUrl"],
+                        "statusCode": fetched.get("statusCode"),
+                        "reason": fetched.get("reason"),
+                        "timeoutPhase": fetched.get("timeoutPhase"),
+                        "redirects": fetched["redirects"],
+                    }
+                ),
+                "isError": True,
+            }
         _throw_if_tool_cancelled(context)
-        raw = await response.text()
-        _throw_if_tool_cancelled(context)
-        shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="WebFetch", family="web", text=_strip_html(raw), strategy="head")
-        return {"content": pretty_json({"url": url, "prompt": prompt, "content": shaped["text"], "content_manifest": shaped["view"]})}
+        shaped = await shapeTextToolResult(
+            config=context["config"], sessionId=context["session"]["id"],
+            toolName="WebFetch", family="web", text=_strip_html(fetched["body"]),
+            sourceTruncated=fetched["truncated"], artifactTruncated=fetched["truncated"],
+            artifactSourceBytes=fetched["decodedBytes"], strategy="head",
+        )
+        return {
+            "content": pretty_json(
+                {
+                    "type": "web_fetch_result",
+                    "status": "partial" if fetched["outcome"] == "partial" else "completed",
+                    "url": fetched["finalUrl"],
+                    "requested_url": fetched["requestedUrl"],
+                    "prompt": sliceUtf8Prefix(prompt, 2_000),
+                    "content": shaped["text"],
+                    "content_manifest": shaped["view"],
+                    "acquisition": {
+                        "compressedBytes": fetched["compressedBytes"],
+                        "decodedBytes": fetched["decodedBytes"],
+                        "truncated": fetched["truncated"],
+                        "reason": fetched.get("reason"),
+                        "timeoutPhase": fetched.get("timeoutPhase"),
+                    },
+                    "redirects": fetched["redirects"],
+                }
+            )
+        }
 
     return ToolDefinition("WebFetch", _tool_description("WebFetch"), _tool_schema("WebFetch"), handler)
+
+
+async def _authorize_web_fetch_hop(context: ToolContext, url: str) -> None:
+    metadata = context.get("session", {}).get("metadata") or {}
+    authority = metadata.get("effectiveAgentAuthority") if isinstance(metadata, dict) else {}
+    sandbox = authority.get("sandbox") if isinstance(authority, dict) else {}
+    configured_sandbox = context.get("config", {}).get("sandbox") or {}
+    network_allowed = sandbox.get("network", configured_sandbox.get("network", True))
+    if network_allowed is False:
+        raise WebFetchPolicyError(
+            "WebFetch is blocked because this session's network policy is disabled."
+        )
+    deny = await findDispatchDenyRule(
+        {
+            "cwd": context["session"]["cwd"],
+            "toolName": "WebFetch",
+            "input": {"url": url},
+            "settingsSources": context.get("config", {}).get("settingsSources"),
+            "inlineSettings": context.get("config", {}).get("inlineSettings"),
+            "rules": authority.get("permissionRules") if isinstance(authority, dict) else None,
+            "projectRoot": authority.get("permissionRuleProjectRoot") if isinstance(authority, dict) else None,
+        }
+    )
+    if deny:
+        raise WebFetchPolicyError(
+            f"Redirect hop blocked by permission rule {sliceUtf8Prefix(deny['raw'], 512)} "
+            f"({deny['scope']} settings)."
+        )
 
 
 def _web_search_tool() -> ToolDefinition:

@@ -4,13 +4,15 @@ from ..contracts.context import ToolContext
 from ..contracts.records import launch_output_file, launch_task_id
 from ..contracts.tools import ToolResult
 
-import asyncio
+import os
 import re
 import uuid
 from pathlib import Path
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
+from ..bash_lifecycle import runInlineShellCommand
+from ..bash_result_payload import buildBashResultPayload
 from ..execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
 from ..owned_process_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ..storage import readTaskMeta, saveTaskRecord, taskOutputPath, writeTaskMeta
@@ -20,11 +22,10 @@ from ..task_process_launch import (
     failTaskLaunchReservation,
     launchReservedProcess,
 )
-from ..tool_payloads import shapeTextToolResult
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
-from .processes import _background_task_runner_argv, _communicate_shell_process, _prepare_sandboxed_argv, _resolve_shell, _spawn_background_task_runner, _track_background_runner
+from .processes import _background_task_runner_argv, _prepare_sandboxed_argv, _resolve_shell, _spawn_background_task_runner, _track_background_runner
 from .schemas import _tool_description, _tool_schema
 from .session_metadata import _append_unique_metadata_list
 from .validation import _require_string
@@ -275,26 +276,52 @@ def _bash_tool() -> ToolDefinition:
                 "meta": {"execution": execution},
             }
         argv = _prepare_sandboxed_argv([_resolve_shell(), "-lc", command], context, context["session"]["cwd"])
-        proc = await asyncio.create_subprocess_exec(*argv, cwd=context["session"]["cwd"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr, timed_out = await _communicate_shell_process(proc, timeout, context)
-        if _signal_aborted(context.get("abortSignal")):
+        run = await runInlineShellCommand(
+            shell=_resolve_shell(),
+            command=command,
+            argv=argv,
+            cwd=context["session"]["cwd"],
+            env=os.environ.copy(),
+            timeoutMs=timeout,
+            abortSignal=context.get("abortSignal"),
+            sessionId=context["session"]["id"],
+            toolName="Bash",
+        )
+        if run["aborted"] and not run["outputLimitExceeded"]:
             raise _create_tool_abort_error()
-        exit_code = None if timed_out or (isinstance(proc.returncode, int) and proc.returncode < 0) else proc.returncode
-        shaped_stdout = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="Bash", family="bash", text=stdout.decode(errors="replace"), strategy="head_tail")
-        shaped_stderr = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="Bash", family="bash", text=stderr.decode(errors="replace"), strategy="head_tail")
+        shaped = await buildBashResultPayload(
+            config=context["config"],
+            sessionId=context["session"]["id"],
+            command=command,
+            cwd=context["session"]["cwd"],
+            run=run,
+        )
         execution = {
             "id": f"{context['session']['id']}:bash",
             "kind": "tool",
             "title": "Shell command completed",
-            "status": "failed" if timed_out or exit_code else "completed",
+            "status": "failed" if shaped["isError"] else "completed",
             "cwd": context["session"]["cwd"],
             "command": command,
-            "output": summarizeOutputManifest(f"{stdout.decode(errors='replace')}{stderr.decode(errors='replace')}"),
-            "metadata": {"exit_code": exit_code, "timed_out": timed_out},
+            "output": summarizeOutputManifest(shaped["summaryText"]),
+            "metadata": {
+                "exit_code": run["exitCode"],
+                "timed_out": run["timedOut"],
+                **({"output_limit_exceeded": True} if run["outputLimitExceeded"] else {}),
+                **(
+                    {
+                        **({"stdio_leak_detected": True} if run["stdioLeakDetected"] else {}),
+                        "background_descendants_detected": True,
+                        "background_descendants_terminated": run["backgroundDescendantsTerminated"],
+                    }
+                    if run["backgroundDescendantsDetected"]
+                    else {}
+                ),
+            },
         }
         return {
-            "content": pretty_json({"command": command, "cwd": context["session"]["cwd"], "exitCode": exit_code, "timedOut": timed_out, "stdout": shaped_stdout["text"], "stderr": shaped_stderr["text"], "stdout_manifest": shaped_stdout["view"], "stderr_manifest": shaped_stderr["view"]}),
-            "isError": bool(timed_out or exit_code),
+            "content": pretty_json(shaped["payload"]),
+            "isError": shaped["isError"],
             "meta": {"execution": execution},
         }
 

@@ -66,6 +66,10 @@ from .providers.openai import *
 
 _INTERNAL_MODULES = {
     "agent_tool_results",
+    "bash_lifecycle",
+    "bash_result_payload",
+    "bounded_io",
+    "bounded_web_fetch",
     "image_budget",
     "mcp_payloads",
     "notebook_payload",
@@ -74,6 +78,7 @@ _INTERNAL_MODULES = {
     "search_result_payload",
     "structured_result_policy",
     "structured_value",
+    "subagent_result_payload",
     "subprocess_output",
     "text_file_window",
     "tool_attachments",

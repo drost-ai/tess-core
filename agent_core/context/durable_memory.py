@@ -6,25 +6,51 @@ import re
 from typing import Any
 
 from .._utils import now_iso
+from ..bounded_io import readFilePrefixBounded as _read_file_prefix_bounded
 from ..storage import getProjectMemoryPath, getProjectRoot, loadProjectMemoryRecords as _loadProjectMemoryRecords
 from ..storage import mutateProjectMemoryRecords
 from ..todo_policy import selectTodoState as _select_todo_state
+from ..utf8_bounds import sliceUtf8Prefix as _slice_utf8_prefix
+from ..utf8_bounds import utf8ByteLength as _utf8_byte_length
 
 
 MANUAL_MEMORY_RECORD_ID = "manual-project-memory"
 MAX_DURABLE_MEMORY_RECORDS = 48
 MAX_MEMORY_TEXT_LENGTH = 480
+_MAX_MEMORY_TEXT_BYTES = MAX_MEMORY_TEXT_LENGTH
+_MAX_MANUAL_MEMORY_ACQUISITION_BYTES = 4_096
 MAX_RETRIEVED_MEMORY_RECORDS = 8
 MAX_RETRIEVED_MEMORY_TOKEN_BUDGET = 1_600
+_MEMORY_PROMPT_PREFIX = [
+    "Relevant durable memory for this workspace is available below.",
+    "Use it when it helps continuation, but prefer recent raw turns and current working context if they conflict.",
+    "",
+    "<retrieved_memory>",
+]
+_MEMORY_PROMPT_SUFFIX = "</retrieved_memory>"
 
 
 async def synchronizeManualProjectMemory(cwd: str) -> list[dict[str, Any]]:
     path = getProjectMemoryPath(cwd)
     try:
-        with open(path, encoding="utf-8") as handle:
-            manual_text = handle.read().strip()
-    except FileNotFoundError:
-        manual_text = ""
+        manual_read = await _read_file_prefix_bounded(
+            filePath=path, maxBytes=_MAX_MANUAL_MEMORY_ACQUISITION_BYTES
+        )
+    except (OSError, ValueError):
+        manual_read = None
+    manual_text = (
+        truncateMemoryText(
+            manual_read["text"],
+            (
+                f" [manual memory projected from {manual_read['originalBytes']} bytes; "
+                f"source range 0-{_MAX_MANUAL_MEMORY_ACQUISITION_BYTES}]"
+                if manual_read["truncated"]
+                else ""
+            ),
+        )
+        if manual_read
+        else ""
+    )
 
     if not manual_text:
         current = await _loadProjectMemoryRecords(cwd)
@@ -107,12 +133,31 @@ async def updateDurableMemoryFromWorkingContext(*positional: Any, **kwargs: Any)
 
 async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
+    if args.get("enabled") is False:
+        return {"records": [], "tokenEstimate": 0}
     session = args.get("session") or {}
     cwd = session.get("cwd")
     if not cwd:
         return {"records": [], "tokenEstimate": 0}
-    max_records = int(args.get("maxRecords") or MAX_RETRIEVED_MEMORY_RECORDS)
-    max_token_budget = int(args.get("maxTokenBudget") or MAX_RETRIEVED_MEMORY_TOKEN_BUDGET)
+    max_records_value = args.get("maxRecords")
+    max_records = max(
+        0,
+        int(
+            MAX_RETRIEVED_MEMORY_RECORDS
+            if max_records_value is None
+            else max_records_value
+        ),
+    )
+    max_token_budget_value = args.get("maxTokenBudget")
+    max_token_budget = max(
+        0,
+        int(
+            MAX_RETRIEVED_MEMORY_TOKEN_BUDGET
+            if max_token_budget_value is None
+            else max_token_budget_value
+        ),
+    )
+    max_prompt_bytes = max_token_budget
     records = await synchronizeManualProjectMemory(cwd)
     selected_todos = _select_todo_state(session.get("todos", []), {"maxOpen": 20, "maxCompleted": 0})
     keywords = deriveKeywords(
@@ -132,15 +177,32 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
     ranked.sort(key=lambda entry: (entry["score"], entry["record"].get("updatedAt", "")), reverse=True)
 
     selected: list[dict[str, Any]] = []
+    truncated_record_ids: list[str] = []
     token_estimate = 0
+    byte_estimate = _prompt_fixed_bytes()
     for entry in ranked:
         if len(selected) >= max_records:
             break
-        next_token_estimate = estimateTextTokens(renderRetrievedMemoryLine(entry["record"]))
-        if selected and token_estimate + next_token_estimate > max_token_budget:
+        separator_bytes = 1
+        available_bytes = max_prompt_bytes - byte_estimate - separator_bytes
+        if available_bytes <= 0:
+            break
+        projection = _project_retrieved_memory_record(entry["record"], available_bytes)
+        if not projection:
             continue
-        selected.append(entry["record"])
+        rendered = renderRetrievedMemoryLine(projection["record"])
+        next_bytes = _utf8_byte_length(rendered) + separator_bytes
+        next_token_estimate = estimateTextTokens(rendered)
+        if (
+            byte_estimate + next_bytes > max_prompt_bytes
+            or token_estimate + next_token_estimate > max_token_budget
+        ):
+            continue
+        selected.append(projection["record"])
+        if projection["truncated"]:
+            truncated_record_ids.append(entry["record"]["id"])
         token_estimate += next_token_estimate
+        byte_estimate += next_bytes
 
     if selected:
         selected_ids = {record["id"] for record in selected}
@@ -153,23 +215,31 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
             ],
         )
 
-    return {"records": selected, "tokenEstimate": token_estimate}
+    return {
+        "records": selected,
+        "tokenEstimate": token_estimate,
+        "byteEstimate": byte_estimate,
+        "maxPromptBytes": max_prompt_bytes,
+        "truncatedRecordIds": truncated_record_ids,
+    }
 
 
 def renderRetrievedMemoryPrompt(memory: dict[str, Any]) -> str | None:
     records = memory.get("records") or []
     if not records:
         return None
-    return "\n".join(
-        [
-            "Relevant durable memory for this workspace is available below.",
-            "Use it when it helps continuation, but prefer recent raw turns and current working context if they conflict.",
-            "",
-            "<retrieved_memory>",
-            *[renderRetrievedMemoryLine(record) for record in records],
-            "</retrieved_memory>",
-        ]
-    )
+    max_bytes = int(memory.get("maxPromptBytes") or MAX_RETRIEVED_MEMORY_TOKEN_BUDGET)
+    lines = list(_MEMORY_PROMPT_PREFIX)
+    for record in records:
+        rendered = renderRetrievedMemoryLine(record)
+        candidate = "\n".join([*lines, rendered, _MEMORY_PROMPT_SUFFIX])
+        if _utf8_byte_length(candidate) > max_bytes:
+            break
+        lines.append(rendered)
+    if len(lines) == len(_MEMORY_PROMPT_PREFIX):
+        return None
+    rendered_prompt = "\n".join([*lines, _MEMORY_PROMPT_SUFFIX])
+    return rendered_prompt if _utf8_byte_length(rendered_prompt) <= max_bytes else None
 
 
 def extractDurableMemoryCandidates(session: dict[str, Any], workingContext: dict[str, Any]) -> list[dict[str, Any]]:
@@ -203,7 +273,12 @@ def extractDurableMemoryCandidates(session: dict[str, Any], workingContext: dict
         candidates.append({"kind": "task_context", "text": entry, "sourceDetail": "Discovery", "filePaths": file_paths, "tags": tags, "confidence": "medium"})
     for entry in asStringArray(workingContext.get("criticalContext")):
         candidates.append({"kind": "environment", "text": entry, "sourceDetail": "Critical continuation context", "filePaths": file_paths, "tags": tags, "confidence": "medium"})
-    return dedupeMemoryCandidates([{**entry, "text": truncateMemoryText(entry["text"])} for entry in candidates if truncateMemoryText(entry.get("text", ""))])
+    bounded_candidates: list[dict[str, Any]] = []
+    for entry in candidates:
+        text = truncateMemoryText(entry.get("text", ""))
+        if text:
+            bounded_candidates.append({**entry, "text": text})
+    return dedupeMemoryCandidates(bounded_candidates)
 
 
 def dedupeMemoryCandidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -219,8 +294,14 @@ def dedupeMemoryCandidates(candidates: list[dict[str, Any]]) -> list[dict[str, A
 
 
 def renderRetrievedMemoryLine(record: dict[str, Any]) -> str:
-    meta = " | ".join([str(record.get("kind")), str(record.get("source")), *[str(path) for path in (record.get("filePaths") or [])[:3]]])
-    return f"- [{meta}] {record.get('text', '')}"
+    meta = " | ".join(
+        [
+            str(record.get("kind")),
+            str(record.get("source")),
+            *[_slice_utf8_prefix(str(path), 120) for path in (record.get("filePaths") or [])[:3]],
+        ]
+    )
+    return f"- [{_slice_utf8_prefix(meta, 420)}] {record.get('text', '')}"
 
 
 def scoreMemoryRecord(record: dict[str, Any], keywords: list[str]) -> int:
@@ -229,10 +310,10 @@ def scoreMemoryRecord(record: dict[str, Any], keywords: list[str]) -> int:
         return score
     haystack = " ".join(
         [
-            record.get("text") or "",
-            *asStringArray(record.get("tags")),
-            *asStringArray(record.get("filePaths")),
-            record.get("sourceDetail") or "",
+            _slice_utf8_prefix(record.get("text") or "", 2_000),
+            *[_slice_utf8_prefix(value, 120) for value in asStringArray(record.get("tags"))[:24]],
+            *[_slice_utf8_prefix(value, 240) for value in asStringArray(record.get("filePaths"))[:12]],
+            _slice_utf8_prefix(record.get("sourceDetail") or "", 240),
         ]
     ).lower()
     matches = sum(1 for keyword in keywords if keyword in haystack)
@@ -262,18 +343,28 @@ def normalizeMemoryText(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().lower())
 
 
-def truncateMemoryText(text: str) -> str:
-    normalized = re.sub(r"\s+", " ", str(text).strip())
-    if len(normalized) <= MAX_MEMORY_TEXT_LENGTH:
-        return normalized
-    return normalized[: MAX_MEMORY_TEXT_LENGTH - 1].rstrip() + "…"
+def truncateMemoryText(text: str, provenance: str = "") -> str:
+    source = str(text)
+    source_bytes = _utf8_byte_length(source)
+    normalized = re.sub(
+        r"\s+", " ", _slice_utf8_prefix(source, _MAX_MEMORY_TEXT_BYTES * 4).strip()
+    )
+    suffix = provenance or (
+        f" [truncated from {source_bytes} bytes]"
+        if source_bytes > _MAX_MEMORY_TEXT_BYTES
+        else ""
+    )
+    available = max(0, _MAX_MEMORY_TEXT_BYTES - _utf8_byte_length(suffix))
+    return f"{_slice_utf8_prefix(normalized, available).rstrip()}{suffix}"
 
 
 def deriveKeywords(values: list[str]) -> list[str]:
     seen: set[str] = set()
     words: list[str] = []
     for value in values:
-        for word in re.findall(r"[a-z0-9_./-]{4,}", str(value).lower()):
+        for word in re.findall(
+            r"[a-z0-9_./-]{4,}", _slice_utf8_prefix(str(value), 8_000).lower()
+        ):
             if word in seen:
                 continue
             seen.add(word)
@@ -286,7 +377,43 @@ def deriveTagsFromText(value: str) -> list[str]:
 
 
 def estimateTextTokens(value: str) -> int:
-    return (len(value) + 3) // 4
+    return _utf8_byte_length(value)
+
+
+def _project_retrieved_memory_record(
+    record: dict[str, Any], max_line_bytes: int
+) -> dict[str, Any] | None:
+    bounded_paths = [
+        _slice_utf8_prefix(str(value), 120)
+        for value in (record.get("filePaths") or [])[:3]
+    ]
+    base = {**record, **({"filePaths": bounded_paths} if record.get("filePaths") else {})}
+    raw_bytes = _utf8_byte_length(str(record.get("text") or ""))
+    if _utf8_byte_length(renderRetrievedMemoryLine(base)) <= max_line_bytes:
+        return {"record": base, "truncated": False}
+    source = _slice_utf8_prefix(
+        str(record.get("sourceDetail") or record.get("id") or ""), 96
+    )
+    reserved = f" … [truncated; source={source}; bytes={raw_bytes}; range=0-{raw_bytes}]"
+    overhead = _utf8_byte_length(renderRetrievedMemoryLine({**base, "text": ""}))
+    available = max_line_bytes - overhead - _utf8_byte_length(reserved)
+    if available <= 0:
+        return None
+    prefix = _slice_utf8_prefix(str(record.get("text") or ""), available).rstrip()
+    provenance = (
+        f" … [truncated; source={source}; bytes={raw_bytes}; "
+        f"range=0-{_utf8_byte_length(prefix)}]"
+    )
+    projected = {**base, "text": f"{prefix}{provenance}"}
+    if _utf8_byte_length(renderRetrievedMemoryLine(projected)) > max_line_bytes:
+        return None
+    return {"record": projected, "truncated": True}
+
+
+def _prompt_fixed_bytes() -> int:
+    return _utf8_byte_length(
+        "\n".join([*_MEMORY_PROMPT_PREFIX, _MEMORY_PROMPT_SUFFIX])
+    )
 
 
 def asStringArray(value: Any) -> list[str]:

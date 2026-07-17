@@ -64,10 +64,10 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertEqual(len(public_tail["output"]), 64)
             zero_tail = run(supervisor["readTaskOutput"](task_id, 0))
             self.assertTrue(zero_tail["truncated"])
-            self.assertEqual(zero_tail["output"], "a")
+            self.assertEqual(zero_tail["output"], "")
             negative_tail = run(supervisor["readTaskOutput"](task_id, -10))
             self.assertTrue(negative_tail["truncated"])
-            self.assertEqual(negative_tail["output"], "a")
+            self.assertEqual(negative_tail["output"], "")
         finally:
             if supervisor:
                 run(supervisor["close"]())

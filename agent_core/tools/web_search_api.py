@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -7,7 +8,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.request import Request, urlopen
 
+from ..bounded_io import readResponseTextBoundedSync
 from .cancellation import _create_tool_abort_error, _signal_aborted
+
+
+EXA_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
 
 
 async def searchExa(
@@ -23,9 +28,10 @@ async def searchExa(
 ) -> list[dict[str, str]]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
+    result_limit = max(1, min(10, int(count)))
     payload: dict[str, Any] = {
         "query": query,
-        "numResults": max(1, min(10, int(count))),
+        "numResults": result_limit,
         "type": "auto",
         "contents": {"text": {"maxCharacters": 600}},
     }
@@ -47,8 +53,7 @@ async def searchExa(
         headers={"x-api-key": api_key, "Accept": "application/json", "Content-Type": "application/json"},
         method="POST",
     )
-    with urlopen(req, timeout=30) as response:
-        raw = response.read().decode("utf-8", errors="replace")
+    raw = await asyncio.to_thread(_read_exa_response, req)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     payload_json = json.loads(raw)
@@ -68,7 +73,18 @@ async def searchExa(
                 "snippet": _exa_summary(item),
             }
         )
+        if len(out) >= result_limit:
+            break
     return out
+
+
+def _read_exa_response(request: Request) -> str:
+    with urlopen(request, timeout=30) as response:
+        return readResponseTextBoundedSync(
+            response,
+            maxBytes=EXA_RESPONSE_MAX_BYTES,
+            label="Exa search response",
+        )["text"]
 
 
 def resolveSearchApiProvider(config: dict[str, Any] | None, provider: str | None = None) -> dict[str, str] | None:

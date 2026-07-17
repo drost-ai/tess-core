@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 from .shared import *
+from ...subagent_result_payload import (
+    boundedSubagentError as _bounded_subagent_error,
+    boundedSubagentEventSummary as _bounded_subagent_event_summary,
+    boundedSubagentRuntimeContract as _bounded_subagent_runtime_contract,
+    shapeForegroundSubagentResult as _shape_foreground_subagent_result,
+)
 
 
 async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -12,6 +18,9 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
     child_session = prepared["childSession"]
     agent_id = prepared["agentId"]
     started_at = _monotonic_ms()
+    bounded_runtime_contract = _bounded_subagent_runtime_contract(
+        prepared.get("runtimeContractSummary")
+    )
     _output(context, "subagent.started", _subagent_started_payload(prepared, args, False))
     await saveChildAgent({**child_record, "status": "running", "lastUpdatedAt": now_iso(), "lastSummary": "Started foreground subagent run."})
 
@@ -19,10 +28,29 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
         _throw_if_subagent_cancelled(context)
         result = await _execute_foreground_subagent(args, prepared)
         status = mapStopReasonToStatus(result.get("stopReason"))
-        event_summary = (result.get("text") or "").strip()[:280]
+        event_summary = _bounded_subagent_event_summary(result.get("text") or "")
         summary = event_summary or None
         completed_at = now_iso()
         structured_fields = _foreground_structured_result_fields(prepared, result.get("text") or "")
+        duration_ms = _monotonic_ms() - started_at
+        parent_payload = _shape_foreground_subagent_result(
+            config=context["config"],
+            agentId=agent_id,
+            sessionId=child_session["id"],
+            agentType=child_record.get("agentType"),
+            status=status,
+            text=result.get("text") or "",
+            usage=result.get("usage"),
+            toolCount=result.get("toolCount") or 0,
+            durationMs=duration_ms,
+            stopReason=result.get("stopReason"),
+            worktreePath=prepared.get("worktreePath"),
+            structuredResultStatus=structured_fields.get("structuredResultStatus"),
+            structuredResult=structured_fields.get("structuredResult"),
+            structuredResultErrors=structured_fields.get("structuredResultErrors"),
+            effectiveAuthority=child_record.get("effectiveAgentAuthority"),
+            runtimeContract=bounded_runtime_contract,
+        )
         await saveChildAgent(
             {
                 **child_record,
@@ -45,38 +73,23 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                 "status": status,
                 "stop_reason": result.get("stopReason"),
                 "summary": event_summary,
-                "duration_ms": _monotonic_ms() - started_at,
-                "runtime_contract": prepared.get("runtimeContractSummary"),
-                "structured_result_status": structured_fields.get("structuredResultStatus"),
-                "structured_result_errors": structured_fields.get("structuredResultErrors"),
+                "duration_ms": duration_ms,
+                "runtime_contract": parent_payload.get("runtime_contract"),
+                "structured_result_status": parent_payload.get("structured_result_status"),
+                "structured_result": parent_payload.get("structured_result"),
+                "structured_result_truncated": parent_payload.get("structured_result_truncated"),
+                "structured_result_errors": parent_payload.get("structured_result_errors"),
+                "recovery": parent_payload["recovery"],
             },
         )
         return {
-            "content": pretty_json(
-                _without_none_values(
-                    {
-                        "agent_id": agent_id,
-                        "session_id": child_session["id"],
-                        "agent_type": child_record.get("agentType"),
-                        "status": status,
-                        "content": result.get("text") or "",
-                        "usage": result.get("usage"),
-                        "tool_count": result.get("toolCount"),
-                        "duration_ms": _monotonic_ms() - started_at,
-                        "stop_reason": result.get("stopReason"),
-                        "runtime_contract": prepared.get("runtimeContractSummary"),
-                        "structured_result_status": structured_fields.get("structuredResultStatus"),
-                        "structured_result_errors": structured_fields.get("structuredResultErrors"),
-                        "worktree_path": prepared.get("worktreePath"),
-                    }
-                )
-            ),
+            "content": pretty_json(parent_payload),
             "isError": status != "completed",
         }
     except Exception as exc:
         cancelled = _is_subagent_abort_error(exc, context.get("abortSignal"))
         status = "cancelled" if cancelled else "failed"
-        message = str(exc) or ("Subagent cancelled" if cancelled else "Subagent failed")
+        message = _bounded_subagent_error(exc)
         completed_at = now_iso()
         next_record = {
             **child_record,
@@ -111,11 +124,11 @@ async def runForegroundSubagent(args: dict[str, Any] | None = None, **kwargs: An
                         "agent_id": agent_id,
                         "session_id": child_session["id"],
                         "status": status,
-                    "error": message,
-                    "stop_reason": "cancelled" if cancelled else None,
-                    "runtime_contract": prepared.get("runtimeContractSummary"),
-                    "worktree_path": prepared.get("worktreePath"),
-                }
+                        "error": message,
+                        "stop_reason": "cancelled" if cancelled else None,
+                        "runtime_contract": bounded_runtime_contract,
+                        "worktree_path": prepared.get("worktreePath"),
+                    }
                 )
             ),
             "isError": True,

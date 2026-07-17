@@ -5,10 +5,11 @@ from ..contracts.records import launch_task_id
 from ..contracts.tools import ToolResult
 
 import asyncio
-from pathlib import Path
+import inspect
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
+from ..bounded_io import readFileTailBounded
 from ..execution_descriptors import createTaskExecutionDescriptor
 from ..tasks.monitor_transitions import monitorStopNote as _monitor_stop_note
 from ..tasks.monitor_transitions import stopMonitorRecord as _stop_monitor_record
@@ -16,7 +17,7 @@ from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defau
 from ..process_identity import processIdentityFromRecord, signalOwnedProcess
 from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 from ..task_ownership import requireModelOwnedMonitor, requireModelOwnedTask
-from ..tool_payloads import shapeTextToolResult
+from ..tool_payloads import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
@@ -41,19 +42,95 @@ def _task_output_tool() -> ToolDefinition:
                 await asyncio.sleep(0.25)
         owned = await requireModelOwnedTask(context, task_id, "output")
         meta = owned["meta"]
+        policy = getToolPayloadPolicy(context["config"])
         output_result = None
         daemon = context.get("daemon")
         if daemon:
             try:
-                output_result = await daemon["readTaskOutput"](task_id)
+                output_result = await _read_daemon_task_output(
+                    daemon["readTaskOutput"], task_id, policy["textInlineBytes"]
+                )
             except Exception:
                 output_result = None
-        text = output_result.get("output") if output_result else Path(taskOutputPath(task_id)).read_text(encoding="utf-8", errors="replace") if Path(taskOutputPath(task_id)).exists() else ""
-        shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="TaskOutput", family="bash", text=text, taskId=task_id, strategy="tail")
+        fallback_output = None
+        if output_result is None:
+            try:
+                fallback_output = await readFileTailBounded(
+                    filePath=taskOutputPath(task_id),
+                    maxBytes=policy["textInlineBytes"],
+                )
+            except (OSError, ValueError):
+                fallback_output = {
+                    "text": "",
+                    "originalBytes": 0,
+                    "returnedBytes": 0,
+                    "truncated": False,
+                    "changed": False,
+                }
+        text = output_result.get("output", "") if output_result is not None else fallback_output["text"]
+        source_truncated = bool(
+            output_result.get("truncated") if output_result is not None else fallback_output["truncated"]
+        )
+        original_bytes = (
+            fallback_output["originalBytes"]
+            if fallback_output is not None
+            else len(text.encode("utf-8", errors="replace"))
+        )
+        shaped = await shapeTextToolResult(
+            config=context["config"],
+            sessionId=context["session"]["id"],
+            toolName="TaskOutput",
+            family="bash",
+            text=text,
+            taskId=task_id,
+            strategy="tail",
+            persistArtifact=False,
+        )
         execution = createTaskExecutionDescriptor(meta, text)
-        return {"content": pretty_json({**meta, "output": shaped["text"], "output_truncated": bool(output_result and output_result.get("truncated")), "output_manifest": shaped["view"], "execution": execution}), "meta": {"execution": execution}}
+        output_file = output_result.get("outputFile") if output_result is not None else None
+        output_file = output_file or taskOutputPath(task_id)
+        output_manifest = {
+            **shaped["view"],
+            "originalBytes": original_bytes,
+            "sourceFile": output_file,
+            "sourceTruncated": source_truncated,
+            **(
+                {"changedDuringRead": True}
+                if fallback_output is not None and fallback_output["changed"]
+                else {}
+            ),
+            "recovery": {
+                "type": "task_output_file",
+                "filePath": output_file,
+                "taskId": task_id,
+            },
+        }
+        return {
+            "content": pretty_json(
+                {
+                    **meta,
+                    "output": shaped["text"],
+                    "output_truncated": source_truncated or shaped["view"]["truncated"],
+                    "output_manifest": output_manifest,
+                    "execution": execution,
+                }
+            ),
+            "meta": {"execution": execution},
+        }
 
     return ToolDefinition("TaskOutput", _tool_description("TaskOutput"), _tool_schema("TaskOutput"), handler)
+
+
+async def _read_daemon_task_output(reader: Any, task_id: str, max_bytes: int) -> Any:
+    try:
+        signature = inspect.signature(reader)
+    except (TypeError, ValueError):
+        return await reader(task_id, max_bytes)
+    try:
+        signature.bind(task_id, max_bytes)
+    except TypeError:
+        return await reader(task_id)
+    return await reader(task_id, max_bytes)
 
 
 def _task_stop_tool() -> ToolDefinition:
