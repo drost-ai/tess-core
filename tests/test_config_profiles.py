@@ -162,6 +162,9 @@ class ConfigProfileTests(AgentCoreTestCase):
                                 "compactionOutputTokens": 3_000,
                                 "requestStartTimeoutMs": 7_000,
                                 "streamIdleTimeoutMs": 8_000,
+                                "tokenCountTimeoutMs": 15_000,
+                                "totalRequestTimeoutMs": 600_000,
+                                "exactTokenCountRequired": True,
                             }
                         },
                     }
@@ -175,6 +178,9 @@ class ConfigProfileTests(AgentCoreTestCase):
             self.assertEqual(profile["compactionOutputTokens"], 3_000)
             self.assertEqual(profile["requestStartTimeoutMs"], 7_000)
             self.assertEqual(profile["streamIdleTimeoutMs"], 8_000)
+            self.assertEqual(profile["tokenCountTimeoutMs"], 15_000)
+            self.assertEqual(profile["totalRequestTimeoutMs"], 600_000)
+            self.assertTrue(profile["exactTokenCountRequired"])
             self.assertEqual(config["compactionProviderProfile"]["profileName"], "local-small")
             self.assertTrue(isRuntimeSecretRef(config["compactionProviderProfile"]["openaiToken"]))
             self.assertEqual(

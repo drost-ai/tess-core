@@ -95,6 +95,9 @@ class ProviderProfile(TypedDict, total=False):
     chatTemplateKwargs: dict[str, Any]
     requestStartTimeoutMs: int | None
     streamIdleTimeoutMs: int | None
+    tokenCountTimeoutMs: int | None
+    totalRequestTimeoutMs: int | None
+    exactTokenCountRequired: bool
     requestOptions: dict[str, Any]
     limits: dict[str, Any]
 

@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import asyncio
+import importlib as _importlib
 import json
 from typing import Any
 from urllib.request import Request, urlopen
 
-from .._utils import now_iso
+from .._utils import get_value as _get_value, maybe_await as _maybe_await, now_iso
 from ..image_budget import measureAdmittedImageSet as _measure_admitted_image_set
+from ..provider_errors import (
+    createProviderFailureRecord as _create_provider_failure_record,
+    createProviderRequestError as _create_provider_request_error,
+    isProviderRequestError as _is_provider_request_error,
+)
+from ..provider_timeouts import DEFAULT_TOKEN_COUNT_TIMEOUT_MS as _DEFAULT_TOKEN_COUNT_TIMEOUT_MS
+from ..provider_watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
-from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams
+from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
 from ..runtime_secret_provider import resolveProviderConfigSecrets
 
 
@@ -26,15 +34,96 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
     if config.get("provider") == "anthropic":
         try:
             resolved_config = await resolveProviderConfigSecrets(config)
-            input_tokens = await _measure_anthropic_count_tokens(resolved_config, request, float(args.get("timeoutSeconds") or 30))
+            input_tokens = await _run_exact_token_count(
+                config=config,
+                model=request["model"],
+                abort_signal=args.get("abortSignal"),
+                deadlines=args.get("deadlines"),
+                timeout_ms=_configured_token_count_timeout_ms(args),
+                operation=lambda signal: _measure_anthropic_count_tokens(
+                    resolved_config,
+                    request,
+                    _configured_token_count_timeout_ms(args) / 1000,
+                    signal,
+                ),
+            )
             return {"inputTokens": input_tokens, "source": "anthropic_count", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"], **image_fields}
-        except Exception:
-            estimate = _estimate_request_tokens(request, images["estimatedInputTokens"])
-            return {"inputTokens": estimate, "baseInputTokens": estimate, "source": "legacy_estimate", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"], **image_fields}
+        except Exception as error:
+            _rethrow_parent_abort(args.get("abortSignal"), error)
+            base_estimate = _estimate_request_tokens(request, images["estimatedInputTokens"])
+            estimate = base_estimate + DEFAULT_ESTIMATE_MARGIN_TOKENS
+            if _exact_token_count_required(config):
+                raise _normalize_mandatory_exact_failure(config, request["model"], error)
+            _emit_token_count_fallback(
+                args=args,
+                estimate=estimate,
+                source="legacy_estimate",
+                error=error,
+            )
+            return {
+                "inputTokens": estimate,
+                "baseInputTokens": base_estimate,
+                "safetyMarginTokens": DEFAULT_ESTIMATE_MARGIN_TOKENS,
+                "source": "legacy_estimate",
+                "measuredAt": measured_at,
+                "provider": "anthropic",
+                "model": request["model"],
+                **image_fields,
+            }
     mode = config.get("openaiApiMode", "responses")
+    exact_count_fallback = False
+    resolved_config = await resolveProviderConfigSecrets(config)
+    if mode == "responses" and resolved_config.get("openaiToken"):
+        try:
+            exact = await _run_exact_token_count(
+                config=config,
+                model=request["model"],
+                abort_signal=args.get("abortSignal"),
+                deadlines=args.get("deadlines"),
+                timeout_ms=_configured_token_count_timeout_ms(args),
+                operation=lambda signal: _measure_openai_exact_tokens(
+                    resolved_config,
+                    request,
+                    signal,
+                ),
+            )
+            return {
+                "inputTokens": exact,
+                "source": "openai_exact",
+                "measuredAt": measured_at,
+                "provider": "openai",
+                "model": request["model"],
+                **image_fields,
+            }
+        except Exception as error:
+            _rethrow_parent_abort(args.get("abortSignal"), error)
+            if _exact_token_count_required(config):
+                raise _normalize_mandatory_exact_failure(config, request["model"], error)
+            exact_count_fallback = True
+            fallback_base = _estimate_openai_request_tokens(
+                request, mode, images["estimatedInputTokens"]
+            )
+            _emit_token_count_fallback(
+                args=args,
+                estimate=fallback_base + DEFAULT_ESTIMATE_MARGIN_TOKENS,
+                source=_openai_estimate_source(mode),
+                error=error,
+            )
+    elif _exact_token_count_required(config):
+        raise _normalize_mandatory_exact_failure(
+            config,
+            request["model"],
+            RuntimeError(f"Exact token counting is unavailable for OpenAI mode '{mode}'."),
+        )
     base = _estimate_openai_request_tokens(request, mode, images["estimatedInputTokens"])
-    margin = _compute_codex_safety_margin(args.get("session", {})) if mode == "codex" else 0
-    return {"inputTokens": base + margin, "baseInputTokens": base, "safetyMarginTokens": margin or None, "source": "codex_estimate" if mode == "codex" else "openai_chat_estimate" if mode == "chat_completions" else "openai_responses_estimate", "measuredAt": measured_at, "provider": "openai", "model": request["model"], **image_fields}
+    margin = (
+        _compute_codex_safety_margin(args.get("session", {}))
+        if mode == "codex"
+        else DEFAULT_ESTIMATE_MARGIN_TOKENS
+        if exact_count_fallback
+        else 0
+    )
+    return {"inputTokens": base + margin, "baseInputTokens": base, "safetyMarginTokens": margin or None, "source": _openai_estimate_source(mode), "measuredAt": measured_at, "provider": "openai", "model": request["model"], **image_fields}
 
 
 def recordPreflightTokenMeasurement(session: dict[str, Any], measurement: dict[str, Any]) -> None:
@@ -76,7 +165,12 @@ def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 
     return total + image_input_tokens
 
 
-async def _measure_anthropic_count_tokens(config: dict[str, Any], request: dict[str, Any], timeout_seconds: float) -> int:
+async def _measure_anthropic_count_tokens(
+    config: dict[str, Any],
+    request: dict[str, Any],
+    timeout_seconds: float,
+    _abort_signal: Any = None,
+) -> int:
     payload = buildAnthropicCountTokensPayload(request, {"config": config})
 
     def send() -> int:
@@ -96,6 +190,245 @@ async def _measure_anthropic_count_tokens(config: dict[str, Any], request: dict[
         return input_tokens
 
     return await asyncio.to_thread(send)
+
+
+async def _measure_openai_exact_tokens(
+    config: dict[str, Any],
+    request: dict[str, Any],
+    abort_signal: Any,
+) -> int:
+    factory = config.get("openaiTokenCountClientFactory")
+    client: Any
+    if callable(factory):
+        client = factory(
+            {
+                "apiKey": config.get("openaiToken"),
+                "baseURL": _resolve_openai_base_url("responses", config.get("openaiBaseUrl")),
+                "abortSignal": abort_signal,
+            }
+        )
+    else:
+        try:
+            openai_module = _importlib.import_module("openai")
+        except Exception as exc:
+            raise RuntimeError("OpenAI exact token counting requires the optional OpenAI SDK.") from exc
+        async_openai = getattr(openai_module, "AsyncOpenAI", None)
+        if async_openai is None:
+            raise RuntimeError("OpenAI exact token counting is unavailable in this OpenAI SDK.")
+        client_kwargs: dict[str, Any] = {"api_key": config.get("openaiToken")}
+        base_url = _resolve_openai_base_url("responses", config.get("openaiBaseUrl"))
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        client = async_openai(**client_kwargs)
+    responses = _get_value(client, "responses")
+    input_tokens_api = _get_value(responses, "input_tokens") or _get_value(responses, "inputTokens")
+    count = _get_value(input_tokens_api, "count")
+    if not callable(count):
+        raise RuntimeError("OpenAI input-token count endpoint is unavailable.")
+    params = _sanitize_openai_count_params(
+        buildResponsesCreateParams({"isCodexBackend": False, "request": request})
+    )
+    if callable(factory):
+        response = await _maybe_await(count(params))
+    else:
+        response = await _maybe_await(count(**params))
+    input_tokens = _get_value(response, "input_tokens")
+    if isinstance(input_tokens, bool) or not isinstance(input_tokens, int):
+        raise RuntimeError("OpenAI input-token count returned no input_tokens value.")
+    return input_tokens
+
+
+def _sanitize_openai_count_params(value: dict[str, Any]) -> dict[str, Any]:
+    next_value = dict(value)
+    for key in (
+        "stream",
+        "store",
+        "max_output_tokens",
+        "prompt_cache_key",
+        "prompt_cache_retention",
+    ):
+        next_value.pop(key, None)
+    return next_value
+
+
+async def _run_exact_token_count(
+    *,
+    config: dict[str, Any],
+    model: str,
+    abort_signal: Any,
+    deadlines: Any,
+    timeout_ms: int,
+    operation: Any,
+) -> int:
+    configured_timeout_ms = max(1, int(timeout_ms or _DEFAULT_TOKEN_COUNT_TIMEOUT_MS))
+    remaining_ms = _deadline_remaining_ms(deadlines)
+    effective_timeout_ms = (
+        max(1, min(configured_timeout_ms, remaining_ms))
+        if remaining_ms is not None
+        else configured_timeout_ms
+    )
+    watchdog = _create_provider_request_watchdog(
+        parentSignal=abort_signal,
+        initialTimeoutMs=effective_timeout_ms,
+        buildTimeoutError=lambda: _create_provider_request_error(
+            _create_provider_failure_record(
+                provider=config.get("provider"),
+                providerLabel=config.get("providerProfileName") or config.get("provider"),
+                phase="token_count",
+                category="timeout",
+                retryable=True,
+                attempt=1,
+                hadAssistantOutput=False,
+                hadToolUse=False,
+                rawMessage=f"Exact token count timed out after {effective_timeout_ms}ms.",
+            )
+        ),
+    )
+    try:
+        result = await watchdog.race(operation(watchdog.signal))
+    finally:
+        watchdog.dispose()
+    if isinstance(result, bool) or not isinstance(result, int):
+        raise RuntimeError(f"Exact token count for model '{model}' was not an integer.")
+    return result
+
+
+def _configured_token_count_timeout_ms(args: dict[str, Any]) -> int:
+    explicit_seconds = args.get("timeoutSeconds")
+    if isinstance(explicit_seconds, (int, float)) and not isinstance(explicit_seconds, bool) and explicit_seconds > 0:
+        return max(1, int(explicit_seconds * 1000))
+    deadlines = args.get("deadlines")
+    deadline_timeout = _deadline_value(deadlines, "tokenCountTimeoutMs")
+    profile = (args.get("config") or {}).get("providerProfile") or {}
+    return (
+        _positive_timeout(deadline_timeout)
+        or _positive_timeout(profile.get("tokenCountTimeoutMs"))
+        or _DEFAULT_TOKEN_COUNT_TIMEOUT_MS
+    )
+
+
+def _deadline_remaining_ms(deadlines: Any) -> int | None:
+    if deadlines is None:
+        return None
+    remaining = _deadline_value(deadlines, "remainingMs")
+    if callable(remaining):
+        try:
+            return max(1, int(remaining()))
+        except Exception:
+            return 1
+    return None
+
+
+def _deadline_value(deadlines: Any, key: str) -> Any:
+    if isinstance(deadlines, dict):
+        return deadlines.get(key)
+    return getattr(deadlines, key, None)
+
+
+def _positive_timeout(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return int(value)
+
+
+def _exact_token_count_required(config: dict[str, Any]) -> bool:
+    return (config.get("providerProfile") or {}).get("exactTokenCountRequired") is True
+
+
+def _normalize_mandatory_exact_failure(
+    config: dict[str, Any],
+    model: str,
+    error: BaseException,
+) -> BaseException:
+    if _is_provider_request_error(error):
+        record = dict(error.record)
+        record.update(
+            {
+                "phase": "token_count",
+                "retryable": False,
+                "rawMessage": _bounded_failure_reason(error),
+            }
+        )
+        return _create_provider_request_error(record)
+    return _create_provider_request_error(
+        _create_provider_failure_record(
+            provider=config.get("provider"),
+            providerLabel=config.get("providerProfileName") or config.get("provider"),
+            phase="token_count",
+            category="protocol",
+            retryable=False,
+            attempt=1,
+            hadAssistantOutput=False,
+            hadToolUse=False,
+            rawMessage=(
+                f"Exact token count is required for model '{model}' but failed: "
+                f"{_bounded_failure_reason(error)}"
+            ),
+        )
+    )
+
+
+def _emit_token_count_fallback(
+    *,
+    args: dict[str, Any],
+    estimate: int,
+    source: str,
+    error: BaseException,
+) -> None:
+    emit = args.get("emitEvent")
+    if not callable(emit):
+        return
+    config = args["config"]
+    session = args.get("session") or {}
+    try:
+        emit(
+            "provider.token_count_fallback",
+            {
+                "session_id": session.get("id"),
+                "provider": config.get("provider"),
+                "provider_profile": config.get("providerProfileName"),
+                "model": args["request"]["model"],
+                "phase": "token_count",
+                "reason": error.record.get("category") if _is_provider_request_error(error) else "unavailable",
+                "detail": _bounded_failure_reason(error),
+                "token_count_timeout_ms": _configured_token_count_timeout_ms(args),
+                "exact_required": False,
+                "fallback_source": source,
+                "estimated_input_tokens": estimate,
+            },
+        )
+    except Exception:
+        pass
+
+
+def _rethrow_parent_abort(signal: Any, error: BaseException) -> None:
+    if not _signal_aborted(signal):
+        return
+    reason = signal.get("reason") if isinstance(signal, dict) else getattr(signal, "reason", None)
+    raise reason if isinstance(reason, BaseException) else error
+
+
+def _signal_aborted(signal: Any) -> bool:
+    if not signal:
+        return False
+    return bool(signal.get("aborted")) if isinstance(signal, dict) else bool(getattr(signal, "aborted", False))
+
+
+def _bounded_failure_reason(error: BaseException) -> str:
+    if _is_provider_request_error(error):
+        value = error.record.get("rawMessage") or str(error)
+    else:
+        value = str(error)
+    normalized = " ".join(str(value).replace("\t", " ").splitlines()).strip()
+    return normalized if len(normalized) <= 256 else f"{normalized[:255]}…"
+
+
+def _openai_estimate_source(mode: str) -> str:
+    if mode == "codex":
+        return "codex_estimate"
+    if mode == "chat_completions":
+        return "openai_chat_estimate"
+    return "openai_responses_estimate"
 
 
 def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_input_tokens: int = 0) -> int:

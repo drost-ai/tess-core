@@ -54,24 +54,38 @@ class ProviderRequestWatchdog:
 
     async def race(self, awaitable: Awaitable[Any]) -> Any:
         task = asyncio.ensure_future(awaitable)
-        while True:
-            self._raise_if_parent_aborted()
-            self._refresh_timeout()
-            if self._timed_out:
-                raise self._timeout_error or self._make_timeout_error()
+        try:
+            while True:
+                self._raise_if_parent_aborted()
+                self._refresh_timeout()
+                if self._timed_out:
+                    raise self._timeout_error or self._make_timeout_error()
+                if task.done():
+                    try:
+                        return task.result()
+                    except BaseException as exc:
+                        self._refresh_timeout()
+                        if self._timed_out:
+                            raise self._timeout_error or self._make_timeout_error()
+                        raise exc
+                remaining = max(0.0, self._deadline - time.monotonic())
+                await asyncio.wait(
+                    {task},
+                    timeout=min(0.05, remaining or 0.001),
+                )
+        except BaseException:
+            if not task.done():
+                task.cancel()
+            if not task.done():
+                await asyncio.wait({task}, timeout=0.05)
             if task.done():
                 try:
-                    return task.result()
-                except BaseException as exc:
-                    self._refresh_timeout()
-                    if self._timed_out:
-                        raise self._timeout_error or self._make_timeout_error()
-                    raise exc
-            remaining = max(0.0, self._deadline - time.monotonic())
-            try:
-                return await asyncio.wait_for(asyncio.shield(task), timeout=min(0.05, remaining or 0.001))
-            except asyncio.TimeoutError:
-                continue
+                    task.result()
+                except (asyncio.CancelledError, Exception):
+                    pass
+            else:
+                task.add_done_callback(_consume_task_result)
+            raise
 
     def dispose(self) -> None:
         self._disposed = True
@@ -120,6 +134,13 @@ def _signal_aborted(signal: Any) -> bool:
 def _signal_reason(signal: Any) -> BaseException:
     reason = signal.get("reason") if isinstance(signal, dict) else getattr(signal, "reason", None)
     return reason if isinstance(reason, BaseException) else AbortError()
+
+
+def _consume_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except (asyncio.CancelledError, Exception):
+        pass
 
 
 __all__ = ["AbortError", "AbortSignal", "ProviderRequestWatchdog", "createProviderRequestWatchdog"]

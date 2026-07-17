@@ -59,7 +59,16 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
         }
         prepared_request = {"request": request, "continuity": request_context, "reactiveAttempt": reactive_attempt}
-        measurement = await measureRequestInputTokens({"config": config, "request": request, "session": session, "abortSignal": runtime.get("abortSignal")})
+        measurement = await measureRequestInputTokens(
+            {
+                "config": config,
+                "request": request,
+                "session": session,
+                "abortSignal": runtime.get("abortSignal"),
+                "deadlines": args.get("deadlines"),
+                "emitEvent": lambda event, data: _safe_emit(runtime, event, data),
+            }
+        )
         compacted = await maybeAutoCompactSession(
             {
                 "session": session,
@@ -144,7 +153,16 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         "messages": request_context["messages"],
         "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
     }
-    measurement = await measureRequestInputTokens({"config": config, "request": request, "session": session, "abortSignal": runtime.get("abortSignal")})
+    measurement = await measureRequestInputTokens(
+        {
+            "config": config,
+            "request": request,
+            "session": session,
+            "abortSignal": runtime.get("abortSignal"),
+            "deadlines": args.get("deadlines"),
+            "emitEvent": lambda event, data: _safe_emit(runtime, event, data),
+        }
+    )
     budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
     _assert_image_context_capacity(measurement, budget)
     recordPreflightTokenMeasurement(session, measurement)

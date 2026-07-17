@@ -9,7 +9,7 @@ if _typing.TYPE_CHECKING:
 from .shared import *
 from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
 from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
-from .providers import _emit_provider_response_completed
+from .providers import _emit_provider_response_completed, _record_provider_failure_if_needed
 from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
 from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
@@ -24,6 +24,7 @@ from ..hooks import fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..permission_rules import findDispatchDenyRule
+from ..provider_timeouts import createTurnDeadlineContext as _create_turn_deadline_context
 from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
@@ -73,7 +74,6 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
         authority,
     )
     tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
-    provider = provider_override or _create_provider(config, runtime, session)
     base_system_prompt = args.get("systemPromptOverride") or session["systemPrompt"]
     text_parts: list[str] = []
     total_usage: dict[str, Any] = {}
@@ -119,6 +119,59 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
         _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": active_model, "partial_text": "\n\n".join(text_parts).strip()})
         return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "cancelled"}
 
+    async def request_provider_response() -> tuple[dict[str, Any], dict[str, Any]]:
+        deadlines = _create_turn_deadline_context(
+            config=config,
+            parentSignal=runtime.get("abortSignal"),
+            perCallOptions=args.get("providerRequestOptions") or {},
+            runtimeContract=runtime_contract,
+        )
+        deadline_runtime = {**runtime, "abortSignal": deadlines.signal}
+        provider = provider_override or _create_provider(config, deadline_runtime, session)
+
+        async def prepare(reactive_attempt: int) -> dict[str, Any]:
+            return await deadlines.race(
+                prepareProviderRequest(
+                    {
+                        "session": session,
+                        "config": config,
+                        "runtime": deadline_runtime,
+                        "baseSystemPrompt": base_system_prompt,
+                        "toolRegistry": tool_registry,
+                        "activeModel": active_model,
+                        "prompt": prompt_text,
+                        "reactiveAttempt": reactive_attempt,
+                        "providerRequestOptions": args.get("providerRequestOptions") or {},
+                        "deadlines": deadlines,
+                    }
+                )
+            )
+
+        try:
+            prepared_request = await prepare(0)
+            while True:
+                try:
+                    _throw_if_turn_cancelled(runtime)
+                    if requestHasImageInputs(prepared_request["request"]) and not modelSupportsImageInputs(config, active_model):
+                        response = unsupportedImageInputResponse(active_model)
+                    else:
+                        response = await deadlines.race(maybe_await(provider["send"](prepared_request["request"])))
+                    return prepared_request, response
+                except Exception as error:
+                    if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                        raise
+                    if prepared_request.get("reactiveAttempt", 0) < 2 and isContextWindowFailure(error):
+                        prepared_request = await prepare(
+                            int(prepared_request.get("reactiveAttempt") or 0) + 1
+                        )
+                        continue
+                    raise
+        except Exception as error:
+            await _record_provider_failure_if_needed(session, config, runtime, error)
+            raise
+        finally:
+            deadlines.dispose()
+
     if _is_turn_cancelled(runtime):
         return await cancel_turn()
 
@@ -157,18 +210,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 },
             )
         try:
-            prepared_request = await prepareProviderRequest(
-                {
-                    "session": session,
-                    "config": config,
-                    "runtime": runtime,
-                    "baseSystemPrompt": base_system_prompt,
-                    "toolRegistry": tool_registry,
-                    "activeModel": active_model,
-                    "prompt": prompt_text,
-                    "reactiveAttempt": 0,
-                }
-            )
+            prepared_request, response = await request_provider_response()
         except _ImageBudgetError as error:
             _restore_session_state(session, last_stable_snapshot)
             await persistSession(session, config)
@@ -182,41 +224,6 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
             if _is_turn_abort_error(error, runtime.get("abortSignal")):
                 return await cancel_turn()
             raise
-        while True:
-            try:
-                _throw_if_turn_cancelled(runtime)
-                if requestHasImageInputs(prepared_request["request"]) and not modelSupportsImageInputs(config, active_model):
-                    response = unsupportedImageInputResponse(active_model)
-                else:
-                    response = await maybe_await(provider["send"](prepared_request["request"]))
-                break
-            except Exception as error:
-                if _is_turn_abort_error(error, runtime.get("abortSignal")):
-                    return await cancel_turn()
-                if prepared_request.get("reactiveAttempt", 0) < 2 and isContextWindowFailure(error):
-                    try:
-                        prepared_request = await prepareProviderRequest(
-                            {
-                                "session": session,
-                                "config": config,
-                                "runtime": runtime,
-                                "baseSystemPrompt": base_system_prompt,
-                                "toolRegistry": tool_registry,
-                                "activeModel": active_model,
-                                "prompt": prompt_text,
-                                "reactiveAttempt": int(prepared_request.get("reactiveAttempt") or 0) + 1,
-                            }
-                        )
-                    except Exception as prepare_error:
-                        if _is_turn_abort_error(prepare_error, runtime.get("abortSignal")):
-                            return await cancel_turn()
-                        raise
-                    continue
-                if isProviderRequestError(error):
-                    session.setdefault("metadata", {})["lastProviderFailure"] = copy.deepcopy(error.record)
-                    _safe_emit(runtime, "provider.failed", {"session_id": session["id"], **error.record})
-                    await persistProviderFailure(session, config, error.record)
-                raise
 
         if session.setdefault("metadata", {}).get("lastProviderFailure"):
             last = copy.deepcopy(session["metadata"]["lastProviderFailure"])

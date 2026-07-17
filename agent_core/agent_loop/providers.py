@@ -5,6 +5,22 @@ from ..provider_timeouts import resolveProviderTimeoutPolicy
 from ..runtime_secret_provider import resolveProviderConfigSecrets
 
 
+async def _record_provider_failure_if_needed(
+    session: dict[str, Any],
+    config: dict[str, Any],
+    runtime: dict[str, Any],
+    error: BaseException,
+) -> None:
+    if not isProviderRequestError(error):
+        return
+    metadata = session.setdefault("metadata", {})
+    if metadata.get("lastProviderFailure") == error.record:
+        return
+    metadata["lastProviderFailure"] = copy.deepcopy(error.record)
+    _safe_emit(runtime, "provider.failed", {"session_id": session["id"], **error.record})
+    await persistProviderFailure(session, config, error.record)
+
+
 def _emit_provider_response_completed(
     *,
     runtime: dict[str, Any],
