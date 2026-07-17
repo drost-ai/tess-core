@@ -343,7 +343,10 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
             status = runtime["listServerStatus"]()[0]
             self.assertFalse(status["connected"])
             self.assertEqual(status["state"], "degraded")
-            self.assertEqual(status["error"], "No matching SSE JSON-RPC response was received.")
+            self.assertEqual(
+                status["error"],
+                "invalid_framing: No matching SSE JSON-RPC response was received.",
+            )
         finally:
             if runtime:
                 run(runtime["close"]())

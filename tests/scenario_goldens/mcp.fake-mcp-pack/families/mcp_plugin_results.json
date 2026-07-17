@@ -25,6 +25,7 @@
           "status": "not_requested"
         },
         "connected": true,
+        "connectionGeneration": 1,
         "error": null,
         "lastConnectedAt": "<timestamp>",
         "lastErrorAt": null,

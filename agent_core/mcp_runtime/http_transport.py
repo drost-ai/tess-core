@@ -325,11 +325,17 @@ class HttpMcpClient(JsonRpcClient):
         if not text.strip():
             return {"jsonrpc": "2.0", "id": request_id, "result": {}}
         message = _decode_json_rpc_payload(text, "HTTP body")
-        if request_id is not None and message.get("id") != request_id:
-            raise McpTransportError(
-                "invalid_framing",
-                "MCP HTTP response id does not match its request.",
-            )
+        if request_id is not None:
+            if "id" not in message:
+                raise McpTransportError(
+                    "invalid_framing",
+                    "MCP HTTP response is missing JSON-RPC id.",
+                )
+            if message.get("id") != request_id:
+                raise McpTransportError(
+                    "invalid_framing",
+                    "MCP HTTP response id did not match its request.",
+                )
         return message
 
     def _consume_rpc_sse_event(
@@ -402,6 +408,7 @@ class HttpMcpClient(JsonRpcClient):
             finally:
                 exchange.unbind(response)
         except BaseException as error:
+            self._handle_stream_error(error)
             if error_ref is not None:
                 error_ref["error"] = error
         finally:
@@ -411,12 +418,10 @@ class HttpMcpClient(JsonRpcClient):
                 ready.set()
             self.stream_threads.discard(threading.current_thread())
 
-    def _consume_stream_event(
-        self,
-        event: dict[str, str],
-        base_url: str,
-        ready: threading.Event | None,
-    ) -> bool:
+    def _handle_stream_error(self, error: BaseException) -> None:
+        return None
+
+    def _consume_stream_event(self, event: dict[str, str], base_url: str, ready: threading.Event | None) -> bool:
         data = event.get("data")
         if not data:
             return False

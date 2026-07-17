@@ -76,11 +76,18 @@ def iterateMcpBody(
         while True:
             try:
                 one_shot = False
-                try:
-                    chunk = response.read(64 * 1024)
-                except TypeError:
-                    chunk = response.read()
-                    one_shot = True
+                incremental_reader = getattr(response, "read1", None)
+                if continuous and callable(incremental_reader):
+                    try:
+                        chunk = incremental_reader(64 * 1024)
+                    except TypeError:
+                        chunk = incremental_reader()
+                else:
+                    try:
+                        chunk = response.read(64 * 1024)
+                    except TypeError:
+                        chunk = response.read()
+                        one_shot = True
             except (TimeoutError, socket.timeout) as error:
                 raise McpTransportError(
                     "body_idle_timeout",
@@ -252,6 +259,21 @@ def _set_response_timeout(response: Any, timeout: float) -> None:
 
 
 def _close_http_response(response: Any) -> None:
+    candidates = (
+        getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None),
+        getattr(getattr(response, "fp", None), "_sock", None),
+        getattr(response, "sock", None),
+        getattr(getattr(response, "_mcp_connection", None), "sock", None),
+    )
+    seen: set[int] = set()
+    for candidate in candidates:
+        if candidate is None or id(candidate) in seen:
+            continue
+        seen.add(id(candidate))
+        shutdown = getattr(candidate, "shutdown", None)
+        if callable(shutdown):
+            with contextlib.suppress(Exception):
+                shutdown(socket.SHUT_RDWR)
     closer = getattr(response, "close", None)
     if callable(closer):
         with contextlib.suppress(Exception):

@@ -96,7 +96,7 @@ def _decode_json_rpc_payload(payload: str, source: str) -> dict[str, Any]:
     except Exception as error:
         raise McpTransportError(
             "invalid_framing",
-            f"MCP {source} contains malformed JSON-RPC.",
+            f"Invalid JSON-RPC response in MCP {source}.",
         ) from error
     if isinstance(parsed, list):
         raise McpTransportError(

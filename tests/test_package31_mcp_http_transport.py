@@ -8,6 +8,7 @@ from tests.test_package31_mcp_transport import _Response
 
 from agent_core.mcp_runtime.http_body import (
     _BoundedHeaderReader,
+    _close_http_response,
     _parse_declared_length,
     iterateMcpBody,
     validateMcpResponseHeaders,
@@ -75,6 +76,58 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
             list(iterateMcpBody(_Response(error=socket.timeout()), policy))
         self.assertEqual(raised.exception.code, "body_idle_timeout")
 
+    def test_continuous_http_body_uses_incremental_reader(self):
+        class StreamingResponse:
+            headers = {}
+
+            def __init__(self):
+                self.values = [b"event: endpoint\n", b"data: /messages\n\n", b""]
+                self.closed = False
+
+            def read(self, _size=0):
+                raise AssertionError("continuous acquisition used blocking read")
+
+            def read1(self, _size=0):
+                return self.values.pop(0)
+
+            def close(self):
+                self.closed = True
+
+        response = StreamingResponse()
+        chunks = list(
+            iterateMcpBody(
+                response,
+                resolveMcpTransportPolicy(),
+                continuous=True,
+            )
+        )
+        self.assertEqual(chunks, [b"event: endpoint\n", b"data: /messages\n\n"])
+        self.assertTrue(response.closed)
+
+    def test_http_close_shuts_down_stream_socket_before_closing(self):
+        class StreamSocket:
+            def __init__(self):
+                self.calls = []
+
+            def shutdown(self, how):
+                self.calls.append(how)
+
+        stream_socket = StreamSocket()
+
+        class Response:
+            fp = type("Stream", (), {"raw": type("Raw", (), {"_sock": stream_socket})()})()
+
+            def __init__(self):
+                self.closed = False
+
+            def close(self):
+                self.closed = True
+
+        response = Response()
+        _close_http_response(response)
+        self.assertEqual(stream_socket.calls, [socket.SHUT_RDWR])
+        self.assertTrue(response.closed)
+
     def test_http_sse_notifications_flush_bounded_and_json_is_strict(self):
         observed = []
         client = HttpMcpClient(
@@ -115,6 +168,56 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
                 1,
             )
         self.assertEqual(raised.exception.code, "invalid_framing")
+
+    def test_legacy_sse_empty_ack_routes_stream_response_and_rejects_wrong_id(self):
+        async def scenario():
+            client = SseMcpClient(
+                {
+                    "name": "legacy-sse",
+                    "transport": "sse",
+                    "commandOrUrl": "https://example.test/sse",
+                    "requestTimeoutMs": 500,
+                },
+                "/tmp",
+            )
+
+            async def empty_ack(_client, request):
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request.get("id"),
+                    "result": {},
+                    "_mcp_sse_empty_ack": True,
+                }
+
+            original_send = HttpMcpClient._send
+            HttpMcpClient._send = empty_ack
+            try:
+                pending = asyncio.create_task(client.request("tools/list"))
+                while not client.pending:
+                    await asyncio.sleep(0)
+                client._consume_stream_event(
+                    {"data": '{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}'},
+                    "https://example.test/sse",
+                    None,
+                )
+                self.assertEqual(await pending, {"tools": []})
+
+                mismatched = asyncio.create_task(client.request("resources/list"))
+                while not client.pending:
+                    await asyncio.sleep(0)
+                client._consume_stream_event(
+                    {"data": '{"jsonrpc":"2.0","id":999,"result":{}}'},
+                    "https://example.test/sse",
+                    None,
+                )
+                outcome = (await asyncio.gather(mismatched, return_exceptions=True))[0]
+                self.assertIsInstance(outcome, McpTransportError)
+                self.assertEqual(outcome.code, "invalid_framing")
+            finally:
+                HttpMcpClient._send = original_send
+                await client.close()
+
+        run(scenario())
 
     def test_http_pending_close_and_sse_origin_are_fail_closed(self):
         async def scenario():

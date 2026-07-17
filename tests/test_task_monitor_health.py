@@ -317,6 +317,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                             "mode": "http",
                             "url": f"http://127.0.0.1:{server.server_address[1]}/health",
                             "expectedStatusCodes": [202],
+                            "expectedBodyPolicy": "contains",
                             "expectedBodySubstring": "ready",
                             "intervalMs": 1000,
                             "timeoutMs": 1000,
@@ -369,15 +370,18 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertIn("wrong body", result["httpOutput"]["output"])
             self.assertIn("ready body", result["httpOutput"]["output"])
             unhealthy_errors = [event["data"]["error"] for event in result["events"] if event["event"] == "health_check.unhealthy" and event["data"]["task_id"] == result["httpTaskId"]]
-            self.assertEqual(unhealthy_errors[:2], ["Unexpected status code 503", "Response body did not contain expected text: ready"])
+            self.assertEqual(unhealthy_errors[:2], ["Unexpected status code 503.", "Response body did not contain expected text: ready"])
             self.assertTrue(any(event["event"] == "health_check.recovered" and event["data"]["task_id"] == result["httpTaskId"] for event in result["events"]))
             direct_task_events = [event for event in result["events"] if event["data"].get("task_id") in {result["httpTaskId"], result["timeoutTaskId"]} and event["event"].startswith("task.")]
-            self.assertEqual(direct_task_events, [])
+            self.assertEqual(len(direct_task_events), 1)
+            self.assertEqual(direct_task_events[0]["event"], "task.stopped")
+            self.assertEqual(direct_task_events[0]["data"]["task_id"], result["httpTaskId"])
+            self.assertEqual(direct_task_events[0]["data"]["detail_status"], "stopped_by_request")
             self.assertEqual(timeout_record["status"], "failed")
             self.assertTrue(timeout_record["lastTimedOut"])
             self.assertTrue(timeout_record["lastTerminated"])
             self.assertIn(timeout_record["lastSignal"], {"SIGTERM", "SIGKILL"})
-            self.assertIn("Health check timed out.", result["timeoutOutput"]["output"])
+            self.assertIn("Health check exceeded its 1000ms deadline.", result["timeoutOutput"]["output"])
         finally:
             if server:
                 server.shutdown()

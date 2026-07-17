@@ -196,6 +196,17 @@
     "data": {
       "model": "claude-sonnet-4-6",
       "payload": {
+        "index": 0,
+        "type": "content_block_stop"
+      },
+      "stream_event": "content_block_stop"
+    },
+    "event": "provider.stream_event"
+  },
+  {
+    "data": {
+      "model": "claude-sonnet-4-6",
+      "payload": {
         "delta": {
           "stop_reason": "end_turn"
         },

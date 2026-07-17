@@ -149,9 +149,6 @@
     "api": "count_tokens",
     "attempt": 1,
     "body": {
-      "cache_control": {
-        "type": "ephemeral"
-      },
       "messages": [
         {
           "content": [
@@ -170,9 +167,6 @@
           "type": "text"
         },
         {
-          "cache_control": {
-            "type": "ephemeral"
-          },
           "text": "Harness provider system.",
           "type": "text"
         }

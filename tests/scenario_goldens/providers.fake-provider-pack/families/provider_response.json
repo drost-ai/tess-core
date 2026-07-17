@@ -28,7 +28,6 @@
           "type": "text"
         }
       ],
-      "incomplete": false,
       "model": "claude-sonnet-4-6",
       "stopReason": "end_turn",
       "usage": {

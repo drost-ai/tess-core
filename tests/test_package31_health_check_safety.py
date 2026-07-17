@@ -236,6 +236,8 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             )
             result = run(executor.executeHealthCheck(record=record, signal=asyncio.Event()))
             self.assertTrue(result["okay"])
+            self.assertFalse(result["lastTimedOut"])
+            self.assertFalse(result["lastTerminated"])
             self.assertEqual(captured["maxSpoolBytes"], 128 * 1024)
             self.assertEqual(captured["env"], policy["environment"])
             self.assertEqual(captured["argv"][-3:], [policy["shellPath"], "-lc", spec["command"]])

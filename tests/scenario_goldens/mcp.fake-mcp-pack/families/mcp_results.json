@@ -76,7 +76,7 @@
   },
   {
     "driver": "call_mcp_tool",
-    "error": "MCP server returned a batch JSON-RPC response.",
+    "error": "invalid_framing: MCP server returned a batch JSON-RPC response.",
     "input": {
       "variant": "batch"
     },

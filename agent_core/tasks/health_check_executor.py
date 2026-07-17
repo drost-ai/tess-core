@@ -123,6 +123,9 @@ async def _execute_command(
         outputTruncated=bool(run["outputLimitExceeded"]),
         lastError=error,
         lastExitCode=run["exitCode"],
+        lastSignal=run.get("exitSignal"),
+        lastTimedOut=bool(run["timedOut"]),
+        lastTerminated=bool(run.get("exitSignal")),
         processIdentity=run.get("processIdentity"),
         outputArtifacts=[item for item in (run.get("stdoutArtifact"), run.get("stderrArtifact")) if item],
         measuredBytes=int(run.get("stdoutBytes") or 0) + int(run.get("stderrBytes") or 0),
@@ -176,6 +179,8 @@ async def _execute_http(record: dict[str, Any], signal: Any) -> dict[str, Any]:
         outputTruncated=bool(response.get("truncated")),
         lastError=error,
         lastStatusCode=response.get("statusCode"),
+        lastTimedOut=False,
+        lastTerminated=False,
         responseSnippet=sliceUtf8Prefix(body, HEALTH_EVENT_EXCERPT_BYTES),
         measuredBytes=max(int(response.get("compressedBytes") or 0), int(response.get("decodedBytes") or 0)),
     )
