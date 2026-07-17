@@ -40,8 +40,18 @@ def _extract_output_blocks(output: list[Any]) -> list[dict[str, Any]]:
         elif get_value(item, "type") == "function_call":
             call_id = str(get_value(item, "call_id", None) or get_value(item, "id", "") or "")
             name = str(get_value(item, "name", "") or "")
-            if call_id and name:
-                blocks.append({"type": "tool_use", "id": call_id, "name": name, "input": _safe_json_object(str(get_value(item, "arguments", "") or ""))})
+            if not call_id or not name:
+                raise ValueError("Function-call output ended before its id and name were complete.")
+            blocks.append(
+                {
+                    "type": "tool_use",
+                    "id": call_id,
+                    "name": name,
+                    "input": _parse_complete_json_object(
+                        str(get_value(item, "arguments", "") or "")
+                    ),
+                }
+            )
     return blocks
 
 def _apply_openai_usage(usage: dict[str, Any], next_usage: Any) -> None:
@@ -59,21 +69,29 @@ def _apply_chat_completion_usage(usage: dict[str, Any], next_usage: Any) -> None
     normalizeCacheUsageFields(usage, next_usage)
 
 def _emit_pending_chat_tool_calls(blocks: list[dict[str, Any]], pending: dict[int, dict[str, str]], emitted_ids: set[str], reasoning: str = "") -> bool:
-    emitted = False
+    assembled: list[dict[str, Any]] = []
     for item in list(pending.values()):
         call_id = (item.get("id") or "").strip()
         name = (item.get("name") or "").strip()
-        if not call_id or not name or call_id in emitted_ids:
+        if not call_id or not name:
+            raise ValueError("Tool call ended before its id and name were complete.")
+        if call_id in emitted_ids:
             continue
-        emitted_ids.add(call_id)
-        block: dict[str, Any] = {"type": "tool_use", "id": call_id, "name": name, "input": _safe_json_object(item.get("arguments") or "")}
+        block: dict[str, Any] = {
+            "type": "tool_use",
+            "id": call_id,
+            "name": name,
+            "input": _parse_complete_json_object(item.get("arguments") or ""),
+        }
         if reasoning:
             block["provider_metadata"] = {"reasoning_content": reasoning}
+        assembled.append(block)
+    for block in assembled:
+        emitted_ids.add(block["id"])
         blocks.append(block)
-        emitted = True
-    if emitted:
+    if assembled:
         pending.clear()
-    return emitted
+    return bool(assembled)
 
 def _extract_provider_reasoning_content(blocks: list[dict[str, Any]]) -> str | None:
     for block in blocks:
@@ -107,6 +125,18 @@ def _safe_json_object(raw: str) -> dict[str, Any]:
         return parsed if isinstance(parsed, dict) else {}
     except Exception:
         return {}
+
+
+def _parse_complete_json_object(raw: str) -> dict[str, Any]:
+    if not raw.strip():
+        raise ValueError("Tool arguments ended before a JSON object was provided.")
+    try:
+        parsed = json.loads(raw)
+    except Exception as exc:
+        raise ValueError("Tool arguments ended before a complete JSON object was received.") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Tool arguments must be a top-level JSON object.")
+    return parsed
 
 def _response_error_text(response: Any) -> str:
     error = get_value(response, "error", {}) or {}

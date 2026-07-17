@@ -347,9 +347,12 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             return AsyncChunks(
                 [
                     {"type": "response.output_text.delta", "delta": "Plan"},
-                    {"type": "response.function_call_arguments.done", "item_id": "item_1", "name": "Read", "arguments": '{"path":"a.txt"}'},
                     {"type": "response.output_item.added", "item": {"type": "function_call", "id": "item_1", "call_id": "call_1"}},
-                    {"type": "response.output_item.done", "item": {"type": "function_call", "call_id": "call_2", "name": "Write", "arguments": "not-json"}},
+                    {"type": "response.function_call_arguments.done", "item_id": "item_1", "name": "Read", "arguments": '{"path":"a.txt"}'},
+                    {"type": "response.output_item.done", "item": {"type": "function_call", "id": "item_1", "call_id": "call_1", "name": "Read", "arguments": '{"path":"a.txt"}'}},
+                    {"type": "response.output_item.added", "item": {"type": "function_call", "id": "item_2", "call_id": "call_2", "name": "Write"}},
+                    {"type": "response.function_call_arguments.done", "item_id": "item_2", "name": "Write", "arguments": "{}"},
+                    {"type": "response.output_item.done", "item": {"type": "function_call", "id": "item_2", "call_id": "call_2", "name": "Write", "arguments": "{}"}},
                     {
                         "type": "response.completed",
                         "response": {

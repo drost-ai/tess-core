@@ -35,6 +35,32 @@ class AnthropicSseAccumulator:
         self.had_assistant_output = False
         self.had_tool_use = False
         self.stopped = False
+        self.open_block_indexes: set[int] = set()
+
+    def incomplete_response(self, reason: str, phase: str = "stream_read") -> Any:
+        assistant_text = "".join(
+            str(block.get("text") or block.get("thinking") or "")
+            for block in self.blocks
+            if block and block.get("type") in {"text", "thinking"}
+        )
+        return createProviderIncompleteResponseError(
+            provider="anthropic",
+            providerLabel="Anthropic",
+            mode="messages",
+            phase=phase,
+            expectedTerminal="message_stop after every content block closed",
+            reason=reason,
+            attempt=self.attempt,
+            hadAssistantOutput=self.had_assistant_output,
+            hadToolUse=self.had_tool_use,
+            partialAssistantBytes=len(assistant_text.encode("utf-8")),
+            partialToolArgumentBytes=sum(
+                len(str(block.get("_input_buffer") or "").encode("utf-8"))
+                for block in self.blocks
+                if block and block.get("type") == "tool_use"
+            ),
+            openItems=len(self.open_block_indexes),
+        )
 
     def process_raw_event(self, raw_event: dict[str, Any]) -> None:
         if self.stopped:
@@ -81,62 +107,110 @@ class AnthropicSseAccumulator:
             _apply_usage_snapshot(self.usage, message.get("usage") or {})
         elif event_type == "content_block_start":
             index = payload.get("index")
-            if not isinstance(index, int):
-                return
+            if isinstance(index, bool) or not isinstance(index, int) or index < 0:
+                raise self.incomplete_response("a content block started without a valid index")
+            if index in self.open_block_indexes or (
+                index < len(self.blocks) and self.blocks[index] is not None
+            ):
+                raise self.incomplete_response(f"content block {index} started more than once")
             while len(self.blocks) <= index:
                 self.blocks.append(None)
-            self.blocks[index] = _internal_block_from_anthropic(payload.get("content_block") or {})
+            content_block = payload.get("content_block")
+            self.blocks[index] = _internal_block_from_anthropic(
+                content_block if isinstance(content_block, dict) else {}
+            )
+            self.open_block_indexes.add(index)
             if self.blocks[index].get("type") == "tool_use":
                 self.had_tool_use = True
             if self.blocks[index].get("type") == "text" and self.blocks[index].get("text"):
                 self.had_assistant_output = True
         elif event_type == "content_block_delta":
             index = payload.get("index")
-            if not isinstance(index, int) or index >= len(self.blocks) or self.blocks[index] is None:
-                return
+            if (
+                isinstance(index, bool)
+                or not isinstance(index, int)
+                or index not in self.open_block_indexes
+            ):
+                raise self.incomplete_response(
+                    "a content block delta arrived without an open content block"
+                )
             block = self.blocks[index]
             delta = payload.get("delta") or {}
+            if not isinstance(block, dict) or not isinstance(delta, dict) or not isinstance(delta.get("type"), str):
+                raise self.incomplete_response(f"content block {index} received a malformed delta")
             if block["type"] == "text" and delta.get("type") == "text_delta":
-                text_delta = delta.get("text") or ""
+                text_delta = delta.get("text") if isinstance(delta.get("text"), str) else ""
                 block["text"] += text_delta
                 if text_delta:
                     self.had_assistant_output = True
                 if self.runtime.get("includePartialMessages") and text_delta:
                     self.runtime.get("emitEvent", lambda *_: None)("message.assistant.partial", {"model": self.model, "text_delta": text_delta, "text": "".join(item.get("text", "") for item in self.blocks if item and item.get("type") == "text")})
+            elif block["type"] == "thinking" and delta.get("type") == "thinking_delta":
+                thinking_delta = delta.get("thinking") if isinstance(delta.get("thinking"), str) else ""
+                block["thinking"] += thinking_delta
+                if self.runtime.get("includePartialMessages") and thinking_delta:
+                    self.runtime.get("emitEvent", lambda *_: None)(
+                        "message.assistant.thinking.partial",
+                        {
+                            "model": self.model,
+                            "thinking_delta": thinking_delta,
+                            "thinking": "".join(
+                                item.get("thinking", "")
+                                for item in self.blocks
+                                if item and item.get("type") == "thinking"
+                            ),
+                        },
+                    )
+            elif block["type"] == "thinking" and delta.get("type") == "signature_delta":
+                signature_delta = delta.get("signature") if isinstance(delta.get("signature"), str) else ""
+                if signature_delta:
+                    block["signature"] = f"{block.get('signature') or ''}{signature_delta}"
             elif block["type"] == "tool_use" and delta.get("type") == "input_json_delta":
-                block["_input_buffer"] = block.get("_input_buffer", "") + (delta.get("partial_json") or "")
+                partial_json = (
+                    delta.get("partial_json")
+                    if isinstance(delta.get("partial_json"), str)
+                    else ""
+                )
+                block["_input_buffer"] = block.get("_input_buffer", "") + partial_json
         elif event_type == "content_block_stop":
             index = payload.get("index")
-            if isinstance(index, int) and index < len(self.blocks):
+            if (
+                isinstance(index, bool)
+                or not isinstance(index, int)
+                or index not in self.open_block_indexes
+            ):
+                raise self.incomplete_response(
+                    "a content block stopped without a matching start event"
+                )
+            try:
                 _finalize_tool_block(self.blocks[index])
+            except Exception as exc:
+                raise self.incomplete_response(str(exc) or "tool arguments were malformed", "parse") from exc
+            self.open_block_indexes.remove(index)
         elif event_type == "message_delta":
             delta = payload.get("delta") or {}
             self.stop_reason = delta.get("stop_reason") or self.stop_reason
             _apply_usage_snapshot(self.usage, payload.get("usage") or {})
         elif event_type == "message_stop":
+            if self.open_block_indexes:
+                raise self.incomplete_response(
+                    "message_stop arrived while content blocks were still open"
+                )
             self.stopped = True
 
     def finalize(self) -> dict[str, Any]:
-        for block in self.blocks:
-            _finalize_tool_block(block)
-        content = [_strip_internal_block(block) for block in self.blocks if block and block.get("type") in ("text", "tool_use")]
-        if not self.stopped and not content:
-            raise _create_anthropic_transport_error(
-                "Anthropic SSE stream ended before message_stop.",
-                self.attempt,
-                self.had_assistant_output,
-                self.had_tool_use,
-                "eof",
-            )
-        stop_reason = self.stop_reason
         if not self.stopped:
-            stop_reason = stop_reason or "stream_incomplete"
+            raise self.incomplete_response("the transport reached EOF before message_stop")
+        content = [
+            _strip_internal_block(block)
+            for block in self.blocks
+            if block and block.get("type") in ("text", "thinking", "tool_use")
+        ]
         return {
             "content": content,
             "usage": self.usage,
             "model": self.model,
-            "stopReason": stop_reason,
-            "incomplete": not self.stopped,
+            "stopReason": self.stop_reason,
         }
 
 
@@ -156,6 +230,15 @@ def normalizeProviderBlocks(blocks: Any) -> list[dict[str, Any]]:
         if block.get("type") == "text" and isinstance(block.get("text"), str):
             normalized.append({"type": "text", "text": block["text"]})
             continue
+        if block.get("type") == "thinking" and isinstance(block.get("thinking"), str):
+            normalized.append(
+                {
+                    "type": "thinking",
+                    "thinking": block["thinking"],
+                    "signature": block.get("signature") if isinstance(block.get("signature"), str) else None,
+                }
+            )
+            continue
         if block.get("type") == "tool_use" and isinstance(block.get("id"), str) and isinstance(block.get("name"), str):
             normalized.append({"type": "tool_use", "id": block["id"], "name": block["name"], "input": block.get("input") if isinstance(block.get("input"), dict) else {}})
             continue
@@ -170,10 +253,23 @@ def _safe_json_parse(value: str) -> Any:
         return None
 
 def _internal_block_from_anthropic(block: dict[str, Any]) -> dict[str, Any]:
-    if block.get("type") == "tool_use":
+    if (
+        block.get("type") == "tool_use"
+        and isinstance(block.get("id"), str)
+        and isinstance(block.get("name"), str)
+    ):
         return {"type": "tool_use", "id": block.get("id"), "name": block.get("name"), "input": block.get("input") or {}, "_input_buffer": ""}
     if block.get("type") == "text":
-        return {"type": "text", "text": block.get("text") or ""}
+        return {
+            "type": "text",
+            "text": block.get("text") if isinstance(block.get("text"), str) else "",
+        }
+    if block.get("type") == "thinking":
+        return {
+            "type": "thinking",
+            "thinking": block.get("thinking") if isinstance(block.get("thinking"), str) else "",
+            "signature": block.get("signature") if isinstance(block.get("signature"), str) else None,
+        }
     return {"type": "ignored"}
 
 def _finalize_tool_block(
@@ -184,23 +280,11 @@ def _finalize_tool_block(
     raw = str(block["_input_buffer"])
     try:
         parsed = json.loads(raw)
-    except Exception:
-        _mark_invalid_tool_input(block, raw)
-        return
+    except Exception as exc:
+        raise ValueError("Tool arguments ended before a complete JSON object was received.") from exc
     if not isinstance(parsed, dict):
-        _mark_invalid_tool_input(block, raw)
-        return
+        raise ValueError("Tool arguments must be a top-level JSON object.")
     block["input"] = parsed
-
-
-def _mark_invalid_tool_input(block: dict[str, Any], raw: str) -> None:
-    preview = raw[:500]
-    if len(raw) > 500:
-        preview += "...<truncated>"
-    block["input"] = {}
-    block["_agent_core_invalid_tool_input"] = True
-    block["_agent_core_invalid_tool_input_error"] = "The provider streamed incomplete or invalid JSON for this tool call. Do not assume the tool ran; retry the tool call with complete valid JSON arguments."
-    block["_agent_core_invalid_tool_input_raw_preview"] = preview
 
 def _create_anthropic_protocol_error(rawMessage: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, streamEventType: str | None = None) -> Any:
     return createProviderRequestError(
@@ -237,8 +321,4 @@ def _create_anthropic_transport_error(rawMessage: str, attempt: int, hadAssistan
 
 
 def _strip_internal_block(block: dict[str, Any]) -> dict[str, Any]:
-    stripped = {key: value for key, value in block.items() if not key.startswith("_")}
-    if block.get("_agent_core_invalid_tool_input"):
-        stripped["_agent_core_invalid_tool_input"] = True
-        stripped["_agent_core_invalid_tool_input_error"] = block.get("_agent_core_invalid_tool_input_error")
-    return stripped
+    return {key: value for key, value in block.items() if not key.startswith("_")}

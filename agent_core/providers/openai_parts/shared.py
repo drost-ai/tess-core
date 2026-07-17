@@ -11,6 +11,7 @@ from ..._utils import compact_json, get_value, maybe_await, to_async_iter
 from ...provider_errors import (
     canRetryProviderFailure,
     createProviderFailureRecord,
+    createProviderIncompleteResponseError,
     createProviderRequestError,
     normalizeUnknownProviderFailure,
     providerRetryDelayMs,

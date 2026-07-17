@@ -155,6 +155,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 'event: message_start\ndata: {"type":"message_start","message":{"model":"claude-sonnet-4-6","usage":{"input_tokens":10,"cache_creation_input_tokens":2,"cache_read_input_tokens":4}}}',
                 'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
                 'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi "}}',
+                'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}',
                 'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"Read","input":{}}}',
                 'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"file_path\\":"}}',
                 'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\"a.txt\\"}"}}',
@@ -203,12 +204,10 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 'event: message_stop\ndata: {"type":"message_stop"}',
             ]
         )
-        bad_tool_response = testing.normalizeAnthropicSseResponse(bad_tool_raw, request)
-        self.assertEqual(bad_tool_response["content"][0]["type"], "tool_use")
-        self.assertEqual(bad_tool_response["content"][0]["id"], "toolu_bad")
-        self.assertEqual(bad_tool_response["content"][0]["input"], {})
-        self.assertTrue(bad_tool_response["content"][0]["_agent_core_invalid_tool_input"])
-        self.assertIn("invalid JSON", bad_tool_response["content"][0]["_agent_core_invalid_tool_input_error"])
+        with self.assertRaises(core.ProviderIncompleteResponseError) as bad_tool_ctx:
+            testing.normalizeAnthropicSseResponse(bad_tool_raw, request)
+        self.assertEqual(bad_tool_ctx.exception.record["category"], "protocol")
+        self.assertEqual(bad_tool_ctx.exception.details["partialToolArgumentBytes"], 12)
 
     def test_anthropic_count_tokens_measurement_and_fallback(self):
         root, home, workspace, previous = self.temp_context()
@@ -303,6 +302,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 response_can_finish.wait(1)
                 for frame in (
                     'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}\n\n',
+                    'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
                     'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}\n\n',
                     'event: message_stop\ndata: {"type":"message_stop"}\n\n',
                 ):
@@ -384,6 +384,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
                     'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"one "}}\n\n',
                     'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"two "}}\n\n',
                     'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"three"}}\n\n',
+                    'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
                     'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}\n\n',
                     'event: message_stop\ndata: {"type":"message_stop"}\n\n',
                 ]

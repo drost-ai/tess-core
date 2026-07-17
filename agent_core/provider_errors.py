@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 import re
 from typing import Any
@@ -17,6 +18,13 @@ class ProviderRequestError(Exception):
         super().__init__(record["message"])
         self.name = "ProviderRequestError"
         self.record = record
+
+
+class ProviderIncompleteResponseError(ProviderRequestError):
+    def __init__(self, record: dict[str, Any], details: dict[str, Any]):
+        super().__init__(record)
+        self.name = "ProviderIncompleteResponseError"
+        self.details = details
 
 
 def isProviderRequestError(error: BaseException | Any) -> bool:
@@ -47,6 +55,43 @@ def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: An
 
 def createProviderRequestError(record: dict[str, Any]) -> ProviderRequestError:
     return ProviderRequestError(record)
+
+
+def createProviderIncompleteResponseError(
+    args: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> ProviderIncompleteResponseError:
+    args = {**(args or {}), **kwargs}
+    details = {
+        "provider": args["provider"],
+        "mode": _bound_diagnostic_text(str(args["mode"]), 64),
+        "phase": args["phase"],
+        "expectedTerminal": _bound_diagnostic_text(str(args["expectedTerminal"]), 128),
+        "reason": _bound_diagnostic_text(str(args["reason"]), 256),
+        "partialAssistantBytes": _bound_diagnostic_count(args.get("partialAssistantBytes")),
+        "partialToolArgumentBytes": _bound_diagnostic_count(args.get("partialToolArgumentBytes")),
+        "openItems": _bound_diagnostic_count(args.get("openItems")),
+    }
+    raw_message = (
+        f"Incomplete {details['provider']}/{details['mode']} response: {details['reason']}. "
+        f"Expected {details['expectedTerminal']}. "
+        "Partial bytes: "
+        f"assistant={details['partialAssistantBytes']}, "
+        f"tool_arguments={details['partialToolArgumentBytes']}; "
+        f"open_items={details['openItems']}."
+    )
+    record = createProviderFailureRecord(
+        provider=args["provider"],
+        providerLabel=args["providerLabel"],
+        phase=args["phase"],
+        category="protocol",
+        retryable=not bool(args["hadAssistantOutput"]) and not bool(args["hadToolUse"]),
+        attempt=args["attempt"],
+        hadAssistantOutput=args["hadAssistantOutput"],
+        hadToolUse=args["hadToolUse"],
+        rawMessage=raw_message,
+    )
+    return ProviderIncompleteResponseError(record, details)
 
 
 def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestError:
@@ -84,6 +129,22 @@ def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: An
 def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestError:
     args = {**(args or {}), **kwargs}
     error = args["error"]
+    if isinstance(error, ProviderIncompleteResponseError):
+        record = dict(error.record)
+        record.update(
+            {
+                "phase": record.get("phase") or args["phase"],
+                "attempt": args["attempt"],
+                "hadAssistantOutput": args["hadAssistantOutput"],
+                "hadToolUse": args["hadToolUse"],
+                "retryable": not bool(args["hadAssistantOutput"]) and not bool(args["hadToolUse"]),
+                "streamEventType": record.get("streamEventType") or args.get("streamEventType"),
+            }
+        )
+        return ProviderIncompleteResponseError(
+            record,
+            {**error.details, "phase": record["phase"]},
+        )
     if isinstance(error, ProviderRequestError):
         record = dict(error.record)
         record.update(
@@ -160,6 +221,24 @@ def fallbackEligibleProviderFailure(error: Any) -> bool:
 
 def providerRetryDelayMs(attempt: int) -> int:
     return (350 if attempt <= 1 else 700) + random.randint(0, 119)
+
+
+def _bound_diagnostic_text(value: str, max_length: int) -> str:
+    normalized = re.sub(r"[\r\n\t]+", " ", value).strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[: max_length - 1]}…"
+
+
+def _bound_diagnostic_count(value: Any) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        return 0
+    return min(9_007_199_254_740_991, int(value))
 
 
 def _format_provider_failure_message(args: dict[str, Any]) -> str:

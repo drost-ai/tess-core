@@ -81,8 +81,8 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
             return AsyncChunks(
                 [
                     {"choices": [{"delta": {"reasoning_content": "Need the file."}, "finish_reason": None}]},
-                    {"choices": [{"delta": {"tool_calls": [{"index": "not-a-number", "id": "call_edge", "function": {"name": "Re", "arguments": "not-json"}}]}, "finish_reason": None}]},
-                    {"choices": [{"delta": {"tool_calls": [{"function": {"name": "Read"}}, {"index": 1, "id": 123, "function": {"name": {}, "arguments": {"path": "ignored"}}}]}, "finish_reason": "tool_calls"}], "usage": {"prompt_tokens": 9, "completion_tokens": 3}},
+                    {"choices": [{"delta": {"tool_calls": [{"index": "not-a-number", "id": "call_edge", "function": {"name": "Re", "arguments": '{"path":"a.txt"}'}}]}, "finish_reason": None}]},
+                    {"choices": [{"delta": {"tool_calls": [{"function": {"name": "Read"}}]}, "finish_reason": "tool_calls"}], "usage": {"prompt_tokens": 9, "completion_tokens": 3}},
                 ]
             )
 
@@ -97,7 +97,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
                 }
             )
         )
-        self.assertEqual(response["content"], [{"type": "tool_use", "id": "call_edge", "name": "Read", "input": {}, "provider_metadata": {"reasoning_content": "Need the file."}}])
+        self.assertEqual(response["content"], [{"type": "tool_use", "id": "call_edge", "name": "Read", "input": {"path": "a.txt"}, "provider_metadata": {"reasoning_content": "Need the file."}}])
         self.assertEqual(response["usage"], {"input_tokens": 9, "output_tokens": 3})
         self.assertEqual(response["stopReason"], "tool_calls")
 

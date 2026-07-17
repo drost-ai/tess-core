@@ -18,10 +18,35 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         emitted_text = ""
         emitted_tool_ids: set[str] = set()
         pending_tool_calls: dict[int, dict[str, str]] = {}
+        observed_choice_indexes: set[int] = set()
+        terminal_choice_indexes: set[int] = set()
         reasoning_content = ""
         runtime = args.get("runtime") or {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
+
+        def incomplete_response(reason: str) -> Any:
+            return createProviderIncompleteResponseError(
+                provider="openai",
+                providerLabel=provider_label,
+                mode="chat_completions",
+                phase=phase,
+                expectedTerminal="a recognized finish_reason for every selected choice",
+                reason=reason,
+                attempt=attempt,
+                hadAssistantOutput=had_output,
+                hadToolUse=had_tool_use,
+                partialAssistantBytes=len(f"{reasoning_content}{emitted_text}".encode("utf-8")),
+                partialToolArgumentBytes=sum(
+                    len(item.get("arguments", "").encode("utf-8"))
+                    for item in pending_tool_calls.values()
+                ),
+                openItems=max(
+                    len(pending_tool_calls),
+                    len(observed_choice_indexes - terminal_choice_indexes),
+                ),
+            )
+
         try:
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
             _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
@@ -75,7 +100,16 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": "chat.completion.chunk", "model": args["request"]["model"], "payload": chunk})
                 _apply_chat_completion_usage(usage, get_value(chunk, "usage"))
-                for choice in get_value(chunk, "choices", []) or []:
+                raw_choices = get_value(chunk, "choices", [])
+                choices = raw_choices if isinstance(raw_choices, list) else []
+                for choice_position, choice in enumerate(choices):
+                    raw_choice_index = get_value(choice, "index")
+                    choice_index = (
+                        raw_choice_index
+                        if isinstance(raw_choice_index, int) and not isinstance(raw_choice_index, bool)
+                        else choice_position
+                    )
+                    observed_choice_indexes.add(choice_index)
                     delta = get_value(choice, "delta", {}) or {}
                     content_delta = get_value(delta, "content", "")
                     if isinstance(content_delta, str) and content_delta:
@@ -87,7 +121,8 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     reasoning_delta = get_value(delta, "reasoning_content", "")
                     if isinstance(reasoning_delta, str) and reasoning_delta:
                         reasoning_content += reasoning_delta
-                    tool_calls = get_value(delta, "tool_calls", []) or []
+                    raw_tool_calls = get_value(delta, "tool_calls", [])
+                    tool_calls = raw_tool_calls if isinstance(raw_tool_calls, list) else []
                     for default_index, tool_call in enumerate(tool_calls):
                         raw_index = get_value(tool_call, "index")
                         index = raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) else default_index
@@ -104,12 +139,47 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                             pending["arguments"] += fn_arguments
                     finish_value = get_value(choice, "finish_reason", "")
                     finish = finish_value if isinstance(finish_value, str) else ""
+                    if finish and finish not in {"stop", "length", "tool_calls", "function_call", "content_filter"}:
+                        raise incomplete_response(
+                            f"choice {choice_index} ended with unrecognized finish_reason {finish}"
+                        )
                     if finish in ("tool_calls", "function_call"):
-                        had_tool_use = _emit_pending_chat_tool_calls(blocks, pending_tool_calls, emitted_tool_ids, reasoning_content) or had_tool_use
+                        try:
+                            had_tool_use = (
+                                _emit_pending_chat_tool_calls(
+                                    blocks,
+                                    pending_tool_calls,
+                                    emitted_tool_ids,
+                                    reasoning_content,
+                                )
+                                or had_tool_use
+                            )
+                        except Exception as exc:
+                            raise incomplete_response(str(exc) or "tool-call assembly failed") from exc
+                        if not had_tool_use:
+                            raise incomplete_response(
+                                f"choice {choice_index} declared tool_calls without a complete tool call"
+                            )
                         stop_reason = "tool_calls"
+                        terminal_choice_indexes.add(choice_index)
                     elif finish:
-                        stop_reason = finish
-            had_tool_use = _emit_pending_chat_tool_calls(blocks, pending_tool_calls, emitted_tool_ids, reasoning_content) or had_tool_use
+                        if pending_tool_calls:
+                            raise incomplete_response(
+                                f"choice {choice_index} ended while tool-call fragments remained open"
+                            )
+                        stop_reason = "max_output_tokens" if finish == "length" else finish
+                        terminal_choice_indexes.add(choice_index)
+            if not observed_choice_indexes:
+                raise incomplete_response("the stream ended without a selected choice")
+            unterminated = sorted(observed_choice_indexes - terminal_choice_indexes)
+            if unterminated:
+                joined = ", ".join(str(index) for index in unterminated)
+                raise incomplete_response(
+                    f"the stream ended before choices {joined} reached a terminal state"
+                )
+            if pending_tool_calls:
+                raise incomplete_response("the stream ended with unfinished tool-call fragments")
+            phase = "response_complete"
             if attempt > 1:
                 _emit(runtime, "provider.recovered", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
             return {"content": blocks, "usage": usage, "model": args["request"]["model"], "stopReason": stop_reason}

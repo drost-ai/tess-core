@@ -4,7 +4,7 @@ from tests.support.agent_core_case import *
 
 
 class AnthropicProviderStreamingTests(AgentCoreTestCase):
-    def test_anthropic_streaming_eof_before_message_stop_returns_usable_partial_content(self):
+    def test_anthropic_streaming_eof_before_message_stop_rejects_partial_content(self):
         calls = {"count": 0}
 
         class TruncatedStreamingAnthropicHandler(http.server.BaseHTTPRequestHandler):
@@ -30,30 +30,30 @@ class AnthropicProviderStreamingTests(AgentCoreTestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            response = run(
-                core.sendAnthropicMessagesRequest(
-                    {
-                        "config": {
-                            "provider": "anthropic",
-                            "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
-                            "apiKey": "test-key",
-                            "customHeaders": {},
-                        },
-                        "request": {
-                            "model": "claude-sonnet-4-6",
-                            "system": "s",
-                            "messages": [{"role": "user", "content": "Hello"}],
-                            "tools": [],
-                        },
-                        "runtime": {"includePartialMessages": True},
-                        "maxAttempts": 2,
-                        "streamIdleTimeoutMs": 2000,
-                    }
+            with self.assertRaises(core.ProviderIncompleteResponseError) as raised:
+                run(
+                    core.sendAnthropicMessagesRequest(
+                        {
+                            "config": {
+                                "provider": "anthropic",
+                                "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1",
+                                "apiKey": "test-key",
+                                "customHeaders": {},
+                            },
+                            "request": {
+                                "model": "claude-sonnet-4-6",
+                                "system": "s",
+                                "messages": [{"role": "user", "content": "Hello"}],
+                                "tools": [],
+                            },
+                            "runtime": {"includePartialMessages": True},
+                            "maxAttempts": 2,
+                            "streamIdleTimeoutMs": 2000,
+                        }
+                    )
                 )
-            )
-            self.assertEqual(response["content"], [{"type": "text", "text": "partial ans"}])
-            self.assertEqual(response["stopReason"], "stream_incomplete")
-            self.assertTrue(response["incomplete"])
+            self.assertEqual(raised.exception.details["partialAssistantBytes"], 11)
+            self.assertFalse(raised.exception.record["retryable"])
             self.assertEqual(calls["count"], 1)
         finally:
             server.shutdown()
