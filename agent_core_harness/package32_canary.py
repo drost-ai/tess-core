@@ -388,7 +388,7 @@ def _request(model: str, system: str, messages: list[dict[str, Any]]) -> dict[st
 
 
 def _stable_prefix() -> str:
-    return " ".join(f"cache-prefix-{index:04d}" for index in range(1_536))
+    return " ".join(f"cache-prefix-{index:04d}" for index in range(768))
 
 
 def _base_messages() -> list[dict[str, Any]]:
