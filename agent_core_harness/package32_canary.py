@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import asyncio
 import hashlib
 import json
@@ -15,7 +14,10 @@ from agent_core.provider_prompt_cache import (
 )
 from agent_core.prompt_cache_state import readPromptCacheState
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
-from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesEnvelope
+from agent_core.providers.anthropic_parts.payloads import (
+    buildAnthropicHeaders,
+    buildAnthropicMessagesEnvelope,
+)
 from agent_core.providers.anthropic_parts.request import sendAnthropicMessagesRequest
 from agent_core.runtime_paths import resolveRuntimePaths
 from agent_core.storage import ensureBaseLayout
@@ -190,6 +192,7 @@ async def _run_canary(
             "stablePrefixOverMinimum": True,
             "jsonCreationThenRead": True,
             "movingBoundaries": True,
+            "diagnosticsBetaSingle": True,
             "diagnosticsImmediateSuccessor": True,
             "resumeContinuity": True,
             "forkIsolation": True,
@@ -231,6 +234,24 @@ async def _interaction(
     plan = envelope["cachePlan"]
     if countAnthropicCacheControls(envelope["payload"]) != plan["usedBreakpoints"]:
         raise Package32CanaryError("placement_mismatch", "Local cache placement count changed.")
+    headers = buildAnthropicHeaders(
+        config,
+        {"stream": stream},
+        envelope.get("headerFeatures"),
+    )
+    beta_tokens = [
+        token.strip().lower()
+        for token in headers.get("anthropic-beta", "").split(",")
+        if token.strip()
+    ]
+    previous_id = (previous or {}).get("response", {}).get("id")
+    sent_previous_id = (
+        envelope.get("payload", {}).get("diagnostics", {}).get("previous_message_id")
+    )
+    diagnostics_requested = bool(envelope.get("diagnostics", {}).get("requested"))
+    diagnostic_lineage_valid = (
+        not diagnostics_requested or sent_previous_id == previous_id
+    )
     response = await send_request(config, prepared, stream)
     await commitProviderPromptCacheObservation(response)
     current = (await readPromptCacheState({"sessionId": session_id, "paths": paths})).get("state")
@@ -260,6 +281,13 @@ async def _interaction(
         "providerReason": (response.get("promptCache") or {}).get("providerDiagnosis"),
         "localReason": current.get("diagnosis", {}).get("localReason"),
         "revision": current.get("revision"),
+        "diagnosticBetaSingle": (
+            sum(name.lower() == "anthropic-beta" for name in headers) == 1
+            and beta_tokens.count("cache-diagnosis-2026-04-07") == 1
+            if diagnostics_requested
+            else None
+        ),
+        "diagnosticLineageValid": diagnostic_lineage_valid,
         "previousDiagnosticIdSent": bool(envelope.get("diagnostics", {}).get("previousMessageIdSent")),
         "cacheWriteUsd": round(float(cost["cacheWriteUsd"]), 6),
         "estimatedCostUsd": round(float(cost["totalUsd"]), 6),
@@ -298,6 +326,10 @@ def _assert_json_trace(records: list[dict[str, Any]]) -> None:
         record["previousDiagnosticIdSent"] for record in records[1:]
     ):
         raise Package32CanaryError("diagnostics_lineage_invalid", "C3 immediate-successor lineage failed.")
+    if not all(record["diagnosticLineageValid"] for record in records):
+        raise Package32CanaryError("diagnostics_lineage_invalid", "C3 used a non-successor diagnostic id.")
+    if not all(record["diagnosticBetaSingle"] for record in records):
+        raise Package32CanaryError("diagnostics_beta_invalid", "C3 beta emission was not singular.")
 
 
 def _assert_stream_trace(records: list[dict[str, Any]]) -> None:
@@ -444,33 +476,9 @@ async def _live_measure(config: dict[str, Any], request: dict[str, Any]) -> dict
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m agent_core_harness.package32_canary")
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--runtime-home", required=True)
-    parser.add_argument("--evidence-file", required=True)
-    parser.add_argument("--max-cost-usd", required=True, type=float)
-    parser.add_argument("--authorize-paid-provider-calls", action="store_true")
-    args = parser.parse_args(argv)
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    try:
-        evidence = runPackage32AnthropicCanary(
-            {
-                "authorized": args.authorize_paid_provider_calls,
-                "model": args.model,
-                "runtimeHome": args.runtime_home,
-                "evidenceFile": args.evidence_file,
-                "maxCostUsd": args.max_cost_usd,
-                "apiKey": api_key,
-            }
-        )
-    except Package32CanaryError as error:
-        print(f"package32 canary refused: {error.code}")
-        return 2
-    except BaseException:
-        print("package32 canary failed: internal_failure")
-        return 3
-    print(json.dumps({"status": evidence["status"], "actualCostUsd": evidence["actualCostUsd"]}))
-    return 0
+    from .package32_canary_cli import runPackage32CanaryCli
+
+    return runPackage32CanaryCli(runPackage32AnthropicCanary, argv)
 
 
 if __name__ == "__main__":

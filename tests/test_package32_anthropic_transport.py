@@ -195,6 +195,24 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
             second = run(anthropic_request_module.sendAnthropicMessagesRequest(
                 {"config": compatible, "request": base_request, "runtime": {}, "maxAttempts": 1}
             ))
+        self.assertEqual(
+            [capture["url"] for capture in captures],
+            [
+                "https://api.kimi.com/coding/v1/messages?beta=true",
+                "https://compatible.example/v1/messages?beta=true",
+            ],
+        )
+        self.assertEqual(
+            captures[0]["headers"]["anthropic-beta"],
+            "claude-code-20250219,fine-grained-tool-streaming-2025-05-14",
+        )
+        self.assertEqual(
+            captures[1]["headers"]["anthropic-beta"],
+            (
+                "fine-grained-tool-streaming-2025-05-14,"
+                "cache-diagnosis-2026-04-07,cache-scope-future-token"
+            ),
+        )
         self.assertEqual(countAnthropicCacheControls(captures[0]["payload"]), 0)
         self.assertNotIn("diagnostics", captures[0]["payload"])
         self.assertEqual(countAnthropicCacheControls(captures[1]["payload"]), 1)
@@ -203,10 +221,167 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         self.assertIn("cache-scope-future-token", captures[1]["headers"]["anthropic-beta"])
         self.assertFalse(first["usage"]["cache_creation_ttl_detail_complete"])
         self.assertFalse(second["usage"]["cache_creation_ttl_detail_complete"])
+        self.assertNotIn("unknown_provider_usage", second["usage"])
+        self.assertNotIn("unknown_response_field", second)
+        pricing = estimateUsageCost(second["usage"], "claude-sonnet-4-6")
+        self.assertEqual(pricing["cacheWriteUsd"], 0.000375)
+        self.assertEqual(pricing["totalUsd"], 0.000435)
+        self.assertTrue(pricing["cacheWriteEstimated"])
+
+    def test_loopback_compatibility_capture_c5_uses_real_http_wire(self):
+        captures = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                captures.append(
+                    {
+                        "path": self.path,
+                        "headers": {
+                            key.lower(): value for key, value in self.headers.items()
+                        },
+                        "payload": json.loads(
+                            self.rfile.read(length).decode("utf-8")
+                        ),
+                    }
+                )
+                body = json.dumps(
+                    {
+                        "model": "compatible-model",
+                        "content": [{"type": "text", "text": "ok"}],
+                        "stop_reason": "end_turn",
+                        "usage": {
+                            "input_tokens": 10,
+                            "output_tokens": 2,
+                            "cache_creation_input_tokens": 100,
+                            "unknown_provider_usage": 999,
+                        },
+                        "unknown_response_field": {"future": True},
+                    }
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base_url = f"http://127.0.0.1:{server.server_address[1]}/v1"
+            request = {
+                "model": "compatible-model",
+                "system": "stable",
+                "messages": [
+                    {"role": "user", "content": "one"},
+                    {"role": "user", "content": "volatile"},
+                ],
+                "tools": [
+                    {
+                        "name": "Read",
+                        "description": "read",
+                        "input_schema": {"type": "object"},
+                    }
+                ],
+                "maxOutputTokens": 100,
+            }
+            suppressed = {
+                **self._config(),
+                "model": "compatible-model",
+                "anthropicBaseUrl": base_url,
+                "promptCache": {
+                    "enabled": True,
+                    "mode": "auto",
+                    "compatibility": "claude_code",
+                    "providerDiagnostics": True,
+                },
+            }
+            explicit = {
+                **self._config(),
+                "model": "compatible-model",
+                "anthropicBaseUrl": base_url,
+                "customHeaders": {
+                    "Anthropic-Beta": (
+                        "cache-diagnosis-2026-04-07,"
+                        "cache-scope-future-token"
+                    )
+                },
+                "promptCache": {
+                    "enabled": True,
+                    "mode": "explicit",
+                    "explicit": True,
+                    "compatibility": "compatible",
+                    "providerDiagnostics": True,
+                    "scope": "global",
+                },
+            }
+            first = run(
+                anthropic_request_module.sendAnthropicMessagesRequest(
+                    {
+                        "config": suppressed,
+                        "request": request,
+                        "runtime": {},
+                        "maxAttempts": 1,
+                    }
+                )
+            )
+            second = run(
+                anthropic_request_module.sendAnthropicMessagesRequest(
+                    {
+                        "config": explicit,
+                        "request": request,
+                        "runtime": {},
+                        "maxAttempts": 1,
+                    }
+                )
+            )
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
         self.assertEqual(
-            estimateUsageCost(second["usage"], "claude-sonnet-4-6")["cacheWriteUsd"],
-            0.000375,
+            [capture["path"] for capture in captures],
+            ["/v1/messages?beta=true"] * 2,
         )
+        for capture in captures:
+            self.assertEqual(capture["headers"].get("x-api-key"), "test-key")
+            self.assertEqual(capture["headers"].get("content-type"), "application/json")
+            self.assertEqual(capture["headers"].get("anthropic-version"), "2023-06-01")
+        self.assertEqual(
+            captures[0]["headers"]["anthropic-beta"],
+            "fine-grained-tool-streaming-2025-05-14",
+        )
+        self.assertEqual(
+            captures[1]["headers"]["anthropic-beta"],
+            (
+                "fine-grained-tool-streaming-2025-05-14,"
+                "cache-diagnosis-2026-04-07,cache-scope-future-token"
+            ),
+        )
+        self.assertEqual(countAnthropicCacheControls(captures[0]["payload"]), 0)
+        self.assertNotIn("diagnostics", captures[0]["payload"])
+        self.assertEqual(countAnthropicCacheControls(captures[1]["payload"]), 1)
+        self.assertNotIn("diagnostics", captures[1]["payload"])
+        self.assertNotIn("global", json.dumps(captures[1]["payload"]))
+        self.assertIn(
+            "cache-scope-future-token",
+            captures[1]["headers"]["anthropic-beta"],
+        )
+        self.assertFalse(first["usage"]["cache_creation_ttl_detail_complete"])
+        self.assertFalse(second["usage"]["cache_creation_ttl_detail_complete"])
+        self.assertEqual(first["usage"]["cache_creation_input_tokens"], 100)
+        self.assertEqual(second["usage"]["cache_creation_input_tokens"], 100)
+        self.assertNotIn("unknown_provider_usage", second["usage"])
+        self.assertNotIn("unknown_response_field", second)
+        pricing = estimateUsageCost(second["usage"], "claude-sonnet-4-6")
+        self.assertEqual(pricing["cacheWriteUsd"], 0.000375)
+        self.assertEqual(pricing["totalUsd"], 0.000435)
+        self.assertTrue(pricing["cacheWriteEstimated"])
 
 
 if __name__ == "__main__":

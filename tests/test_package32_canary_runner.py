@@ -9,7 +9,7 @@ from pathlib import Path
 from tests.support.agent_core_case import AgentCoreTestCase
 
 from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesEnvelope
-from agent_core_harness.package32_canary import runPackage32AnthropicCanary
+from agent_core_harness.package32_canary import main, runPackage32AnthropicCanary
 from agent_core_harness.package32_canary_evidence import (
     Package32CanaryError,
     preparePrivateCanaryRuntime,
@@ -18,6 +18,26 @@ from agent_core_harness.package32_canary_evidence import (
 
 
 class Package32CanaryRunnerTests(AgentCoreTestCase):
+    def test_cli_refuses_unauthorized_run_before_creating_paths(self):
+        with tempfile.TemporaryDirectory() as root:
+            runtime_home = Path(root, "runtime")
+            evidence_file = Path(root, "evidence", "canary.json")
+            result = main(
+                [
+                    "--model",
+                    "claude-opus-4-8",
+                    "--runtime-home",
+                    str(runtime_home),
+                    "--evidence-file",
+                    str(evidence_file),
+                    "--max-cost-usd",
+                    "1.25",
+                ]
+            )
+            self.assertEqual(result, 2)
+            self.assertFalse(runtime_home.exists())
+            self.assertFalse(evidence_file.exists())
+
     def test_authorized_fake_trace_writes_private_content_free_evidence(self):
         with tempfile.TemporaryDirectory() as root:
             base = Path(root)
