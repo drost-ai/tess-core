@@ -22,6 +22,7 @@ from ..storage import (
     daemonLogsDir,
     daemonPidPath,
     daemonSocketPath,
+    daemonStatePath,
     ensureBaseLayout,
     getDaemonDir,
     getStateRoot,
@@ -30,5 +31,6 @@ from ..storage import (
     readLastDaemonEventCursor,
     rotateDaemonEventsIfOversized,
     saveDaemonState,
+    withRecordTransaction,
 )
 from ..task_supervisor import createTaskSupervisor

@@ -7,35 +7,44 @@ async def _publish_daemon_event(subscribers: dict[str, dict[str, Any]], payload:
     for subscriber_id, subscriber in list(subscribers.items()):
         if not _event_matches_session(payload, subscriber.get("sessionId")):
             continue
-        writer = subscriber.get("writer")
-        if not writer:
+        target = subscriber.get("peer") or subscriber.get("writer")
+        if not target:
             stale.append(subscriber_id)
             continue
         try:
-            await _write_daemon_event(writer, payload)
+            await _write_daemon_event(target, payload)
         except Exception:
             stale.append(subscriber_id)
     for subscriber_id in stale:
         subscriber = subscribers.pop(subscriber_id, None)
-        writer = subscriber.get("writer") if subscriber else None
-        if writer:
-            writer.close()
+        target = (subscriber.get("peer") or subscriber.get("writer")) if subscriber else None
+        closer = getattr(target, "close", None)
+        if callable(closer):
+            result = closer()
+            if hasattr(result, "__await__"):
+                await result
 
-async def _write_daemon_event(writer: asyncio.StreamWriter, record: dict[str, Any]) -> None:
-    writer.write(json.dumps({"type": "event", "record": record}, ensure_ascii=False).encode("utf-8") + b"\n")
-    await writer.drain()
+async def _write_daemon_event(target: Any, record: dict[str, Any]) -> None:
+    payload = {"type": "event", "record": record}
+    sender = getattr(target, "sendEvent", None)
+    if callable(sender):
+        if not await sender(payload):
+            raise RuntimeError("Daemon peer rejected an event frame.")
+        return
+    target.write(encodeDaemonFrame(payload, DAEMON_MAX_RESPONSE_FRAME_BYTES))
+    await target.drain()
 
-async def _replay_daemon_events(writer: asyncio.StreamWriter, session_id: str | None, after_cursor: int) -> None:
+async def _replay_daemon_events(target: Any, session_id: str | None, after_cursor: int) -> None:
     for record in await loadDaemonEvents():
         cursor = record.get("cursor")
         if not isinstance(cursor, int) or cursor <= after_cursor:
             continue
         if not _event_matches_session(record, session_id):
             continue
-        await _write_daemon_event(writer, record)
+        await _write_daemon_event(target, record)
 
 async def _send_bootstrap_snapshots(
-    writer: asyncio.StreamWriter,
+    target: Any,
     supervisor: dict[str, Any],
     session_id: str | None,
     next_cursor: Callable[[], int],
@@ -47,11 +56,11 @@ async def _send_bootstrap_snapshots(
     monitor_snapshot = bootstrap.get("monitorSnapshot") if isinstance(bootstrap, dict) else None
     collaboration_snapshot = bootstrap.get("collaborationSnapshot") if isinstance(bootstrap, dict) else None
     if task_snapshot:
-        await _write_daemon_event(writer, _make_snapshot_record(next_cursor(), session_id, "task.snapshot", _task_snapshot_payload(session_id, task_snapshot)))
+        await _write_daemon_event(target, _make_snapshot_record(next_cursor(), session_id, "task.snapshot", _task_snapshot_payload(session_id, task_snapshot)))
     if monitor_snapshot:
-        await _write_daemon_event(writer, _make_snapshot_record(next_cursor(), session_id, "monitor.snapshot", _monitor_snapshot_payload(session_id, monitor_snapshot)))
+        await _write_daemon_event(target, _make_snapshot_record(next_cursor(), session_id, "monitor.snapshot", _monitor_snapshot_payload(session_id, monitor_snapshot)))
     if collaboration_snapshot:
-        await _write_daemon_event(writer, _make_snapshot_record(next_cursor(), session_id, "collaboration.snapshot", _collaboration_snapshot_payload(collaboration_snapshot)))
+        await _write_daemon_event(target, _make_snapshot_record(next_cursor(), session_id, "collaboration.snapshot", _collaboration_snapshot_payload(collaboration_snapshot)))
 
 def _make_snapshot_record(cursor: int, session_id: str, event: str, data: dict[str, Any]) -> dict[str, Any]:
     return {"cursor": cursor, "createdAt": now_iso(), "sessionId": session_id, "event": event, "data": data}

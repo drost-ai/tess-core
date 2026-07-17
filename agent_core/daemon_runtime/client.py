@@ -2,21 +2,77 @@ from __future__ import annotations
 
 from .shared import *
 
-def _create_daemon_client(socket_path: str) -> dict[str, Any]:
+
+def _create_daemon_client(
+    socket_path: str,
+    state: dict[str, Any],
+    auth: dict[str, str],
+) -> dict[str, Any]:
+    guard = threading.Lock()
+    active_writers: dict[str, asyncio.StreamWriter] = {}
+    subscriptions: set[Callable[[], None]] = set()
+    pending_count = 0
+    closed = False
+
     async def request(method: str, params: dict[str, Any] | None = None) -> Any:
-        reader, writer = await asyncio.open_unix_connection(socket_path)
+        nonlocal pending_count
         request_id = str(uuid.uuid4())
-        writer.write(json.dumps({"id": request_id, "method": method, "params": params or {}}, ensure_ascii=False).encode("utf-8") + b"\n")
-        await writer.drain()
-        line = await reader.readline()
-        writer.close()
-        await writer.wait_closed()
-        if not line:
-            raise RuntimeError("Daemon closed the connection without a response.")
-        response = json.loads(line.decode("utf-8"))
-        if not response.get("ok"):
-            raise RuntimeError(response.get("error") or "Daemon request failed.")
-        return response.get("result")
+        with guard:
+            if closed:
+                raise RuntimeError("Daemon connection is closed")
+            if pending_count >= DAEMON_MAX_PENDING_PER_CLIENT:
+                raise DaemonProtocolError(
+                    "daemon.pending_limit",
+                    f"Daemon client already has {DAEMON_MAX_PENDING_PER_CLIENT} pending requests.",
+                )
+            pending_count += 1
+        writer: asyncio.StreamWriter | None = None
+        try:
+            reader, writer = await openAuthenticatedDaemonConnection(
+                socket_path,
+                auth["token"],
+                state["epoch"],
+            )
+            with guard:
+                if closed:
+                    raise RuntimeError("Daemon connection is closed")
+                active_writers[request_id] = writer
+            writer.write(
+                encodeDaemonFrame(
+                    {"id": request_id, "method": method, "params": params or {}},
+                    DAEMON_MAX_REQUEST_FRAME_BYTES,
+                )
+            )
+            await writer.drain()
+            decoder = DaemonLineDecoder(DAEMON_MAX_RESPONSE_FRAME_BYTES)
+            timeout_ms = resolveDaemonRpcTimeoutMs()
+            try:
+                response = await readOneDaemonFrame(
+                    reader,
+                    decoder,
+                    timeout_ms / 1000,
+                )
+            except asyncio.TimeoutError as error:
+                raise DaemonProtocolError(
+                    "daemon.request_timeout",
+                    f"Daemon RPC '{method}' timed out after {timeout_ms}ms.",
+                ) from error
+            if not isDaemonResponse(response) or response.get("id") != request_id:
+                raise DaemonProtocolError(
+                    "daemon.frame_malformed",
+                    "Daemon returned an invalid response envelope.",
+                )
+            if not response["ok"]:
+                raise RuntimeError(response.get("error") or "Daemon request failed.")
+            return response.get("result")
+        finally:
+            with guard:
+                active_writers.pop(request_id, None)
+                pending_count = max(0, pending_count - 1)
+            if writer:
+                writer.close()
+                with contextlib.suppress(Exception):
+                    await writer.wait_closed()
 
     async def start_background_command(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
         return await request("startBackgroundCommand", {**(task_args or {}), **task_kwargs})
@@ -48,20 +104,61 @@ def _create_daemon_client(socket_path: str) -> dict[str, Any]:
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
         return await request("getBootstrap", {"sessionId": session_id})
 
+    def is_closed() -> bool:
+        with guard:
+            return closed
+
     def subscribe(*args: Any, **kwargs: Any):
         listener, session_id, after_cursor = _normalise_subscribe_args(args, kwargs)
         stop_event = threading.Event()
         ready_event = threading.Event()
         socket_ref: dict[str, socket.socket] = {}
+        error_ref: dict[str, BaseException] = {}
         thread = threading.Thread(
             target=_subscription_worker,
-            args=(socket_path, listener, session_id, after_cursor, stop_event, ready_event, socket_ref),
+            args=(
+                socket_path,
+                auth["token"],
+                state["epoch"],
+                listener,
+                session_id,
+                after_cursor,
+                stop_event,
+                ready_event,
+                socket_ref,
+                error_ref,
+            ),
             daemon=True,
         )
         thread.start()
-        ready_event.wait(timeout=1)
+        ready = ready_event.wait(timeout=(resolveDaemonAuthTimeoutMs() / 1000) + 1)
+        if not ready:
+            stop_event.set()
+            sock = socket_ref.get("socket")
+            if sock:
+                with contextlib.suppress(Exception):
+                    sock.close()
+            thread.join(timeout=1)
+            raise DaemonProtocolError(
+                "daemon.request_timeout",
+                "Daemon subscription acknowledgement timed out.",
+            )
+        worker_error = error_ref.get("error")
+        if worker_error:
+            stop_event.set()
+            sock = socket_ref.get("socket")
+            if sock:
+                with contextlib.suppress(Exception):
+                    sock.close()
+            thread.join(timeout=1)
+            raise worker_error
+        unsubscribed = False
 
         def unsubscribe() -> None:
+            nonlocal unsubscribed
+            if unsubscribed:
+                return
+            unsubscribed = True
             stop_event.set()
             sock = socket_ref.get("socket")
             if sock:
@@ -71,17 +168,42 @@ def _create_daemon_client(socket_path: str) -> dict[str, Any]:
                     sock.close()
             if thread is not threading.current_thread() and thread.is_alive():
                 thread.join(timeout=1)
+            with guard:
+                subscriptions.discard(unsubscribe)
 
+        with guard:
+            was_closed = closed
+            if not was_closed:
+                subscriptions.add(unsubscribe)
+        if was_closed:
+            unsubscribe()
+            raise RuntimeError("Daemon connection is closed")
         return unsubscribe
 
     async def close() -> None:
-        return None
+        nonlocal closed
+        with guard:
+            if closed:
+                return
+            closed = True
+            unsubscribers = list(subscriptions)
+            subscriptions.clear()
+            writers = list(active_writers.values())
+        for unsubscribe in unsubscribers:
+            unsubscribe()
+        for writer in writers:
+            writer.close()
+        for writer in writers:
+            with contextlib.suppress(Exception):
+                await writer.wait_closed()
 
     return {
         "_daemonClient": True,
         "_socketPath": socket_path,
+        "_isClosed": is_closed,
         "_request": request,
         "close": close,
+        "shutdown": lambda: request("shutdown", {}),
         "addAttachment": lambda _session_id=None: (lambda: None),
         "getBootstrap": get_bootstrap,
         "getStatus": lambda: request("getStatus", {}),
@@ -98,54 +220,77 @@ def _create_daemon_client(socket_path: str) -> dict[str, Any]:
         "getState": lambda: {"remote": True, "socketPath": socket_path},
     }
 
+
 def _subscription_worker(
     socket_path: str,
+    token: str,
+    epoch: str,
     listener: Callable[[dict[str, Any]], Any],
     session_id: str | None,
     after_cursor: int | None,
     stop_event: threading.Event,
     ready_event: threading.Event,
     socket_ref: dict[str, socket.socket],
+    error_ref: dict[str, BaseException],
 ) -> None:
-    buffer = b""
+    decoder = DaemonLineDecoder(DAEMON_MAX_RESPONSE_FRAME_BYTES)
     saw_ack = False
     sock: socket.socket | None = None
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         socket_ref["socket"] = sock
+        sock.settimeout(resolveDaemonAuthTimeoutMs() / 1000)
         sock.connect(socket_path)
-        sock.settimeout(0.2)
+        sock.sendall(
+            encodeDaemonFrame(
+                {"type": "auth", "protocolVersion": DAEMON_PROTOCOL_VERSION, "token": token},
+                DAEMON_MAX_REQUEST_FRAME_BYTES,
+            )
+        )
+        auth_response = _recv_one_sync(sock, decoder, stop_event)
+        if not isDaemonAuthResponse(auth_response) or auth_response.get("epoch") != epoch:
+            raise DaemonProtocolError("daemon.auth_failed", "Daemon authentication failed.")
         params: dict[str, Any] = {}
         if session_id:
             params["sessionId"] = session_id
         if isinstance(after_cursor, int):
             params["afterCursor"] = after_cursor
-        request = {"id": str(uuid.uuid4()), "method": "subscribe", "params": params}
-        sock.sendall(json.dumps(request, ensure_ascii=False).encode("utf-8") + b"\n")
+        request_id = str(uuid.uuid4())
+        sock.sendall(
+            encodeDaemonFrame(
+                {"id": request_id, "method": "subscribe", "params": params},
+                DAEMON_MAX_REQUEST_FRAME_BYTES,
+            )
+        )
+        sock.settimeout(0.2)
         while not stop_event.is_set():
             try:
-                chunk = sock.recv(4096)
+                chunk = sock.recv(64 * 1024)
             except socket.timeout:
                 continue
-            except OSError:
-                break
             if not chunk:
+                if not saw_ack:
+                    raise RuntimeError(
+                        "Daemon connection closed before the subscription acknowledgement."
+                    )
                 break
-            buffer += chunk
-            while b"\n" in buffer:
-                line, buffer = buffer.split(b"\n", 1)
-                if not line:
+            for frame in decoder.push(chunk):
+                if not frame:
                     continue
-                payload = json.loads(line.decode("utf-8"))
-                if not saw_ack and payload.get("ok") is True and "result" in payload:
+                payload = parseDaemonFrame(frame)
+                if not saw_ack:
+                    if not isDaemonResponse(payload) or payload.get("id") != request_id or not payload.get("ok"):
+                        raise DaemonProtocolError(
+                            "daemon.frame_malformed",
+                            "Daemon returned an invalid subscription response.",
+                        )
                     saw_ack = True
                     ready_event.set()
                     continue
-                saw_ack = True
-                ready_event.set()
-                record = payload.get("record") if payload.get("type") == "event" and isinstance(payload.get("record"), dict) else payload
-                _invoke_subscription_listener(listener, record)
-    except Exception:
+                if isDaemonEventMessage(payload):
+                    _invoke_subscription_listener(listener, payload["record"])
+    except Exception as error:
+        error_ref["error"] = error
         ready_event.set()
     finally:
         ready_event.set()
@@ -153,6 +298,27 @@ def _subscription_worker(
             with contextlib.suppress(Exception):
                 sock.close()
         socket_ref.pop("socket", None)
+
+
+def _recv_one_sync(
+    sock: socket.socket,
+    decoder: DaemonLineDecoder,
+    stop_event: threading.Event,
+) -> Any:
+    while not stop_event.is_set():
+        chunk = sock.recv(64 * 1024)
+        if not chunk:
+            raise RuntimeError("Daemon connection closed before a frame arrived.")
+        frames = decoder.push(chunk)
+        if frames:
+            if len(frames) != 1 or decoder.bufferedBytes:
+                raise DaemonProtocolError(
+                    "daemon.frame_malformed",
+                    "Daemon sent data beyond its authentication response.",
+                )
+            return parseDaemonFrame(frames[0])
+    raise RuntimeError("Daemon subscription stopped during authentication.")
+
 
 def _invoke_subscription_listener(listener: Callable[[dict[str, Any]], Any], payload: dict[str, Any]) -> None:
     try:
@@ -162,6 +328,7 @@ def _invoke_subscription_listener(listener: Callable[[dict[str, Any]], Any], pay
     except Exception:
         pass
 
+
 def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:
     if isinstance(value, str) and value:
         return value
@@ -170,7 +337,11 @@ def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:
         return maybe if isinstance(maybe, str) and maybe else None
     return None
 
-def _normalise_subscribe_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> tuple[Callable[[dict[str, Any]], Any], str | None, int | None]:
+
+def _normalise_subscribe_args(
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> tuple[Callable[[dict[str, Any]], Any], str | None, int | None]:
     listener: Any = kwargs.get("listener")
     session_ref: Any = kwargs.get("sessionId") or kwargs.get("session_id")
     if args and callable(args[0]):
@@ -185,4 +356,5 @@ def _normalise_subscribe_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> 
     after_cursor = kwargs.get("afterCursor") or kwargs.get("after_cursor")
     if isinstance(session_ref, dict):
         after_cursor = session_ref.get("afterCursor") or session_ref.get("after_cursor") or after_cursor
-    return listener, _subscription_session_id(session_ref), int(after_cursor) if isinstance(after_cursor, (int, float, str)) and str(after_cursor).isdigit() else None
+    cursor = int(after_cursor) if isinstance(after_cursor, (int, float, str)) and str(after_cursor).isdigit() else None
+    return listener, _subscription_session_id(session_ref), cursor

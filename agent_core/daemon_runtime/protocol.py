@@ -1,73 +1,215 @@
 from __future__ import annotations
 
+import hmac
+
 from .shared import *
 
-async def _handle_daemon_request(supervisor: dict[str, Any], shutdown: asyncio.Event, request: dict[str, Any]) -> dict[str, Any]:
-    request_id = None
-    try:
-        request_id = request.get("id")
-        method = _normalise_daemon_method(request.get("method"))
-        params = request.get("params") or {}
-        result: Any
-        if method == "getState":
-            result = supervisor["getState"]()
-        elif method == "getStatus":
-            result = await loadDaemonState()
-        elif method == "getBootstrap":
-            result = await supervisor["getBootstrap"](params.get("sessionId"))
-        elif method == "listTasks":
-            result = await supervisor["listTasks"](params.get("sessionId"))
-        elif method == "inspectTask":
-            result = await supervisor["inspectTask"](params.get("taskId"))
-        elif method == "readTaskOutput":
-            result = await supervisor["readTaskOutput"](params.get("taskId"), params.get("tailBytes"))
-        elif method == "stopTask":
-            result = await supervisor["stopTask"](params.get("taskId"))
-        elif method == "retryTask":
-            result = await supervisor["retryTask"](params.get("taskId"))
-        elif method == "startBackgroundCommand":
-            result = await supervisor["startBackgroundCommand"](params)
-        elif method == "startMainSessionTask":
-            result = await supervisor["startMainSessionTask"](params)
-        elif method == "startSubagentTask":
-            result = await supervisor["startSubagentTask"](params)
-        elif method == "startHealthCheck":
-            result = await supervisor["startHealthCheck"](params)
-        elif method == "shutdown":
-            result = {"status": "shutting_down"}
-            shutdown.set()
-            return {"id": request_id, "ok": True, "result": result, "shutdown": True}
-        else:
-            raise RuntimeError(f"Unknown daemon method: {method}")
-        return {"id": request_id, "ok": True, "result": result}
-    except Exception as exc:
-        return {"id": request_id, "ok": False, "error": str(exc)}
 
-def _normalise_daemon_method(method: Any) -> str | None:
-    aliases = {
-        "daemon.status": "getState",
-        "daemon.getStatus": "getStatus",
-        "daemon.getState": "getState",
-        "daemon.getBootstrap": "getBootstrap",
-        "daemon.listTasks": "listTasks",
-        "daemon.inspectTask": "inspectTask",
-        "daemon.readTaskOutput": "readTaskOutput",
-        "daemon.stopTask": "stopTask",
-        "daemon.retryTask": "retryTask",
-        "daemon.startBackgroundCommand": "startBackgroundCommand",
-        "daemon.startMainSessionTask": "startMainSessionTask",
-        "daemon.startSubagentTask": "startSubagentTask",
-        "daemon.startHealthCheck": "startHealthCheck",
-        "daemon.subscribe": "subscribe",
-        "daemon.shutdown": "shutdown",
-        "tasks.list": "listTasks",
-        "tasks.inspect": "inspectTask",
-        "tasks.read_output": "readTaskOutput",
-        "tasks.stop": "stopTask",
-        "tasks.retry": "retryTask",
-        "tasks.start_background_command": "startBackgroundCommand",
-        "tasks.start_main_session": "startMainSessionTask",
-        "tasks.start_subagent": "startSubagentTask",
-        "tasks.start_health_check": "startHealthCheck",
-    }
-    return aliases.get(method, method if isinstance(method, str) else None)
+DAEMON_PROTOCOL_VERSION = 2
+DAEMON_MAX_REQUEST_FRAME_BYTES = 1024 * 1024
+DAEMON_MAX_RESPONSE_FRAME_BYTES = 2 * 1024 * 1024
+DAEMON_MAX_PENDING_PER_CLIENT = 128
+DAEMON_MAX_PENDING_GLOBAL = 1_024
+DAEMON_AUTH_TIMEOUT_MS = 2_000
+DAEMON_RPC_TIMEOUT_MS = 30_000
+DAEMON_MAX_REQUEST_IDS_PER_CONNECTION = 65_536
+DAEMON_MAX_REQUEST_ID_BYTES = 128
+_MAX_PROTOCOL_DIAGNOSTIC_BYTES = 512
+
+
+class DaemonProtocolError(RuntimeError):
+    def __init__(self, code: str, message: str):
+        super().__init__(boundedProtocolDiagnostic(message))
+        self.name = "DaemonProtocolError"
+        self.code = code
+
+
+class DaemonLineDecoder:
+    """Incremental newline framing with a ceiling enforced before parsing."""
+
+    def __init__(self, maxFrameBytes: int):
+        if isinstance(maxFrameBytes, bool) or not isinstance(maxFrameBytes, int) or maxFrameBytes < 1:
+            raise ValueError("Daemon frame limit must be a positive integer.")
+        self.maxFrameBytes = maxFrameBytes
+        self._buffer = bytearray()
+
+    @property
+    def bufferedBytes(self) -> int:
+        return len(self._buffer)
+
+    def push(self, value: bytes | bytearray | memoryview | str) -> list[bytes]:
+        incoming = value.encode("utf-8") if isinstance(value, str) else bytes(value)
+        frames: list[bytes] = []
+        offset = 0
+        while True:
+            newline = incoming.find(b"\n", offset)
+            if newline < 0:
+                break
+            self._append(incoming[offset:newline])
+            frames.append(bytes(self._buffer))
+            self.reset()
+            offset = newline + 1
+        self._append(incoming[offset:])
+        return frames
+
+    def reset(self) -> None:
+        self._buffer.clear()
+
+    def _append(self, chunk: bytes) -> None:
+        if not chunk:
+            return
+        if len(self._buffer) + len(chunk) > self.maxFrameBytes:
+            self.reset()
+            raise DaemonProtocolError(
+                "daemon.frame_oversized",
+                f"Daemon frame exceeded {self.maxFrameBytes} bytes.",
+            )
+        self._buffer.extend(chunk)
+
+
+def encodeDaemonFrame(value: Any, maxFrameBytes: int) -> bytes:
+    try:
+        payload = json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except Exception as error:
+        raise DaemonProtocolError(
+            "daemon.frame_malformed",
+            f"Daemon payload could not be serialized: {error}",
+        ) from error
+    if len(payload) > maxFrameBytes:
+        raise DaemonProtocolError(
+            "daemon.frame_oversized",
+            f"Daemon frame exceeded {maxFrameBytes} bytes.",
+        )
+    return payload + b"\n"
+
+
+def parseDaemonFrame(frame: bytes | bytearray | memoryview) -> Any:
+    try:
+        text = bytes(frame).decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise DaemonProtocolError(
+            "daemon.frame_malformed",
+            "Daemon frame is not valid UTF-8.",
+        ) from error
+    try:
+        return json.loads(text)
+    except Exception as error:
+        raise DaemonProtocolError(
+            "daemon.frame_malformed",
+            f"Daemon frame is not valid JSON: {error}",
+        ) from error
+
+
+def parseDaemonRequest(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise DaemonProtocolError("daemon.frame_malformed", "Daemon request is not an object.")
+    request_id = value.get("id")
+    method = value.get("method")
+    if (
+        not isinstance(request_id, str)
+        or not 1 <= len(request_id.encode("utf-8")) <= DAEMON_MAX_REQUEST_ID_BYTES
+        or not isinstance(method, str)
+        or not method
+    ):
+        raise DaemonProtocolError(
+            "daemon.frame_malformed",
+            "Daemon request envelope is invalid.",
+        )
+    params = value.get("params")
+    if params is not None and not isinstance(params, dict):
+        raise DaemonProtocolError(
+            "daemon.frame_malformed",
+            "Daemon request params are invalid.",
+        )
+    return {"id": request_id, "method": method, "params": params or {}}
+
+
+def isDaemonAuthRequest(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("type") == "auth"
+        and value.get("protocolVersion") == DAEMON_PROTOCOL_VERSION
+        and isinstance(value.get("token"), str)
+    )
+
+
+def isDaemonAuthResponse(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("type") == "auth_ok"
+        and value.get("protocolVersion") == DAEMON_PROTOCOL_VERSION
+        and isinstance(value.get("epoch"), str)
+    )
+
+
+def isDaemonResponse(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("id"), str)
+        and isinstance(value.get("ok"), bool)
+        and (value.get("ok") is True or isinstance(value.get("error"), str))
+    )
+
+
+def isDaemonEventMessage(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("type") == "event"
+        and isinstance(value.get("record"), dict)
+    )
+
+
+def daemonTokensEqual(actual: str, expected: str) -> bool:
+    return hmac.compare_digest(actual.encode("utf-8"), expected.encode("utf-8"))
+
+
+def resolveDaemonRpcTimeoutMs(override: int | None = None) -> int:
+    return _resolve_timeout(
+        override,
+        os.environ.get("AGENT_CORE_DAEMON_RPC_TIMEOUT_MS"),
+        DAEMON_RPC_TIMEOUT_MS,
+        25,
+        300_000,
+    )
+
+
+def resolveDaemonAuthTimeoutMs(override: int | None = None) -> int:
+    return _resolve_timeout(
+        override,
+        os.environ.get("AGENT_CORE_DAEMON_AUTH_TIMEOUT_MS"),
+        DAEMON_AUTH_TIMEOUT_MS,
+        25,
+        30_000,
+    )
+
+
+def boundedProtocolDiagnostic(value: str) -> str:
+    normalized = " ".join(str(value).replace("\t", " ").splitlines()).strip()
+    raw = normalized.encode("utf-8")
+    if len(raw) <= _MAX_PROTOCOL_DIAGNOSTIC_BYTES:
+        return normalized
+    prefix = raw[: _MAX_PROTOCOL_DIAGNOSTIC_BYTES - 3]
+    return prefix.decode("utf-8", errors="ignore") + "…"
+
+
+def _resolve_timeout(
+    override: int | None,
+    environment: str | None,
+    fallback: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    candidate: Any = override
+    if candidate is None and environment:
+        try:
+            candidate = int(environment)
+        except ValueError:
+            candidate = None
+    if isinstance(candidate, int) and not isinstance(candidate, bool):
+        return min(maximum, max(minimum, candidate))
+    return fallback

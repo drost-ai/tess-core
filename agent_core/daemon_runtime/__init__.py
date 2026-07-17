@@ -5,7 +5,17 @@ import sys as _sys
 import types as _types
 from importlib import import_module
 
-_MODULE_NAMES = ['shared', 'events', 'protocol', 'client', 'lifecycle', 'server']
+_MODULE_NAMES = [
+    'shared',
+    'events',
+    'protocol',
+    'security',
+    'transport',
+    'requests',
+    'client',
+    'lifecycle',
+    'server',
+]
 
 _modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
 _namespace = {}

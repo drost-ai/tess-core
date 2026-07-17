@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+from agent_core.daemon_runtime.security import DaemonSecurityError
 
 
 class TaskSupervisorLifecycleTests(AgentCoreTestCase):
@@ -172,7 +173,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_daemon_connection_cleans_stale_state_and_socket(self):
+    def test_daemon_connection_rejects_purpose_confused_stale_socket(self):
         root, home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
@@ -180,9 +181,11 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             Path(socket_path).parent.mkdir(parents=True, exist_ok=True)
             Path(socket_path).write_text("stale", encoding="utf-8")
             run(core.saveDaemonState({"pid": 999999999, "socketPath": socket_path, "status": "running"}))
-            self.assertIsNone(run(core.connectTaskSupervisorDaemonClient()))
-            self.assertFalse(Path(socket_path).exists())
-            self.assertIsNone(run(core.loadDaemonState()))
+            with self.assertRaises(DaemonSecurityError) as raised:
+                run(core.connectTaskSupervisorDaemonClient())
+            self.assertEqual(raised.exception.code, "daemon.security_unsafe")
+            self.assertEqual(Path(socket_path).read_text(encoding="utf-8"), "stale")
+            self.assertIsNotNone(run(core.loadDaemonState()))
         finally:
             self.restore_home(root, previous)
 
