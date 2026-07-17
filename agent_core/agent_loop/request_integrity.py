@@ -250,7 +250,8 @@ def _is_unsendable_image_block(block: Any) -> bool:
 
 
 def _image_payload_string(block: dict[str, Any]) -> str:
-    value = block.get("data") or block.get("data_base64") or block.get("base64") or block.get("image_url") or block.get("url")
+    source = block.get("source") if isinstance(block.get("source"), dict) else block
+    value = source.get("data") or source.get("data_base64") or source.get("base64") or block.get("image_url") or block.get("url")
     if isinstance(value, dict):
         value = value.get("url")
     return str(value or "").strip()

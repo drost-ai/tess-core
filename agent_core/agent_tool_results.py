@@ -4,6 +4,12 @@ import inspect
 from typing import Any, Callable
 
 from .tool_result_guard import boundedToolIdentity, guardToolCallResult
+from .tool_attachments import (
+    imageAttachmentEligibility,
+    imageAttachmentToBlock,
+    resolveRuntimeProviderCapabilities,
+)
+from .utf8_bounds import sliceUtf8Prefix
 
 
 async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -69,7 +75,54 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
         "is_error": bool(guarded["result"].get("isError")),
         "content": guarded["result"]["content"],
     }
-    return {**guarded, "blocks": [block]}
+    blocks = [block]
+    capabilities = resolveRuntimeProviderCapabilities(values["config"])
+    for attachment in guarded["result"].get("attachments") or []:
+        if not isinstance(attachment, dict) or attachment.get("type") != "image":
+            continue
+        try:
+            eligibility = imageAttachmentEligibility(
+                capabilities=capabilities,
+                mimeType=attachment["mimeType"],
+                byteLength=attachment["byteLength"],
+            )
+            image_block = imageAttachmentToBlock(attachment) if eligibility["eligible"] else None
+            reason = "missing_attachment_data" if eligibility["eligible"] else eligibility["reason"]
+        except Exception:
+            image_block = None
+            reason = "invalid_attachment_metadata"
+        if not image_block:
+            if callable(emit):
+                emit(
+                    "tool.attachment_dropped",
+                    {
+                        "session_id": values["sessionId"],
+                        "tool_name": tool_name,
+                        "tool_use_id": tool_use["id"],
+                        "type": "image",
+                        "file_path": sliceUtf8Prefix(str(attachment.get("filePath") or ""), 1_024),
+                        "mime_type": attachment.get("mimeType"),
+                        "bytes": attachment.get("byteLength"),
+                        "reason": reason,
+                    },
+                )
+            continue
+        blocks.append(image_block)
+        if callable(emit):
+            emit(
+                "tool.attachment_included",
+                {
+                    "session_id": values["sessionId"],
+                    "tool_name": tool_name,
+                    "tool_use_id": tool_use["id"],
+                    "type": "image",
+                    "file_path": sliceUtf8Prefix(str(attachment.get("filePath") or ""), 1_024),
+                    "mime_type": attachment.get("mimeType"),
+                    "bytes": attachment.get("byteLength"),
+                    "sha256": attachment.get("sha256"),
+                },
+            )
+    return {**guarded, "blocks": blocks}
 
 
 def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any) -> Callable[..., Any]:
@@ -96,6 +149,8 @@ def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any)
             emit=values.get("emit"),
         )
         block = completed["blocks"][0]
+        if len(completed["blocks"]) > 1:
+            block["_additionalBlocks"] = completed["blocks"][1:]
         if completed["result"].get("pause") == "approval":
             block["_pauseMessage"] = (
                 completed["result"].get("content") or ""

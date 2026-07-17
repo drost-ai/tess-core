@@ -156,8 +156,9 @@ def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
             if block.get("type") == "text":
                 out.append({"type": "text", "text": str(block.get("text", ""))})
             elif block.get("type") == "image":
-                data = str(block.get("data") or block.get("data_base64") or block.get("base64") or "").strip()
-                mime_type = str(block.get("mime_type") or block.get("mimeType") or block.get("mime") or "image/jpeg").strip() or "image/jpeg"
+                source = block.get("source") if isinstance(block.get("source"), dict) else block
+                data = str(source.get("data") or source.get("data_base64") or source.get("base64") or "").strip()
+                mime_type = str(source.get("media_type") or source.get("mime_type") or source.get("mimeType") or source.get("mime") or "image/jpeg").strip() or "image/jpeg"
                 if data and _valid_base64_image_payload(data):
                     out.append({"type": "image", "source": {"type": "base64", "media_type": mime_type, "data": data}})
             elif block.get("type") == "tool_use":

@@ -158,6 +158,7 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     agents: dict[str, AgentDefinition]
     providerProfileName: str
     providerProfile: ProviderProfile
+    providerCapabilities: dict[str, Any]
     providerProfiles: dict[str, ProviderProfile]
     compactionProvider: str | None
     compactionModel: str | None

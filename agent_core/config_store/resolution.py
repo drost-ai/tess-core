@@ -311,6 +311,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "providerKind": resolved_provider,
         "providerProfileName": selected_profile["name"],
         "providerProfile": selected_profile,
+        "providerCapabilities": clone(selected_profile.get("capabilities") or {}),
         "providerProfiles": {name: resolveProviderProfile(name, record) for name, record in provider_profiles.items()},
         "compactionProvider": resolved_compaction_provider,
         "compactionProviderProfile": compaction_provider_profile,

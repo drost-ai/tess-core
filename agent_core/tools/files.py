@@ -3,17 +3,21 @@ from __future__ import annotations
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 
-import base64
 import json
 import mimetypes
 import os
 from pathlib import Path
 from typing import Any
 
-from .._utils import pretty_json
+from .._utils import maybe_await, pretty_json
 from ..notebook_payload import shapeNotebookPayload
 from ..payload_cursor import encodePayloadCursor, fingerprintPayloadSource, resolvePayloadCursor
 from ..text_file_window import readTextFileWindow
+from ..tool_attachments import (
+    createImageToolResultAttachment,
+    imageAttachmentEligibility,
+    resolveRuntimeProviderCapabilities,
+)
 from ..tool_payloads import getToolPayloadPolicy, shapeReadPayload, splitToolTextLines
 from .definitions import ToolDefinition
 from .file_change_payloads import (
@@ -30,14 +34,102 @@ def _read_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context)
         ext = Path(file_path).suffix.lower()
+        stat = _inspect_regular_file(file_path)
         if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
-            data = Path(file_path).read_bytes()
-            return {"content": pretty_json({"type": "image", "file": {"filePath": file_path, "base64": base64.b64encode(data).decode(), "mime": mimetypes.guess_type(file_path)[0] or "image/jpeg", "originalSize": len(data)}})}
+            mime_type = mimetypes.guess_type(file_path)[0] or "image/jpeg"
+            capabilities = resolveRuntimeProviderCapabilities(context["config"])
+            eligibility = imageAttachmentEligibility(
+                capabilities=capabilities, mimeType=mime_type, byteLength=stat.st_size
+            )
+            reservation = None
+            reserve = context.get("reserveImageAttachment")
+            if eligibility["eligible"] and callable(reserve):
+                reservation = await maybe_await(
+                    reserve({"mimeType": mime_type, "decodedBytes": stat.st_size})
+                )
+            reservation_rejection = (
+                reservation.get("reason")
+                if isinstance(reservation, dict) and not reservation.get("accepted")
+                else None
+            )
+            acquired = None
+            if eligibility["eligible"] and not reservation_rejection:
+                try:
+                    acquired = _read_regular_file_bounded(
+                        file_path, stat, capabilities["maxImageBytes"], "Image"
+                    )
+                except Exception:
+                    if isinstance(reservation, dict) and reservation.get("accepted"):
+                        reservation["release"]()
+                    raise
+            changed = bool(acquired and acquired["changed"])
+            if changed and isinstance(reservation, dict) and reservation.get("accepted"):
+                reservation["release"]()
+            attachment = None
+            if acquired and not changed:
+                try:
+                    attachment = createImageToolResultAttachment(
+                        filePath=file_path, mimeType=mime_type, buffer=acquired["buffer"]
+                    )
+                except Exception:
+                    if isinstance(reservation, dict) and reservation.get("accepted"):
+                        reservation["release"]()
+                    raise
+            unavailable_reason = (
+                eligibility.get("reason")
+                if not eligibility["eligible"]
+                else reservation_rejection or ("image changed during read" if changed else None)
+            )
+            if unavailable_reason:
+                context.get("outputJson", lambda *_: None)(
+                    "tool.attachment_dropped",
+                    {
+                        "session_id": context["session"]["id"],
+                        "tool_name": "Read",
+                        "type": "image",
+                        "file_path": file_path,
+                        "mime_type": mime_type,
+                        "bytes": stat.st_size,
+                        "reason": unavailable_reason,
+                    },
+                )
+            result: ToolResult = {
+                "content": pretty_json(
+                    {
+                        "type": "image",
+                        "file": {
+                            "filePath": file_path,
+                            "mime": mime_type,
+                            "bytes": stat.st_size,
+                            **({"sha256": attachment["sha256"]} if attachment else {}),
+                            "attached": bool(attachment),
+                            "rawBytesInlined": False,
+                            **({"reason": unavailable_reason} if unavailable_reason else {}),
+                            **({"changedDuringRead": True} if changed else {}),
+                        },
+                    }
+                )
+            }
+            if attachment:
+                result["attachments"] = [attachment]
+            return result
         if ext == ".pdf":
-            data = Path(file_path).read_bytes()
-            return {"content": pretty_json({"type": "pdf", "file": {"filePath": file_path, "base64": base64.b64encode(data).decode(), "originalSize": len(data)}})}
+            return {
+                "content": pretty_json(
+                    {
+                        "type": "pdf",
+                        "file": {
+                            "filePath": file_path,
+                            "mime": "application/pdf",
+                            "bytes": stat.st_size,
+                            "rawBytesInlined": False,
+                            "note": "PDF bytes are not returned inline. Render pages or extract text with an external tool if needed.",
+                        },
+                    }
+                )
+            }
         if ext == ".ipynb":
-            before_stat = os.stat(file_path)
+            before_stat = stat
             if before_stat.st_size > 16 * 1024 * 1024:
                 raise ValueError(
                     f"Notebook exceeds the acquisition limit ({before_stat.st_size} > {16 * 1024 * 1024} bytes)."
@@ -87,9 +179,6 @@ def _read_tool() -> ToolDefinition:
                 changedDuringRead=_file_snapshot(after_stat) != snapshot,
             )
             return {"content": pretty_json(payload)}
-        stat = os.stat(file_path)
-        if not Path(file_path).is_file():
-            raise ValueError("Read supports regular files only.")
         with open(file_path, "rb") as handle:
             prefix = handle.read(8_192)
         if _looks_binary(prefix):
@@ -201,6 +290,29 @@ def _read_tool() -> ToolDefinition:
         return {"content": pretty_json(payload)}
 
     return ToolDefinition("Read", _tool_description("Read"), _tool_schema("Read"), handler)
+
+
+def _inspect_regular_file(file_path: str) -> os.stat_result:
+    stat = os.stat(file_path)
+    if not Path(file_path).is_file():
+        raise ValueError("Read supports regular files only.")
+    return stat
+
+
+def _read_regular_file_bounded(
+    file_path: str, before: os.stat_result, max_bytes: int, label: str
+) -> dict[str, Any]:
+    if before.st_size > max_bytes:
+        raise ValueError(f"{label} exceeds the acquisition limit ({before.st_size} > {max_bytes} bytes).")
+    with open(file_path, "rb") as handle:
+        data = handle.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError(f"{label} exceeds the acquisition limit.")
+    after = os.stat(file_path)
+    return {
+        "buffer": data,
+        "changed": len(data) != before.st_size or _file_snapshot(after) != _file_snapshot(before),
+    }
 
 
 def _looks_binary(value: bytes) -> bool:

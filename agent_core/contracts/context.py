@@ -38,5 +38,6 @@ class ToolContext(TypedDict, total=False):
     daemon: dict[str, Any] | None     # task supervisor daemon client surface
     taskSupervisor: dict[str, Any] | None
     abortSignal: Any                  # cancellation signal object
+    reserveImageAttachment: Callable[[dict[str, Any]], Any]
     runSubagent: Callable[..., Any]   # foreground subagent runner callback
     tools: list[Any]

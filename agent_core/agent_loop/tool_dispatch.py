@@ -102,6 +102,7 @@ def _assemble_batch(
     outcomes: list[ToolDispatchOutcome | None],
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
     blocked_by_plan_contract = False
     paused_for_approval = False
     paused_message = ""
@@ -119,12 +120,15 @@ def _assemble_batch(
                 }
             }
         results.append(outcome["result"])
+        blocks.append(outcome["result"])
+        blocks.extend(outcome.get("additionalResults") or [])
         blocked_by_plan_contract = blocked_by_plan_contract or bool(outcome.get("blockedByPlanContract"))
         if outcome.get("pauseMessage") and not paused_for_approval:
             paused_for_approval = True
             paused_message = str(outcome["pauseMessage"])
     return {
         "results": results,
+        "blocks": blocks,
         "blockedByPlanContract": blocked_by_plan_contract,
         "pausedForApproval": paused_for_approval,
         "pausedMessage": paused_message,

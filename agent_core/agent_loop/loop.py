@@ -9,18 +9,27 @@ if _typing.TYPE_CHECKING:
 from .shared import *
 from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
 from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
+from .providers import _emit_provider_response_completed
+from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
 from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
+from ..image_budget import ImageBudgetError as _ImageBudgetError
+from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..hooks import fireToolHooks
 from ..permission_rules import findDispatchDenyRule
 from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
+from ..tool_attachments import (
+    imageAttachmentReservationOrder as _image_attachment_reservation_order,
+    resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
+    stripInMemoryImageData as _strip_in_memory_image_data,
+)
 
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
@@ -34,7 +43,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
-    prompt = args["prompt"]
+    prompt_content, prompt_text = _normalize_agent_prompt(args["prompt"])
     runtime_bindings = args.get("runtime")
     assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
     runtime = materializeAgentExecutionRuntime(runtime_bindings)
@@ -74,6 +83,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
     last_stable_snapshot = copy.deepcopy(session)
+    last_stable_snapshot["messages"] = _strip_in_memory_image_data(last_stable_snapshot.get("messages", []))
 
     def subagent_limit_state(tool_calls: int | None = None) -> dict[str, Any]:
         return {
@@ -118,10 +128,10 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
         await persistSession(session, config)
         await consumeAppendedSubagentReconciliations(session, appended_reconciliations, runtime=runtime)
 
-    if prompt.strip():
-        session.setdefault("messages", []).append({"role": "user", "content": prompt})
+    if prompt_content is not None:
+        session.setdefault("messages", []).append({"role": "user", "content": prompt_content})
         await persistSession(session, config)
-        _safe_emit(runtime, "message.user", {"text": prompt, "session_id": session["id"]})
+        _safe_emit(runtime, "message.user", {"text": prompt_text, "session_id": session["id"]})
 
     usage_totals["turns"] += 1
 
@@ -152,10 +162,19 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                     "baseSystemPrompt": base_system_prompt,
                     "toolRegistry": tool_registry,
                     "activeModel": active_model,
-                    "prompt": prompt,
+                    "prompt": prompt_text,
                     "reactiveAttempt": 0,
                 }
             )
+        except _ImageBudgetError as error:
+            _restore_session_state(session, last_stable_snapshot)
+            await persistSession(session, config)
+            _safe_emit(
+                runtime,
+                "provider.image_budget_rejected",
+                {"session_id": session["id"], "code": error.code, "message": str(error), **error.measurement},
+            )
+            raise
         except Exception as error:
             if _is_turn_abort_error(error, runtime.get("abortSignal")):
                 return await cancel_turn()
@@ -181,7 +200,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                                 "baseSystemPrompt": base_system_prompt,
                                 "toolRegistry": tool_registry,
                                 "activeModel": active_model,
-                                "prompt": prompt,
+                                "prompt": prompt_text,
                                 "reactiveAttempt": int(prepared_request.get("reactiveAttempt") or 0) + 1,
                             }
                         )
@@ -218,6 +237,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
             prepared_request=prepared_request,
             call_index=provider_call_index,
         )
+        session["messages"] = _strip_in_memory_image_data(session["messages"])
         session["messages"].append({"role": "assistant", "content": response["content"]})
         merge_usage(total_usage, response.get("usage") or {})
         _merge_usage_into_session(session, response.get("usage") or {})
@@ -239,6 +259,10 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
         paused_message = ""
         persist_queue = _create_serial_queue()
         tools_by_name = {tool.name: tool for tool in tool_registry}
+        image_budget = _create_image_budget_reservation(
+            _resolve_runtime_provider_capabilities(config), _image_attachment_reservation_order(tool_uses)
+        )
+        tool_priorities = {id(tool_use): index for index, tool_use in enumerate(tool_uses)}
 
         async def persist_tool_session() -> None:
             async def commit() -> None:
@@ -259,6 +283,9 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 "getTools": lambda: runtime.get("tools", []),
                 "daemon": runtime.get("daemon"),
                 "abortSignal": runtime.get("abortSignal"),
+                "reserveImageAttachment": lambda image: image_budget.reserve(
+                    image, tool_priorities.get(id(tool_use))
+                ),
                 "currentToolUseId": tool_use.get("id") if isinstance(tool_use, dict) else None,
                 "parentTurnId": parent_turn_id,
                 "subagentLaunchGroupId": parent_turn_id,
@@ -406,11 +433,16 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 )
 
         async def dispatch_single(tool_use: dict[str, Any]) -> dict[str, Any]:
-            result = await run_single(tool_use)
+            try:
+                result = await run_single(tool_use)
+            finally:
+                await image_budget.complete(tool_priorities.get(id(tool_use), -1))
             pause = result.pop("_pauseMessage", None)
             blocked = bool(result.pop("_blockedByPlanContract", False))
+            additional = result.pop("_additionalBlocks", [])
             return {
                 "result": result,
+                **({"additionalResults": additional} if additional else {}),
                 **({"pauseMessage": pause} if pause else {}),
                 **({"blockedByPlanContract": True} if blocked else {}),
             }
@@ -422,7 +454,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 concurrency_of=lambda tool_use: _resolve_tool_concurrency(tools_by_name.get(tool_use["name"])),
                 run=dispatch_single,
             )
-            tool_results = batch["results"]
+            tool_results = batch["blocks"]
             paused_for_approval = batch["pausedForApproval"]
             paused_message = batch["pausedMessage"]
             _throw_if_turn_cancelled(runtime)
@@ -433,6 +465,8 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
 
         session["messages"].append({"role": "user", "content": [result for result in tool_results if result is not None]})
         await persistSession(session, config)
+        last_stable_snapshot = copy.deepcopy(session)
+        last_stable_snapshot["messages"] = _strip_in_memory_image_data(last_stable_snapshot.get("messages", []))
         if paused_for_approval:
             if paused_message:
                 text_parts.append(paused_message)
@@ -460,41 +494,3 @@ def _invalid_tool_input_message(tool_use: Any) -> str | None:
     if isinstance(message, str) and message.strip():
         return message.strip()
     return "The provider streamed incomplete or invalid JSON for this tool call. Retry the tool call with complete valid JSON arguments."
-
-
-def _emit_provider_response_completed(
-    *,
-    runtime: dict[str, Any],
-    session: dict[str, Any],
-    config: dict[str, Any],
-    response: dict[str, Any],
-    prepared_request: dict[str, Any],
-    call_index: int,
-) -> None:
-    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
-    token_tracking = metadata.get("tokenTracking") if isinstance(metadata.get("tokenTracking"), dict) else {}
-    preflight = token_tracking.get("lastPreflight") if isinstance(token_tracking.get("lastPreflight"), dict) else {}
-    runtime_restore = metadata.get("runtimeRestore") if isinstance(metadata.get("runtimeRestore"), dict) else {}
-    continuity = prepared_request.get("continuity") if isinstance(prepared_request, dict) else {}
-    relief = continuity.get("relief") if isinstance(continuity, dict) and isinstance(continuity.get("relief"), dict) else {}
-    usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
-    _safe_emit(
-        runtime,
-        "provider.response_completed",
-        {
-            "session_id": session.get("id"),
-            "provider": config.get("provider"),
-            "provider_profile": session.get("providerProfileName") or config.get("providerProfileName"),
-            "model": response.get("model"),
-            "call_index": max(1, int(call_index or 1)),
-            "usage": copy.deepcopy(usage),
-            "stop_reason": response.get("stopReason"),
-            "request_estimate_tokens": preflight.get("inputTokens"),
-            "request_estimate_source": preflight.get("source"),
-            "context_relief_mode": runtime_restore.get("lastContextReliefMode") or relief.get("selectedMode"),
-            "context_relief_pressure": runtime_restore.get("lastContextReliefPressureLevel") or relief.get("pressureLevel"),
-            "context_relief_kind": runtime_restore.get("lastContextReliefKind"),
-            "context_relief_projection_hash": runtime_restore.get("lastContextReliefProjectionHash"),
-            "context_relief_escalation_requested": bool(runtime_restore.get("contextReliefEscalationRequested")),
-        },
-    )

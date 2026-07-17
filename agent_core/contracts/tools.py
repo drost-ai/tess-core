@@ -22,6 +22,7 @@ class ToolResult(_ToolResultRequired, total=False):
     meta: dict[str, Any]               # carries "execution" descriptors
     pause: Literal["approval"]         # plan-mode approval pause
     structuredContent: Any             # bounded MCP structured companion
+    attachments: list[dict[str, Any]]  # in-memory current-turn binary attachments
 
 
 # Excerpt strategies emitted by tool_payloads.py shapers.

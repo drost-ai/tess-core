@@ -7,6 +7,8 @@ from .shared import *
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
 from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
 from ..providers.prompt_cache import resolvePromptCachePolicy
+from ..image_budget import assertImageContextCapacity as _assert_image_context_capacity
+from ..tool_attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
 
 async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
@@ -38,7 +40,12 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         if system_context and not _dynamic_context_belongs_in_messages(config):
             system = f"{system}\n\n{request_context['systemContext']}"
         request_context = _normalize_request_context_messages(
-            _inject_system_context_into_messages(request_context, system_context, config=config),
+            _admit_request_images(
+                _inject_system_context_into_messages(request_context, system_context, config=config),
+                config=config,
+                runtime=runtime,
+                session_id=session["id"],
+            ),
             config=config,
             runtime=runtime,
             session_id=session["id"],
@@ -65,6 +72,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         if compacted:
             continue
         budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
+        _assert_image_context_capacity(measurement, budget)
         compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
         request = _apply_provider_token_budget(request, budget, config)
         prepared_request = {"request": request, "continuity": request_context, "reactiveAttempt": reactive_attempt}
@@ -80,6 +88,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "source": measurement["source"],
                 "base_input_tokens": measurement.get("baseInputTokens"),
                 "safety_margin_tokens": measurement.get("safetyMarginTokens"),
+                **_image_measurement_event_fields(measurement),
                 "output_budget_safety_margin_tokens": budget.get("safetyMarginTokens"),
                 "max_context_length": budget.get("maxContextLength"),
                 "compaction_threshold_tokens": compaction_policy.get("compactionThresholdTokens"),
@@ -117,7 +126,12 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     if system_context and not _dynamic_context_belongs_in_messages(config):
         system = f"{system}\n\n{request_context['systemContext']}"
     request_context = _normalize_request_context_messages(
-        _inject_system_context_into_messages(request_context, system_context, config=config),
+        _admit_request_images(
+            _inject_system_context_into_messages(request_context, system_context, config=config),
+            config=config,
+            runtime=runtime,
+            session_id=session["id"],
+        ),
         config=config,
         runtime=runtime,
         session_id=session["id"],
@@ -132,6 +146,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     }
     measurement = await measureRequestInputTokens({"config": config, "request": request, "session": session, "abortSignal": runtime.get("abortSignal")})
     budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
+    _assert_image_context_capacity(measurement, budget)
     recordPreflightTokenMeasurement(session, measurement)
     return {"request": _apply_provider_token_budget(request, budget, config), "continuity": request_context, "reactiveAttempt": reactive_attempt}
 
@@ -163,6 +178,41 @@ def _apply_provider_token_budget(request: dict[str, Any], budget: dict[str, Any]
 
 def _dynamic_context_belongs_in_messages(config: dict[str, Any]) -> bool:
     return bool(resolvePromptCachePolicy(config=config).get("enabled"))
+
+
+def _admit_request_images(
+    request_context: dict[str, Any], *, config: dict[str, Any], runtime: dict[str, Any], session_id: str
+) -> dict[str, Any]:
+    profile = config.get("providerProfile") if isinstance(config.get("providerProfile"), dict) else {}
+    legacy_vision_contract = (
+        isinstance(profile.get("supportsVision"), bool)
+        and not isinstance(config.get("providerCapabilities"), dict)
+        and not isinstance(profile.get("capabilities"), dict)
+    )
+    if legacy_vision_contract:
+        return request_context
+    return {
+        **request_context,
+        "messages": _filter_images_for_provider_capabilities(
+            messages=request_context.get("messages") or [],
+            config=config,
+            emitEvent=lambda event, data: _safe_emit(runtime, event, data),
+            sessionId=session_id,
+        ),
+    }
+
+
+def _image_measurement_event_fields(measurement: dict[str, Any]) -> dict[str, Any]:
+    if not measurement.get("imageCount"):
+        return {}
+    return {
+        "image_count": measurement["imageCount"],
+        "image_decoded_bytes": measurement.get("imageDecodedBytes"),
+        "image_encoded_request_bytes": measurement.get("imageEncodedRequestBytes"),
+        "image_input_tokens": measurement.get("imageInputTokens"),
+        "image_set_fingerprint": measurement.get("imageSetFingerprint"),
+        "image_measurements": measurement.get("imageMeasurements"),
+    }
 
 
 def _inject_system_context_into_messages(

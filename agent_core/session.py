@@ -15,6 +15,7 @@ from .storage import (
     loadSession,
     mutateSessionRecordTransaction,
 )
+from .tool_attachments import stripInMemoryImageData as _strip_in_memory_image_data
 from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
 
@@ -54,6 +55,7 @@ async def persistSession(
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
         return
     snapshot = copy.deepcopy(session)
+    snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
     repair = repairSessionTranscript(snapshot)
     await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
     persist_options = {**(options or {}), **kwargs}
@@ -71,7 +73,9 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     metadata = session.setdefault("metadata", {})
     metadata["providerFailureCount"] = metadata.get("providerFailureCount", 0) + 1
     metadata["lastProviderFailure"] = copy.deepcopy(failure)
-    committed = await _commit_prepared_session_snapshot(copy.deepcopy(session))
+    snapshot = copy.deepcopy(session)
+    snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
+    committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed)
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_failure", "session_id": session["id"], "persisted_at": now_iso(), "failure": failure}])
 
@@ -80,7 +84,9 @@ async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
-    committed = await _commit_prepared_session_snapshot(copy.deepcopy(session))
+    snapshot = copy.deepcopy(session)
+    snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
+    committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed)
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])
 

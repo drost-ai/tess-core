@@ -71,7 +71,7 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "auth": clone(record.get("auth") or {}),
         "headers": clone(record.get("headers") or {}),
         "supportsVision": record.get("supportsVision"),
-        "capabilities": clone(record.get("capabilities") or {}),
+        "capabilities": _resolve_provider_capabilities(record),
         "effortLevel": record.get("effortLevel") or record.get("effort"),
         "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
         "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
@@ -185,7 +185,7 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         },
         "headers": clone(record.get("headers") or {}),
         "supportsVision": record.get("supportsVision"),
-        "capabilities": clone(record.get("capabilities") or {}),
+        "capabilities": _normalize_provider_capabilities(record.get("capabilities")),
         "effortLevel": (record.get("effortLevel") or record.get("effort") or "").strip().lower() or None,
         "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
         "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
@@ -203,6 +203,78 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         "limits": clone(record.get("limits") or {}),
         "description": (record.get("description") or "").strip() or None,
     }
+
+
+def _normalize_provider_capabilities(value: Any) -> dict[str, Any]:
+    capabilities = value if isinstance(value, dict) else {}
+    raw_mime_types = capabilities.get("imageMimeTypes")
+    mime_types: list[str] | None = None
+    if isinstance(raw_mime_types, list):
+        mime_types = []
+        for item in raw_mime_types:
+            normalized = str(item).strip().lower() if isinstance(item, str) else ""
+            if (
+                normalized
+                and re.fullmatch(r"image/[a-z0-9.+-]{1,64}", normalized)
+                and normalized not in mime_types
+            ):
+                mime_types.append(normalized)
+            if len(mime_types) >= 32:
+                break
+    normalized = clone(capabilities)
+    for key in (
+        "imageInput", "imageMimeTypes", "maxImageCount", "maxImageBytes",
+        "maxAggregateImageBytes", "maxEncodedImageRequestBytes",
+    ):
+        normalized.pop(key, None)
+    return {
+        **normalized,
+        **({"imageInput": capabilities["imageInput"]} if isinstance(capabilities.get("imageInput"), bool) else {}),
+        **({"imageMimeTypes": mime_types} if mime_types is not None else {}),
+        **_normalized_capability_limit(capabilities, "maxImageCount", MAX_PROVIDER_IMAGE_INPUT_COUNT),
+        **_normalized_capability_limit(capabilities, "maxImageBytes", MAX_PROVIDER_IMAGE_INPUT_BYTES),
+        **_normalized_capability_limit(
+            capabilities, "maxAggregateImageBytes", MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES
+        ),
+        **_normalized_capability_limit(
+            capabilities, "maxEncodedImageRequestBytes", MAX_PROVIDER_ENCODED_IMAGE_REQUEST_BYTES
+        ),
+    }
+
+
+def _normalized_capability_limit(value: dict[str, Any], key: str, maximum: int) -> dict[str, int]:
+    raw = value.get(key)
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        return {}
+    return {key: min(maximum, int(raw))}
+
+
+def _resolve_provider_capabilities(record: dict[str, Any]) -> dict[str, Any]:
+    explicit = _normalize_provider_capabilities(record.get("capabilities"))
+    return {
+        **explicit,
+        "imageInput": explicit.get("imageInput", _default_image_input_capability(record)),
+        "imageMimeTypes": explicit.get("imageMimeTypes", clone(DEFAULT_IMAGE_INPUT_MIME_TYPES)),
+        "maxImageCount": explicit.get("maxImageCount", DEFAULT_MAX_IMAGE_INPUT_COUNT),
+        "maxImageBytes": explicit.get("maxImageBytes", DEFAULT_MAX_IMAGE_INPUT_BYTES),
+        "maxAggregateImageBytes": explicit.get(
+            "maxAggregateImageBytes", DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES
+        ),
+        "maxEncodedImageRequestBytes": explicit.get(
+            "maxEncodedImageRequestBytes", DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES
+        ),
+    }
+
+
+def _default_image_input_capability(record: dict[str, Any]) -> bool:
+    model = str(record.get("defaultModel") or "").strip().lower()
+    if record.get("kind") == "anthropic":
+        return model.startswith("claude-") and bool(re.search(r"(?:opus|sonnet|haiku)-4-|claude-4", model))
+    if record.get("kind") != "openai":
+        return False
+    base_url = str(record.get("baseUrl") or "").strip().lower()
+    official = not base_url or bool(re.match(r"https://api\.openai\.com(?:/|$)", base_url))
+    return official and model.startswith(("gpt-5", "gpt-4"))
 
 def resolveCompactionProviderProfileBinding(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
     args = {**(args or {}), **kwargs}

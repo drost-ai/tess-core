@@ -227,7 +227,8 @@ def _image_data_url(block: dict[str, Any]) -> str:
         if value.lower().startswith("data:"):
             return value if _valid_image_data_url(value) else ""
         return value
-    data = block.get("data") or block.get("data_base64") or block.get("base64")
+    source = block.get("source") if isinstance(block.get("source"), dict) else block
+    data = source.get("data") or source.get("data_base64") or source.get("base64")
     raw = str(data or "").strip()
     if not raw:
         return ""
@@ -235,7 +236,7 @@ def _image_data_url(block: dict[str, Any]) -> str:
         return raw if _valid_image_data_url(raw) else ""
     if not _valid_base64_image_payload(raw):
         return ""
-    mime_type = str(block.get("mime_type") or block.get("mimeType") or block.get("mime") or "image/jpeg").strip() or "image/jpeg"
+    mime_type = str(source.get("media_type") or source.get("mime_type") or source.get("mimeType") or source.get("mime") or "image/jpeg").strip() or "image/jpeg"
     return f"data:{mime_type};base64,{raw}"
 
 def _valid_image_data_url(value: str) -> bool:

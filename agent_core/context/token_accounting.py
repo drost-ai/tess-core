@@ -6,6 +6,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from .._utils import now_iso
+from ..image_budget import measureAdmittedImageSet as _measure_admitted_image_set
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams
 from ..runtime_secret_provider import resolveProviderConfigSecrets
@@ -20,18 +21,20 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
     config = args["config"]
     request = args["request"]
     measured_at = now_iso()
+    images = _measure_admitted_image_set(request.get("messages") or [], config.get("provider") or "openai")
+    image_fields = _image_measurement_fields(images)
     if config.get("provider") == "anthropic":
         try:
             resolved_config = await resolveProviderConfigSecrets(config)
             input_tokens = await _measure_anthropic_count_tokens(resolved_config, request, float(args.get("timeoutSeconds") or 30))
-            return {"inputTokens": input_tokens, "source": "anthropic_count", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"]}
+            return {"inputTokens": input_tokens, "source": "anthropic_count", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"], **image_fields}
         except Exception:
-            estimate = _estimate_request_tokens(request)
-            return {"inputTokens": estimate, "baseInputTokens": estimate, "source": "legacy_estimate", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"]}
+            estimate = _estimate_request_tokens(request, images["estimatedInputTokens"])
+            return {"inputTokens": estimate, "baseInputTokens": estimate, "source": "legacy_estimate", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"], **image_fields}
     mode = config.get("openaiApiMode", "responses")
-    base = _estimate_openai_request_tokens(request, mode)
+    base = _estimate_openai_request_tokens(request, mode, images["estimatedInputTokens"])
     margin = _compute_codex_safety_margin(args.get("session", {})) if mode == "codex" else 0
-    return {"inputTokens": base + margin, "baseInputTokens": base, "safetyMarginTokens": margin or None, "source": "codex_estimate" if mode == "codex" else "openai_chat_estimate" if mode == "chat_completions" else "openai_responses_estimate", "measuredAt": measured_at, "provider": "openai", "model": request["model"]}
+    return {"inputTokens": base + margin, "baseInputTokens": base, "safetyMarginTokens": margin or None, "source": "codex_estimate" if mode == "codex" else "openai_chat_estimate" if mode == "chat_completions" else "openai_responses_estimate", "measuredAt": measured_at, "provider": "openai", "model": request["model"], **image_fields}
 
 
 def recordPreflightTokenMeasurement(session: dict[str, Any], measurement: dict[str, Any]) -> None:
@@ -64,13 +67,13 @@ def _estimate_text_tokens(value: str) -> int:
     return (len(value) + 3) // 4
 
 
-def _estimate_request_tokens(request: dict[str, Any]) -> int:
+def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 0) -> int:
     total = _estimate_text_tokens(request.get("system", ""))
     for message in request.get("messages", []):
         total += _estimate_text_tokens(json.dumps(_redact_image_payloads(message), ensure_ascii=False))
     if request.get("tools"):
         total += _estimate_text_tokens(json.dumps(request["tools"], ensure_ascii=False))
-    return total
+    return total + image_input_tokens
 
 
 async def _measure_anthropic_count_tokens(config: dict[str, Any], request: dict[str, Any], timeout_seconds: float) -> int:
@@ -95,13 +98,13 @@ async def _measure_anthropic_count_tokens(config: dict[str, Any], request: dict[
     return await asyncio.to_thread(send)
 
 
-def _estimate_openai_request_tokens(request: dict[str, Any], mode: str) -> int:
+def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_input_tokens: int = 0) -> int:
     params = buildChatCompletionsCreateParams(request) if mode == "chat_completions" else buildResponsesCreateParams({"isCodexBackend": mode == "codex", "request": request})
     params.pop("stream", None)
     params.pop("store", None)
     params.pop("max_output_tokens", None)
     params = _redact_image_payloads(params)
-    return _estimate_text_tokens(json.dumps(params, ensure_ascii=False))
+    return _estimate_text_tokens(json.dumps(params, ensure_ascii=False)) + image_input_tokens
 
 
 def _redact_image_payloads(value: Any) -> Any:
@@ -114,14 +117,35 @@ def _redact_image_payloads(value: Any) -> Any:
     for key, item in value.items():
         if is_image and key in {"data", "data_base64", "base64", "image_url", "url"}:
             out[key] = _image_placeholder(value)
+        elif is_image and key == "source" and isinstance(item, dict):
+            out[key] = {
+                child_key: _image_placeholder(value)
+                if child_key in {"data", "data_base64", "base64"}
+                else _redact_image_payloads(child)
+                for child_key, child in item.items()
+            }
         else:
             out[key] = _redact_image_payloads(item)
     return out
 
 
 def _image_placeholder(value: dict[str, Any]) -> str:
-    mime_type = value.get("mime_type") or value.get("mimeType") or value.get("mime") or "image"
+    source = value.get("source") if isinstance(value.get("source"), dict) else value
+    mime_type = source.get("media_type") or source.get("mime_type") or source.get("mimeType") or source.get("mime") or "image"
     return f"<image:{mime_type}>"
+
+
+def _image_measurement_fields(images: dict[str, Any]) -> dict[str, Any]:
+    if not images["count"]:
+        return {}
+    return {
+        "imageCount": images["count"],
+        "imageDecodedBytes": images["decodedBytes"],
+        "imageEncodedRequestBytes": images["encodedRequestBytes"],
+        "imageInputTokens": images["estimatedInputTokens"],
+        "imageSetFingerprint": images["fingerprint"],
+        "imageMeasurements": images["images"],
+    }
 
 
 def _compute_codex_safety_margin(session: dict[str, Any]) -> int:
