@@ -1,4 +1,6 @@
 {
+  "activeTasks": 0,
+  "attachedClients": 1,
   "cwd": "<workspace>",
   "daemonUnavailable": {
     "mode": "in_process_fallback",
@@ -7,5 +9,13 @@
   "mode": "in_process_fallback",
   "pid": "<pid:1>",
   "startedAt": "<timestamp>",
-  "status": "degraded"
+  "status": "degraded",
+  "supervisor": {
+    "activeTasks": 0,
+    "attachedClients": 1,
+    "supervisorId": "<uuid:3>",
+    "watchedSessions": 1
+  },
+  "supervisorId": "<uuid:3>",
+  "watchedSessions": 1
 }

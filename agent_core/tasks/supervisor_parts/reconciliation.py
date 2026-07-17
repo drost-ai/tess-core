@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from .shared import *
+from .launch_reconciliation import (
+    _has_interrupted_launch,
+    _reconcile_interrupted_launch,
+)
 
 
 async def _reconcile_persisted_tasks(
@@ -14,13 +18,24 @@ async def _reconcile_persisted_tasks(
         try:
             if record.get("owner") != "daemon":
                 continue
-            if record.get("kind") not in recoverable_kinds or record.get("status") not in active_statuses:
+            if record.get("kind") not in recoverable_kinds:
                 continue
             task_id = record.get("id") or record.get("taskId")
             if not isinstance(task_id, str) or not task_id:
                 continue
             meta = await readTaskMeta(task_id)
             if not meta:
+                continue
+            if _has_interrupted_launch(record, meta):
+                await _reconcile_interrupted_launch(
+                    task_id,
+                    record,
+                    meta,
+                    supervisor_id,
+                    emit,
+                )
+                continue
+            if record.get("status") not in active_statuses:
                 continue
             process_state = await _classify_persisted_process(task_id, record, meta)
             if process_state["state"] in {"completed", "failed"}:

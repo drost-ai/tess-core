@@ -11,6 +11,8 @@ import sys
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Literal, Mapping
 
+from .process_identity_darwin import inspect_darwin_process as _native_inspect_darwin_process
+
 
 MAX_PROCESS_COMMAND_BYTES = 128 * 1024
 PROCESS_IDENTITY_RETRY_DELAYS_SECONDS = (0.02, 0.06)
@@ -208,7 +210,9 @@ async def _inspect_process_identity_once(pid: int) -> ObservedProcessIdentity:
         return await result if hasattr(result, "__await__") else result  # type: ignore[return-value]
     if sys.platform.startswith("linux"):
         return await asyncio.to_thread(_inspect_linux_process, pid)
-    if sys.platform in {"darwin", "freebsd", "openbsd"}:
+    if sys.platform == "darwin":
+        return await asyncio.to_thread(_inspect_darwin_process, pid)
+    if sys.platform in {"freebsd", "openbsd"}:
         return await asyncio.to_thread(_inspect_ps_process, pid)
     if sys.platform == "win32":
         return await asyncio.to_thread(_inspect_windows_process, pid)
@@ -268,6 +272,27 @@ def _inspect_linux_process(pid: int) -> ObservedProcessIdentity:
         "observedCommandDigest": hashlib.sha256(command).hexdigest(),
         "platform": sys.platform,
     }
+
+
+def _inspect_darwin_process(pid: int) -> ObservedProcessIdentity:
+    """Read stable process identity without invoking a user-configured shell.
+
+    Darwin exposes the process group and start timestamp through
+    ``PROC_PIDTBSDINFO`` and the executable through ``proc_pidpath``.  Besides
+    avoiding locale-sensitive ``ps`` output, this keeps identity inspection
+    available in restricted runtimes that permit inspection of owned processes
+    but deny process-listing executables.
+    """
+
+    try:
+        return _native_inspect_darwin_process(
+            pid,
+            max_command_bytes=MAX_PROCESS_COMMAND_BYTES,
+        )
+    except Exception as exc:
+        raise _classify_inspection_failure(
+            pid, "Darwin process metadata could not be read", exc
+        ) from exc
 
 
 def _inspect_ps_process(pid: int) -> ObservedProcessIdentity:

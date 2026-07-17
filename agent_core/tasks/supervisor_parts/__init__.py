@@ -16,6 +16,7 @@ _MODULE_NAMES = [
     "communication",
     "record_issues",
     "projection",
+    "launch_reconciliation",
     "reconciliation",
     "stop",
 ]

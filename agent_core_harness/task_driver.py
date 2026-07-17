@@ -9,8 +9,14 @@ import sys
 import textwrap
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import agent_core as core
+from agent_core.tasks.health_check_policy import (
+    authorizeHealthCheckSpec,
+    healthCheckSpecDigest,
+    normalizeHealthCheckSpec,
+)
 
 from .model import ScenarioAssertionError
 from .runtime_driver import ensure_session_config
@@ -41,7 +47,8 @@ async def start_background_task(data: dict[str, Any], sandbox: ScenarioSandbox, 
     session, _config = await ensure_session_config(data, sandbox, state)
     client = await ensure_task_client(data, sandbox, state)
     command = _command_from_data(data, sandbox)
-    result = await client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(sandbox.workspace), "title": data.get("title")})
+    with mock.patch.dict(os.environ, _isolated_task_environment(sandbox), clear=True):
+        result = await client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(sandbox.workspace), "title": data.get("title")})
     _remember_task(state, data, result["taskId"])
     state.setdefault("task_driver_results", []).append({"driver": "start_background_task", "status": "passed", "taskId": result["taskId"], "command": command, "result": _json_safe(result)})
     await refresh_task_state(sandbox, state)
@@ -176,10 +183,11 @@ async def run_worker_entrypoint(data: dict[str, Any], sandbox: ScenarioSandbox, 
     meta_path = worker_dir / f"{task_id}.meta.json"
     output_path = worker_dir / f"{task_id}.output.log"
     command = data.get("command") or "printf worker-entrypoint-ok"
-    env = os.environ.copy()
+    env = _isolated_task_environment(sandbox)
+    shell = data.get("shell") or env["SHELL"]
     repo_root = str(Path(__file__).resolve().parents[1])
     env["PYTHONPATH"] = repo_root if not env.get("PYTHONPATH") else f"{repo_root}{os.pathsep}{env['PYTHONPATH']}"
-    proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "agent_core.background_task_runner", task_id, str(meta_path), str(output_path), str(sandbox.workspace), os.environ.get("SHELL") or "/bin/sh", command, cwd=str(sandbox.workspace), env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "agent_core.background_task_runner", task_id, str(meta_path), str(output_path), str(sandbox.workspace), shell, command, cwd=str(sandbox.workspace), env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=float(data.get("timeoutSeconds") or 10))
     meta = _read_json(meta_path)
     failed = proc.returncode != 0 or (isinstance(meta, dict) and (meta.get("status") == "failed" or meta.get("exitCode") not in (0, None)))
@@ -193,7 +201,7 @@ async def run_worker_entrypoint(data: dict[str, Any], sandbox: ScenarioSandbox, 
 
 
 async def start_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
-    session, _config = await ensure_session_config(data, sandbox, state)
+    session, config = await ensure_session_config(data, sandbox, state)
     client = await ensure_task_client(data, sandbox, state)
     payload = {key: value for key, value in data.items() if key not in {"alias", "scriptTemplate"}}
     payload.setdefault("sessionId", session["id"])
@@ -201,7 +209,26 @@ async def start_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, sta
     if data.get("scriptTemplate") == "fail_twice_then_succeed":
         payload["mode"] = "command"
         payload["command"] = _health_recovery_command(sandbox, data.get("counterFile", "health-count.txt"))
-    result = await client["startHealthCheck"](payload)
+    with mock.patch.dict(os.environ, _isolated_task_environment(sandbox), clear=True):
+        spec = await normalizeHealthCheckSpec(payload, str(sandbox.workspace))
+        execution_policy = await authorizeHealthCheckSpec(
+            {
+                "session": session,
+                "config": config,
+                "interactive": False,
+                "outputJson": lambda *_args: None,
+                "persistSession": lambda: None,
+            },
+            spec,
+        )
+        result = await client["startHealthCheck"](
+            {
+                "sessionId": session["id"],
+                "spec": spec,
+                "specDigest": healthCheckSpecDigest(spec),
+                "executionPolicy": execution_policy,
+            }
+        )
     _remember_task(state, data, result["taskId"])
     state.setdefault("task_driver_results", []).append({"driver": "start_health_check", "status": "passed", "taskId": result["taskId"], "result": _json_safe(result)})
     await refresh_task_state(sandbox, state)
@@ -301,8 +328,42 @@ def _command_from_data(data: dict[str, Any], sandbox: ScenarioSandbox) -> str:
     return f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
 
 
+def _isolated_task_environment(sandbox: ScenarioSandbox) -> dict[str, str]:
+    captured = {
+        "HOME", "LANG", "LC_ALL", "LC_CTYPE", "LOGNAME", "PATH", "SHELL",
+        "TEMP", "TERM", "TMP", "TMPDIR", "TZ", "USER",
+    }
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in captured and not key.startswith("LC_")
+    }
+    task_tmp = sandbox.home / "tmp"
+    task_tmp.mkdir(parents=True, exist_ok=True)
+    environment.update(
+        {
+            "HOME": str(sandbox.home),
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "LOGNAME": "agent-core",
+            "PATH": os.defpath,
+            "SHELL": "/bin/sh",
+            "TERM": "dumb",
+            "TMPDIR": str(task_tmp),
+            "TZ": "UTC",
+            "USER": "agent-core",
+        }
+    )
+    return environment
+
+
 def _health_recovery_command(sandbox: ScenarioSandbox, counter_file: str) -> str:
-    counter = sandbox.workspace / counter_file
+    counter = Path(counter_file)
+    if counter.is_absolute() or ".." in counter.parts:
+        raise ScenarioAssertionError(
+            "health recovery counter must stay within the scenario workspace",
+            category="driver",
+        )
     script = textwrap.dedent(
         f"""
         from pathlib import Path

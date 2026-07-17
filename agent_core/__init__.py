@@ -81,6 +81,7 @@ _INTERNAL_MODULES = {
     "payload_cursor",
     "prompt_cache_state",
     "prompt_cache_state_schema",
+    "process_identity_darwin",
     "provider_prompt_cache",
     "search_acquisition",
     "search_result_payload",

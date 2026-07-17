@@ -174,8 +174,8 @@
         "alias": "health",
         "backoffMultiplier": 1,
         "failureThreshold": 3,
-        "intervalMs": 250,
-        "maxIntervalMs": 250,
+        "intervalMs": 1000,
+        "maxIntervalMs": 1000,
         "scriptTemplate": "fail_twice_then_succeed",
         "timeoutMs": 1000,
         "title": "scenario health"

@@ -16,6 +16,8 @@ class NormalizationContext:
         self.continuation_map: dict[str, str] = {}
         self.payload_cursor_map: dict[str, str] = {}
         self.bridge_event_key_map: dict[str, str] = {}
+        self.health_spec_digest_map: dict[str, str] = {}
+        self.health_authority_fingerprint_map: dict[str, str] = {}
         self.pid_map: dict[str, str] = {}
         self.port_map: dict[str, str] = {}
 
@@ -134,6 +136,20 @@ class NormalizationContext:
         normalized = self._replace_labeled_numbers(normalized, r"\b(port)[=:\s]+(\d+)\b", self.port_map, "port")
         normalized = self._replace_localhost_ports(normalized)
         key = key_path[-1].lower() if key_path else ""
+        canonical_key = key.replace("_", "")
+        if _SHA256_PATTERN.fullmatch(normalized):
+            if canonical_key == "specdigest":
+                return self._placeholder(
+                    self.health_spec_digest_map,
+                    normalized,
+                    "health-spec-digest",
+                )
+            if canonical_key == "authorityfingerprint":
+                return self._placeholder(
+                    self.health_authority_fingerprint_map,
+                    normalized,
+                    "health-authority-fingerprint",
+                )
         if key in {"continuation_id", "continuationid", "authorizationcontinuationid"}:
             return self._placeholder(self.continuation_map, normalized, "continuation")
         normalized = _UUID_PATTERN.sub(lambda match: self._placeholder(self.uuid_map, match.group(0), "uuid"), normalized)
@@ -234,6 +250,7 @@ _EMBEDDED_GIT_ROOT_FIELD_PATTERN = re.compile(r'("(?:git_root|gitRoot)":)(?:"[^"
 _EMBEDDED_GIT_BRANCH_FIELD_PATTERN = re.compile(r'("(?:git_branch|gitBranch)":)(?:"[^"]*"|null)')
 _UNITTEST_DURATION_PATTERN = re.compile(r"(Ran \d+ tests? in )\d+(?:\.\d+)?s")
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+_SHA256_PATTERN = re.compile(r"[0-9a-f]{64}", re.I)
 _PAYLOAD_CURSOR_PATTERN = re.compile(r"acp1\.[A-Za-z0-9_-]+")
 _BRIDGE_EVENT_ID_PATTERN = re.compile(
     r"(?P<kind>queued|delivery)-(?P<digest>[0-9a-f]{32,64})",

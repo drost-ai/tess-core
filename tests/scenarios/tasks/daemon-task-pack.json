@@ -148,11 +148,11 @@
         "alias": "health",
         "title": "scenario health",
         "scriptTemplate": "fail_twice_then_succeed",
-        "intervalMs": 250,
+        "intervalMs": 1000,
         "timeoutMs": 1000,
         "failureThreshold": 3,
         "backoffMultiplier": 1,
-        "maxIntervalMs": 250
+        "maxIntervalMs": 1000
       }
     },
     {

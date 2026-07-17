@@ -156,7 +156,8 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
 
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
             command = "python3 - <<'PY'\nfor index in range(220):\n    print(f\"line-{index:03} {'x' * 40}\")\nPY"
-            bash_result = run(bash.handler({"command": command}, context))
+            with mock.patch.dict(os.environ, {"HOME": str(home)}):
+                bash_result = run(bash.handler({"command": command}, context))
             bash_payload = json.loads(bash_result["content"])
             self.assertFalse(bash_result.get("isError"))
             self.assertEqual(bash_payload["stderr"], "")

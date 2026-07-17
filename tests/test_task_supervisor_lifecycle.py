@@ -13,6 +13,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             output_path = workspace / "task-output.log"
             repo_root = Path(__file__).parents[1]
             env = os.environ.copy()
+            env["HOME"] = str(home)
             env["PYTHONPATH"] = str(repo_root) if not env.get("PYTHONPATH") else f"{repo_root}{os.pathsep}{env['PYTHONPATH']}"
             result = subprocess.run(
                 [

@@ -92,6 +92,8 @@ class SandboxTests(AgentCoreTestCase):
                 emit=lambda event, data: events.append((event, data)),
             )
             result = subprocess.run(launch["argv"], cwd=workspace, text=True, capture_output=True, check=False)
+            if result.returncode == 71 and "sandbox_apply: Operation not permitted" in result.stderr:
+                self.skipTest("nested sandbox-exec is denied by the outer test environment")
 
             self.assertNotEqual(result.returncode, 0)
             self.assertTrue((workspace / "inside.txt").exists())

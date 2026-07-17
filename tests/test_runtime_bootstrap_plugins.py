@@ -170,17 +170,18 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             infos = []
             errors = []
             hooks = {"info": lambda title, message: infos.append((title, message)), "error": errors.append}
-            shell_result = run(
-                core.handleSlashCommand(
-                    {
-                        "command": "/hello world",
-                        "session": session,
-                        "config": config,
-                        "hooks": hooks,
-                        "runtimeCommands": plugin_runtime["commands"],
-                    }
+            with mock.patch.dict(os.environ, {"HOME": str(home)}):
+                shell_result = run(
+                    core.handleSlashCommand(
+                        {
+                            "command": "/hello world",
+                            "session": session,
+                            "config": config,
+                            "hooks": hooks,
+                            "runtimeCommands": plugin_runtime["commands"],
+                        }
+                    )
                 )
-            )
             self.assertEqual(shell_result, {"outcome": "handled"})
             self.assertEqual(errors, [])
             self.assertEqual(infos[-1], ("Plugin alpha", f"cmd:world:{session['id']}"))

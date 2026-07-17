@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import signal
+import subprocess
 import sys
 
 from tests.support.agent_core_case import *
@@ -236,6 +237,48 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
                 run(core.signalOwnedProcess(persisted, signal.SIGTERM))
             self.assertEqual(error.exception.code, "process.identity_mismatch")
             kill_group.assert_not_called()
+
+    def test_observed_process_identity_binds_argv_not_only_the_executable(self):
+        children = [
+            subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(30)", marker],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            for marker in ("first-command", "second-command")
+        ]
+        identities = []
+        try:
+            for child, marker in zip(children, ("first-command", "second-command")):
+                identities.append(
+                    run(
+                        core.captureOwnedProcessIdentity(
+                            pid=child.pid,
+                            expectedArgv=[
+                                sys.executable,
+                                "-c",
+                                "import time; time.sleep(30)",
+                                marker,
+                            ],
+                        )
+                    )
+                )
+            self.assertNotEqual(
+                identities[0]["observedCommandDigest"],
+                identities[1]["observedCommandDigest"],
+            )
+        finally:
+            for index, child in enumerate(children):
+                if child.poll() is None:
+                    if index < len(identities):
+                        run(core.signalOwnedProcess(identities[index], signal.SIGTERM))
+                    else:
+                        child.terminate()
+            for child in children:
+                if child.poll() is None:
+                    child.wait(timeout=5)
 
     def test_record_and_meta_process_identities_must_match_by_value(self):
         identity = {

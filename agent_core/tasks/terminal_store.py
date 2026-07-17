@@ -334,7 +334,7 @@ def _detail_status(transition: dict[str, Any]) -> str:
     if transition["status"] == "stopped":
         return "stopped_by_request"
     if transition["status"] == "completed":
-        return "completed"
+        return "result_ready"
     return "unexpected_signal" if "unexpected SIG" in transition["summary"] else "failed"
 
 

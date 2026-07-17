@@ -1,6 +1,39 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+from agent_core.tasks.health_check_policy import (
+    authorizeHealthCheckSpec,
+    healthCheckSpecDigest,
+    normalizeHealthCheckSpec,
+)
+
+
+async def _start_authorized_health_check(
+    supervisor: dict,
+    session: dict,
+    config: dict,
+    workspace: Path,
+    request: dict,
+) -> dict:
+    spec = await normalizeHealthCheckSpec(request, str(workspace))
+    execution_policy = await authorizeHealthCheckSpec(
+        {
+            "session": session,
+            "config": config,
+            "interactive": False,
+            "outputJson": lambda *_args: None,
+            "persistSession": lambda: None,
+        },
+        spec,
+    )
+    return await supervisor["startHealthCheck"](
+        {
+            "sessionId": session["id"],
+            "spec": spec,
+            "specDigest": healthCheckSpecDigest(spec),
+            "executionPolicy": execution_policy,
+        }
+    )
 
 
 class TaskMonitorHealthTests(AgentCoreTestCase):
@@ -184,14 +217,17 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 events = []
                 supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
                 try:
-                    started = await supervisor["startHealthCheck"](
+                    started = await _start_authorized_health_check(
+                        supervisor,
+                        session,
+                        config,
+                        workspace,
                         {
-                            "sessionId": session["id"],
                             "cwd": str(workspace),
                             "title": "health threshold",
                             "mode": "command",
                             "command": command,
-                            "intervalMs": 250,
+                            "intervalMs": 1000,
                             "timeoutMs": 1000,
                             "failureThreshold": 3,
                             "backoffMultiplier": 2,
@@ -218,7 +254,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             task_id = result["taskId"]
             self.assertEqual(health["status"], "active")
             self.assertEqual(health["consecutiveFailures"], 0)
-            self.assertEqual(health["currentIntervalMs"], 250)
+            self.assertEqual(health["currentIntervalMs"], 1000)
             self.assertEqual(health["lastExitCode"], 0)
             self.assertIn(task_id, result["persisted"]["metadata"]["taskIds"])
             unhealthy_failures = [event["data"]["failures"] for event in result["events"] if event["event"] == "health_check.unhealthy"]
@@ -270,16 +306,19 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 events = []
                 supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
                 try:
-                    http_started = await supervisor["startHealthCheck"](
+                    http_started = await _start_authorized_health_check(
+                        supervisor,
+                        session,
+                        config,
+                        workspace,
                         {
-                            "sessionId": session["id"],
                             "cwd": str(workspace),
                             "title": "http body",
                             "mode": "http",
                             "url": f"http://127.0.0.1:{server.server_address[1]}/health",
                             "expectedStatusCodes": [202],
                             "expectedBodySubstring": "ready",
-                            "intervalMs": 250,
+                            "intervalMs": 1000,
                             "timeoutMs": 1000,
                             "failureThreshold": 4,
                         }
@@ -291,14 +330,17 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                         if http_record and http_record.get("status") == "active" and http_record.get("lastSuccessAt"):
                             break
                         await asyncio.sleep(0.05)
-                    timeout_started = await supervisor["startHealthCheck"](
+                    timeout_started = await _start_authorized_health_check(
+                        supervisor,
+                        session,
+                        config,
+                        workspace,
                         {
-                            "sessionId": session["id"],
                             "cwd": str(workspace),
                             "title": "timeout body",
                             "mode": "command",
                             "command": f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(2)')}",
-                            "intervalMs": 250,
+                            "intervalMs": 1000,
                             "timeoutMs": 1000,
                             "failureThreshold": 1,
                         }

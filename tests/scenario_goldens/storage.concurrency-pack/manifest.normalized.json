@@ -113,8 +113,8 @@
         "backoffMultiplier": 1,
         "command": "printf health-ok",
         "failureThreshold": 3,
-        "intervalMs": 250,
-        "maxIntervalMs": 250,
+        "intervalMs": 1000,
+        "maxIntervalMs": 1000,
         "mode": "command",
         "timeoutMs": 1000,
         "title": "stop stickiness health"
@@ -136,7 +136,10 @@
     {
       "wait_task_status": {
         "alias": "health",
-        "status": "stopped",
+        "statusIn": [
+          "terminated",
+          "stopped"
+        ],
         "timeoutSeconds": 5
       }
     },

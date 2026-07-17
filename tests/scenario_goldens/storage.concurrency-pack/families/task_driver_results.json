@@ -69,7 +69,14 @@
   {
     "driver": "stop_task",
     "status": "passed",
-    "stopped": true,
+    "stopped": {
+      "changed": true,
+      "note": "Task stopped by deliberate request.",
+      "previousStatus": "running",
+      "status": "stopped",
+      "taskId": "<uuid:7>",
+      "transitionId": "<uuid:8>"
+    },
     "taskId": "<uuid:7>"
   }
 ]

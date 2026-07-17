@@ -18,7 +18,7 @@
           "sessionId": "<uuid:1>",
           "status": "completed",
           "summary": "completed",
-          "taskId": "<uuid:3>",
+          "taskId": "<uuid:4>",
           "updatedAt": "<timestamp>"
         }
       ]
@@ -50,7 +50,7 @@
             "goal": "watch background completion",
             "last_task_status": "completed",
             "muted": null,
-            "task_id": "<uuid:3>"
+            "task_id": "<uuid:4>"
           },
           "outputCursor": 19,
           "relatedMonitorIds": [
@@ -77,17 +77,17 @@
           "detailStatus": "result_ready",
           "foregroundMode": "background",
           "foregroundable": true,
-          "id": "<uuid:3>",
+          "id": "<uuid:4>",
           "kind": "background_command",
           "launchReservation": {
             "attachedAt": "<timestamp>",
             "createdAt": "<timestamp>",
             "kind": "background_command",
-            "reservationId": "<uuid:7>",
+            "reservationId": "<uuid:10>",
             "schemaVersion": 1,
             "sessionId": "<uuid:1>",
             "state": "attached",
-            "taskId": "<uuid:3>"
+            "taskId": "<uuid:4>"
           },
           "metadata": {
             "detached_type": "background_command",
@@ -100,10 +100,12 @@
             "process_state": null,
             "recovery_state": null,
             "runner_pid": null,
-            "signal": null
+            "signal": null,
+            "terminal_event_owner": "supervisor",
+            "terminal_transition_id": "<uuid:5>"
           },
           "outputCursor": 19,
-          "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
+          "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
           "owner": "daemon",
           "parentTaskId": null,
           "processIdentity": {
@@ -124,11 +126,11 @@
           "resultSummary": "background task ok",
           "retrieveOnly": true,
           "sessionId": "<uuid:1>",
-          "sourceId": "<uuid:3>",
+          "sourceId": "<uuid:4>",
           "startedAt": "<timestamp>",
           "status": "completed",
           "summary": "Background command completed successfully. Latest output: background task ok",
-          "supervisorId": "<uuid:6>",
+          "supervisorId": "<uuid:9>",
           "taskFamily": "shell",
           "title": "scenario background",
           "updatedAt": "<timestamp>"

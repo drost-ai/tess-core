@@ -4,7 +4,7 @@
     "state": {
       "activeTasks": 0,
       "attachedClients": 0,
-      "supervisorId": "<uuid:6>",
+      "supervisorId": "<uuid:9>",
       "watchedSessions": 0
     },
     "status": "passed"
@@ -18,30 +18,30 @@
     "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
     "driver": "start_background_task",
     "result": {
-      "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
-      "output_file": "<runtime-home>/tasks/<uuid:3>/output.log",
-      "taskId": "<uuid:3>",
-      "task_id": "<uuid:3>"
+      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "taskId": "<uuid:4>",
+      "task_id": "<uuid:4>"
     },
     "status": "passed",
-    "taskId": "<uuid:3>"
+    "taskId": "<uuid:4>"
   },
   {
     "driver": "read_task_output",
     "result": {
       "output": "background task ok\n",
-      "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
-      "taskId": "<uuid:3>",
+      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
+      "taskId": "<uuid:4>",
       "truncated": false
     },
     "status": "passed",
-    "taskId": "<uuid:3>"
+    "taskId": "<uuid:4>"
   },
   {
     "driver": "create_monitor",
     "monitorId": "<uuid:2>",
     "status": "passed",
-    "taskId": "<uuid:3>"
+    "taskId": "<uuid:4>"
   },
   {
     "driver": "get_daemon_bootstrap",
@@ -58,10 +58,14 @@
       "finishedAt": "<timestamp>",
       "id": "worker-entrypoint",
       "outputFile": "<runtime-home>/worker-entrypoints/worker-entrypoint.output.log",
-      "pid": "<pid:5>",
-      "runnerPid": "<pid:6>",
+      "pid": "<pid:6>",
+      "runnerPid": "<pid:7>",
+      "signal": null,
       "status": "completed",
+      "summary": "Task completed successfully.",
       "taskId": "worker-entrypoint",
+      "terminalEventOwner": "task_runtime",
+      "terminalTransitionId": "<uuid:13>",
       "updatedAt": "<timestamp>"
     },
     "output": "worker-entrypoint-ok",
@@ -83,7 +87,7 @@
     "state": {
       "activeTasks": 0,
       "attachedClients": 0,
-      "supervisorId": "<uuid:8>",
+      "supervisorId": "<uuid:3>",
       "watchedSessions": 0
     },
     "status": "passed"
@@ -97,38 +101,45 @@
     "command": "<python> -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
     "driver": "start_background_task",
     "result": {
-      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
-      "output_file": "<runtime-home>/tasks/<uuid:4>/output.log",
-      "taskId": "<uuid:4>",
-      "task_id": "<uuid:4>"
+      "outputFile": "<runtime-home>/tasks/<uuid:6>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:6>/output.log",
+      "taskId": "<uuid:6>",
+      "task_id": "<uuid:6>"
     },
     "status": "passed",
-    "taskId": "<uuid:4>"
+    "taskId": "<uuid:6>"
   },
   {
     "driver": "stop_task",
     "status": "passed",
-    "stopped": true,
-    "taskId": "<uuid:4>"
+    "stopped": {
+      "changed": true,
+      "note": "Task stopped by deliberate request.",
+      "previousStatus": "running",
+      "status": "stopped",
+      "taskId": "<uuid:6>",
+      "transitionId": "<uuid:7>"
+    },
+    "taskId": "<uuid:6>"
   },
   {
     "driver": "start_health_check",
     "result": {
-      "taskId": "<uuid:5>",
-      "task_id": "<uuid:5>"
+      "taskId": "<uuid:8>",
+      "task_id": "<uuid:8>"
     },
     "status": "passed",
-    "taskId": "<uuid:5>"
+    "taskId": "<uuid:8>"
   },
   {
     "driver": "read_task_output",
     "result": {
-      "output": "[<timestamp>] health-attempt-1\n[<timestamp>] health-attempt-2\n[<timestamp>] health-attempt-3\n",
-      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
-      "taskId": "<uuid:5>",
+      "output": "[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-1\n[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-2\n[<timestamp>] status=ok measured_bytes=17 truncated=false\nhealth-attempt-3\n",
+      "outputFile": "<runtime-home>/tasks/<uuid:8>/output.log",
+      "taskId": "<uuid:8>",
       "truncated": false
     },
     "status": "passed",
-    "taskId": "<uuid:5>"
+    "taskId": "<uuid:8>"
   }
 ]

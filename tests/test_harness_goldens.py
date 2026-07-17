@@ -60,6 +60,13 @@ class HarnessGoldenTests(AgentCoreTestCase):
                         "observedCommandDigest": "b" * 64,
                         "startToken": "ps:Wed Apr 29 11:22:33 2026",
                     },
+                    "health": {
+                        "specDigest": "c" * 64,
+                        "nested": {"spec_digest": "c" * 64},
+                        "next": {"specDigest": "d" * 64},
+                        "authorityFingerprint": "e" * 64,
+                        "unrelatedSha256": "f" * 64,
+                    },
                 }
                 normalized = normalize_observations(raw, sandbox)
                 self.assertEqual(normalized["run"]["id"], "<run-id>")
@@ -83,6 +90,14 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(normalized["processIdentity"]["expectedCommandDigest"], "<expected-command-digest>")
                 self.assertEqual(normalized["processIdentity"]["observedCommandDigest"], "<observed-command-digest>")
                 self.assertEqual(normalized["processIdentity"]["startToken"], "<process-start-token>")
+                self.assertEqual(normalized["health"]["specDigest"], "<health-spec-digest:1>")
+                self.assertEqual(normalized["health"]["nested"]["spec_digest"], "<health-spec-digest:1>")
+                self.assertEqual(normalized["health"]["next"]["specDigest"], "<health-spec-digest:2>")
+                self.assertEqual(
+                    normalized["health"]["authorityFingerprint"],
+                    "<health-authority-fingerprint:1>",
+                )
+                self.assertEqual(normalized["health"]["unrelatedSha256"], "f" * 64)
             finally:
                 sandbox.cleanup_sandbox(passed=True)
 

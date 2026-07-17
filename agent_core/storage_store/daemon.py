@@ -29,8 +29,16 @@ async def clearDaemonState() -> None:
             pass
 
 async def appendDaemonEvent(record: dict[str, Any]) -> None:
-    payload = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
-    await asyncio.to_thread(_append_private_bytes, daemonEventsPath(), payload.encode("utf-8"))
+    async with withRecordTransaction("daemon-events", getStateRoot()):
+        next_record = dict(record)
+        if not isinstance(next_record.get("cursor"), int):
+            next_record["cursor"] = await readLastDaemonEventCursor() + 1
+        payload = json.dumps(next_record, ensure_ascii=False, separators=(",", ":")) + "\n"
+        await asyncio.to_thread(
+            _append_private_bytes,
+            daemonEventsPath(),
+            payload.encode("utf-8"),
+        )
 
 async def loadDaemonEvents() -> list[dict[str, Any]]:
     try:

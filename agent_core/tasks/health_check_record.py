@@ -28,6 +28,7 @@ def buildAuthorizedHealthCheckRecord(
         "taskId": taskId,
         "sessionId": request["sessionId"],
         "createdAt": now,
+        "startedAt": now,
         "updatedAt": now,
         "status": status,
         "currentIntervalMs": spec["intervalMs"],
