@@ -84,9 +84,25 @@ async def verifyPrivateDaemonRuntime() -> None:
     _verify_private_tree(getDaemonDir(), daemonSocketPath())
 
 
-async def createDaemonAuthMaterial() -> dict[str, str]:
+def generateDaemonAuthMaterial() -> dict[str, str]:
     token = secrets.token_urlsafe(32)
-    token_id = daemonTokenId(token)
+    return {"token": token, "tokenId": daemonTokenId(token)}
+
+
+async def publishDaemonAuthMaterial(auth: dict[str, str]) -> None:
+    token = auth.get("token")
+    token_id = auth.get("tokenId")
+    if (
+        not isinstance(token, str)
+        or not _TOKEN_PATTERN.fullmatch(token)
+        or not isinstance(token_id, str)
+        or token_id != daemonTokenId(token)
+    ):
+        raise DaemonSecurityError(
+            "daemon.auth_material_invalid",
+            "Refusing to publish malformed daemon auth material.",
+            daemonAuthTokenPath(),
+        )
     target = daemonAuthTokenPath()
     temp = f"{target}.{os.getpid()}.{uuid.uuid4()}.tmp"
     published = False
@@ -102,7 +118,6 @@ async def createDaemonAuthMaterial() -> dict[str, str]:
         os.unlink(temp)
         os.chmod(target, PRIVATE_FILE_MODE)
         _verify_owned_regular_file(target, require_private=True)
-        return {"token": token, "tokenId": token_id}
     except Exception:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(temp)
@@ -110,6 +125,12 @@ async def createDaemonAuthMaterial() -> dict[str, str]:
             with contextlib.suppress(Exception):
                 await removeDaemonAuthMaterialIfOwned(token_id)
         raise
+
+
+async def createDaemonAuthMaterial() -> dict[str, str]:
+    auth = generateDaemonAuthMaterial()
+    await publishDaemonAuthMaterial(auth)
+    return auth
 
 
 async def readDaemonAuthMaterial(state: dict[str, Any]) -> dict[str, str]:

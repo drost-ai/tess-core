@@ -27,7 +27,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
     daemon_epoch = str(uuid.uuid4())
     daemon_started_at = now_iso()
     daemon_phase = "starting"
-    auth = await createDaemonAuthMaterial()
+    auth = generateDaemonAuthMaterial()
     subscribers: dict[str, dict[str, Any]] = {}
     shutdown = asyncio.Event()
     supervisor: dict[str, Any] | None = None
@@ -132,34 +132,38 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
             loop.add_signal_handler(signum, shutdown.set)
             installed_signals.append(signum)
     try:
-        await write_daemon_state("starting")
-        supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
-        rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(shutdown))
         transport = createAuthenticatedDaemonServer(
             token=auth["token"],
             epoch=daemon_epoch,
             dispatch=dispatch,
             onAuthenticated=on_authenticated,
             onDisconnect=on_disconnect,
+            accepting=False,
         )
         _inject_daemon_boot_fault("pre_bind")
         await transport.listen(socket_path)
         os.chmod(socket_path, 0o600)
         verifyOwnedDaemonSocket(socket_path)
         _inject_daemon_boot_fault("post_bind")
+        await publishDaemonAuthMaterial(auth)
+        await write_daemon_state("starting")
+        _inject_daemon_boot_fault("post_publish")
         await _record_daemon_lifecycle_event(
             "daemon.recovering",
             {"phase": "recovering", "epoch": daemon_epoch},
             next_event_cursor,
         )
         await write_daemon_state("recovering")
-        _inject_daemon_boot_fault("pre_ready")
+        supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
+        rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(shutdown))
+        _inject_daemon_boot_fault("during_recovery")
         await write_daemon_state("running")
         await _record_daemon_lifecycle_event(
             "daemon.recovered",
             {"phase": "running", "epoch": daemon_epoch},
             next_event_cursor,
         )
+        transport.accepting = True
         await shutdown.wait()
     finally:
         daemon_phase = "shutting_down"
@@ -240,7 +244,19 @@ def _inject_daemon_boot_fault(stage: str) -> None:
         try:
             fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
-                raw = memoryview(stage.encode("utf-8"))
+                state = _read_fault_state()
+                payload = json.dumps(
+                    {
+                        "stage": stage,
+                        "socketExists": os.path.lexists(daemonSocketPath()),
+                        "tokenExists": os.path.lexists(daemonAuthTokenPath()),
+                        "stateExists": os.path.lexists(daemonStatePath()),
+                        "statePhase": state.get("phase") if state else None,
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+                raw = memoryview(payload.encode("utf-8"))
                 while raw:
                     written = os.write(fd, raw)
                     if written <= 0:
@@ -251,3 +267,15 @@ def _inject_daemon_boot_fault(stage: str) -> None:
         except FileExistsError:
             return
     os._exit(86)
+
+
+def _read_fault_state() -> dict[str, Any] | None:
+    try:
+        with open(daemonStatePath(), "rb") as handle:
+            payload = handle.read(4_097)
+        if len(payload) > 4_096:
+            return None
+        value = json.loads(payload.decode("utf-8"))
+        return value if isinstance(value, dict) else None
+    except (FileNotFoundError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None

@@ -73,6 +73,11 @@ class DaemonServerPeer:
                     await self._accept_request(value)
 
     async def _authenticate(self, value: Any) -> None:
+        if not self.owner.accepting:
+            raise DaemonProtocolError(
+                "daemon.not_ready",
+                "Daemon recovery is not ready to admit clients.",
+            )
         if _is_legacy_request(value):
             await self._write_frame(
                 {
@@ -279,6 +284,7 @@ class AuthenticatedDaemonServer:
         rpcTimeoutMs: int | None = None,
         onAuthenticated: Callable[..., Any] | None = None,
         onDisconnect: Callable[..., Any] | None = None,
+        accepting: bool = True,
     ) -> None:
         self.token = token
         self.epoch = epoch
@@ -287,6 +293,7 @@ class AuthenticatedDaemonServer:
         self.rpc_timeout_ms = resolveDaemonRpcTimeoutMs(rpcTimeoutMs)
         self.on_authenticated = onAuthenticated
         self.on_disconnect = onDisconnect
+        self.accepting = accepting
         self.server: asyncio.AbstractServer | None = None
         self.peers: set[DaemonServerPeer] = set()
         self.dispatch_work: set[asyncio.Task[Any]] = set()

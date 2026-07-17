@@ -13,11 +13,17 @@ from agent_core.daemon_runtime.protocol import (
     parseDaemonFrame,
     parseDaemonRequest,
 )
+from agent_core.daemon_runtime.transport import (
+    DaemonServerPeer,
+    createAuthenticatedDaemonServer,
+)
 from agent_core.daemon_runtime.security import (
     DaemonSecurityError,
     createDaemonAuthMaterial,
     daemonAuthTokenPath,
+    generateDaemonAuthMaterial,
     prepareDaemonRuntimeSecurity,
+    publishDaemonAuthMaterial,
     readDaemonAuthMaterial,
     verifyPrivateDaemonRuntime,
 )
@@ -25,6 +31,155 @@ import agent_core.daemon_runtime.server as daemon_server_module
 
 
 class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
+    def test_daemon_publishes_after_bind_and_constructs_only_while_recovering(self):
+        trace = []
+        state = {}
+        auth_published = False
+
+        class ReadyBoundary(RuntimeError):
+            pass
+
+        class Transport:
+            def __init__(self):
+                self._accepting = False
+
+            @property
+            def accepting(self):
+                return self._accepting
+
+            @accepting.setter
+            def accepting(self, value):
+                self._accepting = value
+                if value:
+                    trace.append("admit")
+                    raise ReadyBoundary()
+
+            async def listen(self, _path):
+                trace.append("bind")
+                self.assert_prepublication()
+
+            def assert_prepublication(self):
+                self_test.assertFalse(auth_published)
+                self_test.assertEqual(state, {})
+
+            async def close(self):
+                trace.append("close_transport")
+
+        self_test = self
+        transport = Transport()
+
+        async def nothing(*_args, **_kwargs):
+            return None
+
+        async def zero():
+            return 0
+
+        async def publish(_auth):
+            nonlocal auth_published
+            auth_published = True
+            trace.append("publish_auth")
+
+        async def save(next_state):
+            state.clear()
+            state.update(next_state)
+            trace.append(f"state:{next_state['phase']}")
+
+        async def lifecycle(event, _data, _cursor):
+            trace.append(event)
+
+        async def create_supervisor(args):
+            trace.append("construct")
+            self.assertTrue(auth_published)
+            self.assertEqual(state["phase"], "recovering")
+            await args["onEvent"]({"event": "task.reconciled", "data": {}})
+
+            async def close():
+                trace.append("close_supervisor")
+
+            return {"getState": lambda: {}, "close": close}
+
+        def fault(stage):
+            trace.append(f"fault:{stage}")
+
+        replacements = {
+            "ensureBaseLayout": nothing,
+            "loadDaemonState": lambda: nothing(),
+            "_cleanup_stale_daemon_artifacts": nothing,
+            "rotateDaemonEventsIfOversized": nothing,
+            "readLastDaemonEventCursor": zero,
+            "generateDaemonAuthMaterial": lambda: {"token": "a" * 43, "tokenId": "id"},
+            "createAuthenticatedDaemonServer": lambda **_kwargs: transport,
+            "publishDaemonAuthMaterial": publish,
+            "saveDaemonState": save,
+            "_record_daemon_lifecycle_event": lifecycle,
+            "createTaskSupervisor": create_supervisor,
+            "appendDaemonEvent": nothing,
+            "_publish_daemon_event": nothing,
+            "verifyOwnedDaemonSocket": lambda _path: object(),
+            "_inject_daemon_boot_fault": fault,
+            "_clear_owned_daemon_instance": nothing,
+        }
+        with tempfile.NamedTemporaryFile() as socket_file:
+            replacements["daemonSocketPath"] = lambda: socket_file.name
+            with mock.patch.multiple(daemon_server_module, **replacements):
+                with self.assertRaises(ReadyBoundary):
+                    run(daemon_server_module._run_task_supervisor_daemon_scoped("/tmp"))
+        self.assertLess(trace.index("bind"), trace.index("publish_auth"))
+        self.assertLess(trace.index("state:recovering"), trace.index("construct"))
+        self.assertEqual(
+            [item for item in trace if item.startswith("fault:")],
+            [
+                "fault:pre_bind",
+                "fault:post_bind",
+                "fault:post_publish",
+                "fault:during_recovery",
+            ],
+        )
+        self.assertLess(trace.index("daemon.recovered"), trace.index("admit"))
+
+    def test_transport_rejects_authentication_until_recovery_admission(self):
+        class Writer:
+            def __init__(self):
+                self.frames = []
+
+            def is_closing(self):
+                return False
+
+            def write(self, value):
+                self.frames.append(value)
+
+            async def drain(self):
+                return None
+
+        token = "a" * 43
+        server = createAuthenticatedDaemonServer(
+            token=token,
+            epoch="admission-epoch",
+            dispatch=lambda *_args: {},
+            accepting=False,
+        )
+        writer = Writer()
+        auth = {
+            "type": "auth",
+            "protocolVersion": DAEMON_PROTOCOL_VERSION,
+            "token": token,
+        }
+
+        async def scenario():
+            peer = DaemonServerPeer(server, asyncio.StreamReader(), writer)
+            with self.assertRaises(DaemonProtocolError) as raised:
+                await peer._authenticate(auth)
+            self.assertEqual(raised.exception.code, "daemon.not_ready")
+            self.assertFalse(peer.authenticated)
+            self.assertEqual(writer.frames, [])
+
+            server.accepting = True
+            await peer._authenticate(auth)
+            self.assertTrue(peer.authenticated)
+            self.assertEqual(len(writer.frames), 1)
+
+        run(scenario())
+
     def test_bounded_newline_decoder_handles_fragmentation_and_limit_edges(self):
         decoder = DaemonLineDecoder(32)
         self.assertEqual(decoder.push(b'{"id":'), [])
@@ -81,13 +236,15 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         try:
             run(core.ensureBaseLayout(str(workspace)))
             run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
-            auth = run(createDaemonAuthMaterial())
+            auth = generateDaemonAuthMaterial()
+            token_path = Path(daemonAuthTokenPath())
+            self.assertFalse(token_path.exists())
+            run(publishDaemonAuthMaterial(auth))
             state = {
                 "protocolVersion": DAEMON_PROTOCOL_VERSION,
                 "authTokenId": auth["tokenId"],
             }
             self.assertEqual(run(readDaemonAuthMaterial(state)), auth)
-            token_path = Path(daemonAuthTokenPath())
             self.assertEqual(stat.S_IMODE(token_path.stat().st_mode), 0o600)
             self.assertNotIn(auth["token"], json.dumps(state))
             with self.assertRaises(DaemonSecurityError) as raised:
