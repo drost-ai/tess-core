@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, core, run
 
 
 diff_module = importlib.import_module("agent_core.tools.file_change_diff")
@@ -271,12 +271,12 @@ class Package30FileChangePayloadTests(AgentCoreTestCase):
                 core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={
+                    runtime=bind_test_runtime(session, {
                         "interactive": False,
                         "askQuestion": lambda *_: "",
                         "emitEvent": lambda *_: None,
                         "tools": [tools["Edit"]],
-                    },
+                    }),
                     prompt="edit it",
                     providerOverride={"send": send},
                 )

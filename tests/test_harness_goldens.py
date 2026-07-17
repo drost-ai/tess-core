@@ -52,6 +52,11 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "python": f"{Path.cwd()}/.venv/bin/python",
                     "python3": f"{Path.cwd()}/.venv/bin/python3",
                     "tokens": {"input_tokens": 54321},
+                    "processIdentity": {
+                        "expectedCommandDigest": "a" * 64,
+                        "observedCommandDigest": "b" * 64,
+                        "startToken": "ps:Wed Apr 29 11:22:33 2026",
+                    },
                 }
                 normalized = normalize_observations(raw, sandbox)
                 self.assertEqual(normalized["run"]["id"], "<run-id>")
@@ -66,5 +71,8 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(normalized["python"], "<python>")
                 self.assertEqual(normalized["python3"], "<python>")
                 self.assertEqual(normalized["tokens"]["input_tokens"], 54321)
+                self.assertEqual(normalized["processIdentity"]["expectedCommandDigest"], "<expected-command-digest>")
+                self.assertEqual(normalized["processIdentity"]["observedCommandDigest"], "<observed-command-digest>")
+                self.assertEqual(normalized["processIdentity"]["startToken"], "<process-start-token>")
             finally:
                 sandbox.cleanup_sandbox(passed=True)

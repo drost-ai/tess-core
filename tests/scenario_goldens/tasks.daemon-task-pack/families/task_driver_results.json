@@ -83,7 +83,7 @@
     "state": {
       "activeTasks": 0,
       "attachedClients": 0,
-      "supervisorId": "<uuid:7>",
+      "supervisorId": "<uuid:8>",
       "watchedSessions": 0
     },
     "status": "passed"

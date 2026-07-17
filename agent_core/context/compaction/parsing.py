@@ -1,6 +1,14 @@
 from __future__ import annotations
 
+import math
+
 from .shared import *
+
+
+def _finite_non_negative_number(value: Any) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        return None
+    return value
 
 
 def parseCompactionSynthesisResponse(value: str) -> dict[str, Any] | None:
@@ -109,7 +117,13 @@ def coerceWorkingContextDocument(value: Any) -> dict[str, Any] | None:
         }
         if plan
         else None,
-        "todos": {"open": asStringArray(todos.get("open")), "completed": asStringArray(todos.get("completed"))},
+        "todos": {
+            "open": asStringArray(todos.get("open")),
+            "completed": asStringArray(todos.get("completed")),
+            "originalItemCount": _finite_non_negative_number(todos.get("originalItemCount")),
+            "returnedItemCount": _finite_non_negative_number(todos.get("returnedItemCount")),
+            "omittedItemCount": _finite_non_negative_number(todos.get("omittedItemCount")),
+        },
         "activity": {"commands": asStringArray(activity.get("commands")), "searches": asStringArray(activity.get("searches")), "web": asStringArray(activity.get("web")), "failures": asStringArray(activity.get("failures"))},
         "preservedTrace": coercePreservedTrace(record.get("preservedTrace")),
         "nextSteps": asStringArray(record.get("nextSteps")),

@@ -40,6 +40,39 @@ def run(coro):
     return asyncio.run(coro)
 
 
+def bind_test_runtime(session, legacy=None):
+    legacy = dict(legacy or {})
+    daemon = legacy.pop("daemon", None)
+    daemon_reason = legacy.pop(
+        "daemonUnavailableReason",
+        {
+            "code": "test.daemon_unavailable",
+            "message": "The task daemon is intentionally unavailable in this test fixture.",
+        },
+    )
+    interactive = legacy.pop("interactive", False)
+    ask_question = legacy.pop("askQuestion", lambda *_args, **_kwargs: "")
+    emit_event = legacy.pop("emitEvent", lambda *_args, **_kwargs: None)
+    tools = legacy.pop("tools", [])
+    refresh = legacy.pop("refreshMcpToolRegistry", lambda: None)
+    daemon_binding = (
+        {"state": "connected", "client": daemon}
+        if daemon is not None and core.isTaskSupervisorGateway(daemon)
+        else {"state": "unavailable", "reason": daemon_reason}
+    )
+    return core.createAgentRuntimeBindings(
+        {
+            "tools": tools,
+            "emitEvent": emit_event,
+            "daemon": daemon_binding,
+            "refreshMcpToolRegistry": refresh,
+            "sessionBinding": core.createRuntimeSessionBinding(session["id"], 1, 1),
+            "questionPolicy": {"interactive": interactive, "askQuestion": ask_question},
+            **legacy,
+        }
+    )
+
+
 class AsyncChunks:
     def __init__(self, chunks):
         self.chunks = chunks

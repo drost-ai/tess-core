@@ -8,6 +8,7 @@ from typing import Any
 from .._utils import now_iso
 from ..storage import getProjectMemoryPath, getProjectRoot, loadProjectMemoryRecords as _loadProjectMemoryRecords
 from ..storage import mutateProjectMemoryRecords
+from ..todo_policy import selectTodoState as _select_todo_state
 
 
 MANUAL_MEMORY_RECORD_ID = "manual-project-memory"
@@ -113,13 +114,13 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
     max_records = int(args.get("maxRecords") or MAX_RETRIEVED_MEMORY_RECORDS)
     max_token_budget = int(args.get("maxTokenBudget") or MAX_RETRIEVED_MEMORY_TOKEN_BUDGET)
     records = await synchronizeManualProjectMemory(cwd)
+    selected_todos = _select_todo_state(session.get("todos", []), {"maxOpen": 20, "maxCompleted": 0})
     keywords = deriveKeywords(
         [
             args.get("prompt") or "",
             *[
                 " ".join(str(part) for part in (todo.get("content"), todo.get("activeForm")) if part)
-                for todo in session.get("todos", [])
-                if todo.get("status") != "completed"
+                for todo in selected_todos["open"]
             ],
         ]
     )

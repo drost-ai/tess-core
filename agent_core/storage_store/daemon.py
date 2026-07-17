@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .shared import *
+from ..persisted_record_scanner import readPersistedJsonRecord
+from ..persisted_record_validation import isDaemonStateRecord
 
 DAEMON_EVENTS_TAIL_BYTES = 64 * 1024
 DAEMON_EVENTS_ROTATE_BYTES = 32 * 1024 * 1024
@@ -12,7 +14,12 @@ async def saveDaemonState(record: dict[str, Any]) -> None:
         handle.write(f"{record.get('pid')}\n")
 
 async def loadDaemonState() -> dict[str, Any] | None:
-    return await readJsonFile(daemonStatePath(), None)
+    result = await readPersistedJsonRecord(
+        family="daemon_state",
+        filePath=daemonStatePath(),
+        validate=isDaemonStateRecord,
+    )
+    return result.get("record")
 
 async def clearDaemonState() -> None:
     for path in (daemonPidPath(), daemonStatePath(), daemonSocketPath()):

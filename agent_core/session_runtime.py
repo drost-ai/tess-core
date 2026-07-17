@@ -24,6 +24,7 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
     args = {**(args or {}), **kwargs}
     active_session = args.get("session") or {}
     active_config = args.get("config") or {}
+    active_binding = args.get("binding")
     emit: Callable[[str, dict[str, Any]], Any] = args.get("emitRuntimeEvent") or args.get("emit") or (lambda *_: None)
 
     def get_active_session() -> dict[str, Any]:
@@ -32,11 +33,27 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
     def get_active_config() -> dict[str, Any]:
         return active_config
 
-    def set_active_session(session: dict[str, Any], config: dict[str, Any]) -> None:
-        nonlocal active_session, active_config
+    def get_active_binding() -> Any:
+        return active_binding
+
+    def set_active_session(
+        session: dict[str, Any], config: dict[str, Any], binding: Any = None
+    ) -> None:
+        nonlocal active_session, active_config, active_binding
         active_session = session
         active_config = config
-        emit("session.activated", activeSessionPayload(active_session, active_config))
+        active_binding = binding or active_binding
+        payload = activeSessionPayload(active_session, active_config)
+        if active_binding is not None:
+            payload.update(
+                {
+                    "generation": active_binding.get("generation"),
+                    "config_revision": active_binding.get("configRevision"),
+                    "runtime_instance_id": active_binding.get("runtimeInstanceId"),
+                    "path_graph_id": active_binding.get("pathGraphId"),
+                }
+            )
+        emit("session.activated", payload)
 
     def start_turn(turn: dict[str, Any] | None = None, **turn_kwargs: Any) -> None:
         turn = {**(turn or {}), **turn_kwargs}
@@ -74,6 +91,7 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
         "runtime": args.get("runtime"),
         "getActiveSession": get_active_session,
         "getActiveConfig": get_active_config,
+        "getActiveBinding": get_active_binding,
         "setActiveSession": set_active_session,
         "startTurn": start_turn,
         "setTurnCancelling": set_turn_cancelling,

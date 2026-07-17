@@ -199,7 +199,26 @@ async def _maybe_start_group_continuation(
     if not task_starter:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "No task supervisor available."})
         return {"started": False, "reason": "supervisor_unavailable", "launchGroupId": group_id, "continuationRunId": run_id}
-    await _mark_subagent_launch_group_continuation_requested(parent_session_id, group_id, prompt=prompt, runId=run_id)
+    from .subagent_coordination import (
+        claimSubagentLaunchGroupContinuation,
+        markSubagentLaunchGroupContinuationRunning,
+        markSubagentLaunchGroupContinuationStarting,
+        releaseSubagentLaunchGroupContinuationClaim,
+    )
+
+    claim = await claimSubagentLaunchGroupContinuation(
+        parentSessionId=parent_session_id,
+        launchGroupId=group_id,
+        claimantId=run_id,
+    )
+    if not claim:
+        return {"started": False, "reason": "already_requested", "launchGroupId": group_id}
+    claim_token = claim["claimToken"]
+    starting = await markSubagentLaunchGroupContinuationStarting(
+        parent_session_id, group_id, claim_token
+    )
+    if not starting:
+        return {"started": False, "reason": "claim_lost", "launchGroupId": group_id}
     _emit(runtime, "subagent.continuation.requested", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, **ready})
     try:
         launched = await task_starter(
@@ -213,10 +232,17 @@ async def _maybe_start_group_continuation(
         )
         task_id = _launch_task_id(launched)
         if task_id:
-            await _record_subagent_launch_group_continuation_task(parent_session_id, group_id, task_id, runId=run_id)
+            linked = await markSubagentLaunchGroupContinuationRunning(
+                parent_session_id, group_id, claim_token, task_id
+            )
+            if not linked:
+                raise RuntimeError("Continuation started durably but its launch-group claim could not be linked.")
         _emit(runtime, "subagent.continuation.started", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "task_id": task_id})
         return {"started": True, "launchGroupId": group_id, "continuationRunId": run_id, "continuationTaskId": task_id, **ready}
     except Exception as exc:
+        await releaseSubagentLaunchGroupContinuationClaim(
+            parent_session_id, group_id, claim_token, str(exc)
+        )
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": str(exc)})
         return {"started": False, "reason": "start_failed", "launchGroupId": group_id, "continuationRunId": run_id, "error": str(exc)}
 

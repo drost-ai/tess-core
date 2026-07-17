@@ -19,6 +19,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     subscribers: set[Callable[[dict[str, Any]], Any]] = set()
     attached_all_count = 0
     attached_sessions: dict[str, int] = {}
+    reported_record_issues: set[str] = set()
+    construction_watchers = set(_WATCHERS)
 
     async def emit(event: str, data: dict[str, Any], session_id: str | None = None) -> None:
         payload = {"event": event, "data": data, "sessionId": session_id}
@@ -423,7 +425,23 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         records = await _project_session_task_records(session_id, live_work_cache=live_work_cache)
         return {"taskSnapshot": _task_snapshot(records), "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)), "collaborationSnapshot": await _collaboration_snapshot(session_id)}
 
-    await _reconcile_persisted_tasks(supervisor_id, emit)
+    try:
+        await _reconcile_persisted_tasks(supervisor_id, emit)
+        await listChildAgents()
+        await listHealthCheckTasks()
+        await _report_persisted_record_issues(emit, reported_record_issues)
+    except Exception:
+        created_watchers = set(_WATCHERS) - construction_watchers
+        for watcher in created_watchers:
+            if isinstance(watcher, asyncio.Task):
+                watcher.cancel()
+        await asyncio.gather(
+            *(watcher for watcher in created_watchers if isinstance(watcher, asyncio.Task)),
+            return_exceptions=True,
+        )
+        for watcher in created_watchers:
+            _WATCHERS.discard(watcher)
+        raise
 
     return {
         "close": close,

@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 
 from ._utils import now_iso
-from .storage import fileLock, sessionArchiveDir
+from .storage import sessionArchiveDir, withRecordTransaction
 
 
 def resolveSubagentLaunchGroupId(args: dict[str, Any], parentSession: dict[str, Any], context: dict[str, Any] | None = None) -> str:
@@ -67,7 +67,7 @@ async def _upsert_subagent_launch_group(parentSessionId: str, group: dict[str, A
         raise ValueError("Subagent launch group requires an id.")
     now = now_iso()
     path = _subagent_launch_groups_path(parentSessionId)
-    async with fileLock(path):
+    async with withRecordTransaction("subagent-coordination", parentSessionId):
         records = await _read_subagent_launch_groups(parentSessionId)
         current = next((record for record in records if record.get("id") == group_id), None)
         merged = _merge_group_record(current or {}, group, parentSessionId, group_id, now)
@@ -80,7 +80,7 @@ async def _upsert_subagent_launch_group(parentSessionId: str, group: dict[str, A
 async def _mark_subagent_launch_group_continuation_requested(parentSessionId: str, groupId: str, *, prompt: str, runId: str) -> dict[str, Any] | None:
     now = now_iso()
     path = _subagent_launch_groups_path(parentSessionId)
-    async with fileLock(path):
+    async with withRecordTransaction("subagent-coordination", parentSessionId):
         records = await _read_subagent_launch_groups(parentSessionId)
         updated: dict[str, Any] | None = None
         next_records = []
@@ -104,7 +104,7 @@ async def _mark_subagent_launch_group_continuation_requested(parentSessionId: st
 async def _record_subagent_launch_group_continuation_task(parentSessionId: str, groupId: str, taskId: str, *, runId: str | None = None) -> dict[str, Any] | None:
     now = now_iso()
     path = _subagent_launch_groups_path(parentSessionId)
-    async with fileLock(path):
+    async with withRecordTransaction("subagent-coordination", parentSessionId):
         records = await _read_subagent_launch_groups(parentSessionId)
         updated: dict[str, Any] | None = None
         next_records = []

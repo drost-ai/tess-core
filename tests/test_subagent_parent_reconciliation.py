@@ -56,7 +56,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                         "session": parent,
                         "config": config,
                         "prompt": "Synthesize now.",
-                        "runtime": {"tools": [], "interactive": False, "emitEvent": lambda *_: None},
+                        "runtime": bind_test_runtime(parent, {"tools": [], "interactive": False, "emitEvent": lambda *_: None}),
                         "providerOverride": {"send": send},
                     }
                 )

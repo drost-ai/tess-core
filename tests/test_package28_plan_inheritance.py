@@ -43,7 +43,6 @@ class Package28PlanInheritanceTests(AgentCoreTestCase):
                     systemPrompt=config["systemPrompt"],
                     permissionMode=child_mode,
                 )
-                session["metadata"]["parentSessionId"] = "parent-plan-session"
                 executed = []
                 events = []
 
@@ -96,12 +95,12 @@ class Package28PlanInheritanceTests(AgentCoreTestCase):
                 await core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={
+                    runtime=bind_test_runtime(session, {
                         "interactive": False,
                         "emitEvent": lambda event, data: events.append((event, data)),
                         "tools": [tool],
                         "repositoryIdentity": "trusted-runtime-identity",
-                    },
+                    }),
                     prompt="try mutation",
                     providerOverride={"send": send},
                 )

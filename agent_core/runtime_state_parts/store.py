@@ -51,11 +51,17 @@ def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[
         for subscriber in list(subscribers):
             subscriber()
 
+    def set_state(next_state):
+        nonlocal state
+        state = copy.deepcopy(next_state)
+        for subscriber in list(subscribers):
+            subscriber()
+
     def subscribe(fn):
         subscribers.append(fn)
         return lambda: subscribers.remove(fn) if fn in subscribers else None
 
-    return {"getState": get_state, "dispatch": dispatch, "subscribe": subscribe, "applyEvent": dispatch}
+    return {"getState": get_state, "setState": set_state, "dispatch": dispatch, "subscribe": subscribe, "applyEvent": dispatch}
 
 def summarizeSessionRecord(session: dict[str, Any]) -> dict[str, Any]:
     metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}

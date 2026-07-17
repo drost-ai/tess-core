@@ -110,7 +110,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_lock_timeout_notifies_observer_and_falls_back(self):
+    def test_lock_timeout_notifies_observer_and_fails_closed(self):
         root, home, workspace, previous = self.temp_context()
         try:
             path = str(home / "records" / "contended.json")
@@ -129,16 +129,20 @@ class MutateJsonFileTests(AgentCoreTestCase):
 
                     holder_task = asyncio.create_task(holder())
                     await entered.wait()
-                    async with core.fileLock(path, timeoutMs=150):
-                        pass
-                    release.set()
-                    await holder_task
+                    try:
+                        with self.assertRaises(core.StorageTransactionError) as error:
+                            async with core.fileLock(path, timeoutMs=150):
+                                pass
+                        self.assertEqual(error.exception.code, "storage.lock_timeout")
+                    finally:
+                        release.set()
+                        await holder_task
 
                 run(real_main())
             finally:
                 unsubscribe()
             self.assertTrue(events, "expected a lock-timeout notification")
-            self.assertEqual(events[0]["action"], "fallback_unlocked")
+            self.assertEqual(events[0]["action"], "failed_closed")
             self.assertEqual(events[0]["layer"], "in_process")
         finally:
             self.restore_home(root, previous)

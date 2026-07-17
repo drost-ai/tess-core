@@ -4,6 +4,7 @@ import math
 
 from .shared import *
 from ...provider_token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO, resolveCompactionRequestOutputTokens
+from ...usage_costs import mergeProviderUsage as _merge_provider_usage
 from ..compaction_models import resolveCompactionTokenPolicy
 
 
@@ -416,10 +417,7 @@ def _extract_evidence_file_references(transcript: str) -> list[dict[str, Any]]:
 
 
 def _merge_compaction_model_usage(target: dict[str, Any], usage: dict[str, Any]) -> None:
-    target["input_tokens"] = int(target.get("input_tokens") or 0) + int(usage.get("input_tokens") or usage.get("inputTokens") or 0)
-    target["output_tokens"] = int(target.get("output_tokens") or 0) + int(usage.get("output_tokens") or usage.get("outputTokens") or 0)
-    target["cache_creation_input_tokens"] = int(target.get("cache_creation_input_tokens") or 0) + int(usage.get("cache_creation_input_tokens") or usage.get("cacheCreationInputTokens") or 0)
-    target["cache_read_input_tokens"] = int(target.get("cache_read_input_tokens") or 0) + int(usage.get("cache_read_input_tokens") or usage.get("cacheReadInputTokens") or 0)
+    _merge_provider_usage(target, usage)
 
 
 def _normalize_evidence_token_budget(value: Any) -> int | None:

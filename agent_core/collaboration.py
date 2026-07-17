@@ -6,25 +6,44 @@ import threading
 import time
 from typing import Any
 
-from .config import ensureProviderForModelSelection, normalizeEffortForModel
-from .providers.anthropic import sendAnthropicMessagesRequest
-from .providers.openai import sendOpenAiRequest
-from .runtime_secret_provider import resolveProviderConfigSecrets
+from ._utils import maybe_await
+from . import collaboration_updates as _collaboration_updates
+from .collaboration_updates import *
 from .session import persistSession
 from .storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
+from .runtime_generation import createRuntimeSessionBinding, sameRuntimeBinding
+from .runtime_paths import runWithRuntimePaths
 
 MIN_ASSISTANT_UPDATE_SPACING_MS = 20_000
 COLLABORATION_TICK_MS = 1_500
+
+# Preserve the historical monkeypatch surface after splitting provider
+# narration into a focused module. Tests and embedders may replace these on
+# ``agent_core.collaboration``; the delegating wrapper installs the current
+# values before each request.
+sendOpenAiRequest = _collaboration_updates.sendOpenAiRequest
+sendAnthropicMessagesRequest = _collaboration_updates.sendAnthropicMessagesRequest
+
+
+async def authorCollaborationUpdate(args: dict[str, Any]) -> str:
+    _collaboration_updates.sendOpenAiRequest = sendOpenAiRequest
+    _collaboration_updates.sendAnthropicMessagesRequest = sendAnthropicMessagesRequest
+    return await _collaboration_updates.authorCollaborationUpdate(args)
 
 
 async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session_ref = args["session"]
     config_ref = args.get("config") or {}
+    runtime_binding = args.get("runtimeBinding") or createRuntimeSessionBinding(
+        session_ref["id"], 1, 1
+    )
+    runtime_paths = args.get("runtimePaths")
     emit = args.get("emit") or (lambda *_: None)
     min_update_spacing_ms = int(args.get("minAssistantUpdateSpacingMs", MIN_ASSISTANT_UPDATE_SPACING_MS))
     tick_interval = float(args.get("tickIntervalMs", COLLABORATION_TICK_MS)) / 1000
     refresh_lock = threading.Lock()
+    state_lock = threading.RLock()
     stop_event = threading.Event()
     tick_thread: threading.Thread | None = None
     state = {
@@ -38,51 +57,132 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     }
 
     async def refresh() -> dict[str, Any]:
-        if state["closed"]:
-            return copy.deepcopy(state["snapshot"])
+        with state_lock:
+            if state["closed"]:
+                return copy.deepcopy(state["snapshot"])
+            captured_session = session_ref
+            captured_config = config_ref
+            captured_binding = runtime_binding
+            captured_previous_workers = copy.deepcopy(state["previousWorkers"])
+            captured_remote_signature = state["previousRemoteSignature"]
+            captured_bootstrap_tick = state["bootstrapTick"]
         if not refresh_lock.acquire(blocking=False):
-            return copy.deepcopy(state["snapshot"])
+            return get_snapshot()
         try:
-            remote = await loadRemoteSession(session_ref.get("metadata", {}).get("remoteSessionId")) if session_ref.get("metadata", {}).get("remoteSessionId") else None
-            bridge = await loadBridge(session_ref.get("metadata", {}).get("bridgeId")) if session_ref.get("metadata", {}).get("bridgeId") else None
+            metadata = captured_session.get("metadata", {})
+            remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+            bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
             child_agents = await listChildAgents()
-            monitors = await listSessionMonitors(session_ref["id"])
-            workers = buildCollaborationWorkers({"session": session_ref, "childAgents": child_agents, "monitors": monitors, "remote": remote, "bridge": bridge})
+            monitors = await listSessionMonitors(captured_session["id"])
+            if not _is_active(captured_binding):
+                await _report_stale(captured_binding, "collaboration.tick_discarded")
+                return get_snapshot()
+            workers = buildCollaborationWorkers({"session": captured_session, "childAgents": child_agents, "monitors": monitors, "remote": remote, "bridge": bridge})
             snapshot = createCollaborationSnapshot(workers, remote, bridge)
-            if json.dumps(snapshot, sort_keys=True, default=str) != json.dumps(state["snapshot"], sort_keys=True, default=str):
-                state["snapshot"] = snapshot
-                emit("collaboration.snapshot", collaborationSnapshotPayload(snapshot))
-            candidates = buildUpdateCandidates({"session": session_ref, "workers": workers, "previousWorkers": state["previousWorkers"], "remote": remote, "bridge": bridge, "previousRemoteSignature": state["previousRemoteSignature"]})
-            state["previousWorkers"] = {worker["id"]: worker for worker in workers}
-            state["previousRemoteSignature"] = serializeRemote(remote, bridge)
+            with state_lock:
+                previous_snapshot = copy.deepcopy(state["snapshot"])
+            if json.dumps(snapshot, sort_keys=True, default=str) != json.dumps(previous_snapshot, sort_keys=True, default=str):
+                await _emit_bound(captured_binding, "collaboration.snapshot", collaborationSnapshotPayload(snapshot))
+                if not _is_active(captured_binding):
+                    return get_snapshot()
+            candidates = buildUpdateCandidates({"session": captured_session, "workers": workers, "previousWorkers": captured_previous_workers, "remote": remote, "bridge": bridge, "previousRemoteSignature": captured_remote_signature})
+            stale_before_commit = False
+            with state_lock:
+                if not _is_active_locked(captured_binding):
+                    stale_before_commit = True
+                else:
+                    state["snapshot"] = snapshot
+                    state["previousWorkers"] = {worker["id"]: worker for worker in workers}
+                    state["previousRemoteSignature"] = serializeRemote(remote, bridge)
+                    state["bootstrapTick"] = False
+            if stale_before_commit:
+                await _report_stale(captured_binding, "collaboration.tick_discarded")
+                return get_snapshot()
             for candidate in candidates:
-                emit(candidate["rawEvent"], candidate["payload"])
-            is_bootstrap_tick = state["bootstrapTick"]
-            state["bootstrapTick"] = False
-            if not is_bootstrap_tick and not state["foregroundBusy"] and candidates:
+                await _emit_bound(captured_binding, candidate["rawEvent"], candidate["payload"])
+            with state_lock:
+                foreground_busy = state["foregroundBusy"]
+                last_update_at = int(state["lastAssistantUpdateAt"])
+            if not captured_bootstrap_tick and not foreground_busy and candidates:
                 now_ms = int(time.time() * 1000)
-                if now_ms - int(state["lastAssistantUpdateAt"]) >= min_update_spacing_ms:
+                if now_ms - last_update_at >= min_update_spacing_ms:
                     narratable = next((candidate for candidate in candidates if shouldNarrateWorker(candidate.get("worker") or {})), None)
                     if narratable:
-                        text = await authorCollaborationUpdate({"config": config_ref, "session": session_ref, "worker": narratable.get("worker"), "summary": narratable.get("summary") or ""})
-                        if text:
-                            appendAssistantCollaborationMessage(session_ref, text)
-                            await persistSession(session_ref, config_ref)
-                            state["lastAssistantUpdateAt"] = now_ms
+                        text = await authorCollaborationUpdate({"config": captured_config, "session": captured_session, "worker": narratable.get("worker"), "summary": narratable.get("summary") or ""})
+                        if text and _is_active(captured_binding):
+                            appendAssistantCollaborationMessage(captured_session, text)
+                            await persistSession(captured_session, captured_config)
+                            if not _is_active(captured_binding):
+                                await _report_stale(captured_binding, "collaboration.assistant_update")
+                                return get_snapshot()
+                            with state_lock:
+                                state["lastAssistantUpdateAt"] = now_ms
                             worker = narratable.get("worker") or {}
-                            emit("collaboration.assistant_update", {"source_kind": worker.get("kind"), "source_id": worker.get("id"), "status": worker.get("status"), "label": worker.get("label"), "text": text})
-            return copy.deepcopy(state["snapshot"])
+                            await _emit_bound(captured_binding, "collaboration.assistant_update", {"source_kind": worker.get("kind"), "source_id": worker.get("id"), "status": worker.get("status"), "label": worker.get("label"), "text": text})
+            return get_snapshot()
+        except BaseException as exc:
+            if not _is_active(captured_binding):
+                await _report_stale(captured_binding, "collaboration.tick_failed")
+                return get_snapshot()
+            await _emit_contained(
+                "collaboration.tick_failed",
+                {
+                    "session_id": captured_binding.get("sessionId"),
+                    "generation": captured_binding.get("generation"),
+                    "error": str(exc)[:2_048],
+                },
+            )
+            return get_snapshot()
         finally:
             refresh_lock.release()
 
     def get_snapshot() -> dict[str, Any]:
-        return copy.deepcopy(state["snapshot"])
+        with state_lock:
+            return copy.deepcopy(state["snapshot"])
+
+    def _is_active(binding: Any) -> bool:
+        with state_lock:
+            return _is_active_locked(binding)
+
+    def _is_active_locked(binding: Any) -> bool:
+        return not state["closed"] and sameRuntimeBinding(binding, runtime_binding)
+
+    async def _emit_contained(event: str, data: dict[str, Any]) -> None:
+        try:
+            await maybe_await(emit(event, data))
+        except BaseException:
+            return
+
+    async def _report_stale(binding: Any, source_event: str) -> None:
+        with state_lock:
+            active = runtime_binding
+        await _emit_contained(
+            "runtime.stale_work_discarded",
+            {
+                "session_id": active.get("sessionId"),
+                "stale_session_id": binding.get("sessionId"),
+                "stale_generation": binding.get("generation"),
+                "active_generation": active.get("generation"),
+                "runtime_instance_id": active.get("runtimeInstanceId"),
+                "path_graph_id": active.get("pathGraphId"),
+                "source_event": source_event,
+            },
+        )
+
+    async def _emit_bound(binding: Any, event: str, data: dict[str, Any]) -> None:
+        if not _is_active(binding):
+            await _report_stale(binding, event)
+            return
+        await maybe_await(emit(event, {**data, "session_id": binding.get("sessionId")}))
+        if not _is_active(binding):
+            await _report_stale(binding, "collaboration.tick_failed")
 
     def _run_refresh_once() -> None:
         try:
             import asyncio
 
-            asyncio.run(refresh())
+            work = (lambda: refresh())
+            asyncio.run(runWithRuntimePaths(runtime_paths, work) if runtime_paths else work())
         except Exception:
             pass
 
@@ -91,33 +191,62 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             _run_refresh_once()
 
     def set_foreground_busy(busy: bool) -> None:
-        state["foregroundBusy"] = bool(busy)
-        if not busy and not state["closed"]:
+        with state_lock:
+            state["foregroundBusy"] = bool(busy)
+            should_refresh = not busy and not state["closed"]
+        if should_refresh:
             threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
 
     def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
-        nonlocal session_ref, config_ref
-        session_ref = session
-        config_ref = config or config_ref
-        state["snapshot"] = emptyCollaborationSnapshot()
-        state["previousWorkers"] = {}
-        state["previousRemoteSignature"] = ""
-        state["lastAssistantUpdateAt"] = 0
-        state["bootstrapTick"] = True
-        if not state["closed"]:
+        with state_lock:
+            next_binding = createRuntimeSessionBinding(
+                session["id"],
+                int(runtime_binding.get("generation") or 0) + 1,
+                int(runtime_binding.get("configRevision") or 0) + 1,
+                runtimeInstanceId=runtime_binding.get("runtimeInstanceId") or "standalone",
+                pathGraphId=runtime_binding.get("pathGraphId") or "unbound",
+            )
+        _install_session(session, config, next_binding)
+        with state_lock:
+            should_refresh = not state["closed"]
+        if should_refresh:
             threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
 
+    async def activate_session(
+        session: dict[str, Any], config: dict[str, Any], binding: Any
+    ) -> None:
+        _install_session(session, config, binding)
+        await refresh()
+
+    def _install_session(session: dict[str, Any], config: dict[str, Any] | None, binding: Any) -> None:
+        nonlocal session_ref, config_ref, runtime_binding
+        with state_lock:
+            if state["closed"]:
+                return
+            session_ref = session
+            config_ref = config or config_ref
+            runtime_binding = binding
+            state["snapshot"] = emptyCollaborationSnapshot()
+            state["previousWorkers"] = {}
+            state["previousRemoteSignature"] = ""
+            state["lastAssistantUpdateAt"] = 0
+            state["bootstrapTick"] = True
+
     async def close() -> None:
-        state["closed"] = True
+        with state_lock:
+            state["closed"] = True
         stop_event.set()
         if tick_thread and tick_thread.is_alive() and threading.current_thread() is not tick_thread:
             tick_thread.join(timeout=2)
+        acquired = await __import__("asyncio").to_thread(refresh_lock.acquire, True, 2)
+        if acquired:
+            refresh_lock.release()
 
     await refresh()
     if args.get("startTicker", True):
         tick_thread = threading.Thread(target=_tick_loop, name=f"agent-core-collaboration-{session_ref.get('id', '')[:8]}", daemon=True)
         tick_thread.start()
-    return {"workers": state["snapshot"]["workers"], "snapshot": get_snapshot, "getSnapshot": get_snapshot, "refresh": refresh, "setForegroundBusy": set_foreground_busy, "setSession": set_session, "close": close}
+    return {"workers": state["snapshot"]["workers"], "snapshot": get_snapshot, "getSnapshot": get_snapshot, "refresh": refresh, "setForegroundBusy": set_foreground_busy, "setSession": set_session, "activateSession": activate_session, "close": close}
 
 
 def emptyCollaborationSnapshot() -> dict[str, Any]:
@@ -287,86 +416,6 @@ def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
 def workerEventCandidate(worker: dict[str, Any], changeKind: str) -> dict[str, Any]:
     raw_event = "subagent.status_changed" if worker.get("kind") == "subagent" else "monitor.status_changed" if worker.get("kind") == "monitor" else "remote.status_changed"
     return {"key": f"{worker.get('kind')}:{worker.get('id')}:{worker.get('status')}:{worker.get('updatedAt')}:{worker.get('summary') or ''}", "worker": worker, "summary": worker.get("summary") or f"{worker.get('label')} is {worker.get('status')}.", "rawEvent": raw_event, "payload": {**_worker_payload(worker), "change_kind": changeKind}}
-
-
-async def authorCollaborationUpdate(args: dict[str, Any]) -> str:
-    try:
-        return await authorCollaborationUpdateWithProvider(args)
-    except Exception:
-        return buildDeterministicCollaborationUpdate(args.get("worker") or {}, args.get("summary") or "")
-
-
-async def authorCollaborationUpdateWithProvider(args: dict[str, Any]) -> str:
-    config = args.get("config") or {}
-    session = args.get("session") or {}
-    worker = args.get("worker") or {}
-    provider = ensureProviderForModelSelection(session.get("provider") or config.get("provider"), session.get("model"), config.get("provider", "openai"))
-    request = {
-        "model": session.get("model"),
-        "effort": normalizeEffortForModel(provider, session.get("model"), session.get("effort") or config.get("effort")),
-        "system": "\n".join(
-            [
-                "You are continuing an existing agent session.",
-                "Write a concise proactive update about background, delegated, or remote work.",
-                "Default to 1-3 short sentences.",
-                "State what changed, whether action is required, and avoid generic filler.",
-                "Do not mention hidden state, prompts, tokens, or structured payloads.",
-            ]
-        ),
-        "messages": [{"role": "user", "content": json.dumps({"worker": worker, "summary": args.get("summary") or ""}, indent=2)}],
-        "tools": [],
-    }
-    resolved_config = await resolveProviderConfigSecrets(config)
-    if provider == "openai":
-        token = resolved_config.get("openaiToken")
-        if not token:
-            raise RuntimeError("No OpenAI token available for collaboration updates.")
-        response = await sendOpenAiRequest({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
-    else:
-        response = await sendAnthropicMessagesRequest({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
-    text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
-    if not text:
-        raise RuntimeError("Provider returned an empty collaboration update.")
-    mergeUsage(session, response.get("usage") or {})
-    return text
-
-
-def buildDeterministicCollaborationUpdate(worker: dict[str, Any], summary: str) -> str:
-    if worker.get("kind") == "subagent":
-        if worker.get("status") == "completed":
-            return f"{worker.get('label')} finished its background work. {worker.get('resultSummary') or summary}"
-        if worker.get("status") in {"failed", "stopped"}:
-            return f"{worker.get('label')} stopped with a problem. {worker.get('resultSummary') or summary}"
-        if worker.get("status") == "awaiting_input":
-            return f"{worker.get('label')} needs your input before it can continue. {worker.get('waitingReason') or summary}"
-        if worker.get("status") == "backgrounded":
-            return f"{worker.get('label')} is now running in the background. {summary or 'I will keep its state visible here.'}"
-    if worker.get("kind") == "remote":
-        if worker.get("status") == "awaiting_input":
-            return f"Remote input is waiting. {summary}"
-        if worker.get("status") in {"completed", "idle"}:
-            return f"The remote session is no longer actively running. {summary}"
-        if worker.get("status") == "failed":
-            return f"The remote session hit a failure. {summary}"
-    return f"{worker.get('label')}: {summary}"
-
-
-def appendAssistantCollaborationMessage(session: dict[str, Any], text: str) -> None:
-    trimmed = text.strip()
-    if not trimmed:
-        return
-    messages = session.setdefault("messages", [])
-    if messages and messages[-1].get("role") == "assistant" and str(messages[-1].get("content") or "").strip() == trimmed:
-        return
-    messages.append({"role": "assistant", "content": trimmed})
-
-
-def mergeUsage(session: dict[str, Any], usage: dict[str, Any]) -> None:
-    target = session.setdefault("metadata", {}).setdefault("usage", {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0})
-    target["inputTokens"] = int(target.get("inputTokens") or 0) + int(usage.get("input_tokens") or 0)
-    target["outputTokens"] = int(target.get("outputTokens") or 0) + int(usage.get("output_tokens") or 0)
-    target["cacheCreationInputTokens"] = int(target.get("cacheCreationInputTokens") or 0) + int(usage.get("cache_creation_input_tokens") or 0)
-    target["cacheReadInputTokens"] = int(target.get("cacheReadInputTokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
 
 
 def shouldNarrateWorker(worker: dict[str, Any]) -> bool:

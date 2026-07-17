@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence, TextIO
 
 from ..agent_loop import runAgentPrompt
+from ..agent_runtime_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
 from ..config import resolveConfig
 from ..runtime import bootstrapRuntime
 from ..session import resolveSession
@@ -50,13 +51,27 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
     runtime["emitEvent"]("session.activated", activeSessionPayload(session, config))
 
     provider_override = _scripted_provider_override()
-    runtime_context = {
-        **runtime,
-        "interactive": False,
-        "print_mode": True,
-        "printMode": True,
-        "askQuestion": lambda *_args, **_kwargs: "",
-    }
+    daemon = runtime.get("daemon")
+    runtime_context = createAgentRuntimeBindings(
+        {
+            "tools": runtime["tools"],
+            "emitEvent": runtime["emitEvent"],
+            "daemon": {"state": "connected", "client": daemon}
+            if isTaskSupervisorGateway(daemon)
+            else {
+                "state": "unavailable",
+                "reason": {
+                    "code": "headless.daemon_unavailable",
+                    "message": "The task supervisor daemon is unavailable in this headless run.",
+                },
+            },
+            "refreshMcpToolRegistry": runtime["refreshMcpToolRegistry"],
+            "sessionBinding": runtime["getActiveBinding"](),
+            "questionPolicy": {"interactive": False, "askQuestion": lambda *_args, **_kwargs: ""},
+            "print_mode": True,
+            "printMode": True,
+        }
+    )
     result: dict[str, Any]
     exit_code = 0
     try:

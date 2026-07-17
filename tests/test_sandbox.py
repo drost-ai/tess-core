@@ -126,6 +126,7 @@ class SandboxTests(AgentCoreTestCase):
             events = []
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda payload: events.append(payload)}))
             session = core.createEmptySession(cwd=str(workspace), provider="openai", model="gpt-5.4", systemPrompt="s", permissionMode="bypassPermissions")
+            run(core.saveSession(session))
             started = run(
                 supervisor["startBackgroundCommand"](
                     {

@@ -42,6 +42,7 @@
       "wait_task_status": {
         "alias": "background",
         "status": "completed",
+        "event": "task.completed",
         "timeoutSeconds": 8
       }
     },

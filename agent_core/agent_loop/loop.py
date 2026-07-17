@@ -13,18 +13,31 @@ from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
+from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
+from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
 from ..hooks import fireToolHooks
 from ..permission_rules import findDispatchDenyRule
+from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
 
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+    values = {**(args or {}), **kwargs}
+    session = values["session"]
+    assertAgentRuntimeBindings(values.get("runtime"), session.get("id"))
+    config = values["config"]
+    paths = resolveRuntimePaths(candidate=config.get("runtimeHome")) if config.get("runtimeHome") else getActiveRuntimePaths()
+    return await runWithRuntimePaths(paths, lambda: _runAgentPromptInScope(values))
+
+
+async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
     prompt = args["prompt"]
-    runtime = args["runtime"]
+    runtime_bindings = args.get("runtime")
+    assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
+    runtime = materializeAgentExecutionRuntime(runtime_bindings)
     provider_override = args.get("providerOverride")
     authority = await enforceSessionAgentAuthority(session=session, config=config)
     repair = repairSessionTranscript(session)
@@ -230,7 +243,6 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         async def persist_tool_session() -> None:
             async def commit() -> None:
                 await persistSession(session, config)
-
             await persist_queue.run(commit)
 
         def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
@@ -252,6 +264,11 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                 "subagentLaunchGroupId": parent_turn_id,
             }
 
+        finish_tool_result = _create_tool_result_finalizer(
+            config=config, sessionId=session["id"],
+            assistantMessageIndex=len(session.get("messages", [])) - 1,
+            emit=lambda event, data: _safe_emit(runtime, event, data),
+        )
         async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
             nonlocal tool_count
             _throw_if_turn_cancelled(runtime)
@@ -269,8 +286,11 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             )
             if dispatch_deny:
                 message = f"Blocked by permission rule {dispatch_deny['raw']} ({dispatch_deny['scope']} settings)."
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
-                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
+                return await finish_tool_result(
+                    tool_use,
+                    {"kind": "synthesized", "content": message, "isError": True},
+                    rejected=True,
+                )
             if _requires_plan_approval(session):
                 is_mcp_candidate = bool(tool and getattr(tool, "mcp", None) is not None) or str(tool_use["name"]).startswith("mcp__")
                 if is_mcp_candidate:
@@ -301,39 +321,42 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                             f"MCP tool {server}/{mcp_tool_name} is blocked while plan approval is required "
                             f"({verdict['reason']})."
                         )
-                        _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
-                        return {
-                            "type": "tool_result",
-                            "tool_use_id": tool_use["id"],
-                            "is_error": True,
-                            "content": message,
-                            "_blockedByPlanContract": True,
-                        }
+                        return await finish_tool_result(
+                            tool_use,
+                            {"kind": "synthesized", "content": message, "isError": True},
+                            blocked_by_plan_contract=True,
+                            rejected=True,
+                        )
                 elif tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
                     message = f"{tool_use['name']} is not available while plan approval is still required."
-                    _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
-                    return {
-                        "type": "tool_result",
-                        "tool_use_id": tool_use["id"],
-                        "is_error": True,
-                        "content": message,
-                        "_blockedByPlanContract": True,
-                    }
+                    return await finish_tool_result(
+                        tool_use,
+                        {"kind": "synthesized", "content": message, "isError": True},
+                        blocked_by_plan_contract=True,
+                        rejected=True,
+                    )
             invalid_tool_input = _invalid_tool_input_message(tool_use)
             if invalid_tool_input:
                 tool_count += 1
                 usage_totals["toolCalls"] += 1
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": invalid_tool_input, "error": True, "session_id": session["id"]})
-                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": invalid_tool_input}
+                return await finish_tool_result(
+                    tool_use,
+                    {"kind": "synthesized", "content": invalid_tool_input, "isError": True},
+                )
             if not tool:
-                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": f"Tool not available: {tool_use['name']}", "error": True, "session_id": session["id"]})
-                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": f"Tool not available: {tool_use['name']}"}
+                return await finish_tool_result(
+                    tool_use,
+                    {"kind": "synthesized", "content": f"Tool not available: {tool_use['name']}", "isError": True},
+                )
             exceeded = check_subagent_runtime_limits(subagent_limits, subagent_limit_state())
             if exceeded and exceeded.get("reason") == "max_tool_calls":
                 result = build_subagent_tool_limit_result(tool_use, exceeded)
-                _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": result["content"], "error": True, "session_id": session["id"]})
                 _safe_emit(runtime, "subagent.limit_exceeded", {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")})
-                return result
+                return await finish_tool_result(
+                    tool_use,
+                    {"kind": "synthesized", "content": result["content"], "isError": True},
+                    tool_name=tool.name,
+                )
             tool_count += 1
             usage_totals["toolCalls"] += 1
             _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
@@ -367,17 +390,20 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
                         "emit": runtime.get("emitEvent"),
                     }
                 )
-                _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
-                block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": bool(result.get("isError")), "content": result.get("content", "")}
-                if result.get("pause") == "approval":
-                    block["_pauseMessage"] = (result.get("content") or "").strip() or "Approval required before continuing."
-                return block
+                return await finish_tool_result(
+                    tool_use,
+                    {"kind": "returned", "result": result},
+                    tool_name=tool.name,
+                    side_effects_may_have_occurred=True,
+                )
             except Exception as exc:
                 if _is_turn_abort_error(exc, runtime.get("abortSignal")):
                     raise
-                message = str(exc)
-                _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
-                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
+                return await finish_tool_result(
+                    tool_use,
+                    {"kind": "thrown", "error": exc},
+                    tool_name=tool.name,
+                )
 
         async def dispatch_single(tool_use: dict[str, Any]) -> dict[str, Any]:
             result = await run_single(tool_use)

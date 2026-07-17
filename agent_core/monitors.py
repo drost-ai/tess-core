@@ -16,7 +16,7 @@ from .providers.openai import sendOpenAiRequest
 from .runtime_secret_provider import resolveProviderConfigSecrets
 from .session import persistSession
 from .storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
-
+from .usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 MONITOR_TICK_MS = 1500
 DEFAULT_CHECK_INTERVAL_MS = 5000
@@ -37,6 +37,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     tick_in_flight = False
     snapshot = _empty_snapshot()
     bootstrap_baseline = _MonitorBootstrapBaseline()
+    stop_event = asyncio.Event()
 
     async def tick() -> None:
         nonlocal snapshot, tick_in_flight
@@ -144,7 +145,9 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     async def run_loop() -> None:
         while not closed:
             await tick()
-            await asyncio.sleep(tick_interval)
+            if not closed:
+                with _suppress():
+                    await asyncio.wait_for(stop_event.wait(), timeout=tick_interval)
 
     loop_task = asyncio.create_task(run_loop())
     await tick()
@@ -152,8 +155,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     async def close() -> None:
         nonlocal closed
         closed = True
-        with _suppress():
-            loop_task.cancel()
+        stop_event.set()
         with _suppress():
             if not loop_task.get_loop().is_closed():
                 await asyncio.gather(loop_task, return_exceptions=True)
@@ -431,11 +433,7 @@ def _append_assistant_monitor_message(session: dict[str, Any], text: str) -> Non
 
 
 def _merge_usage(session: dict[str, Any], usage: dict[str, Any]) -> None:
-    target = session.setdefault("metadata", {}).setdefault("usage", {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0})
-    target["inputTokens"] = int(target.get("inputTokens") or 0) + int(usage.get("input_tokens") or 0)
-    target["outputTokens"] = int(target.get("outputTokens") or 0) + int(usage.get("output_tokens") or 0)
-    target["cacheCreationInputTokens"] = int(target.get("cacheCreationInputTokens") or 0) + int(usage.get("cache_creation_input_tokens") or 0)
-    target["cacheReadInputTokens"] = int(target.get("cacheReadInputTokens") or 0) + int(usage.get("cache_read_input_tokens") or 0)
+    _merge_usage_into_session(session, usage)
 
 
 def _sync_session_monitor_metadata(session: dict[str, Any], monitors: list[dict[str, Any]]) -> None:

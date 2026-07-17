@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from .supervisor import _is_active_task_status, _project_session_task_records, _task_record_event_payload
 from ..runtime_identifiers import tryParseTaskId
+from ..runtime_paths import runWithRuntimePaths
 from ..storage import saveTaskRecord
 
 
@@ -18,6 +19,7 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
     session_ref = args.get("session") or {}
     config_ref = args.get("config") or {}
     emit: Callable[[str, dict[str, Any]], Any] = args.get("emit") or (lambda *_: None)
+    runtime_paths = args.get("runtimePaths")
     tick_interval = int(args.get("tickIntervalMs") or 1500) / 1000
     closed = False
     foreground_busy = False
@@ -34,7 +36,30 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
             return
         tick_in_flight = True
         try:
-            records = await _project_session_task_records(session_ref["id"], session_ref)
+            projection_issues: list[dict[str, Any]] = []
+            records = await _project_session_task_records(
+                session_ref["id"],
+                session_ref,
+                on_issue=projection_issues.append,
+            )
+            reported: set[tuple[Any, Any]] = set()
+            for issue in projection_issues:
+                key = (issue.get("taskId"), issue.get("reason"))
+                if key in reported:
+                    continue
+                reported.add(key)
+                emit(
+                    "task.projection_skipped",
+                    {
+                        "session_id": session_ref.get("id"),
+                        "task_id": issue.get("taskId"),
+                        "reason": issue.get("reason"),
+                        "record_family": issue.get("family"),
+                        "record_path": issue.get("filePath"),
+                        "record_size": issue.get("size"),
+                        "unavailable": issue.get("unavailable"),
+                    },
+                )
             for record in records:
                 # Monitor/remote rows use virtual display references. They are
                 # projected from their owning stores and must never become
@@ -115,7 +140,8 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
 
     def _run_tick_once() -> None:
         try:
-            asyncio.run(tick())
+            work = lambda: tick()
+            asyncio.run(runWithRuntimePaths(runtime_paths, work) if runtime_paths else work())
         except Exception as exc:
             emit("task.tick_failed", {"session_id": session_ref.get("id"), "error": str(exc)})
 

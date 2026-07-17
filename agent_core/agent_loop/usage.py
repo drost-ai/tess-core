@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .shared import *
+from ..usage_costs import ensureUsageTotals as _ensure_usage_totals_shared
+from ..usage_costs import mergeUsageIntoSession as _merge_usage_into_session_shared
 
 def _apply_plan_mode_overlay(base: str, session: dict[str, Any]) -> str:
     if session.get("permissionMode") != "plan":
@@ -11,17 +13,11 @@ def _apply_plan_mode_overlay(base: str, session: dict[str, Any]) -> str:
 def _requires_plan_approval(session: dict[str, Any]) -> bool:
     return session.get("permissionMode") == "plan" and session.get("metadata", {}).get("planMode", {}).get("state") != "approved"
 
-def _ensure_usage_totals(session: dict[str, Any]) -> dict[str, int]:
-    metadata = session.setdefault("metadata", {})
-    metadata.setdefault("usage", {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0})
-    return metadata["usage"]
+def _ensure_usage_totals(session: dict[str, Any]) -> dict[str, Any]:
+    return _ensure_usage_totals_shared(session)
 
 def _merge_usage_into_session(session: dict[str, Any], usage: dict[str, Any]) -> None:
-    totals = _ensure_usage_totals(session)
-    totals["inputTokens"] += int(usage.get("input_tokens") or 0)
-    totals["outputTokens"] += int(usage.get("output_tokens") or 0)
-    totals["cacheCreationInputTokens"] += int(usage.get("cache_creation_input_tokens") or 0)
-    totals["cacheReadInputTokens"] += int(usage.get("cache_read_input_tokens") or 0)
+    _merge_usage_into_session_shared(session, usage)
 
 def _estimate_usage_cost(usage: dict[str, Any], model: str) -> float:
     pricing = _resolve_pricing(model)

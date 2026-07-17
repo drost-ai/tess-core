@@ -7,6 +7,7 @@ async def _project_session_task_records(
     session_id: str,
     session: dict[str, Any] | None = None,
     live_work_cache: dict[str, Any] | None = None,
+    on_issue: Callable[[dict[str, Any]], Any] | None = None,
 ) -> list[dict[str, Any]]:
     session = session or await loadSession(session_id) or {"id": session_id, "metadata": {}}
     # Projection is also the existing restoration/attachment boundary. Verify
@@ -20,37 +21,67 @@ async def _project_session_task_records(
     records_by_id: dict[str, dict[str, Any]] = {}
 
     monitors = await listSessionMonitors(session_id)
+    child_agents = await listChildAgents()
+    health_checks = await listHealthCheckTasks()
+    for issue in listPersistedRecordIssues(
+        ("agent", "health_check", "monitor"),
+        getStateRoot(),
+    ):
+        if on_issue:
+            on_issue(_projection_issue(issue))
     task_ids = list(metadata.get("taskIds") or [])
     task_ids.extend(monitor.get("taskId") for monitor in monitors if monitor.get("taskId"))
-    task_ids.extend(task.get("taskId") for task in await listHealthCheckTasks() if task.get("sessionId") == session_id and task.get("taskId"))
+    task_ids.extend(task.get("taskId") for task in health_checks if task.get("sessionId") == session_id and task.get("taskId"))
     for task_id in _dedupe([item for item in task_ids if isinstance(item, str) and item]):
         try:
             meta = await readTaskMeta(task_id)
+            if not meta:
+                issue = getPersistedRecordIssue(taskMetaPath(task_id))
+                if on_issue:
+                    on_issue(
+                        _projection_issue(issue, task_id)
+                        if issue
+                        else {"taskId": task_id, "reason": "referenced task meta is missing", "unavailable": True}
+                    )
+                continue
+            task_type = meta.get("type") or ""
+            if task_type not in {"", "background_command", "main_session", "subagent", "health_check"}:
+                if on_issue:
+                    on_issue({"taskId": task_id, "reason": f'unknown task meta type "{task_type}"'})
+                continue
+            if task_type == "subagent" and any(
+                child.get("taskId") == task_id and _is_related_child_agent(session, child)
+                for child in child_agents
+            ):
+                continue
             if meta:
                 record = _build_task_record(meta, None, session)
                 related_monitor_ids = [monitor.get("id") for monitor in monitors if monitor.get("taskId") == task_id and monitor.get("id")]
                 if related_monitor_ids:
                     record["relatedMonitorIds"] = related_monitor_ids
                 records_by_id[task_id] = record
-        except Exception:
-            continue
+        except Exception as exc:
+            if on_issue:
+                on_issue({"taskId": task_id, "reason": str(exc)})
 
     for monitor in monitors:
         monitor_id = monitor.get("id")
         if monitor_id:
             try:
                 records_by_id[f"monitor:{monitor_id}"] = _build_monitor_task_record(session, monitor)
-            except Exception:
-                continue
+            except Exception as exc:
+                if on_issue:
+                    on_issue({"taskId": monitor.get("taskId"), "reason": str(exc)})
 
-    for child in await listChildAgents():
+    for child in child_agents:
         if _is_related_child_agent(session, child):
             try:
                 child_record = await _build_child_agent_task_record(session, child)
                 if child_record.get("id"):
                     records_by_id[str(child_record["id"])] = child_record
-            except Exception:
-                continue
+            except Exception as exc:
+                if on_issue:
+                    on_issue({"taskId": child.get("taskId") or child.get("agentId"), "reason": str(exc)})
 
     remote_id = metadata.get("remoteSessionId")
     remote = await loadRemoteSession(remote_id) if isinstance(remote_id, str) and remote_id else None
@@ -58,8 +89,9 @@ async def _project_session_task_records(
         try:
             bridge = await loadBridge(remote.get("bridgeId")) if isinstance(remote.get("bridgeId"), str) else None
             records_by_id[f"remote:{remote['id']}"] = _build_remote_task_record(session, remote, (bridge or {}).get("status"))
-        except Exception:
-            pass
+        except Exception as exc:
+            if on_issue:
+                on_issue({"reason": str(exc)})
 
     records = sorted(records_by_id.values(), key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
     await _sync_projected_task_metadata(session, records)
@@ -107,11 +139,12 @@ async def _sync_projected_task_metadata(session: dict[str, Any], records: list[d
     if not session.get("id"):
         return
     metadata = session.setdefault("metadata", {})
-    task_ids = [
+    projected_task_ids = [
         record.get("id")
         for record in records
         if record.get("kind") in {"background_command", "main_session", "health_check"} and record.get("id")
     ]
+    task_ids = _dedupe([*(metadata.get("taskIds") or []), *projected_task_ids])
     restore = {
         "savedAt": now_iso(),
         "activeTasks": [
@@ -230,6 +263,17 @@ def _restore_without_saved_at(value: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     return {key: item for key, item in value.items() if key != "savedAt"}
+
+
+def _projection_issue(issue: dict[str, Any], task_id: str | None = None) -> dict[str, Any]:
+    return {
+        "taskId": task_id if task_id is not None else issue.get("id"),
+        "reason": issue.get("reason"),
+        "family": issue.get("family"),
+        "filePath": issue.get("filePath"),
+        "size": issue.get("size"),
+        "unavailable": issue.get("unavailable", True),
+    }
 
 
 def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:

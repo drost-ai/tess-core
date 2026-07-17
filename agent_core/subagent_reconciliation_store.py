@@ -7,6 +7,21 @@ from .subagent_reconciliation import (
     subagentReconciliationLogPath,
     upsertSubagentReconciliation,
 )
+from .subagent_coordination import (
+    claimSubagentLaunchGroupContinuation,
+    claimUnconsumedSubagentReconciliations,
+    completeSubagentReconciliationClaim,
+    listSubagentLaunchGroups,
+    listSubagentReconciliations,
+    markSubagentLaunchGroupContinuationCompleted,
+    markSubagentLaunchGroupContinuationRunning,
+    markSubagentLaunchGroupContinuationStarting,
+    releaseSubagentLaunchGroupContinuationClaim,
+    releaseSubagentReconciliationClaim,
+    upsertSubagentLaunchGroup,
+    withSubagentCoordinationTransaction,
+)
+from .subagent_continuation_recovery import recoverSubagentLaunchGroupContinuations
 
 
 subagent_reconciliation_log_path = subagentReconciliationLogPath

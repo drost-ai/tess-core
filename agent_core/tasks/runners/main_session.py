@@ -8,7 +8,9 @@ import sys
 from typing import Any
 
 from ...agent import runAgentPrompt
+from ...agent_runtime_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
+from ...runtime_generation import createRuntimeSessionBinding
 from ...storage import configureRuntimeHome, loadSession, saveSession
 from ...tools import createBuiltinTools
 
@@ -27,12 +29,14 @@ async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
     def emit_event(event: str, data: dict[str, Any]) -> None:
         events.append({"event": event, "data": data})
 
-    runtime = {
-        "interactive": False,
-        "askQuestion": lambda *_args: "",
+    runtime = createAgentRuntimeBindings({
         "emitEvent": emit_event,
         "tools": createBuiltinTools(),
-    }
+        "daemon": {"state": "unavailable", "reason": {"code": "background.daemon_unavailable", "message": "No task daemon is attached to this background runner."}},
+        "refreshMcpToolRegistry": lambda: None,
+        "sessionBinding": createRuntimeSessionBinding(session["id"], 1, 1),
+        "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
+    })
     result = await runAgentPrompt({"session": session, "config": config, "prompt": args["prompt"], "runtime": runtime})
     await saveSession(session)
     return {

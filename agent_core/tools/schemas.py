@@ -93,7 +93,27 @@ BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["pattern"],
     },
     "Bash": {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number"}, "description": {"type": "string"}, "run_in_background": {"type": "boolean"}, "dangerouslyDisableSandbox": {"type": "boolean"}}, "required": ["command"]},
-    "TodoWrite": {"type": "object", "properties": {"todos": {"type": "array", "items": {"type": "object", "properties": {"content": {"type": "string"}, "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]}, "activeForm": {"type": "string"}}, "required": ["content", "status", "activeForm"], "additionalProperties": False}}}, "required": ["todos"]},
+    "TodoWrite": {
+        "type": "object",
+        "properties": {
+            "todos": {
+                "type": "array",
+                "description": "At most 100 items. This limit is enforced at runtime.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "Non-empty todo text of at most 2000 UTF-8 bytes. This limit is enforced at runtime."},
+                        "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]},
+                        "activeForm": {"type": "string", "description": "Present-progress label of at most 1000 UTF-8 bytes. This limit is enforced at runtime."},
+                    },
+                    "required": ["content", "status", "activeForm"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["todos"],
+        "additionalProperties": False,
+    },
     "WebFetch": {"type": "object", "properties": {"url": {"type": "string"}, "prompt": {"type": "string"}}, "required": ["url", "prompt"]},
     "WebSearch": {
         "type": "object",

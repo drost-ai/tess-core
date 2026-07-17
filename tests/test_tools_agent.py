@@ -47,7 +47,7 @@ class ToolAgentTests(AgentCoreTestCase):
             self.assertEqual(parent["metadata"]["childAgentIds"], [payload["agent_id"]])
             self.assertEqual(parent["metadata"]["childSessionIds"], [payload["session_id"]])
             self.assertEqual(captured["childSession"]["messages"], [{"role": "user", "content": "Find the issue"}])
-            self.assertEqual(captured["childSession"]["permissionMode"], "acceptEdits")
+            self.assertEqual(captured["childSession"]["permissionMode"], "plan")
             self.assertEqual(captured["childSession"]["metadata"]["depth"], 1)
             self.assertEqual(captured["childSession"]["metadata"]["parentSessionId"], parent["id"])
             self.assertNotIn("assistantName", captured["childSession"]["metadata"])
@@ -183,24 +183,47 @@ class ToolAgentTests(AgentCoreTestCase):
         try:
             class FakeProc:
                 pid = 4321
+                def __init__(self):
+                    self.stdin = io.BytesIO()
+
+                def poll(self):
+                    return None
+
+                def terminate(self):
+                    return None
 
             spawn_calls = []
 
-            def fake_spawn(task_id, session_id, agent_id, cwd, output_file):
+            def fake_spawn(task_id, session_id, agent_id, cwd, output_file, **_kwargs):
                 spawn_calls.append({"task_id": task_id, "session_id": session_id, "agent_id": agent_id, "cwd": cwd, "output_file": output_file})
                 return FakeProc()
+
+            async def fake_capture_identity(args):
+                digest = core.digestExpectedCommand(args["expectedArgv"])
+                return {
+                    "schemaVersion": 1,
+                    "pid": 4321,
+                    "processGroupId": 4321,
+                    "spawnedAt": args["spawnedAt"],
+                    "startToken": "fixture-start-token",
+                    "observedCommandDigest": digest,
+                    "expectedCommandDigest": digest,
+                    "platform": "test",
+                }
 
             subagents_module._spawn_local_subagent_worker = fake_spawn
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(parent))
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             events = []
-            result = run(
-                agent.handler(
-                    {"description": "Local async", "prompt": "Run locally", "run_in_background": True},
-                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None},
+            with mock.patch("agent_core.task_process_launch.captureOwnedProcessIdentity", fake_capture_identity):
+                result = run(
+                    agent.handler(
+                        {"description": "Local async", "prompt": "Run locally", "run_in_background": True},
+                        {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None},
+                    )
                 )
-            )
             payload = json.loads(result["content"])
             self.assertEqual(payload["status"], "running")
             self.assertEqual(payload["run_in_background"], True)
@@ -275,6 +298,7 @@ class ToolAgentTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(parent))
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             events = []
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
@@ -321,6 +345,15 @@ class ToolAgentTests(AgentCoreTestCase):
             child["metadata"]["parentSessionId"] = parent["id"]
             child["metadata"]["agentId"] = "agent-worker"
             child["metadata"]["agentName"] = "Worker"
+            child_authority = run(
+                core.captureAgentAuthority(
+                    config=config,
+                    session=child,
+                    tools=core.createBuiltinTools(),
+                )
+            )
+            child["metadata"]["effectiveAgentAuthority"] = child_authority
+            run(core.saveSession(parent))
             run(core.saveSession(child))
             run(
                 core.saveChildAgent(
@@ -337,6 +370,7 @@ class ToolAgentTests(AgentCoreTestCase):
                         "startedAt": "2026-01-01T00:00:00Z",
                         "owner": "daemon",
                         "attachableSessionId": child["id"],
+                        "effectiveAgentAuthority": child_authority,
                     }
                 )
             )
@@ -350,7 +384,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 time.sleep(0.05)
             meta = run(core.readTaskMeta(task_id))
             self.assertEqual(meta["type"], "subagent")
-            self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["status"], "completed", meta)
             self.assertEqual(meta["agent_id"], "agent-worker")
             self.assertEqual(meta["session_id"], child["id"])
             self.assertEqual(meta["completionReason"], "worker_completed")

@@ -1,30 +1,51 @@
 from __future__ import annotations
 
 from .shared import *
+from ...todo_policy import TODO_WRITE_LIMITS as _TODO_WRITE_LIMITS
+from ...todo_policy import boundTodoViewText as _bound_todo_view_text
+from ...todo_policy import selectTodoState as _select_todo_state
 
 
 def renderContinuationOverlay(session: dict[str, Any]) -> str | None:
-    parts = [renderTodoOverlay(session), renderPlanOverlay(session)]
+    parts = [renderTodoOverlay(session), _render_active_task_overlay(session), renderPlanOverlay(session)]
     return "\n\n".join(part for part in parts if part) or None
 
 
 def renderTodoOverlay(session: dict[str, Any]) -> str | None:
-    todos = session.get("todos") or []
+    selected = _select_todo_state(session.get("todos", []), {"maxOpen": 12, "maxCompleted": 6})
     open_entries = []
-    for todo in [todo for todo in todos if todo.get("status") != "completed"][:12]:
-        status = "in progress" if todo.get("status") == "in_progress" else "pending"
+    for todo in selected["open"]:
+        status = "in progress" if todo.get("status") == "in_progress" else "pending" if todo.get("status") == "pending" else "unknown"
         open_entries.append(f"{status}: {todo.get('activeForm') or todo.get('content')}")
-    completed = [todo.get("content") for todo in todos if todo.get("status") == "completed"][-6:]
+    completed = [todo.get("content") for todo in selected["completed"]]
     if not open_entries and not completed:
         return None
     return "\n".join(
         [
             "<todo_state>",
+            f"total={selected['total']}",
+            f"returned={len(open_entries) + len(completed)}",
+            f"omitted={max(0, selected['total'] - len(open_entries) - len(completed))}",
             *[f"open={entry}" for entry in open_entries],
             *[f"completed={entry}" for entry in completed if entry],
             "</todo_state>",
         ]
     )
+
+
+def _render_active_task_overlay(session: dict[str, Any]) -> str | None:
+    active = (session.get("metadata") or {}).get("activeTask")
+    if not isinstance(active, dict) or not str(active.get("content") or "").strip():
+        return None
+    lines = [
+        "<active_task>",
+        f"source={active.get('source')}",
+        f"content={_bound_todo_view_text(active.get('content'))}",
+    ]
+    if active.get("activeForm"):
+        lines.append(f"active_form={_bound_todo_view_text(active.get('activeForm'), _TODO_WRITE_LIMITS['maxViewActiveFormBytes'])}")
+    lines.append("</active_task>")
+    return "\n".join(lines)
 
 
 def renderPlanOverlay(session: dict[str, Any]) -> str | None:

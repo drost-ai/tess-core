@@ -79,6 +79,16 @@
           "foregroundable": true,
           "id": "<uuid:3>",
           "kind": "background_command",
+          "launchReservation": {
+            "attachedAt": "<timestamp>",
+            "createdAt": "<timestamp>",
+            "kind": "background_command",
+            "reservationId": "<uuid:7>",
+            "schemaVersion": 1,
+            "sessionId": "<uuid:1>",
+            "state": "attached",
+            "taskId": "<uuid:3>"
+          },
           "metadata": {
             "detached_type": "background_command",
             "exitCode": 0,
@@ -96,6 +106,16 @@
           "outputFile": "<runtime-home>/tasks/<uuid:3>/output.log",
           "owner": "daemon",
           "parentTaskId": null,
+          "processIdentity": {
+            "expectedCommandDigest": "<expected-command-digest>",
+            "observedCommandDigest": "<observed-command-digest>",
+            "pid": "<pid:2>",
+            "platform": "darwin",
+            "processGroupId": "<pid:2>",
+            "schemaVersion": 1,
+            "spawnedAt": "<timestamp>",
+            "startToken": "<process-start-token>"
+          },
           "relatedChildSessionIds": [],
           "relatedMonitorIds": [
             "<uuid:2>"

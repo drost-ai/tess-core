@@ -202,7 +202,7 @@ def tree_snapshot(root: Path) -> list[dict[str, Any]]:
         return []
     entries: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*")):
-        if path.name.endswith(".json.lock"):
+        if path.name.endswith(".json.lock") or (path.parent.name == "locks" and path.suffix == ".lock"):
             # Transient advisory-lock sidecars (storage_store.fileLock) are
             # infrastructure, not observable state; keep goldens stable.
             continue

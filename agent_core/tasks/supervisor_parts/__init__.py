@@ -14,6 +14,7 @@ _MODULE_NAMES = [
     "subagent_launch",
     "health",
     "communication",
+    "record_issues",
     "projection",
     "reconciliation",
 ]

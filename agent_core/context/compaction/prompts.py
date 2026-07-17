@@ -1,15 +1,31 @@
 from __future__ import annotations
 
 from .shared import *
+from ...todo_policy import TODO_WRITE_LIMITS as _TODO_WRITE_LIMITS
+from ...todo_policy import boundTodoViewText as _bound_todo_view_text
+from ...todo_policy import selectTodoState as _select_todo_state
 
 
 def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
     session = args["session"]
     evidence = args["evidence"]
     model = args["model"]
+    selected_todos = _select_todo_state(
+        session.get("todos", []), {"maxOpen": MAX_TODOS, "maxCompleted": MAX_TODOS}
+    )
+    active_task = (session.get("metadata") or {}).get("activeTask")
     todo_snapshot = {
-        "open": [summarizeTodo(todo) for todo in session.get("todos", []) if todo.get("status") != "completed"],
-        "completed": [summarizeTodo(todo) for todo in session.get("todos", []) if todo.get("status") == "completed"],
+        "originalItemCount": selected_todos["total"],
+        "returnedItemCount": len(selected_todos["open"]) + len(selected_todos["completed"]),
+        "omittedItemCount": max(0, selected_todos["total"] - len(selected_todos["open"]) - len(selected_todos["completed"])),
+        "statusCounts": selected_todos["statusCounts"],
+        "activeTask": {
+            **active_task,
+            "content": _bound_todo_view_text(active_task.get("content")),
+            "activeForm": _bound_todo_view_text(active_task.get("activeForm"), _TODO_WRITE_LIMITS["maxViewActiveFormBytes"]),
+        } if isinstance(active_task, dict) else None,
+        "open": [summarizeTodo(todo) for todo in selected_todos["open"]],
+        "completed": [summarizeTodo(todo) for todo in selected_todos["completed"]],
     }
     lines = [
         "Synthesize the next working context for this session.",
@@ -46,7 +62,7 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
         "- Use the available budget to preserve trace fidelity. Do not produce a tiny executive summary when the source range is large.",
         "- If you cannot preserve the important trace details within the output budget, set shouldCheckpoint to false and explain the missing fidelity.",
         "",
-        "Exact current todo snapshot:",
+        "Bounded current todo snapshot (counts describe the full stored state):",
         json.dumps(todo_snapshot, indent=2, ensure_ascii=False),
         "",
         "Latest saved plan state:",
@@ -197,6 +213,11 @@ def renderWorkingContextPromptContext(context: dict[str, Any]) -> str:
         if plan.get("filePath"):
             lines.append(f"- file: {plan['filePath']}")
     appendPromptList(lines, "open_todos", todos.get("open") or [])
+    if todos.get("originalItemCount") is not None:
+        lines.append(
+            f"todo_cardinality: total={todos['originalItemCount']} "
+            f"returned={todos.get('returnedItemCount', 0)} omitted={todos.get('omittedItemCount', 0)}"
+        )
     appendPromptList(lines, "recent_searches", activity.get("searches") or [])
     appendPromptList(lines, "recent_commands", activity.get("commands") or [])
     appendPromptList(lines, "recent_web", activity.get("web") or [])

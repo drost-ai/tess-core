@@ -421,14 +421,14 @@ class Package28DispatchTests(AgentCoreTestCase):
                 await core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={
+                    runtime=bind_test_runtime(session, {
                         "interactive": False,
                         "askQuestion": lambda *_: "",
                         "emitEvent": lambda event, data: events.append((event, data)),
                         "tools": [tool],
                         "repositoryIdentity": "repo-identity",
                         "resolveMcpOperatorPolicy": resolve_operator_policy,
-                    },
+                    }),
                     prompt="run",
                     providerOverride={"send": send},
                 )

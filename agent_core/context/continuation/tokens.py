@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...todo_policy import selectTodoState as _select_todo_state
 
 
 def estimateMessagesTokens(messages: list[dict[str, Any]]) -> int:
@@ -13,7 +14,11 @@ def estimateMessagesTokens(messages: list[dict[str, Any]]) -> int:
 
 
 def estimateTodoAndPlanTokens(session: dict[str, Any]) -> int:
-    todo_text = "\n".join(" ".join(str(part) for part in (todo.get("content"), todo.get("activeForm"), todo.get("status")) if part) for todo in session.get("todos", []))
+    selected = _select_todo_state(session.get("todos", []), {"maxOpen": 20, "maxCompleted": 8})
+    todo_text = "\n".join(
+        " ".join(str(part) for part in (todo.get("content"), todo.get("activeForm"), todo.get("status")) if part)
+        for todo in [*selected["open"], *selected["completed"]]
+    )
     plan_state = (session.get("metadata") or {}).get("planMode")
     plan_text = plan_state.get("plan") if isinstance(plan_state, dict) and isinstance(plan_state.get("plan"), str) else ""
     return estimateTextTokens(f"{todo_text}\n{plan_text}")

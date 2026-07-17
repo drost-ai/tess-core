@@ -9,10 +9,12 @@ from typing import Any
 
 from ...agent import runAgentPrompt
 from ...agent_authority import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
+from ...agent_runtime_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, saveSession
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...tools import createBuiltinTools
+from ...runtime_generation import createRuntimeSessionBinding
 
 
 async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:
@@ -42,12 +44,14 @@ async def _execute_background_subagent(args: dict[str, Any]) -> tuple[dict[str, 
     def emit_event(event: str, data: dict[str, Any]) -> None:
         events.append({"event": event, "data": data})
 
-    runtime = {
-        "interactive": False,
-        "askQuestion": lambda *_args: "",
+    runtime = createAgentRuntimeBindings({
         "emitEvent": emit_event,
         "tools": createBuiltinTools(),
-    }
+        "daemon": {"state": "unavailable", "reason": {"code": "subagent.daemon_unavailable", "message": "No task daemon is attached to this background subagent runner."}},
+        "refreshMcpToolRegistry": lambda: None,
+        "sessionBinding": createRuntimeSessionBinding(session["id"], 1, 1),
+        "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
+    })
     result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
     payload = {"ok": True, "session_id": session["id"], "agent_id": args["agentId"], "task_id": args["taskId"], "result": {"text": result.get("text"), "stopReason": result.get("stopReason"), "toolCount": result.get("toolCount"), "usage": result.get("usage")}, "events": events[-20:]}
     return session, result, payload

@@ -183,7 +183,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
             unsubscribe()
             run(boot["close"]())
 
-            self.assertEqual(order, ["session.activated", "monitors", "tasks", "collaboration", "workspace", "workspace.refresh"])
+            self.assertEqual(order, ["monitors", "tasks", "collaboration", "workspace", "workspace.refresh", "session.activated"])
         finally:
             self.restore_home(root, previous)
 

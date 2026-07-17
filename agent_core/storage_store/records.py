@@ -13,6 +13,19 @@ from ..runtime_identifiers import (
     parseApprovalRequestId,
     parseMonitorId,
     parseTaskId,
+    tryParseAgentId,
+    tryParseApprovalRequestId,
+    tryParseMonitorId,
+    tryParseTaskId,
+)
+from ..persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
+from ..persisted_record_validation import (
+    isChildAgentRecord,
+    isHealthCheckTaskRecord,
+    isMonitorRecord,
+    isPlanApprovalRecord,
+    isTaskMetaRecord,
+    isTaskRecord,
 )
 
 from .shared import *
@@ -123,6 +136,15 @@ async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
             records.append(value)
     return records
 
+
+def _json_candidate(directory: str, entry: os.DirEntry[str], parse_id) -> dict[str, str] | None:
+    if not entry.name.endswith(".json"):
+        return None
+    record_id = parse_id(entry.name[:-5])
+    if record_id is None:
+        return None
+    return {"id": record_id, "filePath": os.path.join(directory, entry.name)}
+
 async def saveChildAgent(record: ChildAgentRecord) -> None:
     path = childAgentPath(record["agentId"])
     async with fileLock(path):
@@ -151,11 +173,24 @@ async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:
         return updated
 
 async def loadChildAgent(agentId: str) -> ChildAgentRecord | None:
-    return await _load_by_path(childAgentPath(agentId))
+    agent_id = parseAgentId(agentId)
+    result = await readPersistedJsonRecord(
+        family="agent",
+        id=agent_id,
+        filePath=childAgentPath(agent_id),
+        validate=isChildAgentRecord,
+    )
+    return result.get("record")
 
 async def listChildAgents() -> list[ChildAgentRecord]:
-    records = await _list_json_records(os.path.join(getStateRoot(), "agents"), loadChildAgent)
-    return sorted(records, key=lambda item: item.get("startedAt", ""), reverse=True)
+    directory = os.path.join(getStateRoot(), "agents")
+    scan = await scanPersistedJsonRecords(
+        family="agent",
+        directory=directory,
+        select=lambda entry: _json_candidate(directory, entry, tryParseAgentId),
+        validate=isChildAgentRecord,
+    )
+    return sorted(scan["records"], key=lambda item: item.get("startedAt", ""), reverse=True)
 
 def planApprovalPath(requestId: str) -> str:
     return os.path.join(
@@ -168,11 +203,24 @@ async def savePlanApproval(record: PlanApprovalRecord) -> None:
     await _save_by_path(planApprovalPath(record["requestId"]), record)
 
 async def loadPlanApproval(requestId: str) -> PlanApprovalRecord | None:
-    return await _load_by_path(planApprovalPath(requestId))
+    request_id = parseApprovalRequestId(requestId)
+    result = await readPersistedJsonRecord(
+        family="plan_approval",
+        id=request_id,
+        filePath=planApprovalPath(request_id),
+        validate=isPlanApprovalRecord,
+    )
+    return result.get("record")
 
 async def listPlanApprovals() -> list[PlanApprovalRecord]:
-    records = await _list_json_records(os.path.join(getStateRoot(), "plan-approvals"), loadPlanApproval)
-    return sorted(records, key=lambda item: item.get("createdAt", ""), reverse=True)
+    directory = os.path.join(getStateRoot(), "plan-approvals")
+    scan = await scanPersistedJsonRecords(
+        family="plan_approval",
+        directory=directory,
+        select=lambda entry: _json_candidate(directory, entry, tryParseApprovalRequestId),
+        validate=isPlanApprovalRecord,
+    )
+    return sorted(scan["records"], key=lambda item: item.get("createdAt", ""), reverse=True)
 
 PLAN_ADJECTIVES = ["amber", "brisk", "clear", "copper", "ember", "gentle", "midnight", "quiet", "rapid", "silver", "solid", "steady", "sunlit", "tidy", "velvet"]
 PLAN_NOUNS = ["anchor", "beacon", "bridge", "compass", "falcon", "harbor", "lantern", "meadow", "signal", "sparrow", "summit", "thunder", "trail", "valley", "willow"]
@@ -235,19 +283,39 @@ async def mutateTaskMeta(taskId: str, mutate, fallback: TaskMeta | None = None) 
         return updated
 
 async def readTaskMeta(taskId: str) -> TaskMeta | None:
-    return await readJsonFile(taskMetaPath(taskId), None)
+    task_id = parseTaskId(taskId)
+    result = await readPersistedJsonRecord(
+        family="task_meta",
+        id=task_id,
+        filePath=taskMetaPath(task_id),
+        validate=isTaskMetaRecord,
+    )
+    return result.get("record")
 
 async def saveTaskRecord(record: TaskRecord) -> None:
     path = taskRecordPath(record["id"])
     async with fileLock(path):
-        await writeJsonFile(path, record)
+        await writeJsonFile(path, _omit_none_fields(record))
 
 async def loadTaskRecord(taskId: str) -> TaskRecord | None:
-    return await readJsonFile(taskRecordPath(taskId), None)
+    task_id = parseTaskId(taskId)
+    result = await readPersistedJsonRecord(
+        family="task_record",
+        id=task_id,
+        filePath=taskRecordPath(task_id),
+        validate=isTaskRecord,
+    )
+    return result.get("record")
 
 async def listTaskRecords() -> list[TaskRecord]:
-    records = await _list_json_records(os.path.join(getStateRoot(), "task-records"), loadTaskRecord)
-    return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    directory = os.path.join(getStateRoot(), "task-records")
+    scan = await scanPersistedJsonRecords(
+        family="task_record",
+        directory=directory,
+        select=lambda entry: _json_candidate(directory, entry, tryParseTaskId),
+        validate=isTaskRecord,
+    )
+    return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 async def listSessionTaskRecords(sessionId: str) -> list[TaskRecord]:
     return [task for task in await listTaskRecords() if task.get("sessionId") == sessionId]
@@ -258,11 +326,24 @@ async def saveMonitor(record: MonitorRecord) -> None:
         await writeJsonFile(path, record)
 
 async def loadMonitor(monitorId: str) -> MonitorRecord | None:
-    return await readJsonFile(monitorPath(monitorId), None)
+    monitor_id = parseMonitorId(monitorId)
+    result = await readPersistedJsonRecord(
+        family="monitor",
+        id=monitor_id,
+        filePath=monitorPath(monitor_id),
+        validate=isMonitorRecord,
+    )
+    return result.get("record")
 
 async def listMonitors() -> list[MonitorRecord]:
-    records = await _list_json_records(os.path.join(getStateRoot(), "monitors"), loadMonitor)
-    return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    directory = os.path.join(getStateRoot(), "monitors")
+    scan = await scanPersistedJsonRecords(
+        family="monitor",
+        directory=directory,
+        select=lambda entry: _json_candidate(directory, entry, tryParseMonitorId),
+        validate=isMonitorRecord,
+    )
+    return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 async def listSessionMonitors(sessionId: str) -> list[MonitorRecord]:
     return [monitor for monitor in await listMonitors() if monitor.get("sessionId") == sessionId]
@@ -287,20 +368,27 @@ async def mutateHealthCheckTask(taskId: str, mutate) -> TaskMeta | None:
         return updated
 
 async def loadHealthCheckTask(taskId: str) -> TaskMeta | None:
-    return await readJsonFile(healthCheckMetaPath(taskId), None)
+    task_id = parseTaskId(taskId)
+    result = await readPersistedJsonRecord(
+        family="health_check",
+        id=task_id,
+        filePath=healthCheckMetaPath(task_id),
+        validate=isHealthCheckTaskRecord,
+    )
+    return result.get("record")
 
 async def listHealthCheckTasks() -> list[TaskMeta]:
     directory = os.path.join(getStateRoot(), "tasks")
-    try:
-        names = [name for name in os.listdir(directory) if os.path.isdir(os.path.join(directory, name))]
-    except FileNotFoundError:
-        return []
-    records = []
-    for name in names:
-        try:
-            record = await loadHealthCheckTask(name)
-        except RuntimeIdentifierError:
-            continue
-        if record:
-            records.append(record)
-    return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
+    def select(entry: os.DirEntry[str]) -> dict[str, str] | None:
+        task_id = tryParseTaskId(entry.name)
+        if task_id is None or not entry.is_dir(follow_symlinks=False):
+            return None
+        return {"id": task_id, "filePath": healthCheckMetaPath(task_id)}
+
+    scan = await scanPersistedJsonRecords(
+        family="health_check",
+        directory=directory,
+        select=select,
+        validate=isHealthCheckTaskRecord,
+    )
+    return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)

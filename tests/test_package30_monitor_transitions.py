@@ -154,8 +154,9 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
             path = Path(core.monitorPath(monitor["id"]))
             before = path.read_bytes()
             context["session"] = {**context["session"], "id": "different-session"}
-            result = run(tool.handler({"monitor_id": monitor["id"]}, context))
-            self.assertTrue(result["isError"])
+            with self.assertRaises(core.TaskOwnershipError) as error:
+                run(tool.handler({"monitor_id": monitor["id"]}, context))
+            self.assertEqual(error.exception.code, "task.not_owned")
             self.assertEqual(path.read_bytes(), before)
             self.assertEqual(events, [])
         finally:

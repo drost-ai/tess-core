@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable
 
+from .usage_costs import mergeProviderUsage as _merge_provider_usage
+
 
 MISSING = object()
 
@@ -79,13 +81,7 @@ def pretty_json(value: Any) -> str:
 
 
 def merge_usage(target: dict[str, Any], next_usage: dict[str, Any]) -> None:
-    for source, dest in (
-        ("input_tokens", "input_tokens"),
-        ("output_tokens", "output_tokens"),
-        ("cache_creation_input_tokens", "cache_creation_input_tokens"),
-        ("cache_read_input_tokens", "cache_read_input_tokens"),
-    ):
-        target[dest] = int(target.get(dest) or 0) + int(next_usage.get(source) or 0)
+    _merge_provider_usage(target, next_usage)
 
 
 def truthy_string(value: Any) -> str | None:

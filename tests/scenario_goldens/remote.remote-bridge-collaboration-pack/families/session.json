@@ -97,7 +97,10 @@
       "task-monitor"
     ],
     "usage": {
+      "cacheCreation1hInputTokens": 0,
+      "cacheCreation5mInputTokens": 0,
       "cacheCreationInputTokens": 0,
+      "cacheCreationTtlDetailComplete": true,
       "cacheReadInputTokens": 0,
       "inputTokens": 0,
       "outputTokens": 0,

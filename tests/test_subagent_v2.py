@@ -121,7 +121,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                         "session": session,
                         "config": config,
                         "prompt": "run",
-                        "runtime": {"tools": tools, "interactive": False, "emitEvent": lambda *_: None},
+                        "runtime": bind_test_runtime(session, {"tools": tools, "interactive": False, "emitEvent": lambda *_: None}),
                         "providerOverride": {"send": send},
                     }
                 )
@@ -173,7 +173,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                         "session": session,
                         "config": config,
                         "prompt": "run",
-                        "runtime": {"tools": [core.ToolDefinition("AllowedTool", "Allowed", {"type": "object", "properties": {}}, allowed)], "interactive": False, "emitEvent": lambda *_: None},
+                        "runtime": bind_test_runtime(session, {"tools": [core.ToolDefinition("AllowedTool", "Allowed", {"type": "object", "properties": {}}, allowed)], "interactive": False, "emitEvent": lambda *_: None}),
                         "providerOverride": {"send": send},
                     }
                 )

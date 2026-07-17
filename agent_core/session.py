@@ -6,13 +6,14 @@ import re
 from typing import Any
 
 from ._utils import now_iso
+from .session_fork import createForkArchiveHeader, createForkedSession
 from .storage import (
     appendSessionTranscriptLogEntries,
     createEmptySession,
     hasPersistableSessionMessages,
     listSessions,
     loadSession,
-    saveSession,
+    mutateSessionRecordTransaction,
 )
 from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
@@ -60,9 +61,8 @@ async def persistSession(
         snapshot["updatedAt"] = now_iso()
     transcript_log, _appended = await _persist_session_transcript_log(snapshot, repair)
     snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
-    await saveSession(snapshot)
-    session.setdefault("metadata", {})["fullTranscriptLog"] = copy.deepcopy(transcript_log)
-    session["updatedAt"] = snapshot["updatedAt"]
+    committed = await _commit_prepared_session_snapshot(snapshot)
+    _sync_committed_session_state(session, committed)
 
 
 async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any], failure: dict[str, Any]) -> None:
@@ -71,7 +71,8 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     metadata = session.setdefault("metadata", {})
     metadata["providerFailureCount"] = metadata.get("providerFailureCount", 0) + 1
     metadata["lastProviderFailure"] = copy.deepcopy(failure)
-    await saveSession(copy.deepcopy(session))
+    committed = await _commit_prepared_session_snapshot(copy.deepcopy(session))
+    _sync_committed_session_state(session, committed)
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_failure", "session_id": session["id"], "persisted_at": now_iso(), "failure": failure}])
 
 
@@ -79,8 +80,82 @@ async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
-    await saveSession(copy.deepcopy(session))
+    committed = await _commit_prepared_session_snapshot(copy.deepcopy(session))
+    _sync_committed_session_state(session, committed)
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])
+
+
+_CONCURRENT_SESSION_ID_FIELDS = (
+    "taskIds",
+    "monitorIds",
+    "backgroundSessionIds",
+    "childSessionIds",
+    "childAgentIds",
+)
+_CONCURRENT_SESSION_SCALAR_FIELDS = (
+    "subagentTaskId",
+    "subagentLaunchGroupId",
+    "subagentRuntimeContract",
+    "daemonUnavailable",
+)
+
+
+def _valid_revision(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
+def _merge_concurrent_operational_state(
+    desired: dict[str, Any],
+    latest: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if latest is None:
+        return copy.deepcopy(desired)
+    desired_revision = _valid_revision(desired.get("revision"))
+    latest_revision = _valid_revision(latest.get("revision"))
+    merged = copy.deepcopy(desired)
+    if "revision" in latest:
+        merged["revision"] = latest["revision"]
+    else:
+        merged.pop("revision", None)
+    if desired_revision == latest_revision:
+        return merged
+    desired_metadata = merged.setdefault("metadata", {})
+    latest_metadata = latest.get("metadata") if isinstance(latest.get("metadata"), dict) else {}
+    for field in _CONCURRENT_SESSION_ID_FIELDS:
+        desired_metadata[field] = list(dict.fromkeys([
+            *(latest_metadata.get(field) or []),
+            *(desired_metadata.get(field) or []),
+        ]))
+    for field in _CONCURRENT_SESSION_SCALAR_FIELDS:
+        if field in latest_metadata:
+            desired_metadata[field] = copy.deepcopy(latest_metadata[field])
+    return merged
+
+
+async def _commit_prepared_session_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    async def commit(latest: dict[str, Any] | None) -> dict[str, Any]:
+        merged = _merge_concurrent_operational_state(snapshot, latest)
+        return {"changed": latest is None or merged != latest, "session": merged}
+
+    return await mutateSessionRecordTransaction(snapshot["id"], commit)
+
+
+def _sync_committed_session_state(target: dict[str, Any], committed: dict[str, Any]) -> None:
+    persisted = committed["session"]
+    target["revision"] = committed["revision"]
+    target_metadata = target.setdefault("metadata", {})
+    persisted_metadata = persisted.get("metadata") if isinstance(persisted.get("metadata"), dict) else {}
+    if "fullTranscriptLog" in persisted_metadata:
+        target_metadata["fullTranscriptLog"] = copy.deepcopy(persisted_metadata["fullTranscriptLog"])
+    for field in _CONCURRENT_SESSION_ID_FIELDS:
+        target_metadata[field] = list(dict.fromkeys([
+            *(target_metadata.get(field) or []),
+            *(persisted_metadata.get(field) or []),
+        ]))
+    for field in _CONCURRENT_SESSION_SCALAR_FIELDS:
+        if field not in target_metadata and field in persisted_metadata:
+            target_metadata[field] = copy.deepcopy(persisted_metadata[field])
+    target["updatedAt"] = persisted["updatedAt"]
 
 
 def repairSessionTranscript(session: dict[str, Any]) -> dict[str, Any]:
@@ -136,6 +211,9 @@ async def _persist_session_transcript_log(
     previous = previous_count if isinstance(previous_count, int) and previous_count >= 0 else 0
     archived_at = now_iso()
     entries = []
+    fork_header = createForkArchiveHeader(session, archived_at)
+    if fork_header:
+        entries.append(fork_header)
     if repair.get("repaired") and previous > len(session.get("messages", [])):
         entries.append({"type": "repair", "session_id": session["id"], "persisted_at": archived_at, "truncated_to_message_index": len(session.get("messages", [])), "previous_archived_message_count": previous, "removed_count": repair["removedCount"], "missing_tool_use_ids": repair["missingToolUseIds"]})
     for index in range(min(previous, len(session.get("messages", []))), len(session.get("messages", []))):
@@ -198,16 +276,25 @@ def _fork_or_reuse_session(session: dict[str, Any], options: dict[str, Any], con
             session.setdefault("metadata", {})["originalCwd"] = launch["originalCwd"]
             session["metadata"]["worktreePath"] = launch["worktreePath"]
         return session
-    forked = cloneSession(session, {"id": options.get("sessionId") or __import__("uuid").uuid4().hex, "createdAt": now_iso(), "updatedAt": now_iso(), "cwd": launch["cwd"], "name": options.get("name") or session.get("name"), "model": config["model"], "effort": config.get("effort"), "systemPrompt": config["systemPrompt"], "permissionMode": config["permissionMode"]})
-    metadata = forked.setdefault("metadata", {})
-    metadata["originalCwd"] = launch["originalCwd"]
-    metadata["forkedFromSessionId"] = session["id"]
-    metadata["childSessionIds"] = []
-    metadata["childAgentIds"] = []
-    metadata["planMode"] = {"state": "inactive"}
-    metadata["depth"] = 0
-    metadata["usage"] = {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0}
-    return forked
+    timestamp = now_iso()
+    return createForkedSession(
+        parent=session,
+        id=options.get("sessionId") or __import__("uuid").uuid4().hex,
+        now=timestamp,
+        cwd=launch["cwd"],
+        originalCwd=launch["originalCwd"],
+        worktreePath=launch.get("worktreePath"),
+        tmuxSessionName=launch.get("tmuxSessionName"),
+        tmuxWindowName=launch.get("tmuxWindowName"),
+        tmuxMode=launch.get("tmuxMode"),
+        name=options.get("name") or session.get("name"),
+        model=config["model"],
+        effort=config.get("effort"),
+        systemPrompt=config["systemPrompt"],
+        permissionMode=config["permissionMode"],
+        assistantName=config.get("assistantName"),
+        assistantDescription=config.get("assistantDescription"),
+    )
 
 
 def _matches_workspace(session: dict[str, Any], resolved_cwd: str, resolved_git: str | None = None) -> bool:

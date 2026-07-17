@@ -13,6 +13,7 @@ from agent_core.agent_loop.tool_dispatch import (
 )
 
 from .model import ScenarioAssertionError
+from .runtime_bindings import bind_agent_runtime
 from .runtime_driver import ensure_session_config
 from .sandbox import ScenarioSandbox
 
@@ -76,14 +77,15 @@ async def run_mcp_plan_probe(
     await core.runAgentPrompt(
         session=session,
         config=config,
-        runtime={
-            "tools": selected,
-            "interactive": False,
-            "emitEvent": lambda event, payload: events.append(
+        runtime=bind_agent_runtime(
+            session,
+            tools=selected,
+            interactive=False,
+            emitEvent=lambda event, payload: events.append(
                 {"event": event, "data": _json_safe(payload)}
             ),
-            "repositoryIdentity": "package-28-harness",
-        },
+            repositoryIdentity="package-28-harness",
+        ),
         prompt="exercise MCP plan policy",
         providerOverride={"send": send},
     )

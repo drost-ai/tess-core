@@ -370,7 +370,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             openai_factory = lambda _options: SimpleNamespace()
             agent_module.measureRequestInputTokens = fake_measure
             agent_module.runCompaction = fake_run_compaction
-            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}, prompt="continue", providerOverride={"send": send}))
+            result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "done")
             self.assertEqual(len(compaction_calls), 1)

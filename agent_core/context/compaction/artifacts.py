@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from .shared import *
+from ...usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
 def mergeCompactionUsageIntoSession(session: dict[str, Any], usage: dict[str, Any]) -> None:
-    metadata = session.setdefault("metadata", {})
-    current = metadata.setdefault(
-        "usage",
-        {"turns": 0, "toolCalls": 0, "inputTokens": 0, "outputTokens": 0, "cacheCreationInputTokens": 0, "cacheReadInputTokens": 0},
+    _merge_usage_into_session(
+        session,
+        {
+            "input_tokens": usage.get("input_tokens", usage.get("inputTokens")),
+            "output_tokens": usage.get("output_tokens", usage.get("outputTokens")),
+            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", usage.get("cacheCreationInputTokens")),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", usage.get("cacheReadInputTokens")),
+            "cache_creation_5m_input_tokens": usage.get("cache_creation_5m_input_tokens", usage.get("cacheCreation5mInputTokens")),
+            "cache_creation_1h_input_tokens": usage.get("cache_creation_1h_input_tokens", usage.get("cacheCreation1hInputTokens")),
+            "cache_creation_ttl_detail_complete": usage.get("cache_creation_ttl_detail_complete", usage.get("cacheCreationTtlDetailComplete")),
+        },
     )
-    current["inputTokens"] = int(current.get("inputTokens") or 0) + int(usage.get("input_tokens") or usage.get("inputTokens") or 0)
-    current["outputTokens"] = int(current.get("outputTokens") or 0) + int(usage.get("output_tokens") or usage.get("outputTokens") or 0)
-    current["cacheCreationInputTokens"] = int(current.get("cacheCreationInputTokens") or 0) + int(usage.get("cache_creation_input_tokens") or usage.get("cacheCreationInputTokens") or 0)
-    current["cacheReadInputTokens"] = int(current.get("cacheReadInputTokens") or 0) + int(usage.get("cache_read_input_tokens") or usage.get("cacheReadInputTokens") or 0)
 
 
 def buildArtifactPaths(sessionId: str, generation: int) -> dict[str, str]:

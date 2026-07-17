@@ -175,6 +175,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             Path(output_path).write_text(long_output, encoding="utf-8")
             run(core.writeTaskMeta(task_id, {"taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "long task", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": output_path}))
+            session["metadata"]["taskIds"] = [task_id]
             task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
             task_result = run(task_output.handler({"task_id": task_id, "block": False, "timeout": 1000}, context))
             task_payload = json.loads(task_result["content"])

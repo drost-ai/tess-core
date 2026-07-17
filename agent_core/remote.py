@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from ._utils import now_iso
+from .runtime_paths import runWithRuntimePaths
 from .storage import (
     appendBridgeEvent,
     appendBridgeInboxMessage,
@@ -93,6 +94,7 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
     args = {**(args or {}), **kwargs}
     session = args.get("session") or {}
     emit = args.get("emit") or (lambda *_: None)
+    runtime_paths = args.get("runtimePaths")
     now = now_iso()
     requested_bridge_id = args.get("bridgeId") or args.get("bridge_id")
     existing_bridge = await loadBridge(requested_bridge_id) if requested_bridge_id else None
@@ -197,7 +199,8 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
             try:
                 import asyncio
 
-                asyncio.run(poll_bridge_inbox())
+                work = lambda: poll_bridge_inbox()
+                asyncio.run(runWithRuntimePaths(runtime_paths, work) if runtime_paths else work())
             except Exception:
                 stop_event.wait(poll_interval)
 

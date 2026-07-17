@@ -1,31 +1,33 @@
 from __future__ import annotations
 
-import contextvars
 import hashlib
 import tempfile
 
 from .shared import *
 from ..runtime_identifiers import parseArtifactId, parseSessionId
+from ..runtime_paths import (
+    RuntimePaths,
+    RuntimePathsScope,
+    configureActiveRuntimePaths,
+    getActiveRuntimePaths,
+    getScopedRuntimePaths,
+    resetActiveRuntimePaths,
+    resolveRuntimePaths,
+)
 
 Scope = Literal["user", "project", "local"]
 DEFAULT_RUNTIME_HOME = "~/.agent-core"
-_configured_runtime_home: str | None = None
-_active_runtime_home: contextvars.ContextVar[str | None] = contextvars.ContextVar("agent_core_runtime_home", default=None)
-
-
 class RuntimeHomeScope:
     def __init__(self, runtimeHome: str):
         self.runtimeHome = resolveRuntimeHome(None, runtimeHome)
-        self._token: contextvars.Token[str | None] | None = None
+        self._scope = RuntimePathsScope(resolveRuntimePaths(candidate=self.runtimeHome), immutable=False)
 
     def __enter__(self) -> str:
-        self._token = _active_runtime_home.set(self.runtimeHome)
+        self._scope.__enter__()
         return self.runtimeHome
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if self._token is not None:
-            _active_runtime_home.reset(self._token)
-            self._token = None
+        self._scope.__exit__(exc_type, exc, tb)
 
     async def __aenter__(self) -> str:
         return self.__enter__()
@@ -39,7 +41,8 @@ def scopedRuntimeHome(runtimeHome: str) -> RuntimeHomeScope:
 
 
 def getContextRuntimeHome() -> str | None:
-    return _active_runtime_home.get()
+    scoped = getScopedRuntimePaths()
+    return scoped.home if scoped is not None else None
 
 
 def expandHome(rawPath: str) -> str:
@@ -50,23 +53,16 @@ def expandHome(rawPath: str) -> str:
     return rawPath
 
 def resolveRuntimeHome(cwd: str | None = None, candidate: str | None = None) -> str:
-    raw = candidate or os.environ.get("AGENT_CORE_HOME") or DEFAULT_RUNTIME_HOME
-    expanded = expandHome(raw)
-    if os.path.isabs(expanded):
-        return os.path.abspath(expanded)
-    return os.path.abspath(os.path.join(cwd or os.getcwd(), expanded))
+    return resolveRuntimePaths(cwd, candidate).home
 
 def configureRuntimeHome(runtimeHome: str) -> str:
-    global _configured_runtime_home
-    _configured_runtime_home = resolveRuntimeHome(None, runtimeHome)
-    return _configured_runtime_home
+    return configureActiveRuntimePaths(runtimeHome).home
 
 def resetConfiguredRuntimeHome() -> None:
-    global _configured_runtime_home
-    _configured_runtime_home = None
+    resetActiveRuntimePaths()
 
 def getStateRoot() -> str:
-    return _active_runtime_home.get() or _configured_runtime_home or resolveRuntimeHome()
+    return getActiveRuntimePaths().home
 
 def findGitRoot(cwd: str) -> str | None:
     try:
@@ -158,27 +154,37 @@ def compactionManifestPath(sessionId: str) -> str:
 def compactionCheckpointPath(sessionId: str, generation: int) -> str:
     return os.path.join(getSessionCompactionsDir(sessionId), "checkpoints", f"{generation:04d}.json")
 
-async def ensureBaseLayout(cwd: str) -> None:
-    dirs = [
-        getStateRoot(),
-        getDaemonDir(),
-        os.path.join(getStateRoot(), "sessions"),
-        getCompactionsDir(),
-        getToolArtifactsDir(),
-        os.path.join(getStateRoot(), "tasks"),
-        os.path.join(getStateRoot(), "task-records"),
-        os.path.join(getStateRoot(), "monitors"),
-        os.path.join(getStateRoot(), "agents"),
-        os.path.join(getStateRoot(), "plan-approvals"),
-        getPlansDir(),
-        os.path.join(getStateRoot(), "remote-sessions"),
-        os.path.join(getStateRoot(), "bridges"),
-        os.path.join(getStateRoot(), "logs"),
-        daemonLogsDir(),
-        getProjectStateDir(cwd),
-        getLocalStateDir(cwd),
+async def ensureBaseLayout(cwd: str, paths: RuntimePaths | None = None) -> None:
+    graph = paths or getActiveRuntimePaths()
+    runtime_dirs = [
+        graph.home,
+        graph.daemonDir,
+        graph.sessionsDir,
+        graph.compactionsDir,
+        graph.artifactsDir,
+        graph.tasksDir,
+        graph.taskRecordsDir,
+        graph.monitorsDir,
+        graph.agentsDir,
+        graph.planApprovalsDir,
+        graph.plansDir,
+        graph.remoteSessionsDir,
+        graph.bridgesDir,
+        graph.logsDir,
+        graph.daemonLogsDir,
+        graph.locksDir,
+        graph.trustDir,
+        graph.repositoryTrustDir,
+        graph.executableSnapshotsDir,
+        graph.mcpBlobsDir,
+        graph.mcpTokensDir,
+        graph.privateSecretsDir,
     ]
-    for directory in dirs:
+    for directory in runtime_dirs:
+        os.makedirs(directory, exist_ok=True)
+        if os.name != "nt":
+            os.chmod(directory, 0o700)
+    for directory in (getProjectStateDir(cwd), getLocalStateDir(cwd)):
         os.makedirs(directory, exist_ok=True)
 
 expand_home = expandHome

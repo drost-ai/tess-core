@@ -8,9 +8,11 @@
           "additionalProperties": false,
           "properties": {
             "activeForm": {
+              "description": "Present-progress label of at most 1000 UTF-8 bytes. This limit is enforced at runtime.",
               "type": "string"
             },
             "content": {
+              "description": "Non-empty todo text of at most 2000 UTF-8 bytes. This limit is enforced at runtime.",
               "type": "string"
             },
             "status": {
@@ -29,6 +31,7 @@
           ],
           "type": "object"
         },
+        "description": "At most 100 items. This limit is enforced at runtime.",
         "type": "array"
       }
     },

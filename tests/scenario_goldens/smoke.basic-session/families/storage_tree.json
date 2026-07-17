@@ -20,7 +20,19 @@
     "type": "dir"
   },
   {
+    "path": "locks",
+    "type": "dir"
+  },
+  {
     "path": "logs",
+    "type": "dir"
+  },
+  {
+    "path": "mcp-blobs",
+    "type": "dir"
+  },
+  {
+    "path": "mcp-tokens",
     "type": "dir"
   },
   {
@@ -33,6 +45,10 @@
   },
   {
     "path": "plans",
+    "type": "dir"
+  },
+  {
+    "path": "private-secrets",
     "type": "dir"
   },
   {
@@ -62,7 +78,10 @@
           "state": "inactive"
         },
         "usage": {
+          "cacheCreation1hInputTokens": 0,
+          "cacheCreation5mInputTokens": 0,
           "cacheCreationInputTokens": 0,
+          "cacheCreationTtlDetailComplete": true,
           "cacheReadInputTokens": 0,
           "inputTokens": 0,
           "outputTokens": 0,
@@ -93,6 +112,18 @@
   },
   {
     "path": "tool-artifacts",
+    "type": "dir"
+  },
+  {
+    "path": "trust",
+    "type": "dir"
+  },
+  {
+    "path": "trust/repositories",
+    "type": "dir"
+  },
+  {
+    "path": "trust/snapshots",
     "type": "dir"
   }
 ]

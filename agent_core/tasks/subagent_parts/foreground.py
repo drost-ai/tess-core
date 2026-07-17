@@ -141,13 +141,19 @@ async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str,
         raise RuntimeError("Foreground subagent execution requires getTools, tools, or runSubagent in the runtime context.")
     from ...agent import runAgentPrompt
 
-    runtime = {
-        "interactive": context.get("interactive", False),
-        "askQuestion": context.get("askQuestion", lambda *_: ""),
+    from ...agent_runtime_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
+    from ...runtime_generation import createRuntimeSessionBinding
+
+    daemon = context.get("daemon")
+    runtime = createAgentRuntimeBindings({
         "emitEvent": lambda event, data: _emit_child_event(context, event, data, prepared["agentId"], prepared["childSession"]["id"]),
         "tools": tools,
+        "daemon": {"state": "connected", "client": daemon} if isTaskSupervisorGateway(daemon) else {"state": "unavailable", "reason": context.get("daemonUnavailableReason") or {"code": "subagent.daemon_unavailable", "message": "The task daemon is unavailable to this foreground subagent."}},
+        "refreshMcpToolRegistry": context.get("refreshMcpToolRegistry") or (lambda: None),
+        "sessionBinding": createRuntimeSessionBinding(prepared["childSession"]["id"], 1, 1),
+        "questionPolicy": {"interactive": context.get("interactive", False), "askQuestion": context.get("askQuestion", lambda *_: "")},
         "abortSignal": context.get("abortSignal"),
-    }
+    })
     call_args: dict[str, Any] = {"session": prepared["childSession"], "config": prepared["childConfig"], "prompt": "", "runtime": runtime}
     if context.get("providerOverride"):
         call_args["providerOverride"] = context["providerOverride"]

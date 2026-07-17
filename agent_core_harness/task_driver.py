@@ -51,12 +51,23 @@ async def start_background_task(data: dict[str, Any], sandbox: ScenarioSandbox, 
 async def wait_task_status(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     task_id = _task_id(data, state)
     statuses = set(data.get("statusIn") or [data.get("status", "completed")])
+    required_event = data.get("event")
     deadline = asyncio.get_running_loop().time() + float(data.get("timeoutSeconds") or 8)
     last_meta = None
     while asyncio.get_running_loop().time() < deadline:
         last_meta = await core.readTaskMeta(task_id)
         if last_meta and last_meta.get("status") in statuses:
             await refresh_task_state(sandbox, state)
+            if required_event and not any(
+                event.get("event") == required_event
+                and event.get("data", {}).get("task_id") == task_id
+                for event in [
+                    *(state.get("daemon_events") or []),
+                    *(state.get("persisted_daemon_events") or []),
+                ]
+            ):
+                await asyncio.sleep(float(data.get("pollSeconds") or 0.05))
+                continue
             return ["task_records", "task_metadata", "daemon_events"]
         await asyncio.sleep(float(data.get("pollSeconds") or 0.05))
     raise ScenarioAssertionError(f"Task {task_id} did not reach {sorted(statuses)}; last={last_meta}", category="driver")
@@ -136,13 +147,15 @@ async def seed_recovery_task(data: dict[str, Any], sandbox: ScenarioSandbox, sta
     output_file = core.taskOutputPath(task_id)
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     Path(output_file).write_text(data.get("output", "still running\n"), encoding="utf-8")
-    proc = subprocess.Popen([sys.executable, "-c", data.get("script", "import time; time.sleep(30)")], cwd=str(sandbox.workspace), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    argv = [sys.executable, "-c", data.get("script", "import time; time.sleep(30)")]
+    proc = subprocess.Popen(argv, cwd=str(sandbox.workspace), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     sandbox.process_registry.append({"process": proc, "kind": "recovery_task", "taskId": task_id})
     state.setdefault("owned_processes", []).append(proc)
     created = data.get("createdAt") or "2026-01-01T00:00:00Z"
-    meta = {"type": data.get("type", "background_command"), "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": data.get("command", "sleep"), "cwd": str(sandbox.workspace), "startedAt": created, "updatedAt": created, "status": "running", "outputFile": output_file, "pid": proc.pid, "detailStatus": data.get("detailStatus", "running"), "owner": "daemon", "supervisorId": data.get("supervisorId", "previous-supervisor")}
+    identity = await core.captureOwnedProcessIdentity({"pid": proc.pid, "expectedArgv": argv, "spawnedAt": created})
+    meta = {"type": data.get("type", "background_command"), "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": data.get("command", "sleep"), "cwd": str(sandbox.workspace), "startedAt": created, "updatedAt": created, "status": "running", "outputFile": output_file, "pid": proc.pid, "processIdentity": identity, "detailStatus": data.get("detailStatus", "running"), "owner": "daemon", "supervisorId": data.get("supervisorId", "previous-supervisor")}
     await core.writeTaskMeta(task_id, meta)
-    await core.saveTaskRecord({"id": task_id, "sessionId": session["id"], "sourceId": task_id, "kind": "background_command", "status": "running", "title": data.get("title", "recovery task"), "summary": "Background command is running.", "createdAt": created, "updatedAt": created, "startedAt": created, "cwd": str(sandbox.workspace), "command": meta["command"], "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "detailStatus": meta["detailStatus"], "retrieveOnly": True, "owner": "daemon", "supervisorId": meta["supervisorId"], "metadata": {"pid": proc.pid}})
+    await core.saveTaskRecord({"id": task_id, "sessionId": session["id"], "sourceId": task_id, "kind": "background_command", "status": "running", "title": data.get("title", "recovery task"), "summary": "Background command is running.", "createdAt": created, "updatedAt": created, "startedAt": created, "cwd": str(sandbox.workspace), "command": meta["command"], "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "detailStatus": meta["detailStatus"], "retrieveOnly": True, "owner": "daemon", "supervisorId": meta["supervisorId"], "processIdentity": identity, "metadata": {"pid": proc.pid, "processIdentity": identity}})
     _remember_task(state, data, task_id)
     state.setdefault("task_driver_results", []).append({"driver": "seed_recovery_task", "status": "passed", "taskId": task_id, "pid": proc.pid})
     await refresh_task_state(sandbox, state)

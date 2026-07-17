@@ -35,6 +35,15 @@ class NormalizationContext:
         return value
 
     def _normalize_dynamic_dict(self, value: dict[str, Any], key_path: tuple[str, ...]) -> dict[str, Any]:
+        for key in ("expectedCommandDigest", "expected_command_digest"):
+            if key in value:
+                value[key] = "<expected-command-digest>"
+        for key in ("observedCommandDigest", "observed_command_digest"):
+            if key in value:
+                value[key] = "<observed-command-digest>"
+        for key in ("startToken", "start_token"):
+            if key in value:
+                value[key] = "<process-start-token>"
         for key in ("git_branch", "gitBranch"):
             if key in value:
                 value[key] = "<git-branch>"

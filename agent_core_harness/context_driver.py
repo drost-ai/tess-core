@@ -11,6 +11,7 @@ import agent_core.agent as agent_module
 
 from .context_fixtures import ContextLimitFallbackClient, ScriptedCompactionClient, build_context_messages, retrieved_memory_payload
 from .model import ScenarioAssertionError
+from .runtime_bindings import bind_agent_runtime
 from .sandbox import ScenarioSandbox
 
 
@@ -212,7 +213,14 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
         result = await core.runAgentPrompt(
             session=session,
             config=config,
-            runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, payload: events.append((event, _json_safe(payload))), "tools": [], "abortSignal": signal},
+            runtime=bind_agent_runtime(
+                session,
+                interactive=False,
+                askQuestion=lambda *_: "",
+                emitEvent=lambda event, payload: events.append((event, _json_safe(payload))),
+                tools=[],
+                abortSignal=signal,
+            ),
             prompt="continue",
             providerOverride={"send": send},
         )

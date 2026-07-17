@@ -60,7 +60,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []},
+                    runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []}),
                     prompt="",
                     providerOverride={"send": send},
                 )
@@ -133,7 +133,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []},
+                    runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []}),
                     prompt="",
                     providerOverride={"send": send},
                 )
@@ -215,7 +215,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []},
+                    runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": []}),
                     prompt="Follow-up text only.",
                     providerOverride={"send": send},
                 )
@@ -281,7 +281,7 @@ class AgentLoopTests(AgentCoreTestCase):
                     return {"model": "claude-sonnet-4-6", "stopReason": "tool_use", "usage": {"input_tokens": 10, "output_tokens": 5}, "content": [{"type": "tool_use", "id": "use_slow", "name": "slow", "input": {}}, {"type": "tool_use", "id": "use_fast", "name": "fast", "input": {}}]}
                 return {"model": "claude-sonnet-4-6", "stopReason": "end_turn", "usage": {"input_tokens": 5, "output_tokens": 3}, "content": [{"type": "text", "text": "done"}]}
 
-            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": tools}, prompt="run", providerOverride={"send": send}))
+            result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": tools}), prompt="run", providerOverride={"send": send}))
             self.assertEqual(result["toolCount"], 2)
             provider_events = [data for event, data in events if event == "provider.response_completed"]
             self.assertEqual([item["call_index"] for item in provider_events], [1, 2])
@@ -359,7 +359,7 @@ class AgentLoopTests(AgentCoreTestCase):
                     "content": [{"type": "text", "text": "retrying with valid JSON next"}],
                 }
 
-            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": tools}, prompt="run", providerOverride={"send": send}))
+            result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda *_: None, "tools": tools}), prompt="run", providerOverride={"send": send}))
             self.assertFalse(tool_ran)
             self.assertEqual(calls["count"], 2)
             self.assertEqual(result["text"], "retrying with valid JSON next")
@@ -406,7 +406,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "abortSignal": signal},
+                    runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "abortSignal": signal}),
                     prompt="cancel this turn",
                     providerOverride={"send": send},
                 )

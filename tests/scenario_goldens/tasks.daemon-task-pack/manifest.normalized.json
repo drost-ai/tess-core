@@ -59,6 +59,7 @@
     {
       "wait_task_status": {
         "alias": "background",
+        "event": "task.completed",
         "status": "completed",
         "timeoutSeconds": 8
       }
@@ -183,6 +184,7 @@
     {
       "wait_health_check": {
         "alias": "health",
+        "event": "health_check.recovered",
         "requireSuccess": true,
         "status": "active",
         "timeoutSeconds": 10

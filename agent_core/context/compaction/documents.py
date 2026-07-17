@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...todo_policy import selectTodoState as _select_todo_state
 
 
 def buildCompactionQualityFromSynthesis(synthesized: dict[str, Any]) -> dict[str, Any]:
@@ -66,8 +67,11 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
     candidate = args["candidate"]
     working_context = candidate["workingContext"]
     model = candidate["model"]
-    open_todos = [summarizeTodo(todo) for todo in session.get("todos", []) if todo.get("status") != "completed"][:MAX_TODOS]
-    completed_todos = [summarizeTodo(todo) for todo in session.get("todos", []) if todo.get("status") == "completed"][-MAX_TODOS:]
+    selected_todos = _select_todo_state(
+        session.get("todos", []), {"maxOpen": MAX_TODOS, "maxCompleted": MAX_TODOS}
+    )
+    open_todos = [summarizeTodo(todo) for todo in selected_todos["open"]]
+    completed_todos = [summarizeTodo(todo) for todo in selected_todos["completed"]]
     return {
         "version": "v2",
         "sessionId": session["id"],
@@ -94,7 +98,13 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
         "decisions": working_context["decisions"],
         "discoveries": working_context["discoveries"],
         "plan": args.get("latestPlan") or previous.get("plan"),
-        "todos": {"open": open_todos, "completed": completed_todos},
+        "todos": {
+            "open": open_todos,
+            "completed": completed_todos,
+            "originalItemCount": selected_todos["total"],
+            "returnedItemCount": len(open_todos) + len(completed_todos),
+            "omittedItemCount": max(0, selected_todos["total"] - len(open_todos) - len(completed_todos)),
+        },
         "activity": working_context["activity"],
         "preservedTrace": [
             *(previous.get("preservedTrace") or []),
@@ -227,7 +237,12 @@ def renderSummaryMarkdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
         ],
     )
     todos = context.get("todos") or {}
-    appendStringSection(lines, "Todo State", [*[f"Open: {entry}" for entry in todos.get("open", [])], *[f"Completed: {entry}" for entry in todos.get("completed", [])]])
+    cardinality = (
+        [f"{todos['originalItemCount']} stored; {todos.get('returnedItemCount', 0)} shown; {todos.get('omittedItemCount', 0)} omitted"]
+        if todos.get("originalItemCount") is not None
+        else []
+    )
+    appendStringSection(lines, "Todo State", [*cardinality, *[f"Open: {entry}" for entry in todos.get("open", [])], *[f"Completed: {entry}" for entry in todos.get("completed", [])]])
     appendStringSection(lines, "Next Steps", context["nextSteps"])
     appendStringSection(lines, "Critical Context", context["criticalContext"])
     lines.extend(["", "## Resume Guidance", "", "- Use this checkpoint as the authoritative source for earlier compacted work.", "- Prefer the recent raw conversation turns when they conflict with this checkpoint.", ""])

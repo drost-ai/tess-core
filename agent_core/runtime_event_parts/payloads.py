@@ -120,9 +120,14 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "tool.started", {"name": _string_field(_field(data, "name")), "input": _field(data, "input")}
     if event == "tool.completed":
         return "tool.completed", {
+            "toolUseId": _string_field(_field(data, "tool_use_id", "toolUseId")),
             "name": _string_field(_field(data, "name")),
             "output": _field(data, "output"),
             "error": _optional_boolean(_field(data, "error")),
+            "originalItemCount": _optional_number(_field(data, "original_item_count", "originalItemCount")),
+            "returnedItemCount": _optional_number(_field(data, "returned_item_count", "returnedItemCount")),
+            "omittedItemCount": _optional_number(_field(data, "omitted_item_count", "omittedItemCount")),
+            "itemsTruncated": _optional_boolean(_field(data, "items_truncated", "itemsTruncated")),
         }
     if event == "context.raw_pressure":
         return "context.raw_pressure", {

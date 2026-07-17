@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib as _contextlib
+import contextvars as _contextvars
 import hashlib as _hashlib
 import time as _time
 import weakref as _weakref
@@ -39,6 +40,10 @@ _LOCK_OBSERVERS: list[Callable[[dict[str, Any]], Any]] = []
 # many short-lived loops, and an asyncio.Lock cannot cross loops. Cross-loop
 # (and cross-process) exclusion is the OS flock's job.
 _IN_PROCESS_LOCKS: "_weakref.WeakKeyDictionary[Any, dict[str, Any]]" = _weakref.WeakKeyDictionary()
+_HELD_TRANSACTION_LOCKS: _contextvars.ContextVar[frozenset[str]] = _contextvars.ContextVar(
+    "agent_core_held_transaction_locks",
+    default=frozenset(),
+)
 
 
 class StorageTransactionError(RuntimeError):
@@ -202,8 +207,16 @@ async def withRecordTransaction(
     timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS,
 ):
     lock_path = transactionLockPath(namespace, key)
-    async with fileLock(lock_path, timeoutMs=timeoutMs):
+    held = _HELD_TRANSACTION_LOCKS.get()
+    if lock_path in held:
         yield
+        return
+    async with fileLock(lock_path, timeoutMs=timeoutMs):
+        token = _HELD_TRANSACTION_LOCKS.set(held | {lock_path})
+        try:
+            yield
+        finally:
+            _HELD_TRANSACTION_LOCKS.reset(token)
 
 
 async def mutateJsonRecord(
@@ -216,7 +229,7 @@ async def mutateJsonRecord(
     timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS,
 ) -> dict[str, Any]:
     lock_path = transactionLockPath(namespace, key)
-    async with fileLock(lock_path, timeoutMs=timeoutMs):
+    async with withRecordTransaction(namespace, key, timeoutMs=timeoutMs):
         current = await readJsonFile(filePath, fallback)
         result = mutate(current)
         if hasattr(result, "__await__"):

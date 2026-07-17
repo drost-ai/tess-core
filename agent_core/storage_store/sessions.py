@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from ..contracts.records import SessionRecord
 from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
+from ..usage_costs import createUsageTotals
 from .shared import *
 
 def sessionPath(sessionId: str) -> str:
@@ -13,9 +14,16 @@ def sessionTranscriptLogPath(sessionId: str) -> str:
     return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
 async def saveSession(session: SessionRecord) -> None:
     path = sessionPath(session["id"])
-    async with fileLock(path):
+    async with withRecordTransaction("session", session["id"]):
         current = await readJsonFile(path, None)
-        await writeJsonFile(path, _redact_persisted_image_payloads(_merge_session_for_full_save(current, session)))
+        merged = _redact_persisted_image_payloads(_merge_session_for_full_save(current, session))
+        if isinstance(current, dict) and ("revision" in current or "revision" in merged):
+            merged["revision"] = max(
+                normalizeSessionRevision(current.get("revision")),
+                normalizeSessionRevision(merged.get("revision")),
+            )
+        if current != merged:
+            await writeJsonFile(path, merged)
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
     """Locked read-modify-write for cross-process session metadata updates.
 
@@ -24,18 +32,24 @@ async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
     place), and persists with the same redaction as ``saveSession``. Returns
     ``None`` without writing when the session does not exist.
     """
-    path = sessionPath(sessionId)
-    async with fileLock(path):
-        session = await readJsonFile(path, None)
+    async def apply(session: SessionRecord | None) -> dict[str, Any]:
         if session is None:
-            return None
+            raise SessionRecordNotFoundError(f"Session not found: {parseSessionId(sessionId)}")
+        before = copy.deepcopy(session)
         reconciliation = await _reconcile_session_record(sessionId, session)
-        session = reconciliation["record"]
-        updated = mutate(session)
+        working = reconciliation["record"]
+        updated = mutate(working)
+        if hasattr(updated, "__await__"):
+            updated = await updated
         if updated is None:
-            updated = session
-        await writeJsonFile(path, _redact_persisted_image_payloads(updated))
-        return updated
+            updated = working
+        return {"session": updated, "changed": updated != before}
+
+    try:
+        result = await mutateSessionRecordTransaction(sessionId, apply)
+    except SessionRecordNotFoundError:
+        return None
+    return result["session"]
 
 async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
     path = sessionTranscriptLogPath(sessionId)
@@ -213,94 +227,6 @@ def _choose_newer_compaction_state(current: Any, incoming: Any) -> Any:
     if isinstance(current_generation, int) and isinstance(incoming_generation, int):
         return current if current_generation > incoming_generation else incoming
     return current if str(current.get("latestCompactionAt") or "") > str(incoming.get("latestCompactionAt") or "") else incoming
-
-def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
-    indexed: dict[int, dict[str, Any]] = {}
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        try:
-            entry = json.loads(line)
-        except Exception:
-            continue
-        if entry.get("type") == "message" and isinstance(entry.get("message_index"), int):
-            role = entry.get("role")
-            if role in ("user", "assistant") and "content" in entry:
-                indexed[entry["message_index"]] = {"role": role, "content": entry["content"]}
-    return [indexed[index] for index in sorted(indexed)]
-
-def _latest_archived_timestamp(raw: str) -> str | None:
-    latest = None
-    for line in raw.splitlines():
-        try:
-            entry = json.loads(line)
-        except Exception:
-            continue
-        if isinstance(entry.get("persisted_at"), str):
-            latest = entry["persisted_at"]
-    return latest
-
-def parseLatestArchivedTimestamp(raw: str) -> str | None:
-    return _latest_archived_timestamp(raw)
-
-
-async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
-    """Full selected-session load with an explicit, convergent repair verdict."""
-
-    path = sessionPath(sessionId)
-    async with fileLock(path):
-        record = await readJsonFile(path, None)
-        if not record:
-            return {"record": None, "changed": False, "reason": None}
-        result = await _reconcile_session_record(sessionId, record)
-        if result["changed"]:
-            await writeJsonFile(path, _redact_persisted_image_payloads(result["record"]))
-        return result
-
-
-async def loadSession(sessionId: str) -> SessionRecord | None:
-    result = await loadSessionWithReconciliation(sessionId)
-    return result["record"]
-
-
-async def _reconcile_session_record(session_id: str, record: SessionRecord) -> dict[str, Any]:
-    transcript_path = sessionTranscriptLogPath(session_id)
-    try:
-        with open(transcript_path, "r", encoding="utf-8") as handle:
-            raw = handle.read()
-    except FileNotFoundError:
-        return {"record": record, "changed": False, "reason": None}
-    archived = _parse_archived_messages(raw)
-    latest = _latest_archived_timestamp(raw)
-    messages = record.get("messages") if isinstance(record.get("messages"), list) else []
-    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
-    previous_log = metadata.get("fullTranscriptLog") if isinstance(metadata.get("fullTranscriptLog"), dict) else {}
-    next_log = {
-        "path": transcript_path,
-        "archivedMessageCount": len(archived),
-        "lastArchivedAt": latest or previous_log.get("lastArchivedAt") or record.get("updatedAt"),
-    }
-    archive_ahead = len(archived) > len(messages)
-    metadata_mismatch = any(
-        previous_log.get(key) != value for key, value in next_log.items()
-    )
-    updated_at_behind = bool(
-        latest and str(record.get("updatedAt") or "") < latest
-    )
-    if not archive_ahead and not metadata_mismatch and not updated_at_behind:
-        return {"record": record, "changed": False, "reason": None}
-    repaired = copy.deepcopy(record)
-    if archive_ahead:
-        repaired["messages"] = archived
-    repaired.setdefault("metadata", {})["fullTranscriptLog"] = next_log
-    if updated_at_behind:
-        repaired["updatedAt"] = latest
-    return {
-        "record": repaired,
-        "changed": True,
-        "reason": "archive_ahead" if archive_ahead else "metadata_mismatch",
-    }
-
 
 MAX_SHALLOW_SESSION_BYTES = 16 * 1024 * 1024
 
@@ -483,14 +409,7 @@ def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> S
             "originalCwd": params.get("originalCwd") or params["cwd"],
             "assistantName": params.get("assistantName"),
             "assistantDescription": params.get("assistantDescription"),
-            "usage": {
-                "turns": 0,
-                "toolCalls": 0,
-                "inputTokens": 0,
-                "outputTokens": 0,
-                "cacheCreationInputTokens": 0,
-                "cacheReadInputTokens": 0,
-            },
+            "usage": createUsageTotals(),
             "compactions": 0,
             "depth": 0,
             "childSessionIds": [],

@@ -204,7 +204,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                 return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
 
             agent_module.measureRequestInputTokens = fake_measure
-            result = run(core.runAgentPrompt(session=session, config=config, runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}, prompt="continue", providerOverride={"send": send}))
+            result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "recovered")
             self.assertEqual(len(provider_requests), 2)
@@ -265,7 +265,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                 core.runAgentPrompt(
                     session=session,
                     config=config,
-                    runtime={"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "abortSignal": signal},
+                    runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "abortSignal": signal}),
                     prompt="continue",
                     providerOverride={"send": send},
                 )

@@ -42,7 +42,10 @@
       "text": "README says hello from runtime harness.",
       "toolCount": 1,
       "usage": {
+        "cache_creation_1h_input_tokens": 0,
+        "cache_creation_5m_input_tokens": 0,
         "cache_creation_input_tokens": 0,
+        "cache_creation_ttl_detail_complete": true,
         "cache_read_input_tokens": 0,
         "input_tokens": 18,
         "output_tokens": 8

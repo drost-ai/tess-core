@@ -241,23 +241,18 @@ class _TaskRecordRequired(TypedDict):
     kind: TaskKind
     status: TaskStatus
     title: str | None
-    summary: str | None
     createdAt: str | None
     updatedAt: str | None
     startedAt: str | None
-    completedAt: str | None
     foregroundable: bool
     restorable: bool
-    taskFamily: TaskFamily
-    detailStatus: str | None
-    retrieveOnly: bool
-    resultSummary: str | None
-    metadata: dict[str, Any]
 
 
 class TaskRecord(_TaskRecordRequired, total=False):
     """Task record projection at ``task-records/{taskId}.json``."""
 
+    summary: str | None
+    completedAt: str | None
     cwd: str | None
     command: str | None
     outputFile: str | None
@@ -267,6 +262,11 @@ class TaskRecord(_TaskRecordRequired, total=False):
     attachableSessionId: str | None
     parentTaskId: str | None
     relatedChildSessionIds: list[str]
+    taskFamily: TaskFamily
+    detailStatus: str | None
+    retrieveOnly: bool
+    resultSummary: str | None
+    metadata: dict[str, Any]
     owner: TaskOwner | None
     supervisorId: str | None
     processIdentity: OwnedProcessIdentity

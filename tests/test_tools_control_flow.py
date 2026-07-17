@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import agent_core.mcp_origin_policy as mcp_origin_policy_module
+
 from tests.support.agent_core_case import *
 
 
@@ -185,6 +187,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
 
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
             run(core.saveMonitor(monitor))
+            session["metadata"]["monitorIds"] = [monitor["id"]]
             stopped = json.loads(run(tools["TaskMonitorStop"].handler({"monitor_id": monitor["id"]}, context))["content"])
             self.assertEqual(stopped, {"monitor_id": monitor["id"], "task_id": "task-1", "status": "stopped", "previous_status": "active", "changed": True})
             self.assertEqual([event for event, _ in events], ["monitor.status_changed"])
@@ -195,6 +198,28 @@ class ToolControlFlowTests(AgentCoreTestCase):
 
             async def start_health(payload):
                 health_calls.append(("start", payload))
+                await core.saveTaskRecord(
+                    {
+                        "id": "health-1",
+                        "sessionId": session["id"],
+                        "sourceId": "health-1",
+                        "kind": "health_check",
+                        "status": "running",
+                        "title": "health",
+                        "createdAt": "2026-01-01T00:00:00Z",
+                        "updatedAt": "2026-01-01T00:00:00Z",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                    }
+                )
+                await core.writeTaskMeta(
+                    "health-1",
+                    {
+                        "type": "health_check",
+                        "taskId": "health-1",
+                        "sessionId": session["id"],
+                        "status": "running",
+                    },
+                )
                 return {"taskId": "health-1"}
 
             async def stop_health(task_id):
@@ -209,17 +234,17 @@ class ToolControlFlowTests(AgentCoreTestCase):
             stopped_health = json.loads(run(tools["TaskHealthCheckStop"].handler({"task_id": "health-1"}, health_context))["content"])
             self.assertEqual(stopped_health, {"task_id": "health-1", "stopped": True})
 
-            class HeaderResponse(Response):
-                def __init__(self, body, status=200):
-                    super().__init__(body, status)
-                    self.headers = {"content-type": "text/plain"}
-
-            async def fake_fetch(*args, **kwargs):
-                return HeaderResponse("resource body")
-
-            tools_module.fetch = fake_fetch
             config["mcpConfig"] = [{"name": "http", "transport": "http", "commandOrUrl": "http://mcp", "headers": {"authorization": "Bearer token"}}, {"name": "stdio", "transport": "stdio", "commandOrUrl": "python"}]
-            resource = json.loads(run(tools["ReadMcpResource"].handler({"server": "http", "uri": "http://mcp/resource"}, context))["content"])
+            with mock.patch.object(
+                mcp_origin_policy_module,
+                "_fetch_manual",
+                return_value=mcp_origin_policy_module.McpResourceResponse(
+                    200,
+                    b"resource body",
+                    {"content-type": "text/plain"},
+                ),
+            ):
+                resource = json.loads(run(tools["ReadMcpResource"].handler({"server": "http", "uri": "http://mcp/resource"}, context))["content"])
             self.assertEqual(resource["contents"][0]["mimeType"], "text/plain")
             self.assertEqual(resource["contents"][0]["text"], "resource body")
             stdio_resource = run(tools["ReadMcpResource"].handler({"server": "stdio", "uri": "file://resource"}, context))

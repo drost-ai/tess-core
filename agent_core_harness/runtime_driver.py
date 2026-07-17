@@ -10,6 +10,7 @@ from agent_core.contracts import ToolContext
 
 from .model import ScenarioAssertionError
 from .paths import REPO_ROOT
+from .runtime_bindings import bind_agent_runtime
 from .sandbox import ScenarioSandbox
 
 
@@ -40,7 +41,7 @@ async def run_agent(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[
             {
                 "session": session,
                 "config": config,
-                "runtime": runtime,
+                "runtime": bind_agent_runtime(session, runtime),
                 "prompt": data.get("prompt", ""),
                 "providerOverride": {"send": provider.send},
             }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..todo_policy import summarizeTodoState as _summarize_todo_state
 
 
 def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
@@ -319,8 +320,21 @@ def formatPreflightTokenSummary(session: dict[str, Any]) -> str:
 
 
 def buildTodosReport(session: dict[str, Any]) -> str:
-    todos = session.get("todos") or []
-    return "No todos." if not todos else "\n".join(f"- [{todo.get('status', 'pending')}] {todo.get('content') or todo.get('task') or todo}" for todo in todos)
+    summary = _summarize_todo_state(session.get("todos") or [])
+    if summary["originalItemCount"] == 0:
+        return "No todos."
+    lines = [
+        f"{todo['position']}. [{todo['status']}] {todo['content']}"
+        for todo in summary["todos"]
+    ]
+    if summary["itemsTruncated"]:
+        lines.append(
+            f"… {summary['omittedItemCount']} omitted "
+            f"({summary['returnedItemCount']} of {summary['originalItemCount']} shown)."
+        )
+    else:
+        lines.append(f"{summary['originalItemCount']} total.")
+    return "\n".join(lines)
 
 
 def _parse_command(raw: str) -> tuple[str, str]:

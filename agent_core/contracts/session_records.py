@@ -16,6 +16,9 @@ class SessionUsageTotals(TypedDict):
     outputTokens: int
     cacheCreationInputTokens: int
     cacheReadInputTokens: int
+    cacheCreation5mInputTokens: int
+    cacheCreation1hInputTokens: int
+    cacheCreationTtlDetailComplete: bool
 
 
 class CompactionState(TypedDict):

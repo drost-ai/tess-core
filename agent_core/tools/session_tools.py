@@ -3,25 +3,26 @@ from __future__ import annotations
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 
-import re
 import uuid
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..storage import savePlanApproval, writePlanFile
 from ..task_communication import create_task_question, read_task_questions
+from ..todo_policy import requireTodoItems, serializeTodoStateSummary, updateActiveTaskFromTodos
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema
-from .validation import _require_list, _require_string
+from .validation import _require_string
 
 
 def _todo_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        todos = [_normalize_todo_item(item) for item in _require_list(input.get("todos"), "todos")]
+        todos = requireTodoItems(input.get("todos"))
         context["session"]["todos"] = todos
+        updateActiveTaskFromTodos(context["session"], todos)
         await maybe_await(context.get("persistSession", lambda: None)())
-        return {"content": pretty_json({"updated": len(todos), "todos": todos})}
+        return {"content": serializeTodoStateSummary(todos)}
 
     return ToolDefinition("TodoWrite", _tool_description("TodoWrite"), _tool_schema("TodoWrite"), handler)
 
@@ -218,22 +219,13 @@ def parseAllowedPrompts(value: Any) -> list[dict[str, str]]:
 
 
 def _normalize_todo_item(value: Any) -> dict[str, str]:
-    if not isinstance(value, dict):
-        raise ValueError("Invalid todo item")
-    content = _require_string(value.get("content"), "content")
-    status = _require_string(value.get("status"), "status")
-    active_form = value.get("activeForm")
-    if not isinstance(active_form, str) or not active_form.strip():
-        active_form = _derive_todo_active_form(content)
-    return {"content": content, "status": status, "activeForm": active_form}
+    return requireTodoItems([value])[0]
 
 
 def _derive_todo_active_form(content: str) -> str:
-    normalized = content.strip().lower()
-    if not normalized:
-        return "work"
-    match = re.match(r"^[a-z0-9]+", normalized, re.I)
-    return match.group(0) if match else "work"
+    from ..todo_policy import deriveTodoActiveForm
+
+    return deriveTodoActiveForm(content)
 
 
 def _extract_latest_assistant_text(session: dict[str, Any]) -> str | None:
