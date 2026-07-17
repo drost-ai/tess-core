@@ -67,7 +67,10 @@ def _continuation_crash_worker(
     core.configureRuntimeHome(home)
 
     async def crash() -> None:
-        if stage == "before_parent_completion_consumption":
+        if stage in {
+            "before_parent_completion_consumption",
+            "after_parent_durable_completion",
+        }:
             claim = await core.claimUnconsumedSubagentReconciliations(
                 parentSessionId=parent_id,
                 consumerId=f"crash-worker:{os.getpid()}",
@@ -75,6 +78,12 @@ def _continuation_crash_worker(
             )
             if not claim:
                 raise RuntimeError("could not claim reconciliation")
+            if stage == "after_parent_durable_completion":
+                completed = await core.completeSubagentReconciliationClaim(
+                    parent_id, claim["claimToken"]
+                )
+                if len(completed) != 1:
+                    raise RuntimeError("could not persist parent completion")
             os._exit(86)
         claim = await core.claimSubagentLaunchGroupContinuation(
             parentSessionId=parent_id,
@@ -93,8 +102,18 @@ def _continuation_crash_worker(
             raise RuntimeError("could not persist pre-start")
         if stage == "after_pre_start":
             os._exit(86)
-        if stage == "after_durable_child":
-            await core.saveTaskRecord(_task_record(parent_id, record_id, record_id))
+        if stage in {"after_durable_child", "after_child_terminal_result"}:
+            task = _task_record(parent_id, record_id, record_id)
+            if stage == "after_child_terminal_result":
+                task.update(
+                    {
+                        "status": "completed",
+                        "summary": "finished before claimant recovery",
+                        "completedAt": "2026-01-01T00:00:20.000Z",
+                        "updatedAt": "2026-01-01T00:00:20.000Z",
+                    }
+                )
+            await core.saveTaskRecord(task)
             os._exit(86)
         raise RuntimeError(f"unknown stage: {stage}")
 
@@ -215,6 +234,89 @@ class CoordinationTransactionTests(AgentCoreTestCase):
                 parent_id, "durable-child", durable_id
             ))
             self.assertEqual(completed["continuation"]["completedAt"], repeated["continuation"]["completedAt"])
+
+            run(_create_group(parent_id, "ambiguous", {
+                "schemaVersion": 1,
+                "phase": "starting",
+                "attempt": 1,
+                "claimToken": "ambiguous-claim",
+                "leaseExpiresAt": "2026-01-01T00:00:30.000Z",
+            }))
+            run(core.saveTaskRecord(_task_record(
+                parent_id, "40000000-0000-4000-8000-000000000011", "ambiguous"
+            )))
+            run(core.saveTaskRecord(_task_record(
+                parent_id, "40000000-0000-4000-8000-000000000012", "ambiguous"
+            )))
+            run(core.recoverSubagentLaunchGroupContinuations(
+                parent_id, "2026-01-01T00:01:00.000Z"
+            ))
+            ambiguous = next(
+                group
+                for group in run(core.listSubagentLaunchGroups(parent_id))
+                if group["id"] == "ambiguous"
+            )
+            self.assertEqual(ambiguous["continuation"]["phase"], "recovery_blocked")
+
+            run(_create_group(parent_id, "terminal-child", {
+                "schemaVersion": 1,
+                "phase": "starting",
+                "attempt": 1,
+                "claimToken": "terminal-claim",
+                "leaseExpiresAt": "2026-01-01T00:00:30.000Z",
+            }))
+            terminal_task = _task_record(
+                parent_id, "40000000-0000-4000-8000-000000000016", "terminal-child"
+            )
+            terminal_task.update({
+                "status": "completed",
+                "summary": "finished before linkage",
+                "completedAt": "2026-01-01T00:00:20.000Z",
+            })
+            run(core.saveTaskRecord(terminal_task))
+            run(core.recoverSubagentLaunchGroupContinuations(
+                parent_id, "2026-01-01T00:01:00.000Z"
+            ))
+            terminal = next(
+                group
+                for group in run(core.listSubagentLaunchGroups(parent_id))
+                if group["id"] == "terminal-child"
+            )
+            self.assertEqual(terminal["continuation"]["phase"], "completed")
+            self.assertEqual(
+                terminal["continuation"]["completedAt"],
+                "2026-01-01T00:00:20.000Z",
+            )
+
+            for legacy_id in ("legacy-zero", "legacy-one", "legacy-many"):
+                run(core.upsertSubagentLaunchGroup({
+                    "id": legacy_id,
+                    "parentSessionId": parent_id,
+                    "childAgentIds": ["legacy-child"],
+                    "taskIds": ["legacy-task"],
+                    "createdAt": "2026-01-01T00:00:00.000Z",
+                    "updatedAt": "2026-01-01T00:00:00.000Z",
+                    "continuationRequestedAt": "2026-01-01T00:00:00.000Z",
+                }))
+            run(core.saveTaskRecord(_task_record(
+                parent_id, "40000000-0000-4000-8000-000000000013", "legacy-one"
+            )))
+            run(core.saveTaskRecord(_task_record(
+                parent_id, "40000000-0000-4000-8000-000000000014", "legacy-many"
+            )))
+            run(core.saveTaskRecord(_task_record(
+                parent_id, "40000000-0000-4000-8000-000000000015", "legacy-many"
+            )))
+            run(core.recoverSubagentLaunchGroupContinuations(
+                parent_id, "2026-01-01T00:02:00.000Z"
+            ))
+            migrated = {
+                group["id"]: group
+                for group in run(core.listSubagentLaunchGroups(parent_id))
+            }
+            self.assertEqual(migrated["legacy-zero"]["continuation"]["phase"], "retryable")
+            self.assertEqual(migrated["legacy-one"]["continuation"]["phase"], "running")
+            self.assertEqual(migrated["legacy-many"]["continuation"]["phase"], "recovery_blocked")
         finally:
             self.restore_home(root, previous)
 
@@ -238,6 +340,21 @@ class CoordinationTransactionTests(AgentCoreTestCase):
                 group = next(item for item in run(core.listSubagentLaunchGroups(parent_id)) if item["id"] == group_id)
                 self.assertEqual(group["continuation"]["phase"], "retryable")
 
+                async def retry_claims() -> list[dict | None]:
+                    return await asyncio.gather(*(
+                        core.claimSubagentLaunchGroupContinuation(
+                            parentSessionId=parent_id,
+                            launchGroupId=group_id,
+                            claimantId=f"{stage}-retry-{claimant}",
+                        )
+                        for claimant in range(10)
+                    ))
+
+                self.assertEqual(
+                    len([claim for claim in run(retry_claims()) if claim]),
+                    1,
+                )
+
             durable_id = "40000000-0000-4000-8000-000000000033"
             run(_create_group(parent_id, durable_id))
             process = context.Process(
@@ -251,6 +368,37 @@ class CoordinationTransactionTests(AgentCoreTestCase):
             durable = next(item for item in run(core.listSubagentLaunchGroups(parent_id)) if item["id"] == durable_id)
             self.assertEqual(durable["continuation"]["phase"], "running")
             self.assertEqual(durable["continuation"]["childTaskId"], durable_id)
+            self.assertIsNone(run(core.claimSubagentLaunchGroupContinuation(
+                parentSessionId=parent_id,
+                launchGroupId=durable_id,
+                claimantId="must-not-duplicate-durable-child",
+            )))
+
+            terminal_id = "40000000-0000-4000-8000-000000000034"
+            run(_create_group(parent_id, terminal_id))
+            process = context.Process(
+                target=_continuation_crash_worker,
+                args=(str(home), "after_child_terminal_result", parent_id, terminal_id),
+            )
+            process.start()
+            process.join(20)
+            self.assertEqual(process.exitcode, 86)
+            run(core.recoverSubagentLaunchGroupContinuations(parent_id, future))
+            terminal = next(
+                item
+                for item in run(core.listSubagentLaunchGroups(parent_id))
+                if item["id"] == terminal_id
+            )
+            self.assertEqual(terminal["continuation"]["phase"], "completed")
+            self.assertEqual(
+                terminal["continuation"]["completedAt"],
+                "2026-01-01T00:00:20.000Z",
+            )
+            self.assertIsNone(run(core.claimSubagentLaunchGroupContinuation(
+                parentSessionId=parent_id,
+                launchGroupId=terminal_id,
+                claimantId="must-not-duplicate-terminal-child",
+            )))
 
             run(core.upsertSubagentReconciliation(_reconciliation(parent_id, "crashed-consumer")))
             process = context.Process(
@@ -274,6 +422,134 @@ class CoordinationTransactionTests(AgentCoreTestCase):
                 consumerId="must-not-repeat",
                 now="2099-01-01T00:01:00.000Z",
             )))
+
+            run(core.upsertSubagentReconciliation(
+                _reconciliation(parent_id, "durable-consumer")
+            ))
+            process = context.Process(
+                target=_continuation_crash_worker,
+                args=(
+                    str(home),
+                    "after_parent_durable_completion",
+                    parent_id,
+                    "unused",
+                ),
+            )
+            process.start()
+            process.join(20)
+            self.assertEqual(process.exitcode, 86)
+            self.assertIsNone(run(core.claimUnconsumedSubagentReconciliations(
+                parentSessionId=parent_id,
+                consumerId="must-not-repeat-durable-completion",
+                now="2099-01-01T00:02:00.000Z",
+            )))
+            stored = run(core.listSubagentReconciliations(parent_id))
+            durable_completion = next(
+                record
+                for record in stored
+                if record["id"] == "reconciliation-durable-consumer"
+            )
+            self.assertIsNotNone(durable_completion.get("consumedAt"))
+            self.assertNotIn("consumptionClaim", durable_completion)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_p03_legacy_live_dead_and_unknown_claimants_migrate_once(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            parent_id = "40000000-0000-4000-8000-000000000040"
+            live_pid = 41001
+            dead_pid = 41002
+            for group_id, continuation in (
+                (
+                    "legacy-live",
+                    _legacy_claim(
+                        claimantPid=live_pid,
+                        claimantStartToken="live-token",
+                        claimantPlatform="test",
+                    ),
+                ),
+                (
+                    "legacy-dead",
+                    _legacy_claim(
+                        claimantPid=dead_pid,
+                        claimantStartToken="dead-token",
+                        claimantPlatform="test",
+                    ),
+                ),
+                (
+                    "legacy-unknown-fresh",
+                    _legacy_claim(
+                        claimedAt="2026-01-01T00:01:50.000Z",
+                        startingAt="2026-01-01T00:01:51.000Z",
+                    ),
+                ),
+                ("legacy-unknown-old", _legacy_claim()),
+            ):
+                run(_create_group(parent_id, group_id, continuation))
+
+            async def observe(pid: int) -> dict:
+                if pid == live_pid:
+                    return {
+                        "pid": live_pid,
+                        "processGroupId": live_pid,
+                        "startToken": "live-token",
+                        "platform": "test",
+                        "observedCommandDigest": "live",
+                    }
+                if pid == dead_pid:
+                    raise core.ProcessIdentityError(
+                        "process.not_found", "injected dead claimant"
+                    )
+                raise core.ProcessIdentityError(
+                    "process.inspect_unavailable", "injected unknown claimant"
+                )
+
+            with patch(
+                "agent_core.process_identity._process_identity_observer_for_tests",
+                observe,
+            ):
+                run(core.recoverSubagentLaunchGroupContinuations(
+                    parent_id, "2026-01-01T00:02:00.000Z"
+                ))
+                groups = {
+                    group["id"]: group
+                    for group in run(core.listSubagentLaunchGroups(parent_id))
+                }
+                self.assertEqual(
+                    groups["legacy-live"]["continuation"]["recoveryReason"],
+                    "legacy_claimant_live_grace",
+                )
+                self.assertEqual(
+                    groups["legacy-dead"]["continuation"]["phase"],
+                    "retryable",
+                )
+                self.assertEqual(
+                    groups["legacy-unknown-fresh"]["continuation"]["recoveryReason"],
+                    "legacy_claimant_unknown_grace",
+                )
+                self.assertEqual(
+                    groups["legacy-unknown-old"]["continuation"]["phase"],
+                    "retryable",
+                )
+                self.assertEqual(
+                    run(core.recoverSubagentLaunchGroupContinuations(
+                        parent_id, "2026-01-01T00:02:00.000Z"
+                    )),
+                    [],
+                )
+                run(core.recoverSubagentLaunchGroupContinuations(
+                    parent_id, "2026-01-01T00:03:00.000Z"
+                ))
+            groups = {
+                group["id"]: group
+                for group in run(core.listSubagentLaunchGroups(parent_id))
+            }
+            self.assertEqual(groups["legacy-live"]["continuation"]["phase"], "retryable")
+            self.assertEqual(
+                groups["legacy-unknown-fresh"]["continuation"]["phase"],
+                "retryable",
+            )
         finally:
             self.restore_home(root, previous)
 
@@ -332,6 +608,17 @@ def _task_record(parent_id: str, task_id: str, group_id: str) -> dict:
         "foregroundable": True,
         "restorable": True,
         "metadata": {"parent_continuation": True, "launch_group_id": group_id},
+    }
+
+
+def _legacy_claim(**overrides: object) -> dict:
+    return {
+        "schemaVersion": 1,
+        "phase": "starting",
+        "attempt": 1,
+        "claimedAt": "2026-01-01T00:00:00.000Z",
+        "startingAt": "2026-01-01T00:00:01.000Z",
+        **overrides,
     }
 
 

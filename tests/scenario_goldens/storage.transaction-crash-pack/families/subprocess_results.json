@@ -12,7 +12,7 @@
     "driver": "run_subprocess",
     "returnCode": 0,
     "status": "passed",
-    "stderr": "----------------------------------------------------------------------\nRan 11 tests in <duration-s>\n\nOK\n",
+    "stderr": "----------------------------------------------------------------------\nRan 12 tests in <duration-s>\n\nOK\n",
     "stdout": ""
   }
 ]
