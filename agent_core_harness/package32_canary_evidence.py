@@ -69,6 +69,7 @@ def preparePrivateCanaryRuntime(runtime_home: str) -> None:
             "runtime_home_exists",
             "The paid canary runtime home must be a new isolated path.",
         )
+    _require_private_directory(target.parent)
     target.mkdir(parents=False, mode=0o700)
     os.chmod(target, 0o700)
     _require_private_directory(target)

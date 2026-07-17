@@ -12,6 +12,7 @@ from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessages
 from agent_core_harness.package32_canary import runPackage32AnthropicCanary
 from agent_core_harness.package32_canary_evidence import (
     Package32CanaryError,
+    preparePrivateCanaryRuntime,
     reservePrivateEvidenceFile,
 )
 
@@ -157,6 +158,11 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
             with self.assertRaises(Package32CanaryError) as raised:
                 reservePrivateEvidenceFile(str(parent / "canary.json"))
             self.assertEqual(raised.exception.code, "private_path_unsafe")
+            self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o755)
+            with self.assertRaises(Package32CanaryError) as raised:
+                preparePrivateCanaryRuntime(str(parent / "runtime"))
+            self.assertEqual(raised.exception.code, "private_path_unsafe")
+            self.assertFalse(Path(parent, "runtime").exists())
             self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o755)
 
 
