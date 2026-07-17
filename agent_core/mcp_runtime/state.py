@@ -35,6 +35,7 @@ def _create_state(
         "resourcesStale": False,
         "notificationGeneration": 0,
         "catalogGeneration": 0,
+        "connectionGeneration": 0,
     }
     if config.get("transport") != "stdio" and token_store is not None:
         state["oauth"] = createMcpOAuthRuntime(
@@ -55,12 +56,27 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
             pass
     try:
         client = _create_client(state["config"], cwd, on_event, state)
-        await client.initialize()
+        state["client"] = client
+
+        async def startup() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            await client.initialize()
+            return await _refresh_tools(state), await _refresh_resources(state)
+
+        startup_timeout_ms = resolveMcpTransportPolicy(state["config"])[
+            "startupTimeoutMs"
+        ]
+        try:
+            candidate_tools, candidate_resources = await asyncio.wait_for(
+                startup(),
+                timeout=startup_timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError as error:
+            raise McpTransportError(
+                "startup_timeout",
+                f"MCP startup exceeded {startup_timeout_ms}ms for {state['config'].get('name')}.",
+            ) from error
         # Discover into candidates so a partial refresh cannot replace the
         # previous known-good catalog on reconnect failure.
-        state["client"] = client
-        candidate_tools = await _refresh_tools(state)
-        candidate_resources = await _refresh_resources(state)
         state.update(
             {
                 "client": client,
@@ -75,17 +91,27 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
                 "toolsStale": False,
                 "resourcesStale": False,
                 "catalogGeneration": int(state.get("catalogGeneration") or 0) + 1,
+                "connectionGeneration": int(state.get("connectionGeneration") or 0) + 1,
                 "authorizationUrl": None,
                 "authorizationContinuationId": None,
             }
         )
         on_event("mcp.server_connected", {"server": state["config"]["name"], "transport": state["config"].get("transport"), "tools": len(state["tools"]), "resources": len(state["resources"]), "protocol_version": state.get("protocolVersion")})
+    except asyncio.CancelledError:
+        if 'client' in locals():
+            with contextlib.suppress(Exception):
+                await client.close()
+            if state.get("client") is client:
+                state["client"] = None
+        raise
     except Exception as exc:
         if 'client' in locals():
             try:
                 await client.close()
             except Exception:
                 pass
+            if state.get("client") is client:
+                state["client"] = None
         _mark_state_failure(state, exc)
         on_event("mcp.server_connection_failed", {"server": state["config"].get("name"), "transport": state["config"].get("transport"), "reason": "authorization_required" if isinstance(exc, McpAuthorizationRequiredError) else state.get("error")})
 
@@ -216,6 +242,7 @@ def _server_status(state: dict[str, Any]) -> dict[str, Any]:
         "channelRegistration": state["channelRegistration"],
         "protocolVersion": state.get("protocolVersion"),
         "catalogGeneration": state.get("catalogGeneration", 0),
+        "connectionGeneration": state.get("connectionGeneration", 0),
         "toolsStale": bool(state.get("toolsStale")),
         "authorizationUrl": state.get("authorizationUrl"),
         "authorizationContinuationId": state.get("authorizationContinuationId"),
@@ -232,6 +259,11 @@ def _mark_state_failure(state: dict[str, Any], error: Exception) -> None:
         state["lastErrorAt"] = now_iso()
         return
     state["connected"] = False
+    if isinstance(error, McpTransportError) and error.code == "startup_timeout":
+        state["state"] = "unavailable"
+        state["error"] = str(error)
+        state["lastErrorAt"] = now_iso()
+        return
     state["state"] = "degraded" if state["tools"] or state["resources"] else "disconnected"
     state["error"] = str(error)
     state["lastErrorAt"] = now_iso()

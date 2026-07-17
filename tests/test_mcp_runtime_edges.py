@@ -354,7 +354,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
     def test_mcp_sse_endpoint_and_id_matching_follow_reference_edges(self):
         client = mcp_module.SseMcpClient({"name": "edge", "commandOrUrl": "http://127.0.0.1:1/sse"}, "/tmp")
         client._handle_sse_event("endpoint", [json.dumps({"url": "/messages"})])
-        self.assertEqual(client.post_url, "/messages")
+        self.assertEqual(client.post_url, "http://127.0.0.1:1/messages")
 
         no_id = mcp_module._parse_sse_rpc_response('data: {"jsonrpc":"2.0","result":{"ok":true}}\n\n', None)
         self.assertEqual(no_id["result"], {"ok": True})

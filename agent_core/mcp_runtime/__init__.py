@@ -4,7 +4,7 @@ import sys as _sys
 import types as _types
 from importlib import import_module
 
-_MODULE_NAMES = ['shared', 'negotiation', 'token_store', 'auth_loopback', 'auth', 'runtime', 'clients', 'state', 'notifications', 'normalization', 'blobs', 'protocol', 'cancellation']
+_MODULE_NAMES = ['shared', 'transport_policy', 'transport_shared', 'stdio_decoder', 'sse_decoder', 'http_body', 'negotiation', 'token_store', 'auth_loopback', 'auth', 'runtime', 'clients', 'stdio_transport', 'http_transport', 'sse_transport', 'state', 'notifications', 'normalization', 'blobs', 'protocol', 'cancellation']
 
 _modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
 _namespace = {}

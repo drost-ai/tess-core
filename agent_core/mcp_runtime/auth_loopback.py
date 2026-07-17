@@ -18,6 +18,8 @@ class LoopbackListener:
         self.server = server
         self.response_queue = response_queue
         self.thread = threading.Thread(target=server.serve_forever, daemon=True)
+        self._closed = False
+        self._close_lock = asyncio.Lock()
         self.thread.start()
 
     @property
@@ -67,6 +69,14 @@ class LoopbackListener:
         return code
 
     async def close(self) -> None:
-        await asyncio.to_thread(self.server.shutdown)
-        await asyncio.to_thread(self.server.server_close)
-        await asyncio.to_thread(self.thread.join, 1)
+        async with self._close_lock:
+            if self._closed:
+                return
+            self._closed = True
+            try:
+                self.response_queue.put_nowait((None, None))
+            except queue.Full:
+                pass
+            await asyncio.to_thread(self.server.shutdown)
+            await asyncio.to_thread(self.server.server_close)
+            await asyncio.to_thread(self.thread.join, 1)

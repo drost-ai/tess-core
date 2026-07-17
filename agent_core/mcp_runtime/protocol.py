@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from .sse_decoder import parseSseEvents
 
 
 def _runtime_tool_name(server: str, tool: str) -> str:
@@ -47,9 +48,11 @@ def _parse_sse_rpc_response(raw: str, request_id: int | None) -> dict[str, Any]:
         if not data:
             continue
         try:
-            payload = json.loads(data)
-        except Exception:
-            continue
+            payload = json.loads(data, parse_constant=_reject_json_constant)
+        except Exception as exc:
+            raise RuntimeError("MCP SSE event contains malformed JSON-RPC.") from exc
+        if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
+            raise RuntimeError("MCP SSE event contains malformed JSON-RPC.")
         if isinstance(payload, dict) and _json_rpc_id_matches(payload, request_id):
             return _validate_json_rpc_response(payload, request_id, id_already_matched=True)
     raise RuntimeError("No matching SSE JSON-RPC response was received.")
@@ -80,22 +83,4 @@ def _json_rpc_id_matches(payload: dict[str, Any], request_id: int | None) -> boo
 
 
 def _parse_sse_events(raw: str) -> list[dict[str, str]]:
-    events: list[dict[str, str]] = []
-    normalized = raw.replace("\r\n", "\n").replace("\r", "\n")
-    for raw_event in normalized.split("\n\n"):
-        if not raw_event.strip():
-            continue
-        event_name: str | None = None
-        data_parts: list[str] = []
-        for line in raw_event.split("\n"):
-            if line.startswith("event:"):
-                event_name = line[6:].strip()
-            elif line.startswith("data:"):
-                data_parts.append(line[5:].lstrip())
-        event: dict[str, str] = {}
-        if event_name:
-            event["event"] = event_name
-        if data_parts:
-            event["data"] = "\n".join(data_parts)
-        events.append(event)
-    return events
+    return parseSseEvents(raw)

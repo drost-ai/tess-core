@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 from .._utils import maybe_await
 from .auth_loopback import LoopbackListener
 from .token_store import mcpTokenStoreKey, token_store_get, token_store_set
+from .transport_policy import resolveMcpTransportPolicy
 
 
 class McpAuthorizationRequiredError(RuntimeError):
@@ -48,10 +49,11 @@ class McpOAuthRuntime:
         self.authorization_callback = authorization_callback
         self.key = mcpTokenStoreKey(config)
         self.resource_origin = canonical_origin(str(config.get("commandOrUrl") or ""))
-        self.timeout = float(config.get("requestTimeoutSeconds") or 30)
+        self.timeout = resolveMcpTransportPolicy(config)["requestTimeoutMs"] / 1000
         self._refresh_task: asyncio.Task[dict[str, Any]] | None = None
         self._last_authorization_url: str | None = None
         self._last_continuation_id: str | None = None
+        self._active_listener: LoopbackListener | None = None
         self._closed = False
 
     async def authorize_headers(self, resource_url: str) -> dict[str, str]:
@@ -108,6 +110,9 @@ class McpOAuthRuntime:
 
     async def close(self) -> None:
         self._closed = True
+        listener = self._active_listener
+        if listener:
+            await listener.close()
         task = self._refresh_task
         if task and not task.done():
             task.cancel()
@@ -141,6 +146,7 @@ class McpOAuthRuntime:
 
     async def _authorize(self, www_authenticate: str | None, resource_url: str) -> None:
         metadata = await self._discover_authorization_server(www_authenticate, resource_url)
+        self._ensure_open()
         redirect = self.oauth.get("redirect") if isinstance(self.oauth.get("redirect"), dict) else None
         if not redirect and not callable(self.authorization_callback):
             self._authorization_required(str(metadata["authorization_endpoint"]), uuid.uuid4().hex)
@@ -151,11 +157,16 @@ class McpOAuthRuntime:
         listener: LoopbackListener | None = None
         if redirect:
             listener = await LoopbackListener.start(int(redirect.get("port") or 0))
+            if self._closed:
+                await listener.close()
+                self._ensure_open()
+            self._active_listener = listener
             redirect_uri = f"http://127.0.0.1:{listener.port}/callback"
         else:
             redirect_uri = str(self.oauth.get("redirectUri") or "http://127.0.0.1/callback")
         try:
             client_record = await self._ensure_client(metadata, redirect_uri)
+            self._ensure_open()
             client_id = str(self.oauth.get("clientId") or client_record.get("clientId") or "")
             pkce = _create_pkce()
             state = _base64_url(secrets.token_bytes(16))
@@ -189,6 +200,7 @@ class McpOAuthRuntime:
                 code = callback_result.get("code") if isinstance(callback_result, dict) else callback_result
                 if not isinstance(code, str) or not code:
                     raise RuntimeError("MCP OAuth authorization callback did not return a code.")
+            self._ensure_open()
             response = await _request_tokens(
                 str(metadata["token_endpoint"]),
                 {
@@ -201,6 +213,7 @@ class McpOAuthRuntime:
                 },
                 self.timeout,
             )
+            self._ensure_open()
             merged = _merge_token_response(
                 client_record,
                 response,
@@ -213,6 +226,8 @@ class McpOAuthRuntime:
         finally:
             if listener:
                 await listener.close()
+                if self._active_listener is listener:
+                    self._active_listener = None
 
     async def _ensure_client(self, metadata: dict[str, Any], redirect_uri: str) -> dict[str, Any]:
         existing = await token_store_get(self.store, self.key) or {"accessToken": ""}

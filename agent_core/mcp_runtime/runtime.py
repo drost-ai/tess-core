@@ -22,6 +22,11 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     await _register_requested_channels(states, args.get("registeredChannels") or [], args.get("sessionId"), on_event)
     catalog_lock = asyncio.Lock()
     tool_registry_generation = 1 if any(state.get("connected") for state in states) else 0
+    closed = False
+
+    def assert_open() -> None:
+        if closed:
+            raise RuntimeError("MCP runtime lifecycle is closed.")
 
     def list_server_status() -> list[dict[str, Any]]:
         return [_server_status(state) for state in states]
@@ -39,6 +44,7 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         return [tool for state in states for tool in state["tools"]]
 
     async def list_resources(server: str | None = None) -> list[dict[str, Any]]:
+        assert_open()
         selected = _select_states(states, server)
         out: list[dict[str, Any]] = []
         for state in selected:
@@ -48,11 +54,13 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         return out
 
     async def read_resource(server: str, uri: str) -> dict[str, Any]:
+        assert_open()
         state = await _require_connected(states, server, cwd, on_event)
         result = await _request_with_state_tracking(state, "resources/read", {"uri": uri})
         return await _normalize_read_resource_output(server, result)
 
     async def call_tool(server: str, name: str, tool_args: dict[str, Any] | None = None) -> dict[str, Any]:
+        assert_open()
         state = await _require_connected(states, server, cwd, on_event)
         result = await _request_with_state_tracking(state, "tools/call", {"name": name, "arguments": tool_args or {}})
         return _normalize_tool_call_result(server, name, result)
@@ -93,6 +101,7 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
 
     async def apply_pending_catalog_changes() -> dict[str, Any]:
         nonlocal tool_registry_generation
+        assert_open()
         async with catalog_lock:
             changed_servers: list[str] = []
             tools_changed = False
@@ -148,11 +157,18 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             }
 
     async def close() -> None:
+        nonlocal closed
+        if closed:
+            return
+        closed = True
         await asyncio.gather(
             *(state["client"].close() for state in states if state.get("client")),
             *(state["oauth"].close() for state in states if state.get("oauth")),
             return_exceptions=True,
         )
+        for state in states:
+            state["connected"] = False
+            state["state"] = "closed"
 
     return {
         "tools": list_tools(),
