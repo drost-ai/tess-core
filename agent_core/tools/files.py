@@ -53,7 +53,7 @@ def _write_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context, True)
         content = _require_string(input.get("content"), "content")
-        await _ensure_tool_permission(context, "Write", "edit", f"Write {_display_path(context, file_path)} ({len(content)} bytes)")
+        await _ensure_tool_permission(context, "Write", "edit", f"Write {_display_path(context, file_path)} ({len(content)} bytes)", path=file_path)
         previous = Path(file_path).read_text(encoding="utf-8") if Path(file_path).exists() else None
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         Path(file_path).write_text(content, encoding="utf-8")
@@ -75,7 +75,7 @@ def _edit_tool() -> ToolDefinition:
         old = _require_string(input.get("old_string"), "old_string")
         new = _require_string(input.get("new_string"), "new_string")
         replace_all = bool(input.get("replace_all"))
-        await _ensure_tool_permission(context, "Edit", "edit", f"Edit {_display_path(context, file_path)}")
+        await _ensure_tool_permission(context, "Edit", "edit", f"Edit {_display_path(context, file_path)}", path=file_path)
         original = Path(file_path).read_text(encoding="utf-8")
         if old not in original:
             return {"content": f"String not found in {file_path}", "isError": True}

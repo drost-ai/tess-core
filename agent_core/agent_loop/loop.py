@@ -12,6 +12,9 @@ from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp
 from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
+from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
+from ..hooks import fireToolHooks
+from ..permission_rules import findDispatchDenyRule
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
@@ -23,6 +26,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     prompt = args["prompt"]
     runtime = args["runtime"]
     provider_override = args.get("providerOverride")
+    authority = await enforceSessionAgentAuthority(session=session, config=config)
     repair = repairSessionTranscript(session)
     if repair["repaired"]:
         await persistSession(session, config)
@@ -39,7 +43,10 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     if callable(apply_pending_mcp):
         await maybe_await(apply_pending_mcp())
     tool_names = set(filterToolsByPolicy(config))
-    runtime_tools = filter_tools_for_subagent(runtime.get("tools", []), runtime_contract)
+    runtime_tools = filterToolsForAgentAuthority(
+        filter_tools_for_subagent(runtime.get("tools", []), runtime_contract),
+        authority,
+    )
     tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
     provider = provider_override or _create_provider(config, runtime, session)
     base_system_prompt = args.get("systemPromptOverride") or session["systemPrompt"]
@@ -249,6 +256,21 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             nonlocal tool_count
             _throw_if_turn_cancelled(runtime)
             tool = tools_by_name.get(tool_use["name"])
+            dispatch_deny = await findDispatchDenyRule(
+                {
+                    "cwd": session["cwd"],
+                    "toolName": tool_use["name"],
+                    "input": tool_use.get("input") or {},
+                    "settingsSources": config.get("settingsSources"),
+                    "inlineSettings": config.get("inlineSettings"),
+                    "rules": (authority or {}).get("permissionRules") if authority else None,
+                    "projectRoot": (authority or {}).get("permissionRuleProjectRoot") if authority else None,
+                }
+            )
+            if dispatch_deny:
+                message = f"Blocked by permission rule {dispatch_deny['raw']} ({dispatch_deny['scope']} settings)."
+                _safe_emit(runtime, "tool.completed", {"name": tool_use["name"], "tool_use_id": tool_use["id"], "output": message, "error": True, "session_id": session["id"]})
+                return {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": True, "content": message}
             if _requires_plan_approval(session):
                 is_mcp_candidate = bool(tool and getattr(tool, "mcp", None) is not None) or str(tool_use["name"]).startswith("mcp__")
                 if is_mcp_candidate:
@@ -316,8 +338,35 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
             usage_totals["toolCalls"] += 1
             _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
             try:
+                hook_fire = {
+                    "cwd": session["cwd"],
+                    "sessionId": session["id"],
+                    "config": config,
+                    "permissionMode": session.get("permissionMode") or config.get("permissionMode"),
+                    "authority": authority,
+                }
+                pre_hook = await fireToolHooks(
+                    {
+                        "event": "PreToolUse",
+                        "toolName": tool.name,
+                        "toolInput": tool_use.get("input") or {},
+                        "fire": hook_fire,
+                        "emit": runtime.get("emitEvent"),
+                    }
+                )
+                if pre_hook["decision"] == "deny":
+                    raise PermissionError(pre_hook.get("reason") or "Blocked by PreToolUse hook.")
                 result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
                 _throw_if_turn_cancelled(runtime)
+                await fireToolHooks(
+                    {
+                        "event": "PostToolUse",
+                        "toolName": tool.name,
+                        "toolInput": tool_use.get("input") or {},
+                        "fire": hook_fire,
+                        "emit": runtime.get("emitEvent"),
+                    }
+                )
                 _safe_emit(runtime, "tool.completed", {"name": tool.name, "tool_use_id": tool_use["id"], "output": result.get("content", ""), "error": result.get("isError", False), "session_id": session["id"]})
                 block = {"type": "tool_result", "tool_use_id": tool_use["id"], "is_error": bool(result.get("isError")), "content": result.get("content", "")}
                 if result.get("pause") == "approval":

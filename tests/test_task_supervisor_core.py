@@ -105,6 +105,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertNotIn("task_id", payload)
 
             daemon_task_id = "task-output-daemon"
+            session["metadata"]["taskIds"].append(daemon_task_id)
             daemon_output = core.taskOutputPath(daemon_task_id)
             Path(daemon_output).parent.mkdir(parents=True, exist_ok=True)
             Path(daemon_output).write_text("file output\n", encoding="utf-8")
@@ -136,6 +137,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
             client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
             events = []
             unsubscribe = client["subscribe"](lambda event: events.append(event), session["id"])
@@ -169,6 +171,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
             client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
             script = 'print("bootstrap replay")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"

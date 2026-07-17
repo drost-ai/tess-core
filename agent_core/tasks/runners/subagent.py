@@ -8,8 +8,9 @@ import sys
 from typing import Any
 
 from ...agent import runAgentPrompt
+from ...agent_authority import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
 from ...config import resolveConfig
-from ...storage import configureRuntimeHome, loadSession, saveSession
+from ...storage import configureRuntimeHome, loadChildAgent, loadSession, saveSession
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...tools import createBuiltinTools
 
@@ -28,8 +29,14 @@ async def _execute_background_subagent(args: dict[str, Any]) -> tuple[dict[str, 
     session = await loadSession(args["sessionId"])
     if not session:
         raise RuntimeError(f"Subagent session not found: {args['sessionId']}")
+    child_record = await loadChildAgent(args["agentId"])
+    assertMatchingPersistedChildAuthorities(
+        (session.get("metadata") or {}).get("effectiveAgentAuthority"),
+        (child_record or {}).get("effectiveAgentAuthority"),
+    )
     config = await resolveConfig(_session_config_options(session, runtime_home), session["cwd"])
     _apply_session_overrides(config, session)
+    await enforceSessionAgentAuthority(session=session, config=config)
     events = []
 
     def emit_event(event: str, data: dict[str, Any]) -> None:
@@ -77,6 +84,10 @@ def _session_config_options(session: dict[str, Any], runtime_home: str | None) -
         "runtimeHome": runtime_home,
         "provider": session.get("providerProfileName") or session.get("provider"),
         "model": session.get("model"),
+        "settingSources": ",".join(
+            ((metadata.get("effectiveAgentAuthority") or {}).get("executableSources") or {}).get("settingsSources")
+            or ["user"]
+        ),
     }
     if settings:
         options["settings"] = settings

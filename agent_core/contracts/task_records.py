@@ -50,6 +50,30 @@ TaskQuestionStatus = Literal["pending", "answered", "skipped"]
 SubagentStructuredResultStatus = Literal["not_configured", "valid", "invalid"]
 
 
+class OwnedProcessIdentity(TypedDict):
+    schemaVersion: Literal[1]
+    pid: int
+    processGroupId: int
+    spawnedAt: str
+    startToken: str
+    observedCommandDigest: str
+    expectedCommandDigest: str
+    platform: str
+
+
+class TaskLaunchReservation(TypedDict, total=False):
+    schemaVersion: Literal[1]
+    reservationId: str
+    taskId: str
+    sessionId: str
+    kind: Literal["background_command", "main_session", "subagent"]
+    state: Literal["starting", "attached", "failed"]
+    createdAt: str
+    attachedAt: str
+    failedAt: str
+    failureReason: str
+
+
 class SubagentCommunicationPolicy(TypedDict, total=False):
     allowChildQuestions: bool
     maxPendingQuestions: int
@@ -206,6 +230,8 @@ class TaskMeta(_TaskMetaRequired, total=False):
     structuredResultStatus: SubagentStructuredResultStatus
     structuredResultPath: str
     structuredResultErrors: list[str]
+    processIdentity: OwnedProcessIdentity
+    launchReservation: TaskLaunchReservation
 
 
 class _TaskRecordRequired(TypedDict):
@@ -243,6 +269,8 @@ class TaskRecord(_TaskRecordRequired, total=False):
     relatedChildSessionIds: list[str]
     owner: TaskOwner | None
     supervisorId: str | None
+    processIdentity: OwnedProcessIdentity
+    launchReservation: TaskLaunchReservation
 
 
 class _ChildAgentRecordRequired(TypedDict):
@@ -289,6 +317,7 @@ class ChildAgentRecord(_ChildAgentRecordRequired, total=False):
     structuredResult: dict[str, Any] | list[Any] | str | int | float | bool | None
     structuredResultPath: str
     structuredResultErrors: list[str]
+    processIdentity: OwnedProcessIdentity
 
 
 __all__ = [
@@ -296,9 +325,11 @@ __all__ = [
     "ChildAgentStatus",
     "ForegroundMode",
     "HealthCheckStatus",
+    "OwnedProcessIdentity",
     "TaskFamily",
     "TaskKind",
     "TaskLaunchResult",
+    "TaskLaunchReservation",
     "SubagentCommunicationPolicy",
     "SubagentRuntimeContract",
     "SubagentStructuredResultStatus",

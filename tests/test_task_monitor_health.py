@@ -10,6 +10,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             task_id = "monitor-task"
+            session["metadata"]["taskIds"] = [task_id]
             output_file = core.taskOutputPath(task_id)
             run(
                 core.writeTaskMeta(
@@ -127,14 +128,17 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             events = []
             async def exercise_runtime():
                 created = await core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
-                self.assertNotIn("args", calls)
-                with Path(output_file).open("a", encoding="utf-8") as handle:
-                    handle.write("x" * 256 + "\n")
-                for _ in range(100):
-                    if "args" in calls:
-                        break
-                    await asyncio.sleep(0.02)
-                return created
+                try:
+                    self.assertNotIn("args", calls)
+                    with Path(output_file).open("a", encoding="utf-8") as handle:
+                        handle.write("x" * 256 + "\n")
+                    for _ in range(100):
+                        if any(event == "monitor.assistant_update" for event, _ in events):
+                            break
+                        await asyncio.sleep(0.02)
+                    return created
+                finally:
+                    await created["close"]()
 
             runtime = run(exercise_runtime())
             update = next(data for event, data in events if event == "monitor.assistant_update")

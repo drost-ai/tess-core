@@ -4,6 +4,58 @@ from .shared import *
 from ...sandbox import prepareSandboxedArgv
 
 
+def _prepare_shell_argv(
+    command: str,
+    cwd: str,
+    *,
+    sandbox_config: dict[str, Any] | None = None,
+    runtime_home: str | None = None,
+    output_file: str | None = None,
+    sandbox_events: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    argv = [_resolve_shell(), "-lc", command]
+    if not sandbox_config:
+        return argv
+
+    def emit_sandbox_event(event: str, data: dict[str, Any]) -> None:
+        if sandbox_events is not None:
+            sandbox_events.append({"event": event, "data": data})
+
+    launch = prepareSandboxedArgv(
+        argv,
+        config={"sandbox": sandbox_config, "runtimeHome": runtime_home},
+        cwd=cwd,
+        extraWritableRoots=[root for root in (os.path.dirname(output_file) if output_file else None, runtime_home) if root],
+        emit=emit_sandbox_event,
+    )
+    return launch["argv"]
+
+
+def _spawn_owned_argv(
+    argv: list[str],
+    cwd: str,
+    output_file: str,
+    *,
+    env: dict[str, str] | None = None,
+) -> subprocess.Popen[Any]:
+    kwargs: dict[str, Any] = {}
+    if hasattr(os, "setsid"):
+        kwargs["preexec_fn"] = os.setsid
+    handle = open(output_file, "ab")
+    try:
+        return subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE,
+            env=env,
+            **kwargs,
+        )
+    finally:
+        handle.close()
+
+
 def _spawn_shell(
     command: str,
     cwd: str,
@@ -16,20 +68,14 @@ def _spawn_shell(
     kwargs: dict[str, Any] = {}
     if hasattr(os, "setsid"):
         kwargs["preexec_fn"] = os.setsid
-    argv = [_resolve_shell(), "-lc", command]
-    if sandbox_config:
-        def emit_sandbox_event(event: str, data: dict[str, Any]) -> None:
-            if sandbox_events is not None:
-                sandbox_events.append({"event": event, "data": data})
-
-        launch = prepareSandboxedArgv(
-            argv,
-            config={"sandbox": sandbox_config, "runtimeHome": runtime_home},
-            cwd=cwd,
-            extraWritableRoots=[root for root in (os.path.dirname(output_file), runtime_home) if root],
-            emit=emit_sandbox_event,
-        )
-        argv = launch["argv"]
+    argv = _prepare_shell_argv(
+        command,
+        cwd,
+        sandbox_config=sandbox_config,
+        runtime_home=runtime_home,
+        output_file=output_file,
+        sandbox_events=sandbox_events,
+    )
     handle = open(output_file, "ab")
     try:
         return subprocess.Popen(

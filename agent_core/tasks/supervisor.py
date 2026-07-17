@@ -5,8 +5,7 @@ import types as _types
 
 from .supervisor_parts import *
 from ..contracts.records import launch_task_id
-from ..subagent_capacity import check_subagent_capacity, resolve_subagent_concurrency_policy
-from ..task_communication import append_task_event
+from ..process_identity import processIdentityFromRecord, signalOwnedProcess
 from .supervisor_parts import _modules as _SUPERVISOR_PART_MODULES
 
 
@@ -27,26 +26,29 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             await maybe_await(subscriber(payload))
         await maybe_await(on_event(payload))
 
+    _launch_process_task = _create_process_task_launcher(live_work_cache, emit)
+
     async def start_background_command(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
         session_id = _require_string(task_args.get("sessionId") or task_args.get("session_id"), "sessionId")
         command = _require_string(task_args.get("command"), "command")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
         title = task_args.get("title")
+        if not await loadSession(session_id):
+            raise RuntimeError(f"Session not found: {session_id}")
         task_id = str(uuid.uuid4())
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        started_at = now_iso()
         sandbox_events: list[dict[str, Any]] = []
-        proc = _spawn_shell(
+        child_argv = _prepare_shell_argv(
             command,
             task_cwd,
-            output_file,
             sandbox_config=task_args.get("sandbox"),
             runtime_home=task_args.get("runtimeHome"),
+            output_file=output_file,
             sandbox_events=sandbox_events,
         )
-        _PROCESS_REGISTRY[task_id] = proc
+        reservation = createTaskLaunchReservation(taskId=task_id, sessionId=session_id, kind="background_command")
         meta = {
             "type": "background_command",
             "taskId": task_id,
@@ -54,35 +56,46 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "sessionId": session_id,
             "command": command,
             "cwd": task_cwd,
-            "startedAt": started_at,
-            "updatedAt": started_at,
-            "status": "running",
+            "startedAt": reservation["createdAt"],
+            "updatedAt": reservation["createdAt"],
+            "status": "starting",
             "outputFile": output_file,
             "title": title,
             "description": title,
-            "pid": proc.pid,
-            "detailStatus": "launching",
+            "detailStatus": "starting",
+            "attachedDetailStatus": "launching",
+            "attachedSummary": "Background command launched by daemon.",
             "owner": "daemon",
             "supervisorId": supervisor_id,
+            "launchReservation": reservation,
         }
-        await writeTaskMeta(task_id, meta)
-        record = _build_task_record(meta, "Background command launched by daemon.")
-        await saveTaskRecord(record)
-        for sandbox_event in sandbox_events:
-            await emit(sandbox_event["event"], sandbox_event["data"], session_id)
+        record = {
+            **_build_task_record(meta, "Background command is starting."),
+            "status": "queued",
+            "detailStatus": "starting",
+            "launchReservation": reservation,
+        }
 
         def _append_task_id(record_session: dict[str, Any]) -> dict[str, Any]:
             metadata = record_session.setdefault("metadata", {})
             metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
             return record_session
 
-        await mutateSessionRecord(session_id, _append_task_id)
-        _invalidate_live_work_cache(live_work_cache, session_id)
-        await emit("task.updated", _task_record_event_payload(record), session_id)
-        watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
-        _WATCHERS.add(watcher)
-        watcher.start()
-        return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
+        result = await _launch_process_task(
+            task_id=task_id,
+            session_id=session_id,
+            command=command,
+            task_cwd=task_cwd,
+            output_file=output_file,
+            meta=meta,
+            record=record,
+            child_argv=child_argv,
+            env=_worker_env(),
+            reserve_session_updates=[(session_id, _append_task_id)],
+        )
+        for sandbox_event in sandbox_events:
+            await emit(sandbox_event["event"], sandbox_event["data"], session_id)
+        return result
 
     async def start_main_session_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
@@ -96,18 +109,25 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         task_id = str(uuid.uuid4())
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        started_at = now_iso()
+        reservation = createTaskLaunchReservation(taskId=task_id, sessionId=session_id, kind="main_session")
         def _append_main_session_task(record_session: dict[str, Any]) -> dict[str, Any]:
             metadata = record_session.setdefault("metadata", {})
             metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
             metadata["backgroundSessionIds"] = _dedupe([*(metadata.get("backgroundSessionIds") or []), session_id])
             return record_session
 
-        await mutateSessionRecord(session_id, _append_main_session_task)
-        _invalidate_live_work_cache(live_work_cache, session_id)
         command = prompt
-        proc = _spawn_main_session_worker(task_id, session_id, prompt, task_cwd, output_file, runtime_home=task_args.get("runtimeHome"))
-        _PROCESS_REGISTRY[task_id] = proc
+        child_argv = [
+            sys.executable,
+            "-m",
+            "agent_core.background_main_session_runner",
+            "--session-id",
+            session_id,
+            "--task-id",
+            task_id,
+            "--prompt",
+            prompt,
+        ]
         meta = {
             "type": "main_session",
             "taskId": task_id,
@@ -115,113 +135,51 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             "sessionId": session_id,
             "command": command,
             "cwd": task_cwd,
-            "startedAt": started_at,
-            "updatedAt": started_at,
-            "status": "running",
+            "startedAt": reservation["createdAt"],
+            "updatedAt": reservation["createdAt"],
+            "status": "starting",
             "outputFile": output_file,
             "title": title,
             "description": prompt[:180],
-            "pid": proc.pid,
             "attachableSessionId": session_id,
-            "detailStatus": "session_starting",
+            "detailStatus": "starting",
+            "attachedDetailStatus": "session_starting",
+            "attachedSummary": "Detached main-session work is running in the daemon.",
             "owner": "daemon",
             "supervisorId": supervisor_id,
+            "launchReservation": reservation,
         }
-        await writeTaskMeta(task_id, meta)
-        record = _build_task_record(meta, "Detached main-session work is running in the daemon.")
-        await saveTaskRecord(record)
-        await emit("task.updated", _task_record_event_payload(record), session_id)
-        watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
-        _WATCHERS.add(watcher)
-        watcher.start()
-        return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
-
-    async def start_subagent_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
-        task_args = {**(task_args or {}), **task_kwargs}
-        parent_session_id = _require_string(task_args.get("parentSessionId") or task_args.get("parent_session_id"), "parentSessionId")
-        session_id = _require_string(task_args.get("sessionId") or task_args.get("session_id"), "sessionId")
-        agent_id = _require_string(task_args.get("agentId") or task_args.get("agent_id"), "agentId")
-        task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
-        title = task_args.get("label") or task_args.get("title") or agent_id
-        child_session = await loadSession(session_id)
-        if not child_session:
-            raise RuntimeError(f"Subagent session not found: {session_id}")
-        child_metadata = child_session.setdefault("metadata", {})
-        runtime_contract = task_args.get("runtimeContract") or task_args.get("runtime_contract") or child_metadata.get("subagentRuntimeContract")
-        capacity = check_subagent_capacity(resolve_subagent_concurrency_policy(), await listTaskRecords(), runtime_contract if isinstance(runtime_contract, dict) else None)
-        if capacity:
-            raise RuntimeError(f"Subagent capacity exceeded: {capacity.get('reason')} ({capacity.get('active')}/{capacity.get('limit')})")
-        task_id = str(uuid.uuid4())
-        output_file = taskOutputPath(task_id)
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        started_at = now_iso()
-        child_metadata["subagentTaskId"] = task_id
-        if isinstance(runtime_contract, dict) and runtime_contract:
-            child_metadata["subagentRuntimeContract"] = runtime_contract
-        await saveSession(child_session)
-        command = f"{sys.executable} -m agent_core.background_subagent_runner --session-id {session_id} --agent-id {agent_id} --task-id {task_id}"
-        proc = _spawn_subagent_worker(task_id, session_id, agent_id, task_cwd, output_file, runtime_home=task_args.get("runtimeHome"))
-        _PROCESS_REGISTRY[task_id] = proc
-        meta = {
-            "type": "subagent",
-            "taskId": task_id,
-            "id": task_id,
-            "agent_id": agent_id,
-            "sessionId": session_id,
-            "session_id": session_id,
-            "parent_session_id": parent_session_id,
-            "parent_task_id": task_args.get("parentTaskId") or task_args.get("parent_task_id"),
-            "parent_tool_use_id": task_args.get("parentToolUseId") or task_args.get("parent_tool_use_id"),
-            "parent_turn_id": task_args.get("parentTurnId") or task_args.get("parent_turn_id"),
-            "launch_group_id": task_args.get("launchGroupId") or task_args.get("launch_group_id"),
-            "command": command,
-            "cwd": task_cwd,
-            "pid": proc.pid,
-            "startedAt": started_at,
-            "updatedAt": started_at,
-            "status": "running",
-            "outputFile": output_file,
-            "title": title,
-            "description": title,
-            "attachableSessionId": session_id,
-            "retryable": False,
-            "stoppable": True,
-            "detailStatus": "worker_running",
-            "owner": "daemon",
-            "supervisorId": supervisor_id,
-            "runtimeContract": runtime_contract if isinstance(runtime_contract, dict) else None,
-            "runtimeHome": task_args.get("runtimeHome"),
-            "concurrencyGroup": runtime_contract.get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
-            "timeoutMs": runtime_contract.get("timeoutMs") if isinstance(runtime_contract, dict) else None,
-            "metadata": {
-                "runtime_contract": runtime_contract if isinstance(runtime_contract, dict) else None,
-                "concurrency_group": runtime_contract.get("concurrencyGroup") if isinstance(runtime_contract, dict) else None,
-                "launch_group_id": task_args.get("launchGroupId") or task_args.get("launch_group_id"),
-                "parent_tool_use_id": task_args.get("parentToolUseId") or task_args.get("parent_tool_use_id"),
-                "parent_turn_id": task_args.get("parentTurnId") or task_args.get("parent_turn_id"),
-            },
+        record = {
+            **_build_task_record(meta, "Detached main-session work is starting."),
+            "status": "queued",
+            "detailStatus": "starting",
+            "launchReservation": reservation,
         }
-        await writeTaskMeta(task_id, meta)
-        await append_task_event(
-            task_id,
-            {"type": "task.subagent.started", "agentId": agent_id, "childSessionId": session_id, "parentSessionId": parent_session_id, "launchGroupId": task_args.get("launchGroupId") or task_args.get("launch_group_id"), "pid": proc.pid},
+        return await _launch_process_task(
+            task_id=task_id,
+            session_id=session_id,
+            command=command,
+            task_cwd=task_cwd,
+            output_file=output_file,
+            meta=meta,
+            record=record,
+            child_argv=child_argv,
+            env=_worker_env({"AGENT_CORE_HOME": task_args.get("runtimeHome")}) if task_args.get("runtimeHome") else _worker_env(),
+            reserve_session_updates=[(session_id, _append_main_session_task)],
         )
-        record = _build_task_record(meta, "Background subagent is running under daemon supervision.")
-        await saveTaskRecord(record)
-        _invalidate_live_work_cache(live_work_cache, parent_session_id, session_id)
-        await emit("task.updated", _task_record_event_payload(record), parent_session_id)
-        watcher = threading.Thread(target=_watch_process_thread, args=(task_id, command, task_cwd, output_file, emit), daemon=True)
-        _WATCHERS.add(watcher)
-        watcher.start()
-        return {"taskId": task_id, "task_id": task_id, "outputFile": output_file, "output_file": output_file}
+
+    start_subagent_task = _create_subagent_task_starter(cwd, supervisor_id, _launch_process_task)
 
     async def stop_task(task_id: str) -> bool:
         proc = _PROCESS_REGISTRY.get(task_id)
         meta = await readTaskMeta(task_id)
+        record = await loadTaskRecord(task_id)
         affected_session_ids = _task_session_ids(meta)
         meta_type = meta.get("type") if meta else None
         if proc and proc.poll() is None and meta_type != "subagent":
-            stopped = _terminate_process(proc.pid)
+            identity = processIdentityFromRecord(record, meta)
+            await signalOwnedProcess(identity)
+            stopped = True
             _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
             return stopped
         stop_time = now_iso()
@@ -234,7 +192,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
             return True
         if meta and meta_type != "subagent" and isinstance(meta.get("pid"), int) and _is_process_alive(meta["pid"]):
-            stopped = _terminate_process(meta["pid"])
+            identity = processIdentityFromRecord(record, meta)
+            await signalOwnedProcess(identity)
+            stopped = True
             _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
             return stopped
         stopped = False
@@ -253,11 +213,15 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                 await _mark_subagent_cancelled_from_stop(meta, task_id, now)
             await saveTaskRecord(_build_task_record(meta, "Task stopped by request."))
         if proc and proc.poll() is None:
-            stopped = _terminate_process(proc.pid)
+            identity = processIdentityFromRecord(record, meta)
+            await signalOwnedProcess(identity)
+            stopped = True
             with contextlib.suppress(Exception):
                 proc.wait(timeout=2)
         elif meta and isinstance(meta.get("pid"), int):
-            stopped = _terminate_process(meta["pid"])
+            identity = processIdentityFromRecord(record, meta)
+            await signalOwnedProcess(identity)
+            stopped = True
         if meta:
             await emit(_event_name_for_task_status(_map_status(meta.get("status"))), _task_event_payload(meta), meta.get("sessionId"))
         _PROCESS_REGISTRY.pop(task_id, None)
@@ -432,9 +396,16 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return release
 
     async def close() -> None:
-        for proc in list(_PROCESS_REGISTRY.values()):
+        for task_id, proc in list(_PROCESS_REGISTRY.items()):
             if proc.poll() is None:
-                _terminate_process(proc.pid)
+                meta = await readTaskMeta(task_id)
+                record = await loadTaskRecord(task_id)
+                try:
+                    await signalOwnedProcess(processIdentityFromRecord(record, meta))
+                except Exception:
+                    # Fail closed: a process whose durable identity cannot be
+                    # revalidated is never signalled from a bare PID.
+                    continue
                 with contextlib.suppress(Exception):
                     proc.wait(timeout=2)
         for watcher in list(_WATCHERS):

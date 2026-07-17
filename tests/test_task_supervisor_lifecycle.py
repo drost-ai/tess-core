@@ -195,7 +195,18 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             output_file = core.taskOutputPath(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("still running\n", encoding="utf-8")
-            proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"], cwd=str(workspace), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            child_argv = [sys.executable, "-c", "import time; time.sleep(10)"]
+            proc = subprocess.Popen(
+                child_argv,
+                cwd=str(workspace),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            process_identity = run(
+                core.captureOwnedProcessIdentity(pid=proc.pid, expectedArgv=child_argv)
+            )
             created_at = "2026-01-01T00:00:00Z"
             meta = {
                 "type": "background_command",
@@ -209,6 +220,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 "status": "running",
                 "outputFile": output_file,
                 "pid": proc.pid,
+                "processIdentity": process_identity,
                 "detailStatus": "running",
                 "owner": "daemon",
                 "supervisorId": "previous-supervisor",
@@ -237,6 +249,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                         "retrieveOnly": True,
                         "owner": "daemon",
                         "supervisorId": "previous-supervisor",
+                        "processIdentity": process_identity,
                         "metadata": {"pid": proc.pid},
                     }
                 )

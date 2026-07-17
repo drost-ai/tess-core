@@ -1,27 +1,21 @@
 from __future__ import annotations
 
 import copy
-
 from ..contracts.records import SessionRecord
-
+from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
 from .shared import *
 
 def sessionPath(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", f"{sessionId}.json")
-
+    return os.path.join(getStateRoot(), "sessions", f"{parseSessionId(sessionId)}.json")
 def sessionArchiveDir(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", sessionId)
-
+    return os.path.join(getStateRoot(), "sessions", parseSessionId(sessionId))
 def sessionTranscriptLogPath(sessionId: str) -> str:
     return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
-
 async def saveSession(session: SessionRecord) -> None:
     path = sessionPath(session["id"])
     async with fileLock(path):
         current = await readJsonFile(path, None)
         await writeJsonFile(path, _redact_persisted_image_payloads(_merge_session_for_full_save(current, session)))
-
-
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
     """Locked read-modify-write for cross-process session metadata updates.
 
@@ -368,7 +362,10 @@ async def listSessions() -> list[SessionRecord]:
         return []
     records: list[dict[str, Any]] = []
     for name in names:
-        record = await loadSessionRecordShallow(name[:-5])
+        try:
+            record = await loadSessionRecordShallow(name[:-5])
+        except RuntimeIdentifierError:
+            continue
         if record and hasPersistableSessionMessages(record):
             records.append(record)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
@@ -405,7 +402,10 @@ def createSessionListCache() -> dict[str, Any]:
                 continue
             session_id = name[:-5]
             stats["parsed"] += 1
-            record = await loadSessionRecordShallow(session_id)
+            try:
+                record = await loadSessionRecordShallow(session_id)
+            except RuntimeIdentifierError:
+                record = None
             summary = _session_list_summary(record) if record and hasPersistableSessionMessages(record) else None
             if record is None:
                 stats["invalid"] += 1

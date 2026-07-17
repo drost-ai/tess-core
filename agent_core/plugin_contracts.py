@@ -4,27 +4,15 @@ import json
 from typing import Any
 
 from ._utils import now_iso
+from .executable_config import parseMcpServerConfigList, parsePluginManifestV1
 
 
 def normalizePluginMcpServers(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [{**server, "updatedAt": server.get("updatedAt") or now_iso()} for server in servers]
+    return parseMcpServerConfigList(servers, "plugin.mcpServers")
 
 
 def parsePluginManifest(content: str) -> dict[str, Any]:
-    parsed = json.loads(content)
-    if not isinstance(parsed, dict):
-        parsed = {}
-    return {
-        "id": str(parsed.get("id") if parsed.get("id") is not None else parsed.get("name") if parsed.get("name") is not None else "plugin"),
-        "version": str(parsed.get("version") if parsed.get("version") is not None else "0.0.0"),
-        "name": parsed.get("name") if isinstance(parsed.get("name"), str) else None,
-        "description": parsed.get("description") if isinstance(parsed.get("description"), str) else None,
-        "entry": parsed.get("entry") if isinstance(parsed.get("entry"), str) else None,
-        "marketplace": parsed.get("marketplace") if isinstance(parsed.get("marketplace"), str) else None,
-        "capabilities": _normalize_capability_contract(parsed.get("capabilities")),
-        "mcpServers": normalizePluginMcpServers(parsed.get("mcpServers")) if isinstance(parsed.get("mcpServers"), list) else None,
-        "commands": [_normalize_command(command) for command in parsed.get("commands")] if isinstance(parsed.get("commands"), list) else None,
-    }
+    return parsePluginManifestV1(content, "plugin")
 
 
 def validatePluginManifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:

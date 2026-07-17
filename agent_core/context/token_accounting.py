@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 from .._utils import now_iso
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams
+from ..runtime_secret_provider import resolveProviderConfigSecrets
 
 
 DEFAULT_ESTIMATE_MARGIN_TOKENS = 2000
@@ -21,7 +22,8 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
     measured_at = now_iso()
     if config.get("provider") == "anthropic":
         try:
-            input_tokens = await _measure_anthropic_count_tokens(config, request, float(args.get("timeoutSeconds") or 30))
+            resolved_config = await resolveProviderConfigSecrets(config)
+            input_tokens = await _measure_anthropic_count_tokens(resolved_config, request, float(args.get("timeoutSeconds") or 30))
             return {"inputTokens": input_tokens, "source": "anthropic_count", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"]}
         except Exception:
             estimate = _estimate_request_tokens(request)

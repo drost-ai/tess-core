@@ -19,9 +19,15 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             boot["finishTurn"]({"kind": "completed", "stopReason": "stop", "message": "done"})
             self.assertEqual(boot["getState"]()["turn"]["lastOutcome"]["message"], "done")
             other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="acceptEdits")
+            before_switch_events = len(envelopes)
             boot["setActiveSession"](other, {**config, "permissionMode": "acceptEdits"})
             self.assertEqual(boot["getState"]()["session"]["activeSessionId"], other["id"])
-            self.assertEqual(envelopes[-1]["typedEvent"]["kind"], "session.activated")
+            self.assertTrue(
+                any(
+                    envelope["typedEvent"]["kind"] == "session.activated"
+                    for envelope in envelopes[before_switch_events:]
+                )
+            )
             unsubscribe()
             run(boot["close"]())
         finally:
@@ -75,7 +81,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                         "capabilities": {"tools": True, "commands": True, "mcpServers": True},
                         "commands": [
                             {
-                                "name": "/hello",
+                                "name": "hello",
                                 "description": "Say hello",
                                 "command": "printf 'cmd:%s:%s' \"{{args}}\" \"{{session_id}}\"",
                             }
@@ -236,6 +242,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                     ],
                 )
             )
+            run(core.approvePluginSource(cwd=str(workspace), scope="project"))
             config = run(
                 core.resolveConfig(
                     {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(explicit_dir)]},

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from .shared import *
+from ..executable_config import parseMcpServerConfigList
+from ..executable_source_policy import loadSelectedMcpServers, parseSettingSources
+from ..runtime_secrets import assertNoLiteralMcpSecrets
 
 def _parse_setting_sources(raw: str | None) -> list[str]:
-    parts = [part.strip() for part in raw.split(",")] if raw else ["user", "project", "local"]
-    valid = [part for part in parts if part in ("user", "project", "local")]
-    return valid or ["user", "project", "local"]
+    return parseSettingSources(raw)
 
 async def _load_merged_settings(sources: list[str], cwd: str, inline_settings: str | None) -> dict[str, Any]:
     merged = await loadSettingsBySources(sources, cwd)  # type: ignore[arg-type]
@@ -64,15 +65,12 @@ def _parse_inline_agents(raw: str | None) -> dict[str, Any] | None:
 def _parse_json_schema(raw: str | None) -> Any:
     return json.loads(raw) if raw else None
 
-async def _load_mcp_config(cwd: str, inputs: list[str] | None) -> list[dict[str, Any]]:
-    existing = []
-    for scope in ("user", "project", "local"):
-        existing.extend(await loadMcpServers(scope, cwd))  # type: ignore[arg-type]
+async def _load_mcp_config(cwd: str, inputs: list[str] | None, sources: list[str], strict: bool = False) -> list[dict[str, Any]]:
+    existing = [] if strict else await loadSelectedMcpServers(cwd=cwd, sources=sources)
     inline = []
     for item in inputs or []:
         parsed = fileOrJson(item)
-        if isinstance(parsed, list):
-            inline.extend(parsed)
-        elif parsed:
-            inline.append(parsed)
+        records = parseMcpServerConfigList(parsed, "explicitMcpConfig") if parsed else []
+        assertNoLiteralMcpSecrets(records, "explicit")
+        inline.extend(records)
     return [{**item, "commandOrUrl": os.path.expanduser(item.get("commandOrUrl", ""))} for item in [*existing, *inline]]

@@ -10,6 +10,7 @@ from ..provider_timeouts import resolveProviderTimeoutPolicy
 from ..provider_token_budget import resolveCompactionPolicy
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import DEFAULT_CODEX_BASE_URL, getOpenAiProviderLabel, sendOpenAiRequest
+from ..runtime_secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
 from ..storage import loadCodexAuthToken
 
 
@@ -218,7 +219,8 @@ def _build_selection_for_profile(binding: dict[str, Any], fallback_effort: str, 
 
 
 async def _resolve_compaction_openai_transport(config: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:
-    binding = _resolve_compaction_provider_binding(config, model)
+    unresolved_binding = _resolve_compaction_provider_binding(config, model)
+    binding = await resolveCompactionProviderSecrets(unresolved_binding) if unresolved_binding else None
     if binding and (binding.get("profile") or {}).get("kind") == "openai":
         if not binding.get("openaiToken"):
             raise RuntimeError(f"OpenAI credential is required for {binding.get('profileName')}-backed compaction.")
@@ -237,18 +239,19 @@ async def _resolve_compaction_openai_transport(config: dict[str, Any], model: di
         return {"token": token, "baseUrl": DEFAULT_CODEX_BASE_URL, "headers": None, "mode": "codex"}
     if not config.get("openaiToken"):
         raise RuntimeError("OpenAI credential is required for OpenAI-backed compaction.")
+    resolved_config = await resolveProviderConfigSecrets(config)
     use_selected = config.get("provider") == "openai"
     return {
-        "token": config["openaiToken"],
-        "baseUrl": config.get("openaiBaseUrl") if use_selected else None,
-        "headers": config.get("customHeaders") if use_selected else None,
+        "token": resolved_config["openaiToken"],
+        "baseUrl": resolved_config.get("openaiBaseUrl") if use_selected else None,
+        "headers": resolved_config.get("customHeaders") if use_selected else None,
         "mode": config.get("openaiApiMode") if use_selected else "responses",
     }
 
 
 async def _resolve_codex_compaction_token(config: dict[str, Any]) -> str | None:
     if config.get("providerProfileName") == "codex" and config.get("openaiApiMode") == "codex" and config.get("openaiToken"):
-        return config["openaiToken"]
+        return (await resolveProviderConfigSecrets(config)).get("openaiToken")
     if not config.get("openaiCodexAuthPath"):
         return None
     return await loadCodexAuthToken(config["openaiCodexAuthPath"])

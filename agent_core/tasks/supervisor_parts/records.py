@@ -278,6 +278,8 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
         "relatedChildSessionIds": [meta.get("session_id") or meta.get("sessionId")] if is_subagent and (meta.get("session_id") or meta.get("sessionId")) else [],
         "owner": meta.get("owner") or "daemon",
         "supervisorId": meta.get("supervisorId"),
+        "processIdentity": meta.get("processIdentity"),
+        "launchReservation": meta.get("launchReservation"),
         "resultSummary": _result_summary_for_task_meta(meta, status, output_preview, latest_assistant, latest_user),
         "metadata": metadata,
     }

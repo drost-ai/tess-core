@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 from ..contracts.config import ResolvedConfig
+from ..runtime_secret_provider import (
+    normalizeCompactionProviderSecrets,
+    normalizeProviderHeaders,
+    normalizeRuntimeSecretValue,
+)
+from ..permission_rules import loadPermissionRules
+from ..hooks import loadHooks
 from ..sandbox import normalizeSandboxConfig
 
 from .shared import *
@@ -10,8 +17,25 @@ def _opt(options: dict[str, Any] | None, key: str, default: Any = None) -> Any:
         return default
     return options.get(key, default)
 
-def _looks_like_claude_ai_token(value: str | None) -> bool:
-    return bool(value and re.match(r"^sk-ant-o", value, re.I))
+def _looks_like_claude_ai_token(value: Any) -> bool:
+    return bool(isinstance(value, str) and re.match(r"^sk-ant-o", value, re.I))
+
+
+def _omit_provider_credential_environment(
+    settings_env: dict[str, str],
+    provider_profiles: dict[str, dict[str, Any]],
+) -> dict[str, str]:
+    secret_keys = {
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_CUSTOM_HEADERS",
+        "OPENAI_API_KEY",
+    }
+    for profile in provider_profiles.values():
+        env_var = (profile.get("auth") or {}).get("envVar")
+        if isinstance(env_var, str) and env_var:
+            secret_keys.add(env_var)
+    return {key: value for key, value in settings_env.items() if key not in secret_keys}
 
 async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
     options = options or {}
@@ -164,39 +188,45 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         **selected_profile.get("headers", {}),
         **(anthropic_headers if resolved_provider == "anthropic" else {}),
     }
-    compaction_provider_profile = resolveCompactionProviderProfileBinding(
-        {
-            "requestedProfileName": os.environ.get("TESS_COMPACTION_PROVIDER_PROFILE")
-            or settings_env.get("TESS_COMPACTION_PROVIDER_PROFILE")
-            or merged_settings.get("compactionProviderProfile"),
-            "providerProfiles": provider_profiles,
-            "settingsEnv": settings_env,
-            "openaiStoredToken": openai_stored_token,
-            "openaiEnvToken": openai_env_token,
-            "openaiCodexToken": openai_codex_token,
-            "explicitApiKey": explicit_api_key,
-            "explicitAuthToken": explicit_auth_token,
-            "storedAnthropicApiKey": stored_anthropic_api_key,
-            "storedAnthropicAuthToken": stored_anthropic_auth_token,
-            "anthropicHeaders": anthropic_headers,
-        }
+    compaction_provider_profile = await normalizeCompactionProviderSecrets(
+        resolveCompactionProviderProfileBinding(
+            {
+                "requestedProfileName": os.environ.get("TESS_COMPACTION_PROVIDER_PROFILE")
+                or settings_env.get("TESS_COMPACTION_PROVIDER_PROFILE")
+                or merged_settings.get("compactionProviderProfile"),
+                "providerProfiles": provider_profiles,
+                "settingsEnv": settings_env,
+                "openaiStoredToken": openai_stored_token,
+                "openaiEnvToken": openai_env_token,
+                "openaiCodexToken": openai_codex_token,
+                "explicitApiKey": explicit_api_key,
+                "explicitAuthToken": explicit_auth_token,
+                "storedAnthropicApiKey": stored_anthropic_api_key,
+                "storedAnthropicAuthToken": stored_anthropic_auth_token,
+                "anthropicHeaders": anthropic_headers,
+            }
+        ),
+        f"config:{selected_name}:compaction",
     )
-    compaction_verification_provider_profile = resolveCompactionProviderProfileBinding(
-        {
-            "requestedProfileName": os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
-            or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
-            or merged_settings.get("compactionVerificationProviderProfile"),
-            "providerProfiles": provider_profiles,
-            "settingsEnv": settings_env,
-            "openaiStoredToken": openai_stored_token,
-            "openaiEnvToken": openai_env_token,
-            "openaiCodexToken": openai_codex_token,
-            "explicitApiKey": explicit_api_key,
-            "explicitAuthToken": explicit_auth_token,
-            "storedAnthropicApiKey": stored_anthropic_api_key,
-            "storedAnthropicAuthToken": stored_anthropic_auth_token,
-            "anthropicHeaders": anthropic_headers,
-        }
+    compaction_verification_provider_profile = await normalizeCompactionProviderSecrets(
+        resolveCompactionProviderProfileBinding(
+            {
+                "requestedProfileName": os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
+                or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
+                or merged_settings.get("compactionVerificationProviderProfile"),
+                "providerProfiles": provider_profiles,
+                "settingsEnv": settings_env,
+                "openaiStoredToken": openai_stored_token,
+                "openaiEnvToken": openai_env_token,
+                "openaiCodexToken": openai_codex_token,
+                "explicitApiKey": explicit_api_key,
+                "explicitAuthToken": explicit_auth_token,
+                "storedAnthropicApiKey": stored_anthropic_api_key,
+                "storedAnthropicAuthToken": stored_anthropic_auth_token,
+                "anthropicHeaders": anthropic_headers,
+            }
+        ),
+        f"config:{selected_name}:compaction-verification",
     )
     anthropic_creds = _resolve_anthropic_credentials(
         {
@@ -216,6 +246,29 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
             "envDefaultToken": openai_env_token,
             "codexToken": openai_codex_token,
         }
+    )
+    normalized_api_key = await normalizeRuntimeSecretValue(
+        value=anthropic_creds.get("apiKey"),
+        purpose="provider_api_key",
+        idempotencyScope=f"config:{selected_name}:api-key",
+    )
+    normalized_auth_token = await normalizeRuntimeSecretValue(
+        value=anthropic_creds.get("authToken"),
+        purpose="provider_oauth_token",
+        acceptedPurposes=("provider_oauth_token", "provider_setup_token"),
+        idempotencyScope=f"config:{selected_name}:auth-token",
+    )
+    normalized_openai_token = await normalizeRuntimeSecretValue(
+        value=openai_token,
+        purpose="provider_oauth_token"
+        if isinstance(openai_token, str) and openai_token == openai_codex_token
+        else "provider_api_key",
+        acceptedPurposes=("provider_api_key", "provider_oauth_token"),
+        idempotencyScope=f"config:{selected_name}:openai-token",
+    )
+    normalized_custom_headers = await normalizeProviderHeaders(
+        custom_headers,
+        f"config:{selected_name}",
     )
 
     tools = _parse_tool_list(options.get("tools"), merged_settings.get("tools"), defaultToolList())
@@ -247,6 +300,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     options_web_search = options.get("webSearch") if isinstance(options.get("webSearch"), dict) else options.get("web_search") if isinstance(options.get("web_search"), dict) else {}
     web_search_config = {**settings_web_search, **options_web_search}
 
+    strict_mcp = bool(options.get("strictMcpConfig"))
     return {
         "cwd": cwd,
         "runtimeHome": runtime_home,
@@ -260,11 +314,11 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "providerProfiles": {name: resolveProviderProfile(name, record) for name, record in provider_profiles.items()},
         "compactionProvider": resolved_compaction_provider,
         "compactionProviderProfile": compaction_provider_profile,
-        "apiKey": anthropic_creds.get("apiKey"),
-        "authToken": anthropic_creds.get("authToken"),
-        "customHeaders": custom_headers,
+        "apiKey": normalized_api_key,
+        "authToken": normalized_auth_token,
+        "customHeaders": normalized_custom_headers,
         "anthropicBaseUrl": selected_profile.get("baseUrl") if resolved_provider == "anthropic" else None,
-        "openaiToken": openai_token,
+        "openaiToken": normalized_openai_token,
         "openaiApiMode": openai_api_mode,
         "openaiBaseUrl": selected_profile.get("baseUrl") if resolved_provider == "openai" else None,
         "openaiCodexAuthPath": openai_codex_auth_path,
@@ -281,7 +335,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "sandbox": sandbox_config,
         "subagents": subagents_config,
         "webSearch": web_search_config,
-        "settingsEnv": settings_env,
+        "settingsEnv": _omit_provider_credential_environment(settings_env, provider_profiles),
         "tools": tools,
         "allowedTools": allowed_tools,
         "disallowedTools": disallowed_tools,
@@ -310,7 +364,15 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "verbose": bool(options.get("verbose")),
         "bare": bool(options.get("bare")),
         "settingsSources": sources,
-        "mcpConfig": await _load_mcp_config(cwd, options.get("mcpConfig")),
+        "inlineSettings": options.get("settings"),
+        "permissionRules": await loadPermissionRules(
+            cwd=cwd,
+            sources=sources,
+            inlineSettings=options.get("settings"),
+        ),
+        "hooks": await loadHooks(cwd=cwd, sources=sources),
+        "mcpConfig": await _load_mcp_config(cwd, options.get("mcpConfig"), sources, strict_mcp),
+        "mcpConfigPolicy": {"mode": "explicit_only" if strict_mcp else "merged"},
         "channels": _dedupe(options.get("channels") or []),
         "developmentChannels": _dedupe(options.get("dangerouslyLoadDevelopmentChannels") or []),
         "pluginDirs": plugin_dirs,

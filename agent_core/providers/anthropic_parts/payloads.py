@@ -31,6 +31,9 @@ def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
     return f"{base}/messages/count_tokens"
 
 def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
+    from ...runtime_secret_provider import assertProviderConfigSecretsResolved
+
+    config = assertProviderConfigSecretsResolved(config)
     options = options or {}
     headers = {
         "accept": "text/event-stream" if options.get("stream") else "application/json",

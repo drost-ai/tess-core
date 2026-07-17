@@ -9,6 +9,7 @@ def _infer_openai_responses_mode(base_url: str | None) -> str:
     return "codex" if isCodexBaseUrl(base_url) else "responses"
 
 def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
+    _assert_openai_transport_secrets(args)
     factory = args.get("clientFactory") or args.get("client_factory")
     options = {"apiKey": args.get("token"), "dangerouslyAllowBrowser": False, "fetch": _build_openai_fetch(args.get("runtime") or {})}
     if args.get("headers"):
@@ -18,6 +19,18 @@ def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
     if not factory:
         return _create_openai_sdk_client(options)
     return factory(options)
+
+
+def _assert_openai_transport_secrets(args: dict[str, Any]) -> None:
+    from ...runtime_secrets import RuntimeSecretError
+
+    token = args.get("token")
+    headers = args.get("headers") or {}
+    if not isinstance(token, str) or any(not isinstance(value, str) for value in headers.values()):
+        raise RuntimeSecretError(
+            "secret_store_invalid",
+            "provider credential reached a transport before resolution",
+        )
 
 
 class _OpenAiResponsesSdkAdapter:

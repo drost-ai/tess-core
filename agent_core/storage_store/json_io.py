@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib as _contextlib
+import hashlib as _hashlib
 import time as _time
 import weakref as _weakref
 from typing import Callable
@@ -28,8 +29,8 @@ from .shared import *
 #                       low-contention multi-writer -> locked helper available
 #   Daemon state/events cursor-based + append-only     -> unchanged by design
 #
-# Default bound for acquiring a record lock before falling back to a
-# best-effort unlocked write (liveness over strict mutual exclusion).
+# Default bound for acquiring a record lock. A timeout fails closed: a
+# successful mutation must never have raced through an unlocked fallback.
 STORAGE_LOCK_TIMEOUT_MS = 5000
 
 _LOCK_OBSERVERS: list[Callable[[dict[str, Any]], Any]] = []
@@ -38,6 +39,13 @@ _LOCK_OBSERVERS: list[Callable[[dict[str, Any]], Any]] = []
 # many short-lived loops, and an asyncio.Lock cannot cross loops. Cross-loop
 # (and cross-process) exclusion is the OS flock's job.
 _IN_PROCESS_LOCKS: "_weakref.WeakKeyDictionary[Any, dict[str, Any]]" = _weakref.WeakKeyDictionary()
+
+
+class StorageTransactionError(RuntimeError):
+    def __init__(self, code: str, message: str, lockPath: str):
+        super().__init__(message)
+        self.code = code
+        self.lockPath = lockPath
 
 
 def registerStorageLockObserver(listener: Callable[[dict[str, Any]], Any]):
@@ -91,11 +99,10 @@ async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
     Two layers: a per-path asyncio.Lock serializes coroutines in this process,
     then an OS ``flock`` on a ``<filePath>.lock`` sidecar serializes against
     other processes (the daemon's background children). Acquisition is bounded
-    by ``timeoutMs``; on timeout the caller proceeds with a best-effort
-    unlocked write and observers are notified — liveness is preferred to
-    wedging the agent. The flock is taken non-blocking in a thread so the
-    event loop is never blocked, and it releases automatically on process
-    death (no stale-lock cleanup needed).
+    by ``timeoutMs``; a timeout is observable and raises
+    ``StorageTransactionError`` without entering the caller's critical
+    section. The flock is taken non-blocking in a thread so the event loop is
+    never blocked, and it releases automatically on process death.
     """
     path = os.path.abspath(filePath)
     deadline = _time.monotonic() + max(0, int(timeoutMs)) / 1000.0
@@ -108,8 +115,17 @@ async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
             await asyncio.wait_for(in_process.acquire(), timeout=remaining)
             in_process_acquired = True
         except asyncio.TimeoutError:
-            _notify_lock_observers(
-                {"path": path, "layer": "in_process", "timeoutMs": int(timeoutMs), "action": "fallback_unlocked"}
+            payload = {
+                "path": path,
+                "layer": "in_process",
+                "timeoutMs": int(timeoutMs),
+                "action": "failed_closed",
+            }
+            _notify_lock_observers(payload)
+            raise StorageTransactionError(
+                "storage.lock_timeout",
+                f"Timed out waiting for record lock after {int(timeoutMs)}ms.",
+                f"{path}.lock",
             )
         if _fcntl is not None:
             directory = os.path.dirname(path)
@@ -128,8 +144,17 @@ async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
                 os_handle = handle
             else:
                 handle.close()
-                _notify_lock_observers(
-                    {"path": path, "layer": "os", "timeoutMs": int(timeoutMs), "action": "fallback_unlocked"}
+                payload = {
+                    "path": path,
+                    "layer": "os",
+                    "timeoutMs": int(timeoutMs),
+                    "action": "failed_closed",
+                }
+                _notify_lock_observers(payload)
+                raise StorageTransactionError(
+                    "storage.lock_timeout",
+                    f"Timed out waiting for record lock after {int(timeoutMs)}ms.",
+                    f"{path}.lock",
                 )
         yield
     finally:
@@ -158,6 +183,50 @@ async def mutateJsonFile(filePath: str, mutate: Callable[[Any], Any], fallback: 
             updated = current
         await writeJsonFile(filePath, updated)
         return updated
+
+
+def transactionLockPath(namespace: str, key: str) -> str:
+    if not re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", namespace):
+        raise ValueError(f"Invalid transaction namespace: {namespace}")
+    if not isinstance(key, str) or not key or len(key.encode("utf-8")) > 1024:
+        raise ValueError("Transaction key must contain 1-1024 UTF-8 bytes.")
+    digest = _hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return os.path.join(getStateRoot(), "locks", f"{namespace}-{digest}")
+
+
+@_contextlib.asynccontextmanager
+async def withRecordTransaction(
+    namespace: str,
+    key: str,
+    *,
+    timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS,
+):
+    lock_path = transactionLockPath(namespace, key)
+    async with fileLock(lock_path, timeoutMs=timeoutMs):
+        yield
+
+
+async def mutateJsonRecord(
+    *,
+    namespace: str,
+    key: str,
+    filePath: str,
+    fallback: Any,
+    mutate: Callable[[Any], Any],
+    timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS,
+) -> dict[str, Any]:
+    lock_path = transactionLockPath(namespace, key)
+    async with fileLock(lock_path, timeoutMs=timeoutMs):
+        current = await readJsonFile(filePath, fallback)
+        result = mutate(current)
+        if hasattr(result, "__await__"):
+            result = await result
+        if not isinstance(result, dict) or "changed" not in result or "value" not in result:
+            raise TypeError("Record mutation must return {'value': ..., 'changed': bool}.")
+        changed = bool(result["changed"])
+        if changed:
+            await writeJsonFile(filePath, result["value"])
+        return {"value": result["value"], "changed": changed, "lockPath": f"{lock_path}.lock"}
 
 
 async def readJsonFile(filePath: str, fallback: Any) -> Any:
@@ -200,7 +269,15 @@ def resolveMaybeRelative(baseDir: str, candidate: str) -> str:
     return os.path.abspath(expanded if os.path.isabs(expanded) else os.path.join(baseDir, expanded))
 
 async def loadAuth() -> dict[str, Any] | None:
-    return await readJsonFile(os.path.join(getStateRoot(), "auth.json"), None)
+    auth = await readJsonFile(os.path.join(getStateRoot(), "auth.json"), None)
+    if not auth:
+        return None
+    from ..runtime_secret_provider import migrateLegacyStoredAuthSecrets
+
+    migration = await migrateLegacyStoredAuthSecrets(auth)
+    if migration["changed"]:
+        await writeJsonFile(os.path.join(getStateRoot(), "auth.json"), migration["auth"])
+    return migration["auth"]
 
 async def loadCodexAuthToken(authPath: str) -> str | None:
     try:
@@ -215,7 +292,10 @@ async def loadCodexAuthToken(authPath: str) -> str | None:
         return None
 
 async def saveAuth(auth: dict[str, Any]) -> None:
-    await writeJsonFile(os.path.join(getStateRoot(), "auth.json"), auth)
+    from ..runtime_secret_provider import migrateLegacyStoredAuthSecrets
+
+    normalized = await migrateLegacyStoredAuthSecrets(auth)
+    await writeJsonFile(os.path.join(getStateRoot(), "auth.json"), normalized["auth"])
 
 async def clearAuth() -> None:
     try:
@@ -227,7 +307,10 @@ read_json_file = readJsonFile
 write_json_file = writeJsonFile
 append_json_line = appendJsonLine
 mutate_json_file = mutateJsonFile
+mutate_json_record = mutateJsonRecord
 file_lock = fileLock
+with_record_transaction = withRecordTransaction
+transaction_lock_path = transactionLockPath
 resolve_maybe_relative = resolveMaybeRelative
 load_auth = loadAuth
 load_codex_auth_token = loadCodexAuthToken

@@ -7,7 +7,7 @@ Producers: ``agent_core/config_store/resolution.py`` (``resolveConfig``),
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, TypedDict, Union
 
 
 # Mirrors PERMISSION_MODES in tools/permissions.py (sync-tested).
@@ -16,6 +16,25 @@ PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk
 ProviderKind = Literal["anthropic", "openai"]
 
 OpenAiApiMode = Literal["chat_completions", "responses", "codex"]
+
+RuntimeSecretPurpose = Literal[
+    "mcp_header",
+    "mcp_oauth",
+    "mcp_env",
+    "provider_api_key",
+    "provider_oauth_token",
+    "provider_setup_token",
+]
+
+
+class RuntimeSecretRef(TypedDict):
+    kind: Literal["runtime_secret"]
+    id: str
+    purpose: RuntimeSecretPurpose
+    version: Literal[1]
+
+
+RuntimeSecretValue = Union[str, RuntimeSecretRef]
 
 
 class AgentDefinition(TypedDict, total=False):
@@ -60,7 +79,7 @@ class ProviderProfile(TypedDict, total=False):
     apiMode: OpenAiApiMode | None
     auth: dict[str, Any]
     baseUrl: str | None
-    headers: dict[str, str]
+    headers: dict[str, RuntimeSecretValue]
     effortLevel: str | None
     supportsVision: bool | None
     capabilities: dict[str, Any]
@@ -111,6 +130,8 @@ class SettingsRecord(TypedDict, total=False):
     sandbox: dict[str, Any]
     subagents: dict[str, Any]
     webSearch: WebSearchSettings
+    permissions: dict[str, list[str]]
+    hooks: dict[str, list[dict[str, Any]]]
 
 
 class _ResolvedConfigRequired(TypedDict):
@@ -144,11 +165,11 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     compactionVerificationProvider: str | None
     compactionVerificationModel: str | None
     compactionVerificationProviderProfile: dict[str, Any] | None
-    apiKey: str | None
-    authToken: str | None
-    customHeaders: dict[str, str]
+    apiKey: RuntimeSecretValue | None
+    authToken: RuntimeSecretValue | None
+    customHeaders: dict[str, RuntimeSecretValue]
     anthropicBaseUrl: str | None
-    openaiToken: str | None
+    openaiToken: RuntimeSecretValue | None
     openaiApiMode: OpenAiApiMode
     openaiBaseUrl: str | None
     openaiCodexAuthPath: str
@@ -174,7 +195,11 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     verbose: bool
     bare: bool
     settingsSources: list[str]
+    inlineSettings: str | None
+    permissionRules: list[dict[str, Any]]
+    hooks: list[dict[str, Any]]
     mcpConfig: list[dict[str, Any]]
+    mcpConfigPolicy: dict[str, str]
     channels: list[str]
     developmentChannels: list[str]
     pluginDirs: list[str]

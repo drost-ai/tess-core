@@ -240,7 +240,11 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             kwargs = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "cwd": str(workspace)}
             if hasattr(os, "setsid"):
                 kwargs["preexec_fn"] = os.setsid
-            proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"], **kwargs)
+            child_argv = [sys.executable, "-c", "import time; time.sleep(10)"]
+            proc = subprocess.Popen(child_argv, **kwargs)
+            process_identity = run(
+                core.captureOwnedProcessIdentity(pid=proc.pid, expectedArgv=child_argv)
+            )
             run(
                 core.saveChildAgent(
                     {
@@ -259,6 +263,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                         "owner": "daemon",
                         "retryable": False,
                         "stoppable": True,
+                        "processIdentity": process_identity,
                     }
                 )
             )
@@ -273,6 +278,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                 "parent_session_id": parent_session_id,
                 "cwd": str(workspace),
                 "pid": proc.pid,
+                "processIdentity": process_identity,
                 "startedAt": "2026-01-01T00:00:00Z",
                 "updatedAt": "2026-01-01T00:00:00Z",
                 "status": "running",
@@ -305,6 +311,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                         "attachableSessionId": child_session_id,
                         "relatedChildSessionIds": [child_session_id],
                         "owner": "daemon",
+                        "processIdentity": process_identity,
                         "metadata": {"agent_id": agent_id, "child_session_id": child_session_id, "pid": proc.pid},
                     }
                 )
@@ -378,18 +385,32 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             async def stop_missing(_task_id):
                 return False
 
-            missing = run(
-                stopper.handler(
-                    {"task_id": "missing-task"},
-                    {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "daemon": {"stopTask": stop_missing}},
+            with self.assertRaises(core.TaskOwnershipError) as missing_error:
+                run(
+                    stopper.handler(
+                        {"task_id": "missing-task"},
+                        {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "daemon": {"stopTask": stop_missing}},
+                    )
                 )
-            )
-            self.assertTrue(missing["isError"])
-            self.assertEqual(missing["content"], "Task not found or not stoppable: missing-task")
+            self.assertEqual(missing_error.exception.code, "task.not_found")
 
             async def stop_found(_task_id):
                 return True
 
+            session["metadata"].setdefault("taskIds", []).append("daemon-task")
+            run(
+                core.writeTaskMeta(
+                    "daemon-task",
+                    {
+                        "taskId": "daemon-task",
+                        "id": "daemon-task",
+                        "type": "background_command",
+                        "sessionId": session["id"],
+                        "status": "running",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                    },
+                )
+            )
             events = []
             stopped = run(
                 stopper.handler(

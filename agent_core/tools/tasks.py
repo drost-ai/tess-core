@@ -5,7 +5,6 @@ from ..contracts.records import launch_task_id
 from ..contracts.tools import ToolResult
 
 import asyncio
-import os
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +13,9 @@ from ..execution_descriptors import createTaskExecutionDescriptor
 from ..tasks.monitor_transitions import monitorStopNote as _monitor_stop_note
 from ..tasks.monitor_transitions import stopMonitorRecord as _stop_monitor_record
 from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
+from ..process_identity import processIdentityFromRecord, signalOwnedProcess
 from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
+from ..task_ownership import requireModelOwnedMonitor, requireModelOwnedTask
 from ..tool_payloads import shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
@@ -28,6 +29,7 @@ from .validation import _require_string, _without_none_values
 def _task_output_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
+        await requireModelOwnedTask(context, task_id, "output")
         if input.get("block"):
             started = asyncio.get_running_loop().time()
             timeout = float(input.get("timeout") or 30000) / 1000
@@ -37,9 +39,8 @@ def _task_output_tool() -> ToolDefinition:
                 if not meta or meta.get("status") not in ("running", "reconciling"):
                     break
                 await asyncio.sleep(0.25)
-        meta = await readTaskMeta(task_id)
-        if not meta:
-            return {"content": f"Task not found: {task_id}", "isError": True}
+        owned = await requireModelOwnedTask(context, task_id, "output")
+        meta = owned["meta"]
         output_result = None
         daemon = context.get("daemon")
         if daemon:
@@ -58,6 +59,7 @@ def _task_output_tool() -> ToolDefinition:
 def _task_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
+        owned = await requireModelOwnedTask(context, task_id, "stop")
         supervisor = context.get("daemon") or context.get("taskSupervisor")
         if supervisor:
             await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id}")
@@ -73,15 +75,12 @@ def _task_stop_tool() -> ToolDefinition:
                 },
             )
             return {"content": pretty_json({"task_id": task_id, "status": "terminated"})}
-        meta = await readTaskMeta(task_id)
-        if not meta:
-            return {"content": f"Task not found: {task_id}", "isError": True}
-        pid = meta.get("pid")
-        if not isinstance(pid, int):
-            return {"content": f"Task {task_id} has no PID", "isError": True}
-        await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id} (pid {pid})")
+        owned = await requireModelOwnedTask(context, task_id, "stop")
+        meta = owned["meta"]
+        identity = processIdentityFromRecord(owned.get("record"), meta)
+        await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id} (pid {identity['pid']})")
         try:
-            os.kill(pid, 15)
+            await signalOwnedProcess(identity)
         except ProcessLookupError:
             pass
         meta.update({"status": "terminated", "stoppedAt": now_iso(), "updatedAt": now_iso()})
@@ -109,9 +108,8 @@ def _task_monitor_start_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         goal = _require_string(input.get("goal"), "goal")
-        task = await readTaskMeta(task_id)
-        if not task:
-            return {"content": f"Task not found: {task_id}", "isError": True}
+        owned = await requireModelOwnedTask(context, task_id, "monitor")
+        task = owned["meta"]
         existing = next((monitor for monitor in await listSessionMonitors(context["session"]["id"]) if monitor.get("taskId") == task_id and monitor.get("status") == "active"), None)
         if existing:
             return {"content": pretty_json({"monitor_id": existing.get("id"), "task_id": existing.get("taskId"), "status": existing.get("status"), "goal": existing.get("goal"), "note": "Monitor already active for this task."})}
@@ -163,9 +161,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
 def _task_monitor_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         monitor_id = _require_string(input.get("monitor_id"), "monitor_id")
-        monitor = await loadMonitor(monitor_id)
-        if not monitor or monitor.get("sessionId") != context["session"]["id"]:
-            return {"content": f"Monitor not found: {monitor_id}", "isError": True}
+        monitor = await requireModelOwnedMonitor(context, monitor_id)
         transition = _stop_monitor_record(monitor, now_iso())
         record = transition["record"]
         if transition["changed"]:
@@ -238,6 +234,7 @@ def _task_health_check_stop_tool() -> ToolDefinition:
         if not supervisor:
             raise RuntimeError("Health checks require the local task supervisor daemon.")
         task_id = _require_string(input.get("task_id"), "task_id")
+        await requireModelOwnedTask(context, task_id, "health_stop")
         stopped = await supervisor["stopTask"](task_id)
         if not stopped:
             raise RuntimeError(f"Task not found or not stoppable: {task_id}")

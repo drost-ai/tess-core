@@ -6,12 +6,13 @@ from ..contracts.tools import ToolResult
 from typing import Any
 
 from .._utils import pretty_json
+from ..mcp_origin_policy import fetchMcpResourceWithBoundCredentials
 from ..tool_payloads import shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema
 from .validation import _require_string
-from .web import _facade_fetch, _header_value
+from .web import _header_value
 
 
 def _mcp_tool(runtime: Any) -> ToolDefinition:
@@ -78,7 +79,11 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             return {"content": f"MCP server not found: {server}", "isError": True}
         if config.get("transport") in ("http", "sse"):
             _throw_if_tool_cancelled(context)
-            response = await _facade_fetch()(uri, headers=config.get("headers"), signal=context.get("abortSignal"))
+            response = await fetchMcpResourceWithBoundCredentials(
+                config=config,
+                uri=uri,
+                signal=context.get("abortSignal"),
+            )
             _throw_if_tool_cancelled(context)
             text = await response.text()
             shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="ReadMcpResource", family="web", text=text, strategy="head")

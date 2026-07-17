@@ -7,14 +7,21 @@ from ..contracts.records import (
     TaskMeta,
     TaskRecord,
 )
+from ..runtime_identifiers import (
+    RuntimeIdentifierError,
+    parseAgentId,
+    parseApprovalRequestId,
+    parseMonitorId,
+    parseTaskId,
+)
 
 from .shared import *
 
 def taskDir(taskId: str) -> str:
-    return os.path.join(getStateRoot(), "tasks", taskId)
+    return os.path.join(getStateRoot(), "tasks", parseTaskId(taskId))
 
 def taskRecordPath(taskId: str) -> str:
-    return os.path.join(getStateRoot(), "task-records", f"{taskId}.json")
+    return os.path.join(getStateRoot(), "task-records", f"{parseTaskId(taskId)}.json")
 
 def taskMetaPath(taskId: str) -> str:
     return os.path.join(taskDir(taskId), "meta.json")
@@ -26,10 +33,10 @@ def healthCheckMetaPath(taskId: str) -> str:
     return os.path.join(taskDir(taskId), "health-check.json")
 
 def monitorPath(monitorId: str) -> str:
-    return os.path.join(getStateRoot(), "monitors", f"{monitorId}.json")
+    return os.path.join(getStateRoot(), "monitors", f"{parseMonitorId(monitorId)}.json")
 
 def childAgentPath(agentId: str) -> str:
-    return os.path.join(getStateRoot(), "agents", f"{agentId}.json")
+    return os.path.join(getStateRoot(), "agents", f"{parseAgentId(agentId)}.json")
 
 async def _save_by_path(path: str, record: dict[str, Any]) -> None:
     await writeJsonFile(path, record)
@@ -108,7 +115,10 @@ async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
         return []
     records = []
     for name in names:
-        value = await loader(name[:-5])
+        try:
+            value = await loader(name[:-5])
+        except RuntimeIdentifierError:
+            continue
         if value:
             records.append(value)
     return records
@@ -148,7 +158,11 @@ async def listChildAgents() -> list[ChildAgentRecord]:
     return sorted(records, key=lambda item: item.get("startedAt", ""), reverse=True)
 
 def planApprovalPath(requestId: str) -> str:
-    return os.path.join(getStateRoot(), "plan-approvals", f"{requestId}.json")
+    return os.path.join(
+        getStateRoot(),
+        "plan-approvals",
+        f"{parseApprovalRequestId(requestId)}.json",
+    )
 
 async def savePlanApproval(record: PlanApprovalRecord) -> None:
     await _save_by_path(planApprovalPath(record["requestId"]), record)
@@ -283,7 +297,10 @@ async def listHealthCheckTasks() -> list[TaskMeta]:
         return []
     records = []
     for name in names:
-        record = await loadHealthCheckTask(name)
+        try:
+            record = await loadHealthCheckTask(name)
+        except RuntimeIdentifierError:
+            continue
         if record:
             records.append(record)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)

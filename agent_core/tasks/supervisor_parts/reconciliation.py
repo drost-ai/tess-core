@@ -22,11 +22,11 @@ async def _reconcile_persisted_tasks(
             meta = await readTaskMeta(task_id)
             if not meta:
                 continue
-            process_state = _classify_persisted_process(task_id, record, meta)
+            process_state = await _classify_persisted_process(task_id, record, meta)
             if process_state["state"] in {"completed", "failed"}:
                 await _mark_terminal_process_from_meta(task_id, record, meta, supervisor_id, emit, process_state)
-            elif process_state["state"] in {"running", "orphaned"} and isinstance(process_state.get("pid"), int):
-                await _mark_recovered_process(task_id, int(process_state["pid"]), record, meta, supervisor_id, emit, process_state)
+            elif process_state["state"] in {"running", "orphaned"} and isinstance(process_state.get("identity"), dict):
+                await _mark_recovered_process(task_id, process_state["identity"], record, meta, supervisor_id, emit, process_state)
             else:
                 await _mark_lost_process(task_id, record, meta, supervisor_id, emit, process_state)
         except Exception as exc:
@@ -42,7 +42,7 @@ async def _reconcile_persisted_tasks(
 
 async def _mark_recovered_process(
     task_id: str,
-    pid: int,
+    identity: dict[str, Any],
     record: dict[str, Any],
     meta: dict[str, Any],
     supervisor_id: str,
@@ -92,7 +92,7 @@ async def _mark_recovered_process(
                 lambda current: {**current, "recoveryState": "recovered_after_daemon_restart", "lastUpdatedAt": now} if current else None,
             )
     await maybe_await(emit("task.updated", _task_record_event_payload(next_record), record.get("sessionId")))
-    watcher = asyncio.create_task(_watch_recovered_process(task_id, pid, record.get("sessionId"), emit))
+    watcher = asyncio.create_task(_watch_recovered_process(task_id, identity, record.get("sessionId"), emit))
     _WATCHERS.add(watcher)
     watcher.add_done_callback(_WATCHERS.discard)
 
@@ -219,11 +219,15 @@ async def _mark_terminal_process_from_meta(
 
 async def _watch_recovered_process(
     task_id: str,
-    pid: int,
+    identity: dict[str, Any],
     session_id: str | None,
     emit: Callable[[str, dict[str, Any], str | None], Any],
 ) -> None:
-    while _is_process_alive(pid):
+    while True:
+        try:
+            await verifyOwnedProcessIdentity(identity)
+        except ProcessIdentityError:
+            break
         await asyncio.sleep(1)
     existing = await loadTaskRecord(task_id)
     if existing and existing.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, existing, emit, session_id):
@@ -360,7 +364,7 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
     )
 
 
-def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
+async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
     status = meta.get("status")
     if _is_terminal_worker_status(status):
         mapped = _map_status(status)
@@ -370,15 +374,27 @@ def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict
             "source": "terminal_meta",
             "status": status,
         }
+    try:
+        identity = processIdentityFromRecord(record, meta)
+        verified = await verifyOwnedProcessIdentity(identity)
+    except ProcessIdentityError as exc:
+        state = "failed" if exc.code == "process.not_found" else "unknown"
+        return {
+            "state": state,
+            "pid": _extract_pid(record, meta),
+            "source": "process_identity",
+            "status": status,
+            "identity_error": exc.code,
+        }
     proc = _PROCESS_REGISTRY.get(task_id)
-    if proc and proc.poll() is None:
-        return {"state": "running", "pid": proc.pid, "source": "process_registry", "status": status}
-    pid = _extract_pid(record, meta)
-    if isinstance(pid, int):
-        if _is_process_alive(pid):
-            return {"state": "orphaned", "pid": pid, "source": "pid_probe", "status": status}
-        return {"state": "failed", "pid": pid, "source": "pid_probe", "status": status}
-    return {"state": "unknown", "pid": None, "source": "missing_pid", "status": status}
+    source = "process_registry" if proc and proc.poll() is None and proc.pid == verified["pid"] else "process_identity"
+    return {
+        "state": "running" if source == "process_registry" else "orphaned",
+        "pid": verified["pid"],
+        "identity": verified,
+        "source": source,
+        "status": status,
+    }
 
 
 def _extract_pid(record: dict[str, Any], meta: dict[str, Any]) -> int | None:
@@ -402,4 +418,6 @@ def _process_state_metadata(process_state: dict[str, Any] | None) -> dict[str, A
         result["process_pid"] = process_state["pid"]
     if process_state.get("status") is not None:
         result["process_meta_status"] = process_state.get("status")
+    if process_state.get("identity_error") is not None:
+        result["process_identity_error"] = process_state.get("identity_error")
     return result

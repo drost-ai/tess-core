@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+import json
+import os
+import textwrap
+
+from tests.support.agent_core_case import *
+import agent_core.executable_closure as closure_module
+
+
+def _stdio_server(name: str) -> dict[str, Any]:
+    return {"name": name, "transport": "stdio", "commandOrUrl": "/bin/echo", "args": [name]}
+
+
+class ExecutableSourceTrustTests(AgentCoreTestCase):
+    def tearDown(self):
+        getattr(closure_module, "__setExecutableClosureTestHookForTests")(None)
+
+    def test_setting_sources_are_strict_ordered_and_deduplicated(self):
+        self.assertEqual(core.parseSettingSources(None), ["user", "project", "local"])
+        self.assertEqual(core.parseSettingSources("local,user,local"), ["local", "user"])
+        with self.assertRaisesRegex(ValueError, "Unknown setting source"):
+            core.parseSettingSources("user,unknown")
+        with self.assertRaisesRegex(ValueError, "at least one"):
+            core.parseSettingSources("")
+
+    def test_excluded_project_sources_cannot_trigger_mcp_or_plugin_execution(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            run(core.saveMcpServers("project", str(workspace), [_stdio_server("project")]))
+            marker = workspace / "plugin-ran.txt"
+            plugin = workspace / "project-plugin"
+            plugin.mkdir()
+            manifest = {"id": "project-plugin", "version": "1.0.0", "entry": "entry.py"}
+            (plugin / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (plugin / "entry.py").write_text(
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\nplugin = {{}}\n",
+                encoding="utf-8",
+            )
+            run(
+                core.savePlugins(
+                    "project",
+                    str(workspace),
+                    [{"manifest": manifest, "enabled": True, "source": str(plugin)}],
+                )
+            )
+
+            config = run(
+                core.resolveConfig(
+                    {"runtimeHome": str(home), "settingSources": "user"},
+                    str(workspace),
+                )
+            )
+            self.assertEqual(config["mcpConfig"], [])
+            loaded = run(core.loadPluginRuntime(config))
+            self.assertEqual(loaded["plugins"], [])
+            self.assertFalse(marker.exists())
+        finally:
+            self.restore_home(root, previous)
+    def test_selected_project_mcp_requires_external_trust_and_invalidates_on_change(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            run(core.saveMcpServers("project", str(workspace), [_stdio_server("approved")]))
+            with self.assertRaises(core.ExecutableSourceTrustError):
+                run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+            before = run(core.inspectMcpSourceTrust(cwd=str(workspace), scope="project"))
+            self.assertFalse(before["approved"])
+            run(core.approveMcpSource(cwd=str(workspace), scope="project"))
+            config = run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+            self.assertEqual([item["name"] for item in config["mcpConfig"]], ["approved"])
+            self.assertEqual(config["mcpConfig"][0]["scope"], "project")
+
+            run(core.saveMcpServers("project", str(workspace), [_stdio_server("changed")]))
+            with self.assertRaises(core.ExecutableSourceTrustError):
+                run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_strict_mcp_admits_only_explicit_records_and_excludes_plugin_servers(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            run(core.saveMcpServers("user", str(workspace), [_stdio_server("ambient-user")]))
+            run(core.saveMcpServers("project", str(workspace), [_stdio_server("ambient-project")]))
+            explicit = home / "explicit.json"
+            explicit.write_text(json.dumps(_stdio_server("explicit")), encoding="utf-8")
+            config = run(
+                core.resolveConfig(
+                    {"strictMcpConfig": True, "mcpConfig": [str(explicit)]},
+                    str(workspace),
+                )
+            )
+            self.assertEqual([item["name"] for item in config["mcpConfig"]], ["explicit"])
+            self.assertEqual(config["mcpConfigPolicy"], {"mode": "explicit_only"})
+            self.assertEqual(
+                [item["name"] for item in core.selectMcpBootstrapServers(config["mcpConfigPolicy"], config["mcpConfig"], [_stdio_server("plugin")])],
+                ["explicit"],
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_project_plugin_executes_snapshot_not_post_snapshot_mutation(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            plugin = workspace / "plugin"
+            marker = workspace / "marker.txt"
+            plugin.mkdir()
+            manifest = {"id": "snapshot-plugin", "version": "1.0.0", "entry": "entry.py"}
+            (plugin / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+            def source(value: str) -> str:
+                return textwrap.dedent(
+                    f"""
+                    from pathlib import Path
+                    Path({str(marker)!r}).write_text({value!r}, encoding="utf-8")
+                    plugin = {{}}
+                    """
+                )
+
+            (plugin / "entry.py").write_text(source("approved"), encoding="utf-8")
+            run(
+                core.savePlugins(
+                    "project",
+                    str(workspace),
+                    [{"manifest": manifest, "enabled": True, "source": str(plugin)}],
+                )
+            )
+            config = run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+            with self.assertRaises(core.ExecutableSourceTrustError):
+                run(core.loadPluginRuntime(config))
+            run(core.approvePluginSource(cwd=str(workspace), scope="project"))
+
+            async def mutate_after_snapshot(phase: str):
+                if phase == "after_snapshot":
+                    (plugin / "entry.py").write_text(source("mutated"), encoding="utf-8")
+
+            getattr(closure_module, "__setExecutableClosureTestHookForTests")(mutate_after_snapshot)
+            loaded = run(core.loadPluginRuntime(config))
+            self.assertEqual(marker.read_text(encoding="utf-8"), "approved")
+            self.assertIn(os.path.join("trust", "snapshots"), loaded["plugins"][0]["source"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_workspace_legacy_approval_hints_grant_no_authority(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            run(
+                core.saveSettings(
+                    "local",
+                    str(workspace),
+                    {
+                        "permissions": {"allow": ["Bash(git status:*)"]},
+                        "hooks": {
+                            "PreToolUse": [
+                                {"matcher": "Bash", "command": "exit 0", "blocking": True}
+                            ]
+                        },
+                    },
+                )
+            )
+            legacy = workspace / ".tess" / "local"
+            legacy.mkdir(parents=True, exist_ok=True)
+            (legacy / "approved-hooks.json").write_text("{}", encoding="utf-8")
+            (legacy / "approved-permissions.json").write_text("{}", encoding="utf-8")
+
+            rules = run(core.loadPermissionRules(cwd=str(workspace), sources=["local"]))
+            hooks = run(core.loadHooks(cwd=str(workspace), sources=["local"]))
+            self.assertFalse(next(rule for rule in rules if rule["effect"] == "allow")["approved"])
+            self.assertFalse(hooks[0]["approved"])
+
+            run(core.approvePermissionRules(str(workspace), "local"))
+            run(core.approveHooks(str(workspace), "local"))
+            rules = run(core.loadPermissionRules(cwd=str(workspace), sources=["local"]))
+            hooks = run(core.loadHooks(cwd=str(workspace), sources=["local"]))
+            self.assertTrue(next(rule for rule in rules if rule["effect"] == "allow")["approved"])
+            self.assertTrue(hooks[0]["approved"])
+            status = run(core.getRepositoryTrustStatus(str(workspace)))
+            self.assertTrue(status["recordPath"].startswith(str(home)))
+            self.assertEqual(os.stat(status["recordPath"]).st_mode & 0o777, 0o600)
+        finally:
+            self.restore_home(root, previous)

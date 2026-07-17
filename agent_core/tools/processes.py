@@ -16,7 +16,13 @@ from .cancellation import _create_tool_abort_error, _signal_aborted
 _BACKGROUND_RUNNERS: list[subprocess.Popen[Any]] = []
 
 
-def _spawn_background_task_runner(task_id: str, command: str, cwd: str, output_path: str, context: ToolContext | None = None) -> subprocess.Popen[Any]:
+def _background_task_runner_argv(
+    task_id: str,
+    command: str,
+    cwd: str,
+    output_path: str,
+    context: ToolContext | None = None,
+) -> list[str]:
     argv = [
         sys.executable,
         "-m",
@@ -37,11 +43,25 @@ def _spawn_background_task_runner(task_id: str, command: str, cwd: str, output_p
             cwd,
             extra_writable_roots=[os.path.dirname(output_path), context.get("config", {}).get("runtimeHome")],
         )
+    return argv
+
+
+def _spawn_background_task_runner(
+    task_id: str,
+    command: str,
+    cwd: str,
+    output_path: str,
+    context: ToolContext | None = None,
+    *,
+    argv: list[str] | None = None,
+    activation_stdin: bool = False,
+) -> subprocess.Popen[Any]:
+    argv = argv or _background_task_runner_argv(task_id, command, cwd, output_path, context)
     return subprocess.Popen(
         argv,
         cwd=cwd,
         env=_background_runner_env(),
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.PIPE if activation_stdin else subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         start_new_session=True,

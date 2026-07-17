@@ -5,16 +5,40 @@ from ..contracts.context import ToolContext
 import re
 from typing import Any
 
+from ..agent_authority import AgentAuthorityError, assertValidAgentAuthority
 from .._utils import maybe_await
-from ..storage import loadAutoMode, loadSession
+from ..permission_rules import loadPermissionRulesCached, matchPermissionRule
+from ..shell_command_policy import classifyReadOnlyShellCommand, parseSingleShellCommand
+from ..storage import getProjectRoot, loadAutoMode
 
 
 PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
 
 
-async def _ensure_tool_permission(context: ToolContext, tool_name: str, category: str, summary: str, always_ask: bool = False, command: str | None = None) -> None:
+async def _ensure_tool_permission(
+    context: ToolContext,
+    tool_name: str,
+    category: str,
+    summary: str,
+    always_ask: bool = False,
+    command: str | None = None,
+    path: str | None = None,
+    url: str | None = None,
+) -> None:
     mode = await _get_effective_permission_mode(context)
-    resolution = await _resolve_tool_permission(context, tool_name, category, mode, always_ask, command)
+    resolution = await _resolve_tool_permission(
+        context,
+        tool_name,
+        category,
+        mode,
+        always_ask,
+        command,
+        path,
+        url,
+    )
+    authority = (context.get("session", {}).get("metadata") or {}).get("effectiveAgentAuthority")
+    if authority and resolution["decision"] == "ask":
+        resolution.pop("switchMode", None)
     output_json = context.get("outputJson", lambda *_: None)
     if resolution["decision"] == "allow":
         output_json("permission.decided", {"tool": tool_name, "mode": mode, "decision": "allow", "summary": summary, "source": resolution.get("source")})
@@ -25,6 +49,11 @@ async def _ensure_tool_permission(context: ToolContext, tool_name: str, category
         raise PermissionError(resolution.get("reason") or f"Permission denied for {tool_name}.")
 
     if not context.get("interactive"):
+        if authority:
+            raise PermissionError(
+                f"{tool_name} requires an approval that this detached child cannot obtain. "
+                "Child authority is persisted and cannot be widened by relaunching with another permission mode."
+            )
         switch = resolution.get("switchMode") or "bypassPermissions"
         output_json(
             "permission.decided",
@@ -69,24 +98,76 @@ async def _ensure_tool_permission(context: ToolContext, tool_name: str, category
 
 async def _get_effective_permission_mode(context: ToolContext) -> str:
     mode = context["session"].get("permissionMode") or context["config"].get("permissionMode", "default")
-    parent_session_id = context["session"].get("metadata", {}).get("parentSessionId") if context.get("interactive") else None
-    if not parent_session_id:
+    metadata = context["session"].get("metadata", {})
+    authority = metadata.get("effectiveAgentAuthority")
+    if authority:
+        assertValidAgentAuthority(authority)
+        if mode != authority["mode"]:
+            context["session"]["permissionMode"] = authority["mode"]
+            context["config"]["permissionMode"] = authority["mode"]
+            await maybe_await(context.get("persistSession", lambda: None)())
+        return authority["mode"]
+    if not metadata.get("parentSessionId"):
         return mode
-    parent = await loadSession(parent_session_id)
-    inherited = parent.get("permissionMode") if parent else None
-    if not inherited or inherited == mode:
-        return mode
-    context["session"]["permissionMode"] = inherited
-    context["config"]["permissionMode"] = inherited
-    await maybe_await(context.get("persistSession", lambda: None)())
-    return inherited
+    raise AgentAuthorityError(
+        "child_authority_missing",
+        "record",
+        "Legacy child session has no persisted effective authority; tool execution is blocked.",
+    )
 
 
-async def _resolve_tool_permission(context: ToolContext, tool_name: str, category: str, mode: str, always_ask: bool, command: str | None) -> dict[str, str]:
+async def _resolve_tool_permission(
+    context: ToolContext,
+    tool_name: str,
+    category: str,
+    mode: str,
+    always_ask: bool,
+    command: str | None,
+    path: str | None = None,
+    url: str | None = None,
+) -> dict[str, Any]:
+    authority = (context.get("session", {}).get("metadata") or {}).get("effectiveAgentAuthority")
+    rules = (authority or {}).get("permissionRules")
+    if rules is None:
+        rules = await loadPermissionRulesCached(
+            cwd=context["session"]["cwd"],
+            sources=context.get("config", {}).get("settingsSources"),
+            inlineSettings=context.get("config", {}).get("inlineSettings"),
+        )
+    call = {"toolName": tool_name, "command": command, "path": path, "url": url}
+    project_root = (authority or {}).get("permissionRuleProjectRoot") or getProjectRoot(context["session"]["cwd"])
+
+    def matched(effect: str) -> dict[str, Any] | None:
+        return matchPermissionRule(rules, call, effects=(effect,), projectRoot=project_root)
+
+    deny_rule = matched("deny")
+    if deny_rule:
+        return {
+            "decision": "deny",
+            "source": f"rule:{deny_rule['scope']}",
+            "rule": deny_rule["raw"],
+            "reason": f"Blocked by permission rule {deny_rule['raw']} ({deny_rule['scope']} settings).",
+        }
     if mode == "bypassPermissions":
         return {"decision": "allow", "source": "mode"}
     if mode == "plan":
         return {"decision": "deny", "source": "mode", "reason": f"{tool_name} is blocked in plan mode. Switch to /permissions default or /permissions acceptEdits to execute changes."}
+    ask_rule = matched("ask")
+    if ask_rule:
+        return {
+            "decision": "ask",
+            "source": f"rule:{ask_rule['scope']}",
+            "rule": ask_rule["raw"],
+            "reason": f"Permission rule {ask_rule['raw']} ({ask_rule['scope']} settings) requires approval.",
+        }
+    if not always_ask:
+        allow_rule = matched("allow")
+        if allow_rule:
+            return {
+                "decision": "allow",
+                "source": f"rule:{allow_rule['scope']}",
+                "rule": allow_rule["raw"],
+            }
     if category == "edit":
         if mode in ("acceptEdits", "auto", "dontAsk"):
             return {"decision": "allow", "source": "mode"}
@@ -99,6 +180,10 @@ async def _resolve_tool_permission(context: ToolContext, tool_name: str, categor
         if mode in ("auto", "dontAsk"):
             return {"decision": "deny", "source": "mode", "reason": "Stopping processes is blocked in non-interactive permission modes."}
         return {"decision": "ask", "source": "mode", "switchMode": "bypassPermissions", "reason": "This tool sends signals to a running process."}
+    if category == "network":
+        if mode in ("auto", "dontAsk"):
+            return {"decision": "deny", "source": "mode", "reason": "Long-lived network checks are blocked in non-interactive permission modes."}
+        return {"decision": "ask", "source": "mode", "switchMode": "bypassPermissions", "reason": "This tool schedules recurring network requests."}
 
     command = command or ""
     if not always_ask and _is_safe_read_only_shell_command(command):
@@ -118,44 +203,21 @@ def _parse_permission_mode_value(value: Any) -> str | None:
 
 
 def _is_safe_read_only_shell_command(command: str) -> bool:
-    normalized = _normalize_shell_command(command)
-    if not normalized:
-        return False
-    safe_prefixes = [
-        "git status",
-        "git diff",
-        "git log",
-        "git show",
-        "git branch",
-        "ls",
-        "pwd",
-        "find",
-        "rg",
-        "cat",
-        "head",
-        "tail",
-        "sed -n",
-        "wc",
-        "which",
-        "date",
-        "npm test",
-        "pnpm test",
-        "bun test",
-        "pytest",
-        "cargo test",
-        "go test",
-    ]
-    risky_fragments = [" rm ", " rm-", "rm -", "git reset", "git clean", "chmod ", "chown ", "sudo ", "curl ", "wget ", ">|", " >", ">>", "tee "]
-    if any(fragment in normalized for fragment in risky_fragments):
-        return False
-    return any(normalized == prefix or normalized.startswith(f"{prefix} ") for prefix in safe_prefixes)
+    return bool(classifyReadOnlyShellCommand(command).get("safe"))
 
 
 def _matches_command_policy(command: str, patterns: list[str]) -> bool:
-    normalized = _normalize_shell_command(command)
+    parsed = parseSingleShellCommand(command)
+    if not parsed.get("ok"):
+        return False
     for pattern in patterns:
-        normalized_pattern = _normalize_shell_command(pattern)
-        if normalized == normalized_pattern or normalized.startswith(f"{normalized_pattern} "):
+        parsed_pattern = parseSingleShellCommand(pattern)
+        if not parsed_pattern.get("ok") or len(parsed_pattern["argv"]) > len(parsed["argv"]):
+            continue
+        if all(
+            value.lower() == parsed["argv"][index].lower()
+            for index, value in enumerate(parsed_pattern["argv"])
+        ):
             return True
     return False
 

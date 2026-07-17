@@ -19,7 +19,7 @@ def _notebook_edit_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         notebook_path = _authorize_path(_require_string(input.get("notebook_path"), "notebook_path"), context)
         edit_mode = input.get("edit_mode") if isinstance(input.get("edit_mode"), str) else "replace"
-        await _ensure_tool_permission(context, "NotebookEdit", "edit", f"{edit_mode} notebook cell in {_display_path(context, notebook_path)}")
+        await _ensure_tool_permission(context, "NotebookEdit", "edit", f"{edit_mode} notebook cell in {_display_path(context, notebook_path)}", path=notebook_path)
         notebook = json.loads(Path(notebook_path).read_text(encoding="utf-8"))
         cells = notebook.get("cells") if isinstance(notebook.get("cells"), list) else []
         cell_id = input.get("cell_id") if isinstance(input.get("cell_id"), str) else None

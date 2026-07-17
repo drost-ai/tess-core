@@ -110,7 +110,7 @@ class ToolPermissionTests(AgentCoreTestCase):
 
             with self.assertRaises(PermissionError) as deny_ctx:
                 run(bash.handler({"command": f"{shlex.quote(sys.executable)} -c {shlex.quote('print(1)')}"}, context))
-            self.assertIn("deny policy", str(deny_ctx.exception))
+            self.assertIn("not in the allow policy", str(deny_ctx.exception))
             self.assertTrue(any(data.get("source") == "auto-mode" and data.get("decision") == "deny" for event, data in events if event == "permission.decided"))
 
             with self.assertRaises(PermissionError) as unknown_ctx:
@@ -130,11 +130,11 @@ class ToolPermissionTests(AgentCoreTestCase):
             write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
             persisted = {"count": 0}
             context = {"session": child, "config": config, "interactive": True, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
-            run(write.handler({"file_path": str(workspace / "inherited.txt"), "content": "ok"}, context))
-            self.assertEqual(child["permissionMode"], "bypassPermissions")
-            self.assertEqual(config["permissionMode"], "bypassPermissions")
-            self.assertEqual(persisted["count"], 1)
-            self.assertEqual((workspace / "inherited.txt").read_text(), "ok")
+            with self.assertRaises(core.AgentAuthorityError) as error:
+                run(write.handler({"file_path": str(workspace / "inherited.txt"), "content": "ok"}, context))
+            self.assertEqual(error.exception.code, "child_authority_missing")
+            self.assertFalse((workspace / "inherited.txt").exists())
+            self.assertEqual(persisted["count"], 0)
         finally:
             self.restore_home(root, previous)
 

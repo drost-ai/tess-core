@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from .shared import *
+from ...agent_authority import (
+    captureAgentAuthority,
+    deriveChildAgentAuthority,
+    sandboxConfigForAgentAuthority,
+)
 from ...contracts.records import launch_output_file, launch_task_id
 
 
@@ -50,6 +55,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             **child_record,
             "taskId": task_id,
             "pid": launched.get("pid"),
+            "processIdentity": launched.get("processIdentity"),
             "status": "backgrounded",
             "owner": "daemon" if context.get("daemon") else "client",
             "attachableSessionId": child_session["id"],
@@ -110,6 +116,24 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     child_name = name or description.strip()
     runtime_contract = runtime_contract_for_agent(config, agent_type)
     runtime_contract_summary = summarize_subagent_runtime_contract(runtime_contract)
+    get_tools = context.get("getTools")
+    parent_tools = await maybe_await(get_tools()) if callable(get_tools) else context.get("tools")
+    if parent_tools is None:
+        parent_tools = [{"name": name} for name in config.get("tools") or []]
+    parent_authority = await captureAgentAuthority(
+        config=config,
+        session=parent,
+        tools=parent_tools,
+    )
+    parent.setdefault("metadata", {})["effectiveAgentAuthority"] = parent_authority
+    derived_authority = deriveChildAgentAuthority(
+        parent=parent_authority,
+        requestedMode=requested_mode,
+        contract=runtime_contract,
+        permissionRuleProjectRoot=os.path.realpath(parent["cwd"]),
+    )
+    child_authority = derived_authority["authority"]
+    child_mode = child_authority["mode"]
     launch_group_id = resolveSubagentLaunchGroupId(args, parent, context)
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     child_cwd = worktree_path or parent["cwd"]
@@ -147,6 +171,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     metadata["teamName"] = team_name
     metadata["launchGroupId"] = launch_group_id
     metadata["worktreePath"] = worktree_path
+    metadata["effectiveAgentAuthority"] = child_authority
     if isinstance(config.get("parentContinuation"), dict):
         metadata["parentContinuation"] = dict(config["parentContinuation"])
     if runtime_contract:
@@ -168,6 +193,15 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "appendSystemPrompt": None,
         "allowedRoots": _dedupe([*(config.get("allowedRoots") or []), child_cwd]),
     }
+    child_config.update(
+        {
+            "allowedRoots": list(child_authority["readableRoots"]),
+            "tools": list(child_authority["enabledTools"]),
+            "allowedTools": list(child_authority["enabledTools"]),
+            "disallowedTools": [],
+            "sandbox": sandboxConfigForAgentAuthority(child_authority),
+        }
+    )
     parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])
     parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
     parent_metadata["subagentLaunchGroups"] = _dedupe([*(parent_metadata.get("subagentLaunchGroups") or []), launch_group_id])
@@ -204,6 +238,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "worktreePath": worktree_path,
         "runInBackground": run_in_background,
         "runtimeContract": runtime_contract,
+        "effectiveAgentAuthority": child_authority,
         "parentContinuation": metadata.get("parentContinuation"),
         "status": "queued" if run_in_background else "running",
         "startedAt": now,

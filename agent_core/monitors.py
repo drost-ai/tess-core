@@ -13,6 +13,7 @@ from .config import ensureProviderForModelSelection, normalizeEffortForModel
 from .monitor_bootstrap import _MonitorBootstrapBaseline
 from .providers.anthropic import sendAnthropicMessagesRequest
 from .providers.openai import sendOpenAiRequest
+from .runtime_secret_provider import resolveProviderConfigSecrets
 from .session import persistSession
 from .storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 
@@ -379,13 +380,14 @@ async def _author_monitor_update_with_provider(config: dict[str, Any], session: 
         ],
         "tools": [],
     }
+    resolved_config = await resolveProviderConfigSecrets(config)
     if provider == "openai":
-        token = config.get("openaiToken")
+        token = resolved_config.get("openaiToken")
         if not token:
             raise RuntimeError("No OpenAI token available for monitor updates.")
-        response = await sendOpenAiRequest({"token": token, "baseUrl": config.get("openaiBaseUrl"), "headers": config.get("customHeaders"), "mode": config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
+        response = await sendOpenAiRequest({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
     else:
-        response = await sendAnthropicMessagesRequest({"request": request, "config": config, "runtime": {}, "maxAttempts": 1})
+        response = await sendAnthropicMessagesRequest({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
     text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
     if not text:
         raise RuntimeError("Provider returned an empty monitor update.")
@@ -490,5 +492,8 @@ class _suppress:
     def __enter__(self):
         return None
 
-    def __exit__(self, *_exc):
-        return True
+    def __exit__(self, exc_type, _exc, _traceback):
+        # Operational failures are best-effort here, but cancellation is a
+        # lifecycle signal and must reach the owning loop. Swallowing
+        # CancelledError leaves run_loop alive while asyncio.run() drains.
+        return bool(exc_type is not None and issubclass(exc_type, Exception))

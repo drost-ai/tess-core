@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import copy
 from typing import Any, Callable
 
 from ._utils import maybe_await
+from .agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from .collaboration import createCollaborationRuntime
 from .daemon import ensureTaskSupervisorDaemon
 from .mcp import createMcpRuntime
 from .monitors import createMonitorRuntime
 from .plugins import loadPluginRuntime
+from .executable_source_policy import selectMcpBootstrapServers
 from .remote import createBridgeRuntime
 from .runtime_events import createRuntimeEvent
 from .runtime_state import createInitialRuntimeState, createRuntimeStateStore
@@ -28,6 +31,11 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     if config.get("runtimeHome"):
         configureRuntimeHome(config["runtimeHome"])
     cwd = args.get("cwd") or config.get("cwd") or (session or {}).get("cwd")
+    authority = (
+        await enforceSessionAgentAuthority(session=session, config=config)
+        if session
+        else None
+    )
     state_store = createRuntimeStateStore(createInitialRuntimeState(session) if session else None)
     session_runtime: dict[str, Any] | None = None
     daemon_unsubscribe = None
@@ -69,15 +77,27 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             if hasattr(result, "__await__"):
                 await result
 
-    plugins = await loadPluginRuntime(config)
+    plugins = await loadPluginRuntime(
+        config,
+        {
+            "pinnedInstalledRecords": copy.deepcopy(
+                authority["executableSources"].get("pluginRecords") or []
+            )
+        }
+        if authority
+        else None,
+    )
     plugin_mcp_servers = plugins.get("mcpServers") or []
     mcp_runtime = args.get("mcpRuntime")
     mcp_servers = args.get("mcpConfig") or config.get("mcpConfig") or []
-    if mcp_runtime is None and (mcp_servers or plugin_mcp_servers):
+    selected_mcp_servers = selectMcpBootstrapServers(
+        config.get("mcpConfigPolicy"), mcp_servers, plugin_mcp_servers
+    )
+    if mcp_runtime is None and selected_mcp_servers:
         mcp_runtime = await createMcpRuntime(
             {
                 "cwd": cwd,
-                "servers": [*mcp_servers, *plugin_mcp_servers],
+                "servers": selected_mcp_servers,
                 "sessionId": (session or {}).get("id") or args.get("sessionId"),
                 "registeredChannels": args.get("registeredChannels") or config.get("channels") or [],
                 "onRuntimeEvent": emit_runtime_event,
@@ -130,9 +150,13 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
 
     tool_options = {**args, "mcpRuntime": mcp_runtime, "workspaceController": workspace_controller}
     plugin_tools = plugins.get("tools") or []
-    tools = _dedupe_tools([*createBuiltinTools(tool_options), *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []), *plugin_tools])
+    tools = filterToolsForAgentAuthority(
+        _dedupe_tools([*createBuiltinTools(tool_options), *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []), *plugin_tools]),
+        authority,
+    )
     slash_commands = _dedupe_slash_commands(plugins.get("commands") or [])
-    _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
+    if authority is None:
+        _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
 
     def set_foreground_busy(busy: bool) -> None:
         if monitor_runtime and monitor_runtime.get("setForegroundBusy"):
@@ -147,10 +171,14 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
             return {"changed": False, "servers": [], "generation": 0}
         result = await maybe_await(mcp_runtime["applyPendingCatalogChanges"]())
         if result.get("changed"):
-            tools[:] = _dedupe_tools(
-                [*createBuiltinTools(tool_options), *mcp_runtime["createToolDefinitions"](), *plugin_tools]
+            tools[:] = filterToolsForAgentAuthority(
+                _dedupe_tools(
+                    [*createBuiltinTools(tool_options), *mcp_runtime["createToolDefinitions"](), *plugin_tools]
+                ),
+                authority,
             )
-            _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
+            if authority is None:
+                _augment_config_tools(config, [_tool_name(tool) for tool in tools if _tool_name(tool)])
         return result
 
     def set_active_session(next_session: dict[str, Any], next_config: dict[str, Any]) -> None:

@@ -5,6 +5,7 @@ import threading
 from typing import Any, Callable
 
 from .supervisor import _is_active_task_status, _project_session_task_records, _task_record_event_payload
+from ..runtime_identifiers import tryParseTaskId
 from ..storage import saveTaskRecord
 
 
@@ -35,7 +36,11 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
         try:
             records = await _project_session_task_records(session_ref["id"], session_ref)
             for record in records:
-                await saveTaskRecord(record)
+                # Monitor/remote rows use virtual display references. They are
+                # projected from their owning stores and must never become
+                # task-record filenames.
+                if tryParseTaskId(record.get("id")) is not None:
+                    await saveTaskRecord(record)
             next_map = {record["id"]: record for record in records if record.get("id")}
 
             if restored_for_session_id != session_ref["id"]:

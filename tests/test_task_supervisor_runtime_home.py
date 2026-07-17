@@ -62,8 +62,33 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             child["metadata"]["parentSessionId"] = parent["id"]
             child["metadata"]["agentId"] = "agent-runtime-home"
             child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
+            child_authority = run(
+                core.captureAgentAuthority(
+                    config=config,
+                    session=child,
+                    tools=core.createBuiltinTools(),
+                )
+            )
+            child["metadata"]["effectiveAgentAuthority"] = child_authority
             run(core.saveSession(parent))
             run(core.saveSession(child))
+            run(
+                core.saveChildAgent(
+                    {
+                        "agentId": "agent-runtime-home",
+                        "sessionId": child["id"],
+                        "parentSessionId": parent["id"],
+                        "name": "Worker",
+                        "provider": config["provider"],
+                        "model": config["model"],
+                        "mode": "bypassPermissions",
+                        "runInBackground": True,
+                        "status": "backgrounded",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "effectiveAgentAuthority": child_authority,
+                    }
+                )
+            )
             os.environ["AGENT_CORE_HOME"] = str(wrong_home)
 
             async def _start_with_scoped_home():
@@ -102,7 +127,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                     )
 
             meta, output = run(_read_final())
-            self.assertEqual(meta["status"], "completed")
+            self.assertEqual(meta["status"], "completed", f"meta={meta!r}\noutput={output!r}")
             self.assertIn('"ok": true', output["output"])
             self.assertIn("provider profile 'openai-codex'", output["output"])
             self.assertFalse((wrong_home / "sessions" / f"{child['id']}.json").exists())

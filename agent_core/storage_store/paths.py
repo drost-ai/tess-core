@@ -5,6 +5,7 @@ import hashlib
 import tempfile
 
 from .shared import *
+from ..runtime_identifiers import parseArtifactId, parseSessionId
 
 Scope = Literal["user", "project", "local"]
 DEFAULT_RUNTIME_HOME = "~/.agent-core"
@@ -131,17 +132,25 @@ def getToolArtifactsDir() -> str:
     return os.path.join(getStateRoot(), "tool-artifacts")
 
 def getSessionToolArtifactsDir(sessionId: str) -> str:
-    return os.path.join(getToolArtifactsDir(), sessionId)
+    return os.path.join(getToolArtifactsDir(), parseSessionId(sessionId))
 
 def toolArtifactMetaPath(sessionId: str, artifactId: str) -> str:
-    return os.path.join(getSessionToolArtifactsDir(sessionId), f"{artifactId}.meta.json")
+    return os.path.join(
+        getSessionToolArtifactsDir(sessionId),
+        f"{parseArtifactId(artifactId)}.meta.json",
+    )
 
 def toolArtifactDataPath(sessionId: str, artifactId: str, extension: str) -> str:
     ext = extension if extension.startswith(".") else f".{extension}"
-    return os.path.join(getSessionToolArtifactsDir(sessionId), f"{artifactId}{ext}")
+    if not re.fullmatch(r"\.[A-Za-z0-9]{1,16}", ext):
+        raise ValueError("Invalid artifact extension")
+    return os.path.join(
+        getSessionToolArtifactsDir(sessionId),
+        f"{parseArtifactId(artifactId)}{ext}",
+    )
 
 def getSessionCompactionsDir(sessionId: str) -> str:
-    return os.path.join(getCompactionsDir(), sessionId)
+    return os.path.join(getCompactionsDir(), parseSessionId(sessionId))
 
 def compactionManifestPath(sessionId: str) -> str:
     return os.path.join(getSessionCompactionsDir(sessionId), "manifest.json")

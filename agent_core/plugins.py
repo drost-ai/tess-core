@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import importlib.util
 import os
 import shlex
@@ -15,11 +16,20 @@ from .plugin_contracts import (
     validatePluginCapabilityContract,
     validatePluginManifest,
 )
+from .executable_source_policy import loadSelectedPluginRecords
 from .storage import loadPlugins, resolveMaybeRelative
 
 
-async def loadPluginRuntime(config: dict[str, Any]) -> dict[str, Any]:
-    sources = await _resolve_plugin_sources(config)
+async def loadPluginRuntime(
+    config: dict[str, Any], options: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    options = options or {}
+    pinned_records = (
+        options["pinnedInstalledRecords"]
+        if "pinnedInstalledRecords" in options
+        else None
+    )
+    sources = await _resolve_plugin_sources(config, pinned_records)
     plugins: list[dict[str, Any]] = []
     errors: list[str] = []
 
@@ -39,11 +49,18 @@ async def loadPluginRuntime(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _resolve_plugin_sources(config: dict[str, Any]) -> list[dict[str, Any]]:
+async def _resolve_plugin_sources(
+    config: dict[str, Any], pinned_records: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     cwd = config.get("cwd") or os.getcwd()
     by_id: dict[str, dict[str, Any]] = {}
 
-    for record in await _load_installed_plugins(cwd):
+    installed = (
+        copy.deepcopy(pinned_records)
+        if pinned_records is not None
+        else await _load_installed_plugins(cwd, config.get("settingsSources"))
+    )
+    for record in installed:
         manifest = record.get("manifest") if isinstance(record.get("manifest"), dict) else {}
         plugin_id = manifest.get("id") or "plugin"
         try:
@@ -59,18 +76,17 @@ async def _resolve_plugin_sources(config: dict[str, Any]) -> list[dict[str, Any]
     return list(by_id.values())
 
 
-async def _load_installed_plugins(cwd: str) -> list[dict[str, Any]]:
+async def _load_installed_plugins(cwd: str, sources: list[str] | None = None) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
-    for scope in ("user", "project", "local"):
-        for record in await loadPlugins(scope, cwd):
-            manifest = record.get("manifest") if isinstance(record.get("manifest"), dict) else {}
-            plugin_id = manifest.get("id")
-            if not plugin_id:
-                continue
-            if not record.get("enabled"):
-                merged.pop(str(plugin_id), None)
-                continue
-            merged[str(plugin_id)] = record
+    for record in await loadSelectedPluginRecords(cwd=cwd, sources=sources):
+        manifest = record.get("manifest") if isinstance(record.get("manifest"), dict) else {}
+        plugin_id = manifest.get("id")
+        if not plugin_id:
+            continue
+        if not record.get("enabled"):
+            merged.pop(str(plugin_id), None)
+            continue
+        merged[str(plugin_id)] = record
     return list(merged.values())
 
 

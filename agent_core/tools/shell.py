@@ -12,12 +12,19 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
-from ..storage import readTaskMeta, taskOutputPath, writeTaskMeta
+from ..owned_process_launch import activateOwnedProcessRunner, createOwnedProcessActivation
+from ..storage import readTaskMeta, saveTaskRecord, taskOutputPath, writeTaskMeta
+from ..task_process_launch import (
+    attachTaskLaunchReservation,
+    createTaskLaunchReservation,
+    failTaskLaunchReservation,
+    launchReservedProcess,
+)
 from ..tool_payloads import shapeTextToolResult
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
-from .processes import _communicate_shell_process, _prepare_sandboxed_argv, _resolve_shell, _spawn_background_task_runner, _track_background_runner
+from .processes import _background_task_runner_argv, _communicate_shell_process, _prepare_sandboxed_argv, _resolve_shell, _spawn_background_task_runner, _track_background_runner
 from .schemas import _tool_description, _tool_schema
 from .session_metadata import _append_unique_metadata_list
 from .validation import _require_string
@@ -40,6 +47,7 @@ def _bash_tool() -> ToolDefinition:
         if run_in_background:
             supervisor = context.get("daemon") or context.get("taskSupervisor")
             title = input.get("description") or input.get("title")
+            session_registered = False
             if supervisor:
                 started = await supervisor["startBackgroundCommand"](
                     {
@@ -69,25 +77,148 @@ def _bash_tool() -> ToolDefinition:
                 task_id = str(uuid.uuid4())
                 output_path = taskOutputPath(task_id)
                 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-                started_at = now_iso()
-                task_record = {
+                reservation = createTaskLaunchReservation(
+                    taskId=task_id,
+                    sessionId=context["session"]["id"],
+                    kind="background_command",
+                )
+                starting_meta = {
                     "taskId": task_id,
                     "id": task_id,
                     "sessionId": context["session"]["id"],
                     "command": command,
                     "cwd": context["session"]["cwd"],
-                    "startedAt": started_at,
-                    "updatedAt": started_at,
-                    "status": "running",
+                    "startedAt": reservation["createdAt"],
+                    "updatedAt": reservation["createdAt"],
+                    "status": "starting",
                     "outputFile": output_path,
                     "title": title,
                     "description": title,
                     "owner": "client",
+                    "launchReservation": reservation,
                 }
-                runner = _spawn_background_task_runner(task_id, command, context["session"]["cwd"], output_path, context)
-                _track_background_runner(runner)
-                task_record["runnerPid"] = runner.pid
-                await writeTaskMeta(task_id, task_record)
+                record = {
+                    "id": task_id,
+                    "sessionId": context["session"]["id"],
+                    "sourceId": task_id,
+                    "kind": "background_command",
+                    "status": "queued",
+                    "title": title or command[:80],
+                    "summary": "Background command is starting.",
+                    "createdAt": reservation["createdAt"],
+                    "updatedAt": reservation["createdAt"],
+                    "startedAt": reservation["createdAt"],
+                    "completedAt": None,
+                    "foregroundable": True,
+                    "restorable": True,
+                    "cwd": context["session"]["cwd"],
+                    "command": command,
+                    "outputFile": output_path,
+                    "owner": "client",
+                    "foregroundMode": "background",
+                    "taskFamily": "shell",
+                    "detailStatus": "starting",
+                    "retrieveOnly": True,
+                    "resultSummary": None,
+                    "metadata": {},
+                    "launchReservation": reservation,
+                }
+                runner_argv = _background_task_runner_argv(
+                    task_id,
+                    command,
+                    context["session"]["cwd"],
+                    output_path,
+                    context,
+                )
+                activation = createOwnedProcessActivation(runner_argv)
+                process_holder: dict[str, Any] = {}
+
+                async def reserve() -> None:
+                    nonlocal session_registered
+                    await writeTaskMeta(task_id, starting_meta)
+                    await saveTaskRecord(record)
+                    _append_unique_metadata_list(context["session"], "taskIds", task_id)
+                    await maybe_await(context.get("persistSession", lambda: None)())
+                    session_registered = True
+
+                def spawn():
+                    runner = _spawn_background_task_runner(
+                        task_id,
+                        command,
+                        context["session"]["cwd"],
+                        output_path,
+                        context,
+                        argv=activation["argv"],
+                        activation_stdin=True,
+                    )
+                    process_holder["runner"] = runner
+                    return runner
+
+                async def attach(identity: dict[str, Any]) -> None:
+                    attached = attachTaskLaunchReservation(reservation)
+                    await writeTaskMeta(
+                        task_id,
+                        {
+                            **starting_meta,
+                            "status": "running",
+                            "runnerPid": identity["pid"],
+                            "processIdentity": identity,
+                            "launchReservation": attached,
+                            "detailStatus": "launching",
+                            "updatedAt": attached["attachedAt"],
+                        },
+                    )
+                    await saveTaskRecord(
+                        {
+                            **record,
+                            "status": "backgrounded",
+                            "summary": "Background command launched by client runner.",
+                            "detailStatus": "launching",
+                            "processIdentity": identity,
+                            "launchReservation": attached,
+                            "updatedAt": attached["attachedAt"],
+                        }
+                    )
+                    activateOwnedProcessRunner(process_holder["runner"], activation["activationToken"])
+
+                async def fail(error: Any) -> None:
+                    failed = failTaskLaunchReservation(reservation, error)
+                    await writeTaskMeta(
+                        task_id,
+                        {
+                            **starting_meta,
+                            "status": "failed",
+                            "detailStatus": "launch_failed",
+                            "error": failed["failureReason"],
+                            "updatedAt": failed["failedAt"],
+                            "finishedAt": failed["failedAt"],
+                            "launchReservation": failed,
+                        },
+                    )
+                    await saveTaskRecord(
+                        {
+                            **record,
+                            "status": "failed",
+                            "summary": failed["failureReason"],
+                            "detailStatus": "launch_failed",
+                            "updatedAt": failed["failedAt"],
+                            "completedAt": failed["failedAt"],
+                            "launchReservation": failed,
+                        }
+                    )
+
+                launched = await launchReservedProcess(
+                    reservation=reservation,
+                    expectedArgv=activation["argv"],
+                    reserve=reserve,
+                    spawn=spawn,
+                    attach=attach,
+                    fail=fail,
+                )
+                if launched.identity is None:
+                    raise RuntimeError("Background runner exited before its process identity could be attached.")
+                _track_background_runner(launched.child)
+                task_record = await readTaskMeta(task_id) or starting_meta
             task_record = {
                 **{
                     "taskId": task_id,
@@ -105,8 +236,9 @@ def _bash_tool() -> ToolDefinition:
                 "taskId": task_id,
                 "outputFile": output_path,
             }
-            _append_unique_metadata_list(context["session"], "taskIds", task_id)
-            await maybe_await(context.get("persistSession", lambda: None)())
+            if not session_registered:
+                _append_unique_metadata_list(context["session"], "taskIds", task_id)
+                await maybe_await(context.get("persistSession", lambda: None)())
             context.get("outputJson", lambda *_: None)(
                 "task.registered",
                 {

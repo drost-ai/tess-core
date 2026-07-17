@@ -3,12 +3,13 @@ from __future__ import annotations
 import time
 
 from ...contracts.providers import ProviderResponse
+from ...runtime_secret_provider import resolveProviderConfigSecrets
 
 from .shared import *
 
 async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
-    config = args["config"]
+    config = await resolveProviderConfigSecrets(args["config"])
     request = args["request"]
     runtime = args.get("runtime") or {}
     max_attempts = max(1, int(args.get("maxAttempts") or 2))

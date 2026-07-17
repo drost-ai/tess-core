@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..runtime_secrets import resolveMcpServerConfigSecrets
 
 
 async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -9,9 +10,13 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     on_event = args.get("onRuntimeEvent") or (lambda *_: None)
     token_store = args.get("tokenStore") or args.get("mcpTokenStore") or createFileMcpTokenStore()
     authorization_callback = args.get("authorizationCallback") or args.get("mcpAuthorizationCallback")
+    resolved_servers = await asyncio.gather(*(
+        resolveMcpServerConfigSecrets(config)
+        for config in _dedupe_servers(args.get("servers") or args.get("mcpConfig") or [])
+    ))
     states = [
         _create_state(config, token_store, on_event, authorization_callback)
-        for config in _dedupe_servers(args.get("servers") or args.get("mcpConfig") or [])
+        for config in resolved_servers
     ]
     await asyncio.gather(*(_connect_state(state, cwd, on_event) for state in states))
     await _register_requested_channels(states, args.get("registeredChannels") or [], args.get("sessionId"), on_event)

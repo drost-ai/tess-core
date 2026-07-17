@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from .shared import *
+from ..runtime_identifiers import RuntimeIdentifierError, parseBridgeId, parseRemoteSessionId
 
 def remoteSessionPath(remoteSessionId: str) -> str:
-    return os.path.join(getStateRoot(), "remote-sessions", f"{remoteSessionId}.json")
+    return os.path.join(
+        getStateRoot(),
+        "remote-sessions",
+        f"{parseRemoteSessionId(remoteSessionId)}.json",
+    )
 
 async def saveRemoteSession(record: dict[str, Any]) -> None:
     await writeJsonFile(remoteSessionPath(record["id"]), _omit_none_fields(record))
@@ -16,13 +21,13 @@ async def listRemoteSessions() -> list[dict[str, Any]]:
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 def bridgePath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{bridgeId}.json")
+    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.json")
 
 def bridgeInboxPath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{bridgeId}.inbox.json")
+    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.inbox.json")
 
 def bridgeEventsPath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{bridgeId}.events.json")
+    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.events.json")
 
 async def saveBridge(record: dict[str, Any]) -> None:
     await writeJsonFile(bridgePath(record["id"]), _omit_none_fields(record))
@@ -41,7 +46,10 @@ async def listBridges() -> list[dict[str, Any]]:
         return []
     records = []
     for name in names:
-        record = await loadBridge(name[:-5])
+        try:
+            record = await loadBridge(name[:-5])
+        except RuntimeIdentifierError:
+            continue
         if record:
             records.append(record)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)

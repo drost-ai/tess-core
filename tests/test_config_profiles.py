@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+from agent_core.runtime_secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
+from agent_core.runtime_secrets import isRuntimeSecretRef
 
 
 class ConfigProfileTests(AgentCoreTestCase):
@@ -35,7 +37,8 @@ class ConfigProfileTests(AgentCoreTestCase):
             self.assertEqual(config["provider"], "openai")
             self.assertEqual(config["openaiApiMode"], "chat_completions")
             self.assertEqual(config["openaiBaseUrl"], "https://api.deepinfra.com/v1/openai")
-            self.assertEqual(config["openaiToken"], "deepinfra-test-key")
+            self.assertTrue(isRuntimeSecretRef(config["openaiToken"]))
+            self.assertEqual(run(resolveProviderConfigSecrets(config))["openaiToken"], "deepinfra-test-key")
             self.assertEqual(config["model"], "zai-org/GLM-5")
         finally:
             if prev_key is None:
@@ -173,7 +176,11 @@ class ConfigProfileTests(AgentCoreTestCase):
             self.assertEqual(profile["requestStartTimeoutMs"], 7_000)
             self.assertEqual(profile["streamIdleTimeoutMs"], 8_000)
             self.assertEqual(config["compactionProviderProfile"]["profileName"], "local-small")
-            self.assertEqual(config["compactionProviderProfile"]["openaiToken"], "local-token")
+            self.assertTrue(isRuntimeSecretRef(config["compactionProviderProfile"]["openaiToken"]))
+            self.assertEqual(
+                run(resolveCompactionProviderSecrets(config["compactionProviderProfile"]))["openaiToken"],
+                "local-token",
+            )
         finally:
             if prev_key is None:
                 os.environ.pop("LOCAL_API_KEY", None)
@@ -215,14 +222,16 @@ class ConfigProfileTests(AgentCoreTestCase):
             os.environ["ANTHROPIC_AUTH_TOKEN"] = "sk-ant-o-test-token"
             token_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(token_config["providerProfileName"], "anthropic-claude-code")
-            self.assertEqual(token_config["authToken"], "sk-ant-o-test-token")
+            self.assertTrue(isRuntimeSecretRef(token_config["authToken"]))
+            self.assertEqual(run(resolveProviderConfigSecrets(token_config))["authToken"], "sk-ant-o-test-token")
             self.assertIsNone(token_config["apiKey"])
 
             os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
             os.environ["ANTHROPIC_API_KEY"] = "sk-ant-api-test-key"
             key_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(key_config["providerProfileName"], "anthropic-console")
-            self.assertEqual(key_config["apiKey"], "sk-ant-api-test-key")
+            self.assertTrue(isRuntimeSecretRef(key_config["apiKey"]))
+            self.assertEqual(run(resolveProviderConfigSecrets(key_config))["apiKey"], "sk-ant-api-test-key")
             self.assertIsNone(key_config["authToken"])
 
             self.assertEqual(run(core.resolveConfig({"altScreen": False}, str(workspace)))["screenMode"], "inline")
@@ -248,13 +257,15 @@ class ConfigProfileTests(AgentCoreTestCase):
             (home / "auth.json").write_text(json.dumps({"provider": "claudeai", "apiKey": "sk-ant-o-stored-token"}))
             token_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(token_config["providerProfileName"], "anthropic-claude-code")
-            self.assertEqual(token_config["authToken"], "sk-ant-o-stored-token")
+            self.assertTrue(isRuntimeSecretRef(token_config["authToken"]))
+            self.assertEqual(run(resolveProviderConfigSecrets(token_config))["authToken"], "sk-ant-o-stored-token")
             self.assertIsNone(token_config["apiKey"])
 
             (home / "auth.json").write_text(json.dumps({"provider": "console", "apiKey": "sk-ant-api-stored-key"}))
             key_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(key_config["providerProfileName"], "anthropic-console")
-            self.assertEqual(key_config["apiKey"], "sk-ant-api-stored-key")
+            self.assertTrue(isRuntimeSecretRef(key_config["apiKey"]))
+            self.assertEqual(run(resolveProviderConfigSecrets(key_config))["apiKey"], "sk-ant-api-stored-key")
             self.assertIsNone(key_config["authToken"])
         finally:
             if prev_token is None:
@@ -278,7 +289,8 @@ class ConfigProfileTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "codex"}, str(workspace)))
             self.assertEqual(config["providerProfileName"], "codex")
             self.assertEqual(config["openaiApiMode"], "codex")
-            self.assertEqual(config["openaiToken"], "codex-access-token")
+            self.assertTrue(isRuntimeSecretRef(config["openaiToken"]))
+            self.assertEqual(run(resolveProviderConfigSecrets(config))["openaiToken"], "codex-access-token")
         finally:
             if prev_openai is None:
                 os.environ.pop("OPENAI_API_KEY", None)

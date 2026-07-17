@@ -10,6 +10,8 @@ _MODULE_NAMES = [
     "records",
     "processes",
     "live_work",
+    "launch",
+    "subagent_launch",
     "health",
     "communication",
     "projection",
