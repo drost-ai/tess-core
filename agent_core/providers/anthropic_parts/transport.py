@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 
 from .shared import *
@@ -106,5 +107,35 @@ def _apply_usage_snapshot(target: dict[str, Any], usage: dict[str, Any]) -> None
     if not isinstance(usage, dict):
         return
     for key in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"):
-        if usage.get(key) is not None:
-            target[key] = usage.get(key)
+        value = _finite_usage_number(usage.get(key))
+        if value is not None:
+            target[key] = value
+    creation = usage.get("cache_creation")
+    creation = creation if isinstance(creation, dict) else {}
+    detail_fields = (
+        ("cache_creation_5m_input_tokens", creation.get("ephemeral_5m_input_tokens", usage.get("cache_creation_5m_input_tokens"))),
+        ("cache_creation_1h_input_tokens", creation.get("ephemeral_1h_input_tokens", usage.get("cache_creation_1h_input_tokens"))),
+    )
+    for key, raw in detail_fields:
+        value = _finite_usage_number(raw)
+        if value is not None:
+            target[key] = value
+    aggregate = _finite_usage_number(target.get("cache_creation_input_tokens")) or 0
+    five_minutes = _finite_usage_number(target.get("cache_creation_5m_input_tokens"))
+    one_hour = _finite_usage_number(target.get("cache_creation_1h_input_tokens"))
+    if "cache_creation_input_tokens" in target or five_minutes is not None or one_hour is not None:
+        target["cache_creation_ttl_detail_complete"] = (
+            (five_minutes is not None or one_hour is not None or aggregate == 0)
+            and (five_minutes or 0) + (one_hour or 0) == aggregate
+        )
+
+
+def _finite_usage_number(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return int(value)
+
+
+applyAnthropicUsageSnapshot = _apply_usage_snapshot

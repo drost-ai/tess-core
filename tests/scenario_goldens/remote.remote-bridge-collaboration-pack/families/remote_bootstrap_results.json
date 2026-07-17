@@ -2,7 +2,7 @@
   {
     "bridge": {
       "attached": true,
-      "bridgeId": "bridge-main",
+      "bridgeId": "<uuid:2>",
       "lastEventAt": "<timestamp>",
       "lastEventName": "remote.status_changed",
       "remoteSessionId": "remote-main"
@@ -11,7 +11,7 @@
       "activeCount": 2,
       "awaitingInputCount": 1,
       "backgroundCount": 5,
-      "bridgeStatus": "active",
+      "bridgeStatus": "superseded",
       "labels": [
         "Watch remote tests",
         "Remote QA"
@@ -48,7 +48,7 @@
         },
         {
           "attachableSessionId": "<uuid:1>",
-          "bridgeId": "bridge-main",
+          "bridgeId": "<uuid:2>",
           "childSessionId": null,
           "completionReason": null,
           "id": "remote-main",
@@ -66,7 +66,7 @@
           "sessionId": "<uuid:1>",
           "status": "active",
           "stoppable": null,
-          "summary": "bridge.reconnected",
+          "summary": "bridge.started",
           "taskId": null,
           "updatedAt": "<timestamp>",
           "waitingReason": null

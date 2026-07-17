@@ -2,9 +2,11 @@
   {
     "alias": "main",
     "data": {
-      "bridge_id": "bridge-main",
+      "bridge_generation": 1,
+      "bridge_id": "<uuid:2>",
       "name": "qa",
       "remote_session_id": "remote-main",
+      "reused": false,
       "session_id": "<uuid:1>"
     },
     "event": "bridge.started"
@@ -12,8 +14,10 @@
   {
     "alias": "main",
     "data": {
-      "bridge_id": "bridge-main",
-      "message_id": "<uuid:2>",
+      "bridge_generation": 1,
+      "bridge_id": "<uuid:2>",
+      "delivery_key": "<uuid:2>:<uuid:3>",
+      "message_id": "<uuid:3>",
       "remote_session_id": "remote-main",
       "session_id": "<uuid:1>",
       "source": "remote",
@@ -24,9 +28,11 @@
   {
     "alias": "replay",
     "data": {
-      "bridge_id": "bridge-replay",
+      "bridge_generation": 2,
+      "bridge_id": "<uuid:4>",
       "name": "replay",
       "remote_session_id": "remote-replay",
+      "reused": false,
       "session_id": "<uuid:1>"
     },
     "event": "bridge.started"
@@ -34,8 +40,10 @@
   {
     "alias": "replay",
     "data": {
-      "bridge_id": "bridge-replay",
-      "message_id": "<uuid:3>",
+      "bridge_generation": 2,
+      "bridge_id": "<uuid:4>",
+      "delivery_key": "<uuid:4>:<uuid:5>",
+      "message_id": "<uuid:5>",
       "remote_session_id": "remote-replay",
       "session_id": "<uuid:1>",
       "source": "remote",
@@ -46,19 +54,22 @@
   {
     "alias": "replay",
     "data": {
-      "bridge_id": "bridge-replay",
+      "bridge_generation": 3,
+      "bridge_id": "<uuid:7>",
       "name": "replay",
       "remote_session_id": "remote-replay",
-      "replayed_messages": 1,
+      "reused": false,
       "session_id": "<uuid:1>"
     },
-    "event": "bridge.reconnected"
+    "event": "bridge.started"
   },
   {
     "alias": "replay",
     "data": {
-      "bridge_id": "bridge-replay",
-      "message_id": "<uuid:4>",
+      "bridge_generation": 3,
+      "bridge_id": "<uuid:7>",
+      "delivery_key": "<uuid:4>:<uuid:6>",
+      "message_id": "<uuid:6>",
       "remote_session_id": "remote-replay",
       "session_id": "<uuid:1>",
       "source": "remote",
@@ -69,9 +80,11 @@
   {
     "alias": "failure",
     "data": {
-      "bridge_id": "bridge-failure",
+      "bridge_generation": 4,
+      "bridge_id": "<uuid:8>",
       "name": "failure",
       "remote_session_id": "remote-failure",
+      "reused": false,
       "session_id": "<uuid:1>"
     },
     "event": "bridge.started"
@@ -79,8 +92,10 @@
   {
     "alias": "failure",
     "data": {
-      "bridge_id": "bridge-failure",
-      "message_id": "<uuid:5>",
+      "bridge_generation": 4,
+      "bridge_id": "<uuid:8>",
+      "delivery_key": "<uuid:8>:<uuid:9>",
+      "message_id": "<uuid:9>",
       "remote_session_id": "remote-failure",
       "session_id": "<uuid:1>",
       "source": "remote",
@@ -91,8 +106,20 @@
   {
     "alias": "failure",
     "data": {
-      "bridge_id": "bridge-failure",
-      "message_id": "<uuid:5>",
+      "bridge_generation": 4,
+      "bridge_id": "<uuid:8>",
+      "reason": "emit failure for failure",
+      "session_id": "<uuid:1>"
+    },
+    "event": "bridge.poll_failed"
+  },
+  {
+    "alias": "failure",
+    "data": {
+      "bridge_generation": 4,
+      "bridge_id": "<uuid:8>",
+      "delivery_key": "<uuid:8>:<uuid:9>",
+      "message_id": "<uuid:9>",
       "remote_session_id": "remote-failure",
       "session_id": "<uuid:1>",
       "source": "remote",

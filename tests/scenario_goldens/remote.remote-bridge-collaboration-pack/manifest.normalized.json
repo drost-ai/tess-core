@@ -177,11 +177,6 @@
       }
     },
     {
-      "close_bridge_runtime": {
-        "alias": "replay"
-      }
-    },
-    {
       "reconnect_bridge": {
         "alias": "replay",
         "name": "replay"
@@ -201,11 +196,11 @@
       "assert_bridge_diagnostics": {
         "alias": "replay",
         "eventsInclude": [
-          "bridge.reconnected",
+          "bridge.started",
           "bridge.message.received"
         ],
-        "inboxCount": 2,
-        "messageCount": 2,
+        "inboxCount": 1,
+        "messageCount": 1,
         "pendingMessages": 0,
         "status": "active",
         "textContains": "deliver after restart"
@@ -249,15 +244,15 @@
     {
       "assert_bridge_diagnostics": {
         "alias": "failure",
-        "bridgeStatus": "failed",
+        "bridgeStatus": "active",
         "eventsInclude": [
-          "bridge.failed"
+          "bridge.poll_failed"
         ],
         "inboxCount": 1,
         "messageCount": 0,
         "pendingMessages": 1,
-        "remoteStatus": "failed",
-        "status": "failed",
+        "remoteStatus": "active",
+        "status": "active",
         "textContains": "emit failure for failure"
       }
     },
@@ -282,7 +277,7 @@
         "alias": "failure",
         "bridgeStatus": "active",
         "eventsInclude": [
-          "bridge.failed",
+          "bridge.poll_failed",
           "bridge.message.received"
         ],
         "inboxCount": 1,

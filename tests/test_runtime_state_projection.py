@@ -311,7 +311,17 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         )
         self.assertEqual(
             monitor_status["payload"],
-            {"monitorId": "monitor-1", "taskId": "task-1", "status": "active", "taskStatus": "running", "exitCode": 0},
+            {
+                "monitorId": "monitor-1",
+                "taskId": "task-1",
+                "status": "active",
+                "taskStatus": "running",
+                "exitCode": 0,
+                "previousStatus": None,
+                "changed": None,
+                "revision": None,
+                "transitionId": None,
+            },
         )
 
         collaboration_snapshot = core.createRuntimeEvent(

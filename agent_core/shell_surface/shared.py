@@ -31,6 +31,7 @@ from ..tasks.monitor_transitions import (
     resumeMonitorRecord as _resume_monitor_record,
     stopMonitorRecord as _stop_monitor_record,
 )
+from ..tasks.monitor_transactions import commitMonitorMutation as _commit_monitor_mutation
 from ..remote import formatBridgeTail, formatRemoteSessionCandidate, sendBridgeMessage, updateRemoteSession
 from ..storage import (
     compactionCheckpointPath,
@@ -52,8 +53,8 @@ from ..storage import (
     loadSession,
     loadSettings,
     loadTaskRecord,
-    saveBridge,
     saveAutoMode,
+    saveBridge,
     saveSettings,
     saveMonitor,
 )

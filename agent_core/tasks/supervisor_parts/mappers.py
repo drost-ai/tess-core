@@ -26,8 +26,9 @@ def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:
         "pending_questions": metadata.get("pending_questions"),
         "structured_result_status": metadata.get("structured_result_status"),
         "runtime_contract": metadata.get("runtime_contract"),
+        "transition_id": metadata.get("terminal_transition_id"),
     }
-    for key in ("pending_questions", "structured_result_status", "runtime_contract"):
+    for key in ("pending_questions", "structured_result_status", "runtime_contract", "transition_id"):
         if payload.get(key) is None:
             payload.pop(key, None)
     return payload

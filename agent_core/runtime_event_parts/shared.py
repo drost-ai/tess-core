@@ -25,6 +25,7 @@ KNOWN_RUNTIME_EVENTS = {
     "provider.failed",
     "provider.input_tokens",
     "provider.response_completed",
+    "provider.prompt_cache",
     "provider.fallback",
     "tool.started",
     "tool.completed",

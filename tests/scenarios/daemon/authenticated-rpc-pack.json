@@ -1,0 +1,13 @@
+{
+  "id": "daemon.authenticated-rpc-pack",
+  "title": "Authenticated Daemon RPC Pack",
+  "area": "daemon",
+  "mode": ["python"],
+  "setup": {"workspace": {}},
+  "steps": [
+    {"run_subprocess": {"command": ["python3", "-m", "unittest", "-q", "tests.test_package31_daemon_protocol_security", "tests.test_package31_daemon_transport"]}},
+    {"assert_driver_result": {"driver": "run_subprocess", "status": "passed", "returnCode": 0}},
+    {"capture": {"include": ["driver_results", "subprocess_results", "step_results"]}}
+  ],
+  "capture": {"include": ["driver_results", "subprocess_results", "step_results"]}
+}

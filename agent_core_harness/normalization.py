@@ -15,6 +15,7 @@ class NormalizationContext:
         self.uuid_map: dict[str, str] = {}
         self.continuation_map: dict[str, str] = {}
         self.payload_cursor_map: dict[str, str] = {}
+        self.bridge_event_key_map: dict[str, str] = {}
         self.pid_map: dict[str, str] = {}
         self.port_map: dict[str, str] = {}
 
@@ -26,6 +27,8 @@ class NormalizationContext:
             normalized_items = [self.normalize(item, (*key_path, str(index))) for index, item in enumerate(value)]
             if key_path and key_path[-1] == "workspace_tree":
                 return [item for item in normalized_items if not _is_empty_project_config_dir(item)]
+            if key_path and key_path[-1] == "supersedes":
+                return sorted(normalized_items)
             return normalized_items
         if isinstance(value, tuple):
             return [self.normalize(item, (*key_path, str(index))) for index, item in enumerate(value)]
@@ -111,10 +114,18 @@ class NormalizationContext:
         normalized = _EMBEDDED_WORKSPACE_NAME_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<workspace-name>"', normalized)
         normalized = _EMBEDDED_GIT_ROOT_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<git-root>"', normalized)
         normalized = _EMBEDDED_GIT_BRANCH_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<git-branch>"', normalized)
+        normalized = _UNITTEST_DURATION_PATTERN.sub(r"\1<duration-s>", normalized)
         normalized = _PYTHON_EXECUTABLE_PATTERN.sub("<python>", normalized)
         normalized = _PAYLOAD_CURSOR_PATTERN.sub(
             lambda match: self._placeholder(
                 self.payload_cursor_map, match.group(0), "payload-cursor"
+            ),
+            normalized,
+        )
+        normalized = _BRIDGE_EVENT_ID_PATTERN.sub(
+            lambda match: (
+                f"{match.group('kind')}-"
+                f"{self._placeholder(self.bridge_event_key_map, match.group('digest'), 'bridge-event-key')}"
             ),
             normalized,
         )
@@ -133,15 +144,16 @@ class NormalizationContext:
         return normalized
 
     def _replace_paths(self, value: str) -> str:
-        replacements = _path_replacements(
-            [
-                (Path(self.sandbox.home), "<runtime-home>"),
-                (Path(self.sandbox.workspace), "<workspace>"),
-                (Path(self.sandbox.run_dir), "<run-dir>"),
-                (Path(REPO_ROOT), "<repo>"),
-                (Path(tempfile.gettempdir()), "<tmp>"),
-            ]
-        )
+        items = [
+            (Path(self.sandbox.home), "<runtime-home>"),
+            (Path(self.sandbox.workspace), "<workspace>"),
+            (Path(self.sandbox.run_dir), "<run-dir>"),
+            (Path(REPO_ROOT), "<repo>"),
+            (Path(tempfile.gettempdir()), "<tmp>"),
+        ]
+        replacements = _path_replacements(items)
+        replacements.extend(_home_relative_replacements(items))
+        replacements.sort(key=lambda item: len(item[0]), reverse=True)
         normalized = value
         for raw, marker in replacements:
             normalized = _replace_path_prefix(normalized, raw, marker)
@@ -191,6 +203,18 @@ def _path_replacements(items: list[tuple[Path, str]]) -> list[tuple[str, str]]:
     return sorted(out, key=lambda item: len(item[0]), reverse=True)
 
 
+def _home_relative_replacements(items: list[tuple[Path, str]]) -> list[tuple[str, str]]:
+    home = Path.home().resolve()
+    out: list[tuple[str, str]] = []
+    for path, marker in items:
+        try:
+            relative = path.resolve().relative_to(home)
+        except ValueError:
+            continue
+        out.append((f"~/{relative.as_posix()}", marker))
+    return out
+
+
 def _is_estimated_token_record(value: dict[str, Any]) -> bool:
     return value.get("source") == "openai_responses_estimate" or value.get("inputTokenSource") == "openai_responses_estimate"
 
@@ -208,8 +232,13 @@ _EMBEDDED_DURATION_FIELD_PATTERN = re.compile(r'("(?:elapsed_ms_since_last_check
 _EMBEDDED_WORKSPACE_NAME_FIELD_PATTERN = re.compile(r'("(?:workspace_name|workspaceName)":)"[^"]*"')
 _EMBEDDED_GIT_ROOT_FIELD_PATTERN = re.compile(r'("(?:git_root|gitRoot)":)(?:"[^"]*"|null)')
 _EMBEDDED_GIT_BRANCH_FIELD_PATTERN = re.compile(r'("(?:git_branch|gitBranch)":)(?:"[^"]*"|null)')
+_UNITTEST_DURATION_PATTERN = re.compile(r"(Ran \d+ tests? in )\d+(?:\.\d+)?s")
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 _PAYLOAD_CURSOR_PATTERN = re.compile(r"acp1\.[A-Za-z0-9_-]+")
+_BRIDGE_EVENT_ID_PATTERN = re.compile(
+    r"(?P<kind>queued|delivery)-(?P<digest>[0-9a-f]{32,64})",
+    re.I,
+)
 _PYTHON_EXECUTABLE_PATTERN = re.compile(
     r"(?<![\w<])(?:<repo>/\.venv/bin/python\d*(?:\.\d+)?|/(?:[\w.+@-]+/)*python\d*(?:\.\d+)?)(?![\w.])"
 )

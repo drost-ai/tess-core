@@ -11,6 +11,14 @@ from typing import Any, Callable
 from ._utils import now_iso
 from .config import ensureProviderForModelSelection, normalizeEffortForModel
 from .monitor_bootstrap import _MonitorBootstrapBaseline
+from .tasks.monitor_observation import (
+    buildMonitorNarrationMutation as _build_monitor_narration_mutation,
+    buildMonitorObservationMutation as _build_monitor_observation_mutation,
+)
+from .tasks.monitor_transactions import (
+    commitMonitorMutation as _commit_monitor_mutation,
+    monitorTransitionEventFields as _monitor_transition_event_fields,
+)
 from .providers.anthropic import sendAnthropicMessagesRequest
 from .providers.openai import sendOpenAiRequest
 from .runtime_secret_provider import resolveProviderConfigSecrets
@@ -64,41 +72,39 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         nonlocal snapshot
         task = await _load_task_record(monitor.get("taskId"))
         output_size = _get_output_size(monitor.get("taskId"))
-        observed_task_status = (task or {}).get("status") or "unknown"
-        final_status = _derive_monitor_status(task, monitor)
-        task_transitioned = observed_task_status != monitor.get("lastObservedTaskStatus")
-        output_changed = output_size != int(monitor.get("lastObservedOutputSize") or 0)
-        reason = _monitor_update_reason(monitor, final_status, output_changed, output_size, now_ms)
         monitor_id = monitor.get("id") if isinstance(monitor.get("id"), str) else ""
-        observation = (final_status, output_size, observed_task_status)
-        reason = bootstrap_baseline.resolve_reason(monitor, observation, reason, bootstrap_observation)
-        now = now_iso()
-        next_monitor = {
-            **monitor,
-            "updatedAt": now,
-            "status": final_status,
-            "lastCheckAt": now,
-            "lastObservedTaskStatus": observed_task_status,
-            "lastObservedOutputSize": output_size,
-            "muted": monitor.get("muted"),
-        }
-        if final_status in {"completed", "failed", "stopped"}:
-            next_monitor["completedAt"] = monitor.get("completedAt") or now
-        if final_status in {"failed", "stopped"}:
-            next_monitor["failureReason"] = (task or {}).get("error") or monitor.get("failureReason")
-        await saveMonitor(next_monitor)
+        observed = await _commit_monitor_mutation(
+            monitorId=monitor_id,
+            expectedSessionId=session_ref["id"],
+            mutate=lambda latest: _build_monitor_observation_mutation(
+                latest, task, output_size, now_ms
+            ),
+        )
+        next_monitor = observed["current"]
+        reason = observed["value"].get("reason")
+        observation = (
+            next_monitor.get("status"),
+            output_size,
+            next_monitor.get("lastObservedTaskStatus"),
+        )
+        reason = bootstrap_baseline.resolve_reason(
+            monitor, observation, reason, bootstrap_observation
+        )
         _sync_session_monitor_metadata(session_ref, await listSessionMonitors(session_ref["id"]))
 
-        if task_transitioned or final_status != monitor.get("status"):
+        if observed.get("transitionId"):
             emit(
                 "monitor.status_changed",
                 {
                     "session_id": session_ref.get("id"),
-                    "monitor_id": monitor.get("id"),
-                    "task_id": monitor.get("taskId"),
-                    "status": final_status,
-                    "task_status": observed_task_status,
+                    "monitor_id": next_monitor.get("id"),
+                    "task_id": next_monitor.get("taskId"),
+                    "status": next_monitor.get("status"),
+                    "previous_status": observed["previous"].get("status"),
+                    "changed": observed.get("statusChanged", False),
+                    "task_status": next_monitor.get("lastObservedTaskStatus"),
                     "exit_code": (task or {}).get("exitCode"),
+                    **_monitor_transition_event_fields(observed),
                 },
             )
 
@@ -112,19 +118,24 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         text = await _author_monitor_update(config_ref, session_ref, next_monitor, task, reason, excerpt["text"], excerpt["omittedBytes"])
         if not text:
             return
-        _append_assistant_monitor_message(session_ref, text)
         update_time = now_iso()
-        next_monitor.update(
-            {
-                "lastAssistantUpdateAt": update_time,
-                "lastAssistantUpdateSummary": text,
-                "lastNarratedOutputSize": output_size,
-            }
+        narration = await _commit_monitor_mutation(
+            monitorId=monitor_id,
+            expectedSessionId=session_ref["id"],
+            mutate=lambda latest: _build_monitor_narration_mutation(
+                latest,
+                observed["revision"],
+                update_time,
+                text,
+                output_size,
+                reason,
+            ),
         )
-        if reason == "heartbeat":
-            next_monitor["lastHeartbeatAt"] = update_time
+        if not narration["value"].get("accepted"):
+            return
+        next_monitor = narration["current"]
+        _append_assistant_monitor_message(session_ref, text)
         bootstrap_baseline.narrated(monitor_id)
-        await saveMonitor(next_monitor)
         _sync_session_monitor_metadata(session_ref, await listSessionMonitors(session_ref["id"]))
         with _suppress():
             await persistSession(session_ref, config_ref)
@@ -281,19 +292,6 @@ def _is_process_alive(pid: int) -> bool:
         return False
 
 
-def _derive_monitor_status(task: dict[str, Any] | None, monitor: dict[str, Any]) -> str:
-    if monitor.get("status") in {"stopped", "muted"}:
-        return monitor["status"]
-    task_status = (task or {}).get("status") or monitor.get("lastObservedTaskStatus") or "unknown"
-    if task_status == "completed":
-        return "completed"
-    if task_status in {"failed", "unknown"}:
-        return "failed"
-    if task_status in {"terminated", "stopped"}:
-        return "stopped"
-    return "active"
-
-
 def _get_output_size(task_id: Any) -> int:
     if not isinstance(task_id, str) or not task_id:
         return 0
@@ -313,19 +311,6 @@ def _read_output_excerpt(task_id: Any, from_byte: int, to_byte: int, max_chars: 
         return {"text": sliced.strip(), "omittedBytes": 0}
     trimmed = sliced[-max_chars:]
     return {"text": trimmed.strip(), "omittedBytes": len(sliced) - len(trimmed)}
-
-
-def _monitor_update_reason(monitor: dict[str, Any], final_status: str, output_changed: bool, output_size: int, now_ms: int) -> str | None:
-    if not monitor.get("lastAssistantUpdateAt"):
-        return "start"
-    if final_status not in {"active", monitor.get("status")}:
-        return final_status if final_status in {"completed", "stopped", "failed"} else None
-    progress_bytes = max(0, output_size - int(monitor.get("lastNarratedOutputSize") or 0))
-    if output_changed and progress_bytes >= MIN_PROGRESS_BYTES:
-        return "progress"
-    if now_ms - _parse_iso_ms(monitor.get("lastAssistantUpdateAt") or monitor.get("createdAt")) >= int(monitor.get("heartbeatIntervalMs") or DEFAULT_HEARTBEAT_INTERVAL_MS):
-        return "heartbeat"
-    return None
 
 
 async def _author_monitor_update(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:

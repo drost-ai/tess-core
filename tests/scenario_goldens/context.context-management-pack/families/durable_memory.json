@@ -165,6 +165,8 @@
   ],
   "renderedPrompt": "Relevant durable memory for this workspace is available below.\nUse it when it helps continuation, but prefer recent raw turns and current working context if they conflict.\n\n<retrieved_memory>\n- [environment | compaction | agent_core/context/compaction/orchestration.py] Verification must accept before artifacts are persisted\n- [workflow | compaction | agent_core/context/compaction/orchestration.py] Use fixed Codex Spark compaction model selection\n- [task_context | compaction | agent_core/context/compaction/orchestration.py] Continuation relief must preserve durable memory reinjection\n- [user_preference | manual] Prefer focused parity tests\n- [repo_fact | compaction | agent_core/context/compaction/orchestration.py] tests/test_agent_core.py\n- [constraint | compaction] Perform exactly like TypeScript\n- [user_preference | compaction] Detailed commits\n- [repo_fact | compaction] Python port of agent-core\n</retrieved_memory>",
   "retrieved": {
+    "byteEstimate": 930,
+    "maxPromptBytes": 1600,
     "records": [
       {
         "confidence": "medium",
@@ -329,6 +331,7 @@
         "workspaceRoot": "<workspace-root>"
       }
     ],
-    "tokenEstimate": "<token-estimate>"
+    "tokenEstimate": "<token-estimate>",
+    "truncatedRecordIds": []
   }
 }

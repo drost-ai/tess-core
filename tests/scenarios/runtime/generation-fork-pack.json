@@ -1,0 +1,13 @@
+{
+  "id": "runtime.generation-fork-pack",
+  "title": "Runtime Generation And Fork Isolation Pack",
+  "area": "runtime",
+  "mode": ["python"],
+  "setup": {"workspace": {}},
+  "steps": [
+    {"run_subprocess": {"command": ["python3", "-m", "unittest", "-q", "tests.test_runtime_paths_lifecycle", "tests.test_runtime_generation_safety", "tests.test_runtime_bindings_contract", "tests.test_session_fork_isolation"]}},
+    {"assert_driver_result": {"driver": "run_subprocess", "status": "passed", "returnCode": 0}},
+    {"capture": {"include": ["driver_results", "subprocess_results", "step_results"]}}
+  ],
+  "capture": {"include": ["driver_results", "subprocess_results", "step_results"]}
+}

@@ -26,7 +26,12 @@ class RemoteBridgeTests(AgentCoreTestCase):
                 [item["event"] for item in event_records],
                 ["bridge.started", "bridge.message.queued", "bridge.message.received"],
             )
-            self.assertEqual(event_records[-1]["data"], {"message_id": message["id"], "source": "remote", "text": "please replay"})
+            self.assertEqual(event_records[-1]["data"], {
+                "message_id": message["id"],
+                "delivery_key": message["idempotencyKey"],
+                "source": "remote",
+                "text": "please replay",
+            })
             remote_after_receive = run(core.loadRemoteSession(remote["id"]))
             self.assertEqual(remote_after_receive["lastEventName"], "bridge.message.received")
             self.assertEqual(remote_after_receive["status"], "awaiting_input")
@@ -45,7 +50,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
             self.assertEqual(bridge_after_repoll["messageCount"], 1)
             run(bridge_runtime["close"]())
             closed_remote = run(core.loadRemoteSession(remote["id"]))
-            self.assertEqual(closed_remote["status"], "idle")
+            self.assertEqual(closed_remote["status"], "completed")
             self.assertEqual(closed_remote["bridgeStatus"], "closed")
             closed_events = run(core.loadBridgeEvents(bridge["id"]))
             self.assertEqual(
@@ -66,24 +71,25 @@ class RemoteBridgeTests(AgentCoreTestCase):
             first = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "already delivered", "source": "remote"}))
             run(bridge_runtime["pollInbox"]())
             second = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "deliver after restart", "source": "remote"}))
-            run(bridge_runtime["close"]())
-
             replay_events = []
-            restarted = run(core.createBridgeRuntime({"session": session, "bridgeId": bridge_runtime["bridge"]["id"], "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: replay_events.append((event, data))}))
-            self.assertEqual(replay_events[0][0], "bridge.reconnected")
+            restarted = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: replay_events.append((event, data))}))
+            self.assertEqual(replay_events[0][0], "bridge.started")
+            self.assertNotEqual(restarted["bridge"]["id"], bridge_runtime["bridge"]["id"])
+            self.assertEqual(restarted["generation"], bridge_runtime["generation"] + 1)
+            self.assertEqual(run(core.loadBridge(bridge_runtime["bridge"]["id"]))["status"], "superseded")
             delivered = run(restarted["pollInbox"]())
             self.assertEqual([message["id"] for message in delivered], [second["id"]])
             self.assertFalse(any(event == "bridge.message" and data["message_id"] == first["id"] for event, data in replay_events))
             self.assertTrue(any(event == "bridge.message" and data["message_id"] == second["id"] for event, data in replay_events))
-            bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            bridge = run(core.loadBridge(restarted["bridge"]["id"]))
             self.assertEqual(bridge["status"], "active")
-            self.assertEqual(bridge["messageCount"], 2)
+            self.assertEqual(bridge["messageCount"], 1)
             self.assertEqual(bridge["pendingMessages"], 0)
             diagnostics = run(restarted["diagnostics"]())
             self.assertEqual(diagnostics["status"], "active")
-            self.assertEqual(diagnostics["inboxCount"], 2)
-            self.assertEqual(diagnostics["messageCount"], 2)
-            self.assertTrue(any(event["event"] == "bridge.reconnected" for event in diagnostics["events"]))
+            self.assertEqual(diagnostics["inboxCount"], 1)
+            self.assertEqual(diagnostics["messageCount"], 1)
+            self.assertTrue(any(event["event"] == "bridge.started" for event in diagnostics["events"]))
             with self.assertRaisesRegex(RuntimeError, "Bridge not found for reconnect"):
                 run(core.createBridgeRuntime({"session": session, "bridgeId": "missing-bridge", "startPolling": False, "emit": lambda *_: None}))
             run(restarted["close"]())
@@ -109,16 +115,14 @@ class RemoteBridgeTests(AgentCoreTestCase):
             with self.assertRaisesRegex(RuntimeError, "emit failed"):
                 run(bridge_runtime["pollInbox"]())
             failed_bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
-            self.assertEqual(failed_bridge["status"], "failed")
-            self.assertEqual(failed_bridge["lastEventName"], "bridge.failed")
-            self.assertEqual(failed_bridge["lastFailurePhase"], "poll")
-            self.assertIn("emit failed", failed_bridge["lastFailureMessage"])
+            self.assertEqual(failed_bridge["status"], "active")
+            self.assertEqual(failed_bridge["lastEventName"], "bridge.poll_failed")
             failed_remote = run(core.loadRemoteSession(remote["id"]))
-            self.assertEqual(failed_remote["status"], "failed")
-            self.assertEqual(failed_remote["bridgeStatus"], "failed")
+            self.assertEqual(failed_remote["status"], "active")
+            self.assertEqual(failed_remote["bridgeStatus"], "active")
             diagnostics = run(bridge_runtime["getDiagnostics"]())
-            self.assertEqual(diagnostics["status"], "failed")
-            self.assertTrue(any(event["event"] == "bridge.failed" and event["data"]["phase"] == "poll" for event in diagnostics["events"]))
+            self.assertEqual(diagnostics["status"], "active")
+            self.assertTrue(any(event["event"] == "bridge.poll_failed" and "emit failed" in event["data"]["reason"] for event in diagnostics["events"]))
 
             fail["enabled"] = False
             delivered = run(bridge_runtime["pollInbox"]())

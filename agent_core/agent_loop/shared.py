@@ -25,15 +25,8 @@ from ..providers.openai import sendOpenAiRequest
 from ..session import persistProviderFailure, persistProviderRecovery, persistSession, repairSessionTranscript
 from ..subagent_reconciliation import appendPendingSubagentReconciliationsToSession, consumeAppendedSubagentReconciliations
 from ..token_accounting import measureRequestInputTokens, recordActualTokenUsage, recordPreflightTokenMeasurement
+from ..usage_costs import MODEL_PRICING
 
-
-MODEL_PRICING = {
-    "claude-opus-4-6": (5, 25, 6.25, 0.5),
-    "claude-sonnet-4-6": (3, 15, 3.75, 0.3),
-    "claude-haiku-4-5": (1, 5, 1.25, 0.1),
-    "gpt-5.4": (2.5, 15, 0, 0),
-    "gpt-5-mini-2025-08-07": (0.25, 2, 0, 0),
-}
 
 PLAN_SAFE_TOOL_NAMES = {
     "Read",

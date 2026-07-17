@@ -1,0 +1,13 @@
+{
+  "id": "tools.universal-bounds-pack",
+  "title": "Universal Tool Bounds And Pagination Pack",
+  "area": "tools",
+  "mode": ["python"],
+  "setup": {"workspace": {}},
+  "steps": [
+    {"run_subprocess": {"command": ["python3", "-m", "unittest", "-q", "tests.test_package31_universal_results", "tests.test_package31_bounded_task_output", "tests.test_package31_payload_pagination", "tests.test_package31_multimodal", "tests.test_package31_multimodal_wire", "tests.test_package31_todo_cardinality_scenario"], "timeoutSeconds": 30}},
+    {"assert_driver_result": {"driver": "run_subprocess", "status": "passed", "returnCode": 0}},
+    {"capture": {"include": ["driver_results", "subprocess_results", "step_results"]}}
+  ],
+  "capture": {"include": ["driver_results", "subprocess_results", "step_results"]}
+}

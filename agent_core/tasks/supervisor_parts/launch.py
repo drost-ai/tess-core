@@ -15,6 +15,7 @@ from ...task_process_launch import (
 def _create_process_task_launcher(
     live_work_cache: dict[str, Any],
     emit: Callable[[str, dict[str, Any], str | None], Any],
+    wait_for_stop_commit: Callable[[str], None],
 ) -> Callable[..., Any]:
     async def launch_process_task(
         *,
@@ -120,7 +121,7 @@ def _create_process_task_launcher(
         await emit("task.updated", _task_record_event_payload(current_record), session_id)
         watcher = threading.Thread(
             target=_watch_process_thread,
-            args=(task_id, command, task_cwd, output_file, emit),
+            args=(task_id, command, task_cwd, output_file, emit, wait_for_stop_commit),
             daemon=True,
         )
         _WATCHERS.add(watcher)

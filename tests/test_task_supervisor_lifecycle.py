@@ -117,7 +117,8 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
             started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "stop parity"}))
             task_id = started["taskId"]
-            self.assertTrue(run(supervisor["stopTask"](task_id)))
+            stopped = run(supervisor["stopTask"](task_id))
+            self.assertEqual((stopped["status"], stopped["changed"]), ("stopped", True))
             for _ in range(60):
                 meta = run(core.readTaskMeta(task_id))
                 if meta and meta.get("status") == "terminated":
@@ -128,10 +129,11 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertIsNone(meta.get("exitCode"))
             record = run(supervisor["inspectTask"](task_id))
             self.assertEqual(record["status"], "stopped")
-            self.assertEqual(record["summary"], "Task was terminated.")
+            self.assertEqual(record["summary"], "Task stopped by deliberate request.")
             stopped_events = [event for event in events if event["event"] == "task.stopped" and event["data"]["task_id"] == task_id]
             self.assertEqual(len(stopped_events), 1)
-            self.assertEqual(stopped_events[0]["data"]["summary"], "Task was terminated.")
+            self.assertEqual(stopped_events[0]["data"]["summary"], "Task stopped by deliberate request.")
+            self.assertEqual(stopped_events[0]["data"]["transition_id"], stopped["transitionId"])
             self.assertNotIn("updated_at", stopped_events[0]["data"])
         finally:
             if supervisor:

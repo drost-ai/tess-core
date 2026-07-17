@@ -317,15 +317,16 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                 )
             )
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
-            self.assertTrue(run(supervisor["stopTask"](task_id)))
+            stopped = run(supervisor["stopTask"](task_id))
+            self.assertEqual((stopped["status"], stopped["changed"]), ("stopped", True))
             child = run(core.loadChildAgent(agent_id))
             self.assertEqual(child["status"], "cancelled")
             self.assertEqual(child["completionReason"], "cancelled")
             self.assertFalse(child["stoppable"])
             self.assertTrue(child["retryable"])
             meta = run(core.readTaskMeta(task_id))
-            self.assertEqual(meta["status"], "stopped")
-            self.assertEqual(meta["completionReason"], "cancelled")
+            self.assertEqual(meta["status"], "terminated")
+            self.assertEqual(meta["terminalTransitionId"], stopped["transitionId"])
             record = run(supervisor["inspectTask"](task_id))
             self.assertEqual(record["status"], "stopped")
         finally:
@@ -357,8 +358,11 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             stopped = run(stopper.handler({"task_id": task_id}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace)}))
             self.assertFalse(stopped.get("isError"))
             stopped_payload = json.loads(stopped["content"])
-            self.assertEqual(stopped_payload["status"], "terminated")
-            self.assertNotIn("stopped", stopped_payload)
+            self.assertEqual(stopped_payload["status"], "stopped")
+            self.assertEqual(stopped_payload["previous_status"], "running")
+            self.assertTrue(stopped_payload["changed"])
+            self.assertTrue(stopped_payload["stopped"])
+            self.assertIn("transition_id", stopped_payload)
             self.assertEqual(stopped_payload["execution"]["title"], f"Stopped background task {task_id}")
             self.assertEqual(stopped["meta"]["execution"]["status"], "terminated")
             for _ in range(20):
@@ -369,8 +373,8 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             self.assertEqual(run(core.readTaskMeta(task_id))["status"], "terminated")
             stop_permission = next(data for event, data in events if event == "permission.decided" and data["tool"] == "TaskStop")
             self.assertRegex(stop_permission["summary"], rf"^Stop background task {re.escape(task_id)} \(pid \d+\)$")
-            self.assertEqual(events[-1][0], "task.failed")
-            self.assertEqual(events[-1][1]["summary"], "Task terminated by user request.")
+            self.assertEqual(events[-1][0], "task.stopped")
+            self.assertEqual(events[-1][1]["summary"], "Task stopped by deliberate request.")
         finally:
             run(core.stopTaskSupervisorDaemon())
             self.restore_home(root, previous)
@@ -418,8 +422,18 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                     {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "daemon": {"stopTask": stop_found}},
                 )
             )
-            self.assertEqual(json.loads(stopped["content"]), {"task_id": "daemon-task", "status": "terminated"})
+            self.assertEqual(
+                json.loads(stopped["content"]),
+                {
+                    "task_id": "daemon-task",
+                    "previous_status": "running",
+                    "status": "stopped",
+                    "changed": True,
+                    "stopped": True,
+                    "note": "Task stopped by deliberate request.",
+                },
+            )
             self.assertNotIn("meta", stopped)
-            self.assertEqual(events[-1], ("task.failed", {"session_id": session["id"], "task_id": "daemon-task", "summary": "Task terminated by user request."}))
+            self.assertEqual([event for event, _data in events], ["permission.decided"])
         finally:
             self.restore_home(root, previous)

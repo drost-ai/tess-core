@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import time
 
 from ...contracts.providers import ProviderResponse
@@ -19,6 +20,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         or args.get("requestStartTimeoutMs")
         or (ANTHROPIC_STREAM_IDLE_TIMEOUT_MS if stream else ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS)
     )
+    envelope = buildAnthropicMessagesEnvelope(request, config, {"stream": stream})
     last_failure = None
 
     for attempt in range(1, max_attempts + 1):
@@ -32,7 +34,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 "provider.request_started",
                 {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
             )
-            payload = buildAnthropicMessagesPayload(request, {"stream": stream, "config": config})
+            payload = envelope["payload"]
             if stream:
                 stream_activity_state = {
                     "last_activity": time.monotonic(),
@@ -47,6 +49,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                         request,
                         runtime,
                         attempt,
+                        envelope.get("headerFeatures"),
                         on_activity=lambda accumulator=None: _mark_anthropic_stream_activity(
                             stream_activity_state,
                             accumulator,
@@ -62,7 +65,9 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 )
             else:
                 raw, content_type = await _race_anthropic_activity(
-                    _send_anthropic_messages_async(config, payload, timeout_ms, stream),
+                    _send_anthropic_messages_async(
+                        config, payload, timeout_ms, stream, envelope.get("headerFeatures")
+                    ),
                     timeout_ms=timeout_ms,
                     attempt=attempt,
                     phase=phase,
@@ -72,9 +77,15 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 )
                 phase = "parse"
                 if "text/event-stream" in content_type:
-                    response = normalizeAnthropicSseResponse(raw, request, runtime, attempt=attempt)
+                    response = normalizeAnthropicSseResponse(
+                        raw,
+                        request,
+                        {**runtime, "_capturePromptCacheMetadata": True},
+                        attempt=attempt,
+                    )
                 else:
                     response = _normalize_anthropic_json_response(json.loads(raw), request)
+            response = _attach_prompt_cache_observation(response, envelope)
             if attempt > 1:
                 runtime.get("emitEvent", lambda *_: None)(
                     "provider.recovered",
@@ -129,11 +140,17 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
 
     raise last_failure or RuntimeError("Anthropic request failed unexpectedly.")
 
-def _send_anthropic_messages_sync(config: dict[str, Any], payload: dict[str, Any], timeout_ms: int, stream: bool = False) -> tuple[str, str]:
+def _send_anthropic_messages_sync(
+    config: dict[str, Any],
+    payload: dict[str, Any],
+    timeout_ms: int,
+    stream: bool = False,
+    header_features: dict[str, Any] | None = None,
+) -> tuple[str, str]:
     req = Request(
         resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
         data=json.dumps(payload).encode("utf-8"),
-        headers=buildAnthropicHeaders(config, {"stream": stream}),
+        headers=buildAnthropicHeaders(config, {"stream": stream}, header_features),
         method="POST",
     )
     with urlopen(req, timeout=max(1, timeout_ms) / 1000) as response:
@@ -141,7 +158,13 @@ def _send_anthropic_messages_sync(config: dict[str, Any], payload: dict[str, Any
         content_type = response.headers.get("content-type", "")
     return raw, content_type
 
-def _send_anthropic_messages_async(config: dict[str, Any], payload: dict[str, Any], timeout_ms: int, stream: bool = False) -> asyncio.Future[tuple[str, str]]:
+def _send_anthropic_messages_async(
+    config: dict[str, Any],
+    payload: dict[str, Any],
+    timeout_ms: int,
+    stream: bool = False,
+    header_features: dict[str, Any] | None = None,
+) -> asyncio.Future[tuple[str, str]]:
     loop = asyncio.get_running_loop()
     future: asyncio.Future[tuple[str, str]] = loop.create_future()
 
@@ -155,7 +178,9 @@ def _send_anthropic_messages_async(config: dict[str, Any], payload: dict[str, An
 
     def worker() -> None:
         try:
-            result = _send_anthropic_messages_sync(config, payload, timeout_ms, stream)
+            result = _send_anthropic_messages_sync(
+                config, payload, timeout_ms, stream, header_features
+            )
         except BaseException as exc:
             with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(complete_error, exc)
@@ -174,6 +199,7 @@ def _send_anthropic_messages_streaming_async(
     request: dict[str, Any],
     runtime: dict[str, Any],
     attempt: int,
+    header_features: dict[str, Any] | None = None,
     on_activity: Any | None = None,
 ) -> asyncio.Future[dict[str, Any]]:
     loop = asyncio.get_running_loop()
@@ -196,6 +222,7 @@ def _send_anthropic_messages_streaming_async(
                 request,
                 runtime,
                 attempt,
+                header_features=header_features,
                 should_stop=lambda: future.cancelled(),
                 on_activity=on_activity,
             )
@@ -217,13 +244,14 @@ def _send_anthropic_messages_streaming_sync(
     request: dict[str, Any],
     runtime: dict[str, Any],
     attempt: int,
+    header_features: dict[str, Any] | None = None,
     should_stop: Any | None = None,
     on_activity: Any | None = None,
 ) -> dict[str, Any]:
     req = Request(
         resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
         data=json.dumps(payload).encode("utf-8"),
-        headers=buildAnthropicHeaders(config, {"stream": True}),
+        headers=buildAnthropicHeaders(config, {"stream": True}, header_features),
         method="POST",
     )
     with urlopen(req, timeout=max(1, timeout_ms) / 1000) as response:
@@ -295,14 +323,40 @@ def _process_anthropic_sse_frame(
 
 
 def _normalize_anthropic_json_response(parsed: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
-    return {
+    usage: dict[str, Any] = {}
+    _apply_usage_snapshot(usage, parsed.get("usage") or {})
+    response = {
         "content": normalizeProviderBlocks(parsed.get("content", [])),
-        "usage": {
-            "input_tokens": (parsed.get("usage") or {}).get("input_tokens"),
-            "output_tokens": (parsed.get("usage") or {}).get("output_tokens"),
-            "cache_creation_input_tokens": (parsed.get("usage") or {}).get("cache_creation_input_tokens"),
-            "cache_read_input_tokens": (parsed.get("usage") or {}).get("cache_read_input_tokens"),
-        },
+        "usage": usage,
         "model": parsed.get("model") or request["model"],
         "stopReason": parsed.get("stop_reason"),
     }
+    response["_anthropicResponseId"] = parsed.get("id") if isinstance(parsed.get("id"), str) else None
+    response["_anthropicDiagnosticsFieldPresent"] = "diagnostics" in parsed
+    response["_anthropicDiagnostics"] = parsed.get("diagnostics")
+    return response
+
+
+def _attach_prompt_cache_observation(
+    response: dict[str, Any], envelope: dict[str, Any]
+) -> dict[str, Any]:
+    response_id = response.pop("_anthropicResponseId", None)
+    field_present = bool(response.pop("_anthropicDiagnosticsFieldPresent", False))
+    diagnostics = response.pop("_anthropicDiagnostics", None)
+    observation = envelope.get("promptCache")
+    if not isinstance(observation, dict):
+        return response
+    observation = copy.deepcopy(observation)
+    requested = bool(envelope.get("diagnostics", {}).get("requested"))
+    if requested and isinstance(response_id, str):
+        observation["responseId"] = response_id
+    observation["providerDiagnosis"] = normalizePromptCacheProviderReason(
+        {
+            "requested": requested,
+            "previousMessageIdSent": bool(envelope.get("diagnostics", {}).get("previousMessageIdSent")),
+            "fieldPresent": field_present,
+            "diagnostics": diagnostics,
+        }
+    )
+    response["promptCache"] = observation
+    return response

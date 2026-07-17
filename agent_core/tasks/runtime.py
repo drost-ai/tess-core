@@ -7,7 +7,8 @@ from typing import Any, Callable
 from .supervisor import _is_active_task_status, _project_session_task_records, _task_record_event_payload
 from ..runtime_identifiers import tryParseTaskId
 from ..runtime_paths import runWithRuntimePaths
-from ..storage import saveTaskRecord
+from ..storage import saveTaskRecord  # retained as a compatibility export
+from .terminal_store import saveProjectedTaskRecord as _save_projected_task_record
 
 
 def _empty_snapshot() -> dict[str, Any]:
@@ -60,12 +61,15 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
                         "unavailable": issue.get("unavailable"),
                     },
                 )
+            committed_records: list[dict[str, Any]] = []
             for record in records:
                 # Monitor/remote rows use virtual display references. They are
                 # projected from their owning stores and must never become
                 # task-record filenames.
                 if tryParseTaskId(record.get("id")) is not None:
-                    await saveTaskRecord(record)
+                    record = await _save_projected_task_record(record)
+                committed_records.append(record)
+            records = committed_records
             next_map = {record["id"]: record for record in records if record.get("id")}
 
             if restored_for_session_id != session_ref["id"]:
@@ -92,6 +96,13 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
                 status_changed = record.get("status") != old.get("status")
                 detail_changed = record.get("summary") != old.get("summary") or record.get("title") != old.get("title")
                 if status_changed:
+                    metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
+                    terminal_owned_by_committer = (
+                        metadata.get("terminal_event_owner") in {"supervisor", "tool"}
+                        and record.get("status") in {"completed", "failed", "stopped"}
+                    )
+                    if terminal_owned_by_committer:
+                        continue
                     event = (
                         "task.completed"
                         if record.get("status") == "completed"

@@ -6,7 +6,7 @@
       "errors": [],
       "infos": [
         {
-          "message": "session      <uuid:1>\ncwd          <workspace>\nprofile      openai\nprovider     openai\nmodel        gpt-5.4\nmode         responses\nbase url     default\neffort       xhigh\npermissions  bypassPermissions\nmessages     4\ntodos        0\nmonitors     0\nusage        18 in \u00b7 8 out \u00b7 1 tools \u00b7 1 turns\ncompactions  0\nworking ctx  n/a\nctx source   n/a\npreflight <token-estimate> via openai_responses_estimate\ncompacted to n/a\narchived     4\narchive log  <runtime-home>/sessions/<uuid:1>/full-transcript-with-tools.jsonl",
+          "message": "session      <uuid:1>\ncwd          <workspace>\nprofile      openai\nprovider     openai\nmodel        gpt-5.4\nmode         responses\nbase url     default\neffort       xhigh\npermissions  bypassPermissions\nmessages     4\ntodos        0\nmonitors     0\nusage        18 in \u00b7 8 out \u00b7 1 tools \u00b7 1 turns \u00b7 written: 5m 0, 1h 0\ncompactions  0\nworking ctx  n/a\nctx source   n/a\npreflight <token-estimate> via openai_responses_estimate\ncompacted to n/a\narchived     4\narchive log  <runtime-home>/sessions/<uuid:1>/full-transcript-with-tools.jsonl",
           "title": "Status"
         }
       ],
@@ -14,7 +14,7 @@
       "refreshCount": 0
     },
     "result": {
-      "message": "session      <uuid:1>\ncwd          <workspace>\nprofile      openai\nprovider     openai\nmodel        gpt-5.4\nmode         responses\nbase url     default\neffort       xhigh\npermissions  bypassPermissions\nmessages     4\ntodos        0\nmonitors     0\nusage        18 in \u00b7 8 out \u00b7 1 tools \u00b7 1 turns\ncompactions  0\nworking ctx  n/a\nctx source   n/a\npreflight <token-estimate> via openai_responses_estimate\ncompacted to n/a\narchived     4\narchive log  <runtime-home>/sessions/<uuid:1>/full-transcript-with-tools.jsonl",
+      "message": "session      <uuid:1>\ncwd          <workspace>\nprofile      openai\nprovider     openai\nmodel        gpt-5.4\nmode         responses\nbase url     default\neffort       xhigh\npermissions  bypassPermissions\nmessages     4\ntodos        0\nmonitors     0\nusage        18 in \u00b7 8 out \u00b7 1 tools \u00b7 1 turns \u00b7 written: 5m 0, 1h 0\ncompactions  0\nworking ctx  n/a\nctx source   n/a\npreflight <token-estimate> via openai_responses_estimate\ncompacted to n/a\narchived     4\narchive log  <runtime-home>/sessions/<uuid:1>/full-transcript-with-tools.jsonl",
       "outcome": "handled",
       "title": "Status"
     },

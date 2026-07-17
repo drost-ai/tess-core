@@ -5,6 +5,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 
+_VALID_COMPATIBILITY = {"auto", "official", "claude_code", "compatible"}
+_VALID_SCOPES = {"ephemeral", "global", "bedrock"}
+
+
 def resolvePromptCachePolicy(
     *,
     config: dict[str, Any] | None = None,
@@ -31,6 +35,17 @@ def resolvePromptCachePolicy(
     enabled = _bool_setting(raw.get("enabled"), True)
     mode = _normalize_choice(raw.get("mode"), {"auto", "explicit", "off"}, "auto")
     ttl = _normalize_choice(raw.get("ttl"), {"provider_default", "5m", "1h", "24h"}, "provider_default")
+    compatibility = _normalize_choice(raw.get("compatibility"), _VALID_COMPATIBILITY, "auto")
+    if compatibility == "auto":
+        compatibility = _resolve_anthropic_compatibility(config, profile)
+    explicit = _bool_setting(raw.get("explicit"), None)
+    suppressed = bool(
+        enabled
+        and mode != "off"
+        and str(config.get("provider") or "anthropic").lower() == "anthropic"
+        and compatibility == "claude_code"
+        and explicit is not True
+    )
     return {
         "enabled": enabled and mode != "off",
         "mode": mode,
@@ -38,26 +53,67 @@ def resolvePromptCachePolicy(
         "affinity": _bool_setting(raw.get("affinity"), True),
         "isolation": str(raw.get("isolation") or "").strip() or None,
         "retention": _normalize_choice(raw.get("retention"), {"provider_default", "in_memory", "24h"}, "provider_default"),
-        "explicit": _bool_setting(raw.get("explicit"), None),
+        "explicit": explicit,
+        "compatibility": compatibility,
+        "messageTailBreakpoints": _bool_setting(
+            raw.get("messageTailBreakpoints", raw.get("message_tail_breakpoints")), None
+        ),
+        "toolDefinitionBreakpoint": _bool_setting(
+            raw.get("toolDefinitionBreakpoint", raw.get("tool_definition_breakpoint")), None
+        ),
+        "providerDiagnostics": bool(
+            _bool_setting(raw.get("providerDiagnostics", raw.get("provider_diagnostics")), False)
+        ),
+        "scope": _normalize_choice(raw.get("scope"), _VALID_SCOPES, "ephemeral"),
+        "evictOnComplete": bool(
+            _bool_setting(raw.get("evictOnComplete", raw.get("evict_on_complete")), False)
+        ),
+        "messageTailPreviousAnchor": raw.get("messageTailPreviousAnchor"),
+        "dispatchContext": raw.get("dispatchContext") if isinstance(raw.get("dispatchContext"), dict) else None,
+        "compatibilitySuppressedReason": (
+            "Anthropic cache controls suppressed for Claude Code compatible provider profile."
+            if suppressed
+            else None
+        ),
     }
 
 
 def anthropicExplicitCacheEnabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
     policy = resolvePromptCachePolicy(config=config, request=request, options=options)
-    if not policy["enabled"]:
+    if not policy["enabled"] or policy.get("compatibilitySuppressedReason"):
         return False
-    if policy["explicit"] is not None:
-        return bool(policy["explicit"])
-    if policy["mode"] == "explicit":
-        return True
-    return not isKimiAnthropicCodingBackend(config)
+    if policy["explicit"] is False:
+        return False
+    return policy["mode"] in {"auto", "explicit"}
 
 
 def anthropicAutomaticCacheEnabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
     policy = resolvePromptCachePolicy(config=config, request=request, options=options)
-    if not policy["enabled"] or policy["mode"] != "auto":
+    if (
+        not policy["enabled"]
+        or policy["mode"] != "auto"
+        or policy.get("compatibilitySuppressedReason")
+    ):
         return False
-    return not isKimiAnthropicCodingBackend(config)
+    return True
+
+
+def anthropicMessageTailCacheEnabled(policy: dict[str, Any] | None) -> bool:
+    if not _anthropic_explicit_policy_enabled(policy):
+        return False
+    explicit = (policy or {}).get("messageTailBreakpoints")
+    if isinstance(explicit, bool):
+        return explicit
+    return (policy or {}).get("compatibility") in {"official", "claude_code"}
+
+
+def anthropicToolDefinitionCacheEnabled(policy: dict[str, Any] | None) -> bool:
+    if not _anthropic_explicit_policy_enabled(policy):
+        return False
+    explicit = (policy or {}).get("toolDefinitionBreakpoint")
+    if isinstance(explicit, bool):
+        return explicit
+    return (policy or {}).get("compatibility") in {"official", "claude_code"}
 
 
 def anthropicCacheControl(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
@@ -141,6 +197,39 @@ def normalizeCacheUsageFields(usage: dict[str, Any], raw_usage: Any) -> None:
 def isKimiAnthropicCodingBackend(config: dict[str, Any] | None) -> bool:
     base = str((config or {}).get("anthropicBaseUrl") or "").strip().rstrip("/").lower()
     return "api.kimi.com/coding" in base
+
+
+def _anthropic_explicit_policy_enabled(policy: dict[str, Any] | None) -> bool:
+    return bool(
+        policy
+        and policy.get("enabled")
+        and not policy.get("compatibilitySuppressedReason")
+        and policy.get("explicit") is not False
+        and policy.get("mode") in {"auto", "explicit"}
+    )
+
+
+def _resolve_anthropic_compatibility(
+    config: dict[str, Any], profile: dict[str, Any]
+) -> str:
+    base_url = str(
+        profile.get("baseUrl")
+        or profile.get("base_url")
+        or config.get("anthropicBaseUrl")
+        or ""
+    ).strip()
+    profile_name = str(
+        config.get("providerProfileName") or profile.get("name") or ""
+    )
+    auth = profile.get("auth") if isinstance(profile.get("auth"), dict) else {}
+    if not base_url:
+        return "official"
+    if auth.get("kind") == "anthropic_auth_token" or "claude-code" in profile_name.lower():
+        return "claude_code"
+    host = _hostname(base_url)
+    if "kimi" in host or "moonshot" in host:
+        return "claude_code"
+    return "compatible"
 
 
 def _bool_setting(value: Any, default: bool | None) -> bool | None:

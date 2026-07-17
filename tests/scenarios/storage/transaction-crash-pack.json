@@ -1,0 +1,13 @@
+{
+  "id": "storage.transaction-crash-pack",
+  "title": "Transactional Storage And Crash Recovery Pack",
+  "area": "storage",
+  "mode": ["python"],
+  "setup": {"workspace": {}},
+  "steps": [
+    {"run_subprocess": {"command": ["python3", "-m", "unittest", "-q", "tests.test_session_transactions", "tests.test_coordination_transactions", "tests.test_record_corruption_isolation"]}},
+    {"assert_driver_result": {"driver": "run_subprocess", "status": "passed", "returnCode": 0}},
+    {"capture": {"include": ["driver_results", "subprocess_results", "step_results"]}}
+  ],
+  "capture": {"include": ["driver_results", "subprocess_results", "step_results"]}
+}

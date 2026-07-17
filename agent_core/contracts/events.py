@@ -39,6 +39,7 @@ RuntimeEventName = Literal[
     "provider.failed",
     "provider.input_tokens",
     "provider.response_completed",
+    "provider.prompt_cache",
     "provider.fallback",
     "tool.started",
     "tool.completed",
@@ -141,6 +142,24 @@ class RuntimeSubscriberEnvelope(TypedDict):
     event: str
     data: dict[str, Any]
     typedEvent: RuntimeEventEnvelope
+
+
+class ProviderPromptCachePayload(TypedDict, total=False):
+    phase: Literal["observed", "state_error", "eviction_intent"]
+    mode: Literal["off", "explicit", "auto"] | None
+    ttl: Literal["provider_default", "5m", "1h", "24h"] | None
+    scope: Literal["ephemeral", "global", "bedrock"] | None
+    usedBreakpoints: int | None
+    placements: list[Literal["automatic", "system", "tools", "tail_a", "tail_b"]] | None
+    cacheReadInputTokens: int | None
+    cacheCreationInputTokens: int | None
+    cacheCreation5mInputTokens: int | None
+    cacheCreation1hInputTokens: int | None
+    cacheCreationTtlDetailComplete: bool | None
+    localReason: str | None
+    providerReason: str | None
+    stateStatus: Literal["committed", "stale", "unavailable", "recorded"] | None
+    intentStatus: Literal["recorded"] | None
 
 
 def event_kind(event: Mapping[str, Any]) -> str:

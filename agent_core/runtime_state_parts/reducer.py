@@ -7,8 +7,10 @@ from .mcp import MCP_RUNTIME_STATE_EVENTS as _MCP_RUNTIME_STATE_EVENTS
 from .mcp import reduce_mcp_runtime_state as _reduce_mcp_runtime_state
 
 def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
-    next_state = copy.deepcopy(state)
     typ = event_kind(event)
+    if typ == "provider.prompt_cache":
+        return state
+    next_state = copy.deepcopy(state)
     data = event_payload(event)
     timestamp = event_time(event) or now_iso()
 

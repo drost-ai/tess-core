@@ -1,0 +1,10 @@
+{
+  "debug": "<run-dir>/debug",
+  "id": "<run-id>",
+  "logs": "<run-dir>/logs",
+  "normalized": "<run-dir>/normalized",
+  "raw": "<run-dir>/raw",
+  "runDir": "<run-dir>",
+  "runtimeHome": "<runtime-home>",
+  "workspace": "<workspace>"
+}

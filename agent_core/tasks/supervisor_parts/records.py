@@ -191,6 +191,10 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
             "lastResult": meta.get("lastResult"),
             "process_state": meta.get("processState") or metadata.get("process_state"),
             "process_reconciled_at": meta.get("processReconciledAt") or metadata.get("process_reconciled_at"),
+            "terminal_transition_id": meta.get("terminalTransitionId")
+            or metadata.get("terminal_transition_id"),
+            "terminal_event_owner": meta.get("terminalEventOwner")
+            or metadata.get("terminal_event_owner"),
         }
     )
     if not is_health_check:

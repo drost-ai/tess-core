@@ -1,0 +1,49 @@
+{
+  "area": "tasks",
+  "capture": {
+    "include": [
+      "driver_results",
+      "subprocess_results",
+      "step_results"
+    ]
+  },
+  "id": "tasks.lifecycle-race-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {}
+  },
+  "steps": [
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "-q",
+          "tests.test_package31_task_stop_terminal",
+          "tests.test_package31_health_check_safety",
+          "tests.test_package31_monitor_transition_concurrency"
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "returnCode": 0,
+        "status": "passed"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "driver_results",
+          "subprocess_results",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Task Health Monitor Lifecycle Race Pack"
+}

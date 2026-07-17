@@ -293,14 +293,16 @@ def normalizeModel(inputModel: str) -> str:
 def formatUsageSummary(usage: dict[str, Any] | None) -> str:
     if not usage:
         return "no tracked usage"
-    return f"{usage.get('inputTokens', 0)} in · {usage.get('outputTokens', 0)} out · {usage.get('toolCalls', 0)} tools · {usage.get('turns', 0)} turns"
+    summary = f"{usage.get('inputTokens', 0)} in · {usage.get('outputTokens', 0)} out · {usage.get('toolCalls', 0)} tools · {usage.get('turns', 0)} turns"
+    if usage.get("cacheCreationTtlDetailComplete") is True:
+        summary += f" · written: 5m {usage.get('cacheCreation5mInputTokens', 0)}, 1h {usage.get('cacheCreation1hInputTokens', 0)}"
+    return summary
 
 
 def formatUsageBreakdown(usage: dict[str, Any] | None) -> str:
     if not usage:
         return "No tracked usage for this session yet."
-    return "\n".join(
-        [
+    lines = [
             f"turns                    {usage.get('turns', 0)}",
             f"tool calls               {usage.get('toolCalls', 0)}",
             f"input tokens             {usage.get('inputTokens', 0)}",
@@ -308,7 +310,11 @@ def formatUsageBreakdown(usage: dict[str, Any] | None) -> str:
             f"cache creation tokens    {usage.get('cacheCreationInputTokens', 0)}",
             f"cache read tokens        {usage.get('cacheReadInputTokens', 0)}",
         ]
-    )
+    if usage.get("cacheCreationTtlDetailComplete") is True:
+        lines.append(
+            f"cache written by TTL     5m {usage.get('cacheCreation5mInputTokens', 0)}, 1h {usage.get('cacheCreation1hInputTokens', 0)}"
+        )
+    return "\n".join(lines)
 
 
 def formatPreflightTokenSummary(session: dict[str, Any]) -> str:

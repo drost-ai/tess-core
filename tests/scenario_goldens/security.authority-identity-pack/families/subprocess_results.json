@@ -1,0 +1,20 @@
+[
+  {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "-q",
+      "tests.test_agent_authority",
+      "tests.test_executable_config",
+      "tests.test_executable_source_trust",
+      "tests.test_shell_authority_parser",
+      "tests.test_task_identity_ownership"
+    ],
+    "driver": "run_subprocess",
+    "returnCode": 0,
+    "status": "passed",
+    "stderr": "----------------------------------------------------------------------\nRan 27 tests in <duration-s>\n\nOK\n",
+    "stdout": ""
+  }
+]

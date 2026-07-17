@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import agent_core as core
@@ -270,7 +271,16 @@ async def _refresh_remote_state(state: dict[str, Any]) -> None:
     remotes = await core.listRemoteSessions()
     bridges = await core.listBridges()
     state["remote_sessions"] = _json_safe(sorted(remotes, key=lambda item: item.get("id") or ""))
-    state["bridge_records"] = _json_safe(sorted(bridges, key=lambda item: item.get("id") or ""))
+    state["bridge_records"] = _json_safe(
+        sorted(
+            bridges,
+            key=lambda item: (
+                int(item.get("generation") or 0),
+                item.get("createdAt") or "",
+                item.get("id") or "",
+            ),
+        )
+    )
     state["bridge_inbox"] = _json_safe([{"bridgeId": bridge["id"], "messages": await core.loadBridgeInbox(bridge["id"])} for bridge in state["bridge_records"]])
     state["bridge_events"] = _json_safe([{"bridgeId": bridge["id"], "events": await core.loadBridgeEvents(bridge["id"])} for bridge in state["bridge_records"]])
 
@@ -322,7 +332,8 @@ def _tool_name(tool: Any) -> str | None:
 
 
 def _stable_bridge_row(row: str) -> str:
-    return row[:-19] + "<timestamp>" if len(row) >= 19 and row[-19:-15].isdigit() and row[-15] == "-" else row
+    stable = re.sub(r"^[0-9a-f]{8}(?=\s)", "<bridge>", row, flags=re.I)
+    return stable[:-19] + "<timestamp>" if len(stable) >= 19 and stable[-19:-15].isdigit() and stable[-15] == "-" else stable
 
 
 def _json_safe(value: Any) -> Any:

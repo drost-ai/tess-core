@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..bridge_runtime import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
 
 
 async def buildDaemonReport() -> str:
@@ -224,34 +225,16 @@ async def _resolve_bridge_record(
 async def _close_remote_records(remote: dict[str, Any] | None, bridge: dict[str, Any] | None) -> None:
     timestamp = now_iso()
     if bridge:
-        bridge = {
-            **bridge,
-            "status": "closed",
-            "updatedAt": timestamp,
-            "lastEventName": "bridge.closed",
-        }
-        await saveBridge(bridge)
-    if remote:
+        await _closeCurrentBridgeGeneration(bridge)
+    if remote and not bridge:
         await updateRemoteSession(
             remote["id"],
             {
                 "status": "idle",
                 "bridgeStatus": "closed" if bridge else remote.get("bridgeStatus"),
-                "lastEventName": "remote.closed" if not bridge else "bridge.closed",
+                "lastEventName": "remote.closed",
                 "lastEventAt": timestamp,
                 "lastEventSummary": "Remote shell record closed.",
-                "unreadBridgeMessages": 0,
-            },
-        )
-    elif bridge and bridge.get("remoteSessionId"):
-        await updateRemoteSession(
-            bridge["remoteSessionId"],
-            {
-                "status": "idle",
-                "bridgeStatus": "closed",
-                "lastEventName": "bridge.closed",
-                "lastEventAt": timestamp,
-                "lastEventSummary": "Remote shell bridge closed.",
                 "unreadBridgeMessages": 0,
             },
         )

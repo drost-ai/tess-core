@@ -9,6 +9,8 @@ import uuid
 from typing import Any
 
 from ._utils import now_iso
+from .bridge_admission import admitBridgeMessage as _admitBridgeMessage
+from .bridge_runtime import createBridgeRuntimeController as _createBridgeRuntimeController
 from .runtime_paths import runWithRuntimePaths
 from .storage import (
     appendBridgeEvent,
@@ -90,7 +92,7 @@ async def resolveTeleportSession(args: dict[str, Any] | None = None, **kwargs: A
     return {"remote": selected, "sessionId": selected.get("sessionId")}
 
 
-async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def _legacy_createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session = args.get("session") or {}
     emit = args.get("emit") or (lambda *_: None)
@@ -232,7 +234,7 @@ async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any)
     return {"bridge": bridge, "send": lambda text: sendBridgeMessage({"bridgeId": bridge["id"], "text": text}), "recordEvent": record_event, "pollInbox": poll_bridge_inbox, "pollBridgeInbox": poll_bridge_inbox, "diagnostics": lambda: getBridgeDiagnostics(bridge["id"]), "getDiagnostics": lambda: getBridgeDiagnostics(bridge["id"]), "close": close}
 
 
-async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def _legacy_sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     bridge = await loadBridge(args["bridgeId"])
     if not bridge:
@@ -251,6 +253,18 @@ async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -
         remote = await loadRemoteSession(bridge["remoteSessionId"])
         await updateRemoteSession(bridge["remoteSessionId"], {"status": "awaiting_input", "bridgeStatus": "active", "unreadBridgeMessages": int((remote or {}).get("unreadBridgeMessages") or 0) + 1, "lastEventName": "bridge.message.queued", "lastEventAt": message["createdAt"], "lastEventSummary": _truncate_remote_summary(f"Queued bridge input: {message['text']}")})
     return message
+
+
+async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Create the selected, durable bridge generation for a session."""
+
+    return await _createBridgeRuntimeController({**(args or {}), **kwargs})
+
+
+async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Admit one generation-bound, idempotent bridge message."""
+
+    return await _admitBridgeMessage({**(args or {}), **kwargs})
 
 
 async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:

@@ -1,0 +1,17 @@
+[
+  {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "-q",
+      "tests.test_package31_daemon_protocol_security",
+      "tests.test_package31_daemon_transport"
+    ],
+    "driver": "run_subprocess",
+    "returnCode": 0,
+    "status": "passed",
+    "stderr": "----------------------------------------------------------------------\nRan 20 tests in <duration-s>\n\nOK\n",
+    "stdout": ""
+  }
+]

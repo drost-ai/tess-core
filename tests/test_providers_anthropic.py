@@ -167,7 +167,16 @@ class AnthropicProviderTests(AgentCoreTestCase):
         normalized = testing.normalizeAnthropicSseResponse(raw, request, {"includePartialMessages": True, "emitEvent": lambda event, data: emitted.append((event, data))})
         self.assertEqual(normalized["content"][0], {"type": "text", "text": "Hi "})
         self.assertEqual(normalized["content"][1], {"type": "tool_use", "id": "toolu_1", "name": "Read", "input": {"file_path": "a.txt"}})
-        self.assertEqual(normalized["usage"], {"input_tokens": 10, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 4, "output_tokens": 3})
+        self.assertEqual(
+            normalized["usage"],
+            {
+                "input_tokens": 10,
+                "cache_creation_input_tokens": 2,
+                "cache_creation_ttl_detail_complete": False,
+                "cache_read_input_tokens": 4,
+                "output_tokens": 3,
+            },
+        )
         self.assertTrue(any(event == "message.assistant.partial" for event, _ in emitted))
         self.assertNotIn("stream", testing.buildAnthropicMessagesPayload({**request, "effort": None}))
         self.assertEqual(
@@ -176,7 +185,6 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 {
                     "type": "text",
                     "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
-                    "cache_control": {"type": "ephemeral"},
                 }
             ],
         )

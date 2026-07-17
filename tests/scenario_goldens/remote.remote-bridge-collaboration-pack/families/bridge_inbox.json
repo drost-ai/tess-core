@@ -1,45 +1,71 @@
 [
   {
-    "bridgeId": "bridge-failure",
+    "bridgeId": "<uuid:2>",
     "messages": [
       {
-        "bridgeId": "bridge-failure",
+        "bridgeId": "<uuid:2>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:5>",
-        "source": "remote",
-        "text": "retry me"
-      }
-    ]
-  },
-  {
-    "bridgeId": "bridge-main",
-    "messages": [
-      {
-        "bridgeId": "bridge-main",
-        "createdAt": "<timestamp>",
-        "id": "<uuid:2>",
+        "generation": 1,
+        "id": "<uuid:3>",
+        "idempotencyKey": "<uuid:2>:<uuid:3>",
         "source": "remote",
         "text": "please review"
       }
     ]
   },
   {
-    "bridgeId": "bridge-replay",
+    "bridgeId": "<uuid:4>",
     "messages": [
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:4>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:3>",
+        "generation": 2,
+        "id": "<uuid:5>",
+        "idempotencyKey": "<uuid:4>:<uuid:5>",
         "source": "remote",
         "text": "already delivered"
       },
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:4>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:4>",
+        "generation": 2,
+        "id": "<uuid:6>",
+        "idempotencyKey": "<uuid:4>:<uuid:6>",
         "source": "remote",
         "text": "deliver after restart"
       }
     ]
+  },
+  {
+    "bridgeId": "<uuid:7>",
+    "messages": [
+      {
+        "bridgeId": "<uuid:7>",
+        "createdAt": "<timestamp>",
+        "generation": 3,
+        "id": "<uuid:6>",
+        "idempotencyKey": "<uuid:4>:<uuid:6>",
+        "source": "remote",
+        "text": "deliver after restart"
+      }
+    ]
+  },
+  {
+    "bridgeId": "<uuid:8>",
+    "messages": [
+      {
+        "bridgeId": "<uuid:8>",
+        "createdAt": "<timestamp>",
+        "generation": 4,
+        "id": "<uuid:9>",
+        "idempotencyKey": "<uuid:8>:<uuid:9>",
+        "source": "remote",
+        "text": "retry me"
+      }
+    ]
+  },
+  {
+    "bridgeId": "<uuid:10>",
+    "messages": []
   }
 ]

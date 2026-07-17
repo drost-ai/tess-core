@@ -9,7 +9,8 @@ if _typing.TYPE_CHECKING:
 from .shared import *
 from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
 from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
-from .providers import _emit_provider_response_completed, _record_provider_failure_if_needed
+from .providers import _emit_provider_response_completed
+from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
 from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
 from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
@@ -17,6 +18,7 @@ from .tool_hooks import run_pre_tool_hook as _run_pre_tool_hook
 from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
+from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
@@ -24,7 +26,7 @@ from ..hooks import fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..permission_rules import findDispatchDenyRule
-from ..provider_timeouts import createTurnDeadlineContext as _create_turn_deadline_context
+from ..providers.prompt_cache_finalization import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
 from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
@@ -47,6 +49,7 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
+    paths = getActiveRuntimePaths()
     prompt_content, prompt_text = _normalize_agent_prompt(args["prompt"])
     runtime_bindings = args.get("runtime")
     assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
@@ -119,59 +122,6 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
         _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": active_model, "partial_text": "\n\n".join(text_parts).strip()})
         return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "cancelled"}
 
-    async def request_provider_response() -> tuple[dict[str, Any], dict[str, Any]]:
-        deadlines = _create_turn_deadline_context(
-            config=config,
-            parentSignal=runtime.get("abortSignal"),
-            perCallOptions=args.get("providerRequestOptions") or {},
-            runtimeContract=runtime_contract,
-        )
-        deadline_runtime = {**runtime, "abortSignal": deadlines.signal}
-        provider = provider_override or _create_provider(config, deadline_runtime, session)
-
-        async def prepare(reactive_attempt: int) -> dict[str, Any]:
-            return await deadlines.race(
-                prepareProviderRequest(
-                    {
-                        "session": session,
-                        "config": config,
-                        "runtime": deadline_runtime,
-                        "baseSystemPrompt": base_system_prompt,
-                        "toolRegistry": tool_registry,
-                        "activeModel": active_model,
-                        "prompt": prompt_text,
-                        "reactiveAttempt": reactive_attempt,
-                        "providerRequestOptions": args.get("providerRequestOptions") or {},
-                        "deadlines": deadlines,
-                    }
-                )
-            )
-
-        try:
-            prepared_request = await prepare(0)
-            while True:
-                try:
-                    _throw_if_turn_cancelled(runtime)
-                    if requestHasImageInputs(prepared_request["request"]) and not modelSupportsImageInputs(config, active_model):
-                        response = unsupportedImageInputResponse(active_model)
-                    else:
-                        response = await deadlines.race(maybe_await(provider["send"](prepared_request["request"])))
-                    return prepared_request, response
-                except Exception as error:
-                    if _is_turn_abort_error(error, runtime.get("abortSignal")):
-                        raise
-                    if prepared_request.get("reactiveAttempt", 0) < 2 and isContextWindowFailure(error):
-                        prepared_request = await prepare(
-                            int(prepared_request.get("reactiveAttempt") or 0) + 1
-                        )
-                        continue
-                    raise
-        except Exception as error:
-            await _record_provider_failure_if_needed(session, config, runtime, error)
-            raise
-        finally:
-            deadlines.dispose()
-
     if _is_turn_cancelled(runtime):
         return await cancel_turn()
 
@@ -210,7 +160,18 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 },
             )
         try:
-            prepared_request, response = await request_provider_response()
+            provider_result = await _request_provider_response(
+                {
+                    "config": config, "runtime": runtime, "session": session, "paths": paths,
+                    "runtimeContract": runtime_contract, "providerOverride": provider_override,
+                    "providerRequestOptions": args.get("providerRequestOptions") or {},
+                    "baseSystemPrompt": base_system_prompt, "toolRegistry": tool_registry,
+                    "activeModel": active_model, "prompt": prompt_text, "repair": repair,
+                    "totalUsage": total_usage,
+                }
+            )
+            prepared_request, response = provider_result["preparedRequest"], provider_result["response"]
+            cost += float(provider_result.get("emptyResponseCostUsd") or 0)
         except _ImageBudgetError as error:
             _restore_session_state(session, last_stable_snapshot)
             await persistSession(session, config)
@@ -237,6 +198,16 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
             if _is_turn_abort_error(error, runtime.get("abortSignal")):
                 return await cancel_turn()
             raise
+        empty_result = await _complete_empty_provider_response(
+            {
+                "response": response, "session": session, "config": config, "runtime": runtime,
+                "totalUsage": total_usage, "estimatedCostUsd": cost,
+                "emptyResponseAttempts": provider_result.get("emptyResponseAttempts"),
+                "textParts": text_parts, "toolCount": tool_count,
+            }
+        )
+        if empty_result is not None:
+            return empty_result
         active_model = response["model"]
         provider_call_index += 1
         _emit_provider_response_completed(
@@ -262,6 +233,14 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
         tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
         if not tool_uses:
             await persistSession(session, config)
+            await _record_prompt_cache_eviction_intent_at_finalization(
+                {
+                    "session": session,
+                    "config": config,
+                    "runtime": runtime,
+                    "stopReason": response.get("stopReason"),
+                }
+            )
             return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": response.get("stopReason")}
 
         tool_results: list[dict[str, Any] | None] = [None] * len(tool_uses)
@@ -481,20 +460,3 @@ def extractAssistantText(message: dict[str, Any]) -> str:
     if isinstance(content, str):
         return content
     return "".join(block.get("text", "") for block in content or [] if block.get("type") == "text")
-
-
-def _invalid_tool_input_message(tool_use: Any) -> str | None:
-    if not isinstance(tool_use, dict):
-        return None
-    if tool_use.get("_agent_core_invalid_tool_input") is True:
-        message = tool_use.get("_agent_core_invalid_tool_input_error")
-        if isinstance(message, str) and message.strip():
-            return message.strip()
-        return "The provider streamed incomplete or invalid JSON for this tool call. Retry the tool call with complete valid JSON arguments."
-    input_value = tool_use.get("input")
-    if not isinstance(input_value, dict) or input_value.get("__agent_core_invalid_tool_input") is not True:
-        return None
-    message = input_value.get("error")
-    if isinstance(message, str) and message.strip():
-        return message.strip()
-    return "The provider streamed incomplete or invalid JSON for this tool call. Retry the tool call with complete valid JSON arguments."

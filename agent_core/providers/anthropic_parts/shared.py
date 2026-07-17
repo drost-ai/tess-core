@@ -16,6 +16,13 @@ from ..prompt_cache import (
     anthropicCacheControl,
     anthropicExplicitCacheEnabled,
     isKimiAnthropicCodingBackend,
+    resolvePromptCachePolicy,
+)
+from ..anthropic_cache import (
+    applyAnthropicCachePlan,
+    countAnthropicCacheControls,
+    planAnthropicCache,
+    sanitizeAnthropicCountPayload,
 )
 from ...provider_errors import (
     canRetryProviderFailure,

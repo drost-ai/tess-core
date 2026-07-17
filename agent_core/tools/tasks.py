@@ -5,7 +5,9 @@ from ..contracts.records import launch_task_id
 from ..contracts.tools import ToolResult
 
 import asyncio
+import contextlib
 import inspect
+import signal
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
@@ -13,15 +15,25 @@ from ..bounded_io import readFileTailBounded
 from ..execution_descriptors import createTaskExecutionDescriptor
 from ..tasks.monitor_transitions import monitorStopNote as _monitor_stop_note
 from ..tasks.monitor_transitions import stopMonitorRecord as _stop_monitor_record
+from ..tasks.health_check_policy import (
+    authorizeHealthCheckSpec,
+    healthCheckSpecDigest,
+    normalizeHealthCheckSpec,
+)
+from ..tasks.monitor_transactions import (
+    commitMonitorMutation,
+    monitorTransitionEventFields,
+    startMonitorOnce,
+)
 from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from ..process_identity import processIdentityFromRecord, signalOwnedProcess
-from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
+from ..tasks.terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
+from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath
 from ..task_ownership import requireModelOwnedMonitor, requireModelOwnedTask
 from ..tool_payloads import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
-from .processes import _wait_for_tracked_background_runner
 from .schemas import _tool_description, _tool_schema
 from .session_metadata import _append_unique_metadata_list
 from .validation import _require_string, _without_none_values
@@ -137,46 +149,82 @@ def _task_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         owned = await requireModelOwnedTask(context, task_id, "stop")
+        existing_status = _terminal_task_status(
+            (owned.get("record") or {}).get("status"),
+            (owned.get("meta") or {}).get("status"),
+        )
+        if existing_status:
+            semantic_status = "stopped" if existing_status == "terminated" else existing_status
+            return {
+                "content": pretty_json(
+                    {
+                        "task_id": task_id,
+                        "previous_status": semantic_status,
+                        "status": semantic_status,
+                        "changed": False,
+                        "stopped": False,
+                        "note": "Task was already terminal; no process signal was sent.",
+                    }
+                )
+            }
         supervisor = context.get("daemon") or context.get("taskSupervisor")
         if supervisor:
             await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id}")
             stopped = await supervisor["stopTask"](task_id)
             if not stopped:
                 return {"content": f"Task not found or not stoppable: {task_id}", "isError": True}
-            context.get("outputJson", lambda *_: None)(
-                "task.failed",
-                {
-                    "session_id": context["session"]["id"],
-                    "task_id": task_id,
-                    "summary": "Task terminated by user request.",
-                },
-            )
-            return {"content": pretty_json({"task_id": task_id, "status": "terminated"})}
+            if stopped is True:
+                stopped = {
+                    "previousStatus": "running",
+                    "status": "stopped",
+                    "changed": True,
+                    "note": "Task stopped by deliberate request.",
+                }
+            return {"content": pretty_json(_task_stop_content(task_id, stopped))}
         owned = await requireModelOwnedTask(context, task_id, "stop")
         meta = owned["meta"]
         identity = processIdentityFromRecord(owned.get("record"), meta)
         await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id} (pid {identity['pid']})")
+        prepared = await prepareTaskStop(task_id, "SIGTERM", "tool")
+        if not prepared:
+            return {"content": f"Task not found or not stoppable: {task_id}", "isError": True}
+        if prepared.get("result"):
+            return {"content": pretty_json(_task_stop_content(task_id, prepared["result"]))}
+        transition_id = prepared.get("transitionId")
+        prepared_identity = prepared.get("identity")
+        if not isinstance(transition_id, str) or not isinstance(prepared_identity, dict):
+            raise RuntimeError(
+                f"Task stop preparation did not capture an owned process: {task_id}"
+            )
         try:
-            await signalOwnedProcess(identity)
-        except ProcessLookupError:
-            pass
-        meta.update({"status": "terminated", "stoppedAt": now_iso(), "updatedAt": now_iso()})
-        await writeTaskMeta(task_id, meta)
-        runner_pid = meta.get("runnerPid")
-        if isinstance(runner_pid, int):
-            await _wait_for_tracked_background_runner(runner_pid)
-        execution = _stopped_task_execution_descriptor(task_id, meta)
-        context.get("outputJson", lambda *_: None)(
-            "task.failed",
-            {
-                "session_id": context["session"]["id"],
-                "task_id": task_id,
-                "kind": meta.get("type") or "background_command",
-                "title": meta.get("title") or meta.get("description") or meta.get("command"),
-                "summary": "Task terminated by user request.",
-            },
-        )
-        return {"content": pretty_json({"task_id": task_id, "status": "terminated", "execution": execution}), "meta": {"execution": execution}}
+            await signalOwnedProcess(prepared_identity, signal.SIGTERM)
+        except Exception:
+            with contextlib.suppress(Exception):
+                await clearPreparedTaskStop(task_id, transition_id)
+            raise
+        committed = await commitPreparedTaskStop(task_id, transition_id, "tool")
+        stop_result = committed["result"]
+        record = committed.get("record")
+        if stop_result.get("changed") and isinstance(record, dict):
+            context.get("outputJson", lambda *_: None)(
+                "task.stopped",
+                {
+                    "session_id": context["session"]["id"],
+                    "task_id": task_id,
+                    "kind": record.get("kind"),
+                    "title": record.get("title"),
+                    "summary": record.get("summary"),
+                    "transition_id": stop_result.get("transitionId"),
+                },
+            )
+        committed_meta = await readTaskMeta(task_id) or meta
+        execution = _stopped_task_execution_descriptor(task_id, committed_meta)
+        return {
+            "content": pretty_json(
+                {**_task_stop_content(task_id, stop_result), "execution": execution}
+            ),
+            "meta": {"execution": execution},
+        }
 
     return ToolDefinition("TaskStop", _tool_description("TaskStop"), _tool_schema("TaskStop"), handler)
 
@@ -187,27 +235,44 @@ def _task_monitor_start_tool() -> ToolDefinition:
         goal = _require_string(input.get("goal"), "goal")
         owned = await requireModelOwnedTask(context, task_id, "monitor")
         task = owned["meta"]
-        existing = next((monitor for monitor in await listSessionMonitors(context["session"]["id"]) if monitor.get("taskId") == task_id and monitor.get("status") == "active"), None)
-        if existing:
-            return {"content": pretty_json({"monitor_id": existing.get("id"), "task_id": existing.get("taskId"), "status": existing.get("status"), "goal": existing.get("goal"), "note": "Monitor already active for this task."})}
         summary_style = input.get("summary_style") if isinstance(input.get("summary_style"), str) and input.get("summary_style").strip() else None
-        record = createMonitorRecord(
-            {
-                "sessionId": context["session"]["id"],
-                "taskId": task_id,
-                "goal": goal,
-                "summaryStyle": summary_style.strip() if isinstance(summary_style, str) else None,
-                "checkIntervalMs": defaultMonitorCheckIntervalMs(input.get("check_interval_ms")),
-                "heartbeatIntervalMs": defaultMonitorHeartbeatIntervalMs(input.get("heartbeat_interval_ms")),
-            }
+        started = await startMonitorOnce(
+            sessionId=context["session"]["id"],
+            taskId=task_id,
+            create=lambda: createMonitorRecord(
+                {
+                    "sessionId": context["session"]["id"],
+                    "taskId": task_id,
+                    "goal": goal,
+                    "summaryStyle": summary_style.strip() if isinstance(summary_style, str) else None,
+                    "checkIntervalMs": defaultMonitorCheckIntervalMs(input.get("check_interval_ms")),
+                    "heartbeatIntervalMs": defaultMonitorHeartbeatIntervalMs(input.get("heartbeat_interval_ms")),
+                }
+            ),
         )
+        record = started["monitor"]
         if summary_style:
             record["summaryStyle"] = summary_style.strip()
-        await saveMonitor(record)
-        _append_unique_metadata_list(context["session"], "monitorIds", record["id"])
-        await maybe_await(context.get("persistSession", lambda: None)())
+        monitor_ids = context["session"].setdefault("metadata", {}).get("monitorIds") or []
+        if record["id"] not in monitor_ids:
+            _append_unique_metadata_list(context["session"], "monitorIds", record["id"])
+            await maybe_await(context.get("persistSession", lambda: None)())
+        if not started["changed"]:
+            return {
+                "content": pretty_json(
+                    {
+                        "monitor_id": record["id"],
+                        "task_id": record["taskId"],
+                        "status": record["status"],
+                        "goal": record.get("goal"),
+                        "changed": False,
+                        "revision": started["revision"],
+                        "note": "Monitor already active for this task.",
+                    }
+                )
+            }
         context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": f"monitor:{record['id']}", "kind": "monitor", "status": "running", "title": f"Monitor {goal}"})
-        context.get("outputJson", lambda *_: None)("monitor.created", {"session_id": context["session"]["id"], "monitor_id": record["id"], "task_id": task_id, "goal": goal, "status": record["status"]})
+        context.get("outputJson", lambda *_: None)("monitor.created", {"session_id": context["session"]["id"], "monitor_id": record["id"], "task_id": task_id, "goal": goal, "status": record["status"], "changed": True, **monitorTransitionEventFields(started)})
         execution = {
             "id": record["id"],
             "kind": "task",
@@ -225,6 +290,9 @@ def _task_monitor_start_tool() -> ToolDefinition:
                     "task_id": task_id,
                     "status": record["status"],
                     "goal": goal,
+                    "changed": True,
+                    "revision": started["revision"],
+                    "transition_id": started.get("transitionId"),
                     "check_interval_ms": record["checkIntervalMs"],
                     "heartbeat_interval_ms": record["heartbeatIntervalMs"],
                     "execution": execution,
@@ -239,10 +307,19 @@ def _task_monitor_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         monitor_id = _require_string(input.get("monitor_id"), "monitor_id")
         monitor = await requireModelOwnedMonitor(context, monitor_id)
-        transition = _stop_monitor_record(monitor, now_iso())
-        record = transition["record"]
-        if transition["changed"]:
-            await saveMonitor(record)
+        committed = await commitMonitorMutation(
+            monitorId=monitor["id"],
+            expectedSessionId=context["session"]["id"],
+            mutate=lambda latest: _monitor_stop_mutation(latest),
+        )
+        transition = {
+            **committed["value"],
+            "record": committed["current"],
+            "previousStatus": committed["previous"]["status"],
+            "changed": committed["changed"],
+        }
+        record = committed["current"]
+        if committed.get("transitionId"):
             context.get("outputJson", lambda *_: None)(
                 "monitor.status_changed",
                 {
@@ -252,6 +329,7 @@ def _task_monitor_stop_tool() -> ToolDefinition:
                     "status": record["status"],
                     "previous_status": transition["previousStatus"],
                     "changed": True,
+                    **monitorTransitionEventFields(committed),
                 },
             )
         return {
@@ -263,6 +341,8 @@ def _task_monitor_stop_tool() -> ToolDefinition:
                         "status": record["status"],
                         "previous_status": transition["previousStatus"],
                         "changed": transition["changed"],
+                        "revision": committed["revision"],
+                        "transition_id": committed.get("transitionId"),
                         "note": _monitor_stop_note(transition),
                     }
                 )
@@ -272,35 +352,58 @@ def _task_monitor_stop_tool() -> ToolDefinition:
     return ToolDefinition("TaskMonitorStop", _tool_description("TaskMonitorStop"), _tool_schema("TaskMonitorStop"), handler)
 
 
+def _monitor_stop_mutation(latest: dict[str, Any]) -> dict[str, Any]:
+    transition = _stop_monitor_record(latest, now_iso())
+    return {
+        "record": transition["record"],
+        "changed": transition["changed"],
+        "transition": transition["changed"],
+        "transitionLabel": (
+            f"stop:{transition['previousStatus']}->{transition['record']['status']}"
+        ),
+        "value": transition,
+    }
+
+
 def _task_health_check_start_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         supervisor = context.get("daemon")
         if not supervisor:
             raise RuntimeError("Health checks require the local task supervisor daemon.")
-        title = _require_string(input.get("title"), "title")
-        mode = _require_string(input.get("mode"), "mode")
+        spec = await normalizeHealthCheckSpec(
+            {
+                "title": input.get("title"),
+                "mode": input.get("mode"),
+                "cwd": context["session"]["cwd"],
+                "command": input.get("command"),
+                "url": input.get("url"),
+                "intervalMs": input.get("interval_ms"),
+                "timeoutMs": input.get("timeout_ms"),
+                "failureThreshold": input.get("failure_threshold"),
+                "backoffMultiplier": input.get("backoff_multiplier"),
+                "maxIntervalMs": input.get("max_interval_ms"),
+                "expectedStatusCodes": input.get("expected_status_codes"),
+                "expectedBodyPolicy": input.get("expected_body_policy"),
+                "expectedBodySubstring": input.get("expected_body_substring"),
+                "outputLimitBytes": input.get("output_limit_bytes"),
+                "bodyLimitBytes": input.get("body_limit_bytes"),
+            },
+            context["session"]["cwd"],
+        )
+        execution_policy = await authorizeHealthCheckSpec(context, spec)
         started = await supervisor["startHealthCheck"](
             {
                 "sessionId": context["session"]["id"],
-                "cwd": context["session"]["cwd"],
-                "title": title,
-                "mode": "command" if mode == "command" else "http",
-                "command": input.get("command") if isinstance(input.get("command"), str) else None,
-                "url": input.get("url") if isinstance(input.get("url"), str) else None,
-                "intervalMs": input.get("interval_ms") if isinstance(input.get("interval_ms"), (int, float)) else None,
-                "timeoutMs": input.get("timeout_ms") if isinstance(input.get("timeout_ms"), (int, float)) else None,
-                "failureThreshold": input.get("failure_threshold") if isinstance(input.get("failure_threshold"), (int, float)) else None,
-                "backoffMultiplier": input.get("backoff_multiplier") if isinstance(input.get("backoff_multiplier"), (int, float)) else None,
-                "maxIntervalMs": input.get("max_interval_ms") if isinstance(input.get("max_interval_ms"), (int, float)) else None,
-                "expectedStatusCodes": [value for value in input.get("expected_status_codes", []) if isinstance(value, (int, float))] if isinstance(input.get("expected_status_codes"), list) else None,
-                "expectedBodySubstring": input.get("expected_body_substring") if isinstance(input.get("expected_body_substring"), str) and input.get("expected_body_substring").strip() else None,
+                "spec": spec,
+                "specDigest": healthCheckSpecDigest(spec),
+                "executionPolicy": execution_policy,
             }
         )
         task_id = launch_task_id(started)
         _append_unique_metadata_list(context["session"], "taskIds", task_id)
         await maybe_await(context.get("persistSession", lambda: None)())
-        context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": title, "owner": "daemon"})
-        return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": title})}
+        context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": spec["title"], "owner": "daemon"})
+        return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": spec["title"]})}
 
     return ToolDefinition("TaskHealthCheckStart", _tool_description("TaskHealthCheckStart"), _tool_schema("TaskHealthCheckStart"), handler)
 
@@ -315,10 +418,38 @@ def _task_health_check_stop_tool() -> ToolDefinition:
         stopped = await supervisor["stopTask"](task_id)
         if not stopped:
             raise RuntimeError(f"Task not found or not stoppable: {task_id}")
-        context.get("outputJson", lambda *_: None)("task.failed", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "stopped"})
-        return {"content": pretty_json({"task_id": task_id, "stopped": True})}
+        if stopped is True:
+            stopped = {
+                "previousStatus": "running",
+                "status": "stopped",
+                "changed": True,
+                "note": "Task stopped by deliberate request.",
+            }
+        return {"content": pretty_json(_task_stop_content(task_id, stopped))}
 
     return ToolDefinition("TaskHealthCheckStop", _tool_description("TaskHealthCheckStop"), _tool_schema("TaskHealthCheckStop"), handler)
+
+
+def _task_stop_content(task_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    return _without_none_values(
+        {
+            "task_id": task_id,
+            "previous_status": result.get("previousStatus"),
+            "status": result.get("status"),
+            "changed": bool(result.get("changed")),
+            "stopped": result.get("status") == "stopped",
+            "note": result.get("note"),
+            "transition_id": result.get("transitionId"),
+        }
+    )
+
+
+def _terminal_task_status(record_status: Any, meta_status: Any) -> str | None:
+    for status in (record_status, meta_status):
+        normalized = str(status or "")
+        if normalized in {"completed", "failed", "stopped", "terminated"}:
+            return normalized
+    return None
 
 
 def _stopped_task_execution_descriptor(task_id: str, meta: dict[str, Any]) -> dict[str, Any]:

@@ -1,0 +1,13 @@
+{
+  "id": "security.authority-identity-pack",
+  "title": "Authority And Identity Adversarial Pack",
+  "area": "security",
+  "mode": ["python"],
+  "setup": {"workspace": {}},
+  "steps": [
+    {"run_subprocess": {"command": ["python3", "-m", "unittest", "-q", "tests.test_agent_authority", "tests.test_executable_config", "tests.test_executable_source_trust", "tests.test_shell_authority_parser", "tests.test_task_identity_ownership"]}},
+    {"assert_driver_result": {"driver": "run_subprocess", "status": "passed", "returnCode": 0, "stdoutContains": ""}},
+    {"capture": {"include": ["driver_results", "subprocess_results", "step_results"]}}
+  ],
+  "capture": {"include": ["driver_results", "subprocess_results", "step_results"]}
+}

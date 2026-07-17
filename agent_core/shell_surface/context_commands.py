@@ -64,20 +64,53 @@ async def _handle_monitor(arg_text: str, session: dict[str, Any], hooks: dict[st
     if not monitor:
         return _error(hooks, f"No monitor matched: {parts[1]}")
     if parts[0] == "stop":
-        transition = _stop_monitor_record(monitor, now_iso())
+        committed = await _commit_monitor_mutation(
+            monitorId=monitor["id"],
+            expectedSessionId=session["id"],
+            mutate=lambda latest: _slash_monitor_mutation(latest, "stop"),
+        )
         verb = "Stopped"
+    else:
+        committed = await _commit_monitor_mutation(
+            monitorId=monitor["id"],
+            expectedSessionId=session["id"],
+            mutate=lambda latest: _slash_monitor_mutation(latest, "resume"),
+        )
+        verb = "Resumed"
+    transition = {
+        **committed["value"],
+        "record": committed["current"],
+        "previousStatus": committed["previous"]["status"],
+        "changed": committed["changed"],
+    }
+    if parts[0] == "stop":
         note = _monitor_stop_note(transition)
     else:
-        transition = _resume_monitor_record(monitor, now_iso())
-        verb = "Resumed"
         note = _monitor_resume_note(transition)
     record = transition["record"]
     if transition["changed"]:
-        await saveMonitor(record)
         _call(hooks, "refresh")
         await _persist(hooks)
         return _info(hooks, "Monitor", f"{verb} monitor {record['id']}")
     return _info(hooks, "Monitor", note or f"Monitor {record['id']} unchanged.")
+
+
+def _slash_monitor_mutation(latest: dict[str, Any], operation: str) -> dict[str, Any]:
+    transition = (
+        _stop_monitor_record(latest, now_iso())
+        if operation == "stop"
+        else _resume_monitor_record(latest, now_iso())
+    )
+    return {
+        "record": transition["record"],
+        "changed": transition["changed"],
+        "transition": transition["changed"],
+        "transitionLabel": (
+            f"{operation}:{transition['previousStatus']}"
+            f"->{transition['record']['status']}"
+        ),
+        "value": transition,
+    }
 
 
 async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:

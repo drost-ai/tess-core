@@ -54,12 +54,12 @@ class ProviderRequestWatchdog:
 
     async def race(self, awaitable: Awaitable[Any]) -> Any:
         task = asyncio.ensure_future(awaitable)
+        # JavaScript constructs and starts the provider Promise before
+        # Promise.race observes an already-fired watchdog. Give the Python
+        # coroutine the same single scheduling turn before checking deadlines.
+        await asyncio.sleep(0)
         try:
             while True:
-                self._raise_if_parent_aborted()
-                self._refresh_timeout()
-                if self._timed_out:
-                    raise self._timeout_error or self._make_timeout_error()
                 if task.done():
                     try:
                         return task.result()
@@ -68,6 +68,10 @@ class ProviderRequestWatchdog:
                         if self._timed_out:
                             raise self._timeout_error or self._make_timeout_error()
                         raise exc
+                self._raise_if_parent_aborted()
+                self._refresh_timeout()
+                if self._timed_out:
+                    raise self._timeout_error or self._make_timeout_error()
                 remaining = max(0.0, self._deadline - time.monotonic())
                 await asyncio.wait(
                     {task},

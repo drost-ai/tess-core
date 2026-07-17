@@ -38,6 +38,7 @@ class ScenarioSandbox:
                 "AGENT_CORE_HOME": str(self.home),
                 "AGENT_CORE_HARNESS_RUN_ID": self.run_id,
                 "AGENT_CORE_HARNESS_SCENARIO_ID": self.scenario_id,
+                "GIT_CEILING_DIRECTORIES": str(self.run_dir),
                 "PYTHONDONTWRITEBYTECODE": "1",
             }
         )

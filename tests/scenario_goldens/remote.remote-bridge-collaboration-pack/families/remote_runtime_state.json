@@ -1,7 +1,7 @@
 {
   "bridge": {
     "attached": true,
-    "bridgeId": "bridge-main",
+    "bridgeId": "<uuid:2>",
     "lastEventAt": "<timestamp>",
     "lastEventName": "remote.status_changed",
     "lastMessageAt": "<timestamp>",
@@ -23,7 +23,7 @@
     "workers": [
       {
         "attachableSessionId": "<uuid:1>",
-        "bridgeId": "bridge-main",
+        "bridgeId": "<uuid:2>",
         "childSessionId": null,
         "completionReason": null,
         "id": "remote-main",
@@ -204,7 +204,7 @@
     "activeSessionId": "<uuid:1>",
     "lastActivatedAt": "<timestamp>",
     "summary": {
-      "bridgeId": "bridge-main",
+      "bridgeId": "<uuid:2>",
       "cwd": "<workspace>",
       "gitBranch": "<git-branch>",
       "gitRoot": "<git-root>",

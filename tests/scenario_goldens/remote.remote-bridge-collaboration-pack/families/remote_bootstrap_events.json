@@ -1,7 +1,7 @@
 [
   {
     "data": {
-      "bridge_id": "bridge-main",
+      "bridge_id": "<uuid:2>",
       "cwd": "<workspace>",
       "git_branch": "<git-branch>",
       "git_root": "<git-root>",
@@ -17,7 +17,7 @@
     "typedEvent": {
       "createdAt": "<timestamp>",
       "data": {
-        "bridge_id": "bridge-main",
+        "bridge_id": "<uuid:2>",
         "cwd": "<workspace>",
         "git_branch": "<git-branch>",
         "git_root": "<git-root>",
@@ -32,7 +32,7 @@
       "event": "session.activated",
       "kind": "session.activated",
       "legacyData": {
-        "bridge_id": "bridge-main",
+        "bridge_id": "<uuid:2>",
         "cwd": "<workspace>",
         "git_branch": "<git-branch>",
         "git_root": "<git-root>",
@@ -46,7 +46,7 @@
       },
       "legacyEvent": "session.activated",
       "payload": {
-        "bridgeId": "bridge-main",
+        "bridgeId": "<uuid:2>",
         "cwd": "<workspace>",
         "gitBranch": "<git-branch>",
         "gitRoot": "<git-root>",

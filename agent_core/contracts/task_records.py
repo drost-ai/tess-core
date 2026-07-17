@@ -45,7 +45,14 @@ ChildAgentStatus = Literal[
     "awaiting_input",
     "awaiting_plan_approval",
 ]
-HealthCheckStatus = Literal["active", "unhealthy", "failed", "stopped"]
+HealthCheckStatus = Literal[
+    "active",
+    "unhealthy",
+    "failed",
+    "stopped",
+    "suspended_unverified",
+    "suspended_for_rollback",
+]
 TaskQuestionStatus = Literal["pending", "answered", "skipped"]
 SubagentStructuredResultStatus = Literal["not_configured", "valid", "invalid"]
 

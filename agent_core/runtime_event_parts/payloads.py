@@ -1,7 +1,6 @@
 from __future__ import annotations
-
 from .shared import *
-
+from .prompt_cache import promptCacheEventPayload
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     payload = _camelize_record(data)
     if event == "session.activated":
@@ -110,6 +109,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "contextReliefProjectionHash": _optional_string(_field(data, "context_relief_projection_hash", "contextReliefProjectionHash")),
             "contextReliefEscalationRequested": _optional_boolean(_field(data, "context_relief_escalation_requested", "contextReliefEscalationRequested")),
         }
+    if event == "provider.prompt_cache": return "provider.prompt_cache", promptCacheEventPayload(data)
     if event == "provider.fallback":
         return "provider.fallback", {
             "provider": _optional_string(_field(data, "provider")),
@@ -383,6 +383,11 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "taskId": _optional_string(_field(data, "task_id", "taskId")),
             "status": _optional_string(_field(data, "status")),
             "goal": _optional_string(_field(data, "goal")),
+            "changed": _optional_boolean(_field(data, "changed")),
+            "revision": _optional_number(_field(data, "revision")),
+            "transitionId": _optional_string(
+                _field(data, "transition_id", "transitionId")
+            ),
         }
     if event == "monitor.assistant_update":
         return "monitor.assistant_update", {
@@ -399,6 +404,14 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "status": _optional_string(_field(data, "status")),
             "taskStatus": _optional_string(_field(data, "task_status", "taskStatus")),
             "exitCode": _optional_number(_field(data, "exit_code", "exitCode")),
+            "previousStatus": _optional_string(
+                _field(data, "previous_status", "previousStatus")
+            ),
+            "changed": _optional_boolean(_field(data, "changed")),
+            "revision": _optional_number(_field(data, "revision")),
+            "transitionId": _optional_string(
+                _field(data, "transition_id", "transitionId")
+            ),
         }
     if event == "collaboration.snapshot":
         return "collaboration.snapshot", {

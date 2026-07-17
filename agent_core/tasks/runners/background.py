@@ -7,11 +7,13 @@ import json
 import os
 import signal
 import subprocess
+import uuid
 from pathlib import Path
 from typing import Any
 
 from ..._utils import now_iso
 from ...storage import configureRuntimeHome, readTaskMeta, writeTaskMeta
+from ..terminal_transitions import applyTaskProcessCompletion, resolveTaskSemanticStatus
 
 
 async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
@@ -30,11 +32,7 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     process: subprocess.Popen[Any] | None = None
-    stop_requested = False
-
     def terminate_child(signum: int, _frame: Any) -> None:
-        nonlocal stop_requested
-        stop_requested = True
         if process and process.poll() is None:
             _terminate_process(process.pid, signum)
 
@@ -68,37 +66,31 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
 
         current = await _read_runner_meta(task_id, meta_path)
         now = now_iso()
-        if current.get("status") == "terminated":
+        signal_name = _exit_signal_name(exit_code)
+        transition = applyTaskProcessCompletion(
+            current=resolveTaskSemanticStatus(current.get("status")),
+            code=exit_code,
+            signalName=signal_name,
+            terminationIntent=(
+                current.get("terminationIntent")
+                if isinstance(current.get("terminationIntent"), dict)
+                else None
+            ),
+        )
+        if not transition["changed"]:
             update = {
-                "taskId": task_id,
-                "command": command,
-                "cwd": cwd,
-                "outputFile": output_path,
-                "pid": process.pid if process else current.get("pid"),
-                "runnerPid": os.getpid(),
-                "updatedAt": now,
-                "stoppedAt": current.get("stoppedAt") or now,
-                "finishedAt": now,
-                "detailStatus": "terminated",
                 "exitCode": exit_code,
-            }
-        elif stop_requested or current.get("status") == "stopped" or _terminated_by_request(exit_code):
-            update = {
-                "taskId": task_id,
-                "command": command,
-                "cwd": cwd,
-                "outputFile": output_path,
-                "pid": process.pid if process else current.get("pid"),
-                "runnerPid": os.getpid(),
-                "status": "terminated",
-                "updatedAt": now,
-                "stoppedAt": current.get("stoppedAt") or now,
-                "finishedAt": now,
-                "detailStatus": "terminated",
-                "exitCode": exit_code,
+                "signal": signal_name or current.get("signal"),
             }
         else:
-            status = _derive_final_status(exit_code)
+            intent = (
+                current.get("terminationIntent")
+                if isinstance(current.get("terminationIntent"), dict)
+                else {}
+            )
+            terminal_status = (
+                "terminated" if transition["status"] == "stopped" else transition["status"]
+            )
             update = {
                 "taskId": task_id,
                 "command": command,
@@ -106,31 +98,41 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
                 "outputFile": output_path,
                 "pid": process.pid if process else current.get("pid"),
                 "runnerPid": os.getpid(),
-                "status": status,
+                "status": terminal_status,
                 "updatedAt": now,
                 "finishedAt": now,
-                "detailStatus": status,
+                "detailStatus": transition["status"],
                 "exitCode": exit_code,
+                "signal": signal_name,
+                "summary": transition["summary"],
+                "terminalTransitionId": intent.get("transitionId") or str(uuid.uuid4()),
+                "terminalEventOwner": intent.get("eventOwner") or "task_runtime",
             }
-            signal_name = _exit_signal_name(exit_code)
-            if status == "failed" and signal_name:
-                update["error"] = f"Process exited due to signal {signal_name}"
+            if transition["status"] == "stopped":
+                update["stoppedAt"] = current.get("stoppedAt") or now
+                update["_clearError"] = True
+            elif transition["status"] == "failed":
+                update["error"] = transition["summary"]
         await _merge_task_meta(task_id, update, meta_path)
         return {"ok": True, "task_id": task_id, "exit_code": exit_code}
     except Exception as exc:
         now = now_iso()
-        await _merge_task_meta(
-            task_id,
-            {
-                "status": "failed",
-                "updatedAt": now,
-                "finishedAt": now,
-                "detailStatus": "failed",
-                "error": str(exc),
-                "runnerPid": os.getpid(),
-            },
-            meta_path,
-        )
+        current = await _read_runner_meta(task_id, meta_path)
+        if resolveTaskSemanticStatus(current.get("status")) == "running":
+            await _merge_task_meta(
+                task_id,
+                {
+                    "status": "failed",
+                    "updatedAt": now,
+                    "finishedAt": now,
+                    "detailStatus": "failed",
+                    "error": str(exc),
+                    "runnerPid": os.getpid(),
+                    "terminalTransitionId": str(uuid.uuid4()),
+                    "terminalEventOwner": "task_runtime",
+                },
+                meta_path,
+            )
         raise
     finally:
         signal.signal(signal.SIGTERM, previous_term)
@@ -175,7 +177,11 @@ def _parse_positional_args() -> dict[str, str] | None:
 
 async def _merge_task_meta(task_id: str, update: dict[str, Any], meta_path: str | None = None) -> None:
     current = await _read_runner_meta(task_id, meta_path)
-    next_meta = {**current, **update}
+    clean_update = dict(update)
+    clear_error = bool(clean_update.pop("_clearError", False))
+    next_meta = {**current, **clean_update}
+    if clear_error:
+        next_meta.pop("error", None)
     if meta_path:
         Path(meta_path).write_text(f"{json.dumps(next_meta, indent=2)}\n", encoding="utf-8")
     else:
@@ -201,21 +207,6 @@ def _terminate_process(pid: int | None, signum: int = signal.SIGTERM) -> bool:
         os.kill(pid, signum)
         return True
     return False
-
-
-def _terminated_by_request(exit_code: int | None) -> bool:
-    return exit_code in (-signal.SIGTERM, -signal.SIGINT)
-
-
-def _derive_final_status(exit_code: int | None) -> str:
-    if exit_code is None:
-        return "unknown"
-    if exit_code == 0:
-        return "completed"
-    signal_name = _exit_signal_name(exit_code)
-    if signal_name in {"SIGTERM", "SIGINT"}:
-        return "terminated"
-    return "failed"
 
 
 def _exit_signal_name(exit_code: int | None) -> str | None:

@@ -1,0 +1,18 @@
+[
+  {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "-q",
+      "tests.test_package31_anthropic_terminal_completion",
+      "tests.test_package31_provider_terminal_completion",
+      "tests.test_package31_token_count_deadlines"
+    ],
+    "driver": "run_subprocess",
+    "returnCode": 0,
+    "status": "passed",
+    "stderr": "----------------------------------------------------------------------\nRan 23 tests in <duration-s>\n\nOK\n",
+    "stdout": ""
+  }
+]

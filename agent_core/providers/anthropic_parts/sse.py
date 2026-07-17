@@ -36,6 +36,9 @@ class AnthropicSseAccumulator:
         self.had_tool_use = False
         self.stopped = False
         self.open_block_indexes: set[int] = set()
+        self.response_id: str | None = None
+        self.diagnostics_field_present = False
+        self.provider_diagnostics: Any = None
 
     def incomplete_response(self, reason: str, phase: str = "stream_read") -> Any:
         assistant_text = "".join(
@@ -103,6 +106,11 @@ class AnthropicSseAccumulator:
             )
         if event_type == "message_start":
             message = payload.get("message") or {}
+            if isinstance(message.get("id"), str):
+                self.response_id = message["id"]
+            if isinstance(message, dict) and "diagnostics" in message:
+                self.diagnostics_field_present = True
+                self.provider_diagnostics = message.get("diagnostics")
             self.model = message.get("model") or self.model
             _apply_usage_snapshot(self.usage, message.get("usage") or {})
         elif event_type == "content_block_start":
@@ -211,6 +219,9 @@ class AnthropicSseAccumulator:
             "usage": self.usage,
             "model": self.model,
             "stopReason": self.stop_reason,
+            "_anthropicResponseId": self.response_id,
+            "_anthropicDiagnosticsFieldPresent": self.diagnostics_field_present,
+            "_anthropicDiagnostics": self.provider_diagnostics,
         }
 
 
@@ -218,7 +229,12 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
     accumulator = AnthropicSseAccumulator(request, runtime, attempt)
     for raw_event in parseAnthropicSseEvents(raw):
         accumulator.process_raw_event(raw_event)
-    return accumulator.finalize()
+    response = accumulator.finalize()
+    if not (runtime or {}).get("_capturePromptCacheMetadata"):
+        response.pop("_anthropicResponseId", None)
+        response.pop("_anthropicDiagnosticsFieldPresent", None)
+        response.pop("_anthropicDiagnostics", None)
+    return response
 
 def normalizeProviderBlocks(blocks: Any) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []

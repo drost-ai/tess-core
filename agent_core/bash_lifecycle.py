@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import signal
 from typing import Any
 
+from .owned_process_launch import createOwnedProcessActivation
+from .process_identity import captureOwnedProcessIdentity
 from .subprocess_output import createSubprocessOutputCollector
 
 
@@ -30,6 +33,8 @@ async def runInlineShellCommand(
     values = {**(args or {}), **kwargs}
     command = str(values["command"])
     argv = list(values.get("argv") or [values["shell"], "-lc", command])
+    activation = createOwnedProcessActivation(argv) if values.get("onProcessIdentity") else None
+    launched_argv = activation["argv"] if activation else argv
     collector = values.get("outputCollector") or await createSubprocessOutputCollector(
         sessionId=values.get("sessionId"),
         toolName=values.get("toolName") or "Bash",
@@ -39,10 +44,10 @@ async def runInlineShellCommand(
     )
     try:
         process = await asyncio.create_subprocess_exec(
-            *argv,
+            *launched_argv,
             cwd=values["cwd"],
             env=values.get("env"),
-            stdin=asyncio.subprocess.DEVNULL,
+            stdin=asyncio.subprocess.PIPE if activation else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=os.name != "nt",
@@ -50,6 +55,31 @@ async def runInlineShellCommand(
     except Exception:
         await collector.finalize()
         raise
+
+    process_identity = None
+    if activation:
+        try:
+            process_identity = await captureOwnedProcessIdentity(
+                pid=process.pid,
+                expectedArgv=launched_argv,
+            )
+            pending = values["onProcessIdentity"](process_identity)
+            if hasattr(pending, "__await__"):
+                await pending
+            if process.stdin is None:
+                raise RuntimeError("Owned process runner activation channel is unavailable.")
+            process.stdin.write(
+                f"activate:{activation['activationToken']}\n".encode("ascii")
+            )
+            await process.stdin.drain()
+            process.stdin.close()
+            await process.stdin.wait_closed()
+        except BaseException:
+            _signal_process_tree(process, signal.SIGTERM)
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(process.wait(), 3)
+            await collector.finalize()
+            raise
 
     limit_event = asyncio.Event()
 
@@ -126,6 +156,7 @@ async def runInlineShellCommand(
     return {
         "exitCode": exit_code,
         "exitSignal": _exit_signal(process.returncode),
+        **({"processIdentity": process_identity} if process_identity else {}),
         **capture,
         "timedOut": timed_out,
         "aborted": aborted,

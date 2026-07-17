@@ -1,0 +1,18 @@
+[
+  {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "-q",
+      "tests.test_package31_task_stop_terminal",
+      "tests.test_package31_health_check_safety",
+      "tests.test_package31_monitor_transition_concurrency"
+    ],
+    "driver": "run_subprocess",
+    "returnCode": 0,
+    "status": "passed",
+    "stderr": "----------------------------------------------------------------------\nRan 17 tests in <duration-s>\n\nOK\n",
+    "stdout": ""
+  }
+]

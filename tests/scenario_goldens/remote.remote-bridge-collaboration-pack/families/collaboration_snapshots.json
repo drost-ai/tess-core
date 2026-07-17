@@ -16,7 +16,7 @@
       "workers": [
         {
           "attachableSessionId": "<uuid:1>",
-          "bridgeId": "bridge-main",
+          "bridgeId": "<uuid:2>",
           "id": "remote-main",
           "kind": "remote",
           "label": "Remote QA",
@@ -148,7 +148,7 @@
       "workers": [
         {
           "attachableSessionId": "<uuid:1>",
-          "bridgeId": "bridge-main",
+          "bridgeId": "<uuid:2>",
           "id": "remote-main",
           "kind": "remote",
           "label": "Remote QA",

@@ -1,0 +1,47 @@
+{
+  "area": "remote",
+  "capture": {
+    "include": [
+      "driver_results",
+      "subprocess_results",
+      "step_results"
+    ]
+  },
+  "id": "remote.bridge-generation-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {}
+  },
+  "steps": [
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "-q",
+          "tests.test_package31_remote_bridge_lifecycle"
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "returnCode": 0,
+        "status": "passed"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "driver_results",
+          "subprocess_results",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Remote Bridge Generation Lifecycle Pack"
+}

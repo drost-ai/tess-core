@@ -17,6 +17,7 @@ _MODULE_NAMES = [
     "record_issues",
     "projection",
     "reconciliation",
+    "stop",
 ]
 
 _modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]

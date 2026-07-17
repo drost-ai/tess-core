@@ -26,6 +26,7 @@ class ProviderRequest(_ProviderRequestRequired, total=False):
     tools: list[dict[str, Any]]
     effort: str
     sessionId: str
+    promptCache: dict[str, Any]
 
 
 class TextBlock(TypedDict):
@@ -53,6 +54,9 @@ class ProviderUsage(TypedDict, total=False):
     input_tokens: int | None
     output_tokens: int | None
     cache_creation_input_tokens: int | None
+    cache_creation_5m_input_tokens: int | None
+    cache_creation_1h_input_tokens: int | None
+    cache_creation_ttl_detail_complete: bool
     cache_read_input_tokens: int | None
 
 
@@ -65,6 +69,7 @@ class _ProviderResponseRequired(TypedDict):
 class ProviderResponse(_ProviderResponseRequired, total=False):
     stopReason: str | None
     provider_metadata: dict[str, Any]  # OpenAI reasoning metadata
+    promptCache: dict[str, Any]  # Internal cache observation; never serialized to provider.
 
 
 ProviderFailureCategory = Literal[

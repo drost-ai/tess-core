@@ -1,14 +1,15 @@
 [
   {
     "activeRows": [
-      "bridge-m  qa                  active    remote-m  <timestamp>"
+      "<bridge>  qa                  active    remote-m  <timestamp>"
     ],
     "alias": "main",
     "diagnostics": {
       "bridge": {
         "createdAt": "<timestamp>",
         "cwd": "<workspace>",
-        "id": "bridge-main",
+        "generation": 1,
+        "id": "<uuid:2>",
         "lastEventName": "bridge.message.received",
         "lastMessageAt": "<timestamp>",
         "lastMessageSource": "remote",
@@ -16,52 +17,65 @@
         "name": "qa",
         "pendingMessages": 0,
         "remoteSessionId": "remote-main",
+        "revision": 4,
+        "schemaVersion": 2,
         "sessionId": "<uuid:1>",
         "status": "active",
+        "supersedes": [],
         "updatedAt": "<timestamp>"
       },
       "bridgeStatus": "active",
       "events": [
         {
-          "bridgeId": "bridge-main",
+          "bridgeId": "<uuid:2>",
           "createdAt": "<timestamp>",
           "data": {
-            "bridge_id": "bridge-main",
+            "bridge_generation": 1,
+            "bridge_id": "<uuid:2>",
             "name": "qa",
             "remote_session_id": "remote-main",
+            "reused": false,
             "session_id": "<uuid:1>"
           },
           "event": "bridge.started",
-          "id": "<uuid:10>"
+          "generation": 1,
+          "id": "<uuid:11>"
         },
         {
-          "bridgeId": "bridge-main",
+          "bridgeId": "<uuid:2>",
           "createdAt": "<timestamp>",
           "data": {
-            "message_id": "<uuid:2>",
+            "delivery_key": "<uuid:2>:<uuid:3>",
+            "message_id": "<uuid:3>",
             "source": "remote",
             "text": "please review"
           },
           "event": "bridge.message.queued",
-          "id": "<uuid:11>"
+          "generation": 1,
+          "id": "queued-<bridge-event-key:1>",
+          "idempotencyKey": "<uuid:2>:<uuid:3>"
         },
         {
-          "bridgeId": "bridge-main",
+          "bridgeId": "<uuid:2>",
           "createdAt": "<timestamp>",
           "data": {
-            "message_id": "<uuid:2>",
+            "delivery_key": "<uuid:2>:<uuid:3>",
+            "message_id": "<uuid:3>",
             "source": "remote",
             "text": "please review"
           },
           "event": "bridge.message.received",
-          "id": "<uuid:12>"
+          "generation": 1,
+          "id": "delivery-<bridge-event-key:1>",
+          "idempotencyKey": "<uuid:2>:<uuid:3>"
         }
       ],
       "inboxCount": 1,
       "messageCount": 1,
       "pendingMessages": 0,
       "remote": {
-        "bridgeId": "bridge-main",
+        "bridgeGeneration": 1,
+        "bridgeId": "<uuid:2>",
         "bridgeStatus": "active",
         "channelServers": [
           "local"
@@ -79,7 +93,7 @@
         "sessionId": "<uuid:1>",
         "status": "awaiting_input",
         "title": "Remote QA",
-        "unreadBridgeMessages": 1,
+        "unreadBridgeMessages": 0,
         "updatedAt": "<timestamp>",
         "workspaceName": "<workspace-name>"
       },
@@ -88,107 +102,74 @@
     },
     "driver": "collect_bridge_diagnostics",
     "status": "passed",
-    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"bridge-main\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-main\",\"name\":\"qa\"}\n<timestamp>  bridge.message.queued  please review\n<timestamp>  bridge.message.received  please review"
+    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"<uuid:2>\",\"bridge_generation\":1,\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-main\",\"name\":\"qa\",\"reused\":false}\n<timestamp>  bridge.message.queued  please review\n<timestamp>  bridge.message.received  please review"
   },
   {
     "activeRows": [
-      "bridge-r  replay              active    remote-r  <timestamp>",
-      "bridge-m  qa                  active    remote-m  <timestamp>"
+      "<bridge>  replay              active    remote-r  <timestamp>"
     ],
     "alias": "replay",
     "diagnostics": {
       "bridge": {
         "createdAt": "<timestamp>",
         "cwd": "<workspace>",
-        "id": "bridge-replay",
+        "generation": 3,
+        "id": "<uuid:7>",
         "lastEventName": "bridge.message.received",
         "lastMessageAt": "<timestamp>",
         "lastMessageSource": "remote",
-        "messageCount": 2,
+        "messageCount": 1,
         "name": "replay",
         "pendingMessages": 0,
         "remoteSessionId": "remote-replay",
+        "revision": 3,
+        "schemaVersion": 2,
         "sessionId": "<uuid:1>",
         "status": "active",
+        "supersedes": [
+          "<uuid:2>",
+          "<uuid:4>"
+        ],
         "updatedAt": "<timestamp>"
       },
       "bridgeStatus": "active",
       "events": [
         {
-          "bridgeId": "bridge-replay",
+          "bridgeId": "<uuid:7>",
           "createdAt": "<timestamp>",
           "data": {
-            "bridge_id": "bridge-replay",
+            "bridge_generation": 3,
+            "bridge_id": "<uuid:7>",
             "name": "replay",
             "remote_session_id": "remote-replay",
+            "reused": false,
             "session_id": "<uuid:1>"
           },
           "event": "bridge.started",
-          "id": "<uuid:14>"
+          "generation": 3,
+          "id": "<uuid:13>"
         },
         {
-          "bridgeId": "bridge-replay",
+          "bridgeId": "<uuid:7>",
           "createdAt": "<timestamp>",
           "data": {
-            "message_id": "<uuid:3>",
-            "source": "remote",
-            "text": "already delivered"
-          },
-          "event": "bridge.message.queued",
-          "id": "<uuid:15>"
-        },
-        {
-          "bridgeId": "bridge-replay",
-          "createdAt": "<timestamp>",
-          "data": {
-            "message_id": "<uuid:3>",
-            "source": "remote",
-            "text": "already delivered"
-          },
-          "event": "bridge.message.received",
-          "id": "<uuid:16>"
-        },
-        {
-          "bridgeId": "bridge-replay",
-          "createdAt": "<timestamp>",
-          "data": {
-            "message_id": "<uuid:4>",
-            "source": "remote",
-            "text": "deliver after restart"
-          },
-          "event": "bridge.message.queued",
-          "id": "<uuid:17>"
-        },
-        {
-          "bridgeId": "bridge-replay",
-          "createdAt": "<timestamp>",
-          "data": {
-            "bridge_id": "bridge-replay",
-            "name": "replay",
-            "remote_session_id": "remote-replay",
-            "replayed_messages": 1,
-            "session_id": "<uuid:1>"
-          },
-          "event": "bridge.reconnected",
-          "id": "<uuid:18>"
-        },
-        {
-          "bridgeId": "bridge-replay",
-          "createdAt": "<timestamp>",
-          "data": {
-            "message_id": "<uuid:4>",
+            "delivery_key": "<uuid:4>:<uuid:6>",
+            "message_id": "<uuid:6>",
             "source": "remote",
             "text": "deliver after restart"
           },
           "event": "bridge.message.received",
-          "id": "<uuid:19>"
+          "generation": 3,
+          "id": "delivery-<bridge-event-key:3>",
+          "idempotencyKey": "<uuid:4>:<uuid:6>"
         }
       ],
-      "inboxCount": 2,
-      "messageCount": 2,
+      "inboxCount": 1,
+      "messageCount": 1,
       "pendingMessages": 0,
       "remote": {
-        "bridgeId": "bridge-replay",
+        "bridgeGeneration": 3,
+        "bridgeId": "<uuid:7>",
         "bridgeStatus": "active",
         "channelServers": [
           "local"
@@ -206,7 +187,7 @@
         "sessionId": "<uuid:1>",
         "status": "awaiting_input",
         "title": "Replay Remote",
-        "unreadBridgeMessages": 2,
+        "unreadBridgeMessages": 0,
         "updatedAt": "<timestamp>",
         "workspaceName": "<workspace-name>"
       },
@@ -215,77 +196,89 @@
     },
     "driver": "collect_bridge_diagnostics",
     "status": "passed",
-    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"bridge-replay\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-replay\",\"name\":\"replay\"}\n<timestamp>  bridge.message.queued  already delivered\n<timestamp>  bridge.message.received  already delivered\n<timestamp>  bridge.message.queued  deliver after restart\n<timestamp>  bridge.reconnected  {\"bridge_id\":\"bridge-replay\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-replay\",\"name\":\"replay\",\"replayed_messages\":1}\n<timestamp>  bridge.message.received  deliver after restart"
+    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"<uuid:7>\",\"bridge_generation\":3,\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-replay\",\"name\":\"replay\",\"reused\":false}\n<timestamp>  bridge.message.received  deliver after restart"
   },
   {
     "activeRows": [
-      "bridge-r  replay              active    remote-r  <timestamp>",
-      "bridge-m  qa                  active    remote-m  <timestamp>"
+      "<bridge>  failure             active    remote-f  <timestamp>"
     ],
     "alias": "failure",
     "diagnostics": {
       "bridge": {
         "createdAt": "<timestamp>",
         "cwd": "<workspace>",
-        "id": "bridge-failure",
-        "lastEventName": "bridge.failed",
-        "lastFailureMessage": "emit failure for failure",
-        "lastFailurePhase": "poll",
+        "generation": 4,
+        "id": "<uuid:8>",
+        "lastEventName": "bridge.poll_failed",
         "lastMessageAt": "<timestamp>",
         "lastMessageSource": "remote",
         "messageCount": 0,
         "name": "failure",
         "pendingMessages": 1,
         "remoteSessionId": "remote-failure",
+        "revision": 4,
+        "schemaVersion": 2,
         "sessionId": "<uuid:1>",
-        "status": "failed",
+        "status": "active",
+        "supersedes": [
+          "<uuid:2>",
+          "<uuid:4>",
+          "<uuid:7>"
+        ],
         "updatedAt": "<timestamp>"
       },
-      "bridgeStatus": "failed",
+      "bridgeStatus": "active",
       "events": [
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "bridge_id": "bridge-failure",
+            "bridge_generation": 4,
+            "bridge_id": "<uuid:8>",
             "name": "failure",
             "remote_session_id": "remote-failure",
+            "reused": false,
             "session_id": "<uuid:1>"
           },
           "event": "bridge.started",
-          "id": "<uuid:6>"
+          "generation": 4,
+          "id": "<uuid:14>"
         },
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "message_id": "<uuid:5>",
+            "delivery_key": "<uuid:8>:<uuid:9>",
+            "message_id": "<uuid:9>",
             "source": "remote",
             "text": "retry me"
           },
           "event": "bridge.message.queued",
-          "id": "<uuid:7>"
+          "generation": 4,
+          "id": "queued-<bridge-event-key:4>",
+          "idempotencyKey": "<uuid:8>:<uuid:9>"
         },
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "bridge_id": "bridge-failure",
-            "error": "emit failure for failure",
-            "phase": "poll",
-            "remote_session_id": "remote-failure",
+            "bridge_generation": 4,
+            "bridge_id": "<uuid:8>",
+            "reason": "emit failure for failure",
             "session_id": "<uuid:1>"
           },
-          "event": "bridge.failed",
-          "id": "<uuid:8>"
+          "event": "bridge.poll_failed",
+          "generation": 4,
+          "id": "<uuid:15>"
         }
       ],
       "inboxCount": 1,
       "messageCount": 0,
       "pendingMessages": 1,
       "remote": {
-        "bridgeId": "bridge-failure",
-        "bridgeStatus": "failed",
+        "bridgeGeneration": 4,
+        "bridgeId": "<uuid:8>",
+        "bridgeStatus": "active",
         "channelServers": [
           "local"
         ],
@@ -296,103 +289,117 @@
         "gitBranch": "<git-branch>",
         "id": "remote-failure",
         "lastEventAt": "<timestamp>",
-        "lastEventName": "bridge.failed",
-        "lastEventSummary": "Bridge failed during poll: emit failure for failure",
+        "lastEventName": "bridge.poll_failed",
+        "lastEventSummary": "bridge.poll_failed",
         "originalCwd": "<workspace>",
         "sessionId": "<uuid:1>",
-        "status": "failed",
+        "status": "active",
         "title": "Failure Remote",
         "unreadBridgeMessages": 1,
         "updatedAt": "<timestamp>",
         "workspaceName": "<workspace-name>"
       },
-      "remoteStatus": "failed",
-      "status": "failed"
+      "remoteStatus": "active",
+      "status": "active"
     },
     "driver": "collect_bridge_diagnostics",
     "status": "passed",
-    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"bridge-failure\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-failure\",\"name\":\"failure\"}\n<timestamp>  bridge.message.queued  retry me\n<timestamp>  bridge.failed  {\"bridge_id\":\"bridge-failure\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-failure\",\"phase\":\"poll\",\"error\":\"emit failure for failure\"}"
+    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"<uuid:8>\",\"bridge_generation\":4,\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-failure\",\"name\":\"failure\",\"reused\":false}\n<timestamp>  bridge.message.queued  retry me\n<timestamp>  bridge.poll_failed  {\"bridge_id\":\"<uuid:8>\",\"bridge_generation\":4,\"session_id\":\"<uuid:1>\",\"reason\":\"emit failure for failure\"}"
   },
   {
     "activeRows": [
-      "bridge-f  failure             active    remote-f  <timestamp>",
-      "bridge-r  replay              active    remote-r  <timestamp>",
-      "bridge-m  qa                  active    remote-m  <timestamp>"
+      "<bridge>  failure             active    remote-f  <timestamp>"
     ],
     "alias": "failure",
     "diagnostics": {
       "bridge": {
         "createdAt": "<timestamp>",
         "cwd": "<workspace>",
-        "id": "bridge-failure",
+        "generation": 4,
+        "id": "<uuid:8>",
         "lastEventName": "bridge.message.received",
-        "lastFailureMessage": "emit failure for failure",
-        "lastFailurePhase": "poll",
         "lastMessageAt": "<timestamp>",
         "lastMessageSource": "remote",
         "messageCount": 1,
         "name": "failure",
         "pendingMessages": 0,
         "remoteSessionId": "remote-failure",
+        "revision": 5,
+        "schemaVersion": 2,
         "sessionId": "<uuid:1>",
         "status": "active",
+        "supersedes": [
+          "<uuid:2>",
+          "<uuid:4>",
+          "<uuid:7>"
+        ],
         "updatedAt": "<timestamp>"
       },
       "bridgeStatus": "active",
       "events": [
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "bridge_id": "bridge-failure",
+            "bridge_generation": 4,
+            "bridge_id": "<uuid:8>",
             "name": "failure",
             "remote_session_id": "remote-failure",
+            "reused": false,
             "session_id": "<uuid:1>"
           },
           "event": "bridge.started",
-          "id": "<uuid:6>"
+          "generation": 4,
+          "id": "<uuid:14>"
         },
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "message_id": "<uuid:5>",
+            "delivery_key": "<uuid:8>:<uuid:9>",
+            "message_id": "<uuid:9>",
             "source": "remote",
             "text": "retry me"
           },
           "event": "bridge.message.queued",
-          "id": "<uuid:7>"
+          "generation": 4,
+          "id": "queued-<bridge-event-key:4>",
+          "idempotencyKey": "<uuid:8>:<uuid:9>"
         },
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "bridge_id": "bridge-failure",
-            "error": "emit failure for failure",
-            "phase": "poll",
-            "remote_session_id": "remote-failure",
+            "bridge_generation": 4,
+            "bridge_id": "<uuid:8>",
+            "reason": "emit failure for failure",
             "session_id": "<uuid:1>"
           },
-          "event": "bridge.failed",
-          "id": "<uuid:8>"
+          "event": "bridge.poll_failed",
+          "generation": 4,
+          "id": "<uuid:15>"
         },
         {
-          "bridgeId": "bridge-failure",
+          "bridgeId": "<uuid:8>",
           "createdAt": "<timestamp>",
           "data": {
-            "message_id": "<uuid:5>",
+            "delivery_key": "<uuid:8>:<uuid:9>",
+            "message_id": "<uuid:9>",
             "source": "remote",
             "text": "retry me"
           },
           "event": "bridge.message.received",
-          "id": "<uuid:9>"
+          "generation": 4,
+          "id": "delivery-<bridge-event-key:4>",
+          "idempotencyKey": "<uuid:8>:<uuid:9>"
         }
       ],
       "inboxCount": 1,
       "messageCount": 1,
       "pendingMessages": 0,
       "remote": {
-        "bridgeId": "bridge-failure",
+        "bridgeGeneration": 4,
+        "bridgeId": "<uuid:8>",
         "bridgeStatus": "active",
         "channelServers": [
           "local"
@@ -410,7 +417,7 @@
         "sessionId": "<uuid:1>",
         "status": "awaiting_input",
         "title": "Failure Remote",
-        "unreadBridgeMessages": 1,
+        "unreadBridgeMessages": 0,
         "updatedAt": "<timestamp>",
         "workspaceName": "<workspace-name>"
       },
@@ -419,6 +426,6 @@
     },
     "driver": "collect_bridge_diagnostics",
     "status": "passed",
-    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"bridge-failure\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-failure\",\"name\":\"failure\"}\n<timestamp>  bridge.message.queued  retry me\n<timestamp>  bridge.failed  {\"bridge_id\":\"bridge-failure\",\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-failure\",\"phase\":\"poll\",\"error\":\"emit failure for failure\"}\n<timestamp>  bridge.message.received  retry me"
+    "tail": "<timestamp>  bridge.started  {\"bridge_id\":\"<uuid:8>\",\"bridge_generation\":4,\"session_id\":\"<uuid:1>\",\"remote_session_id\":\"remote-failure\",\"name\":\"failure\",\"reused\":false}\n<timestamp>  bridge.message.queued  retry me\n<timestamp>  bridge.poll_failed  {\"bridge_id\":\"<uuid:8>\",\"bridge_generation\":4,\"session_id\":\"<uuid:1>\",\"reason\":\"emit failure for failure\"}\n<timestamp>  bridge.message.received  retry me"
   }
 ]

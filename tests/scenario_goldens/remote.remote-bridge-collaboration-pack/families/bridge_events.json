@@ -1,179 +1,226 @@
 [
   {
-    "bridgeId": "bridge-failure",
+    "bridgeId": "<uuid:2>",
     "events": [
       {
-        "bridgeId": "bridge-failure",
+        "bridgeId": "<uuid:2>",
         "createdAt": "<timestamp>",
         "data": {
-          "bridge_id": "bridge-failure",
-          "name": "failure",
-          "remote_session_id": "remote-failure",
-          "session_id": "<uuid:1>"
-        },
-        "event": "bridge.started",
-        "id": "<uuid:6>"
-      },
-      {
-        "bridgeId": "bridge-failure",
-        "createdAt": "<timestamp>",
-        "data": {
-          "message_id": "<uuid:5>",
-          "source": "remote",
-          "text": "retry me"
-        },
-        "event": "bridge.message.queued",
-        "id": "<uuid:7>"
-      },
-      {
-        "bridgeId": "bridge-failure",
-        "createdAt": "<timestamp>",
-        "data": {
-          "bridge_id": "bridge-failure",
-          "error": "emit failure for failure",
-          "phase": "poll",
-          "remote_session_id": "remote-failure",
-          "session_id": "<uuid:1>"
-        },
-        "event": "bridge.failed",
-        "id": "<uuid:8>"
-      },
-      {
-        "bridgeId": "bridge-failure",
-        "createdAt": "<timestamp>",
-        "data": {
-          "message_id": "<uuid:5>",
-          "source": "remote",
-          "text": "retry me"
-        },
-        "event": "bridge.message.received",
-        "id": "<uuid:9>"
-      }
-    ]
-  },
-  {
-    "bridgeId": "bridge-main",
-    "events": [
-      {
-        "bridgeId": "bridge-main",
-        "createdAt": "<timestamp>",
-        "data": {
-          "bridge_id": "bridge-main",
+          "bridge_generation": 1,
+          "bridge_id": "<uuid:2>",
           "name": "qa",
           "remote_session_id": "remote-main",
+          "reused": false,
           "session_id": "<uuid:1>"
         },
         "event": "bridge.started",
-        "id": "<uuid:10>"
-      },
-      {
-        "bridgeId": "bridge-main",
-        "createdAt": "<timestamp>",
-        "data": {
-          "message_id": "<uuid:2>",
-          "source": "remote",
-          "text": "please review"
-        },
-        "event": "bridge.message.queued",
+        "generation": 1,
         "id": "<uuid:11>"
       },
       {
-        "bridgeId": "bridge-main",
+        "bridgeId": "<uuid:2>",
         "createdAt": "<timestamp>",
         "data": {
-          "message_id": "<uuid:2>",
+          "delivery_key": "<uuid:2>:<uuid:3>",
+          "message_id": "<uuid:3>",
+          "source": "remote",
+          "text": "please review"
+        },
+        "event": "bridge.message.queued",
+        "generation": 1,
+        "id": "queued-<bridge-event-key:1>",
+        "idempotencyKey": "<uuid:2>:<uuid:3>"
+      },
+      {
+        "bridgeId": "<uuid:2>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "delivery_key": "<uuid:2>:<uuid:3>",
+          "message_id": "<uuid:3>",
           "source": "remote",
           "text": "please review"
         },
         "event": "bridge.message.received",
-        "id": "<uuid:12>"
-      },
-      {
-        "bridgeId": "bridge-main",
-        "createdAt": "<timestamp>",
-        "data": {
-          "bridge_id": "bridge-main",
-          "name": "qa",
-          "remote_session_id": "remote-main",
-          "replayed_messages": 0,
-          "session_id": "<uuid:1>"
-        },
-        "event": "bridge.reconnected",
-        "id": "<uuid:13>"
+        "generation": 1,
+        "id": "delivery-<bridge-event-key:1>",
+        "idempotencyKey": "<uuid:2>:<uuid:3>"
       }
     ]
   },
   {
-    "bridgeId": "bridge-replay",
+    "bridgeId": "<uuid:4>",
     "events": [
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:4>",
         "createdAt": "<timestamp>",
         "data": {
-          "bridge_id": "bridge-replay",
+          "bridge_generation": 2,
+          "bridge_id": "<uuid:4>",
           "name": "replay",
           "remote_session_id": "remote-replay",
+          "reused": false,
           "session_id": "<uuid:1>"
         },
         "event": "bridge.started",
+        "generation": 2,
+        "id": "<uuid:12>"
+      },
+      {
+        "bridgeId": "<uuid:4>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "delivery_key": "<uuid:4>:<uuid:5>",
+          "message_id": "<uuid:5>",
+          "source": "remote",
+          "text": "already delivered"
+        },
+        "event": "bridge.message.queued",
+        "generation": 2,
+        "id": "queued-<bridge-event-key:2>",
+        "idempotencyKey": "<uuid:4>:<uuid:5>"
+      },
+      {
+        "bridgeId": "<uuid:4>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "delivery_key": "<uuid:4>:<uuid:5>",
+          "message_id": "<uuid:5>",
+          "source": "remote",
+          "text": "already delivered"
+        },
+        "event": "bridge.message.received",
+        "generation": 2,
+        "id": "delivery-<bridge-event-key:2>",
+        "idempotencyKey": "<uuid:4>:<uuid:5>"
+      },
+      {
+        "bridgeId": "<uuid:4>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "delivery_key": "<uuid:4>:<uuid:6>",
+          "message_id": "<uuid:6>",
+          "source": "remote",
+          "text": "deliver after restart"
+        },
+        "event": "bridge.message.queued",
+        "generation": 2,
+        "id": "queued-<bridge-event-key:3>",
+        "idempotencyKey": "<uuid:4>:<uuid:6>"
+      }
+    ]
+  },
+  {
+    "bridgeId": "<uuid:7>",
+    "events": [
+      {
+        "bridgeId": "<uuid:7>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_generation": 3,
+          "bridge_id": "<uuid:7>",
+          "name": "replay",
+          "remote_session_id": "remote-replay",
+          "reused": false,
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.started",
+        "generation": 3,
+        "id": "<uuid:13>"
+      },
+      {
+        "bridgeId": "<uuid:7>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "delivery_key": "<uuid:4>:<uuid:6>",
+          "message_id": "<uuid:6>",
+          "source": "remote",
+          "text": "deliver after restart"
+        },
+        "event": "bridge.message.received",
+        "generation": 3,
+        "id": "delivery-<bridge-event-key:3>",
+        "idempotencyKey": "<uuid:4>:<uuid:6>"
+      }
+    ]
+  },
+  {
+    "bridgeId": "<uuid:8>",
+    "events": [
+      {
+        "bridgeId": "<uuid:8>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_generation": 4,
+          "bridge_id": "<uuid:8>",
+          "name": "failure",
+          "remote_session_id": "remote-failure",
+          "reused": false,
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.started",
+        "generation": 4,
         "id": "<uuid:14>"
       },
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:8>",
         "createdAt": "<timestamp>",
         "data": {
-          "message_id": "<uuid:3>",
+          "delivery_key": "<uuid:8>:<uuid:9>",
+          "message_id": "<uuid:9>",
           "source": "remote",
-          "text": "already delivered"
+          "text": "retry me"
         },
         "event": "bridge.message.queued",
+        "generation": 4,
+        "id": "queued-<bridge-event-key:4>",
+        "idempotencyKey": "<uuid:8>:<uuid:9>"
+      },
+      {
+        "bridgeId": "<uuid:8>",
+        "createdAt": "<timestamp>",
+        "data": {
+          "bridge_generation": 4,
+          "bridge_id": "<uuid:8>",
+          "reason": "emit failure for failure",
+          "session_id": "<uuid:1>"
+        },
+        "event": "bridge.poll_failed",
+        "generation": 4,
         "id": "<uuid:15>"
       },
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:8>",
         "createdAt": "<timestamp>",
         "data": {
-          "message_id": "<uuid:3>",
+          "delivery_key": "<uuid:8>:<uuid:9>",
+          "message_id": "<uuid:9>",
           "source": "remote",
-          "text": "already delivered"
+          "text": "retry me"
         },
         "event": "bridge.message.received",
-        "id": "<uuid:16>"
-      },
+        "generation": 4,
+        "id": "delivery-<bridge-event-key:4>",
+        "idempotencyKey": "<uuid:8>:<uuid:9>"
+      }
+    ]
+  },
+  {
+    "bridgeId": "<uuid:10>",
+    "events": [
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:10>",
         "createdAt": "<timestamp>",
         "data": {
-          "message_id": "<uuid:4>",
-          "source": "remote",
-          "text": "deliver after restart"
-        },
-        "event": "bridge.message.queued",
-        "id": "<uuid:17>"
-      },
-      {
-        "bridgeId": "bridge-replay",
-        "createdAt": "<timestamp>",
-        "data": {
-          "bridge_id": "bridge-replay",
-          "name": "replay",
-          "remote_session_id": "remote-replay",
-          "replayed_messages": 1,
+          "bridge_generation": 5,
+          "bridge_id": "<uuid:10>",
+          "name": "qa",
+          "remote_session_id": "remote-main",
+          "reused": false,
           "session_id": "<uuid:1>"
         },
-        "event": "bridge.reconnected",
-        "id": "<uuid:18>"
-      },
-      {
-        "bridgeId": "bridge-replay",
-        "createdAt": "<timestamp>",
-        "data": {
-          "message_id": "<uuid:4>",
-          "source": "remote",
-          "text": "deliver after restart"
-        },
-        "event": "bridge.message.received",
-        "id": "<uuid:19>"
+        "event": "bridge.started",
+        "generation": 5,
+        "id": "<uuid:16>"
       }
     ]
   }

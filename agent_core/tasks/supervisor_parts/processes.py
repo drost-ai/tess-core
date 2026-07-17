@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..terminal_store import commitTaskProcessCompletion, saveProjectedTaskRecord
 from ...sandbox import prepareSandboxedArgv
 
 
@@ -186,53 +187,68 @@ def _watch_process_thread(
     cwd: str,
     output_file: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
+    wait_for_stop_commit: Callable[[str], None],
 ) -> None:
-    proc = _PROCESS_REGISTRY.get(task_id)
-    if not proc:
-        return
-    code = proc.wait()
-    _PROCESS_REGISTRY.pop(task_id, None)
-    now = now_iso()
-    previous_status_seen: list[Any] = [None]
+    try:
+        proc = _PROCESS_REGISTRY.get(task_id)
+        if not proc:
+            return
+        code = proc.wait()
+        wait_for_stop_commit(task_id)
+        _PROCESS_REGISTRY.pop(task_id, None)
+        signal_name = _signal_name(abs(code)) if code is not None and code < 0 else None
 
-    def _finalize_exit(previous_raw: dict[str, Any] | None) -> dict[str, Any]:
-        previous = previous_raw or {}
-        previous_status = previous.get("status")
-        previous_status_seen[0] = previous_status
-        if _is_terminal_worker_status(previous_status):
-            status = str(previous_status)
-        else:
-            status = "completed" if code == 0 else "failed"
-            if code is not None and code < 0:
-                status = "terminated" if abs(code) in {signal.SIGINT, signal.SIGTERM} else "failed"
-        exit_code = previous.get("exitCode") if _is_terminal_worker_status(previous_status) else None if status == "terminated" else code
-        signal_name = previous.get("signal")
-        if signal_name is None and code is not None and code < 0:
-            signal_name = _signal_name(abs(code))
-        return {
-            **previous,
-            "type": previous.get("type") or "background_command",
-            "taskId": task_id,
-            "id": task_id,
-            "command": previous.get("command") or command,
-            "cwd": previous.get("cwd") or cwd,
-            "outputFile": previous.get("outputFile") or output_file,
-            "status": status,
-            "exitCode": exit_code,
-            "signal": signal_name,
-            "finishedAt": previous.get("finishedAt") or previous.get("completedAt") or now,
-            "updatedAt": now,
-            "detailStatus": previous.get("detailStatus") or previous.get("completionReason") or previous.get("waitingReason") or status,
-        }
+        async def finalize() -> None:
+            committed = await commitTaskProcessCompletion(
+                taskId=task_id,
+                code=code,
+                signalName=signal_name,
+            )
+            transition = committed["transition"]
+            record = committed.get("record")
+            if transition["changed"]:
+                if record and transition.get("event"):
+                    await maybe_await(
+                        emit(
+                            transition["event"],
+                            _task_record_event_payload(record),
+                            record.get("sessionId"),
+                        )
+                    )
+                return
 
-    meta = asyncio.run(mutateTaskMeta(task_id, _finalize_exit, fallback={}))
-    previous_status = previous_status_seen[0]
-    summary = None if _is_terminal_worker_status(previous_status) else _process_exit_summary(str(meta.get("status")), code)
-    record = _build_task_record(meta, summary)
-    asyncio.run(saveTaskRecord(record))
-    event_session_id = meta.get("parent_session_id") if meta.get("type") == "subagent" else meta.get("sessionId")
-    asyncio.run(maybe_await(emit(_event_name_for_task_status(record.get("status")), _task_record_event_payload(record), event_session_id)))
-    _WATCHERS.discard(threading.current_thread())
+            # A worker may have durably written terminal task metadata before
+            # the process watcher observes exit.  Project that worker-owned
+            # state once, while preserving a supervisor/tool terminal record
+            # as the first-terminal-wins authority.
+            existing = await loadTaskRecord(task_id)
+            if existing and existing.get("status") in {"completed", "failed", "stopped"}:
+                return
+            meta = await readTaskMeta(task_id)
+            if not meta or not _is_terminal_worker_status(meta.get("status")):
+                return
+            projected = _build_task_record(meta, None)
+            saved = await saveProjectedTaskRecord(projected)
+            metadata = saved.get("metadata") if isinstance(saved.get("metadata"), dict) else {}
+            owner = metadata.get("terminal_event_owner")
+            if owner in {"supervisor", "tool"}:
+                return
+            event_session_id = (
+                meta.get("parent_session_id")
+                if meta.get("type") == "subagent"
+                else meta.get("sessionId")
+            )
+            await maybe_await(
+                emit(
+                    _event_name_for_task_status(saved.get("status")),
+                    _task_record_event_payload(saved),
+                    event_session_id,
+                )
+            )
+
+        asyncio.run(finalize())
+    finally:
+        _WATCHERS.discard(threading.current_thread())
 
 
 def _is_process_alive(pid: int) -> bool:

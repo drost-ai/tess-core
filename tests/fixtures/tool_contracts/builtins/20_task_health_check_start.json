@@ -9,6 +9,16 @@
       "command": {
         "type": "string"
       },
+      "body_limit_bytes": {
+        "type": "number"
+      },
+      "expected_body_policy": {
+        "enum": [
+          "ignore",
+          "contains"
+        ],
+        "type": "string"
+      },
       "expected_body_substring": {
         "type": "string"
       },
@@ -33,6 +43,9 @@
           "command"
         ],
         "type": "string"
+      },
+      "output_limit_bytes": {
+        "type": "number"
       },
       "timeout_ms": {
         "type": "number"

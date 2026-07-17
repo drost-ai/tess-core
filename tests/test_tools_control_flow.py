@@ -189,7 +189,12 @@ class ToolControlFlowTests(AgentCoreTestCase):
             run(core.saveMonitor(monitor))
             session["metadata"]["monitorIds"] = [monitor["id"]]
             stopped = json.loads(run(tools["TaskMonitorStop"].handler({"monitor_id": monitor["id"]}, context))["content"])
-            self.assertEqual(stopped, {"monitor_id": monitor["id"], "task_id": "task-1", "status": "stopped", "previous_status": "active", "changed": True})
+            self.assertEqual(
+                {key: stopped[key] for key in ("monitor_id", "task_id", "status", "previous_status", "changed")},
+                {"monitor_id": monitor["id"], "task_id": "task-1", "status": "stopped", "previous_status": "active", "changed": True},
+            )
+            self.assertEqual(stopped["revision"], 1)
+            self.assertTrue(stopped["transition_id"].startswith(f"monitor:{monitor['id']}:r1:"))
             self.assertEqual([event for event, _ in events], ["monitor.status_changed"])
 
             with self.assertRaises(RuntimeError):
@@ -227,12 +232,25 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 return True
 
             health_context = {**context, "daemon": {"startHealthCheck": start_health, "stopTask": stop_health}}
-            started = json.loads(run(tools["TaskHealthCheckStart"].handler({"title": "health", "mode": "http", "url": "http://localhost", "expected_status_codes": [200, "bad"], "expected_body_substring": "ok"}, health_context))["content"])
+            with self.assertRaises(ValueError):
+                run(tools["TaskHealthCheckStart"].handler({"title": "health", "mode": "http", "url": "http://localhost", "expected_status_codes": [200, "bad"], "expected_body_policy": "contains", "expected_body_substring": "ok"}, health_context))
+            started = json.loads(run(tools["TaskHealthCheckStart"].handler({"title": "health", "mode": "http", "url": "http://localhost", "expected_status_codes": [200], "expected_body_policy": "contains", "expected_body_substring": "ok"}, health_context))["content"])
             self.assertEqual(started["task_id"], "health-1")
-            self.assertEqual(health_calls[0][1]["expectedStatusCodes"], [200])
-            self.assertEqual(health_calls[0][1]["expectedBodySubstring"], "ok")
+            self.assertEqual(health_calls[0][1]["spec"]["expectedStatusCodes"], [200])
+            self.assertEqual(health_calls[0][1]["spec"]["expectedBodySubstring"], "ok")
+            self.assertEqual(len(health_calls[0][1]["specDigest"]), 64)
             stopped_health = json.loads(run(tools["TaskHealthCheckStop"].handler({"task_id": "health-1"}, health_context))["content"])
-            self.assertEqual(stopped_health, {"task_id": "health-1", "stopped": True})
+            self.assertEqual(
+                stopped_health,
+                {
+                    "task_id": "health-1",
+                    "previous_status": "running",
+                    "status": "stopped",
+                    "changed": True,
+                    "stopped": True,
+                    "note": "Task stopped by deliberate request.",
+                },
+            )
 
             config["mcpConfig"] = [{"name": "http", "transport": "http", "commandOrUrl": "http://mcp", "headers": {"authorization": "Bearer token"}}, {"name": "stdio", "transport": "stdio", "commandOrUrl": "python"}]
             with mock.patch.object(

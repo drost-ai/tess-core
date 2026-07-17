@@ -1,6 +1,12 @@
 from __future__ import annotations
 
+import copy
+
 from .shared import *
+from ..prompt_cache_diagnostics import (
+    buildPromptCacheRequestSnapshot,
+    normalizePromptCacheProviderReason,
+)
 
 
 def _normalize_anthropic_api_base_url(baseUrl: str | None) -> str | None:
@@ -30,16 +36,34 @@ def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
         return MESSAGES_COUNT_TOKENS_API_URL
     return f"{base}/messages/count_tokens"
 
-def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
+DEFAULT_API_KEY_BETAS = ["fine-grained-tool-streaming-2025-05-14"]
+DEFAULT_OAUTH_BETAS = [
+    "claude-code-20250219",
+    "oauth-2025-04-20",
+    "fine-grained-tool-streaming-2025-05-14",
+]
+
+
+def buildAnthropicHeaders(
+    config: dict[str, Any],
+    options: dict[str, Any] | None = None,
+    features: dict[str, Any] | None = None,
+) -> dict[str, str]:
     from ...runtime_secret_provider import assertProviderConfigSecretsResolved
 
     config = assertProviderConfigSecretsResolved(config)
     options = options or {}
+    custom_headers = config.get("customHeaders") or {}
+    unrelated_custom_headers = {
+        name: value
+        for name, value in custom_headers.items()
+        if str(name).lower() not in {"anthropic-beta", "authorization", "x-api-key"}
+    }
     headers = {
         "accept": "text/event-stream" if options.get("stream") else "application/json",
         "content-type": "application/json",
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": _build_anthropic_beta_header(config),
+        "anthropic-beta": buildAnthropicBetaHeader(config, features or {}),
         "anthropic-dangerous-direct-browser-access": "true",
         "user-agent": (
             "claude-cli/2.1.2 (external, cli)"
@@ -47,7 +71,7 @@ def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None
             else "tess/0.1.0 (sdk-cli)"
         ),
         "x-app": "cli",
-        **(config.get("customHeaders") or {}),
+        **unrelated_custom_headers,
     }
     if config.get("authToken"):
         headers["authorization"] = f"Bearer {config['authToken']}"
@@ -57,42 +81,240 @@ def buildAnthropicHeaders(config: dict[str, Any], options: dict[str, Any] | None
         raise RuntimeError("No Anthropic credential is configured.")
     return headers
 
+
+def buildAnthropicBetaHeader(
+    config: dict[str, Any], features: dict[str, Any] | None = None
+) -> str:
+    from ...runtime_secret_provider import assertProviderConfigSecretsResolved
+
+    config = assertProviderConfigSecretsResolved(config)
+    features = features or {}
+    values = list(DEFAULT_OAUTH_BETAS if config.get("authToken") else DEFAULT_API_KEY_BETAS)
+    if not config.get("authToken") and _is_kimi_anthropic_coding_backend(config):
+        values.insert(0, "claude-code-20250219")
+    if features.get("providerDiagnostics"):
+        values.append("cache-diagnosis-2026-04-07")
+    custom_headers = config.get("customHeaders") or {}
+    for name, value in sorted(custom_headers.items(), key=lambda item: str(item[0])):
+        if str(name).lower() == "anthropic-beta":
+            values.extend(str(value).split(","))
+    seen: set[str] = set()
+    merged: list[str] = []
+    for token in values:
+        normalized = str(token).strip()
+        logical = normalized.lower()
+        if not normalized or logical in seen:
+            continue
+        seen.add(logical)
+        merged.append(normalized)
+    return ",".join(merged)
+
 def buildAnthropicCountTokensPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = buildAnthropicMessagesPayload(request, {"stream": False, **(options or {})})
     payload.pop("max_tokens", None)
     payload.pop("stream", None)
     payload.pop("output_config", None)
-    return payload
+    return sanitizeAnthropicCountPayload(payload)
 
 def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
+    built = _build_anthropic_payload_parts(request, options)
+    if _anthropic_provider_diagnostics_enabled(built["policy"]):
+        built["payload"]["diagnostics"] = {"previous_message_id": None}
+    return built["payload"]
+
+
+def buildAnthropicMessagesEnvelope(
+    request: dict[str, Any],
+    config: dict[str, Any],
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    built = _build_anthropic_payload_parts(request, {**(options or {}), "config": config})
+    policy = built["policy"]
+    diagnostics_requested = _anthropic_provider_diagnostics_enabled(policy)
+    header_features = {"providerDiagnostics": diagnostics_requested}
+    dispatch = policy.get("dispatchContext") if isinstance(policy.get("dispatchContext"), dict) else None
+    envelope = {
+        "payload": built["payload"],
+        "cachePlan": built["plan"],
+        "headerFeatures": header_features,
+        "diagnostics": {"requested": diagnostics_requested, "previousMessageIdSent": False},
+    }
+    if not dispatch or not policy.get("enabled"):
+        if diagnostics_requested:
+            built["payload"]["diagnostics"] = {"previous_message_id": None}
+        return envelope
+    snapshot = buildPromptCacheRequestSnapshot(
+        {
+            "providerProfileName": config.get("providerProfileName") or config.get("provider") or "anthropic",
+            "routeClass": _prompt_cache_route_class(policy.get("compatibility")),
+            "baseUrl": config.get("anthropicBaseUrl"),
+            "model": request.get("model"),
+            "betaTokens": [token.strip() for token in buildAnthropicBetaHeader(config, header_features).split(",") if token.strip()],
+            "normalizedTools": built["normalizedTools"],
+            "normalizedSystem": built["normalizedSystem"],
+            "normalizedMessages": built["normalizedMessages"],
+            "toolChoice": request.get("toolChoice") or request.get("tool_choice"),
+            "outputConfig": built.get("outputConfig"),
+            "policy": policy,
+            "plan": built["plan"],
+            "preparation": dispatch.get("preparation"),
+            "reactiveAttempt": (dispatch.get("dispatchOrder") or {}).get("reactiveAttempt"),
+        }
+    )
+    previous_message_id = (
+        _eligible_previous_diagnostic_id(dispatch.get("previous"), snapshot)
+        if diagnostics_requested
+        else None
+    )
+    if diagnostics_requested:
+        built["payload"]["diagnostics"] = {"previous_message_id": previous_message_id}
+    envelope["diagnostics"]["previousMessageIdSent"] = previous_message_id is not None
+    envelope["promptCache"] = {
+        "sessionId": dispatch.get("sessionId"),
+        "paths": dispatch.get("paths"),
+        "dispatchOrder": copy.deepcopy(dispatch.get("dispatchOrder")),
+        "plan": copy.deepcopy(built["plan"]),
+        "snapshot": snapshot,
+        "ttl": policy.get("ttl"),
+        "scope": policy.get("scope"),
+    }
+    return envelope
+
+
+def _build_anthropic_payload_parts(
+    request: dict[str, Any], options: dict[str, Any] | None = None
+) -> dict[str, Any]:
     options = options or {}
     config = options.get("config") if isinstance(options.get("config"), dict) else {}
-    system_blocks = [
-        {"type": "text", "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;"},
-    ]
+    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+    system_blocks = [{
+        "type": "text",
+        "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
+        "_cache_target": False,
+    }]
     system_text = str(request.get("system") or "").strip()
     if system_text:
         system_blocks.append({"type": "text", "text": system_text})
-    if anthropicExplicitCacheEnabled(config, request, options):
-        _mark_last_text_block_for_cache(system_blocks, anthropicCacheControl(config, request, options))
+    normalized_messages = [
+        {"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))}
+        for message in request.get("messages", [])
+    ]
+    normalized_tools = [
+        _normalize_anthropic_tool_definition(tool) for tool in request.get("tools") or []
+    ]
+    prior = request.get("promptCache") or request.get("prompt_cache") or {}
+    plan = planAnthropicCache(
+        {
+            "policy": policy,
+            "normalizedSystem": system_blocks,
+            "normalizedTools": normalized_tools,
+            "normalizedMessages": normalized_messages,
+            "previousAnchor": prior.get("messageTailPreviousAnchor")
+            if isinstance(prior, dict)
+            else None,
+        }
+    )
+    marked = applyAnthropicCachePlan(
+        {"system": system_blocks, "tools": normalized_tools, "messages": normalized_messages},
+        plan,
+    )
     payload: dict[str, Any] = {
         "model": request["model"],
         "max_tokens": _resolve_max_output_tokens(request),
-        "system": system_blocks,
-        "messages": [{"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))} for message in request.get("messages", [])],
+        "system": marked["system"],
+        "messages": marked["messages"],
     }
-    if anthropicAutomaticCacheEnabled(config, request, options):
-        payload["cache_control"] = anthropicCacheControl(config, request, options)
+    if marked["tools"]:
+        payload["tools"] = marked["tools"]
+    if plan["automatic"]:
+        payload["cache_control"] = copy.deepcopy(plan["cacheControl"])
     if options.get("stream"):
         payload["stream"] = True
     effort = request.get("effort")
     if effort:
         payload["thinking"] = {"type": "adaptive"}
         payload["output_config"] = {"effort": effort}
-    tools = request.get("tools") or []
-    if tools:
-        payload["tools"] = [_normalize_anthropic_tool_definition(tool) for tool in tools]
-    return payload
+    if countAnthropicCacheControls(payload) != plan["usedBreakpoints"]:
+        raise RuntimeError("Anthropic cache plan does not match serialized controls.")
+    return {
+        "payload": payload,
+        "plan": plan,
+        "policy": policy,
+        "normalizedSystem": system_blocks,
+        "normalizedTools": normalized_tools,
+        "normalizedMessages": normalized_messages,
+        "outputConfig": payload.get("output_config"),
+    }
+
+
+def _anthropic_provider_diagnostics_enabled(policy: dict[str, Any]) -> bool:
+    return bool(
+        policy.get("enabled")
+        and policy.get("providerDiagnostics")
+        and policy.get("compatibility") == "official"
+        and not policy.get("compatibilitySuppressedReason")
+    )
+
+
+def _eligible_previous_diagnostic_id(previous: Any, current: dict[str, Any]) -> str | None:
+    if not isinstance(previous, dict) or not isinstance(previous.get("responseId"), str):
+        return None
+    prior = previous.get("request")
+    if not isinstance(prior, dict):
+        return None
+    fields = (
+        "providerProfileNameHash",
+        "routeClass",
+        "endpointIdentityHash",
+        "modelHash",
+        "betasHash",
+        "cachePolicyHash",
+    )
+    return previous["responseId"] if all(prior.get(key) == current.get(key) for key in fields) else None
+
+
+def _prompt_cache_route_class(compatibility: Any) -> str:
+    return compatibility if compatibility in {"official", "claude_code", "compatible", "bedrock"} else "official"
+
+
+def planAnthropicCacheBreakpoints(
+    request: dict[str, Any], options: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    options = options or {}
+    config = options.get("config") if isinstance(options.get("config"), dict) else {}
+    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+    system = [{
+        "type": "text",
+        "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
+        "_cache_target": False,
+    }]
+    if str(request.get("system") or "").strip():
+        system.append({"type": "text", "text": str(request["system"]).strip()})
+    messages = [
+        {"role": item.get("role"), "content": normalizeAnthropicContentBlocks(item.get("content"))}
+        for item in request.get("messages") or []
+    ]
+    tools = [_normalize_anthropic_tool_definition(item) for item in request.get("tools") or []]
+    prior = request.get("promptCache") or request.get("prompt_cache") or {}
+    return planAnthropicCache(
+        {
+            "policy": policy,
+            "normalizedSystem": system,
+            "normalizedTools": tools,
+            "normalizedMessages": messages,
+            "previousAnchor": prior.get("messageTailPreviousAnchor")
+            if isinstance(prior, dict)
+            else None,
+        }
+    )
+
+
+def anthropicCacheBreakpointMessageIndices(plan: dict[str, Any]) -> list[int]:
+    return [
+        int(anchor["messageIndex"])
+        for anchor in (plan.get("tailA"), plan.get("tailB"))
+        if isinstance(anchor, dict) and isinstance(anchor.get("messageIndex"), int)
+    ]
 
 def _mark_last_text_block_for_cache(blocks: list[dict[str, Any]], cache_control: dict[str, str]) -> None:
     for index in range(len(blocks) - 1, -1, -1):
@@ -181,10 +403,4 @@ def _valid_base64_image_payload(value: str) -> bool:
         return False
     return True
 
-def _build_anthropic_beta_header(config: dict[str, Any]) -> str:
-    values = ["fine-grained-tool-streaming-2025-05-14"]
-    if config.get("authToken"):
-        values = ["claude-code-20250219", "oauth-2025-04-20", *values]
-    elif _is_kimi_anthropic_coding_backend(config):
-        values = ["claude-code-20250219", *values]
-    return ",".join(dict.fromkeys(values))
+_build_anthropic_beta_header = buildAnthropicBetaHeader

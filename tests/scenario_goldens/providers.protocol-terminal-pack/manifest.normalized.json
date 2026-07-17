@@ -1,0 +1,49 @@
+{
+  "area": "providers",
+  "capture": {
+    "include": [
+      "driver_results",
+      "subprocess_results",
+      "step_results"
+    ]
+  },
+  "id": "providers.protocol-terminal-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {}
+  },
+  "steps": [
+    {
+      "run_subprocess": {
+        "command": [
+          "python3",
+          "-m",
+          "unittest",
+          "-q",
+          "tests.test_package31_anthropic_terminal_completion",
+          "tests.test_package31_provider_terminal_completion",
+          "tests.test_package31_token_count_deadlines"
+        ]
+      }
+    },
+    {
+      "assert_driver_result": {
+        "driver": "run_subprocess",
+        "returnCode": 0,
+        "status": "passed"
+      }
+    },
+    {
+      "capture": {
+        "include": [
+          "driver_results",
+          "subprocess_results",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "title": "Provider Terminal Protocol And Deadline Pack"
+}

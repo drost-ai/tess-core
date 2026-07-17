@@ -7,7 +7,7 @@
   "metadata": {
     "assistantDescription": null,
     "assistantName": null,
-    "bridgeId": "bridge-main",
+    "bridgeId": "<uuid:2>",
     "childAgentIds": [
       "agent-running",
       "agent-completed",
@@ -52,10 +52,10 @@
           "foregroundMode": "foreground",
           "id": "remote:remote-main",
           "kind": "remote",
-          "resultSummary": "bridge.reconnected",
+          "resultSummary": "bridge.started",
           "retrieveOnly": false,
           "status": "running",
-          "summary": "bridge.reconnected",
+          "summary": "bridge.started",
           "taskFamily": "remote",
           "title": "Remote QA",
           "updatedAt": "<timestamp>"

@@ -7,7 +7,7 @@
   },
   {
     "alias": "main",
-    "bridgeId": "bridge-main",
+    "bridgeId": "<uuid:2>",
     "driver": "create_remote_bridge",
     "remoteId": "remote-main",
     "status": "passed"
@@ -16,9 +16,11 @@
     "alias": "main",
     "driver": "queue_bridge_message",
     "message": {
-      "bridgeId": "bridge-main",
+      "bridgeId": "<uuid:2>",
       "createdAt": "<timestamp>",
-      "id": "<uuid:2>",
+      "generation": 1,
+      "id": "<uuid:3>",
+      "idempotencyKey": "<uuid:2>:<uuid:3>",
       "source": "remote",
       "text": "please review"
     },
@@ -34,9 +36,11 @@
     "alias": "main",
     "delivered": [
       {
-        "bridgeId": "bridge-main",
+        "bridgeId": "<uuid:2>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:2>",
+        "generation": 1,
+        "id": "<uuid:3>",
+        "idempotencyKey": "<uuid:2>:<uuid:3>",
         "source": "remote",
         "text": "please review"
       }
@@ -64,7 +68,7 @@
   },
   {
     "alias": "replay",
-    "bridgeId": "bridge-replay",
+    "bridgeId": "<uuid:4>",
     "driver": "create_remote_bridge",
     "remoteId": "remote-replay",
     "status": "passed"
@@ -73,9 +77,11 @@
     "alias": "replay",
     "driver": "queue_bridge_message",
     "message": {
-      "bridgeId": "bridge-replay",
+      "bridgeId": "<uuid:4>",
       "createdAt": "<timestamp>",
-      "id": "<uuid:3>",
+      "generation": 2,
+      "id": "<uuid:5>",
+      "idempotencyKey": "<uuid:4>:<uuid:5>",
       "source": "remote",
       "text": "already delivered"
     },
@@ -85,9 +91,11 @@
     "alias": "replay",
     "delivered": [
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:4>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:3>",
+        "generation": 2,
+        "id": "<uuid:5>",
+        "idempotencyKey": "<uuid:4>:<uuid:5>",
         "source": "remote",
         "text": "already delivered"
       }
@@ -99,9 +107,11 @@
     "alias": "replay",
     "driver": "queue_bridge_message",
     "message": {
-      "bridgeId": "bridge-replay",
+      "bridgeId": "<uuid:4>",
       "createdAt": "<timestamp>",
-      "id": "<uuid:4>",
+      "generation": 2,
+      "id": "<uuid:6>",
+      "idempotencyKey": "<uuid:4>:<uuid:6>",
       "source": "remote",
       "text": "deliver after restart"
     },
@@ -109,12 +119,7 @@
   },
   {
     "alias": "replay",
-    "driver": "close_bridge_runtime",
-    "status": "passed"
-  },
-  {
-    "alias": "replay",
-    "bridgeId": "bridge-replay",
+    "bridgeId": "<uuid:7>",
     "driver": "reconnect_bridge",
     "status": "passed"
   },
@@ -122,9 +127,11 @@
     "alias": "replay",
     "delivered": [
       {
-        "bridgeId": "bridge-replay",
+        "bridgeId": "<uuid:7>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:4>",
+        "generation": 3,
+        "id": "<uuid:6>",
+        "idempotencyKey": "<uuid:4>:<uuid:6>",
         "source": "remote",
         "text": "deliver after restart"
       }
@@ -135,12 +142,12 @@
   {
     "alias": "replay",
     "driver": "collect_bridge_diagnostics",
-    "eventCount": 6,
+    "eventCount": 2,
     "status": "passed"
   },
   {
     "alias": "failure",
-    "bridgeId": "bridge-failure",
+    "bridgeId": "<uuid:8>",
     "driver": "create_remote_bridge",
     "remoteId": "remote-failure",
     "status": "passed"
@@ -155,9 +162,11 @@
     "alias": "failure",
     "driver": "queue_bridge_message",
     "message": {
-      "bridgeId": "bridge-failure",
+      "bridgeId": "<uuid:8>",
       "createdAt": "<timestamp>",
-      "id": "<uuid:5>",
+      "generation": 4,
+      "id": "<uuid:9>",
+      "idempotencyKey": "<uuid:8>:<uuid:9>",
       "source": "remote",
       "text": "retry me"
     },
@@ -185,9 +194,11 @@
     "alias": "failure",
     "delivered": [
       {
-        "bridgeId": "bridge-failure",
+        "bridgeId": "<uuid:8>",
         "createdAt": "<timestamp>",
-        "id": "<uuid:5>",
+        "generation": 4,
+        "id": "<uuid:9>",
+        "idempotencyKey": "<uuid:8>:<uuid:9>",
         "source": "remote",
         "text": "retry me"
       }
@@ -208,7 +219,7 @@
   },
   {
     "driver": "project_remote_events",
-    "eventCount": 23,
+    "eventCount": 24,
     "status": "passed"
   }
 ]

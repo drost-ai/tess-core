@@ -5,7 +5,9 @@ import types as _types
 
 from .supervisor_parts import *
 from ..contracts.records import launch_task_id
-from ..process_identity import processIdentityFromRecord, signalOwnedProcess
+from .health_check_executor import recordToSpec
+from .health_check_runtime import createHealthCheckController
+from .task_stop_coordination import createTaskStopCoordinator
 from .supervisor_parts import _modules as _SUPERVISOR_PART_MODULES
 
 
@@ -28,7 +30,24 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             await maybe_await(subscriber(payload))
         await maybe_await(on_event(payload))
 
-    _launch_process_task = _create_process_task_launcher(live_work_cache, emit)
+    task_stop_coordinator = createTaskStopCoordinator()
+    _launch_process_task = _create_process_task_launcher(
+        live_work_cache,
+        emit,
+        task_stop_coordinator.waitForStopCommit,
+    )
+
+    def _track_health_task(task: asyncio.Task[Any]) -> None:
+        _WATCHERS.add(task)
+        task.add_done_callback(_WATCHERS.discard)
+
+    health_check_controller = createHealthCheckController(
+        emit=emit,
+        invalidateSession=lambda session_id: _invalidate_live_work_cache(
+            live_work_cache, session_id
+        ),
+        track=_track_health_task,
+    )
 
     async def start_background_command(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
@@ -171,64 +190,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         )
 
     start_subagent_task = _create_subagent_task_starter(cwd, supervisor_id, _launch_process_task)
-
-    async def stop_task(task_id: str) -> bool:
-        proc = _PROCESS_REGISTRY.get(task_id)
-        meta = await readTaskMeta(task_id)
-        record = await loadTaskRecord(task_id)
-        affected_session_ids = _task_session_ids(meta)
-        meta_type = meta.get("type") if meta else None
-        if proc and proc.poll() is None and meta_type != "subagent":
-            identity = processIdentityFromRecord(record, meta)
-            await signalOwnedProcess(identity)
-            stopped = True
-            _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
-            return stopped
-        stop_time = now_iso()
-        health = await mutateHealthCheckTask(
-            task_id,
-            lambda current: {**current, "status": "stopped", "updatedAt": stop_time, "stoppedAt": stop_time} if current else None,
-        )
-        if health:
-            await writeTaskMeta(task_id, {**health, "type": "health_check", "updatedAt": stop_time})
-            _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
-            return True
-        if meta and meta_type != "subagent" and isinstance(meta.get("pid"), int) and _is_process_alive(meta["pid"]):
-            identity = processIdentityFromRecord(record, meta)
-            await signalOwnedProcess(identity)
-            stopped = True
-            _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
-            return stopped
-        stopped = False
-        if meta:
-            now = now_iso()
-            stop_updates: dict[str, Any] = {"status": "stopped", "updatedAt": now, "stoppedAt": now, "detailStatus": "stopped"}
-            if meta.get("type") == "subagent":
-                stop_updates.update({"completionReason": "cancelled", "resultSummary": "Stopped by request.", "retryable": True, "stoppable": False})
-            loaded_meta = meta
-
-            def _apply_stop(current: dict[str, Any] | None) -> dict[str, Any]:
-                return {**(current or loaded_meta), **stop_updates}
-
-            meta = await mutateTaskMeta(task_id, _apply_stop, fallback=loaded_meta)
-            if meta.get("type") == "subagent":
-                await _mark_subagent_cancelled_from_stop(meta, task_id, now)
-            await saveTaskRecord(_build_task_record(meta, "Task stopped by request."))
-        if proc and proc.poll() is None:
-            identity = processIdentityFromRecord(record, meta)
-            await signalOwnedProcess(identity)
-            stopped = True
-            with contextlib.suppress(Exception):
-                proc.wait(timeout=2)
-        elif meta and isinstance(meta.get("pid"), int):
-            identity = processIdentityFromRecord(record, meta)
-            await signalOwnedProcess(identity)
-            stopped = True
-        if meta:
-            await emit(_event_name_for_task_status(_map_status(meta.get("status"))), _task_event_payload(meta), meta.get("sessionId"))
-        _PROCESS_REGISTRY.pop(task_id, None)
-        _invalidate_live_work_cache(live_work_cache, *affected_session_ids)
-        return stopped
+    stop_task = _create_task_stopper(
+        task_stop_coordinator,
+        live_work_cache,
+        emit,
+        health_check_controller["abortAndDrain"],
+    )
 
     async def inspect_task(task_id: str) -> dict[str, Any] | None:
         return await _inspect_latest_task_record(task_id)
@@ -280,7 +247,27 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             health = await loadHealthCheckTask(task_id)
             if not health:
                 raise RuntimeError(f"Health check metadata not found: {task_id}")
-            retried = await start_health_check(health)
+            if (
+                health.get("schemaVersion") != 2
+                or not isinstance(health.get("executionPolicy"), dict)
+                or not isinstance(health.get("specDigest"), str)
+                or int(health.get("generation") or 0) < 1
+                or health.get("status") not in {"stopped", "failed"}
+            ):
+                raise RuntimeError(
+                    "Health check requires explicit revalidation before retry."
+                )
+            retried = await health_check_controller["start"](
+                {
+                    "sessionId": health["sessionId"],
+                    "spec": recordToSpec(health),
+                    "specDigest": health["specDigest"],
+                    "executionPolicy": health["executionPolicy"],
+                    "lineageId": health.get("lineageId") or health["taskId"],
+                    "supersedes": health["taskId"],
+                    "generation": 1,
+                }
+            )
             await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
             return retried
         if kind == "subagent":
@@ -312,55 +299,16 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
 
     async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
-        session_id = task_args.get("sessionId") or task_args.get("session_id")
-        task_id = str(uuid.uuid4())
-        now = now_iso()
-        interval_ms = max(250, int(task_args.get("intervalMs") or task_args.get("interval_ms") or 10000))
-        timeout_ms = max(1000, int(task_args.get("timeoutMs") or task_args.get("timeout_ms") or 10000))
-        max_interval_ms = max(250, int(task_args.get("maxIntervalMs") or task_args.get("max_interval_ms") or interval_ms * 4))
-        record = {
-            "type": "health_check",
-            "taskId": task_id,
-            "id": task_id,
-            "sessionId": session_id,
-            "cwd": os.path.abspath(str(task_args.get("cwd") or cwd)),
-            "title": _require_string(task_args.get("title"), "title"),
-            "mode": task_args.get("mode") or ("command" if task_args.get("command") else "http"),
-            "command": task_args.get("command"),
-            "url": task_args.get("url"),
-            "intervalMs": interval_ms,
-            "currentIntervalMs": interval_ms,
-            "timeoutMs": timeout_ms,
-            "backoffMultiplier": max(1, float(task_args.get("backoffMultiplier") or task_args.get("backoff_multiplier") or 2)),
-            "maxIntervalMs": max(interval_ms, max_interval_ms),
-            "failureThreshold": max(1, int(task_args.get("failureThreshold") or task_args.get("failure_threshold") or 2)),
-            "expectedStatusCodes": task_args.get("expectedStatusCodes") or task_args.get("expected_status_codes"),
-            "expectedBodySubstring": task_args.get("expectedBodySubstring") or task_args.get("expected_body_substring"),
-            "status": "active",
-            "createdAt": now,
-            "startedAt": now,
-            "updatedAt": now,
-            "lastRunAt": None,
-            "lastResult": None,
-            "consecutiveFailures": 0,
-            "outputFile": taskOutputPath(task_id),
-        }
-        await saveHealthCheckTask(record)
-        await writeTaskMeta(task_id, record)
-        await saveTaskRecord(_build_task_record(record, "Health check is running."))
-        if isinstance(session_id, str) and session_id:
-
-            def _append_health_check_task(record_session: dict[str, Any]) -> dict[str, Any]:
-                metadata = record_session.setdefault("metadata", {})
-                metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
-                return record_session
-
-            await mutateSessionRecord(session_id, _append_health_check_task)
-            _invalidate_live_work_cache(live_work_cache, session_id)
-        watcher = asyncio.create_task(_run_health_check(record, emit))
-        _WATCHERS.add(watcher)
-        watcher.add_done_callback(_WATCHERS.discard)
-        return {"taskId": task_id, "task_id": task_id}
+        if not all(
+            key in task_args
+            for key in ("sessionId", "spec", "specDigest", "executionPolicy")
+        ):
+            error = RuntimeError(
+                "Health-check start requires explicit execution authorization."
+            )
+            setattr(error, "code", "health_check.authorization_required")
+            raise error
+        return await health_check_controller["start"](task_args)
 
     def subscribe(listener: Callable[[dict[str, Any]], Any], sessionId: str | dict[str, Any] | None = None):
         session_id = _subscription_session_id(sessionId)
@@ -400,16 +348,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     async def close() -> None:
         for task_id, proc in list(_PROCESS_REGISTRY.items()):
             if proc.poll() is None:
-                meta = await readTaskMeta(task_id)
-                record = await loadTaskRecord(task_id)
-                try:
-                    await signalOwnedProcess(processIdentityFromRecord(record, meta))
-                except Exception:
-                    # Fail closed: a process whose durable identity cannot be
-                    # revalidated is never signalled from a bare PID.
-                    continue
                 with contextlib.suppress(Exception):
-                    proc.wait(timeout=2)
+                    await stop_task(task_id)
+        await health_check_controller["close"]()
         for watcher in list(_WATCHERS):
             if isinstance(watcher, threading.Thread) and watcher is not threading.current_thread() and watcher.is_alive():
                 watcher.join(timeout=2)
@@ -419,16 +360,28 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         _PROCESS_REGISTRY.clear()
 
     def get_state() -> dict[str, Any]:
-        return {"supervisorId": supervisor_id, "watchedSessions": len(attached_sessions), "activeTasks": sum(1 for proc in _PROCESS_REGISTRY.values() if proc.poll() is None), "attachedClients": attached_all_count + sum(attached_sessions.values())}
+        return {"supervisorId": supervisor_id, "watchedSessions": len(attached_sessions), "activeTasks": sum(1 for proc in _PROCESS_REGISTRY.values() if proc.poll() is None) + health_check_controller["activeCount"](), "attachedClients": attached_all_count + sum(attached_sessions.values())}
 
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
         records = await _project_session_task_records(session_id, live_work_cache=live_work_cache)
         return {"taskSnapshot": _task_snapshot(records), "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)), "collaborationSnapshot": await _collaboration_snapshot(session_id)}
 
+    async def health_reconcile_loop() -> None:
+        while True:
+            await asyncio.sleep(2)
+            try:
+                await health_check_controller["tick"]()
+            except Exception as exc:
+                await emit(
+                    "supervisor.reconcile_failed",
+                    {"reason": str(exc), "family": "health_check"},
+                )
+
     try:
         await _reconcile_persisted_tasks(supervisor_id, emit)
         await listChildAgents()
         await listHealthCheckTasks()
+        await health_check_controller["tick"]()
         await _report_persisted_record_issues(emit, reported_record_issues)
     except Exception:
         created_watchers = set(_WATCHERS) - construction_watchers
@@ -442,6 +395,10 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         for watcher in created_watchers:
             _WATCHERS.discard(watcher)
         raise
+
+    health_reconcile = asyncio.create_task(health_reconcile_loop())
+    _WATCHERS.add(health_reconcile)
+    health_reconcile.add_done_callback(_WATCHERS.discard)
 
     return {
         "close": close,

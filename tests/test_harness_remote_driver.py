@@ -19,12 +19,12 @@ class HarnessRemoteDriverTests(AgentCoreTestCase):
             diagnostics = {item["alias"]: item["diagnostics"] for item in observations["bridge_diagnostics"]}
             bootstrap = observations["remote_bootstrap_results"][-1]
 
-            self.assertIn("bridge.reconnected", remote_events)
+            self.assertIn("bridge.started", remote_events)
             self.assertIn("bridge.message", remote_events)
-            self.assertIn("bridge.failed", bridge_events)
+            self.assertIn("bridge.poll_failed", bridge_events)
             self.assertIn("collaboration.snapshot", collaboration_events)
             self.assertIn("subagent.status_changed", collaboration_events)
-            self.assertEqual(diagnostics["replay"]["messageCount"], 2)
+            self.assertEqual(diagnostics["replay"]["messageCount"], 1)
             self.assertEqual(diagnostics["failure"]["messageCount"], 1)
             self.assertTrue(bootstrap["hasBridge"])
             self.assertTrue(bootstrap["hasCollaboration"])

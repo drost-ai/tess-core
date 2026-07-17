@@ -1,7 +1,6 @@
 [
   {
-    "bridgeId": "bridge-failure",
-    "bridgeStatus": "active",
+    "bridgeStatus": "closed",
     "channelServers": [
       "local"
     ],
@@ -13,17 +12,18 @@
     "id": "remote-failure",
     "lastEventAt": "<timestamp>",
     "lastEventName": "bridge.message.received",
-    "lastEventSummary": "Bridge message: retry me",
+    "lastEventSummary": "Bridge superseded",
     "originalCwd": "<workspace>",
     "sessionId": "<uuid:1>",
     "status": "awaiting_input",
     "title": "Failure Remote",
-    "unreadBridgeMessages": 1,
+    "unreadBridgeMessages": 0,
     "updatedAt": "<timestamp>",
     "workspaceName": "<workspace-name>"
   },
   {
-    "bridgeId": "bridge-main",
+    "bridgeGeneration": 5,
+    "bridgeId": "<uuid:10>",
     "bridgeStatus": "active",
     "channelServers": [
       "local"
@@ -35,19 +35,18 @@
     "gitBranch": "<git-branch>",
     "id": "remote-main",
     "lastEventAt": "<timestamp>",
-    "lastEventName": "bridge.reconnected",
-    "lastEventSummary": "bridge.reconnected",
+    "lastEventName": "bridge.started",
+    "lastEventSummary": "bridge.started",
     "originalCwd": "<workspace>",
     "sessionId": "<uuid:1>",
     "status": "active",
     "title": "Remote QA",
-    "unreadBridgeMessages": 1,
+    "unreadBridgeMessages": 0,
     "updatedAt": "<timestamp>",
     "workspaceName": "<workspace-name>"
   },
   {
-    "bridgeId": "bridge-replay",
-    "bridgeStatus": "active",
+    "bridgeStatus": "closed",
     "channelServers": [
       "local"
     ],
@@ -59,12 +58,12 @@
     "id": "remote-replay",
     "lastEventAt": "<timestamp>",
     "lastEventName": "bridge.message.received",
-    "lastEventSummary": "Bridge message: deliver after restart",
+    "lastEventSummary": "Bridge superseded",
     "originalCwd": "<workspace>",
     "sessionId": "<uuid:1>",
     "status": "awaiting_input",
     "title": "Replay Remote",
-    "unreadBridgeMessages": 2,
+    "unreadBridgeMessages": 0,
     "updatedAt": "<timestamp>",
     "workspaceName": "<workspace-name>"
   }
