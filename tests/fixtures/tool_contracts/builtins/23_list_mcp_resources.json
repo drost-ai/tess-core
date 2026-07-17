@@ -3,6 +3,16 @@
   "inputSchema": {
     "additionalProperties": false,
     "properties": {
+      "cursor": {
+        "description": "Opaque continuation cursor returned by a previous resource-list page. Do not combine with offset.",
+        "type": "string"
+      },
+      "limit": {
+        "type": "number"
+      },
+      "offset": {
+        "type": "number"
+      },
       "server": {
         "type": "string"
       }

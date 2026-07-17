@@ -14,6 +14,7 @@ class NormalizationContext:
         self.sandbox = sandbox
         self.uuid_map: dict[str, str] = {}
         self.continuation_map: dict[str, str] = {}
+        self.payload_cursor_map: dict[str, str] = {}
         self.pid_map: dict[str, str] = {}
         self.port_map: dict[str, str] = {}
 
@@ -111,6 +112,12 @@ class NormalizationContext:
         normalized = _EMBEDDED_GIT_ROOT_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<git-root>"', normalized)
         normalized = _EMBEDDED_GIT_BRANCH_FIELD_PATTERN.sub(lambda match: f'{match.group(1)}"<git-branch>"', normalized)
         normalized = _PYTHON_EXECUTABLE_PATTERN.sub("<python>", normalized)
+        normalized = _PAYLOAD_CURSOR_PATTERN.sub(
+            lambda match: self._placeholder(
+                self.payload_cursor_map, match.group(0), "payload-cursor"
+            ),
+            normalized,
+        )
         normalized = re.sub(r"\bpreflight\s+\d+\s+via\b", "preflight <token-estimate> via", normalized)
         normalized = self._replace_labeled_numbers(normalized, r"\b(pid|ppid|process_id|processId)[=:\s]+(\d+)\b", self.pid_map, "pid")
         normalized = self._replace_labeled_numbers(normalized, r"\b(port)[=:\s]+(\d+)\b", self.port_map, "port")
@@ -202,6 +209,7 @@ _EMBEDDED_WORKSPACE_NAME_FIELD_PATTERN = re.compile(r'("(?:workspace_name|worksp
 _EMBEDDED_GIT_ROOT_FIELD_PATTERN = re.compile(r'("(?:git_root|gitRoot)":)(?:"[^"]*"|null)')
 _EMBEDDED_GIT_BRANCH_FIELD_PATTERN = re.compile(r'("(?:git_branch|gitBranch)":)(?:"[^"]*"|null)')
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
+_PAYLOAD_CURSOR_PATTERN = re.compile(r"acp1\.[A-Za-z0-9_-]+")
 _PYTHON_EXECUTABLE_PATTERN = re.compile(
     r"(?<![\w<])(?:<repo>/\.venv/bin/python\d*(?:\.\d+)?|/(?:[\w.+@-]+/)*python\d*(?:\.\d+)?)(?![\w.])"
 )

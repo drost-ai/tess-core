@@ -30,6 +30,10 @@
         "description": "Number of context lines to include before and after each match.",
         "type": "number"
       },
+      "cursor": {
+        "description": "Opaque continuation cursor returned by a previous Grep page. Do not combine with offset.",
+        "type": "string"
+      },
       "glob": {
         "description": "Optional glob filter, such as '*.py' or 'src/**/*.ts'.",
         "type": "string"

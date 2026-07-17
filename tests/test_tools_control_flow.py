@@ -271,7 +271,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
             tools_module._exec_ripgrep_allowing_no_matches = fake_exec_rg
             glob_payload = json.loads(run(tools["Glob"].handler({"pattern": "*.py"}, context))["content"])
             self.assertEqual(glob_payload["matches"], ["src/a.py"])
-            self.assertEqual(rg_calls[-1][1][0:3], ["--files", "-g", "*.py"])
+            self.assertEqual(rg_calls[-1][1][0:5], ["--files", "--sort", "path", "-g", "*.py"])
             grep_payload = json.loads(run(tools["Grep"].handler({"pattern": "needle", "output_mode": "content", "glob": "*.py", "-i": True, "context": 2}, context))["content"])
             self.assertEqual(grep_payload["outputMode"], "content")
             self.assertIn("--glob", rg_calls[-1][1])

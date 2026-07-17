@@ -65,10 +65,10 @@ BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
 
 
 BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
-    "Read": {"type": "object", "properties": {"file_path": {"type": "string"}, "offset": {"type": "number"}, "limit": {"type": "number"}, "pages": {"type": "string"}}, "required": ["file_path"]},
+    "Read": {"type": "object", "properties": {"file_path": {"type": "string"}, "offset": {"type": "number"}, "cursor": {"type": "string", "description": "Opaque continuation cursor returned by a previous Read page. Do not combine with offset."}, "limit": {"type": "number"}, "pages": {"type": "string"}}, "required": ["file_path"]},
     "Write": {"type": "object", "properties": {"file_path": {"type": "string"}, "content": {"type": "string"}}, "required": ["file_path", "content"]},
     "Edit": {"type": "object", "properties": {"file_path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}, "replace_all": {"type": "boolean"}}, "required": ["file_path", "old_string", "new_string"]},
-    "Glob": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}, "offset": {"type": "number"}, "limit": {"type": "number"}}, "required": ["pattern"]},
+    "Glob": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}, "offset": {"type": "number"}, "cursor": {"type": "string", "description": "Opaque continuation cursor returned by a previous Glob page. Do not combine with offset."}, "limit": {"type": "number"}}, "required": ["pattern"]},
     "Grep": {
         "type": "object",
         "properties": {
@@ -88,6 +88,7 @@ BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
             "type": {"type": "string", "description": "Optional ripgrep file type, such as 'py', 'ts', 'js', or 'md'."},
             "head_limit": {"type": "number", "description": "Maximum number of returned matches. Use 0 only when full output is required."},
             "offset": {"type": "number", "description": "Match offset for paginating large result sets."},
+            "cursor": {"type": "string", "description": "Opaque continuation cursor returned by a previous Grep page. Do not combine with offset."},
             "multiline": {"type": "boolean", "description": "Enable multiline regular-expression search."},
         },
         "required": ["pattern"],
@@ -143,8 +144,8 @@ BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "TaskHealthCheckStart": {"type": "object", "properties": {"title": {"type": "string"}, "mode": {"type": "string", "enum": ["http", "command"]}, "url": {"type": "string"}, "command": {"type": "string"}, "interval_ms": {"type": "number"}, "timeout_ms": {"type": "number"}, "failure_threshold": {"type": "number"}, "backoff_multiplier": {"type": "number"}, "max_interval_ms": {"type": "number"}, "expected_status_codes": {"type": "array", "items": {"type": "number"}}, "expected_body_substring": {"type": "string"}}, "required": ["title", "mode"]},
     "TaskHealthCheckStop": {"type": "object", "properties": {"task_id": {"type": "string"}}, "required": ["task_id"]},
     "Mcp": {"type": "object"},
-    "ListMcpResources": {"type": "object", "properties": {"server": {"type": "string"}}},
-    "ReadMcpResource": {"type": "object", "properties": {"server": {"type": "string"}, "uri": {"type": "string"}}, "required": ["server", "uri"]},
+    "ListMcpResources": {"type": "object", "properties": {"server": {"type": "string"}, "offset": {"type": "number"}, "cursor": {"type": "string", "description": "Opaque continuation cursor returned by a previous resource-list page. Do not combine with offset."}, "limit": {"type": "number"}}},
+    "ReadMcpResource": {"type": "object", "properties": {"server": {"type": "string"}, "uri": {"type": "string"}, "offset": {"type": "number"}, "cursor": {"type": "string", "description": "Opaque continuation cursor returned by a previous resource page. Do not combine with offset."}, "limit": {"type": "number"}}, "required": ["server", "uri"]},
     "EnterWorktree": {"type": "object", "properties": {"name": {"type": "string"}}},
     "ExitWorktree": {"type": "object"},
 }

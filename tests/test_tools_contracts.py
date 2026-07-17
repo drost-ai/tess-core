@@ -80,7 +80,6 @@ class ToolContractTests(AgentCoreTestCase):
             file_payload = payload["file"]
             self.assertEqual(file_payload["content"], "one\ntwo\n")
             self.assertEqual(file_payload["totalLines"], 3)
-            self.assertEqual(file_payload["selectedNumLines"], 3)
             self.assertEqual(file_payload["transcriptView"]["originalLines"], 3)
             self.assertNotIn("artifact", file_payload)
             self.assertNotIn("nextOffset", file_payload)

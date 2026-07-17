@@ -4,6 +4,7 @@ from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 
 import asyncio
+import math
 import os
 import platform
 import shutil
@@ -13,7 +14,17 @@ from pathlib import Path
 from typing import Any
 
 from .._utils import pretty_json
-from ..tool_payloads import applyDefaultGlobExcludes, filterDefaultIgnoredGlobMatches, shapeGlobPayload, shapeGrepPayload
+from ..payload_cursor import fingerprintPayloadSource, resolvePayloadCursor
+from ..search_acquisition import buildStreamingSearchFromOutput, runStreamingSearch
+from ..search_result_payload import buildStreamingGlobPayload, buildStreamingGrepPayload
+from ..tool_payloads import (
+    applyDefaultGlobExcludes,
+    filterDefaultIgnoredGlobMatches,
+    getToolPayloadPolicy,
+    shapeGlobPayload,
+    shapeGrepPayload,
+)
+from .cancellation import _create_tool_abort_error
 from .definitions import ToolDefinition
 from .paths import _authorize_path
 from .schemas import _tool_description, _tool_schema
@@ -31,19 +42,50 @@ def _glob_tool() -> ToolDefinition:
             return {"content": "ripgrep is required for Glob and was not found.", "isError": True}
         if _is_filesystem_root(search_path):
             return {"content": "Glob refuses to search the filesystem root. Provide a narrower path or an absolute glob inside the target directory.", "isError": True}
-        args = applyDefaultGlobExcludes(["--files", "-g", pattern])
+        args = applyDefaultGlobExcludes(["--files", "--sort", "path", "-g", pattern])
         args.append(search_path)
-        stdout, _stderr = await _facade_exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
-        matches = filterDefaultIgnoredGlobMatches([line for line in stdout.strip().splitlines() if line])
-        payload = await shapeGlobPayload(
-            config=context["config"],
+        policy = getToolPayloadPolicy(context["config"])
+        source_fingerprint = fingerprintPayloadSource(["glob", cwd, *args])
+        cursor = resolvePayloadCursor(
+            family="glob",
+            sourceFingerprint=source_fingerprint,
+            cursor=input.get("cursor"),
+            legacyOffset=_optional_offset(input.get("offset")) if "offset" in input else None,
+            legacyBase=0,
+        )
+        _require_search_record_cursor(cursor, "Glob")
+        offset = cursor["recordOffset"]
+        limit = min(
+            _normalize_positive_limit(_require_optional_number(input.get("limit")), policy["globInlineItems"]),
+            policy["globInlineItems"],
+        )
+        acquisition = await _facade_run_streaming_search(
+            binary=rg_path,
+            argv=args,
+            cwd=cwd,
             sessionId=context["session"]["id"],
+            toolName="Glob",
+            family="glob",
+            contentType="paths",
+            offset=offset,
+            sampleItems=limit,
+            sampleBytes=policy["globInlineBytes"],
+            accept=lambda record: bool(filterDefaultIgnoredGlobMatches([record])),
+            abortSignal=context.get("abortSignal"),
+        )
+        if acquisition["aborted"]:
+            raise _create_tool_abort_error()
+        _require_matching_search_snapshot(cursor, acquisition["resultFingerprint"], "Glob")
+        failure = _build_search_process_failure("Glob", acquisition)
+        if failure:
+            return failure
+        payload = buildStreamingGlobPayload(
             pattern=pattern,
             searchPath=search_path,
-            matches=matches,
-            offset=int(input.get("offset") or 0),
-            requestedLimit=input.get("limit"),
-            ignoredDefaultsApplied=True,
+            offset=offset,
+            limit=limit,
+            result=acquisition,
+            sourceFingerprint=source_fingerprint,
         )
         return {"content": pretty_json(payload)}
 
@@ -59,7 +101,7 @@ def _grep_tool() -> ToolDefinition:
         if not rg_path:
             return {"content": "ripgrep is required for Grep and was not found.", "isError": True}
         output_mode = input.get("output_mode") if isinstance(input.get("output_mode"), str) else "files_with_matches"
-        args = ["--color", "never"]
+        args = ["--color", "never", "--sort", "path"]
         if output_mode == "files_with_matches":
             args.append("-l")
         elif output_mode == "count":
@@ -92,9 +134,50 @@ def _grep_tool() -> ToolDefinition:
         if input.get("multiline"):
             args.extend(["-U", "--multiline-dotall"])
         args.extend([pattern, search_path])
-        stdout, _stderr = await _facade_exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
-        matches = [line for line in stdout.strip().splitlines() if line]
-        payload = await shapeGrepPayload(config=context["config"], sessionId=context["session"]["id"], pattern=pattern, searchPath=search_path, outputMode=output_mode, matches=matches, offset=int(input.get("offset") or 0), requestedHeadLimit=input.get("head_limit"))
+        policy = getToolPayloadPolicy(context["config"])
+        source_fingerprint = fingerprintPayloadSource(["grep", cwd, *args])
+        cursor = resolvePayloadCursor(
+            family="grep",
+            sourceFingerprint=source_fingerprint,
+            cursor=input.get("cursor"),
+            legacyOffset=_optional_offset(input.get("offset")) if "offset" in input else None,
+            legacyBase=0,
+        )
+        _require_search_record_cursor(cursor, "Grep")
+        offset = cursor["recordOffset"]
+        requested_head_limit = _require_optional_number(input.get("head_limit"))
+        head_limit = min(
+            policy["grepInlineMatches"] if requested_head_limit == 0 else _normalize_positive_limit(requested_head_limit, policy["grepInlineMatches"]),
+            policy["grepInlineMatches"],
+        )
+        acquisition = await _facade_run_streaming_search(
+            binary=rg_path,
+            argv=args,
+            cwd=cwd,
+            sessionId=context["session"]["id"],
+            toolName="Grep",
+            family="grep",
+            contentType="text",
+            offset=offset,
+            sampleItems=head_limit,
+            sampleBytes=policy["grepInlineBytes"],
+            abortSignal=context.get("abortSignal"),
+        )
+        if acquisition["aborted"]:
+            raise _create_tool_abort_error()
+        _require_matching_search_snapshot(cursor, acquisition["resultFingerprint"], "Grep")
+        failure = _build_search_process_failure("Grep", acquisition)
+        if failure:
+            return failure
+        payload = buildStreamingGrepPayload(
+            pattern=pattern,
+            searchPath=search_path,
+            outputMode=output_mode,
+            offset=offset,
+            limit=head_limit,
+            result=acquisition,
+            sourceFingerprint=source_fingerprint,
+        )
         return {"content": pretty_json(payload)}
 
     return ToolDefinition("Grep", _tool_description("Grep"), _tool_schema("Grep"), handler)
@@ -149,6 +232,54 @@ async def _facade_exec_ripgrep_allowing_no_matches(rg_path: str, args: list[str]
     if callable(current) and current is not _exec_ripgrep_allowing_no_matches:
         return await current(rg_path, args, cwd=cwd)
     return await _exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
+
+
+async def _facade_run_streaming_search(**kwargs: Any) -> dict[str, Any]:
+    facade = sys.modules.get("agent_core.tools")
+    current = getattr(facade, "_exec_ripgrep_allowing_no_matches", None)
+    if callable(current) and current is not _exec_ripgrep_allowing_no_matches:
+        stdout, stderr = await current(kwargs["binary"], kwargs["argv"], cwd=kwargs["cwd"])
+        return await buildStreamingSearchFromOutput(stdout=stdout, stderr=stderr, **kwargs)
+    return await runStreamingSearch(**kwargs)
+
+
+def _build_search_process_failure(tool_name: str, result: dict[str, Any]) -> ToolResult | None:
+    if result["outputLimitExceeded"] or result["timedOut"] or result["exitCode"] in (0, 1):
+        return None
+    return {
+        "content": pretty_json({
+            "type": "search_error",
+            "tool": tool_name,
+            "status": "failed",
+            "exitCode": result["exitCode"],
+            "exitSignal": result["exitSignal"],
+            "stderr": result["stderr"],
+        }),
+        "isError": True,
+    }
+
+
+def _optional_offset(value: Any) -> int:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        return 0
+    return max(0, math.floor(value))
+
+
+def _normalize_positive_limit(value: int | float | None, fallback: int) -> int:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value <= 0:
+        return fallback
+    return math.floor(value)
+
+
+def _require_search_record_cursor(cursor: dict[str, Any], tool_name: str) -> None:
+    if any(cursor.get(key) is not None for key in ("byteOffset", "sourceByteOffset", "recordBytes")):
+        raise ValueError(f"{tool_name} cursors must point to a result-record boundary.")
+
+
+def _require_matching_search_snapshot(cursor: dict[str, Any], fingerprint: str, tool_name: str) -> None:
+    expected = cursor.get("snapshotFingerprint")
+    if expected is not None and expected != fingerprint:
+        raise ValueError(f"{tool_name} results changed after the cursor was issued; restart pagination.")
 
 
 def _resolve_glob_search(pattern: str, requested_path: Any, context: ToolContext) -> dict[str, str]:

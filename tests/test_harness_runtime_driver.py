@@ -24,9 +24,8 @@ class HarnessRuntimeDriverTests(AgentCoreTestCase):
             self.assertEqual(observations["runtime_state"]["turn"]["status"], "idle")
             self.assertIn("subprocess ok", observations["subprocess_results"][0]["stdout"])
             self.assertIn("README says hello from runtime harness.", json.dumps(observations["transcript"]))
-            artifact_paths = {item["path"] for item in observations["tool_artifacts"]}
-            self.assertTrue(any(path.endswith(".meta.json") for path in artifact_paths))
-            self.assertTrue(any(path.endswith(".txt") for path in artifact_paths))
+            self.assertEqual(observations["tool_artifacts"], [])
+            self.assertIn("source_file", json.dumps(observations["transcript"]))
 
     def test_committed_runtime_tool_golden_compares(self):
         with tempfile.TemporaryDirectory() as runs:

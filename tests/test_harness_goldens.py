@@ -51,6 +51,8 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "repo": str(Path.cwd() / "agent_core_harness"),
                     "python": f"{Path.cwd()}/.venv/bin/python",
                     "python3": f"{Path.cwd()}/.venv/bin/python3",
+                    "cursor": "acp1.eyJ2IjoxLCJzIjoiZHluYW1pYyJ9",
+                    "embeddedCursor": '{"nextCursor":"acp1.eyJ2IjoxLCJzIjoiZHluYW1pYyJ9"}',
                     "tokens": {"input_tokens": 54321},
                     "processIdentity": {
                         "expectedCommandDigest": "a" * 64,
@@ -70,6 +72,11 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(normalized["repo"], "<repo>/agent_core_harness")
                 self.assertEqual(normalized["python"], "<python>")
                 self.assertEqual(normalized["python3"], "<python>")
+                self.assertEqual(normalized["cursor"], "<payload-cursor:1>")
+                self.assertEqual(
+                    normalized["embeddedCursor"],
+                    '{"nextCursor":"<payload-cursor:1>"}',
+                )
                 self.assertEqual(normalized["tokens"]["input_tokens"], 54321)
                 self.assertEqual(normalized["processIdentity"]["expectedCommandDigest"], "<expected-command-digest>")
                 self.assertEqual(normalized["processIdentity"]["observedCommandDigest"], "<observed-command-digest>")

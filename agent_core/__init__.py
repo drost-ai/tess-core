@@ -66,8 +66,15 @@ from .providers.openai import *
 
 _INTERNAL_MODULES = {
     "agent_tool_results",
+    "mcp_payloads",
+    "notebook_payload",
+    "payload_cursor",
+    "search_acquisition",
+    "search_result_payload",
     "structured_result_policy",
     "structured_value",
+    "subprocess_output",
+    "text_file_window",
     "todo_policy",
     "tool_result_guard",
     "usage_costs",

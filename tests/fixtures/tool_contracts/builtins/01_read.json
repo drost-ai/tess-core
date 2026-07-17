@@ -3,6 +3,10 @@
   "inputSchema": {
     "additionalProperties": false,
     "properties": {
+      "cursor": {
+        "description": "Opaque continuation cursor returned by a previous Read page. Do not combine with offset.",
+        "type": "string"
+      },
       "file_path": {
         "type": "string"
       },

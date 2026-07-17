@@ -7,6 +7,7 @@ from typing import Any
 
 from .._utils import pretty_json
 from ..mcp_origin_policy import fetchMcpResourceWithBoundCredentials
+from ..mcp_payloads import shapeMcpResourceList, shapeMcpResourceRead
 from ..tool_payloads import shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
@@ -54,13 +55,27 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
 def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         server = input.get("server") if isinstance(input.get("server"), str) else None
+        payload_context = {"config": context["config"], "sessionId": context["session"]["id"]}
         if runtime:
             _throw_if_tool_cancelled(context)
             resources = await runtime["listResources"](server)
             _throw_if_tool_cancelled(context)
-            return {"content": pretty_json(resources)}
+            payload = await shapeMcpResourceList(
+                resources=resources if isinstance(resources, list) else [],
+                server=server,
+                context=payload_context,
+                **_pagination_args(input),
+            )
+            return {"content": pretty_json(payload)}
         configs = context["config"].get("mcpConfig", [])
-        return {"content": pretty_json([{"server": item.get("name"), "name": item.get("name"), "uri": item.get("commandOrUrl"), "description": f"{item.get('transport')} server (not connected)"} for item in configs if not server or item.get("name") == server])}
+        resources = [{"server": item.get("name"), "name": item.get("name"), "uri": item.get("commandOrUrl"), "description": f"{item.get('transport')} server (not connected)"} for item in configs if not server or item.get("name") == server]
+        payload = await shapeMcpResourceList(
+            resources=resources,
+            server=server,
+            context=payload_context,
+            **_pagination_args(input),
+        )
+        return {"content": pretty_json(payload)}
 
     return ToolDefinition("ListMcpResources", _tool_description("ListMcpResources"), _tool_schema("ListMcpResources"), handler)
 
@@ -69,11 +84,19 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         server = _require_string(input.get("server"), "server")
         uri = _require_string(input.get("uri"), "uri")
+        payload_context = {"config": context["config"], "sessionId": context["session"]["id"]}
         if runtime:
             _throw_if_tool_cancelled(context)
             resource = await runtime["readResource"](server, uri)
             _throw_if_tool_cancelled(context)
-            return {"content": pretty_json(resource)}
+            payload = await shapeMcpResourceRead(
+                server=server,
+                uri=uri,
+                value=resource,
+                context=payload_context,
+                **_pagination_args(input),
+            )
+            return {"content": pretty_json(payload)}
         config = next((entry for entry in context["config"].get("mcpConfig", []) if entry.get("name") == server), None)
         if not config:
             return {"content": f"MCP server not found: {server}", "isError": True}
@@ -86,8 +109,22 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             )
             _throw_if_tool_cancelled(context)
             text = await response.text()
-            shaped = await shapeTextToolResult(config=context["config"], sessionId=context["session"]["id"], toolName="ReadMcpResource", family="web", text=text, strategy="head")
-            return {"content": pretty_json({"contents": [{"uri": uri, "mimeType": _header_value(response.headers, "content-type"), "text": shaped["text"], "manifest": shaped["view"]}]})}
+            payload = await shapeMcpResourceRead(
+                server=server,
+                uri=uri,
+                value={"contents": [{"uri": uri, "mimeType": _header_value(response.headers, "content-type"), "text": text}]},
+                context=payload_context,
+                **_pagination_args(input),
+            )
+            return {"content": pretty_json(payload)}
         return {"content": f"MCP server not found: {server}", "isError": True}
 
     return ToolDefinition("ReadMcpResource", _tool_description("ReadMcpResource"), _tool_schema("ReadMcpResource"), handler)
+
+
+def _pagination_args(input: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **({"offset": input["offset"]} if "offset" in input else {}),
+        **({"cursor": input["cursor"]} if "cursor" in input else {}),
+        **({"requestedLimit": input["limit"]} if "limit" in input else {}),
+    }

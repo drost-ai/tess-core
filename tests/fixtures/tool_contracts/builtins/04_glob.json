@@ -3,6 +3,10 @@
   "inputSchema": {
     "additionalProperties": false,
     "properties": {
+      "cursor": {
+        "description": "Opaque continuation cursor returned by a previous Glob page. Do not combine with offset.",
+        "type": "string"
+      },
       "limit": {
         "type": "number"
       },
