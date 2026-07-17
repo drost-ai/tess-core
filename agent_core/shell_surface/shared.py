@@ -25,6 +25,12 @@ from ..debug_bundle import createDebugBundle
 from ..durable_memory import synchronizeManualProjectMemory
 from ..daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ..platform import collectDoctorReport
+from ..tasks.monitor_transitions import (
+    monitorResumeNote as _monitor_resume_note,
+    monitorStopNote as _monitor_stop_note,
+    resumeMonitorRecord as _resume_monitor_record,
+    stopMonitorRecord as _stop_monitor_record,
+)
 from ..remote import formatBridgeTail, formatRemoteSessionCandidate, sendBridgeMessage, updateRemoteSession
 from ..storage import (
     compactionCheckpointPath,

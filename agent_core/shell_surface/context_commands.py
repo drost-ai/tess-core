@@ -63,16 +63,21 @@ async def _handle_monitor(arg_text: str, session: dict[str, Any], hooks: dict[st
     monitor = _resolve_monitor(monitors, parts[1])
     if not monitor:
         return _error(hooks, f"No monitor matched: {parts[1]}")
-    now = now_iso()
-    monitor = {**monitor, "status": "stopped" if parts[0] == "stop" else "active", "updatedAt": now}
     if parts[0] == "stop":
-        monitor["stoppedAt"] = now
+        transition = _stop_monitor_record(monitor, now_iso())
+        verb = "Stopped"
+        note = _monitor_stop_note(transition)
     else:
-        monitor.pop("stoppedAt", None)
-    await saveMonitor(monitor)
-    _call(hooks, "refresh")
-    await _persist(hooks)
-    return _info(hooks, "Monitor", f"{'Stopped' if parts[0] == 'stop' else 'Resumed'} monitor {monitor['id']}")
+        transition = _resume_monitor_record(monitor, now_iso())
+        verb = "Resumed"
+        note = _monitor_resume_note(transition)
+    record = transition["record"]
+    if transition["changed"]:
+        await saveMonitor(record)
+        _call(hooks, "refresh")
+        await _persist(hooks)
+        return _info(hooks, "Monitor", f"{verb} monitor {record['id']}")
+    return _info(hooks, "Monitor", note or f"Monitor {record['id']} unchanged.")
 
 
 async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:

@@ -58,7 +58,7 @@
     {
       "content": [
         {
-          "content": "{\n  \"type\": \"file_change\",\n  \"tool\": \"Write\",\n  \"action\": \"create\",\n  \"filePath\": \"<workspace>/notes/tool.txt\",\n  \"bytes\": 18,\n  \"diff\": \"  1 + direct tool write\\n  2   \"\n}",
+          "content": "{\n  \"type\": \"file_change\",\n  \"tool\": \"Write\",\n  \"action\": \"create\",\n  \"filePath\": \"<workspace>/notes/tool.txt\",\n  \"bytes\": 18,\n  \"fileBytes\": 18,\n  \"addedLines\": 2,\n  \"removedLines\": 0,\n  \"diffStrategy\": \"create\",\n  \"diff\": \"  1 + direct tool write\\n  2 + \",\n  \"diffView\": {\n    \"strategy\": \"inline_full\",\n    \"truncated\": false,\n    \"originalBytes\": 30,\n    \"originalLines\": 2,\n    \"returnedBytes\": 30,\n    \"returnedLines\": 2\n  }\n}",
           "is_error": null,
           "tool_use_id": "harness_tool_5",
           "type": "tool_result"

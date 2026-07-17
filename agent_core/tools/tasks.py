@@ -11,6 +11,8 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..execution_descriptors import createTaskExecutionDescriptor
+from ..tasks.monitor_transitions import monitorStopNote as _monitor_stop_note
+from ..tasks.monitor_transitions import stopMonitorRecord as _stop_monitor_record
 from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 from ..tool_payloads import shapeTextToolResult
@@ -164,20 +166,35 @@ def _task_monitor_stop_tool() -> ToolDefinition:
         monitor = await loadMonitor(monitor_id)
         if not monitor or monitor.get("sessionId") != context["session"]["id"]:
             return {"content": f"Monitor not found: {monitor_id}", "isError": True}
-        monitor.update({"status": "stopped", "updatedAt": now_iso(), "stoppedAt": now_iso()})
-        await saveMonitor(monitor)
-        context.get("outputJson", lambda *_: None)(
-            "task.failed",
-            {
-                "session_id": context["session"]["id"],
-                "task_id": f"monitor:{monitor['id']}",
-                "kind": "monitor",
-                "title": f"Monitor {monitor.get('goal')}",
-                "summary": "Monitor stopped.",
-            },
-        )
-        context.get("outputJson", lambda *_: None)("monitor.status_changed", {"session_id": context["session"]["id"], "monitor_id": monitor["id"], "task_id": monitor.get("taskId"), "status": monitor["status"]})
-        return {"content": pretty_json({"monitor_id": monitor["id"], "task_id": monitor.get("taskId"), "status": monitor["status"]})}
+        transition = _stop_monitor_record(monitor, now_iso())
+        record = transition["record"]
+        if transition["changed"]:
+            await saveMonitor(record)
+            context.get("outputJson", lambda *_: None)(
+                "monitor.status_changed",
+                {
+                    "session_id": context["session"]["id"],
+                    "monitor_id": record["id"],
+                    "task_id": record.get("taskId"),
+                    "status": record["status"],
+                    "previous_status": transition["previousStatus"],
+                    "changed": True,
+                },
+            )
+        return {
+            "content": pretty_json(
+                _without_none_values(
+                    {
+                        "monitor_id": record["id"],
+                        "task_id": record.get("taskId"),
+                        "status": record["status"],
+                        "previous_status": transition["previousStatus"],
+                        "changed": transition["changed"],
+                        "note": _monitor_stop_note(transition),
+                    }
+                )
+            )
+        }
 
     return ToolDefinition("TaskMonitorStop", _tool_description("TaskMonitorStop"), _tool_schema("TaskMonitorStop"), handler)
 

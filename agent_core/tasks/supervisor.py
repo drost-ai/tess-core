@@ -265,11 +265,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return stopped
 
     async def inspect_task(task_id: str) -> dict[str, Any] | None:
-        record = await loadTaskRecord(task_id)
-        if record:
-            return record
-        meta = await readTaskMeta(task_id)
-        return _build_task_record(meta, None) if meta else None
+        return await _inspect_latest_task_record(task_id)
 
     async def list_tasks(session_id: str | None = None) -> list[dict[str, Any]]:
         from ..storage import listTaskRecords

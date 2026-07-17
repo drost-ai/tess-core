@@ -66,12 +66,20 @@ async def wait_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, stat
     task_id = _task_id(data, state)
     status = data.get("status")
     require_success = bool(data.get("requireSuccess"))
+    required_event = data.get("event")
     deadline = asyncio.get_running_loop().time() + float(data.get("timeoutSeconds") or 10)
     last_health = None
     while asyncio.get_running_loop().time() < deadline:
         last_health = await core.loadHealthCheckTask(task_id)
         if last_health and (not status or last_health.get("status") == status) and (not require_success or last_health.get("lastSuccessAt")):
             await refresh_task_state(sandbox, state)
+            if required_event and not any(
+                event.get("event") == required_event
+                and event.get("data", {}).get("task_id") == task_id
+                for event in state.get("persisted_daemon_events", [])
+            ):
+                await asyncio.sleep(float(data.get("pollSeconds") or 0.05))
+                continue
             return ["health_checks", "task_records", "task_metadata", "daemon_events"]
         await asyncio.sleep(float(data.get("pollSeconds") or 0.05))
     raise ScenarioAssertionError(f"Health check {task_id} did not reach expected state; last={last_health}", category="driver")

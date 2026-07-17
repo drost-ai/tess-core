@@ -186,9 +186,8 @@ class ToolControlFlowTests(AgentCoreTestCase):
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
             run(core.saveMonitor(monitor))
             stopped = json.loads(run(tools["TaskMonitorStop"].handler({"monitor_id": monitor["id"]}, context))["content"])
-            self.assertEqual(stopped, {"monitor_id": monitor["id"], "task_id": "task-1", "status": "stopped"})
-            self.assertEqual([event for event, _ in events[-2:]], ["task.failed", "monitor.status_changed"])
-            self.assertEqual(events[-2][1]["task_id"], f"monitor:{monitor['id']}")
+            self.assertEqual(stopped, {"monitor_id": monitor["id"], "task_id": "task-1", "status": "stopped", "previous_status": "active", "changed": True})
+            self.assertEqual([event for event, _ in events], ["monitor.status_changed"])
 
             with self.assertRaises(RuntimeError):
                 run(tools["TaskHealthCheckStart"].handler({"title": "health", "mode": "http"}, context))

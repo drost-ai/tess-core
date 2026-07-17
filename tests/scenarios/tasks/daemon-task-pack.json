@@ -159,6 +159,7 @@
         "alias": "health",
         "status": "active",
         "requireSuccess": true,
+        "event": "health_check.recovered",
         "timeoutSeconds": 10
       }
     },

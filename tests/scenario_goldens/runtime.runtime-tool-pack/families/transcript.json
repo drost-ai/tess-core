@@ -48,16 +48,28 @@
     "tone": "assistant"
   },
   {
-    "body": "{\n  \"type\": \"file_change\",\n  \"tool\": \"Write\",\n  \"action\": \"create\",\n  \"filePath\": \"<workspace>/notes/tool.txt\",\n  \"bytes\": 18,\n  \"diff\": \"  1 + direct tool write\\n  2   \"\n}",
+    "body": "{\n  \"type\": \"file_change\",\n  \"tool\": \"Write\",\n  \"action\": \"create\",\n  \"filePath\": \"<workspace>/notes/tool.txt\",\n  \"bytes\": 18,\n  \"fileBytes\": 18,\n  \"addedLines\": 2,\n  \"removedLines\": 0,\n  \"diffStrategy\": \"create\",\n  \"diff\": \"  1 + direct tool write\\n  2 + \",\n  \"diffView\": {\n    \"strategy\": \"inline_full\",\n    \"truncated\": false,\n    \"originalBytes\": 30,\n    \"originalLines\": 2,\n    \"returnedBytes\": 30,\n    \"returnedLines\": 2\n  }\n}",
     "payload": {
       "failed": false,
       "label": "Write(tool.txt)",
       "outputs": [
         {
           "action": "create",
+          "addedLines": 2,
           "bytes": 18,
-          "diff": "  1 + direct tool write\n  2   ",
+          "diff": "  1 + direct tool write\n  2 + ",
+          "diffStrategy": "create",
+          "diffView": {
+            "originalBytes": 30,
+            "originalLines": 2,
+            "returnedBytes": 30,
+            "returnedLines": 2,
+            "strategy": "inline_full",
+            "truncated": false
+          },
+          "fileBytes": 18,
           "filePath": "<workspace>/notes/tool.txt",
+          "removedLines": 0,
           "tool": "Write",
           "type": "file_change"
         }

@@ -13,7 +13,10 @@ from typing import Any
 from .._utils import pretty_json
 from ..tool_payloads import shapeReadPayload, splitToolTextLines
 from .definitions import ToolDefinition
-from .diffs import _file_change_payload
+from .file_change_payloads import (
+    build_edit_file_change_payload,
+    build_write_file_change_payload,
+)
 from .paths import _authorize_path, _display_path
 from .permissions import _ensure_tool_permission
 from .schemas import _tool_description, _tool_schema
@@ -54,7 +57,14 @@ def _write_tool() -> ToolDefinition:
         previous = Path(file_path).read_text(encoding="utf-8") if Path(file_path).exists() else None
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         Path(file_path).write_text(content, encoding="utf-8")
-        return {"content": pretty_json(_file_change_payload("Write", file_path, previous, content))}
+        payload = await build_write_file_change_payload(
+            config=context["config"],
+            sessionId=context["session"]["id"],
+            filePath=file_path,
+            previousContent=previous,
+            nextContent=content,
+        )
+        return {"content": pretty_json(payload)}
 
     return ToolDefinition("Write", _tool_description("Write"), _tool_schema("Write"), handler)
 
@@ -71,6 +81,19 @@ def _edit_tool() -> ToolDefinition:
             return {"content": f"String not found in {file_path}", "isError": True}
         updated = original.replace(old, new) if replace_all else original.replace(old, new, 1)
         Path(file_path).write_text(updated, encoding="utf-8")
-        return {"content": pretty_json(_file_change_payload("Edit", file_path, original, updated, {"note": "Replaced all occurrences." if replace_all else "Replaced the first matching occurrence."}))}
+        payload = await build_edit_file_change_payload(
+            config=context["config"],
+            sessionId=context["session"]["id"],
+            filePath=file_path,
+            previousContent=original,
+            nextContent=updated,
+            oldString=old,
+            newString=new,
+            replaceAll=replace_all,
+            note="Replaced all occurrences."
+            if replace_all
+            else "Replaced the first matching occurrence.",
+        )
+        return {"content": pretty_json(payload)}
 
     return ToolDefinition("Edit", _tool_description("Edit"), _tool_schema("Edit"), handler)
