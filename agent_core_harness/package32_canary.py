@@ -386,6 +386,7 @@ def _config(preflight: dict[str, Any], workspace: str, ttl: str, mode: str, diag
             "exactTokenCountRequired": True,
         },
         "apiKey": preflight["apiKey"],
+        "authToken": preflight["authToken"],
         "customHeaders": {},
         "model": MODEL,
         "promptCache": {

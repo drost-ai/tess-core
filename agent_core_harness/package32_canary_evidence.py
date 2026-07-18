@@ -48,17 +48,21 @@ def requirePaidCanaryPreflight(options: dict[str, Any]) -> dict[str, Any]:
             "Evidence must not be stored inside the disposable runtime home.",
         )
     api_key = options.get("apiKey")
-    if not isinstance(api_key, str) or not api_key.strip():
+    auth_token = options.get("authToken")
+    normalized_api_key = api_key.strip() if isinstance(api_key, str) else ""
+    normalized_auth_token = auth_token.strip() if isinstance(auth_token, str) else ""
+    if not normalized_api_key and not normalized_auth_token:
         raise Package32CanaryError(
             "credential_required",
-            "An Anthropic API key is required after authorization.",
+            "An Anthropic API key or auth token is required after authorization.",
         )
     return {
         "model": model,
         "maxCostUsd": float(ceiling),
         "runtimeHome": runtime_home,
         "evidenceFile": evidence_path,
-        "apiKey": api_key.strip(),
+        "apiKey": normalized_api_key or None,
+        "authToken": normalized_auth_token or None,
     }
 
 
@@ -110,8 +114,25 @@ def writePrivateCanaryEvidence(descriptor: int, evidence: dict[str, Any]) -> Non
 
 
 def safeFailureEvidence(base: dict[str, Any], error: BaseException) -> dict[str, Any]:
-    code = error.code if isinstance(error, Package32CanaryError) else "internal_failure"
+    if isinstance(error, Package32CanaryError):
+        code = error.code
+    else:
+        record = getattr(error, "record", None)
+        if isinstance(record, dict):
+            phase = _closed_failure_component(record.get("phase"), "provider")
+            category = _closed_failure_component(record.get("category"), "failure")
+            code = f"provider_{phase}_{category}"
+        else:
+            code = "internal_failure"
     return {**base, "status": "failed", "failureReason": code}
+
+
+def _closed_failure_component(value: Any, fallback: str) -> str:
+    normalized = "".join(
+        character if character.isalnum() else "_"
+        for character in str(value or "").strip().lower()
+    ).strip("_")
+    return normalized[:48] or fallback
 
 
 def _absolute_path(value: Any, code: str) -> str:

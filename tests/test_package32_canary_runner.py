@@ -1,23 +1,47 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import stat
 import tempfile
 from pathlib import Path
+from unittest import mock
 
 from tests.support.agent_core_case import AgentCoreTestCase
 
+import agent_core as core
 from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesEnvelope
+from agent_core.provider_errors import createProviderFailureRecord, createProviderRequestError
 from agent_core_harness.package32_canary import main, runPackage32AnthropicCanary
+from agent_core_harness.package32_canary_cli import runPackage32CanaryCli
 from agent_core_harness.package32_canary_evidence import (
     Package32CanaryError,
     preparePrivateCanaryRuntime,
     reservePrivateEvidenceFile,
+    safeFailureEvidence,
 )
 
 
 class Package32CanaryRunnerTests(AgentCoreTestCase):
+    def test_provider_failure_evidence_is_closed_and_content_free(self):
+        error = createProviderRequestError(
+            createProviderFailureRecord(
+                provider="anthropic",
+                providerLabel="official",
+                phase="token_count",
+                category="auth",
+                retryable=False,
+                attempt=1,
+                hadAssistantOutput=False,
+                hadToolUse=False,
+                rawMessage="sentinel-provider-body",
+            )
+        )
+        evidence = safeFailureEvidence({"status": "running"}, error)
+        self.assertEqual(evidence["failureReason"], "provider_token_count_auth")
+        self.assertNotIn("sentinel", json.dumps(evidence))
+
     def test_cli_refuses_unauthorized_run_before_creating_paths(self):
         with tempfile.TemporaryDirectory() as root:
             runtime_home = Path(root, "runtime")
@@ -37,6 +61,56 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
             self.assertEqual(result, 2)
             self.assertFalse(runtime_home.exists())
             self.assertFalse(evidence_file.exists())
+
+    def test_cli_loads_anthropic_auth_token_from_explicit_credential_home(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            credential_home = base / "credentials"
+            workspace = base / "workspace"
+            credential_home.mkdir(mode=0o700)
+            workspace.mkdir()
+
+            async def seed_auth():
+                async with core.scopedRuntimeHome(str(credential_home)):
+                    await core.ensureBaseLayout(str(workspace))
+                    await core.saveAuth(
+                        {
+                            "provider": "claudeai",
+                            "source": "test",
+                            "authToken": "sentinel-oauth-token",
+                        }
+                    )
+
+            asyncio.run(seed_auth())
+            received = {}
+
+            def fake_canary(options):
+                received.update(options)
+                return {"status": "passed", "actualCostUsd": 0.0}
+
+            with mock.patch.dict(
+                os.environ,
+                {"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": ""},
+            ):
+                result = runPackage32CanaryCli(
+                    fake_canary,
+                    [
+                        "--model",
+                        "claude-opus-4-8",
+                        "--runtime-home",
+                        str(base / "runtime"),
+                        "--credential-home",
+                        str(credential_home),
+                        "--evidence-file",
+                        str(base / "evidence.json"),
+                        "--max-cost-usd",
+                        "1.25",
+                        "--authorize-paid-provider-calls",
+                    ],
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual(received["authToken"], "sentinel-oauth-token")
+            self.assertIsNone(received["apiKey"])
 
     def test_authorized_fake_trace_writes_private_content_free_evidence(self):
         with tempfile.TemporaryDirectory() as root:
