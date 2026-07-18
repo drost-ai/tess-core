@@ -378,15 +378,11 @@ def _config(preflight: dict[str, Any], workspace: str, ttl: str, mode: str, diag
         "runtimeHome": preflight["runtimeHome"],
         "provider": "anthropic",
         "providerKind": "anthropic",
-        "providerProfileName": "official",
-        "providerProfile": {
-            "kind": "anthropic",
-            "name": "official",
-            "auth": {},
-            "exactTokenCountRequired": True,
-        },
+        "providerProfileName": preflight["providerProfileName"],
+        "providerProfile": preflight["providerProfile"],
         "apiKey": preflight["apiKey"],
         "authToken": preflight["authToken"],
+        "anthropicBaseUrl": preflight["anthropicBaseUrl"],
         "customHeaders": {},
         "model": MODEL,
         "promptCache": {

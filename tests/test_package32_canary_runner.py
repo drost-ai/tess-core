@@ -77,8 +77,27 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
                         {
                             "provider": "claudeai",
                             "source": "test",
-                            "authToken": "sentinel-oauth-token",
+                            "authToken": "stale-auth-file-token",
                         }
+                    )
+                    await core.saveSettings(
+                        "user",
+                        str(workspace),
+                        {
+                            "providerProfiles": {
+                                "anthropic-claude-code-opus": {
+                                    "kind": "anthropic",
+                                    "defaultModel": "claude-opus-4-8",
+                                    "auth": {
+                                        "kind": "anthropic_auth_token",
+                                        "envVar": "ANTHROPIC_AUTH_TOKEN",
+                                    },
+                                }
+                            },
+                            "env": {
+                                "ANTHROPIC_AUTH_TOKEN": "sentinel-oauth-token",
+                            },
+                        },
                     )
 
             asyncio.run(seed_auth())
@@ -101,6 +120,8 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
                         str(base / "runtime"),
                         "--credential-home",
                         str(credential_home),
+                        "--provider-profile",
+                        "anthropic-claude-code-opus",
                         "--evidence-file",
                         str(base / "evidence.json"),
                         "--max-cost-usd",
@@ -111,6 +132,10 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
             self.assertEqual(result, 0)
             self.assertEqual(received["authToken"], "sentinel-oauth-token")
             self.assertIsNone(received["apiKey"])
+            self.assertEqual(
+                received["providerProfileName"],
+                "anthropic-claude-code-opus",
+            )
 
     def test_authorized_fake_trace_writes_private_content_free_evidence(self):
         with tempfile.TemporaryDirectory() as root:

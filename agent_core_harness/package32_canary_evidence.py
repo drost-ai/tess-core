@@ -56,6 +56,10 @@ def requirePaidCanaryPreflight(options: dict[str, Any]) -> dict[str, Any]:
             "credential_required",
             "An Anthropic API key or auth token is required after authorization.",
         )
+    provider_profile_name = str(
+        options.get("providerProfileName") or "anthropic-console"
+    ).strip()
+    provider_profile = options.get("providerProfile")
     return {
         "model": model,
         "maxCostUsd": float(ceiling),
@@ -63,6 +67,18 @@ def requirePaidCanaryPreflight(options: dict[str, Any]) -> dict[str, Any]:
         "evidenceFile": evidence_path,
         "apiKey": normalized_api_key or None,
         "authToken": normalized_auth_token or None,
+        "providerProfileName": provider_profile_name,
+        "providerProfile": (
+            dict(provider_profile)
+            if isinstance(provider_profile, dict)
+            else {
+                "kind": "anthropic",
+                "name": provider_profile_name,
+                "auth": {},
+                "exactTokenCountRequired": True,
+            }
+        ),
+        "anthropicBaseUrl": options.get("anthropicBaseUrl"),
     }
 
 
