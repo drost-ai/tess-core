@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import math
+
 from .shared import *
+from ..._compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
+from ...provider_token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO as _DEFAULT_COMPACTION_PRESERVATION_RATIO
+from ...usage_costs import mergeProviderUsage as _merge_provider_usage
 
 
 def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
@@ -64,6 +69,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     model_client = args.get("modelClient") or args.get("model_client") or createDefaultCompactionModelClient(
         {"openaiClientFactory": runtime.get("openaiClientFactory") or config.get("openaiClientFactory")}
     )
+    await _refresh_compaction_state_from_manifest(session)
     messages = session.get("messages", [])
     previous_cutoff = int(session.get("metadata", {}).get("compactionState", {}).get("compactedThroughMessageIndex") or 0)
 
@@ -98,6 +104,36 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     source_messages = messages[previous_cutoff:cutoff]
     recent_messages = messages[cutoff:]
     raw_token_estimate = estimateMessageTokens(messages)
+    source_token_estimate = estimateMessageTokens(source_messages)
+    current_input_tokens = int(args.get("currentInputTokens") or 0)
+    compaction_threshold_tokens = int(args.get("compactionThresholdTokens") or 0)
+    target_estimated_relief = max(
+        0,
+        source_token_estimate - math.ceil(source_token_estimate * _DEFAULT_COMPACTION_PRESERVATION_RATIO),
+    )
+    if (
+        trigger == "auto_hard_limit"
+        and previous_cutoff > 0
+        and current_input_tokens > 0
+        and compaction_threshold_tokens > 0
+        and current_input_tokens - target_estimated_relief >= compaction_threshold_tokens
+    ):
+        return {
+            "status": "skipped",
+            "trigger": trigger,
+            "reason": "insufficient_incremental_relief",
+            "detail": (
+                "The new compactable transcript slice is too small to bring the measured request below the compaction "
+                "threshold, even at the target preservation ratio. Rewriting the durable checkpoint would not provide "
+                "meaningful context relief."
+            ),
+            "previousCutoff": previous_cutoff,
+            "candidateCutoff": cutoff,
+            "sourceTokenEstimate": source_token_estimate,
+            "targetEstimatedRelief": target_estimated_relief,
+            "currentInputTokens": current_input_tokens,
+            "compactionThresholdTokens": compaction_threshold_tokens,
+        }
 
     await ensureBaseLayout(session.get("cwd") or os.getcwd())
     os.makedirs(os.path.join(getSessionCompactionsDir(session["id"]), "checkpoints"), exist_ok=True)
@@ -163,6 +199,8 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             },
         }
     )
+    verification_usage: dict[str, Any] = {}
+    _merge_provider_usage(verification_usage, verification.get("usage") or {})
     repair_count = 0
 
     if verification.get("verdict") == "repair" and verification.get("repairedCheckpoint"):
@@ -181,7 +219,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
                 "preservedTraceEvidence": verification.get("evidence"),
             }
         )
-        verification = await runCompactionCheckpointVerificationWithFallback(
+        repaired_verification = await runCompactionCheckpointVerificationWithFallback(
             {
                 "session": session,
                 "config": config,
@@ -195,9 +233,8 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
                 "repairAttempt": 1,
             }
         )
-
-    mergeCompactionUsageIntoSession(session, synthesized.get("usage") or {})
-    mergeCompactionUsageIntoSession(session, verification.get("usage") or {})
+        _merge_provider_usage(verification_usage, repaired_verification.get("usage") or {})
+        verification = {**repaired_verification, "usage": verification_usage}
 
     if verification.get("verdict") in {"reject", "repair"}:
         return {

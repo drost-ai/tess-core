@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from .shared import *
+from .._compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
+from ..compaction_models import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
 
 
 async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] | None:
@@ -8,6 +10,21 @@ async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] 
     config = args["config"]
     runtime = args["runtime"]
     compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
+    refreshed = await _refresh_compaction_state_from_manifest(session)
+    if refreshed:
+        state = session.get("metadata", {}).get("compactionState") or {}
+        _safe_emit(
+            runtime,
+            "compaction.state_refreshed",
+            {
+                "session_id": session["id"],
+                "source": "manifest",
+                "latest_compaction_generation": state.get("latestCompactionGeneration"),
+                "latest_compaction_at": state.get("latestCompactionAt"),
+                "compacted_through_message_index": state.get("compactedThroughMessageIndex"),
+                "archive_message_count": state.get("archiveMessageCount"),
+            },
+        )
     decision = decideDurableCheckpoint(session, tokenLimit=compaction_policy.get("compactionThresholdTokens"))
     raw_context = decision.get("rawContext") or {}
     _emit_raw_context_pressure(runtime, session["id"], raw_context)
@@ -30,7 +47,23 @@ async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] 
 async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None:
     session = args["session"]
     compaction_policy = resolveCompactionPolicy(args["config"].get("providerProfile") or {})
+    await _refresh_compaction_state_from_manifest(session)
     decision = shouldAutoCompact(session, args.get("currentInputTokens"), compaction_policy.get("compactionThresholdTokens"))
+    _safe_emit(
+        args["runtime"],
+        "compaction.decision",
+        {
+            "session_id": session["id"],
+            "should_checkpoint": bool(decision.get("shouldCompact")),
+            "trigger": decision.get("trigger"),
+            "reason": "complete_request_at_or_above_threshold" if decision.get("shouldCompact") else "complete_request_below_threshold",
+            "measurement_scope": "provider_request_complete",
+            "current_token_estimate": decision.get("currentTokenEstimate"),
+            "current_token_source": args.get("currentInputTokensSource"),
+            "compaction_threshold_tokens": compaction_policy.get("compactionThresholdTokens"),
+            "max_context_length": compaction_policy.get("maxContextLength"),
+        },
+    )
     if not decision.get("shouldCompact") or not decision.get("trigger"):
         return None
     return await _run_auto_compaction(
@@ -41,6 +74,7 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
             "trigger": decision["trigger"],
             "currentTokenEstimate": decision["currentTokenEstimate"],
             "currentTokenSource": args.get("currentInputTokensSource"),
+            "compactionThresholdTokens": compaction_policy.get("compactionThresholdTokens"),
         }
     )
 
@@ -53,6 +87,7 @@ async def _run_auto_compaction(args: dict[str, Any]) -> dict[str, Any] | None:
     current_token_estimate = _safe_int(args.get("currentTokenEstimate"))
     current_token_source = args.get("currentTokenSource")
     decision = args.get("decision") or {}
+    execution_plan = _resolve_compaction_execution_plan({"config": config, "session": session})
     _safe_emit(
         runtime,
         "compaction.started",
@@ -65,10 +100,29 @@ async def _run_auto_compaction(args: dict[str, Any]) -> dict[str, Any] | None:
             "raw_token_estimate": (decision.get("rawContext") or {}).get("rawTokenEstimate"),
             "messages_since_last_checkpoint": (decision.get("rawContext") or {}).get("messagesSinceLastCheckpoint"),
             "tool_results_since_last_checkpoint": (decision.get("rawContext") or {}).get("toolResultsSinceLastCheckpoint"),
+            "compaction_provider": execution_plan["synthesis"].get("provider"),
+            "compaction_provider_profile": execution_plan["synthesis"].get("providerProfileName"),
+            "compaction_model": execution_plan["synthesis"].get("model"),
+            "compaction_effort": execution_plan["synthesis"].get("effort"),
+            "compaction_selection_source": execution_plan["synthesis"].get("selectionSource"),
+            "verification_provider": execution_plan["verification"].get("provider"),
+            "verification_provider_profile": execution_plan["verification"].get("providerProfileName"),
+            "verification_model": execution_plan["verification"].get("model"),
+            "verification_effort": execution_plan["verification"].get("effort"),
+            "verification_selection_source": execution_plan["verification"].get("selectionSource"),
         },
     )
     try:
-        outcome = await runCompaction({"session": session, "config": config, "runtime": runtime, "trigger": trigger})
+        outcome = await runCompaction(
+            {
+                "session": session,
+                "config": config,
+                "runtime": runtime,
+                "trigger": trigger,
+                "currentInputTokens": current_token_estimate,
+                "compactionThresholdTokens": args.get("compactionThresholdTokens"),
+            }
+        )
     except Exception as error:
         await _handle_auto_compaction_failure(
             session=session,
@@ -86,7 +140,7 @@ async def _run_auto_compaction(args: dict[str, Any]) -> dict[str, Any] | None:
 
     if not outcome or outcome.get("status") == "skipped":
         _emit_auto_compaction_skip(runtime, session["id"], trigger, current_token_estimate, current_token_source, decision, outcome)
-        return None
+        return outcome
 
     result = outcome
     _record_successful_auto_compaction(session)
@@ -175,6 +229,10 @@ def _emit_auto_compaction_skip(
             "candidate_cutoff": (outcome or {}).get("candidateCutoff"),
             "quality_score": (outcome or {}).get("qualityScore"),
             "quality_classification": (outcome or {}).get("qualityClassification"),
+            "source_token_estimate": (outcome or {}).get("sourceTokenEstimate"),
+            "target_estimated_relief": (outcome or {}).get("targetEstimatedRelief"),
+            "compaction_threshold_tokens": (outcome or {}).get("compactionThresholdTokens"),
+            "measurement_scope": "raw_session" if current_token_source == "raw_session_estimate" else "provider_request_complete",
         },
     )
 

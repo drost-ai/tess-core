@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 from .shared import *
+from .artifacts import mergeCompactionUsageIntoSession
 from ...provider_token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO, resolveCompactionRequestOutputTokens
 from ...usage_costs import mergeProviderUsage as _merge_provider_usage
 from ..compaction_models import resolveCompactionTokenPolicy
@@ -123,6 +124,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
         raw_response_text = str(response.get("text") or "").strip()
         last_raw_response_text = raw_response_text
         _merge_compaction_model_usage(usage, response.get("usage") or {})
+        mergeCompactionUsageIntoSession(session, response.get("usage") or {})
         parsed = parseCompactionSynthesisResponse(raw_response_text)
         if parsed:
             return {**parsed, "usage": usage, "rawResponseText": raw_response_text, "evidence": evidence, "evidenceBudgetTokens": evidence_budget, "model": response.get("model") or model}
@@ -184,6 +186,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
     last_error = "No compaction verification response was returned."
     last_invalid_response: dict[str, Any] | None = None
     last_invalid_raw_response_text = ""
+    usage: dict[str, Any] = {}
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
     token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
@@ -218,9 +221,11 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
             },
         )
         raw_response_text = str(response.get("text") or "").strip()
+        _merge_compaction_model_usage(usage, response.get("usage") or {})
+        mergeCompactionUsageIntoSession(session, response.get("usage") or {})
         parsed = parseCompactionVerificationResponse(raw_response_text)
         if parsed:
-            return {**parsed, "usage": response.get("usage") or {}, "rawResponseText": raw_response_text, "evidence": evidence, "evidenceBudgetTokens": evidence_budget, "model": response.get("model") or model}
+            return {**parsed, "usage": usage, "rawResponseText": raw_response_text, "evidence": evidence, "evidenceBudgetTokens": evidence_budget, "model": response.get("model") or model}
         last_invalid_response = response
         last_invalid_raw_response_text = raw_response_text
         last_error = f"Attempt {attempt} returned invalid compaction verification JSON: {truncate(raw_response_text, 1200)}"
@@ -231,7 +236,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
             "reason": f"Compaction verification did not return valid verification JSON after {COMPACTION_VERIFICATION_MAX_RETRIES} attempts; rejecting the candidate checkpoint instead. {last_error}",
             "issues": [last_error],
             "notes": [],
-            "usage": last_invalid_response.get("usage") or {},
+            "usage": usage,
             "rawResponseText": last_invalid_raw_response_text,
             "evidence": evidence,
             "evidenceBudgetTokens": evidence_budget,
@@ -344,13 +349,13 @@ def buildEvidenceBackedCompactionSynthesis(args: dict[str, Any]) -> dict[str, An
         },
         "goals": {
             "active": recent_user_requests[-3:] or previous_goals.get("active") or ["Continue from the recent raw transcript; use preserved trace for compacted history."],
-            "recentRequests": dedupeStrings([*(previous_goals.get("recentRequests") or []), *recent_user_requests])[-48:],
+            "recentRequests": _dedupe_strings([*(previous_goals.get("recentRequests") or []), *recent_user_requests])[-48:],
             "constraints": previous_goals.get("constraints") or [],
             "preferences": previous_goals.get("preferences") or [],
         },
         "currentState": {
             "completed": previous_state.get("completed") or [],
-            "inProgress": dedupeStrings([*(previous_state.get("inProgress") or []), "Compacted history is preserved as deterministic trace evidence because synthesis returned malformed JSON."])[-64:],
+            "inProgress": _dedupe_strings([*(previous_state.get("inProgress") or []), "Compacted history is preserved as deterministic trace evidence because synthesis returned malformed JSON."])[-64:],
             "blocked": previous_state.get("blocked") or [],
         },
         "decisions": previous.get("decisions") or [],
@@ -359,10 +364,10 @@ def buildEvidenceBackedCompactionSynthesis(args: dict[str, Any]) -> dict[str, An
             "commands": previous_activity.get("commands") or [],
             "searches": previous_activity.get("searches") or [],
             "web": previous_activity.get("web") or [],
-            "failures": dedupeStrings([*(previous_activity.get("failures") or []), reason])[-MAX_FAILURES:],
+            "failures": _dedupe_strings([*(previous_activity.get("failures") or []), reason])[-MAX_FAILURES:],
         },
         "nextSteps": previous.get("nextSteps") or ["Use the recent raw messages for the immediate continuation state.", "Use preserved trace as authoritative evidence for compacted history."],
-        "criticalContext": dedupeStrings(
+        "criticalContext": _dedupe_strings(
             [
                 *(previous.get("criticalContext") or []),
                 f"Preserved trace is authoritative for compacted source messages {source_start}-{max(source_end - 1, source_start)}.",
@@ -393,6 +398,17 @@ def _extract_recent_user_requests(messages: list[dict[str, Any]]) -> list[str]:
         if text:
             requests.append(truncate(text, 600))
     return requests[-12:]
+
+
+def _dedupe_strings(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, str) or not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _extract_message_text(message: dict[str, Any]) -> str | None:

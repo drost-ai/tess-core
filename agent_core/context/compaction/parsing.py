@@ -172,14 +172,13 @@ def coerceSynthesizedWorkingContextFields(value: Any) -> dict[str, Any] | None:
 def coercePreservedTrace(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
-    traces = []
-    for entry in value:
+    for entry in reversed(value):
         record = asRecord(entry)
         if not record:
             continue
         source = asRecord(record.get("sourceRange")) or {}
-        traces.append(
-            {
+        return [
+            _bound_preserved_trace_record({
                 "sourceRange": {
                     "generation": source.get("generation") if isinstance(source.get("generation"), int) else 1,
                     "start": source.get("start") if isinstance(source.get("start"), int) else 0,
@@ -194,9 +193,9 @@ def coercePreservedTrace(value: Any) -> list[dict[str, Any]]:
                 "tokenBudget": record.get("tokenBudget") if isinstance(record.get("tokenBudget"), int) else 0,
                 "truncated": bool(record.get("truncated")),
                 "content": record.get("content") if isinstance(record.get("content"), str) else "",
-            }
-        )
-    return traces
+            })
+        ]
+    return []
 
 
 def coerceRepairedCheckpoint(value: Any) -> dict[str, Any] | None:

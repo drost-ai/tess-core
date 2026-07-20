@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from .._compaction_state import isCompactionStateNewer as _is_compaction_state_newer
 
 def _safe_emit(runtime: dict[str, Any], event: str, data: dict[str, Any]) -> None:
     try:
@@ -45,10 +46,33 @@ def _signal_reason(signal: Any) -> Any:
 
 def _restore_session_state(session: dict[str, Any], snapshot: dict[str, Any]) -> None:
     preserved_permission_mode = session.get("permissionMode")
+    live_metadata = session.get("metadata") or {}
+    snapshot_metadata = snapshot.get("metadata") or {}
+    live_compaction_state = live_metadata.get("compactionState")
+    newer_compaction_state = (
+        copy.deepcopy(live_compaction_state)
+        if _is_compaction_state_newer(live_compaction_state, snapshot_metadata.get("compactionState"))
+        else None
+    )
+    newer_compaction_count = None
+    newer_runtime_restore = None
+    if newer_compaction_state:
+        newer_compaction_count = max(
+            int(live_metadata.get("compactions") or 0),
+            int(snapshot_metadata.get("compactions") or 0),
+            int(newer_compaction_state.get("latestCompactionGeneration") or 0),
+        )
+        newer_runtime_restore = copy.deepcopy(live_metadata.get("runtimeRestore"))
     session.clear()
     session.update(copy.deepcopy(snapshot))
     if preserved_permission_mode is not None:
         session["permissionMode"] = preserved_permission_mode
+    if newer_compaction_state:
+        metadata = session.setdefault("metadata", {})
+        metadata["compactionState"] = newer_compaction_state
+        metadata["compactions"] = newer_compaction_count
+        if newer_runtime_restore:
+            metadata["runtimeRestore"] = newer_runtime_restore
 
 def _now() -> str:
     from .._utils import now_iso

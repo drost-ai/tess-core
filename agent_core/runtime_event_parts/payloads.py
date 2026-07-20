@@ -151,14 +151,17 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "shouldCheckpoint": _optional_boolean(_field(data, "should_checkpoint", "shouldCheckpoint")),
             "trigger": _optional_string(_field(data, "trigger")),
             "reason": _optional_string(_field(data, "reason")),
+            "measurementScope": _optional_string(_field(data, "measurement_scope", "measurementScope")),
+            "currentTokenEstimate": _optional_number(_field(data, "current_token_estimate", "currentTokenEstimate")),
+            "currentTokenSource": _optional_string(_field(data, "current_token_source", "currentTokenSource")),
+            "compactionThresholdTokens": _optional_number(_field(data, "compaction_threshold_tokens", "compactionThresholdTokens")),
+            "maxContextLength": _optional_number(_field(data, "max_context_length", "maxContextLength")),
             "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),
             "messageCount": _optional_number(_field(data, "message_count", "messageCount")),
             "messagesSinceLastCheckpoint": _optional_number(_field(data, "messages_since_last_checkpoint", "messagesSinceLastCheckpoint")),
             "toolResultsSinceLastCheckpoint": _optional_number(_field(data, "tool_results_since_last_checkpoint", "toolResultsSinceLastCheckpoint")),
             "rawTokenDeltaSinceLastCheckpoint": _optional_number(_field(data, "raw_token_delta_since_last_checkpoint", "rawTokenDeltaSinceLastCheckpoint")),
-            "toolResultTokenEstimateSinceLastCheckpoint": _optional_number(
-                _field(data, "tool_result_token_estimate_since_last_checkpoint", "toolResultTokenEstimateSinceLastCheckpoint")
-            ),
+            "toolResultTokenEstimateSinceLastCheckpoint": _optional_number(_field(data, "tool_result_token_estimate_since_last_checkpoint", "toolResultTokenEstimateSinceLastCheckpoint")),
             "largestToolResultTokenEstimate": _optional_number(_field(data, "largest_tool_result_token_estimate", "largestToolResultTokenEstimate")),
             "hasDurableCheckpoint": _optional_boolean(_field(data, "has_durable_checkpoint", "hasDurableCheckpoint")),
             "latestCompactionAt": _optional_string(_field(data, "latest_compaction_at", "latestCompactionAt")),
@@ -166,10 +169,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
     if event == "permission.requested":
         return "permission.requested", {"summary": _optional_string(_field(data, "summary"))}
     if event == "permission.decided":
-        return "permission.decided", {
-            "decision": _optional_string(_field(data, "decision")),
-            "summary": _optional_string(_field(data, "summary")),
-        }
+        return "permission.decided", {"decision": _optional_string(_field(data, "decision")), "summary": _optional_string(_field(data, "summary"))}
     if event == "sandbox.applied":
         return "sandbox.applied", {
             "backend": _optional_string(_field(data, "backend")),

@@ -152,8 +152,8 @@
         "cacheCreationInputTokens": 0,
         "cacheCreationTtlDetailComplete": true,
         "cacheReadInputTokens": 0,
-        "inputTokens": 22,
-        "outputTokens": 14,
+        "inputTokens": 33,
+        "outputTokens": 21,
         "toolCalls": 0,
         "turns": 0
       }

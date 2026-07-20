@@ -72,6 +72,11 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
     )
     open_todos = [summarizeTodo(todo) for todo in selected_todos["open"]]
     completed_todos = [summarizeTodo(todo) for todo in selected_todos["completed"]]
+    preserved_trace = _latest_preserved_trace(
+        previous.get("preservedTrace"),
+        args.get("sourceRange"),
+        args.get("preservedTraceEvidence"),
+    )
     return {
         "version": "v2",
         "sessionId": session["id"],
@@ -106,26 +111,38 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
             "omittedItemCount": max(0, selected_todos["total"] - len(open_todos) - len(completed_todos)),
         },
         "activity": working_context["activity"],
-        "preservedTrace": [
-            *(previous.get("preservedTrace") or []),
-            *([buildPreservedTraceRecord(args["sourceRange"], args["preservedTraceEvidence"])] if args.get("preservedTraceEvidence") else []),
-        ][-12:],
+        "preservedTrace": preserved_trace,
         "nextSteps": working_context["nextSteps"],
         "criticalContext": working_context["criticalContext"],
     }
 
 
 def buildPreservedTraceRecord(sourceRange: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
-    return {
+    return _bound_preserved_trace_record({
         "sourceRange": sourceRange,
         "entryCount": evidence.get("entryCount"),
         "includedEntryCount": evidence.get("includedEntryCount"),
         "omittedEntryCount": evidence.get("omittedEntryCount"),
         "tokenEstimate": evidence.get("tokenEstimate"),
         "tokenBudget": evidence.get("tokenBudget"),
-        "truncated": evidence.get("truncated"),
-        "content": evidence.get("transcript"),
-    }
+        "truncated": bool(evidence.get("truncated")),
+        "content": str(evidence.get("transcript") or ""),
+    })
+
+
+def _latest_preserved_trace(
+    previous_traces: Any,
+    source_range: dict[str, Any] | None,
+    evidence: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if isinstance(evidence, dict) and isinstance(source_range, dict):
+        return [buildPreservedTraceRecord(source_range, evidence)]
+    if not isinstance(previous_traces, list):
+        return []
+    for trace in reversed(previous_traces):
+        if isinstance(trace, dict):
+            return [_bound_preserved_trace_record(trace)]
+    return []
 
 
 def buildModelBackedCompactionStateSnapshot(args: dict[str, Any]) -> dict[str, Any]:

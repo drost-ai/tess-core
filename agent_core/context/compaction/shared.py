@@ -48,6 +48,22 @@ COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT = 600
 COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT = 6_000
 COMPACTION_FILE_PREVIEW_LINES = 48
 COMPACTION_MATCH_PREVIEW_LIMIT = 32
+_PRESERVED_TRACE_PROMPT_TOKEN_BUDGET = 20_000
+
+
+def _bound_preserved_trace_record(record: dict[str, Any]) -> dict[str, Any]:
+    content = str(record.get("content") or "")
+    char_limit = _PRESERVED_TRACE_PROMPT_TOKEN_BUDGET * 4
+    if len(content) <= char_limit:
+        return {**record, "content": content}
+    bounded_content = content[: max(0, char_limit - 1)].rstrip() + "…"
+    return {
+        **record,
+        "tokenEstimate": (len(bounded_content) + 3) // 4,
+        "tokenBudget": _PRESERVED_TRACE_PROMPT_TOKEN_BUDGET,
+        "truncated": True,
+        "content": bounded_content,
+    }
 
 COMPACTION_SYSTEM_PROMPT = """You synthesize durable working context for a coding agent.
 

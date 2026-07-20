@@ -21,7 +21,8 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
     prepared_request: dict[str, Any] | None = None
 
-    await maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": runtime})
+    raw_checkpoint_outcome = await maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": runtime})
+    durable_compaction_applied = bool(raw_checkpoint_outcome and raw_checkpoint_outcome.get("status") == "completed")
 
     for _attempt in range(4):
         request_context = await buildContinuationContext(
@@ -69,16 +70,19 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "emitEvent": lambda event, data: _safe_emit(runtime, event, data),
             }
         )
-        compacted = await maybeAutoCompactSession(
-            {
-                "session": session,
-                "config": config,
-                "runtime": runtime,
-                "currentInputTokens": measurement["inputTokens"],
-                "currentInputTokensSource": measurement.get("source"),
-            }
-        )
-        if compacted:
+        compacted = None
+        if not durable_compaction_applied:
+            compacted = await maybeAutoCompactSession(
+                {
+                    "session": session,
+                    "config": config,
+                    "runtime": runtime,
+                    "currentInputTokens": measurement["inputTokens"],
+                    "currentInputTokensSource": measurement.get("source"),
+                }
+            )
+        if compacted and compacted.get("status") == "completed":
+            durable_compaction_applied = True
             continue
         budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
         _assert_image_context_capacity(measurement, budget)

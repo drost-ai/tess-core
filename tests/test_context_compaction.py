@@ -195,6 +195,10 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertEqual(working["nextSteps"], ["run focused compaction tests"])
             state = json.loads(Path(result["artifacts"]["state"]).read_text())
             self.assertEqual(state["verification"]["repairCount"], 1)
+            self.assertEqual(state["verification"]["usage"]["input_tokens"], 6)
+            self.assertEqual(state["verification"]["usage"]["output_tokens"], 4)
+            self.assertEqual(session["metadata"]["usage"]["inputTokens"], 9)
+            self.assertEqual(session["metadata"]["usage"]["outputTokens"], 6)
         finally:
             self.restore_home(root, previous)
 
@@ -336,7 +340,7 @@ class ContextCompactionTests(AgentCoreTestCase):
 
             async def fake_measure(_args):
                 measure_calls["count"] += 1
-                return {"inputTokens": 200_000 if measure_calls["count"] == 1 else 1_000, "source": "fake"}
+                return {"inputTokens": 200_000, "source": "fake"}
 
             async def fake_run_compaction(args):
                 compaction_calls.append(args)
@@ -379,7 +383,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertEqual(measure_calls["count"], 2)
             self.assertEqual(provider_requests[0]["messages"][0]["content"], core.CONTINUATION_BRIDGE_MESSAGE)
             self.assertTrue(any(event == "compaction.completed" for event, _ in events))
-            self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 1_000 for event, data in events))
+            self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 200_000 for event, data in events))
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastCompactionMode"], "full_checkpoint_compaction")
         finally:
             agent_module.measureRequestInputTokens = original_measure
