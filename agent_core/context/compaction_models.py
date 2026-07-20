@@ -125,21 +125,35 @@ def resolveCompactionExecutionPlan(args: dict[str, Any] | None = None, **kwargs:
     session_provider = session.get("provider") or config.get("provider") or "openai"
     session_model = session.get("model") or config.get("model") or getDefaultModelForProvider(session_provider)
     session_effort = session.get("effort") or config.get("effort") or getDefaultEffortForProvider(session_provider)
+    synthesis_effort = config.get("compactionEffort") or session_effort
     synthesis_profile = config.get("compactionProviderProfile")
     if synthesis_profile:
-        synthesis = _build_selection_for_profile(synthesis_profile, session_effort, "synthesis")
+        synthesis = _build_selection_for_profile(
+            synthesis_profile,
+            synthesis_effort,
+            "synthesis",
+            model_override=config.get("compactionModel"),
+            effort_override=config.get("compactionEffort"),
+        )
     elif config.get("compactionModel") or config.get("compactionProvider"):
-        synthesis = _build_selection(provider=config.get("compactionProvider") or session_provider, model=config.get("compactionModel") or session_model, effort=session_effort, purpose="synthesis", selectionSource="configured", providerProfileName=None)
+        synthesis = _build_selection(provider=config.get("compactionProvider") or session_provider, model=config.get("compactionModel") or session_model, effort=synthesis_effort, purpose="synthesis", selectionSource="configured", providerProfileName=None)
     else:
         synthesis = _build_selection(provider=FIXED_COMPACTION_PROVIDER, model=FIXED_COMPACTION_MODEL, effort=FIXED_COMPACTION_EFFORT, purpose="synthesis", selectionSource="fixed", providerProfileName=None)
 
+    verification_effort = config.get("compactionVerificationEffort") or synthesis.get("effort") or synthesis_effort
     verification_profile = config.get("compactionVerificationProviderProfile")
     if verification_profile:
-        verification = _build_selection_for_profile(verification_profile, synthesis.get("effort") or session_effort, "verification")
+        verification = _build_selection_for_profile(
+            verification_profile,
+            verification_effort,
+            "verification",
+            model_override=config.get("compactionVerificationModel"),
+            effort_override=config.get("compactionVerificationEffort"),
+        )
     elif config.get("compactionVerificationModel") or config.get("compactionVerificationProvider"):
-        verification = _build_selection(provider=config.get("compactionVerificationProvider") or synthesis["provider"], model=config.get("compactionVerificationModel") or synthesis["model"], effort=synthesis.get("effort") or session_effort, purpose="verification", selectionSource="configured", providerProfileName=None)
+        verification = _build_selection(provider=config.get("compactionVerificationProvider") or synthesis["provider"], model=config.get("compactionVerificationModel") or synthesis["model"], effort=verification_effort, purpose="verification", selectionSource="configured", providerProfileName=None)
     else:
-        verification = _build_selection(provider=synthesis["provider"], model=synthesis["model"], effort=synthesis.get("effort") or session_effort, purpose="verification", selectionSource=synthesis.get("selectionSource", "fixed"), providerProfileName=synthesis.get("providerProfileName"))
+        verification = _build_selection(provider=synthesis["provider"], model=synthesis["model"], effort=verification_effort, purpose="verification", selectionSource=synthesis.get("selectionSource", "fixed"), providerProfileName=synthesis.get("providerProfileName"))
     return {"synthesis": synthesis, "verification": verification}
 
 
@@ -211,11 +225,19 @@ def _build_selection(provider: str, model: str, effort: str, purpose: str, selec
     return {"provider": provider, "providerProfileName": providerProfileName, "model": normalized, "effort": normalizeEffortForModel(provider, normalized, effort), "selectionSource": selectionSource, "purpose": purpose}
 
 
-def _build_selection_for_profile(binding: dict[str, Any], fallback_effort: str, purpose: str) -> dict[str, Any]:
+def _build_selection_for_profile(
+    binding: dict[str, Any],
+    fallback_effort: str,
+    purpose: str,
+    *,
+    model_override: str | None = None,
+    effort_override: str | None = None,
+) -> dict[str, Any]:
     profile = binding.get("profile") or {}
     provider = profile.get("kind")
-    model = normalizeModelName(profile.get("defaultModel") or getDefaultModelForProvider(provider), provider)
-    return _build_selection(provider=provider, providerProfileName=binding.get("profileName") or profile.get("name"), model=model, effort=profile.get("reasoningEffort") or profile.get("effortLevel") or fallback_effort or getDefaultEffortForProvider(provider), purpose=purpose, selectionSource="configured")
+    model = normalizeModelName(model_override or profile.get("defaultModel") or getDefaultModelForProvider(provider), provider)
+    effort = effort_override or profile.get("reasoningEffort") or profile.get("effortLevel") or fallback_effort or getDefaultEffortForProvider(provider)
+    return _build_selection(provider=provider, providerProfileName=binding.get("profileName") or profile.get("name"), model=model, effort=effort, purpose=purpose, selectionSource="configured")
 
 
 async def _resolve_compaction_openai_transport(config: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:

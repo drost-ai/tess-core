@@ -122,9 +122,11 @@ class SettingsRecord(TypedDict, total=False):
     env: dict[str, str]
     compactionProvider: str
     compactionModel: str
+    compactionEffort: str
     compactionProviderProfile: str
     compactionVerificationProvider: str
     compactionVerificationModel: str
+    compactionVerificationEffort: str
     compactionVerificationProviderProfile: str
     screenMode: str
     openaiApiMode: OpenAiApiMode
@@ -165,9 +167,11 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     providerProfiles: dict[str, ProviderProfile]
     compactionProvider: str | None
     compactionModel: str | None
+    compactionEffort: str | None
     compactionProviderProfile: dict[str, Any] | None
     compactionVerificationProvider: str | None
     compactionVerificationModel: str | None
+    compactionVerificationEffort: str | None
     compactionVerificationProviderProfile: dict[str, Any] | None
     apiKey: RuntimeSecretValue | None
     authToken: RuntimeSecretValue | None

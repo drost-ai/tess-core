@@ -38,3 +38,59 @@ class CompactionModelFetchTests(AgentCoreTestCase):
         policy = testing.resolveCompactionTokenPolicy({"config": {"compactionProviderProfile": profile, "providerProfiles": {"codex": profile["profile"]}}, "model": plan["synthesis"]})
         self.assertEqual(policy["compactionOutputTokens"], 20_000)
         self.assertEqual(policy["profileName"], "codex")
+
+    def test_configured_profile_carries_auth_while_model_and_effort_are_overridden(self):
+        profile = {
+            "profileName": "codex",
+            "profile": {
+                "name": "codex",
+                "kind": "openai",
+                "apiMode": "codex",
+                "defaultModel": "gpt-5.3-codex-spark",
+                "effortLevel": "high",
+            },
+            "openaiToken": "codex-token",
+            "customHeaders": {},
+        }
+        session = core.createEmptySession(
+            cwd="/tmp/workspace",
+            provider="anthropic",
+            providerProfileName="anthropic-console",
+            model="claude-opus-4-8",
+            effort="max",
+            systemPrompt="s",
+            permissionMode="default",
+        )
+        config = {
+            "compactionProvider": "openai",
+            "compactionProviderProfile": profile,
+            "compactionModel": "gpt-5.6-terra",
+            "compactionEffort": "medium",
+            "compactionVerificationProvider": "openai",
+            "compactionVerificationProviderProfile": profile,
+            "compactionVerificationModel": "gpt-5.6-terra",
+            "compactionVerificationEffort": "medium",
+        }
+        plan = testing.resolveCompactionExecutionPlan({"config": config, "session": session})
+        self.assertEqual(
+            plan["synthesis"],
+            {
+                "provider": "openai",
+                "providerProfileName": "codex",
+                "model": "gpt-5.6-terra",
+                "effort": "medium",
+                "selectionSource": "configured",
+                "purpose": "synthesis",
+            },
+        )
+        self.assertEqual(
+            plan["verification"],
+            {
+                "provider": "openai",
+                "providerProfileName": "codex",
+                "model": "gpt-5.6-terra",
+                "effort": "medium",
+                "selectionSource": "configured",
+                "purpose": "verification",
+            },
+        )

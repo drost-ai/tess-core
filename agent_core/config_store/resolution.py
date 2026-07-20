@@ -138,14 +138,22 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     openai_api_mode = selected_profile.get("apiMode") if resolved_provider == "openai" else DEFAULT_OPENAI_API_MODE
 
     requested_compaction_provider = normalizeProviderName(
-        os.environ.get("TESS_COMPACTION_PROVIDER")
+        options.get("compactionProvider")
+        or os.environ.get("TESS_COMPACTION_PROVIDER")
         or settings_env.get("TESS_COMPACTION_PROVIDER")
         or merged_settings.get("compactionProvider")
     )
     requested_compaction_model = (
-        os.environ.get("TESS_COMPACTION_MODEL")
+        options.get("compactionModel")
+        or os.environ.get("TESS_COMPACTION_MODEL")
         or settings_env.get("TESS_COMPACTION_MODEL")
         or merged_settings.get("compactionModel")
+    )
+    requested_compaction_effort = normalizeEffortLevel(
+        options.get("compactionEffort")
+        or os.environ.get("TESS_COMPACTION_EFFORT")
+        or settings_env.get("TESS_COMPACTION_EFFORT")
+        or merged_settings.get("compactionEffort")
     )
     resolved_compaction_provider = (
         resolveProviderForModelSelection(requested_compaction_provider, requested_compaction_model)
@@ -159,14 +167,22 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     )
 
     requested_verification_provider = normalizeProviderName(
-        os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER")
+        options.get("compactionVerificationProvider")
+        or os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER")
         or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER")
         or merged_settings.get("compactionVerificationProvider")
     )
     requested_verification_model = (
-        os.environ.get("TESS_COMPACTION_VERIFICATION_MODEL")
+        options.get("compactionVerificationModel")
+        or os.environ.get("TESS_COMPACTION_VERIFICATION_MODEL")
         or settings_env.get("TESS_COMPACTION_VERIFICATION_MODEL")
         or merged_settings.get("compactionVerificationModel")
+    )
+    requested_verification_effort = normalizeEffortLevel(
+        options.get("compactionVerificationEffort")
+        or os.environ.get("TESS_COMPACTION_VERIFICATION_EFFORT")
+        or settings_env.get("TESS_COMPACTION_VERIFICATION_EFFORT")
+        or merged_settings.get("compactionVerificationEffort")
     )
     resolved_verification_provider = (
         resolveProviderForModelSelection(requested_verification_provider, requested_verification_model)
@@ -191,7 +207,8 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     compaction_provider_profile = await normalizeCompactionProviderSecrets(
         resolveCompactionProviderProfileBinding(
             {
-                "requestedProfileName": os.environ.get("TESS_COMPACTION_PROVIDER_PROFILE")
+                "requestedProfileName": options.get("compactionProviderProfile")
+                or os.environ.get("TESS_COMPACTION_PROVIDER_PROFILE")
                 or settings_env.get("TESS_COMPACTION_PROVIDER_PROFILE")
                 or merged_settings.get("compactionProviderProfile"),
                 "providerProfiles": provider_profiles,
@@ -211,7 +228,8 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     compaction_verification_provider_profile = await normalizeCompactionProviderSecrets(
         resolveCompactionProviderProfileBinding(
             {
-                "requestedProfileName": os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
+                "requestedProfileName": options.get("compactionVerificationProviderProfile")
+                or os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
                 or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
                 or merged_settings.get("compactionVerificationProviderProfile"),
                 "providerProfiles": provider_profiles,
@@ -314,6 +332,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "providerCapabilities": clone(selected_profile.get("capabilities") or {}),
         "providerProfiles": {name: resolveProviderProfile(name, record) for name, record in provider_profiles.items()},
         "compactionProvider": resolved_compaction_provider,
+        "compactionEffort": requested_compaction_effort,
         "compactionProviderProfile": compaction_provider_profile,
         "apiKey": normalized_api_key,
         "authToken": normalized_auth_token,
@@ -327,6 +346,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "compactionModel": resolved_compaction_model,
         "compactionVerificationProvider": resolved_verification_provider,
         "compactionVerificationModel": resolved_verification_model,
+        "compactionVerificationEffort": requested_verification_effort,
         "compactionVerificationProviderProfile": compaction_verification_provider_profile,
         "effort": normalizeEffortLevel(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or getDefaultEffortForProvider(resolved_provider),
         "assistantName": assistant_name,

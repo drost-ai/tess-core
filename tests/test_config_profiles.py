@@ -194,6 +194,59 @@ class ConfigProfileTests(AgentCoreTestCase):
                 os.environ["LOCAL_API_KEY"] = prev_key
             self.restore_home(root, previous)
 
+    def test_direct_compaction_options_override_settings_and_bind_codex_auth(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            codex_auth_path = home / "codex-auth.json"
+            codex_auth_path.write_text(
+                json.dumps(
+                    {
+                        "auth_mode": "chatgpt",
+                        "tokens": {"access_token": "codex-access-token"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (home / "settings.json").write_text(
+                json.dumps(
+                    {
+                        "openaiCodexAuthPath": str(codex_auth_path),
+                        "compactionModel": "gpt-5.3-codex-spark",
+                        "compactionEffort": "high",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = run(
+                core.resolveConfig(
+                    {
+                        "runtimeHome": str(home),
+                        "compactionProvider": "openai",
+                        "compactionProviderProfile": "codex",
+                        "compactionModel": "gpt-5.6-terra",
+                        "compactionEffort": "medium",
+                        "compactionVerificationProvider": "openai",
+                        "compactionVerificationProviderProfile": "codex",
+                        "compactionVerificationModel": "gpt-5.6-terra",
+                        "compactionVerificationEffort": "medium",
+                    },
+                    str(workspace),
+                )
+            )
+            self.assertEqual(config["compactionProvider"], "openai")
+            self.assertEqual(config["compactionModel"], "gpt-5.6-terra")
+            self.assertEqual(config["compactionEffort"], "medium")
+            self.assertEqual(config["compactionProviderProfile"]["profileName"], "codex")
+            self.assertTrue(isRuntimeSecretRef(config["compactionProviderProfile"]["openaiToken"]))
+            self.assertEqual(config["compactionVerificationModel"], "gpt-5.6-terra")
+            self.assertEqual(config["compactionVerificationEffort"], "medium")
+            self.assertEqual(
+                config["compactionVerificationProviderProfile"]["profileName"],
+                "codex",
+            )
+        finally:
+            self.restore_home(root, previous)
+
     def test_provider_profile_effort_level_is_used_as_route_default(self):
         root, home, workspace, previous = self.temp_context()
         try:
