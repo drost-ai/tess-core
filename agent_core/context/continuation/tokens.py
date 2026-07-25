@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..._image_redaction import redactImagePayloads as _redact_image_payloads
 from ...todo_policy import selectTodoState as _select_todo_state
 
 
@@ -40,23 +41,3 @@ def collapseWhitespace(value: Any) -> str:
 
 def asRecord(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
-
-
-def _redact_image_payloads(value: Any) -> Any:
-    if isinstance(value, list):
-        return [_redact_image_payloads(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-    out: dict[str, Any] = {}
-    is_image = str(value.get("type") or "").strip().lower() in {"image", "input_image", "image_url"}
-    for key, item in value.items():
-        if is_image and key in {"data", "data_base64", "base64", "image_url", "url"}:
-            out[key] = _image_placeholder(value)
-        else:
-            out[key] = _redact_image_payloads(item)
-    return out
-
-
-def _image_placeholder(value: dict[str, Any]) -> str:
-    mime_type = value.get("mime_type") or value.get("mimeType") or value.get("mime") or "image"
-    return f"<image:{mime_type}>"

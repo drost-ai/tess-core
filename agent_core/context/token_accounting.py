@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 
 from .._utils import get_value as _get_value, maybe_await as _maybe_await, now_iso
 from ..image_budget import measureAdmittedImageSet as _measure_admitted_image_set
+from .._image_redaction import redactImagePayloads as _redact_image_payloads
 from ..provider_errors import (
     createProviderFailureRecord as _create_provider_failure_record,
     createProviderRequestError as _create_provider_request_error,
@@ -438,34 +439,6 @@ def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_in
     params.pop("max_output_tokens", None)
     params = _redact_image_payloads(params)
     return _estimate_text_tokens(json.dumps(params, ensure_ascii=False)) + image_input_tokens
-
-
-def _redact_image_payloads(value: Any) -> Any:
-    if isinstance(value, list):
-        return [_redact_image_payloads(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-    out: dict[str, Any] = {}
-    is_image = str(value.get("type") or "").strip().lower() in {"image", "input_image", "image_url"}
-    for key, item in value.items():
-        if is_image and key in {"data", "data_base64", "base64", "image_url", "url"}:
-            out[key] = _image_placeholder(value)
-        elif is_image and key == "source" and isinstance(item, dict):
-            out[key] = {
-                child_key: _image_placeholder(value)
-                if child_key in {"data", "data_base64", "base64"}
-                else _redact_image_payloads(child)
-                for child_key, child in item.items()
-            }
-        else:
-            out[key] = _redact_image_payloads(item)
-    return out
-
-
-def _image_placeholder(value: dict[str, Any]) -> str:
-    source = value.get("source") if isinstance(value.get("source"), dict) else value
-    mime_type = source.get("media_type") or source.get("mime_type") or source.get("mimeType") or source.get("mime") or "image"
-    return f"<image:{mime_type}>"
 
 
 def _image_measurement_fields(images: dict[str, Any]) -> dict[str, Any]:

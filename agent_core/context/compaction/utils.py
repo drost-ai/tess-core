@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..._image_redaction import redactImagePayloads as _redact_image_payloads
 
 
 def estimateMessageTokens(messages: list[dict[str, Any]]) -> int:
@@ -9,7 +10,7 @@ def estimateMessageTokens(messages: list[dict[str, Any]]) -> int:
 
 def estimateSingleMessageTokens(message: dict[str, Any]) -> int:
     content = message.get("content")
-    value = f"{message.get('role')}:{content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, separators=(',', ':'))}"
+    value = f"{message.get('role')}:{content if isinstance(content, str) else json.dumps(_redact_image_payloads(content), ensure_ascii=False, separators=(',', ':'))}"
     return estimateTextTokens(value)
 
 
