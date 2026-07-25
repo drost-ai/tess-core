@@ -297,6 +297,106 @@ class AgentLoopTests(AgentCoreTestCase):
             self.assertEqual(blocks[1]["tool_use_id"], "use_fast")
             self.assertEqual(blocks[1]["content"], "FAST")
 
+    def test_run_agent_prompt_stops_only_after_persisted_tool_boundary(self):
+        with tempfile.TemporaryDirectory(prefix="agent-core-stable-boundary-") as cwd:
+            config = {
+                "cwd": cwd,
+                "runtimeHome": cwd,
+                "allowedRoots": [cwd],
+                "agents": {},
+                "provider": "anthropic",
+                "providerKind": "anthropic",
+                "providerProfileName": "default",
+                "providerProfile": {"kind": "anthropic", "name": "default", "auth": {}},
+                "providerProfiles": {"default": {"kind": "anthropic", "name": "default"}},
+                "customHeaders": {},
+                "openaiApiMode": "responses",
+                "model": "claude-sonnet-4-6",
+                "effort": "medium",
+                "assistantName": "Test",
+                "assistantDescription": "",
+                "systemPrompt": "test",
+                "tools": ["delegate"],
+                "allowedTools": ["delegate"],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            session = core.createEmptySession(
+                cwd=cwd,
+                provider="anthropic",
+                model="claude-sonnet-4-6",
+                effort="medium",
+                systemPrompt="test",
+                permissionMode="bypassPermissions",
+            )
+            calls = {"provider": 0, "hook": 0}
+            events = []
+
+            async def delegate_handler(_input, _context):
+                return {"content": "job-123 started", "isError": False}
+
+            async def send(_request):
+                calls["provider"] += 1
+                if calls["provider"] > 1:
+                    raise AssertionError("provider must not run after the stable boundary")
+                return {
+                    "model": "claude-sonnet-4-6",
+                    "stopReason": "tool_use",
+                    "usage": {"input_tokens": 10, "output_tokens": 5},
+                    "content": [
+                        {"type": "text", "text": "Delegating now."},
+                        {
+                            "type": "tool_use",
+                            "id": "use_delegate",
+                            "name": "delegate",
+                            "input": {},
+                        },
+                    ],
+                }
+
+            def stop_after_tool_batch():
+                calls["hook"] += 1
+                tool_result = session["messages"][-1]["content"][0]
+                self.assertEqual(tool_result["type"], "tool_result")
+                self.assertEqual(tool_result["content"], "job-123 started")
+                return {"stop": True, "text": "I’ll continue when the delegated work finishes."}
+
+            tools = [
+                core.ToolDefinition(
+                    "delegate",
+                    "launch delegated work",
+                    {"type": "object"},
+                    delegate_handler,
+                )
+            ]
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime=bind_test_runtime(
+                        session,
+                        {
+                            "interactive": False,
+                            "askQuestion": lambda *_: "",
+                            "emitEvent": lambda event, data: events.append((event, data)),
+                            "tools": tools,
+                            "shouldStopAfterStableBoundary": stop_after_tool_batch,
+                        },
+                    ),
+                    prompt="run",
+                    providerOverride={"send": send},
+                )
+            )
+
+            self.assertEqual(calls, {"provider": 1, "hook": 1})
+            self.assertEqual(result["stopReason"], "stable_boundary")
+            self.assertIn("I’ll continue", result["text"])
+            self.assertTrue(
+                any(event == "turn.stable_boundary_stopped" for event, _ in events)
+            )
+            self.assertEqual(session["messages"][-1]["role"], "user")
+
     def test_run_agent_prompt_turns_invalid_streamed_tool_input_into_repairable_tool_result(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-invalid-tool-") as cwd:
             config = {

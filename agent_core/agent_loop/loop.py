@@ -12,6 +12,7 @@ from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp
 from .providers import _emit_provider_response_completed
 from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
 from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
+from .stable_boundary import run_stable_boundary_hook as _run_stable_boundary_hook
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
 from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
 from .tool_hooks import run_pre_tool_hook as _run_pre_tool_hook
@@ -454,6 +455,30 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
             if paused_message:
                 text_parts.append(paused_message)
             return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "approval_required"}
+        stable_boundary = await _run_stable_boundary_hook(
+            runtime.get("shouldStopAfterStableBoundary")
+        )
+        if stable_boundary and stable_boundary["stop"]:
+            boundary_text = stable_boundary["text"].strip()
+            if boundary_text and (not text_parts or text_parts[-1] != boundary_text):
+                text_parts.append(boundary_text)
+            _safe_emit(
+                runtime,
+                "turn.stable_boundary_stopped",
+                {
+                    "session_id": session["id"],
+                    "model": active_model,
+                    "tool_count": tool_count,
+                },
+            )
+            return {
+                "text": "\n\n".join(text_parts).strip(),
+                "toolCount": tool_count,
+                "usage": total_usage,
+                "model": active_model,
+                "estimatedCostUsd": _round_usd(cost),
+                "stopReason": "stable_boundary",
+            }
 
 def extractAssistantText(message: dict[str, Any]) -> str:
     content = message.get("content")
