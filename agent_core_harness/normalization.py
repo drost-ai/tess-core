@@ -68,13 +68,31 @@ class NormalizationContext:
         for key in ("workspaceRoot", "workspace_root"):
             if key in value:
                 value[key] = "<workspace-root>"
-        if _is_estimated_token_record(value):
+        if _is_estimated_token_record(value) or (
+            key_path and key_path[-1] == "headroom"
+        ):
             for key in (
                 "base_input_tokens",
+                "estimated_fixed_input_tokens",
+                "estimated_image_input_tokens",
+                "estimated_message_input_tokens",
+                "fixed_input_tokens",
+                "image_input_tokens",
                 "input_tokens",
+                "irreducible_input_tokens",
+                "message_input_tokens",
+                "remaining_headroom_tokens",
                 "remaining_output_tokens",
                 "baseInputTokens",
+                "estimatedFixedInputTokens",
+                "estimatedImageInputTokens",
+                "estimatedMessageInputTokens",
+                "fixedInputTokens",
+                "imageInputTokens",
                 "inputTokens",
+                "irreducibleInputTokens",
+                "messageInputTokens",
+                "remainingHeadroomTokens",
                 "remainingOutputTokens",
             ):
                 if key in value:
@@ -232,7 +250,13 @@ def _home_relative_replacements(items: list[tuple[Path, str]]) -> list[tuple[str
 
 
 def _is_estimated_token_record(value: dict[str, Any]) -> bool:
-    return value.get("source") == "openai_responses_estimate" or value.get("inputTokenSource") == "openai_responses_estimate"
+    sources = (
+        value.get("source"),
+        value.get("inputTokenSource"),
+        value.get("measurementSource"),
+        value.get("measurement_source"),
+    )
+    return "openai_responses_estimate" in sources
 
 
 def _is_token_estimate_key(key: str) -> bool:

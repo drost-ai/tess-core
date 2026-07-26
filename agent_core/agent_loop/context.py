@@ -5,6 +5,11 @@ import json
 
 from .shared import *
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
+from .context_budget import (
+    assessContextHeadroom as _assess_context_headroom,
+    enforceContextHeadroom as _enforce_context_headroom,
+    headroomEventPayload as _headroom_event_payload,
+)
 from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
 from ..providers.prompt_cache import resolvePromptCachePolicy
 from ..image_budget import assertImageContextCapacity as _assert_image_context_capacity
@@ -20,6 +25,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     prompt = args["prompt"]
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
     prepared_request: dict[str, Any] | None = None
+    last_compaction_outcome: dict[str, Any] | None = None
 
     raw_checkpoint_outcome = await maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": runtime})
     durable_compaction_applied = bool(raw_checkpoint_outcome and raw_checkpoint_outcome.get("status") == "completed")
@@ -81,14 +87,32 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                     "currentInputTokensSource": measurement.get("source"),
                 }
             )
+            last_compaction_outcome = compacted
         if compacted and compacted.get("status") == "completed":
             durable_compaction_applied = True
             continue
         budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
         _assert_image_context_capacity(measurement, budget)
         compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
+        headroom = _assess_context_headroom(
+            measurement=measurement,
+            policy=compaction_policy,
+            outputBudget=budget,
+            compactionOutcome=last_compaction_outcome,
+        )
+        _safe_emit(
+            runtime,
+            "compaction.headroom",
+            _headroom_event_payload(session["id"], headroom),
+        )
+        _enforce_context_headroom(config=config, assessment=headroom)
         request = _apply_provider_token_budget(request, budget, config)
-        prepared_request = {"request": request, "continuity": request_context, "reactiveAttempt": reactive_attempt}
+        prepared_request = {
+            "request": request,
+            "continuity": request_context,
+            "reactiveAttempt": reactive_attempt,
+            "contextBudget": headroom,
+        }
         recordPreflightTokenMeasurement(session, measurement)
         _safe_emit(
             runtime,
@@ -105,7 +129,11 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "output_budget_safety_margin_tokens": budget.get("safetyMarginTokens"),
                 "max_context_length": budget.get("maxContextLength"),
                 "compaction_threshold_tokens": compaction_policy.get("compactionThresholdTokens"),
+                "compaction_target_tokens": compaction_policy.get("compactionTargetTokens"),
                 "compaction_output_tokens": compaction_policy.get("compactionOutputTokens"),
+                "remaining_headroom_tokens": headroom.get("remainingHeadroomTokens"),
+                "headroom_status": headroom.get("status"),
+                "impossible_headroom_reason": headroom.get("reason"),
                 "configured_max_output_tokens": budget.get("configuredMaxOutputTokens"),
                 "effective_max_output_tokens": budget.get("effectiveMaxOutputTokens"),
                 "remaining_output_tokens": budget.get("remainingOutputTokens"),
@@ -169,8 +197,22 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     )
     budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
     _assert_image_context_capacity(measurement, budget)
+    compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
+    headroom = _assess_context_headroom(
+        measurement=measurement,
+        policy=compaction_policy,
+        outputBudget=budget,
+        compactionOutcome=last_compaction_outcome,
+    )
+    _safe_emit(runtime, "compaction.headroom", _headroom_event_payload(session["id"], headroom))
+    _enforce_context_headroom(config=config, assessment=headroom)
     recordPreflightTokenMeasurement(session, measurement)
-    return {"request": _apply_provider_token_budget(request, budget, config), "continuity": request_context, "reactiveAttempt": reactive_attempt}
+    return {
+        "request": _apply_provider_token_budget(request, budget, config),
+        "continuity": request_context,
+        "reactiveAttempt": reactive_attempt,
+        "contextBudget": headroom,
+    }
 
 
 def _apply_provider_token_budget(request: dict[str, Any], budget: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:

@@ -4,6 +4,7 @@ import copy
 import time
 
 from ...contracts.providers import ProviderResponse
+from ...provider_activity import emitProviderActivity
 from ...runtime_secret_provider import resolveProviderConfigSecrets
 
 from .shared import *
@@ -23,11 +24,6 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
     envelope = buildAnthropicMessagesEnvelope(request, config, {"stream": stream})
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
-    logical_call_id = (
-        turn_session.start_logical_call(request["model"])
-        if turn_session is not None
-        else ""
-    )
 
     for attempt in range(1, max_attempts + 1):
         phase = "request_start"
@@ -40,18 +36,12 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 "provider.request_started",
                 {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
             )
-            if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase=phase,
-                    activity_kind="request_started",
-                    model=request["model"],
-                )
+            emitProviderActivity(runtime, "request_started", attempt=attempt)
             payload = envelope["payload"]
             if stream:
                 stream_activity_state = {
                     "last_activity": time.monotonic(),
+                    "saw_activity": False,
                     "had_assistant_output": False,
                     "had_tool_use": False,
                 }
@@ -67,10 +57,6 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                         on_activity=lambda accumulator=None: _record_anthropic_turn_activity(
                             stream_activity_state,
                             accumulator,
-                            turn_session=turn_session,
-                            logical_call_id=logical_call_id,
-                            attempt=attempt,
-                            model=request["model"],
                         ),
                     ),
                     timeout_ms=timeout_ms,
@@ -95,6 +81,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                     abortSignal=runtime.get("abortSignal"),
                     turnSession=turn_session,
                 )
+                emitProviderActivity(runtime, "response_headers", attempt=attempt)
                 phase = "parse"
                 if "text/event-stream" in content_type:
                     response = normalizeAnthropicSseResponse(
@@ -106,14 +93,6 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 else:
                     response = _normalize_anthropic_json_response(json.loads(raw), request)
             response = _attach_prompt_cache_observation(response, envelope)
-            if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase="response_complete",
-                    activity_kind="terminal",
-                    model=request["model"],
-                )
             if attempt > 1:
                 runtime.get("emitEvent", lambda *_: None)(
                     "provider.recovered",
@@ -161,14 +140,12 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             delay_ms = providerRetryDelayMs(attempt)
             _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             runtime.get("emitEvent", lambda *_: None)("provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
-            if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase="retry_wait",
-                    activity_kind="retry_wait",
-                    model=request["model"],
-                )
+            emitProviderActivity(
+                runtime,
+                "retry_wait",
+                attempt=attempt,
+                force=True,
+            )
             await asyncio.sleep(delay_ms / 1000)
             _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             continue
@@ -342,6 +319,7 @@ def _mark_anthropic_stream_activity(target: Any, accumulator: Any | None = None)
     if not isinstance(target, dict):
         return
     target["last_activity"] = time.monotonic()
+    target["saw_activity"] = True
     if accumulator is not None:
         target["had_assistant_output"] = bool(getattr(accumulator, "had_assistant_output", False))
         target["had_tool_use"] = bool(getattr(accumulator, "had_tool_use", False))
@@ -350,22 +328,8 @@ def _mark_anthropic_stream_activity(target: Any, accumulator: Any | None = None)
 def _record_anthropic_turn_activity(
     target: dict[str, Any],
     accumulator: Any | None,
-    *,
-    turn_session: Any,
-    logical_call_id: str,
-    attempt: int,
-    model: str,
 ) -> None:
     _mark_anthropic_stream_activity(target, accumulator)
-    if turn_session is None:
-        return
-    turn_session.emit_activity(
-        logical_call_id=logical_call_id,
-        attempt=attempt,
-        phase="stream_read",
-        activity_kind="stream_frame",
-        model=model,
-    )
 
 
 def _process_anthropic_sse_frame(

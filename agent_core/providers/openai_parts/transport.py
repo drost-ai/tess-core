@@ -160,6 +160,11 @@ def _plain_openai_value(value: Any) -> Any:
     return value
 
 def _create_openai_timeout(provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool, timeout_ms: int) -> Any:
+    code = (
+        "provider_request_start_timeout"
+        if phase == "request_start"
+        else "provider_stream_idle_timeout"
+    )
     return createProviderRequestError(
         createProviderFailureRecord(
             provider="openai",
@@ -170,6 +175,7 @@ def _create_openai_timeout(provider_label: str, phase: str, attempt: int, had_ou
             attempt=attempt,
             hadAssistantOutput=had_output,
             hadToolUse=had_tool_use,
+            code=code,
             rawMessage=f"OpenAI request timed out after {timeout_ms}ms while waiting for provider activity.",
         )
     )

@@ -52,6 +52,9 @@
     "api": "count_tokens",
     "provider": "anthropic",
     "response": {
+      "estimatedFixedInputTokens": "<token-estimate>",
+      "estimatedImageInputTokens": "<token-estimate>",
+      "estimatedMessageInputTokens": "<token-estimate>",
       "inputTokens": 77,
       "measuredAt": "<timestamp>",
       "model": "claude-sonnet-4-6",
@@ -65,7 +68,7 @@
     "failure": {
       "attempt": 1,
       "category": "timeout",
-      "code": null,
+      "code": "provider_stream_idle_timeout",
       "errorType": null,
       "hadAssistantOutput": false,
       "hadToolUse": false,

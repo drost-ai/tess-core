@@ -41,7 +41,12 @@ async def _race_anthropic_activity(
             await _cancel_anthropic_activity_task(task)
             _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
             raise _create_anthropic_timeout(
-                phase,
+                (
+                    "stream_read"
+                    if activityState is not None
+                    and activityState.get("saw_activity") is True
+                    else phase
+                ),
                 attempt,
                 _activity_state_bool(activityState, "had_assistant_output", hadAssistantOutput),
                 _activity_state_bool(activityState, "had_tool_use", hadToolUse),
@@ -66,6 +71,11 @@ def _activity_state_bool(activityState: dict[str, Any] | None, key: str, fallbac
 
 
 def _create_anthropic_timeout(phase: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, timeout_ms: int) -> Any:
+    code = (
+        "provider_request_start_timeout"
+        if phase == "request_start"
+        else "provider_stream_idle_timeout"
+    )
     return createProviderRequestError(
         createProviderFailureRecord(
             provider="anthropic",
@@ -76,6 +86,7 @@ def _create_anthropic_timeout(phase: str, attempt: int, hadAssistantOutput: bool
             attempt=attempt,
             hadAssistantOutput=hadAssistantOutput,
             hadToolUse=hadToolUse,
+            code=code,
             rawMessage=f"Anthropic request timed out after {timeout_ms}ms while waiting for provider activity.",
         )
     )

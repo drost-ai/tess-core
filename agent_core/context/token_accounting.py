@@ -20,10 +20,8 @@ from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthrop
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
 from ..runtime_secret_provider import resolveProviderConfigSecrets
 
-
 DEFAULT_ESTIMATE_MARGIN_TOKENS = 2000
 MAX_CODEX_ERROR_SAMPLES = 12
-
 
 async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
@@ -48,7 +46,15 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
                     signal,
                 ),
             )
-            return {"inputTokens": input_tokens, "source": "anthropic_count", "measuredAt": measured_at, "provider": "anthropic", "model": request["model"], **image_fields}
+            return {
+                "inputTokens": input_tokens,
+                "source": "anthropic_count",
+                "measuredAt": measured_at,
+                "provider": "anthropic",
+                "model": request["model"],
+                **_request_component_fields(request, config, images["estimatedInputTokens"]),
+                **image_fields,
+            }
         except Exception as error:
             _rethrow_parent_abort(args.get("abortSignal"), error)
             base_estimate = _estimate_request_tokens(request, images["estimatedInputTokens"])
@@ -69,6 +75,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
                 "measuredAt": measured_at,
                 "provider": "anthropic",
                 "model": request["model"],
+                **_request_component_fields(request, config, images["estimatedInputTokens"]),
                 **image_fields,
             }
     mode = config.get("openaiApiMode", "responses")
@@ -94,6 +101,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
                 "measuredAt": measured_at,
                 "provider": "openai",
                 "model": request["model"],
+                **_request_component_fields(request, config, images["estimatedInputTokens"]),
                 **image_fields,
             }
         except Exception as error:
@@ -124,8 +132,17 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
         if exact_count_fallback
         else 0
     )
-    return {"inputTokens": base + margin, "baseInputTokens": base, "safetyMarginTokens": margin or None, "source": _openai_estimate_source(mode), "measuredAt": measured_at, "provider": "openai", "model": request["model"], **image_fields}
-
+    return {
+        "inputTokens": base + margin,
+        "baseInputTokens": base,
+        "safetyMarginTokens": margin or None,
+        "source": _openai_estimate_source(mode),
+        "measuredAt": measured_at,
+        "provider": "openai",
+        "model": request["model"],
+        **_request_component_fields(request, config, images["estimatedInputTokens"]),
+        **image_fields,
+    }
 
 def recordPreflightTokenMeasurement(session: dict[str, Any], measurement: dict[str, Any]) -> None:
     tracking = session.setdefault("metadata", {}).setdefault("tokenTracking", {})
@@ -133,7 +150,6 @@ def recordPreflightTokenMeasurement(session: dict[str, Any], measurement: dict[s
     if session.get("metadata", {}).get("compactionState"):
         session["metadata"]["compactionState"]["workingContextTokenMeasurement"] = measurement
         session["metadata"]["compactionState"]["workingContextTokenEstimate"] = measurement["inputTokens"]
-
 
 def recordActualTokenUsage(session: dict[str, Any], usage: dict[str, Any]) -> None:
     tracking = session.setdefault("metadata", {}).setdefault("tokenTracking", {})
@@ -164,6 +180,27 @@ def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 
     if request.get("tools"):
         total += _estimate_text_tokens(json.dumps(request["tools"], ensure_ascii=False))
     return total + image_input_tokens
+
+
+def _request_component_fields(
+    request: dict[str, Any],
+    config: dict[str, Any],
+    image_input_tokens: int,
+) -> dict[str, int]:
+    without_messages = {**request, "messages": []}
+    if config.get("provider") == "openai":
+        mode = config.get("openaiApiMode", "responses")
+        fixed = _estimate_openai_request_tokens(without_messages, mode, 0)
+        complete = _estimate_openai_request_tokens(request, mode, image_input_tokens)
+    else:
+        fixed = _estimate_request_tokens(without_messages, 0)
+        complete = _estimate_request_tokens(request, image_input_tokens)
+    text_messages = max(0, complete - fixed - max(0, int(image_input_tokens or 0)))
+    return {
+        "estimatedFixedInputTokens": fixed,
+        "estimatedMessageInputTokens": text_messages,
+        "estimatedImageInputTokens": max(0, int(image_input_tokens or 0)),
+    }
 
 
 async def _measure_anthropic_count_tokens(

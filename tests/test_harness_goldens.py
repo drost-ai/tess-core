@@ -55,6 +55,19 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "cursor": "acp1.eyJ2IjoxLCJzIjoiZHluYW1pYyJ9",
                     "embeddedCursor": '{"nextCursor":"acp1.eyJ2IjoxLCJzIjoiZHluYW1pYyJ9"}',
                     "tokens": {"input_tokens": 54321},
+                    "headroom": {
+                        "compactionTargetTokens": 150_000,
+                        "compactionThresholdTokens": 200_000,
+                        "inputTokens": 3_574,
+                        "irreducibleInputTokens": 3_278,
+                        "remainingHeadroomTokens": 196_426,
+                    },
+                    "measurement": {
+                        "measurement_source": "openai_responses_estimate",
+                        "input_tokens": 3_574,
+                        "message_input_tokens": 296,
+                        "remaining_headroom_tokens": 196_426,
+                    },
                     "processIdentity": {
                         "expectedCommandDigest": "a" * 64,
                         "observedCommandDigest": "b" * 64,
@@ -87,6 +100,24 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     '{"nextCursor":"<payload-cursor:1>"}',
                 )
                 self.assertEqual(normalized["tokens"]["input_tokens"], 54321)
+                self.assertEqual(
+                    normalized["headroom"],
+                    {
+                        "compactionTargetTokens": 150_000,
+                        "compactionThresholdTokens": 200_000,
+                        "inputTokens": "<token-estimate>",
+                        "irreducibleInputTokens": "<token-estimate>",
+                        "remainingHeadroomTokens": "<token-estimate>",
+                    },
+                )
+                self.assertEqual(
+                    normalized["measurement"]["message_input_tokens"],
+                    "<token-estimate>",
+                )
+                self.assertEqual(
+                    normalized["measurement"]["remaining_headroom_tokens"],
+                    "<token-estimate>",
+                )
                 self.assertEqual(normalized["processIdentity"]["expectedCommandDigest"], "<expected-command-digest>")
                 self.assertEqual(normalized["processIdentity"]["observedCommandDigest"], "<observed-command-digest>")
                 self.assertEqual(normalized["processIdentity"]["startToken"], "<process-start-token>")

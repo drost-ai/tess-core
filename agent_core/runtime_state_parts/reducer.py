@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from ..contracts.events import event_kind, event_payload, event_time
 
+from .compaction import reduceCompactionHeadroom
 from .shared import *
 from .mcp import MCP_RUNTIME_STATE_EVENTS as _MCP_RUNTIME_STATE_EVENTS
 from .mcp import reduce_mcp_runtime_state as _reduce_mcp_runtime_state
-
 def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     typ = event_kind(event)
     if typ == "provider.prompt_cache":
@@ -211,6 +211,7 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
                     "compactionThresholdTokens",
                     "compaction_threshold_tokens",
                 ),
+                "compactionTargetTokens": _field(data, "compactionTargetTokens", "compaction_target_tokens"),
                 "maxContextLength": _field(data, "maxContextLength", "max_context_length"),
                 "rawTokenEstimate": _field(data, "rawTokenEstimate", "raw_token_estimate"),
                 "messageCount": _field(data, "messageCount", "message_count"),
@@ -228,6 +229,10 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             },
             "updatedAt": timestamp,
         }
+    elif typ == "compaction.headroom":
+        next_state["compaction"] = reduceCompactionHeadroom(
+            next_state.get("compaction", {}), data, timestamp
+        )
     elif typ == "compaction.started":
         next_state["compaction"] = {
             **next_state.get("compaction", {}),

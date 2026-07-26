@@ -86,6 +86,7 @@ class ProviderProfile(TypedDict, total=False):
     maxContextLength: int
     maxOutputTokens: int
     compactionThresholdTokens: int
+    compactionTargetTokens: int
     compactionOutputTokens: int
     reasoningEffortEnabled: bool | None
     reasoningEffort: str | None

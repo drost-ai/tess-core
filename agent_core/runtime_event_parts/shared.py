@@ -3,8 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .._utils import now_iso
-
+from .._utils import now_iso as now_iso
 
 KNOWN_RUNTIME_EVENTS = {
     "system.init",
@@ -23,6 +22,7 @@ KNOWN_RUNTIME_EVENTS = {
     "provider.retrying",
     "provider.recovered",
     "provider.failed",
+    "provider.activity",
     "provider.input_tokens",
     "provider.response_completed",
     "provider.prompt_cache",
@@ -31,6 +31,7 @@ KNOWN_RUNTIME_EVENTS = {
     "tool.completed",
     "context.raw_pressure",
     "compaction.decision",
+    "compaction.headroom",
     "permission.requested",
     "permission.decided",
     "sandbox.applied",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from .shared import *
-from .prompt_cache import promptCacheEventPayload
+from .provider_payloads import providerTypedPayload
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     payload = _camelize_record(data)
     if event == "session.activated":
@@ -60,62 +60,9 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "status.updated", {"message": _string_field(_field(data, "message")), "detail": _optional_string(_field(data, "detail"))}
     if event == "status.cleared":
         return "status.cleared", {}
-    if event == "provider.retrying":
-        return "provider.retrying", {
-            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
-            "nextAttempt": _optional_number(_field(data, "next_attempt", "nextAttempt")),
-            "delayMs": _optional_number(_field(data, "delay_ms", "delayMs")),
-        }
-    if event == "provider.recovered":
-        return "provider.recovered", {
-            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
-            "attempts": _optional_number(_field(data, "attempts")),
-        }
-    if event == "provider.failed":
-        return "provider.failed", {
-            "provider": _optional_string(_field(data, "provider")),
-            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
-            "category": _optional_string(_field(data, "category")),
-            "phase": _optional_string(_field(data, "phase")),
-            "message": _optional_string(_field(data, "message")),
-            "retryable": _optional_boolean(_field(data, "retryable")),
-            "attempt": _optional_number(_field(data, "attempt")),
-            "status": _optional_number(_field(data, "status")),
-            "code": _optional_string(_field(data, "code")),
-            "errorType": _optional_string(_field(data, "error_type", "errorType")),
-        }
-    if event == "provider.input_tokens":
-        return "provider.input_tokens", {
-            "provider": _optional_string(_field(data, "provider")),
-            "model": _optional_string(_field(data, "model")),
-            "inputTokens": _optional_number(_field(data, "input_tokens", "inputTokens")),
-            "source": _optional_string(_field(data, "source")),
-            "baseInputTokens": _optional_number(_field(data, "base_input_tokens", "baseInputTokens")),
-            "safetyMarginTokens": _optional_number(_field(data, "safety_margin_tokens", "safetyMarginTokens")),
-        }
-    if event == "provider.response_completed":
-        return "provider.response_completed", {
-            "provider": _optional_string(_field(data, "provider")),
-            "providerProfile": _optional_string(_field(data, "provider_profile", "providerProfile")),
-            "model": _optional_string(_field(data, "model")),
-            "callIndex": _optional_number(_field(data, "call_index", "callIndex")),
-            "usage": _field(data, "usage"),
-            "stopReason": _optional_string(_field(data, "stop_reason", "stopReason")),
-            "requestEstimateTokens": _optional_number(_field(data, "request_estimate_tokens", "requestEstimateTokens")),
-            "requestEstimateSource": _optional_string(_field(data, "request_estimate_source", "requestEstimateSource")),
-            "contextReliefMode": _optional_string(_field(data, "context_relief_mode", "contextReliefMode")),
-            "contextReliefPressure": _optional_string(_field(data, "context_relief_pressure", "contextReliefPressure")),
-            "contextReliefKind": _optional_string(_field(data, "context_relief_kind", "contextReliefKind")),
-            "contextReliefProjectionHash": _optional_string(_field(data, "context_relief_projection_hash", "contextReliefProjectionHash")),
-            "contextReliefEscalationRequested": _optional_boolean(_field(data, "context_relief_escalation_requested", "contextReliefEscalationRequested")),
-        }
-    if event == "provider.prompt_cache": return "provider.prompt_cache", promptCacheEventPayload(data)
-    if event == "provider.fallback":
-        return "provider.fallback", {
-            "provider": _optional_string(_field(data, "provider")),
-            "model": _optional_string(_field(data, "model")),
-            "error": _optional_string(_field(data, "error")),
-        }
+    provider_payload = providerTypedPayload(event, data)
+    if provider_payload is not None:
+        return provider_payload
     if event == "tool.started":
         return "tool.started", {"name": _string_field(_field(data, "name")), "input": _field(data, "input")}
     if event == "tool.completed":
@@ -155,6 +102,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "currentTokenEstimate": _optional_number(_field(data, "current_token_estimate", "currentTokenEstimate")),
             "currentTokenSource": _optional_string(_field(data, "current_token_source", "currentTokenSource")),
             "compactionThresholdTokens": _optional_number(_field(data, "compaction_threshold_tokens", "compactionThresholdTokens")),
+            "compactionTargetTokens": _optional_number(_field(data, "compaction_target_tokens", "compactionTargetTokens")),
             "maxContextLength": _optional_number(_field(data, "max_context_length", "maxContextLength")),
             "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),
             "messageCount": _optional_number(_field(data, "message_count", "messageCount")),
@@ -165,6 +113,45 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "largestToolResultTokenEstimate": _optional_number(_field(data, "largest_tool_result_token_estimate", "largestToolResultTokenEstimate")),
             "hasDurableCheckpoint": _optional_boolean(_field(data, "has_durable_checkpoint", "hasDurableCheckpoint")),
             "latestCompactionAt": _optional_string(_field(data, "latest_compaction_at", "latestCompactionAt")),
+        }
+    if event == "compaction.headroom":
+        return "compaction.headroom", {
+            "status": _bounded_optional_string(_field(data, "status"), 64),
+            "reason": _bounded_optional_string(_field(data, "reason"), 64),
+            "measurementSource": _bounded_optional_string(
+                _field(data, "measurement_source", "measurementSource"), 64
+            ),
+            "inputTokens": _optional_number(_field(data, "input_tokens", "inputTokens")),
+            "irreducibleInputTokens": _optional_number(
+                _field(data, "irreducible_input_tokens", "irreducibleInputTokens")
+            ),
+            "messageInputTokens": _optional_number(
+                _field(data, "message_input_tokens", "messageInputTokens")
+            ),
+            "imageInputTokens": _optional_number(
+                _field(data, "image_input_tokens", "imageInputTokens")
+            ),
+            "compactionThresholdTokens": _optional_number(
+                _field(data, "compaction_threshold_tokens", "compactionThresholdTokens")
+            ),
+            "compactionTargetTokens": _optional_number(
+                _field(data, "compaction_target_tokens", "compactionTargetTokens")
+            ),
+            "remainingHeadroomTokens": _optional_number(
+                _field(data, "remaining_headroom_tokens", "remainingHeadroomTokens")
+            ),
+            "effectiveMaxOutputTokens": _optional_number(
+                _field(data, "effective_max_output_tokens", "effectiveMaxOutputTokens")
+            ),
+            "minUsefulOutputTokens": _optional_number(
+                _field(data, "min_useful_output_tokens", "minUsefulOutputTokens")
+            ),
+            "compactionOutcome": _bounded_optional_string(
+                _field(data, "compaction_outcome", "compactionOutcome"), 32
+            ),
+            "compactionOutcomeReason": _bounded_optional_string(
+                _field(data, "compaction_outcome_reason", "compactionOutcomeReason"), 64
+            ),
         }
     if event == "permission.requested":
         return "permission.requested", {"summary": _optional_string(_field(data, "summary"))}

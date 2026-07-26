@@ -9,6 +9,7 @@ DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH = 200_000
 DEFAULT_PROVIDER_MAX_OUTPUT_TOKENS = 16_384
 DEFAULT_COMPACTION_THRESHOLD_TOKENS = 200_000
 DEFAULT_COMPACTION_PRESERVATION_RATIO = 0.1
+DEFAULT_COMPACTION_HEADROOM_RATIO = 0.25
 DEFAULT_OUTPUT_BUDGET_SAFETY_MARGIN_TOKENS = 4_096
 MIN_USEFUL_PROVIDER_OUTPUT_TOKENS = 256
 
@@ -39,16 +40,37 @@ def resolve_compaction_policy(input: dict[str, Any] | None = None) -> dict[str, 
     limits = resolve_provider_token_limits(profile)
     explicit_threshold = normalize_positive_integer(profile.get("compactionThresholdTokens"))
     explicit_output = normalize_positive_integer(profile.get("compactionOutputTokens"))
+    target_present = (
+        "compactionTargetTokens" in profile
+        and profile.get("compactionTargetTokens") is not None
+    )
+    explicit_target = normalize_positive_integer(profile.get("compactionTargetTokens"))
+    if target_present and explicit_target is None:
+        raise ValueError("compactionTargetTokens must be a positive integer")
     raw_threshold = explicit_threshold or DEFAULT_COMPACTION_THRESHOLD_TOKENS
     threshold = min(raw_threshold, limits["maxContextLength"])
     default_output = math.ceil(threshold * DEFAULT_COMPACTION_PRESERVATION_RATIO)
     raw_output = explicit_output or min(limits["maxOutputTokens"], default_output)
+    output = min(raw_output, limits["maxOutputTokens"])
+    derived_headroom = max(
+        output,
+        math.ceil(threshold * DEFAULT_COMPACTION_HEADROOM_RATIO),
+    )
+    target = explicit_target or (threshold - derived_headroom)
+    if target <= 0 or target >= threshold:
+        raise ValueError(
+            "compactionTargetTokens must be greater than zero and less than "
+            "compactionThresholdTokens"
+        )
     return {
         "maxContextLength": limits["maxContextLength"],
         "maxOutputTokens": limits["maxOutputTokens"],
         "compactionThresholdTokens": threshold,
-        "compactionOutputTokens": min(raw_output, limits["maxOutputTokens"]),
+        "compactionTargetTokens": target,
+        "compactionOutputTokens": output,
+        "compactionHeadroomTokens": threshold - target,
         "thresholdSource": "default" if explicit_threshold is None else "explicit",
+        "targetSource": "explicit" if explicit_target is not None else "derived",
         "outputSource": "default" if explicit_output is None else "explicit",
         "thresholdClamped": raw_threshold > limits["maxContextLength"],
         "outputClamped": raw_output > limits["maxOutputTokens"],
@@ -83,6 +105,7 @@ def resolve_provider_profile_token_limits(args: dict[str, Any] | None = None, **
             "maxContextLength": profile.get("maxContextLength"),
             "maxOutputTokens": profile.get("maxOutputTokens"),
             "compactionThresholdTokens": profile.get("compactionThresholdTokens"),
+            "compactionTargetTokens": profile.get("compactionTargetTokens"),
             "compactionOutputTokens": profile.get("compactionOutputTokens"),
         }
     )

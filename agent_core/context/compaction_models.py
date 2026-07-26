@@ -178,6 +178,7 @@ def resolveCompactionTokenPolicy(args: dict[str, Any] | None = None, **kwargs: A
             "maxContextLength": profile.get("maxContextLength"),
             "maxOutputTokens": profile.get("maxOutputTokens"),
             "compactionThresholdTokens": profile.get("compactionThresholdTokens"),
+            "compactionTargetTokens": profile.get("compactionTargetTokens"),
             "compactionOutputTokens": profile.get("compactionOutputTokens"),
         }
     else:

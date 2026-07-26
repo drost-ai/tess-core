@@ -15,7 +15,8 @@ class ContextCompactionTests(AgentCoreTestCase):
                 captured.update(args)
                 return {"content": [{"type": "text", "text": "Spark compaction output"}], "usage": {"input_tokens": 12, "output_tokens": 4}, "model": args["request"]["model"], "stopReason": "stop"}
 
-            openai_factory = lambda _options: SimpleNamespace()
+            def openai_factory(_options):
+                return SimpleNamespace()
             abort_signal = object()
             client = testing.createDefaultCompactionModelClient({"openAiRequestSender": sender})
             result = run(
@@ -108,7 +109,8 @@ class ContextCompactionTests(AgentCoreTestCase):
                 session["messages"].append({"role": role, "content": f"{role} message {index}"})
             session["todos"] = [{"content": "Finish compaction", "activeForm": "Implementing compaction", "status": "in_progress"}]
             client = FakeCompactionClient()
-            openai_factory = lambda _options: SimpleNamespace()
+            def openai_factory(_options):
+                return SimpleNamespace()
 
             result = run(core.runCompaction({"session": session, "config": {}, "runtime": {"openaiClientFactory": openai_factory}, "trigger": "manual", "force": True, "modelClient": client}))
 
@@ -340,7 +342,12 @@ class ContextCompactionTests(AgentCoreTestCase):
 
             async def fake_measure(_args):
                 measure_calls["count"] += 1
-                return {"inputTokens": 200_000, "source": "fake"}
+                return {
+                    "inputTokens": (
+                        200_000 if measure_calls["count"] == 1 else 1_000
+                    ),
+                    "source": "fake",
+                }
 
             async def fake_run_compaction(args):
                 compaction_calls.append(args)
@@ -371,7 +378,8 @@ class ContextCompactionTests(AgentCoreTestCase):
                 provider_requests.append(request)
                 return {"model": request["model"], "content": [{"type": "text", "text": "done"}], "usage": {}, "stopReason": "end"}
 
-            openai_factory = lambda _options: SimpleNamespace()
+            def openai_factory(_options):
+                return SimpleNamespace()
             agent_module.measureRequestInputTokens = fake_measure
             agent_module.runCompaction = fake_run_compaction
             result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}), prompt="continue", providerOverride={"send": send}))
@@ -383,7 +391,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertEqual(measure_calls["count"], 2)
             self.assertEqual(provider_requests[0]["messages"][0]["content"], core.CONTINUATION_BRIDGE_MESSAGE)
             self.assertTrue(any(event == "compaction.completed" for event, _ in events))
-            self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 200_000 for event, data in events))
+            self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 1_000 for event, data in events))
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastCompactionMode"], "full_checkpoint_compaction")
         finally:
             agent_module.measureRequestInputTokens = original_measure

@@ -59,6 +59,7 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
             "maxContextLength": token_limits["maxContextLength"],
             "maxOutputTokens": token_limits["maxOutputTokens"],
             "compactionThresholdTokens": record.get("compactionThresholdTokens"),
+            "compactionTargetTokens": record.get("compactionTargetTokens"),
             "compactionOutputTokens": record.get("compactionOutputTokens"),
         }
     )
@@ -87,6 +88,7 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "maxContextLength": token_limits["maxContextLength"],
         "maxOutputTokens": token_limits["maxOutputTokens"],
         "compactionThresholdTokens": compaction_policy["compactionThresholdTokens"],
+        "compactionTargetTokens": compaction_policy["compactionTargetTokens"],
         "compactionOutputTokens": compaction_policy["compactionOutputTokens"],
         "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
         "limits": clone(record.get("limits") or {}),
@@ -204,6 +206,11 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         "maxContextLength": normalizePositiveInteger(record.get("maxContextLength")),
         "maxOutputTokens": normalizePositiveInteger(record.get("maxOutputTokens")),
         "compactionThresholdTokens": normalizePositiveInteger(record.get("compactionThresholdTokens")),
+        "compactionTargetTokens": (
+            record.get("compactionTargetTokens")
+            if "compactionTargetTokens" in record
+            else None
+        ),
         "compactionOutputTokens": normalizePositiveInteger(record.get("compactionOutputTokens")),
         "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
         "limits": clone(record.get("limits") or {}),

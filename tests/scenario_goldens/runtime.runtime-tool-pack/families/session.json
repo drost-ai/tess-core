@@ -136,6 +136,9 @@
       "lastActualOutputTokens": 5,
       "lastPreflight": {
         "baseInputTokens": "<token-estimate>",
+        "estimatedFixedInputTokens": "<token-estimate>",
+        "estimatedImageInputTokens": "<token-estimate>",
+        "estimatedMessageInputTokens": "<token-estimate>",
         "inputTokens": "<token-estimate>",
         "measuredAt": "<timestamp>",
         "model": "gpt-5.4",

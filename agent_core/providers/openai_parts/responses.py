@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ...contracts.providers import ProviderResponse
+from ...provider_activity import emitProviderActivity
 from ..openai_turn_session import PreparedOpenAiRequest as _PreparedOpenAiRequest
 
 from .shared import *
@@ -26,11 +27,6 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
     max_attempts = max(1, int(args.get("maxAttempts") or 2))
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
-    logical_call_id = (
-        turn_session.start_logical_call(args["request"]["model"])
-        if turn_session is not None
-        else ""
-    )
     for attempt in range(1, max_attempts + 1):
         phase = "request_start"
         had_output = False
@@ -75,15 +71,8 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
 
         try:
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
-            if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase="request_prepare",
-                    activity_kind="request_preparing",
-                    model=args["request"]["model"],
-                )
             client, connection_reused = await _acquire_openai_client(args, base_url)
+            emitProviderActivity(runtime, "request_started", attempt=attempt)
             responses = get_value(client, "responses")
             if not responses:
                 raise RuntimeError("OpenAI Responses client is unavailable.")
@@ -122,14 +111,6 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     **_projection_event_fields(prepared_attempt),
                 },
             )
-            if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase=phase,
-                    activity_kind="request_started",
-                    model=args["request"]["model"],
-                )
             response, prepared_attempt = await _start_responses_stream(
                 responses=responses,
                 prepared=prepared_attempt,
@@ -144,14 +125,8 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
             if turn_session is not None:
                 turn_session.bind_stream(response)
                 turn_session.mark_provider_activity("response_headers")
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase="stream_open",
-                    activity_kind="response_headers",
-                    model=args["request"]["model"],
-                )
             completed_turn_state = _extract_turn_state(response)
+            emitProviderActivity(runtime, "response_headers", attempt=attempt)
             phase = "stream_open"
             iterator = to_async_iter(response).__aiter__()
             while True:
@@ -171,6 +146,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 except StopAsyncIteration:
                     break
                 phase = "stream_read"
+                emitProviderActivity(runtime, "stream_frame", attempt=attempt)
                 typ = str(get_value(event, "type", "") or "")
                 completed_turn_state = (
                     _extract_turn_state(event)
@@ -180,13 +156,11 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 if turn_session is not None:
                     activity_kind = _responses_activity_kind(typ)
                     turn_session.mark_provider_activity(activity_kind)
-                    turn_session.emit_activity(
-                        logical_call_id=logical_call_id,
-                        attempt=attempt,
-                        phase=phase,
-                        activity_kind=activity_kind,
-                        model=args["request"]["model"],
-                    )
+                emitProviderActivity(
+                    runtime,
+                    _responses_activity_kind(typ),
+                    attempt=attempt,
+                )
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": typ, "model": args["request"]["model"], "payload": event})
                 if saw_completed:
@@ -197,6 +171,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     delta = str(get_value(event, "delta", "") or "")
                     if not delta:
                         continue
+                    emitProviderActivity(runtime, "output_delta", attempt=attempt)
                     had_output = True
                     emitted_text += delta
                     if runtime.get("includePartialMessages"):
@@ -210,6 +185,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     delta = str(get_value(event, "delta", "") or "")
                     if not delta:
                         continue
+                    emitProviderActivity(runtime, "reasoning", attempt=attempt)
                     reasoning_text += delta
                     if runtime.get("includePartialMessages"):
                         _emit(
@@ -232,6 +208,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         raise incomplete_response(f"output item {item_id} started more than once")
                     open_output_items[item_id] = str(get_value(item, "type", "unknown") or "unknown")
                     if get_value(item, "type") == "function_call":
+                        emitProviderActivity(runtime, "tool_boundary", attempt=attempt)
                         call_id = str(get_value(item, "call_id", "") or "")
                         if call_id:
                             item_to_call_id[item_id] = call_id
@@ -484,14 +461,12 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 delay_ms = providerRetryDelayMs(attempt)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
-                if turn_session is not None:
-                    turn_session.emit_activity(
-                        logical_call_id=logical_call_id,
-                        attempt=attempt,
-                        phase="retry_wait",
-                        activity_kind="retry_wait",
-                        model=args["request"]["model"],
-                    )
+                emitProviderActivity(
+                    runtime,
+                    "retry_wait",
+                    attempt=attempt,
+                    force=True,
+                )
                 await asyncio.sleep(delay_ms / 1000)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 continue

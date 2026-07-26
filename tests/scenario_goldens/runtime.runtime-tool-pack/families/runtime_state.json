@@ -17,7 +17,18 @@
     "workers": []
   },
   "compaction": {
+    "headroom": {
+      "compactionTargetTokens": 150000,
+      "compactionThresholdTokens": 200000,
+      "inputTokens": "<token-estimate>",
+      "irreducibleInputTokens": "<token-estimate>",
+      "reason": null,
+      "remainingHeadroomTokens": "<token-estimate>",
+      "status": "ready",
+      "updatedAt": "<timestamp>"
+    },
     "lastDecision": {
+      "compactionTargetTokens": 150000,
       "compactionThresholdTokens": 200000,
       "currentTokenEstimate": "<token-estimate>",
       "currentTokenSource": "openai_responses_estimate",
@@ -30,7 +41,7 @@
       "messagesSinceLastCheckpoint": null,
       "rawTokenDeltaSinceLastCheckpoint": null,
       "rawTokenEstimate": null,
-      "reason": "complete_request_below_threshold",
+      "reason": "complete_request_at_or_below_compaction_target",
       "shouldCheckpoint": false,
       "toolResultTokenEstimateSinceLastCheckpoint": null,
       "toolResultsSinceLastCheckpoint": null,

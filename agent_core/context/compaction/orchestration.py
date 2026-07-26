@@ -18,12 +18,31 @@ def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
     return int(state.get("compactedContextTokenEstimate") or 0) + estimateMessageTokens(recent_messages)
 
 
-def shouldAutoCompact(session: dict[str, Any], currentInputTokens: int | None = None, tokenLimit: int | None = None) -> dict[str, Any]:
+def shouldAutoCompact(
+    session: dict[str, Any],
+    currentInputTokens: int | None = None,
+    tokenLimit: int | None = None,
+    targetTokenLimit: int | None = None,
+) -> dict[str, Any]:
     current_token_estimate = currentInputTokens if currentInputTokens is not None else estimateWorkingContextTokens(session)
     limit = int(tokenLimit or WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT)
+    target = int(targetTokenLimit or limit)
     if current_token_estimate >= limit:
-        return {"shouldCompact": True, "trigger": "auto_hard_limit", "currentTokenEstimate": current_token_estimate}
-    return {"shouldCompact": False, "currentTokenEstimate": current_token_estimate}
+        return {
+            "shouldCompact": True,
+            "trigger": "auto_hard_limit",
+            "currentTokenEstimate": current_token_estimate,
+        }
+    if current_token_estimate > target:
+        return {
+            "shouldCompact": True,
+            "trigger": "auto_target_headroom",
+            "currentTokenEstimate": current_token_estimate,
+        }
+    return {
+        "shouldCompact": False,
+        "currentTokenEstimate": current_token_estimate,
+    }
 
 
 def buildMessagesForWorkingContext(session: dict[str, Any]) -> list[dict[str, Any]]:
@@ -96,7 +115,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         return {
             "status": "skipped",
             "trigger": trigger,
-            "reason": "already_up_to_date",
+            "reason": "already_compacted_no_new_source",
             "detail": "Working context is already compacted through the newest valid boundary.",
             "previousCutoff": previous_cutoff,
             "candidateCutoff": cutoff,
@@ -110,16 +129,19 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     source_token_estimate = estimateMessageTokens(source_messages)
     current_input_tokens = int(args.get("currentInputTokens") or 0)
     compaction_threshold_tokens = int(args.get("compactionThresholdTokens") or 0)
+    compaction_target_tokens = int(
+        args.get("compactionTargetTokens") or compaction_threshold_tokens
+    )
     target_estimated_relief = max(
         0,
         source_token_estimate - math.ceil(source_token_estimate * _DEFAULT_COMPACTION_PRESERVATION_RATIO),
     )
     if (
-        trigger == "auto_hard_limit"
+        trigger in {"auto_hard_limit", "auto_target_headroom"}
         and previous_cutoff > 0
         and current_input_tokens > 0
-        and compaction_threshold_tokens > 0
-        and current_input_tokens - target_estimated_relief >= compaction_threshold_tokens
+        and compaction_target_tokens > 0
+        and current_input_tokens - target_estimated_relief > compaction_target_tokens
     ):
         return {
             "status": "skipped",
@@ -127,7 +149,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "reason": "insufficient_incremental_relief",
             "detail": (
                 "The new compactable transcript slice is too small to bring the measured request below the compaction "
-                "threshold, even at the target preservation ratio. Rewriting the durable checkpoint would not provide "
+                "headroom target, even at the target preservation ratio. Rewriting the durable checkpoint would not provide "
                 "meaningful context relief."
             ),
             "previousCutoff": previous_cutoff,
@@ -136,6 +158,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "targetEstimatedRelief": target_estimated_relief,
             "currentInputTokens": current_input_tokens,
             "compactionThresholdTokens": compaction_threshold_tokens,
+            "compactionTargetTokens": compaction_target_tokens,
         }
 
     await ensureBaseLayout(session.get("cwd") or os.getcwd())

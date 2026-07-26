@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ...provider_activity import emitProviderActivity
 from .shared import *
 
 async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -9,11 +10,6 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
     max_attempts = max(1, int(args.get("maxAttempts") or 2))
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
-    logical_call_id = (
-        turn_session.start_logical_call(args["request"]["model"])
-        if turn_session is not None
-        else ""
-    )
     for attempt in range(1, max_attempts + 1):
         phase = "request_start"
         had_output = False
@@ -57,6 +53,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         try:
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
             client, connection_reused = await _acquire_openai_client(args, base_url)
+            emitProviderActivity(runtime, "request_started", attempt=attempt)
             chat = get_value(client, "chat")
             completions = get_value(chat, "completions") if chat else None
             if not completions:
@@ -100,14 +97,6 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     "chain_reset_reason": "stateless_chat_completions",
                 },
             )
-            if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase=phase,
-                    activity_kind="request_started",
-                    model=args["request"]["model"],
-                )
             response = await _race_openai_activity(
                 maybe_await(get_value(completions, "create")(params)),
                 timeout_ms=request_start_timeout_ms,
@@ -122,6 +111,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             active_stream = response
             if turn_session is not None:
                 turn_session.bind_stream(response)
+            emitProviderActivity(runtime, "response_headers", attempt=attempt)
+            if turn_session is not None:
+                turn_session.mark_provider_activity("response_headers")
             phase = "stream_open"
             iterator = to_async_iter(response).__aiter__()
             while True:
@@ -141,14 +133,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 except StopAsyncIteration:
                     break
                 phase = "stream_read"
+                emitProviderActivity(runtime, "stream_frame", attempt=attempt)
                 if turn_session is not None:
-                    turn_session.emit_activity(
-                        logical_call_id=logical_call_id,
-                        attempt=attempt,
-                        phase=phase,
-                        activity_kind="stream_frame",
-                        model=args["request"]["model"],
-                    )
+                    turn_session.mark_provider_activity("stream_frame")
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": "chat.completion.chunk", "model": args["request"]["model"], "payload": chunk})
                 _apply_chat_completion_usage(usage, get_value(chunk, "usage"))
@@ -165,6 +152,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     delta = get_value(choice, "delta", {}) or {}
                     content_delta = get_value(delta, "content", "")
                     if isinstance(content_delta, str) and content_delta:
+                        emitProviderActivity(runtime, "output_delta", attempt=attempt)
+                        if turn_session is not None:
+                            turn_session.mark_provider_activity("output_delta")
                         had_output = True
                         emitted_text += content_delta
                         if runtime.get("includePartialMessages"):
@@ -172,10 +162,14 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                         _append_text_block(blocks, content_delta)
                     reasoning_delta = get_value(delta, "reasoning_content", "")
                     if isinstance(reasoning_delta, str) and reasoning_delta:
+                        emitProviderActivity(runtime, "reasoning", attempt=attempt)
+                        if turn_session is not None:
+                            turn_session.mark_provider_activity("reasoning")
                         reasoning_content += reasoning_delta
                     raw_tool_calls = get_value(delta, "tool_calls", [])
                     tool_calls = raw_tool_calls if isinstance(raw_tool_calls, list) else []
                     for default_index, tool_call in enumerate(tool_calls):
+                        emitProviderActivity(runtime, "tool_boundary", attempt=attempt)
                         raw_index = get_value(tool_call, "index")
                         index = raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) else default_index
                         pending = pending_tool_calls.setdefault(index, {"arguments": ""})
@@ -233,13 +227,6 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 raise incomplete_response("the stream ended with unfinished tool-call fragments")
             phase = "response_complete"
             if turn_session is not None:
-                turn_session.emit_activity(
-                    logical_call_id=logical_call_id,
-                    attempt=attempt,
-                    phase=phase,
-                    activity_kind="terminal",
-                    model=args["request"]["model"],
-                )
                 await turn_session.release_stream(active_stream)
                 active_stream = None
             if attempt > 1:
@@ -263,6 +250,12 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 delay_ms = providerRetryDelayMs(attempt)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
+                emitProviderActivity(
+                    runtime,
+                    "retry_wait",
+                    attempt=attempt,
+                    force=True,
+                )
                 await asyncio.sleep(delay_ms / 1000)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 continue

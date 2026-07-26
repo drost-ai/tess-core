@@ -90,6 +90,9 @@
       "lastEstimateDelta": -538,
       "lastPreflight": {
         "baseInputTokens": 539,
+        "estimatedFixedInputTokens": "<token-estimate>",
+        "estimatedImageInputTokens": "<token-estimate>",
+        "estimatedMessageInputTokens": "<token-estimate>",
         "inputTokens": 2539,
         "measuredAt": "<timestamp>",
         "model": "gpt-5.4",

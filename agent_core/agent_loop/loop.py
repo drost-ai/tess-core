@@ -24,7 +24,7 @@ from .turn_session import run_in_provider_turn_session as _run_in_provider_turn_
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
-from ..hooks import fireToolHooks
+from ..hooks import fireToolHooks as fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..permission_rules import findDispatchDenyRule
@@ -192,6 +192,8 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     "baseSystemPrompt": base_system_prompt, "toolRegistry": tool_registry,
                     "activeModel": active_model, "prompt": prompt_text, "repair": repair,
                     "totalUsage": total_usage,
+                    "logicalTurnId": parent_turn_id,
+                    "logicalCallIndex": provider_call_index + 1,
                 }
             )
             prepared_request, response = provider_result["preparedRequest"], provider_result["response"]

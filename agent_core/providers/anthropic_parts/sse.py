@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...provider_activity import emitProviderActivity
 
 def parseAnthropicSseEvents(raw: str) -> list[dict[str, Any]]:
     normalized = raw.replace("\r\n", "\n")
@@ -83,6 +84,7 @@ class AnthropicSseAccumulator:
         event_type = payload.get("type") or raw_event.get("event")
         if not event_type or event_type == "ping":
             return
+        emitProviderActivity(self.runtime, "stream_frame", attempt=self.attempt)
         if self.runtime.get("streamProviderMessages"):
             self.runtime.get("emitEvent", lambda *_: None)("provider.stream_event", {"stream_event": event_type, "model": self.model, "payload": payload})
         if event_type == "error":
@@ -105,6 +107,7 @@ class AnthropicSseAccumulator:
                 )
             )
         if event_type == "message_start":
+            emitProviderActivity(self.runtime, "response_headers", attempt=self.attempt)
             message = payload.get("message") or {}
             if isinstance(message.get("id"), str):
                 self.response_id = message["id"]
@@ -129,6 +132,7 @@ class AnthropicSseAccumulator:
             )
             self.open_block_indexes.add(index)
             if self.blocks[index].get("type") == "tool_use":
+                emitProviderActivity(self.runtime, "tool_boundary", attempt=self.attempt)
                 self.had_tool_use = True
             if self.blocks[index].get("type") == "text" and self.blocks[index].get("text"):
                 self.had_assistant_output = True
@@ -150,11 +154,14 @@ class AnthropicSseAccumulator:
                 text_delta = delta.get("text") if isinstance(delta.get("text"), str) else ""
                 block["text"] += text_delta
                 if text_delta:
+                    emitProviderActivity(self.runtime, "output_delta", attempt=self.attempt)
                     self.had_assistant_output = True
                 if self.runtime.get("includePartialMessages") and text_delta:
                     self.runtime.get("emitEvent", lambda *_: None)("message.assistant.partial", {"model": self.model, "text_delta": text_delta, "text": "".join(item.get("text", "") for item in self.blocks if item and item.get("type") == "text")})
             elif block["type"] == "thinking" and delta.get("type") == "thinking_delta":
                 thinking_delta = delta.get("thinking") if isinstance(delta.get("thinking"), str) else ""
+                if thinking_delta:
+                    emitProviderActivity(self.runtime, "reasoning", attempt=self.attempt)
                 block["thinking"] += thinking_delta
                 if self.runtime.get("includePartialMessages") and thinking_delta:
                     self.runtime.get("emitEvent", lambda *_: None)(

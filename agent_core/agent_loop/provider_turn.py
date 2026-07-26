@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import uuid
 from typing import Any
 
 from .._utils import maybe_await, merge_usage
@@ -9,6 +10,7 @@ from ..provider_prompt_cache import (
     commitProviderPromptCacheObservation,
     createPromptCacheTurnContext,
 )
+from ..provider_activity import ProviderActivityEmitter, emitProviderActivity
 from ..provider_timeouts import createTurnDeadlineContext
 from ..session import persistSession
 from ..token_accounting import recordActualTokenUsage
@@ -42,7 +44,28 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         perCallOptions=args.get("providerRequestOptions") or {},
         runtimeContract=args.get("runtimeContract"),
     )
-    deadline_runtime = {**runtime, "abortSignal": deadlines.signal}
+    activity = ProviderActivityEmitter(
+        emitEvent=runtime.get("emitEvent", lambda *_: None),
+        sessionId=session["id"],
+        logicalTurnId=args.get("logicalTurnId") or f"turn-{uuid.uuid4()}",
+        logicalCallId=(
+            f"{args.get('logicalTurnId')}-call-{max(1, int(args.get('logicalCallIndex') or 1))}"
+            if args.get("logicalTurnId")
+            else f"call-{uuid.uuid4()}"
+        ),
+        provider=config.get("provider"),
+        profile=config.get("providerProfileName") or config.get("provider"),
+        model=args["activeModel"],
+        coalesceIntervalMs=int(
+            (config.get("providerProfile") or {}).get("providerActivityCoalesceMs")
+            or 250
+        ),
+    )
+    deadline_runtime = {
+        **runtime,
+        "abortSignal": deadlines.signal,
+        "providerActivityEmitter": activity,
+    }
     provider = args.get("providerOverride") or _create_provider(
         config,
         deadline_runtime,
@@ -54,6 +77,11 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
     )
 
     async def prepare(reactive_attempt: int) -> dict[str, Any]:
+        emitProviderActivity(
+            deadline_runtime,
+            "request_preparing",
+            attempt=reactive_attempt + 1,
+        )
         prepared = await deadlines.race(
             prepareProviderRequest(
                 {
@@ -91,6 +119,11 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                 if requestHasImageInputs(request) and not modelSupportsImageInputs(config, args["activeModel"]):
                     response = unsupportedImageInputResponse(args["activeModel"])
                 else:
+                    emitProviderActivity(
+                        deadline_runtime,
+                        "request_started",
+                        attempt=int(prepared.get("reactiveAttempt") or 0) + 1,
+                    )
                     response = await deadlines.race(maybe_await(provider["send"](request)))
                 await commitProviderPromptCacheObservation(response, deadline_runtime)
                 return prepared, response
@@ -99,6 +132,12 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                     raise
                 attempt = int(prepared.get("reactiveAttempt") or 0)
                 if attempt < 2 and isContextWindowFailure(error):
+                    emitProviderActivity(
+                        deadline_runtime,
+                        "retry_wait",
+                        attempt=attempt + 1,
+                        force=True,
+                    )
                     prepared = await prepare(attempt + 1)
                     continue
                 raise
@@ -122,13 +161,21 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
             prepared = addEmptyResponseContinuationNudge(await prepare(reactive_attempt))
             prepared, response = await dispatch(prepared)
             _throw_if_turn_cancelled(runtime)
-        return {
+        result = {
             "preparedRequest": prepared,
             "response": response,
             "emptyResponseAttempts": empty_attempts,
             "emptyResponseCostUsd": empty_cost,
         }
+        emitProviderActivity(
+            deadline_runtime,
+            "terminal",
+            attempt=int(prepared.get("reactiveAttempt") or 0) + 1,
+            force=True,
+        )
+        return result
     except Exception as error:
+        emitProviderActivity(deadline_runtime, "terminal", force=True)
         await _record_provider_failure_if_needed(session, config, runtime, error)
         raise
     finally:

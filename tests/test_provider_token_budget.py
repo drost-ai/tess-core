@@ -26,6 +26,7 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
 
         policy = resolveCompactionPolicy({"kind": "openai", "model": "llamacpp", "maxContextLength": 32_000, "maxOutputTokens": 4_096})
         self.assertEqual(policy["compactionThresholdTokens"], 32_000)
+        self.assertEqual(policy["compactionTargetTokens"], 24_000)
         self.assertEqual(policy["compactionOutputTokens"], 3_200)
         self.assertTrue(policy["thresholdClamped"])
 

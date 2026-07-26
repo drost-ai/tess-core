@@ -20,6 +20,7 @@ from .plugins import *
 from .permission_rules import *
 from .process_identity import *
 from .provider_errors import *
+from .provider_activity import *
 from .remote import *
 from .repository_trust import *
 from .runtime import *
@@ -82,6 +83,7 @@ _INTERNAL_MODULES = {
     "prompt_cache_state",
     "prompt_cache_state_schema",
     "process_identity_darwin",
+    "provider_activity",
     "provider_prompt_cache",
     "provider_turn_session",
     "search_acquisition",

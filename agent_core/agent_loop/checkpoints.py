@@ -48,7 +48,19 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
     session = args["session"]
     compaction_policy = resolveCompactionPolicy(args["config"].get("providerProfile") or {})
     await _refresh_compaction_state_from_manifest(session)
-    decision = shouldAutoCompact(session, args.get("currentInputTokens"), compaction_policy.get("compactionThresholdTokens"))
+    decision = shouldAutoCompact(
+        session,
+        args.get("currentInputTokens"),
+        compaction_policy.get("compactionThresholdTokens"),
+        compaction_policy.get("compactionTargetTokens"),
+    )
+    decision_reason = (
+        "complete_request_at_or_above_threshold"
+        if decision.get("trigger") == "auto_hard_limit"
+        else "complete_request_above_compaction_target"
+        if decision.get("trigger") == "auto_target_headroom"
+        else "complete_request_at_or_below_compaction_target"
+    )
     _safe_emit(
         args["runtime"],
         "compaction.decision",
@@ -56,11 +68,12 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
             "session_id": session["id"],
             "should_checkpoint": bool(decision.get("shouldCompact")),
             "trigger": decision.get("trigger"),
-            "reason": "complete_request_at_or_above_threshold" if decision.get("shouldCompact") else "complete_request_below_threshold",
+            "reason": decision_reason,
             "measurement_scope": "provider_request_complete",
             "current_token_estimate": decision.get("currentTokenEstimate"),
             "current_token_source": args.get("currentInputTokensSource"),
             "compaction_threshold_tokens": compaction_policy.get("compactionThresholdTokens"),
+            "compaction_target_tokens": compaction_policy.get("compactionTargetTokens"),
             "max_context_length": compaction_policy.get("maxContextLength"),
         },
     )
@@ -75,6 +88,7 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
             "currentTokenEstimate": decision["currentTokenEstimate"],
             "currentTokenSource": args.get("currentInputTokensSource"),
             "compactionThresholdTokens": compaction_policy.get("compactionThresholdTokens"),
+            "compactionTargetTokens": compaction_policy.get("compactionTargetTokens"),
         }
     )
 
@@ -121,6 +135,7 @@ async def _run_auto_compaction(args: dict[str, Any]) -> dict[str, Any] | None:
                 "trigger": trigger,
                 "currentInputTokens": current_token_estimate,
                 "compactionThresholdTokens": args.get("compactionThresholdTokens"),
+                "compactionTargetTokens": args.get("compactionTargetTokens"),
             }
         )
     except Exception as error:
@@ -232,6 +247,7 @@ def _emit_auto_compaction_skip(
             "source_token_estimate": (outcome or {}).get("sourceTokenEstimate"),
             "target_estimated_relief": (outcome or {}).get("targetEstimatedRelief"),
             "compaction_threshold_tokens": (outcome or {}).get("compactionThresholdTokens"),
+            "compaction_target_tokens": (outcome or {}).get("compactionTargetTokens"),
             "measurement_scope": "raw_session" if current_token_source == "raw_session_estimate" else "provider_request_complete",
         },
     )
