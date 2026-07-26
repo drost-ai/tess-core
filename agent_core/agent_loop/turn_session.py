@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -8,7 +9,112 @@ from ..agent_runtime_bindings import (
     assertAgentRuntimeBindings,
     materializeAgentExecutionRuntime,
 )
+from ..config import (
+    ensureProviderForModelSelection,
+    resolveFallbackProviderProfileName,
+)
 from ..provider_turn_session import createProviderTurnSession
+from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
+from .._transient_input import (
+    createTransientExecutionSession,
+    syncTransientExecutionSession,
+)
+
+
+async def run_with_transient_execution_session(
+    args: dict[str, Any],
+    run: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
+) -> dict[str, Any]:
+    canonical_session = args["session"]
+    assertAgentRuntimeBindings(args.get("runtime"), canonical_session.get("id"))
+    config = args["config"]
+    paths = (
+        resolveRuntimePaths(candidate=config.get("runtimeHome"))
+        if config.get("runtimeHome")
+        else getActiveRuntimePaths()
+    )
+    execution_session = createTransientExecutionSession(
+        canonical_session,
+        args.get("transientInputOverlay"),
+    )
+    values = {**args, "session": execution_session}
+    try:
+        return await runWithRuntimePaths(paths, lambda: run(values))
+    finally:
+        if execution_session is not canonical_session:
+            syncTransientExecutionSession(canonical_session, execution_session)
+
+
+def resolve_effective_provider_turn_binding(
+    args: dict[str, Any],
+) -> dict[str, Any]:
+    session = args["session"]
+    config = args["config"]
+    active_model = args.get("modelOverride") or session["model"]
+    effective_provider = ensureProviderForModelSelection(
+        session.get("provider") or config["provider"],
+        active_model,
+        config["provider"],
+    )
+    profiles = (
+        config.get("providerProfiles")
+        if isinstance(config.get("providerProfiles"), dict)
+        else {}
+    )
+    profile_name = resolveFallbackProviderProfileName(
+        effective_provider,
+        profiles,
+        session.get("providerProfileName") or config.get("providerProfileName"),
+    )
+    current_profile_matches = (
+        config.get("provider") == effective_provider
+        and config.get("providerProfileName") == profile_name
+        and isinstance(config.get("providerProfile"), dict)
+    )
+    profile = (
+        config.get("providerProfile")
+        if current_profile_matches
+        else profiles.get(profile_name)
+    )
+    if not isinstance(profile, dict):
+        profile = {}
+    current_capabilities = (
+        config.get("providerCapabilities")
+        if current_profile_matches
+        and isinstance(config.get("providerCapabilities"), dict)
+        else None
+    )
+    session["provider"] = effective_provider
+    session["providerProfileName"] = profile_name
+    effective_config = {
+        **config,
+        "provider": effective_provider,
+        "providerKind": effective_provider,
+        "providerProfileName": profile_name,
+        "providerProfile": profile,
+        "providerCapabilities": copy.deepcopy(
+            current_capabilities or profile.get("capabilities") or {}
+        ),
+        "customHeaders": copy.deepcopy(
+            profile.get("headers")
+            or (config.get("customHeaders") if current_profile_matches else {})
+            or {}
+        ),
+    }
+    if effective_provider == "openai":
+        effective_config["openaiApiMode"] = profile.get("apiMode") or config.get(
+            "openaiApiMode"
+        )
+        effective_config["openaiBaseUrl"] = profile.get("baseUrl") or (
+            config.get("openaiBaseUrl") if current_profile_matches else None
+        )
+        effective_config["anthropicBaseUrl"] = None
+    else:
+        effective_config["anthropicBaseUrl"] = profile.get("baseUrl") or (
+            config.get("anthropicBaseUrl") if current_profile_matches else None
+        )
+        effective_config["openaiBaseUrl"] = None
+    return {**args, "config": effective_config}
 
 
 async def run_in_provider_turn_session(
@@ -42,3 +148,10 @@ async def run_in_provider_turn_session(
         if is_cancelled(runtime):
             await provider_turn_session.cancel("turn_cancelled")
         await provider_turn_session.close()
+
+
+__all__ = [
+    "resolve_effective_provider_turn_binding",
+    "run_in_provider_turn_session",
+    "run_with_transient_execution_session",
+]

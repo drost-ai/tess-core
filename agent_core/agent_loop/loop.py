@@ -20,7 +20,11 @@ from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
-from .turn_session import run_in_provider_turn_session as _run_in_provider_turn_session
+from .turn_session import (
+    resolve_effective_provider_turn_binding as _resolve_effective_provider_turn_binding,
+    run_in_provider_turn_session as _run_in_provider_turn_session,
+    run_with_transient_execution_session as _run_with_transient_execution_session,
+)
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
@@ -33,9 +37,7 @@ from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithR
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
-from .._transient_input import createTransientExecutionSession as _create_transient_execution_session
 from .._transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
-from .._transient_input import syncTransientExecutionSession as _sync_transient_execution_session
 from ..tool_attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
     resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
@@ -43,30 +45,19 @@ from ..tool_attachments import (
 )
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
-    canonical_session = values["session"]
-    assertAgentRuntimeBindings(values.get("runtime"), canonical_session.get("id"))
-    config = values["config"]
-    paths = resolveRuntimePaths(candidate=config.get("runtimeHome")) if config.get("runtimeHome") else getActiveRuntimePaths()
-    execution_session = _create_transient_execution_session(
-        canonical_session,
-        values.get("transientInputOverlay"),
+    return await _run_with_transient_execution_session(
+        values,
+        _runAgentPromptInScope,
     )
-    values["session"] = execution_session
-    try:
-        return await runWithRuntimePaths(paths, lambda: _runAgentPromptInScope(values))
-    finally:
-        if execution_session is not canonical_session:
-            _sync_transient_execution_session(canonical_session, execution_session)
 
 
 async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
+    effective_args = _resolve_effective_provider_turn_binding(args)
     return await _run_in_provider_turn_session(
-        args,
+        effective_args,
         _runAgentPromptWithProviderSession,
         is_cancelled=_is_turn_cancelled,
     )
-
-
 async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
@@ -83,11 +74,6 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     if repair["repaired"]:
         await persistSession(session, config)
         _safe_emit(runtime, "transcript.repaired", {"session_id": session["id"], "truncated_from": repair.get("truncatedFrom"), "removed_count": repair["removedCount"], "missing_tool_use_ids": repair["missingToolUseIds"]})
-
-    effective_provider = ensureProviderForModelSelection(session.get("provider") or config["provider"], args.get("modelOverride") or session["model"], config["provider"])
-    session["provider"] = effective_provider
-    provider_profile_name = resolveFallbackProviderProfileName(effective_provider, config.get("providerProfiles", {}), session.get("providerProfileName") or config.get("providerProfileName"))
-    session["providerProfileName"] = provider_profile_name
 
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     runtime_contract = metadata.get("subagentRuntimeContract") if isinstance(metadata, dict) else None

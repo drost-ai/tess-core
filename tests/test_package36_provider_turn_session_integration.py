@@ -22,6 +22,11 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
     def test_three_round_turn_reuses_one_client_and_sends_strict_deltas(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-p36-") as cwd:
             config = p36._config(cwd)
+            # This test isolates provider-session transport reuse. Its deliberately
+            # large prompt remains below the explicit proactive-compaction target
+            # so Package 35's synthesis client is not part of the construction count.
+            config["providerProfile"]["compactionThresholdTokens"] = 200_000
+            config["providerProfile"]["compactionTargetTokens"] = 190_000
             session = core.createEmptySession(
                 cwd=cwd,
                 provider="openai",
@@ -152,6 +157,35 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
             self.assertEqual(
                 len({item["logical_turn_id"] for item in activity}), 1
             )
+            by_call: dict[str, list[dict[str, object]]] = {}
+            for item in activity:
+                by_call.setdefault(str(item["logical_call_id"]), []).append(item)
+            self.assertEqual(len(by_call), 3)
+            for call_events in by_call.values():
+                self.assertEqual(
+                    len(
+                        [
+                            item
+                            for item in call_events
+                            if item["activity_kind"] == "request_started"
+                        ]
+                    ),
+                    1,
+                )
+                self.assertEqual(
+                    [
+                        item["activity_kind"]
+                        for item in call_events
+                        if item["activity_kind"] == "terminal"
+                    ],
+                    ["terminal"],
+                )
+                self.assertEqual(call_events[-1]["activity_kind"], "terminal")
+                self.assertEqual(
+                    [item["monotonic_sequence"] for item in call_events],
+                    list(range(1, len(call_events) + 1)),
+                )
+            self.assertNotIn("x" * 128, json.dumps(activity))
             persisted = json.dumps(session)
             self.assertNotIn("response-1", persisted)
             self.assertNotIn("sticky-turn-state", persisted)

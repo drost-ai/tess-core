@@ -46,6 +46,10 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         system_context = request_context.get("systemContext")
         if system_context and not _dynamic_context_belongs_in_messages(config):
             system = f"{system}\n\n{request_context['systemContext']}"
+        unsupported_image_inputs = (
+            requestHasImageInputs({"messages": request_context.get("messages") or []})
+            and not modelSupportsImageInputs(config, active_model)
+        )
         request_context = _normalize_request_context_messages(
             _admit_request_images(
                 _inject_system_context_into_messages(request_context, system_context, config=config),
@@ -65,7 +69,12 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "messages": request_context["messages"],
             "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
         }
-        prepared_request = {"request": request, "continuity": request_context, "reactiveAttempt": reactive_attempt}
+        prepared_request = {
+            "request": request,
+            "continuity": request_context,
+            "reactiveAttempt": reactive_attempt,
+            "unsupportedImageInputs": unsupported_image_inputs,
+        }
         measurement = await measureRequestInputTokens(
             {
                 "config": config,
@@ -112,6 +121,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "continuity": request_context,
             "reactiveAttempt": reactive_attempt,
             "contextBudget": headroom,
+            "unsupportedImageInputs": unsupported_image_inputs,
         }
         recordPreflightTokenMeasurement(session, measurement)
         _safe_emit(
@@ -166,6 +176,10 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     system_context = request_context.get("systemContext")
     if system_context and not _dynamic_context_belongs_in_messages(config):
         system = f"{system}\n\n{request_context['systemContext']}"
+    unsupported_image_inputs = (
+        requestHasImageInputs({"messages": request_context.get("messages") or []})
+        and not modelSupportsImageInputs(config, active_model)
+    )
     request_context = _normalize_request_context_messages(
         _admit_request_images(
             _inject_system_context_into_messages(request_context, system_context, config=config),
@@ -212,6 +226,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         "continuity": request_context,
         "reactiveAttempt": reactive_attempt,
         "contextBudget": headroom,
+        "unsupportedImageInputs": unsupported_image_inputs,
     }
 
 

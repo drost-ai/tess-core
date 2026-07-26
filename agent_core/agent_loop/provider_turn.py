@@ -116,7 +116,10 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
             try:
                 _throw_if_turn_cancelled(runtime)
                 request = prepared["request"]
-                if requestHasImageInputs(request) and not modelSupportsImageInputs(config, args["activeModel"]):
+                if prepared.get("unsupportedImageInputs") or (
+                    requestHasImageInputs(request)
+                    and not modelSupportsImageInputs(config, args["activeModel"])
+                ):
                     response = unsupportedImageInputResponse(args["activeModel"])
                 else:
                     emitProviderActivity(

@@ -171,7 +171,6 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     delta = str(get_value(event, "delta", "") or "")
                     if not delta:
                         continue
-                    emitProviderActivity(runtime, "output_delta", attempt=attempt)
                     had_output = True
                     emitted_text += delta
                     if runtime.get("includePartialMessages"):
@@ -185,7 +184,6 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     delta = str(get_value(event, "delta", "") or "")
                     if not delta:
                         continue
-                    emitProviderActivity(runtime, "reasoning", attempt=attempt)
                     reasoning_text += delta
                     if runtime.get("includePartialMessages"):
                         _emit(
@@ -208,7 +206,6 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         raise incomplete_response(f"output item {item_id} started more than once")
                     open_output_items[item_id] = str(get_value(item, "type", "unknown") or "unknown")
                     if get_value(item, "type") == "function_call":
-                        emitProviderActivity(runtime, "tool_boundary", attempt=attempt)
                         call_id = str(get_value(item, "call_id", "") or "")
                         if call_id:
                             item_to_call_id[item_id] = call_id
