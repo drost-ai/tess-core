@@ -2,9 +2,18 @@
   {
     "data": {
       "attempt": 1,
+      "chain_reset_reason": "stateless",
+      "connection_reused": false,
+      "input_projection": "full",
+      "logical_input_bytes": 70,
+      "logical_input_items": 1,
       "model": "gpt-5.4",
+      "previous_response_id_present": false,
       "provider": "openai",
-      "provider_label": "OpenAI Responses"
+      "provider_label": "OpenAI Responses",
+      "transmitted_input_bytes": 70,
+      "transmitted_input_items": 1,
+      "transport": "sse"
     },
     "event": "provider.request_started"
   },
@@ -34,9 +43,18 @@
   {
     "data": {
       "attempt": 2,
+      "chain_reset_reason": "stateless",
+      "connection_reused": false,
+      "input_projection": "full",
+      "logical_input_bytes": 70,
+      "logical_input_items": 1,
       "model": "gpt-5.4",
+      "previous_response_id_present": false,
       "provider": "openai",
-      "provider_label": "OpenAI Responses"
+      "provider_label": "OpenAI Responses",
+      "transmitted_input_bytes": 70,
+      "transmitted_input_items": 1,
+      "transport": "sse"
     },
     "event": "provider.request_started"
   },
@@ -242,18 +260,36 @@
   {
     "data": {
       "attempt": 1,
+      "chain_reset_reason": "stateless_chat_completions",
+      "connection_reused": false,
+      "input_projection": "full",
+      "logical_input_bytes": 108,
+      "logical_input_items": 2,
       "model": "gpt-5.4",
+      "previous_response_id_present": false,
       "provider": "openai",
-      "provider_label": "OpenAI Chat Completions"
+      "provider_label": "OpenAI Chat Completions",
+      "transmitted_input_bytes": 108,
+      "transmitted_input_items": 2,
+      "transport": "sse"
     },
     "event": "provider.request_started"
   },
   {
     "data": {
       "attempt": 1,
+      "chain_reset_reason": "stateless_chat_completions",
+      "connection_reused": false,
+      "input_projection": "full",
+      "logical_input_bytes": 108,
+      "logical_input_items": 2,
       "model": "gpt-5.4",
+      "previous_response_id_present": false,
       "provider": "openai",
-      "provider_label": "OpenAI Chat Completions"
+      "provider_label": "OpenAI Chat Completions",
+      "transmitted_input_bytes": 108,
+      "transmitted_input_items": 2,
+      "transport": "sse"
     },
     "event": "provider.request_started"
   }

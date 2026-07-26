@@ -68,6 +68,8 @@ def _create_openai_sdk_client(options: dict[str, Any]) -> Any:
     return SimpleNamespace(
         responses=_OpenAiResponsesSdkAdapter(client),
         chat=SimpleNamespace(completions=_OpenAiChatCompletionsSdkAdapter(client)),
+        capabilities={},
+        close=getattr(client, "close", None),
     )
 
 def _build_openai_fetch(runtime: dict[str, Any]):
@@ -89,9 +91,12 @@ async def _race_openai_activity(
     had_output: bool,
     had_tool_use: bool,
     abort_signal: Any = None,
+    turn_session: Any = None,
 ) -> Any:
     _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
     task = asyncio.ensure_future(awaitable)
+    if turn_session is not None:
+        turn_session.bind_activity_task(task)
     loop = asyncio.get_running_loop()
     deadline = loop.time() + (max(1, timeout_ms) / 1000)
     poll_seconds = OPENAI_ABORT_POLL_INTERVAL_MS / 1000
@@ -112,6 +117,47 @@ async def _race_openai_activity(
             if task.done():
                 return task.result()
             continue
+        finally:
+            if task.done() and turn_session is not None:
+                turn_session.clear_activity_task(task)
+
+
+async def _acquire_openai_client(
+    args: dict[str, Any], base_url: str | None
+) -> tuple[Any, bool]:
+    turn_session = args.get("turnSession") or args.get("turn_session")
+    if turn_session is None or not hasattr(turn_session, "acquire_client"):
+        return _create_openai_client(args, base_url), False
+    identity = (
+        args.get("token"),
+        base_url,
+        tuple(sorted((args.get("headers") or {}).items())),
+        id(args.get("clientFactory") or args.get("client_factory")),
+    )
+    return await turn_session.acquire_client(
+        identity=identity,
+        create=lambda: _create_openai_client(args, base_url),
+    )
+
+
+def _plain_openai_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _plain_openai_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain_openai_value(item) for item in value]
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        try:
+            return _plain_openai_value(model_dump(exclude_none=True))
+        except TypeError:
+            return _plain_openai_value(model_dump())
+    if hasattr(value, "__dict__"):
+        return {
+            str(key): _plain_openai_value(item)
+            for key, item in vars(value).items()
+            if not str(key).startswith("_")
+        }
+    return value
 
 def _create_openai_timeout(provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool, timeout_ms: int) -> Any:
     return createProviderRequestError(

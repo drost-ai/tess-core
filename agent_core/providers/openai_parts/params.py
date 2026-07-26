@@ -109,7 +109,17 @@ def _merge_request_options(
 ) -> dict[str, Any]:
     if not isinstance(request_options, dict) or not request_options:
         return params
-    protected = {"model", "messages", "input", "instructions", "tools", "stream", "stream_options"}
+    protected = {
+        "model",
+        "messages",
+        "input",
+        "instructions",
+        "tools",
+        "stream",
+        "stream_options",
+        "store",
+        "previous_response_id",
+    }
     merged = dict(params)
     extra_body = dict(merged.get("extra_body") or {}) if isinstance(merged.get("extra_body"), dict) else {}
     for key, value in request_options.items():
@@ -118,7 +128,13 @@ def _merge_request_options(
             continue
         if cleaned == "extra_body":
             if isinstance(value, dict):
-                extra_body.update(value)
+                extra_body.update(
+                    {
+                        nested_key: nested_value
+                        for nested_key, nested_value in value.items()
+                        if str(nested_key or "").strip() not in protected
+                    }
+                )
             continue
         if cleaned in top_level_options:
             merged[cleaned] = value

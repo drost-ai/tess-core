@@ -8,6 +8,12 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
     provider_label = getOpenAiProviderLabel("chat_completions", base_url)
     max_attempts = max(1, int(args.get("maxAttempts") or 2))
     last_failure = None
+    turn_session = args.get("turnSession") or args.get("turn_session")
+    logical_call_id = (
+        turn_session.start_logical_call(args["request"]["model"])
+        if turn_session is not None
+        else ""
+    )
     for attempt in range(1, max_attempts + 1):
         phase = "request_start"
         had_output = False
@@ -21,6 +27,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         observed_choice_indexes: set[int] = set()
         terminal_choice_indexes: set[int] = set()
         reasoning_content = ""
+        active_stream: Any = None
         runtime = args.get("runtime") or {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
@@ -49,8 +56,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
 
         try:
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
-            _emit(runtime, "provider.request_started", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempt": attempt})
-            client = _create_openai_client(args, base_url)
+            client, connection_reused = await _acquire_openai_client(args, base_url)
             chat = get_value(client, "chat")
             completions = get_value(chat, "completions") if chat else None
             if not completions:
@@ -69,6 +75,39 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     ),
                 },
             )
+            wire_messages = params.get("messages") if isinstance(params.get("messages"), list) else []
+            wire_bytes = len(
+                json.dumps(wire_messages, separators=(",", ":"), default=str).encode(
+                    "utf-8"
+                )
+            )
+            _emit(
+                runtime,
+                "provider.request_started",
+                {
+                    "provider": "openai",
+                    "provider_label": provider_label,
+                    "model": args["request"]["model"],
+                    "attempt": attempt,
+                    "logical_input_bytes": wire_bytes,
+                    "logical_input_items": len(wire_messages),
+                    "transmitted_input_bytes": wire_bytes,
+                    "transmitted_input_items": len(wire_messages),
+                    "input_projection": "full",
+                    "previous_response_id_present": False,
+                    "connection_reused": connection_reused,
+                    "transport": "sse",
+                    "chain_reset_reason": "stateless_chat_completions",
+                },
+            )
+            if turn_session is not None:
+                turn_session.emit_activity(
+                    logical_call_id=logical_call_id,
+                    attempt=attempt,
+                    phase=phase,
+                    activity_kind="request_started",
+                    model=args["request"]["model"],
+                )
             response = await _race_openai_activity(
                 maybe_await(get_value(completions, "create")(params)),
                 timeout_ms=request_start_timeout_ms,
@@ -78,7 +117,11 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 had_output=had_output,
                 had_tool_use=had_tool_use,
                 abort_signal=runtime.get("abortSignal"),
+                turn_session=turn_session,
             )
+            active_stream = response
+            if turn_session is not None:
+                turn_session.bind_stream(response)
             phase = "stream_open"
             iterator = to_async_iter(response).__aiter__()
             while True:
@@ -93,10 +136,19 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                         had_output=had_output,
                         had_tool_use=had_tool_use,
                         abort_signal=runtime.get("abortSignal"),
+                        turn_session=turn_session,
                     )
                 except StopAsyncIteration:
                     break
                 phase = "stream_read"
+                if turn_session is not None:
+                    turn_session.emit_activity(
+                        logical_call_id=logical_call_id,
+                        attempt=attempt,
+                        phase=phase,
+                        activity_kind="stream_frame",
+                        model=args["request"]["model"],
+                    )
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": "chat.completion.chunk", "model": args["request"]["model"], "payload": chunk})
                 _apply_chat_completion_usage(usage, get_value(chunk, "usage"))
@@ -180,10 +232,23 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             if pending_tool_calls:
                 raise incomplete_response("the stream ended with unfinished tool-call fragments")
             phase = "response_complete"
+            if turn_session is not None:
+                turn_session.emit_activity(
+                    logical_call_id=logical_call_id,
+                    attempt=attempt,
+                    phase=phase,
+                    activity_kind="terminal",
+                    model=args["request"]["model"],
+                )
+                await turn_session.release_stream(active_stream)
+                active_stream = None
             if attempt > 1:
                 _emit(runtime, "provider.recovered", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
             return {"content": blocks, "usage": usage, "model": args["request"]["model"], "stopReason": stop_reason}
         except Exception as exc:
+            if turn_session is not None and active_stream is not None:
+                await turn_session.release_stream(active_stream)
+                active_stream = None
             failure = normalizeUnknownProviderFailure(
                 error=exc,
                 provider="openai",

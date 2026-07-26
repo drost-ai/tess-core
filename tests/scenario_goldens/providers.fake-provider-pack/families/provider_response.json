@@ -3,6 +3,17 @@
     "api": "responses",
     "provider": "openai",
     "response": {
+      "_providerTelemetry": {
+        "chain_reset_reason": "stateless",
+        "connection_reused": false,
+        "input_projection": "full",
+        "logical_input_bytes": 70,
+        "logical_input_items": 1,
+        "previous_response_id_present": false,
+        "transmitted_input_bytes": 70,
+        "transmitted_input_items": 1,
+        "transport": "sse"
+      },
       "content": [
         {
           "text": "Plan done",

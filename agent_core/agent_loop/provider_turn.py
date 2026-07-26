@@ -43,7 +43,12 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         runtimeContract=args.get("runtimeContract"),
     )
     deadline_runtime = {**runtime, "abortSignal": deadlines.signal}
-    provider = args.get("providerOverride") or _create_provider(config, deadline_runtime, session)
+    provider = args.get("providerOverride") or _create_provider(
+        config,
+        deadline_runtime,
+        session,
+        args.get("providerTurnSession"),
+    )
     turn_context = await createPromptCacheTurnContext(
         {"config": config, "session": session, "paths": args["paths"]}
     )

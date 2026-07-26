@@ -37,6 +37,11 @@ def _emit_provider_response_completed(
     continuity = prepared_request.get("continuity") if isinstance(prepared_request, dict) else {}
     relief = continuity.get("relief") if isinstance(continuity, dict) and isinstance(continuity.get("relief"), dict) else {}
     usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+    provider_telemetry = (
+        response.get("_providerTelemetry")
+        if isinstance(response.get("_providerTelemetry"), dict)
+        else {}
+    )
     _safe_emit(
         runtime,
         "provider.response_completed",
@@ -55,10 +60,16 @@ def _emit_provider_response_completed(
             "context_relief_kind": runtime_restore.get("lastContextReliefKind"),
             "context_relief_projection_hash": runtime_restore.get("lastContextReliefProjectionHash"),
             "context_relief_escalation_requested": bool(runtime_restore.get("contextReliefEscalationRequested")),
+            **copy.deepcopy(provider_telemetry),
         },
     )
 
-def _create_provider(config: dict[str, Any], runtime: dict[str, Any], session: dict[str, Any] | None = None) -> dict[str, Any]:
+def _create_provider(
+    config: dict[str, Any],
+    runtime: dict[str, Any],
+    session: dict[str, Any] | None = None,
+    provider_turn_session: Any = None,
+) -> dict[str, Any]:
     metadata = session.get("metadata") if isinstance(session, dict) and isinstance(session.get("metadata"), dict) else {}
     timeout_policy = resolveProviderTimeoutPolicy({"config": config, "runtimeContract": metadata.get("subagentRuntimeContract")})
     if config.get("provider") == "openai":
@@ -76,6 +87,7 @@ def _create_provider(config: dict[str, Any], runtime: dict[str, Any], session: d
                 requestOptions=(resolved.get("providerProfile") or {}).get("requestOptions") or {},
                 runtime=runtime,
                 clientFactory=runtime.get("openaiClientFactory") or resolved.get("openaiClientFactory"),
+                turnSession=provider_turn_session,
                 **timeout_policy,
             )
 
@@ -88,6 +100,7 @@ def _create_provider(config: dict[str, Any], runtime: dict[str, Any], session: d
             config=resolved,
             request=request,
             runtime=runtime,
+            turnSession=provider_turn_session,
             **timeout_policy,
         )
 

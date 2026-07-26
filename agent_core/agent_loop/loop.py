@@ -20,6 +20,7 @@ from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
+from .turn_session import run_in_provider_turn_session as _run_in_provider_turn_session
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
@@ -59,6 +60,14 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 
 
 async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
+    return await _run_in_provider_turn_session(
+        args,
+        _runAgentPromptWithProviderSession,
+        is_cancelled=_is_turn_cancelled,
+    )
+
+
+async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
     paths = getActiveRuntimePaths()
@@ -99,7 +108,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     cost = 0.0
     tool_count = 0
     provider_call_index = 0
-    parent_turn_id = f"turn-{uuid.uuid4()}"
+    parent_turn_id = args["logicalTurnId"]
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
     last_stable_snapshot = copy.deepcopy(session)
@@ -178,6 +187,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
                 {
                     "config": config, "runtime": runtime, "session": session, "paths": paths,
                     "runtimeContract": runtime_contract, "providerOverride": provider_override,
+                    "providerTurnSession": args["providerTurnSession"],
                     "providerRequestOptions": args.get("providerRequestOptions") or {},
                     "baseSystemPrompt": base_system_prompt, "toolRegistry": tool_registry,
                     "activeModel": active_model, "prompt": prompt_text, "repair": repair,

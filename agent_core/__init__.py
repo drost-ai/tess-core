@@ -83,6 +83,7 @@ _INTERNAL_MODULES = {
     "prompt_cache_state_schema",
     "process_identity_darwin",
     "provider_prompt_cache",
+    "provider_turn_session",
     "search_acquisition",
     "search_result_payload",
     "structured_result_policy",

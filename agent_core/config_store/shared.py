@@ -77,6 +77,9 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "auth": {"kind": "openai_api_key_or_codex", "envVar": "OPENAI_API_KEY"},
         "description": "OpenAI Codex-compatible backend",
         "capabilities": {
+            "openaiResponsesIncremental": True,
+            "openaiResponsesWebSocket": True,
+            "openaiTurnState": True,
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
             "maxImageCount": DEFAULT_MAX_IMAGE_INPUT_COUNT,

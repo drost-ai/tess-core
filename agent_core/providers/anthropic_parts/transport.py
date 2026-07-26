@@ -15,14 +15,19 @@ async def _race_anthropic_activity(
     hadToolUse: bool = False,
     abortSignal: Any = None,
     activityState: dict[str, Any] | None = None,
+    turnSession: Any = None,
 ) -> Any:
     _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
     task = asyncio.ensure_future(awaitable)
+    if turnSession is not None:
+        turnSession.bind_activity_task(task)
     timeout_seconds = max(1, timeout_ms) / 1000
     deadline = time.monotonic() + timeout_seconds
     poll_seconds = ANTHROPIC_ABORT_POLL_INTERVAL_MS / 1000
     while True:
         if task.done():
+            if turnSession is not None:
+                turnSession.clear_activity_task(task)
             return task.result()
         if _signal_aborted(abortSignal):
             await _cancel_anthropic_activity_task(task)
@@ -48,6 +53,9 @@ async def _race_anthropic_activity(
             if task.done():
                 return task.result()
             continue
+        finally:
+            if task.done() and turnSession is not None:
+                turnSession.clear_activity_task(task)
 
 
 def _activity_state_bool(activityState: dict[str, Any] | None, key: str, fallback: bool) -> bool:
