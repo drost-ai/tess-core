@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
@@ -47,8 +48,16 @@ def _read_text(path: str | None) -> str:
 def _write_text(path: str, value: str) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
-        handle.write(value)
+        handle.write(_sanitize_media_for_persistence(value))
 
 
 def _write_json(path: str, value: Any) -> None:
-    _write_text(path, json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+    _write_text(
+        path,
+        json.dumps(
+            _sanitize_media_for_persistence(value),
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
+    )

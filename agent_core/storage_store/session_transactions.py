@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable
 
+from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..runtime_identifiers import parseSessionId
 from .shared import *
 
@@ -63,7 +64,7 @@ async def mutateSessionRecordTransaction(
         committed = copy.deepcopy(next_session)
         committed["revision"] = current_revision + 1
         return {
-            "value": _redact_persisted_image_payloads(committed),
+            "value": _sanitize_media_for_persistence(committed),
             "changed": True,
         }
 

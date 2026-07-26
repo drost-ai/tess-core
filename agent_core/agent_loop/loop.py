@@ -32,19 +32,30 @@ from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithR
 from ..subagent_contract import filter_tools_for_subagent
 from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
+from .._transient_input import createTransientExecutionSession as _create_transient_execution_session
+from .._transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
+from .._transient_input import syncTransientExecutionSession as _sync_transient_execution_session
 from ..tool_attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
     resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
     stripInMemoryImageData as _strip_in_memory_image_data,
 )
-
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
-    session = values["session"]
-    assertAgentRuntimeBindings(values.get("runtime"), session.get("id"))
+    canonical_session = values["session"]
+    assertAgentRuntimeBindings(values.get("runtime"), canonical_session.get("id"))
     config = values["config"]
     paths = resolveRuntimePaths(candidate=config.get("runtimeHome")) if config.get("runtimeHome") else getActiveRuntimePaths()
-    return await runWithRuntimePaths(paths, lambda: _runAgentPromptInScope(values))
+    execution_session = _create_transient_execution_session(
+        canonical_session,
+        values.get("transientInputOverlay"),
+    )
+    values["session"] = execution_session
+    try:
+        return await runWithRuntimePaths(paths, lambda: _runAgentPromptInScope(values))
+    finally:
+        if execution_session is not canonical_session:
+            _sync_transient_execution_session(canonical_session, execution_session)
 
 
 async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
@@ -54,7 +65,9 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     prompt_content, prompt_text = _normalize_agent_prompt(args["prompt"])
     runtime_bindings = args.get("runtime")
     assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
-    runtime = materializeAgentExecutionRuntime(runtime_bindings)
+    runtime = _runtime_with_sanitized_events(
+        materializeAgentExecutionRuntime(runtime_bindings)
+    )
     provider_override = args.get("providerOverride")
     authority = await enforceSessionAgentAuthority(session=session, config=config)
     repair = repairSessionTranscript(session)

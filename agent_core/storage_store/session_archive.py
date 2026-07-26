@@ -4,6 +4,7 @@ import copy
 from pathlib import Path
 from typing import Any
 
+from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
 from .shared import *
 
@@ -49,12 +50,14 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
             recovered = _rebuild_session_from_transcript_archive(sessionId)
             if recovered is None:
                 return {"record": None, "changed": False, "reason": None}
-            await writeJsonFile(path, _redact_persisted_image_payloads(recovered))
-            return {"record": recovered, "changed": True, "reason": "archive_recovery"}
+            safe_recovered = _sanitize_media_for_persistence(recovered)
+            await writeJsonFile(path, safe_recovered)
+            return {"record": safe_recovered, "changed": True, "reason": "archive_recovery"}
         result = await _reconcile_session_record(sessionId, record)
+        safe_record = _sanitize_media_for_persistence(result["record"])
         if result["changed"]:
-            await writeJsonFile(path, _redact_persisted_image_payloads(result["record"]))
-        return result
+            await writeJsonFile(path, safe_record)
+        return {**result, "record": safe_record}
 
 
 async def loadSession(sessionId: str) -> SessionRecord | None:

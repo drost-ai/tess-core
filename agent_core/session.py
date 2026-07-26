@@ -5,6 +5,7 @@ import os
 import re
 from typing import Any
 
+from ._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ._utils import now_iso
 from .session_fork import createForkArchiveHeader, createForkedSession
 from .storage import (
@@ -15,7 +16,6 @@ from .storage import (
     loadSession,
     mutateSessionRecordTransaction,
 )
-from .tool_attachments import stripInMemoryImageData as _strip_in_memory_image_data
 from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
 
@@ -51,11 +51,10 @@ async def persistSession(
     config: dict[str, Any],
     options: dict[str, Any] | None = None,
     **kwargs: Any,
-) -> None:
+) -> dict[str, Any] | None:
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
-        return
-    snapshot = copy.deepcopy(session)
-    snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
+        return None
+    snapshot = _sanitize_media_for_persistence(session)
     repair = repairSessionTranscript(snapshot)
     await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
     persist_options = {**(options or {}), **kwargs}
@@ -65,6 +64,7 @@ async def persistSession(
     snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed)
+    return copy.deepcopy(committed["session"])
 
 
 async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any], failure: dict[str, Any]) -> None:
@@ -73,8 +73,7 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     metadata = session.setdefault("metadata", {})
     metadata["providerFailureCount"] = metadata.get("providerFailureCount", 0) + 1
     metadata["lastProviderFailure"] = copy.deepcopy(failure)
-    snapshot = copy.deepcopy(session)
-    snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
+    snapshot = _sanitize_media_for_persistence(session)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed)
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_failure", "session_id": session["id"], "persisted_at": now_iso(), "failure": failure}])
@@ -84,8 +83,7 @@ async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
-    snapshot = copy.deepcopy(session)
-    snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
+    snapshot = _sanitize_media_for_persistence(session)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed)
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])

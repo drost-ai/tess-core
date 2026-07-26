@@ -6,6 +6,7 @@ import hashlib
 import re
 from typing import Any
 
+from ._media_persistence import sanitizeMediaForPersistence
 from .config_store.shared import (
     DEFAULT_IMAGE_INPUT_MIME_TYPES,
     DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
@@ -17,7 +18,7 @@ from .config_store.shared import (
     MAX_PROVIDER_IMAGE_INPUT_BYTES,
     MAX_PROVIDER_IMAGE_INPUT_COUNT,
 )
-from .image_budget import admitImageMessages, estimateEncodedImageRequestBytes, measureCanonicalBase64
+from .image_budget import admitImageMessages, estimateEncodedImageRequestBytes
 
 
 _IMAGE_READ_PATH_PATTERN = re.compile(r"\.(?:gif|jpe?g|png|webp)$", re.IGNORECASE)
@@ -170,35 +171,7 @@ def persistedImagePlaceholderText(mediaType: str, byteLength: int) -> str:
 
 
 def stripInMemoryImageData(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    output: list[dict[str, Any]] = []
-    for raw_message in messages:
-        message = copy.deepcopy(raw_message)
-        content = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(content, list):
-            output.append(message)
-            continue
-        blocks: list[Any] = []
-        for block in content:
-            if not isinstance(block, dict) or str(block.get("type") or "").lower() != "image":
-                blocks.append(block)
-                continue
-            source = block.get("source") if isinstance(block.get("source"), dict) else block
-            mime_type = str(
-                source.get("media_type")
-                or source.get("mime_type")
-                or source.get("mimeType")
-                or source.get("mime")
-                or "image/unknown"
-            )
-            data = source.get("data") or source.get("data_base64") or source.get("base64")
-            try:
-                byte_length = measureCanonicalBase64(data)
-            except Exception:
-                byte_length = 0
-            blocks.append({"type": "text", "text": persistedImagePlaceholderText(mime_type, byte_length)})
-        message["content"] = blocks
-        output.append(message)
-    return output
+    return sanitizeMediaForPersistence(messages)
 
 
 def _normalize_mime_types(values: list[Any]) -> list[str]:
