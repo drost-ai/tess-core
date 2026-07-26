@@ -139,10 +139,81 @@
         "estimatedFixedInputTokens": "<token-estimate>",
         "estimatedImageInputTokens": "<token-estimate>",
         "estimatedMessageInputTokens": "<token-estimate>",
+        "exactCountFallback": false,
         "inputTokens": "<token-estimate>",
         "measuredAt": "<timestamp>",
         "model": "gpt-5.4",
         "provider": "openai",
+        "requestPreflight": {
+          "admission": {
+            "compactionTargetTokens": "<token-estimate>",
+            "compactionThresholdTokens": "<token-estimate>",
+            "configuredMaxOutputTokens": "<token-estimate>",
+            "effectiveMaxOutputTokens": "<token-estimate>",
+            "minimumUsefulOutputTokens": "<token-estimate>",
+            "outputBudgetClamped": false,
+            "reason": null,
+            "remainingHeadroomTokens": "<token-estimate>",
+            "remainingOutputTokens": "<token-estimate>",
+            "status": "ready"
+          },
+          "categories": {
+            "checkpoint": "<token-estimate>",
+            "continuationOverlays": "<token-estimate>",
+            "currentMedia": "<token-estimate>",
+            "currentText": "<token-estimate>",
+            "pendingToolResults": "<token-estimate>",
+            "protocolOverhead": "<token-estimate>",
+            "recentHistory": "<token-estimate>",
+            "selectedSkills": "<token-estimate>",
+            "systemIdentity": "<token-estimate>",
+            "toolDefinitions": "<token-estimate>",
+            "unattributed": "<token-estimate>"
+          },
+          "compaction": {
+            "cutoffMessageIndex": 0,
+            "generation": 0,
+            "outcome": null,
+            "outcomeReason": null,
+            "reliefApplied": false,
+            "reliefMode": "none"
+          },
+          "measurement": {
+            "baseInputTokens": "<token-estimate>",
+            "componentEstimateTokens": "<token-estimate>",
+            "exactCountFallback": false,
+            "inputTokens": "<token-estimate>",
+            "measuredAt": "<timestamp>",
+            "measurementDeltaTokens": "<token-estimate>",
+            "safetyMarginTokens": null,
+            "source": "openai_responses_estimate"
+          },
+          "model": "gpt-5.4",
+          "profile": "openai",
+          "provenance": {
+            "continuationSegments": {
+              "checkpointTokens": "<token-estimate>",
+              "continuationOverlayTokens": "<token-estimate>",
+              "reliefTokens": "<token-estimate>",
+              "retrievedMemoryTokens": "<token-estimate>",
+              "status": "measured"
+            },
+            "currentTurn": {
+              "messageIndex": null,
+              "status": "inferred",
+              "trusted": false,
+              "turnIdHash": null
+            },
+            "selectedSkills": {
+              "reason": "not_provided",
+              "status": "unknown",
+              "trusted": false
+            }
+          },
+          "provider": "openai",
+          "requestFingerprint": "<request-fingerprint>",
+          "schemaVersion": 1
+        },
         "safetyMarginTokens": null,
         "source": "openai_responses_estimate"
       }

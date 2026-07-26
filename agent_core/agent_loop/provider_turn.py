@@ -94,6 +94,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                     "prompt": args["prompt"],
                     "reactiveAttempt": reactive_attempt,
                     "providerRequestOptions": args.get("providerRequestOptions") or {},
+                    "requestPreflightHints": args.get("requestPreflightHints") or {},
                     "deadlines": deadlines,
                 }
             )

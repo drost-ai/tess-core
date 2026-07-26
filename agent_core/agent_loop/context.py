@@ -6,9 +6,15 @@ import json
 from .shared import *
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
 from .context_budget import (
+    applyProviderTokenBudget as _apply_provider_token_budget,
     assessContextHeadroom as _assess_context_headroom,
     enforceContextHeadroom as _enforce_context_headroom,
     headroomEventPayload as _headroom_event_payload,
+)
+from ..context.request_preflight import (
+    buildRequestPreflight as _build_request_preflight,
+    imageMeasurementEventFields as _image_measurement_event_fields,
+    preflightEventPayload as _preflight_event_payload,
 )
 from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
 from ..providers.prompt_cache import resolvePromptCachePolicy
@@ -114,6 +120,26 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "compaction.headroom",
             _headroom_event_payload(session["id"], headroom),
         )
+        preflight = _build_request_preflight(
+            request=request,
+            measurement=measurement,
+            outputBudget=budget,
+            contextBudget=headroom,
+            continuation=request_context,
+            session=session,
+            baseSystemPrompt=base_system_prompt,
+            preflightHints=args.get("requestPreflightHints"),
+            dynamicContextInMessages=_dynamic_context_belongs_in_messages(config),
+            compactionOutcome=last_compaction_outcome,
+            providerProfileName=config.get("providerProfileName"),
+        )
+        measurement["requestPreflight"] = preflight
+        recordPreflightTokenMeasurement(session, measurement)
+        _safe_emit(
+            runtime,
+            "provider.request_preflight",
+            _preflight_event_payload(session["id"], preflight),
+        )
         _enforce_context_headroom(config=config, assessment=headroom)
         request = _apply_provider_token_budget(request, budget, config)
         prepared_request = {
@@ -123,7 +149,6 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "contextBudget": headroom,
             "unsupportedImageInputs": unsupported_image_inputs,
         }
-        recordPreflightTokenMeasurement(session, measurement)
         _safe_emit(
             runtime,
             "provider.input_tokens",
@@ -219,8 +244,27 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         compactionOutcome=last_compaction_outcome,
     )
     _safe_emit(runtime, "compaction.headroom", _headroom_event_payload(session["id"], headroom))
-    _enforce_context_headroom(config=config, assessment=headroom)
+    preflight = _build_request_preflight(
+        request=request,
+        measurement=measurement,
+        outputBudget=budget,
+        contextBudget=headroom,
+        continuation=request_context,
+        session=session,
+        baseSystemPrompt=base_system_prompt,
+        preflightHints=args.get("requestPreflightHints"),
+        dynamicContextInMessages=_dynamic_context_belongs_in_messages(config),
+        compactionOutcome=last_compaction_outcome,
+        providerProfileName=config.get("providerProfileName"),
+    )
+    measurement["requestPreflight"] = preflight
     recordPreflightTokenMeasurement(session, measurement)
+    _safe_emit(
+        runtime,
+        "provider.request_preflight",
+        _preflight_event_payload(session["id"], preflight),
+    )
+    _enforce_context_headroom(config=config, assessment=headroom)
     return {
         "request": _apply_provider_token_budget(request, budget, config),
         "continuity": request_context,
@@ -228,32 +272,6 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         "contextBudget": headroom,
         "unsupportedImageInputs": unsupported_image_inputs,
     }
-
-
-def _apply_provider_token_budget(request: dict[str, Any], budget: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
-    if budget.get("insufficient"):
-        raise createProviderRequestError(
-            createProviderFailureRecord(
-                {
-                    "provider": config.get("provider"),
-                    "providerLabel": config.get("providerProfileName"),
-                    "phase": "request_build",
-                    "category": "client_request",
-                    "retryable": False,
-                    "attempt": 1,
-                    "hadAssistantOutput": False,
-                    "hadToolUse": False,
-                    "rawMessage": (
-                        f"Provider profile '{config.get('providerProfileName')}' has maxContextLength={budget.get('maxContextLength')}, "
-                        f"estimated input tokens={budget.get('estimatedInputTokens')}, safety margin={budget.get('safetyMarginTokens')}, "
-                        f"and only {budget.get('remainingOutputTokens')} output tokens remaining. "
-                        f"At least {budget.get('minUsefulOutputTokens')} output tokens are required before dispatch."
-                    ),
-                }
-            )
-        )
-    return {**request, "maxOutputTokens": budget.get("effectiveMaxOutputTokens")}
-
 
 def _dynamic_context_belongs_in_messages(config: dict[str, Any]) -> bool:
     return bool(resolvePromptCachePolicy(config=config).get("enabled"))
@@ -278,19 +296,6 @@ def _admit_request_images(
             emitEvent=lambda event, data: _safe_emit(runtime, event, data),
             sessionId=session_id,
         ),
-    }
-
-
-def _image_measurement_event_fields(measurement: dict[str, Any]) -> dict[str, Any]:
-    if not measurement.get("imageCount"):
-        return {}
-    return {
-        "image_count": measurement["imageCount"],
-        "image_decoded_bytes": measurement.get("imageDecodedBytes"),
-        "image_encoded_request_bytes": measurement.get("imageEncodedRequestBytes"),
-        "image_input_tokens": measurement.get("imageInputTokens"),
-        "image_set_fingerprint": measurement.get("imageSetFingerprint"),
-        "image_measurements": measurement.get("imageMeasurements"),
     }
 
 

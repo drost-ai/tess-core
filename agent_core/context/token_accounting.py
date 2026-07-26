@@ -48,7 +48,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
             )
             return {
                 "inputTokens": input_tokens,
-                "source": "anthropic_count",
+                "source": "anthropic_count", "exactCountFallback": False,
                 "measuredAt": measured_at,
                 "provider": "anthropic",
                 "model": request["model"],
@@ -71,7 +71,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
                 "inputTokens": estimate,
                 "baseInputTokens": base_estimate,
                 "safetyMarginTokens": DEFAULT_ESTIMATE_MARGIN_TOKENS,
-                "source": "legacy_estimate",
+                "source": "legacy_estimate", "exactCountFallback": True,
                 "measuredAt": measured_at,
                 "provider": "anthropic",
                 "model": request["model"],
@@ -97,7 +97,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
             )
             return {
                 "inputTokens": exact,
-                "source": "openai_exact",
+                "source": "openai_exact", "exactCountFallback": False,
                 "measuredAt": measured_at,
                 "provider": "openai",
                 "model": request["model"],
@@ -136,7 +136,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
         "inputTokens": base + margin,
         "baseInputTokens": base,
         "safetyMarginTokens": margin or None,
-        "source": _openai_estimate_source(mode),
+        "source": _openai_estimate_source(mode), "exactCountFallback": exact_count_fallback,
         "measuredAt": measured_at,
         "provider": "openai",
         "model": request["model"],

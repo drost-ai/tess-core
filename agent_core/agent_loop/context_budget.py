@@ -83,6 +83,38 @@ def enforceContextHeadroom(
     )
 
 
+def applyProviderTokenBudget(
+    request: dict[str, Any],
+    budget: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    if budget.get("insufficient"):
+        raise createProviderRequestError(
+            createProviderFailureRecord(
+                {
+                    "provider": config.get("provider"),
+                    "providerLabel": config.get("providerProfileName"),
+                    "phase": "request_build",
+                    "category": "client_request",
+                    "retryable": False,
+                    "attempt": 1,
+                    "hadAssistantOutput": False,
+                    "hadToolUse": False,
+                    "rawMessage": (
+                        f"Provider profile '{config.get('providerProfileName')}' "
+                        f"has maxContextLength={budget.get('maxContextLength')}, "
+                        f"estimated input tokens={budget.get('estimatedInputTokens')}, "
+                        f"safety margin={budget.get('safetyMarginTokens')}, and only "
+                        f"{budget.get('remainingOutputTokens')} output tokens remaining. "
+                        f"At least {budget.get('minUsefulOutputTokens')} output tokens "
+                        "are required before dispatch."
+                    ),
+                }
+            )
+        )
+    return {**request, "maxOutputTokens": budget.get("effectiveMaxOutputTokens")}
+
+
 def headroomEventPayload(
     session_id: str,
     assessment: dict[str, Any],

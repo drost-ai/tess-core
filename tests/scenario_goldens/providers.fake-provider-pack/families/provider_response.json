@@ -55,6 +55,7 @@
       "estimatedFixedInputTokens": "<token-estimate>",
       "estimatedImageInputTokens": "<token-estimate>",
       "estimatedMessageInputTokens": "<token-estimate>",
+      "exactCountFallback": false,
       "inputTokens": 77,
       "measuredAt": "<timestamp>",
       "model": "claude-sonnet-4-6",

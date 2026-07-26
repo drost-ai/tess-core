@@ -107,6 +107,29 @@ class NormalizationContext:
             for key in value:
                 if "tokens" in key.lower():
                     value[key] = "<token-estimate>"
+        if key_path and key_path[-1] == "categories" and _is_request_preflight_categories(value):
+            for key in value:
+                value[key] = "<token-estimate>"
+        if key_path and key_path[-1] == "admission":
+            for key in (
+                "compactionTargetTokens",
+                "compactionThresholdTokens",
+                "configuredMaxOutputTokens",
+                "effectiveMaxOutputTokens",
+                "minimumUsefulOutputTokens",
+                "remainingHeadroomTokens",
+                "remainingOutputTokens",
+            ):
+                if key in value:
+                    value[key] = "<token-estimate>"
+        if "componentEstimateTokens" in value:
+            for key in value:
+                if key.lower().endswith("tokens") and isinstance(value[key], int):
+                    value[key] = "<token-estimate>"
+        if key_path and key_path[-1] == "continuationSegments":
+            for key in value:
+                if key.lower().endswith("tokens"):
+                    value[key] = "<token-estimate>"
         for key in ("elapsed_ms_since_last_checkpoint", "elapsedMsSinceLastCheckpoint"):
             if key in value:
                 value[key] = "<duration-ms>"
@@ -155,6 +178,10 @@ class NormalizationContext:
         normalized = self._replace_localhost_ports(normalized)
         key = key_path[-1].lower() if key_path else ""
         canonical_key = key.replace("_", "")
+        if canonical_key == "requestfingerprint" and _SHA256_PATTERN.fullmatch(normalized):
+            return "<request-fingerprint>"
+        if canonical_key == "turnidhash" and _SHA256_PATTERN.fullmatch(normalized):
+            return "<turn-id-hash>"
         if _SHA256_PATTERN.fullmatch(normalized):
             if canonical_key == "specdigest":
                 return self._placeholder(
@@ -257,6 +284,22 @@ def _is_estimated_token_record(value: dict[str, Any]) -> bool:
         value.get("measurement_source"),
     )
     return "openai_responses_estimate" in sources
+
+
+def _is_request_preflight_categories(value: dict[str, Any]) -> bool:
+    return {
+        "systemIdentity",
+        "selectedSkills",
+        "toolDefinitions",
+        "checkpoint",
+        "continuationOverlays",
+        "recentHistory",
+        "currentText",
+        "currentMedia",
+        "pendingToolResults",
+        "protocolOverhead",
+        "unattributed",
+    }.issubset(value)
 
 
 def _is_token_estimate_key(key: str) -> bool:

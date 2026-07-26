@@ -32,12 +32,19 @@ async def buildContinuationContext(args: dict[str, Any] | None = None, **kwargs:
         for part in (compaction_context, continuation_overlay, memory_prompt, relief_prompt)
         if isinstance(part, str) and part.strip()
     ) or None
+    preflight_segments = {
+        "checkpointTokens": estimateTextTokens(compaction_context or ""),
+        "continuationOverlayTokens": estimateTextTokens(continuation_overlay or ""),
+        "retrievedMemoryTokens": estimateTextTokens(memory_prompt or ""),
+        "reliefTokens": estimateTextTokens(relief_prompt or ""),
+    }
     return {
         "systemContext": system_context,
         "messages": relief["messages"],
         "pressure": classifyContextPressure({"session": session, "messages": relief["messages"], "systemContext": system_context}),
         "retrievedMemory": retrieved_memory,
         "relief": relief["summary"],
+        "preflightSegments": preflight_segments,
     }
 
 
