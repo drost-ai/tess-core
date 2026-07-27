@@ -17,6 +17,7 @@ from ..storage import (
 from .terminal_transitions import (
     applyDeliberateTaskStop,
     applyTaskProcessCompletion,
+    normalizeTaskProcessOutcome,
     resolveTaskSemanticStatus,
     toTaskStopResult,
 )
@@ -161,6 +162,7 @@ async def commitTaskProcessCompletion(
     signalName: str | None,
     error: str | None = None,
 ) -> dict[str, Any]:
+    code, signalName = normalizeTaskProcessOutcome(code, signalName)
     async with withRecordTransaction("task-lifecycle", taskId):
         record = await loadTaskRecord(taskId)
         meta = await readTaskMeta(taskId)

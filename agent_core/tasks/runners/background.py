@@ -13,7 +13,11 @@ from typing import Any
 
 from ..._utils import now_iso
 from ...storage import configureRuntimeHome, readTaskMeta, writeTaskMeta
-from ..terminal_transitions import applyTaskProcessCompletion, resolveTaskSemanticStatus
+from ..terminal_transitions import (
+    applyTaskProcessCompletion,
+    normalizeTaskProcessOutcome,
+    resolveTaskSemanticStatus,
+)
 
 
 async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
@@ -62,11 +66,14 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
                 },
                 meta_path,
             )
-            exit_code = process.wait()
+            raw_exit_code = process.wait()
 
         current = await _read_runner_meta(task_id, meta_path)
         now = now_iso()
-        signal_name = _exit_signal_name(exit_code)
+        exit_code, signal_name = normalizeTaskProcessOutcome(
+            raw_exit_code,
+            _exit_signal_name(raw_exit_code),
+        )
         transition = applyTaskProcessCompletion(
             current=resolveTaskSemanticStatus(current.get("status")),
             code=exit_code,

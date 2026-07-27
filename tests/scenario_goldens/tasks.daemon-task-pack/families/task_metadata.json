@@ -49,7 +49,7 @@
     "cwd": "<workspace>",
     "description": "scenario stoppable",
     "detailStatus": "stopped_by_request",
-    "exitCode": -15,
+    "exitCode": null,
     "finishedAt": "<timestamp>",
     "id": "<uuid:6>",
     "launchReservation": {

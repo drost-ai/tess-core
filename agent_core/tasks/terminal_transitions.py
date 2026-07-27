@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import signal
 from typing import Any
 
 
@@ -13,6 +15,18 @@ def resolveTaskSemanticStatus(*statuses: Any) -> str:
         if normalized in {"stopped", "terminated", "cancelled"}:
             return "stopped"
     return "running"
+
+
+def normalizeTaskProcessOutcome(
+    code: int | None,
+    signalName: str | None,
+) -> tuple[int | None, str | None]:
+    resolved_signal = signalName
+    if not resolved_signal and isinstance(code, int) and code < 0:
+        with contextlib.suppress(Exception):
+            resolved_signal = signal.Signals(-code).name
+        resolved_signal = resolved_signal or f"SIG{-code}"
+    return (None if resolved_signal else code), resolved_signal
 
 
 def applyDeliberateTaskStop(current: str) -> dict[str, Any]:
@@ -122,3 +136,4 @@ resolve_task_semantic_status = resolveTaskSemanticStatus
 apply_deliberate_task_stop = applyDeliberateTaskStop
 apply_task_process_completion = applyTaskProcessCompletion
 to_task_stop_result = toTaskStopResult
+normalize_task_process_outcome = normalizeTaskProcessOutcome

@@ -346,6 +346,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                     meta = run(core.readTaskMeta(task_id))
                     self.assertEqual(meta["status"], expected_status)
                     self.assertEqual(meta["terminalEventOwner"], expected_owner)
+                    self.assertIsNone(meta.get("exitCode"))
                     if intent:
                         self.assertEqual(
                             meta["terminalTransitionId"], intent["transitionId"]
