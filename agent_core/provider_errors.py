@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import math
 import random
 import re
+from collections.abc import Mapping as _Mapping
 from typing import Any
 
 import typing as _typing
@@ -176,6 +178,51 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
                 "streamEventType": args.get("streamEventType"),
             }
         )
+    sdk_stream = _extract_openai_sdk_stream_error(error)
+    if sdk_stream is not None:
+        status = sdk_stream.get("status")
+        if isinstance(status, int) and not isinstance(status, bool):
+            return classifyProviderHttpFailure(
+                {
+                    "provider": args["provider"],
+                    "providerLabel": args["providerLabel"],
+                    "phase": args["phase"],
+                    "attempt": args["attempt"],
+                    "hadAssistantOutput": args["hadAssistantOutput"],
+                    "hadToolUse": args["hadToolUse"],
+                    "status": status,
+                    "body": sdk_stream.get("body"),
+                    "errorType": sdk_stream.get("errorType"),
+                    "code": sdk_stream.get("code"),
+                    "streamEventType": (
+                        args.get("streamEventType")
+                        or sdk_stream.get("streamEventType")
+                    ),
+                }
+            )
+        category = _classify_openai_sdk_stream_error(sdk_stream)
+        return createProviderRequestError(
+            createProviderFailureRecord(
+                {
+                    "provider": args["provider"],
+                    "providerLabel": args["providerLabel"],
+                    "phase": args["phase"],
+                    "category": category,
+                    "retryable": category in {"rate_limit", "timeout", "server"},
+                    "attempt": args["attempt"],
+                    "hadAssistantOutput": args["hadAssistantOutput"],
+                    "hadToolUse": args["hadToolUse"],
+                    "rawMessage": raw,
+                    "rawBody": sdk_stream.get("body"),
+                    "errorType": sdk_stream.get("errorType"),
+                    "code": sdk_stream.get("code"),
+                    "streamEventType": (
+                        args.get("streamEventType")
+                        or sdk_stream.get("streamEventType")
+                    ),
+                }
+            )
+        )
     category = "unknown"
     retryable = False
     if _looks_like_timeout(lower):
@@ -288,6 +335,76 @@ def _looks_like_protocol(message: str) -> bool:
 
 def _looks_like_auth(message: str) -> bool:
     return bool(re.search(r"unauthorized|forbidden|invalid api key|authentication|auth token|insufficient permissions?|missing scopes?|insufficient_scope|permission denied", message))
+
+
+def _extract_openai_sdk_stream_error(error: BaseException) -> dict[str, Any] | None:
+    error_type = type(error)
+    module = str(getattr(error_type, "__module__", "") or "")
+    if not module.startswith("openai"):
+        return None
+
+    raw_body = getattr(error, "body", None)
+    status = getattr(error, "status_code", None)
+    code = getattr(error, "code", None)
+    sdk_error_type = getattr(error, "type", None)
+    if isinstance(raw_body, _Mapping):
+        nested = raw_body.get("error")
+        body_fields = nested if isinstance(nested, _Mapping) else raw_body
+        code = code or body_fields.get("code")
+        sdk_error_type = sdk_error_type or body_fields.get("type")
+    body = _serialize_provider_diagnostic_body(raw_body)
+    return {
+        "status": (
+            status
+            if isinstance(status, int) and not isinstance(status, bool)
+            else None
+        ),
+        "body": body,
+        "code": _optional_provider_diagnostic_scalar(code),
+        "errorType": _optional_provider_diagnostic_scalar(sdk_error_type),
+        "streamEventType": "error",
+    }
+
+
+def _serialize_provider_diagnostic_body(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        rendered = value
+    else:
+        try:
+            rendered = json.dumps(value, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            rendered = str(value)
+    rendered = rendered.strip()
+    if not rendered:
+        return None
+    return _bound_diagnostic_text(rendered, 4_000)
+
+
+def _optional_provider_diagnostic_scalar(value: Any) -> str | None:
+    if value is None:
+        return None
+    rendered = str(value).strip()
+    return _bound_diagnostic_text(rendered, 256) if rendered else None
+
+
+def _classify_openai_sdk_stream_error(details: dict[str, Any]) -> str:
+    text = " ".join(
+        str(details.get(key) or "")
+        for key in ("body", "errorType", "code")
+    ).lower()
+    if _looks_like_quota(text):
+        return "quota"
+    if "rate" in text and ("limit" in text or "exceed" in text):
+        return "rate_limit"
+    if _looks_like_timeout(text):
+        return "timeout"
+    if _looks_like_auth(text):
+        return "auth"
+    if re.search(r"invalid[_ -]?request|bad request|unsupported|not found", text):
+        return "client_request"
+    return "server"
 
 
 def _looks_like_quota(message: str) -> bool:
