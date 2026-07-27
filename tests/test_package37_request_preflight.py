@@ -147,6 +147,100 @@ def _receipt_fixture(
     )
 
 
+def _production_sized_preflight_fixture() -> dict:
+    system = "s" * 91_407
+    messages = [
+        {
+            "role": "user" if index % 2 == 0 else "assistant",
+            "content": f"history-{index:03d}-" + ("m" * 420),
+        }
+        for index in range(248)
+    ]
+    messages[-1] = {
+        "role": "user",
+        "metadata": {"host": {"turn_id": "production-turn"}},
+        "content": "current request " + ("c" * 420),
+    }
+    tools = [
+        {
+            "name": f"production_tool_{index:02d}",
+            "description": "d" * 500,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "value": {"type": "string", "description": "v" * 120},
+                },
+            },
+        }
+        for index in range(45)
+    ]
+    request = {
+        "model": "gpt-5.6-sol",
+        "effort": "xhigh",
+        "system": system,
+        "messages": messages,
+        "tools": tools,
+    }
+    target_chars = 268_953
+    encoded_chars = len(
+        json.dumps(request, ensure_ascii=False, separators=(",", ":"))
+    )
+    assert encoded_chars < target_chars
+    messages[-1]["content"] += "p" * (target_chars - encoded_chars)
+    assert (
+        len(json.dumps(request, ensure_ascii=False, separators=(",", ":")))
+        == target_chars
+    )
+    return {
+        "request": request,
+        "measurement": {
+            "inputTokens": 67_239,
+            "baseInputTokens": 67_000,
+            "safetyMarginTokens": 239,
+            "source": "production_fixture",
+            "measuredAt": "2026-07-26T00:00:00Z",
+            "provider": "openai",
+            "model": request["model"],
+            "estimatedFixedInputTokens": 28_000,
+            "estimatedMessageInputTokens": 39_000,
+            "estimatedImageInputTokens": 0,
+        },
+        "outputBudget": {
+            "configuredMaxOutputTokens": 128_000,
+            "effectiveMaxOutputTokens": 128_000,
+            "minUsefulOutputTokens": 256,
+            "remainingOutputTokens": 128_000,
+            "clamped": False,
+        },
+        "contextBudget": {
+            "status": "ready",
+            "reason": None,
+            "compactionThresholdTokens": 200_000,
+            "compactionTargetTokens": 150_000,
+            "remainingHeadroomTokens": 132_761,
+        },
+        "continuation": {
+            "systemContext": "",
+            "preflightSegments": {},
+            "relief": {"selectedMode": "none", "applied": False},
+        },
+        "session": {
+            "id": "production-session",
+            "messages": messages,
+            "metadata": {"compactionState": {}},
+        },
+        "baseSystemPrompt": system,
+        "preflightHints": {
+            "systemPromptHash": hashlib.sha256(system.encode()).hexdigest(),
+            "selectedSkillChars": 12_000,
+            "currentTurnId": "production-turn",
+            "currentMessageIndex": 247,
+        },
+        "dynamicContextInMessages": True,
+        "providerProfileName": "codex",
+    }
+
+
 class Package37RequestPreflightTests(AgentCoreTestCase):
     def test_receipt_is_bounded_content_free_and_exhaustively_accounted(self):
         receipt = _receipt_fixture()
@@ -201,10 +295,14 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
         self.assertNotIn("sentinel", json.dumps(payload))
 
     def test_production_sized_projection_is_linear_and_below_gate(self):
+        fixture = _production_sized_preflight_fixture()
+        self.assertEqual(len(fixture["request"]["messages"]), 248)
+        self.assertEqual(len(fixture["request"]["tools"]), 45)
+        self.assertEqual(len(fixture["baseSystemPrompt"]), 91_407)
         samples = []
         for _ in range(30):
             started = time.perf_counter()
-            _receipt_fixture(history_pairs=50, history_chars=8_000)
+            buildRequestPreflight(**fixture)
             samples.append(time.perf_counter() - started)
         p95 = sorted(samples)[int(len(samples) * 0.95) - 1]
         self.assertLess(p95, 0.250)
