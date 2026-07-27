@@ -3,11 +3,11 @@ from __future__ import annotations
 import copy
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from ..provider_turn_session import ProviderTurnSession, _close_resource
-
 
 _INTERNAL_ITEM_KEYS = {"_agent_core", "provider_metadata"}
 _TURN_STATE_HEADER = "x-codex-turn-state"
@@ -159,7 +159,10 @@ class OpenAiProviderTurnSession(ProviderTurnSession):
         self._last_full_replay_input = copy.deepcopy(
             _input_items(prepared.full_replay_params)
         )
-        self._last_output_items = copy.deepcopy(output_items)
+        self._last_output_items = _complete_replay_output_items(
+            output_items,
+            canonical_output_items,
+        )
         self._last_canonical_output = copy.deepcopy(canonical_output_items)
         self._last_response_id = (
             response_id.strip() or None if isinstance(response_id, str) else None
@@ -322,6 +325,42 @@ def _without_internal_metadata(value: Any) -> Any:
 def _input_items(params: dict[str, Any]) -> list[Any]:
     value = params.get("input")
     return value if isinstance(value, list) else []
+
+
+def _complete_replay_output_items(
+    output_items: list[Any],
+    canonical_output_items: list[Any],
+) -> list[Any]:
+    """Keep full replay executable when a terminal stream omits raw output.
+
+    Some Responses transports stream complete function-call items but leave the
+    terminal ``response.output`` collection empty.  The agent loop still has the
+    canonical assistant projection, so use it to fill only missing executable
+    items.  Raw reasoning and message items remain authoritative when present.
+    """
+
+    replay = copy.deepcopy(output_items)
+    raw_call_ids = {
+        str(item.get("call_id") or "")
+        for item in replay
+        if isinstance(item, dict) and item.get("type") == "function_call"
+    }
+    has_message = any(
+        isinstance(item, dict) and item.get("type") == "message" for item in replay
+    )
+    for item in canonical_output_items:
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type == "function_call":
+            call_id = str(item.get("call_id") or "")
+            if call_id and call_id not in raw_call_ids:
+                replay.append(copy.deepcopy(item))
+                raw_call_ids.add(call_id)
+        elif item_type == "message" and not has_message:
+            replay.append(copy.deepcopy(item))
+            has_message = True
+    return replay
 
 
 def _json_bytes(value: Any) -> int:
