@@ -76,6 +76,7 @@ _INTERNAL_MODULES = {
     "bridge_runtime",
     "bounded_io",
     "bounded_web_fetch",
+    "exception_groups",
     "image_budget",
     "mcp_payloads",
     "notebook_payload",

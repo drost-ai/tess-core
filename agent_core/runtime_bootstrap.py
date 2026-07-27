@@ -9,7 +9,7 @@ from ._utils import maybe_await
 from .agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from .collaboration import createCollaborationRuntime
 from .daemon import ensureTaskSupervisorDaemon
-from .exception_groups import RuntimeExceptionGroup
+from .exception_groups import RuntimeExceptionGroup as _RuntimeExceptionGroup
 from .lifecycle_barrier import createLifecycleBarrier
 from .mcp import createMcpRuntime
 from .monitors import createMonitorRuntime
@@ -292,7 +292,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                 await discard_prepared(prepared)
                 if superseded:
                     raise RuntimeActivationSupersededError(prepared["session"]["id"])
-                raise RuntimeExceptionGroup("Runtime session activation failed.", failures)
+                raise _RuntimeExceptionGroup("Runtime session activation failed.", failures)
 
             with state_lock:
                 active_binding = prepared["binding"]
@@ -445,7 +445,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             legacy_subscribers.clear()
             event_subscribers.clear()
             if failures:
-                raise RuntimeExceptionGroup(
+                raise _RuntimeExceptionGroup(
                     "One or more runtime components failed to close.",
                     failures,
                 )
@@ -456,7 +456,6 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                 {"cleanup": cleanup, "failAfterMs": BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS}
             ),
         )
-
     runtime_api.update(
         {
             "daemon": daemon,
