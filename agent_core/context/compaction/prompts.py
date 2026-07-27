@@ -160,7 +160,17 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def renderWorkingContextPromptContext(context: dict[str, Any]) -> str:
+def renderWorkingContextPromptContext(
+    context: dict[str, Any],
+    tokenLimit: int | None = None,
+) -> str:
+    rendered = _renderFullWorkingContextPromptContext(context)
+    if tokenLimit is None or estimateTextTokens(rendered) <= int(tokenLimit):
+        return rendered
+    return _renderBoundedWorkingContextPromptContext(context, int(tokenLimit))
+
+
+def _renderFullWorkingContextPromptContext(context: dict[str, Any]) -> str:
     session = context.get("session") or {}
     compaction = context.get("compaction") or {}
     project = context.get("project") or {}
@@ -227,6 +237,138 @@ def renderWorkingContextPromptContext(context: dict[str, Any]) -> str:
     appendPreservedTrace(lines, context)
     lines.append("</working_context>")
     return "\n".join(lines)
+
+
+def _renderBoundedWorkingContextPromptContext(
+    context: dict[str, Any],
+    token_limit: int,
+) -> str:
+    """Render an ephemeral, priority-ordered checkpoint projection.
+
+    The complete structured working-context artifact remains authoritative on
+    disk.  This projection exists only for one provider request when the full
+    checkpoint cannot fit inside the interactive request budget.
+    """
+
+    max_chars = max(1_200, int(token_limit) * 4)
+    reserve = len(
+        "\ncheckpoint_projection_omitted_lower_priority_context=true"
+        "\n</working_context>"
+    )
+    lines = [
+        "Archived working context from earlier turns is available below as a "
+        "bounded request projection.",
+        "The complete immutable checkpoint artifact remains authoritative. "
+        "Prefer recent raw turns when they conflict.",
+        "",
+        "<working_context>",
+    ]
+
+    def append_line(value: Any, *, item_limit: int = 1_200) -> None:
+        text = collapseWhitespace(value)
+        if not text:
+            return
+        text = truncate(text, item_limit)
+        used = len("\n".join(lines))
+        remaining = max_chars - used - reserve - 1
+        if remaining <= 0:
+            return
+        if len(text) > remaining:
+            text = truncate(text, remaining)
+        lines.append(text)
+
+    session = context.get("session") or {}
+    compaction = context.get("compaction") or {}
+    for key, value in (
+        ("session", context.get("sessionId")),
+        ("generation", context.get("generation")),
+        ("cwd", session.get("cwd")),
+        ("provider", session.get("provider")),
+        ("model", session.get("model")),
+        ("permission_mode", session.get("permissionMode")),
+        (
+            "compaction_model",
+            (
+                f"{compaction.get('provider')}:{compaction.get('model')}"
+                if compaction
+                else None
+            ),
+        ),
+    ):
+        if value is not None:
+            append_line(f"{key}={value}", item_limit=600)
+
+    project = context.get("project") or {}
+    facts = project.get("facts") or {}
+    goals = context.get("goals") or {}
+    current_state = context.get("currentState") or {}
+    activity = context.get("activity") or {}
+    todos = context.get("todos") or {}
+
+    sections = [
+        ("critical_context", context.get("criticalContext") or []),
+        ("active_goals", goals.get("active") or []),
+        ("constraints", goals.get("constraints") or []),
+        ("in_progress", current_state.get("inProgress") or []),
+        ("blocked", current_state.get("blocked") or []),
+        ("next_steps", context.get("nextSteps") or []),
+        ("decisions", context.get("decisions") or []),
+        ("discoveries", context.get("discoveries") or []),
+        (
+            "relevant_files",
+            [
+                _format_relevant_file_prompt(record)
+                for record in project.get("keyFiles", [])
+            ],
+        ),
+        ("open_todos", todos.get("open") or []),
+        ("recent_requests", goals.get("recentRequests") or []),
+        ("preferences", goals.get("preferences") or []),
+        ("completed", current_state.get("completed") or []),
+        ("project_evidence", facts.get("evidence") or []),
+        ("recent_failures", activity.get("failures") or []),
+        ("recent_commands", activity.get("commands") or []),
+        ("recent_searches", activity.get("searches") or []),
+        ("recent_web", activity.get("web") or []),
+    ]
+    for heading, entries in sections:
+        values = [entry for entry in entries if entry]
+        if not values:
+            continue
+        append_line(f"{heading}:", item_limit=200)
+        for entry in values:
+            before = len(lines)
+            append_line(f"- {entry}")
+            if len(lines) == before:
+                break
+
+    traces = context.get("preservedTrace") or []
+    if isinstance(traces, list):
+        for trace in traces:
+            if not isinstance(trace, dict):
+                continue
+            source_range = trace.get("sourceRange") or {}
+            append_line(
+                "preserved_trace "
+                f"source_start={source_range.get('start')} "
+                f"source_end={source_range.get('end')} "
+                f"messages={source_range.get('messageCount')}:",
+                item_limit=300,
+            )
+            append_line(trace.get("content") or "", item_limit=1_600)
+
+    # This renderer is called only when the full artifact exceeds token_limit,
+    # so the omission marker is authoritative even when every high-priority
+    # field happened to fit.
+    suffix = (
+        "\ncheckpoint_projection_omitted_lower_priority_context=true"
+        "\n</working_context>"
+    )
+    body = "\n".join(lines)
+    body_limit = max(1, max_chars - len(suffix))
+    if len(body) > body_limit:
+        body = truncate(body, body_limit)
+    return f"{body}{suffix}"
 
 
 def appendPreservedTrace(lines: list[str], context: dict[str, Any]) -> None:

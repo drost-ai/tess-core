@@ -11,6 +11,7 @@ def planInteractiveContextRelief(
     config: dict[str, Any],
     measurement: dict[str, Any],
     currentMessageThreshold: int | None,
+    projectionAttempt: int = 0,
 ) -> dict[str, Any]:
     policy = resolve_interactive_context_policy(
         config.get("providerProfile") or {}
@@ -38,6 +39,17 @@ def planInteractiveContextRelief(
             "messageThreshold": max(1, int(threshold) - effective_fixed),
             "messageTarget": max(1, int(target) - effective_fixed - 1_024),
         }
+    if (
+        currentMessageThreshold is not None
+        and input_tokens > int(target)
+        and projectionAttempt < 3
+    ):
+        return {
+            "action": "project",
+            "policy": policy,
+            "messageThreshold": currentMessageThreshold,
+            "messageTarget": max(1, int(target) - _effective_fixed(measurement) - 1_024),
+        }
     if currentMessageThreshold is not None and input_tokens > int(target):
         _raise_failure(
             config=config,
@@ -54,9 +66,11 @@ def interactiveReliefReceipt(
     originalInputTokens: int | None,
     projectedInputTokens: int,
     applied: bool,
+    attemptCount: int = 0,
+    checkpointProjection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     target = policy.get("contextReliefTargetTokens")
-    return {
+    receipt = {
         "applied": applied,
         "source": policy.get("reliefSource"),
         "thresholdTokens": policy.get("contextReliefThresholdTokens"),
@@ -65,6 +79,27 @@ def interactiveReliefReceipt(
         "projectedInputTokens": projectedInputTokens,
         "targetMet": target is None or projectedInputTokens <= int(target),
     }
+    if applied or attemptCount > 0:
+        projection = checkpointProjection or {}
+        receipt["attemptCount"] = max(0, int(attemptCount))
+        receipt["checkpointProjection"] = {
+            key: projection.get(key)
+            for key in (
+                "applied",
+                "targetTokens",
+                "originalTokens",
+                "projectedTokens",
+            )
+        }
+    return receipt
+
+
+def _effective_fixed(measurement: dict[str, Any]) -> int:
+    return max(
+        0,
+        int(measurement.get("inputTokens") or 0)
+        - int(measurement.get("estimatedMessageInputTokens") or 0),
+    )
 
 
 def raiseInteractiveContextConvergenceFailure(

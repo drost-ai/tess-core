@@ -6,7 +6,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ...provider_token_budget import resolveCompactionPolicy
-from ..compaction import buildCompactionSystemPromptContext, buildMessagesForWorkingContext
+from ..compaction import (
+    buildCompactionSystemPromptContext,
+    buildMessagesForWorkingContext,
+)
 from ..durable_memory import renderRetrievedMemoryPrompt, retrieveRelevantDurableMemory
 
 

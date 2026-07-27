@@ -57,26 +57,72 @@ def buildMessagesForWorkingContext(session: dict[str, Any]) -> list[dict[str, An
 
 
 async def buildCompactionSystemPromptContext(session: dict[str, Any]) -> str | None:
+    projection = await _buildCompactionSystemPromptProjection(session)
+    return projection["text"]
+
+
+async def _buildCompactionSystemPromptProjection(
+    session: dict[str, Any],
+    *,
+    tokenLimit: int | None = None,
+) -> dict[str, Any]:
     state = session.get("metadata", {}).get("compactionState")
     if not state:
-        return None
+        return {
+            "text": None,
+            "applied": False,
+            "targetTokens": tokenLimit,
+            "originalTokens": 0,
+            "projectedTokens": 0,
+        }
     artifacts = state.get("artifacts") or {}
     working_context = await loadWorkingContextArtifact(artifacts.get("workingContext"))
     if working_context:
-        return renderWorkingContextPromptContext(working_context)
-    summary_path = artifacts.get("summary")
-    summary = _read_text(summary_path).strip() if summary_path else ""
-    if not summary:
-        return None
-    return "\n".join(
-        [
-            "Archived working context from earlier turns and compacted portions of the current turn is available below.",
-            "Use it as authoritative background for earlier work and earlier compacted activity in this turn.",
-            "When it conflicts with the recent raw turns, prefer the recent raw turns.",
-            "",
-            summary,
-        ]
-    )
+        original = renderWorkingContextPromptContext(working_context)
+        projected = renderWorkingContextPromptContext(
+            working_context,
+            tokenLimit=tokenLimit,
+        )
+    else:
+        summary_path = artifacts.get("summary")
+        summary = _read_text(summary_path).strip() if summary_path else ""
+        if not summary:
+            return {
+                "text": None,
+                "applied": False,
+                "targetTokens": tokenLimit,
+                "originalTokens": 0,
+                "projectedTokens": 0,
+            }
+        original = "\n".join(
+            [
+                "Archived working context from earlier turns and compacted portions of the current turn is available below.",
+                "Use it as authoritative background for earlier work and earlier compacted activity in this turn.",
+                "When it conflicts with the recent raw turns, prefer the recent raw turns.",
+                "",
+                summary,
+            ]
+        )
+        if tokenLimit is None:
+            projected = original
+        else:
+            max_chars = max(1_200, int(tokenLimit) * 4)
+            omission = (
+                "\ncheckpoint_projection_omitted_lower_priority_context=true"
+            )
+            projected = (
+                f"{truncate(original, max(1, max_chars - len(omission)))}"
+                f"{omission}"
+            )
+    original_tokens = estimateTextTokens(original)
+    projected_tokens = estimateTextTokens(projected)
+    return {
+        "text": projected,
+        "applied": projected_tokens < original_tokens,
+        "targetTokens": tokenLimit,
+        "originalTokens": original_tokens,
+        "projectedTokens": projected_tokens,
+    }
 
 
 async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
