@@ -12,6 +12,10 @@ DEFAULT_COMPACTION_PRESERVATION_RATIO = 0.1
 DEFAULT_COMPACTION_HEADROOM_RATIO = 0.25
 DEFAULT_OUTPUT_BUDGET_SAFETY_MARGIN_TOKENS = 4_096
 MIN_USEFUL_PROVIDER_OUTPUT_TOKENS = 256
+DEFAULT_CODEX_CONTEXT_RELIEF_THRESHOLD_TOKENS = 64_000
+DEFAULT_CODEX_CONTEXT_RELIEF_TARGET_TOKENS = 48_000
+DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES = 24_000
+DEFAULT_CODEX_INLINE_TOOL_RESULT_TURN_BYTES = 64_000
 
 
 def normalize_positive_integer(value: Any) -> int | None:
@@ -74,6 +78,88 @@ def resolve_compaction_policy(input: dict[str, Any] | None = None) -> dict[str, 
         "outputSource": "default" if explicit_output is None else "explicit",
         "thresholdClamped": raw_threshold > limits["maxContextLength"],
         "outputClamped": raw_output > limits["maxOutputTokens"],
+    }
+
+
+def resolve_interactive_context_policy(input: dict[str, Any] | None = None) -> dict[str, Any]:
+    profile = input or {}
+    codex_profile = _is_codex_profile(profile)
+    relief_configured = any(
+        key in profile and profile.get(key) is not None
+        for key in ("contextReliefThresholdTokens", "contextReliefTargetTokens")
+    )
+    tool_budget_configured = any(
+        key in profile and profile.get(key) is not None
+        for key in ("inlineToolResultBatchBytes", "inlineToolResultTurnBytes")
+    )
+
+    threshold = _explicit_positive_integer(profile, "contextReliefThresholdTokens")
+    target = _explicit_positive_integer(profile, "contextReliefTargetTokens")
+    if codex_profile:
+        threshold = threshold or DEFAULT_CODEX_CONTEXT_RELIEF_THRESHOLD_TOKENS
+        target = target or DEFAULT_CODEX_CONTEXT_RELIEF_TARGET_TOKENS
+    elif relief_configured:
+        compaction = resolve_compaction_policy(profile)
+        threshold = threshold or int(compaction["compactionThresholdTokens"])
+        target = target or min(
+            int(compaction["compactionTargetTokens"]),
+            math.floor(threshold * 0.75),
+        )
+    if (threshold is None) != (target is None):
+        raise ValueError(
+            "contextReliefThresholdTokens and contextReliefTargetTokens must "
+            "resolve together"
+        )
+    if threshold is not None and (target is None or target >= threshold):
+        raise ValueError(
+            "contextReliefTargetTokens must be greater than zero and less than "
+            "contextReliefThresholdTokens"
+        )
+
+    batch_bytes = _explicit_positive_integer(profile, "inlineToolResultBatchBytes")
+    turn_bytes = _explicit_positive_integer(profile, "inlineToolResultTurnBytes")
+    if codex_profile:
+        batch_bytes = batch_bytes or DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES
+        turn_bytes = turn_bytes or DEFAULT_CODEX_INLINE_TOOL_RESULT_TURN_BYTES
+    elif tool_budget_configured:
+        batch_bytes = batch_bytes or DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES
+        turn_bytes = turn_bytes or max(
+            batch_bytes,
+            DEFAULT_CODEX_INLINE_TOOL_RESULT_TURN_BYTES,
+        )
+    if (batch_bytes is None) != (turn_bytes is None):
+        raise ValueError(
+            "inlineToolResultBatchBytes and inlineToolResultTurnBytes must "
+            "resolve together"
+        )
+    if batch_bytes is not None and turn_bytes is not None and turn_bytes < batch_bytes:
+        raise ValueError(
+            "inlineToolResultTurnBytes must be greater than or equal to "
+            "inlineToolResultBatchBytes"
+        )
+    return {
+        "contextReliefThresholdTokens": threshold,
+        "contextReliefTargetTokens": target,
+        "inlineToolResultBatchBytes": batch_bytes,
+        "inlineToolResultTurnBytes": turn_bytes,
+        "reliefSource": (
+            str(profile.get("reliefSource"))
+            if profile.get("reliefSource") in {"explicit", "codex_inferred"}
+            else "explicit"
+            if relief_configured
+            else "codex_inferred"
+            if codex_profile
+            else "disabled"
+        ),
+        "toolBudgetSource": (
+            str(profile.get("toolBudgetSource"))
+            if profile.get("toolBudgetSource") in {"explicit", "codex_inferred"}
+            else "explicit"
+            if tool_budget_configured
+            else "codex_inferred"
+            if codex_profile
+            else "disabled"
+        ),
     }
 
 
@@ -155,6 +241,21 @@ def _infer_model_token_limits(input: dict[str, Any]) -> dict[str, int] | None:
         if predicate(normalized):
             return {"maxContextLength": max_context, "maxOutputTokens": max_output}
     return None
+
+
+def _is_codex_profile(input: dict[str, Any]) -> bool:
+    profile_name = str(input.get("profileName") or input.get("name") or "").strip().lower()
+    api_mode = str(input.get("apiMode") or "").strip().lower()
+    return profile_name in {"codex", "openai-codex"} or api_mode == "codex"
+
+
+def _explicit_positive_integer(input: dict[str, Any], key: str) -> int | None:
+    if key not in input or input.get(key) is None:
+        return None
+    value = normalize_positive_integer(input.get(key))
+    if value is None:
+        raise ValueError(f"{key} must be a positive integer")
+    return value
 
 
 def _rule(max_context: int, max_output: int, predicate: Callable[[dict[str, Any]], bool]) -> tuple[int, int, Callable[[dict[str, Any]], bool]]:

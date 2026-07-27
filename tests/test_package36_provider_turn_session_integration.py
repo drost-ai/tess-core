@@ -27,6 +27,8 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
             # so Package 35's synthesis client is not part of the construction count.
             config["providerProfile"]["compactionThresholdTokens"] = 200_000
             config["providerProfile"]["compactionTargetTokens"] = 190_000
+            config["providerProfile"]["contextReliefThresholdTokens"] = 200_000
+            config["providerProfile"]["contextReliefTargetTokens"] = 190_000
             session = core.createEmptySession(
                 cwd=cwd,
                 provider="openai",

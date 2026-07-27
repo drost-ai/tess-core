@@ -68,6 +68,13 @@ class HarnessGoldenTests(AgentCoreTestCase):
                         "message_input_tokens": 296,
                         "remaining_headroom_tokens": 196_426,
                     },
+                    "interactiveRelief": {
+                        "applied": True,
+                        "originalInputTokens": 110_399,
+                        "projectedInputTokens": 47_500,
+                        "thresholdTokens": 64_000,
+                        "targetTokens": 48_000,
+                    },
                     "processIdentity": {
                         "expectedCommandDigest": "a" * 64,
                         "observedCommandDigest": "b" * 64,
@@ -117,6 +124,16 @@ class HarnessGoldenTests(AgentCoreTestCase):
                 self.assertEqual(
                     normalized["measurement"]["remaining_headroom_tokens"],
                     "<token-estimate>",
+                )
+                self.assertEqual(
+                    normalized["interactiveRelief"],
+                    {
+                        "applied": True,
+                        "originalInputTokens": "<token-estimate>",
+                        "projectedInputTokens": "<token-estimate>",
+                        "thresholdTokens": 64_000,
+                        "targetTokens": 48_000,
+                    },
                 )
                 self.assertEqual(normalized["processIdentity"]["expectedCommandDigest"], "<expected-command-digest>")
                 self.assertEqual(normalized["processIdentity"]["observedCommandDigest"], "<observed-command-digest>")

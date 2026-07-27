@@ -16,8 +16,18 @@ from ..context.request_preflight import (
     imageMeasurementEventFields as _image_measurement_event_fields,
     preflightEventPayload as _preflight_event_payload,
 )
-from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
+# Retained as a compatibility export from this module; dynamic_context owns use.
 from ..providers.prompt_cache import resolvePromptCachePolicy
+from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
+from .dynamic_context import (
+    dynamicContextBelongsInMessages as _dynamic_context_belongs_in_messages,
+    injectSystemContextIntoMessages as _inject_system_context_into_messages,
+)
+from .interactive_context import (
+    interactiveReliefReceipt as _interactive_relief_receipt,
+    planInteractiveContextRelief as _plan_interactive_context_relief,
+    raiseInteractiveContextConvergenceFailure as _raise_interactive_context_convergence_failure,
+)
 from ..image_budget import assertImageContextCapacity as _assert_image_context_capacity
 from ..tool_attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
 
@@ -32,6 +42,9 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
     prepared_request: dict[str, Any] | None = None
     last_compaction_outcome: dict[str, Any] | None = None
+    interactive_relief_message_threshold: int | None = None
+    interactive_relief_message_target: int | None = None
+    interactive_relief_original_tokens: int | None = None
 
     raw_checkpoint_outcome = await maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": runtime})
     durable_compaction_applied = bool(raw_checkpoint_outcome and raw_checkpoint_outcome.get("status") == "completed")
@@ -44,6 +57,8 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "prompt": prompt,
                 "aggressive": reactive_attempt > 0,
                 "reactiveAttempt": reactive_attempt,
+                "reliefTokenLimit": interactive_relief_message_threshold,
+                "reliefTargetTokenLimit": interactive_relief_message_target,
             }
         )
         emitContinuationRelief(runtime, session, request_context)
@@ -106,6 +121,24 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         if compacted and compacted.get("status") == "completed":
             durable_compaction_applied = True
             continue
+        interactive_step = _plan_interactive_context_relief(
+            config=config,
+            measurement=measurement,
+            currentMessageThreshold=interactive_relief_message_threshold,
+        )
+        if interactive_step["action"] == "project":
+            interactive_relief_original_tokens = int(measurement["inputTokens"])
+            interactive_relief_message_threshold = interactive_step[
+                "messageThreshold"
+            ]
+            interactive_relief_message_target = interactive_step["messageTarget"]
+            continue
+        request_context["interactiveRelief"] = _interactive_relief_receipt(
+            policy=interactive_step["policy"],
+            originalInputTokens=interactive_relief_original_tokens,
+            projectedInputTokens=int(measurement["inputTokens"]),
+            applied=interactive_relief_message_threshold is not None,
+        )
         budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
         _assert_image_context_capacity(measurement, budget)
         compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
@@ -176,6 +209,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "min_useful_output_tokens": budget.get("minUsefulOutputTokens"),
                 "continuity_pressure": request_context.get("pressure"),
                 "continuity_relief": request_context.get("relief"),
+                "interactive_relief": request_context.get("interactiveRelief"),
                 "retrieved_memory_count": len((request_context.get("retrievedMemory") or {}).get("records", [])),
                 "retrieved_memory_tokens": (request_context.get("retrievedMemory") or {}).get("tokenEstimate"),
             },
@@ -183,98 +217,10 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         await persistSession(session, config)
         return prepared_request
 
-    if prepared_request:
-        return prepared_request
-
-    request_context = await buildContinuationContext(
-        {
-            "session": session,
-            "config": config,
-            "prompt": prompt,
-            "aggressive": reactive_attempt > 0,
-            "reactiveAttempt": reactive_attempt,
-        }
-    )
-    emitContinuationRelief(runtime, session, request_context)
-    recordContinuationRelief(session, request_context)
-    system = _apply_plan_mode_overlay(base_system_prompt, session)
-    system_context = request_context.get("systemContext")
-    if system_context and not _dynamic_context_belongs_in_messages(config):
-        system = f"{system}\n\n{request_context['systemContext']}"
-    unsupported_image_inputs = (
-        requestHasImageInputs({"messages": request_context.get("messages") or []})
-        and not modelSupportsImageInputs(config, active_model)
-    )
-    request_context = _normalize_request_context_messages(
-        _admit_request_images(
-            _inject_system_context_into_messages(request_context, system_context, config=config),
-            config=config,
-            runtime=runtime,
-            session_id=session["id"],
-        ),
+    _raise_interactive_context_convergence_failure(
         config=config,
-        runtime=runtime,
-        session_id=session["id"],
-    )
-    request = {
-        "model": active_model,
-        "effort": normalizeEffortForModel(config["provider"], active_model, session.get("effort") or config.get("effort")),
-        "sessionId": session["id"],
-        "system": system,
-        "messages": request_context["messages"],
-        "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
-    }
-    measurement = await measureRequestInputTokens(
-        {
-            "config": config,
-            "request": request,
-            "session": session,
-            "abortSignal": runtime.get("abortSignal"),
-            "deadlines": args.get("deadlines"),
-            "emitEvent": lambda event, data: _safe_emit(runtime, event, data),
-        }
-    )
-    budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
-    _assert_image_context_capacity(measurement, budget)
-    compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
-    headroom = _assess_context_headroom(
         measurement=measurement,
-        policy=compaction_policy,
-        outputBudget=budget,
-        compactionOutcome=last_compaction_outcome,
     )
-    _safe_emit(runtime, "compaction.headroom", _headroom_event_payload(session["id"], headroom))
-    preflight = _build_request_preflight(
-        request=request,
-        measurement=measurement,
-        outputBudget=budget,
-        contextBudget=headroom,
-        continuation=request_context,
-        session=session,
-        baseSystemPrompt=base_system_prompt,
-        preflightHints=args.get("requestPreflightHints"),
-        dynamicContextInMessages=_dynamic_context_belongs_in_messages(config),
-        compactionOutcome=last_compaction_outcome,
-        providerProfileName=config.get("providerProfileName"),
-    )
-    measurement["requestPreflight"] = preflight
-    recordPreflightTokenMeasurement(session, measurement)
-    _safe_emit(
-        runtime,
-        "provider.request_preflight",
-        _preflight_event_payload(session["id"], preflight),
-    )
-    _enforce_context_headroom(config=config, assessment=headroom)
-    return {
-        "request": _apply_provider_token_budget(request, budget, config),
-        "continuity": request_context,
-        "reactiveAttempt": reactive_attempt,
-        "contextBudget": headroom,
-        "unsupportedImageInputs": unsupported_image_inputs,
-    }
-
-def _dynamic_context_belongs_in_messages(config: dict[str, Any]) -> bool:
-    return bool(resolvePromptCachePolicy(config=config).get("enabled"))
 
 
 def _admit_request_images(
@@ -297,55 +243,6 @@ def _admit_request_images(
             sessionId=session_id,
         ),
     }
-
-
-def _inject_system_context_into_messages(
-    request_context: dict[str, Any],
-    system_context: Any,
-    *,
-    config: dict[str, Any],
-) -> dict[str, Any]:
-    if not system_context or not _dynamic_context_belongs_in_messages(config):
-        return request_context
-    messages = copy.deepcopy(request_context.get("messages") or [])
-    if not messages:
-        return {**request_context, "messages": [_dynamic_context_message(system_context)]}
-
-    dynamic_block = _dynamic_context_text_block(system_context)
-    for index in range(len(messages) - 1, -1, -1):
-        message = messages[index]
-        if not isinstance(message, dict) or message.get("role") != "user":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            messages[index] = {**message, "content": f"{dynamic_block['text']}\n\n{content}"}
-        elif isinstance(content, list):
-            messages[index] = {**message, "content": [dynamic_block, *copy.deepcopy(content)]}
-        else:
-            messages[index] = {**message, "content": dynamic_block["text"]}
-        return {**request_context, "messages": messages}
-
-    messages.append(_dynamic_context_message(system_context))
-    return {**request_context, "messages": messages}
-
-
-def _dynamic_context_message(system_context: Any) -> dict[str, Any]:
-    return {"role": "user", "content": _dynamic_context_text_block(system_context)["text"]}
-
-
-def _dynamic_context_text_block(system_context: Any) -> dict[str, str]:
-    text = str(system_context or "").strip()
-    return {
-        "type": "text",
-        "text": "\n".join(
-            [
-                "[Dynamic continuation context]",
-                text,
-                "[/Dynamic continuation context]",
-            ]
-        ),
-    }
-
 def _normalize_request_context_messages(
     request_context: dict[str, Any],
     *,

@@ -22,6 +22,8 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
         toolName=tool_name,
         outcome=values["outcome"],
         sideEffectsMayHaveOccurred=values.get("sideEffectsMayHaveOccurred"),
+        **({"maxBytes": values["maxBytes"]} if values.get("maxBytes") is not None else {}),
+        requireArtifact=bool(values.get("requireArtifact")),
         **({"artifactWriter": values["artifactWriter"]} if values.get("artifactWriter") else {}),
     )
     cardinality_fields = _cardinality_fields(guarded.get("cardinality"))
@@ -136,6 +138,8 @@ def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any)
         blocked_by_plan_contract: bool = False,
         rejected: bool = False,
         side_effects_may_have_occurred: bool = False,
+        max_bytes: int | None = None,
+        require_artifact: bool = False,
     ) -> dict[str, Any]:
         completed = await finalizeToolDispatchResult(
             config=values["config"],
@@ -145,6 +149,8 @@ def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any)
             toolName=tool_name,
             outcome=outcome,
             sideEffectsMayHaveOccurred=side_effects_may_have_occurred,
+            maxBytes=max_bytes,
+            requireArtifact=require_artifact,
             rejected=rejected,
             emit=values.get("emit"),
         )

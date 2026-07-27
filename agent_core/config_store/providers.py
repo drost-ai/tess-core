@@ -3,6 +3,7 @@ from __future__ import annotations
 from ..provider_token_budget import (
     normalizePositiveInteger,
     resolveCompactionPolicy,
+    resolve_interactive_context_policy as _resolve_interactive_context_policy,
     resolveProviderProfileTokenLimits,
 )
 
@@ -63,6 +64,22 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
             "compactionOutputTokens": record.get("compactionOutputTokens"),
         }
     )
+    interactive_policy = _resolve_interactive_context_policy(
+        {
+            "profileName": name,
+            "kind": record.get("kind"),
+            "apiMode": api_mode,
+            "model": overrides.get("model") or record.get("defaultModel"),
+            "maxContextLength": token_limits["maxContextLength"],
+            "maxOutputTokens": token_limits["maxOutputTokens"],
+            "compactionThresholdTokens": compaction_policy["compactionThresholdTokens"],
+            "compactionTargetTokens": compaction_policy["compactionTargetTokens"],
+            "contextReliefThresholdTokens": record.get("contextReliefThresholdTokens"),
+            "contextReliefTargetTokens": record.get("contextReliefTargetTokens"),
+            "inlineToolResultBatchBytes": record.get("inlineToolResultBatchBytes"),
+            "inlineToolResultTurnBytes": record.get("inlineToolResultTurnBytes"),
+        }
+    )
     return {
         "name": name,
         "kind": record["kind"],
@@ -90,6 +107,7 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "compactionThresholdTokens": compaction_policy["compactionThresholdTokens"],
         "compactionTargetTokens": compaction_policy["compactionTargetTokens"],
         "compactionOutputTokens": compaction_policy["compactionOutputTokens"],
+        **interactive_policy,
         "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
         "limits": clone(record.get("limits") or {}),
         "description": record.get("description"),
@@ -212,6 +230,26 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
             else None
         ),
         "compactionOutputTokens": normalizePositiveInteger(record.get("compactionOutputTokens")),
+        "contextReliefThresholdTokens": (
+            record.get("contextReliefThresholdTokens")
+            if "contextReliefThresholdTokens" in record
+            else None
+        ),
+        "contextReliefTargetTokens": (
+            record.get("contextReliefTargetTokens")
+            if "contextReliefTargetTokens" in record
+            else None
+        ),
+        "inlineToolResultBatchBytes": (
+            record.get("inlineToolResultBatchBytes")
+            if "inlineToolResultBatchBytes" in record
+            else None
+        ),
+        "inlineToolResultTurnBytes": (
+            record.get("inlineToolResultTurnBytes")
+            if "inlineToolResultTurnBytes" in record
+            else None
+        ),
         "requestOptions": clone(record.get("requestOptions") or record.get("request_body") or {}),
         "limits": clone(record.get("limits") or {}),
         "description": (record.get("description") or "").strip() or None,

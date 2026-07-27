@@ -19,7 +19,10 @@ from ..compaction import runCompaction, shouldAutoCompact
 from ..context_policy import decideDurableCheckpoint, estimateRawContextPressure
 from ..continuation import buildContinuationContext
 from ..provider_errors import createProviderFailureRecord, createProviderRequestError, fallbackEligibleProviderFailure, isProviderRequestError
-from ..provider_token_budget import computeProviderTokenBudget, resolveCompactionPolicy
+from ..provider_token_budget import (
+    computeProviderTokenBudget,
+    resolveCompactionPolicy,
+)
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
 from ..session import persistProviderFailure, persistProviderRecovery, persistSession, repairSessionTranscript

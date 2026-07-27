@@ -132,6 +132,15 @@
             "reliefApplied": false,
             "reliefMode": "none"
           },
+          "interactiveRelief": {
+            "applied": false,
+            "originalInputTokens": null,
+            "projectedInputTokens": "<token-estimate>",
+            "source": "codex_inferred",
+            "targetMet": true,
+            "targetTokens": 48000,
+            "thresholdTokens": 64000
+          },
           "measurement": {
             "baseInputTokens": "<token-estimate>",
             "componentEstimateTokens": "<token-estimate>",

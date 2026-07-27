@@ -21,11 +21,25 @@ TOOL_RESULT_FINAL_BYTES = {"small": 12_000, "medium": 18_000, "large": 24_000}
 MAX_TOOL_IDENTITY_BYTES = 256
 MAX_ARTIFACT_PATH_BYTES = 1_024
 MAX_ERROR_MESSAGE_BYTES = 2_000
+MIN_EFFECTIVE_TOOL_RESULT_BYTES = 512
 
 
 async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
-    limit_bytes = getToolResultMaxBytes(values["config"])
+    configured_limit_bytes = getToolResultMaxBytes(values["config"])
+    requested_limit_bytes = values.get("maxBytes")
+    limit_bytes = configured_limit_bytes
+    if requested_limit_bytes is not None:
+        try:
+            parsed_limit_bytes = int(requested_limit_bytes)
+            if parsed_limit_bytes <= 0:
+                raise ValueError
+            limit_bytes = min(
+                configured_limit_bytes,
+                max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
+            )
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("maxBytes must be a positive integer") from None
     normalized = _normalize_outcome(values["outcome"], limit_bytes)
     original_bytes = serializedContentBytes(normalized["content"])
     diagnostics = list(normalized["diagnostics"])
@@ -33,6 +47,14 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
     if original_bytes <= limit_bytes:
         if structured and structured["requiresShaping"]:
             artifact, artifact_unavailable = await _try_artifact(values, normalized["content"], "json")
+            if artifact_unavailable and values.get("requireArtifact"):
+                return _required_artifact_failure(
+                    values,
+                    normalized,
+                    original_bytes,
+                    limit_bytes,
+                    diagnostics,
+                )
             shaped = buildStructuredResultSummary(
                 analysis=structured,
                 maxBytes=limit_bytes,
@@ -76,6 +98,14 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
 
     content_type = "json" if _looks_like_json(normalized["content"]) else "text"
     artifact, artifact_unavailable = await _try_artifact(values, normalized["content"], content_type)
+    if artifact_unavailable and values.get("requireArtifact"):
+        return _required_artifact_failure(
+            values,
+            normalized,
+            original_bytes,
+            limit_bytes,
+            diagnostics,
+        )
     envelope: dict[str, Any] = {
         "type": "tool_error" if normalized["result"].get("isError") else "tool_result_truncated",
         "tool": boundedToolIdentity(values["toolName"]),
@@ -136,6 +166,57 @@ def assertToolResultContentLimit(content: str, maxBytes: int) -> None:
 
 def boundedToolIdentity(value: str) -> str:
     return sliceUtf8Prefix(normalizeUtf8String(value), MAX_TOOL_IDENTITY_BYTES)
+
+
+def _required_artifact_failure(
+    values: dict[str, Any],
+    normalized: dict[str, Any],
+    original_bytes: int,
+    limit_bytes: int,
+    diagnostics: list[dict[str, Any]],
+) -> dict[str, Any]:
+    content = _fit_envelope_with_excerpt(
+        {
+            "type": "tool_error",
+            "code": "artifact_persistence_failed",
+            "tool": boundedToolIdentity(values["toolName"]),
+            "status": "completed_but_output_unavailable",
+            "originalBytes": original_bytes,
+            "outputTruncated": True,
+            "outputAvailable": "unavailable",
+            **(
+                {"sideEffectsMayHaveOccurred": True}
+                if values.get("sideEffectsMayHaveOccurred")
+                else {}
+            ),
+        },
+        "The tool completed, but Agent Core could not durably preserve its "
+        "complete output. The result is withheld rather than silently losing data.",
+        limit_bytes,
+    )
+    final_bytes = serializedContentBytes(content)
+    return {
+        "result": {
+            **normalized["result"],
+            "content": content,
+            "isError": True,
+        },
+        "originalBytes": original_bytes,
+        "finalBytes": final_bytes,
+        "limitBytes": limit_bytes,
+        "truncated": True,
+        "artifactUnavailable": True,
+        "diagnostics": [
+            *diagnostics,
+            _diagnostic(
+                "artifact_required_unavailable",
+                original_bytes,
+                final_bytes,
+                limit_bytes,
+                None,
+            ),
+        ],
+    }
 
 
 async def _try_artifact(

@@ -88,6 +88,12 @@ class ProviderProfile(TypedDict, total=False):
     compactionThresholdTokens: int
     compactionTargetTokens: int
     compactionOutputTokens: int
+    contextReliefThresholdTokens: int | None
+    contextReliefTargetTokens: int | None
+    inlineToolResultBatchBytes: int | None
+    inlineToolResultTurnBytes: int | None
+    reliefSource: str
+    toolBudgetSource: str
     reasoningEffortEnabled: bool | None
     reasoningEffort: str | None
     openAiChatReasoning: dict[str, Any]

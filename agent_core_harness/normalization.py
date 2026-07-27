@@ -130,6 +130,13 @@ class NormalizationContext:
             for key in value:
                 if key.lower().endswith("tokens"):
                     value[key] = "<token-estimate>"
+        if key_path and key_path[-1] in {
+            "interactiveRelief",
+            "interactive_relief",
+        }:
+            for key in ("originalInputTokens", "projectedInputTokens"):
+                if isinstance(value.get(key), int):
+                    value[key] = "<token-estimate>"
         for key in ("elapsed_ms_since_last_checkpoint", "elapsedMsSinceLastCheckpoint"):
             if key in value:
                 value[key] = "<duration-ms>"

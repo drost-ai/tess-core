@@ -1,0 +1,467 @@
+from __future__ import annotations
+
+import copy
+import json
+from pathlib import Path
+from typing import Any
+
+import agent_core as core
+from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
+
+from agent_core.provider_token_budget import resolve_interactive_context_policy
+from agent_core.tool_result_guard import guardToolCallResult, serializedContentBytes
+
+
+def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:
+    profile = {
+        "name": "codex",
+        "kind": "openai",
+        "apiMode": "codex",
+        "defaultModel": "gpt-5.6-sol",
+        "auth": {},
+        "maxContextLength": 400_000,
+        "maxOutputTokens": 128_000,
+        "compactionThresholdTokens": 200_000,
+        "compactionTargetTokens": 150_000,
+        "compactionOutputTokens": 20_000,
+    }
+    return {
+        "cwd": str(workspace),
+        "runtimeHome": str(home),
+        "allowedRoots": [str(workspace)],
+        "agents": {},
+        "provider": "openai",
+        "providerKind": "openai",
+        "providerProfileName": "codex",
+        "providerProfile": profile,
+        "providerProfiles": {"codex": profile},
+        "customHeaders": {},
+        "openaiApiMode": "codex",
+        "model": "gpt-5.6-sol",
+        "effort": "xhigh",
+        "assistantName": "Test",
+        "assistantDescription": "",
+        "systemPrompt": "stable identity",
+        "tools": [],
+        "allowedTools": [],
+        "disallowedTools": [],
+        "permissionMode": "bypassPermissions",
+        "sessionPersistence": False,
+    }
+
+
+class Package38InteractiveContextReliefTests(AgentCoreTestCase):
+    def test_codex_defaults_and_explicit_validation(self):
+        policy = resolve_interactive_context_policy(
+            {"profileName": "codex", "kind": "openai", "apiMode": "codex"}
+        )
+        self.assertEqual(policy["contextReliefThresholdTokens"], 64_000)
+        self.assertEqual(policy["contextReliefTargetTokens"], 48_000)
+        self.assertEqual(policy["inlineToolResultBatchBytes"], 24_000)
+        self.assertEqual(policy["inlineToolResultTurnBytes"], 64_000)
+        self.assertEqual(policy["reliefSource"], "codex_inferred")
+
+        disabled = resolve_interactive_context_policy(
+            {"profileName": "anthropic", "kind": "anthropic"}
+        )
+        self.assertIsNone(disabled["contextReliefThresholdTokens"])
+        self.assertIsNone(disabled["inlineToolResultBatchBytes"])
+
+        with self.assertRaisesRegex(
+            ValueError, "contextReliefTargetTokens"
+        ):
+            resolve_interactive_context_policy(
+                {
+                    "contextReliefThresholdTokens": 50_000,
+                    "contextReliefTargetTokens": 50_000,
+                }
+            )
+        with self.assertRaisesRegex(ValueError, "inlineToolResultTurnBytes"):
+            resolve_interactive_context_policy(
+                {
+                    "inlineToolResultBatchBytes": 20_000,
+                    "inlineToolResultTurnBytes": 10_000,
+                }
+            )
+
+    def test_irreducible_fixed_prompt_fails_before_provider_dispatch(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            core.configureRuntimeHome(str(home))
+            run(core.ensureBaseLayout(str(workspace)))
+            config = _codex_config(home, workspace)
+            system_prompt = "irreducible identity " * 12_000
+            config["systemPrompt"] = system_prompt
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="openai",
+                providerProfileName="codex",
+                model="gpt-5.6-sol",
+                effort="xhigh",
+                systemPrompt=system_prompt,
+                permissionMode="bypassPermissions",
+            )
+            dispatched = False
+
+            async def send(_request):
+                nonlocal dispatched
+                dispatched = True
+                raise AssertionError("provider dispatch must remain closed")
+
+            with self.assertRaises(core.ProviderRequestError) as raised:
+                run(
+                    core.runAgentPrompt(
+                        session=session,
+                        config=config,
+                        runtime=bind_test_runtime(session),
+                        prompt="current request",
+                        providerOverride={"send": send},
+                    )
+                )
+            self.assertFalse(dispatched)
+            self.assertEqual(
+                raised.exception.record["code"],
+                "interactive_context_relief_failed",
+            )
+            self.assertIn(
+                "configured_target_below_irreducible_request",
+                str(raised.exception.record["rawMessage"]),
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_live_shaped_first_request_projects_below_target_without_message_mutation(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            core.configureRuntimeHome(str(home))
+            run(core.ensureBaseLayout(str(workspace)))
+            config = _codex_config(home, workspace)
+            system_prompt = "identity guidance " * 7_500
+            config["systemPrompt"] = system_prompt
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="openai",
+                providerProfileName="codex",
+                model="gpt-5.6-sol",
+                effort="xhigh",
+                systemPrompt=system_prompt,
+                permissionMode="bypassPermissions",
+            )
+            session["messages"] = [
+                {
+                    "role": "user" if index % 2 == 0 else "assistant",
+                    "content": f"historical-{index} " + ("payload " * 2_500),
+                }
+                for index in range(20)
+            ]
+            original_messages = copy.deepcopy(session["messages"])
+            requests: list[dict[str, Any]] = []
+            events: list[tuple[str, dict[str, Any]]] = []
+
+            async def send(request):
+                requests.append(copy.deepcopy(request))
+                return {
+                    "model": "gpt-5.6-sol",
+                    "stopReason": "end_turn",
+                    "usage": {"input_tokens": 42_000, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "bounded"}],
+                }
+
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime=bind_test_runtime(
+                        session,
+                        {"emitEvent": lambda event, data: events.append((event, data))},
+                    ),
+                    prompt="current request",
+                    providerOverride={"send": send},
+                )
+            )
+            self.assertEqual(result["text"], "bounded")
+            self.assertEqual(len(requests), 1)
+            preflight = next(
+                data
+                for event, data in events
+                if event == "provider.request_preflight"
+            )
+            relief = preflight["interactive_relief"]
+            self.assertTrue(relief["applied"])
+            self.assertGreater(relief["originalInputTokens"], 64_000)
+            self.assertLessEqual(relief["projectedInputTokens"], 48_000)
+            self.assertTrue(relief["targetMet"])
+            self.assertGreater(preflight["categories"]["systemIdentity"], 25_000)
+            self.assertEqual(session["messages"][:20], original_messages)
+            self.assertLess(
+                len(json.dumps(requests[0]["messages"])),
+                len(json.dumps(original_messages)),
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_parallel_batch_budget_artifactizes_individually_valid_results(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            core.configureRuntimeHome(str(home))
+            run(core.ensureBaseLayout(str(workspace)))
+            config = _codex_config(home, workspace)
+            config["tools"] = ["first", "second"]
+            config["allowedTools"] = ["first", "second"]
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="openai",
+                providerProfileName="codex",
+                model="gpt-5.6-sol",
+                effort="xhigh",
+                systemPrompt="stable identity",
+                permissionMode="bypassPermissions",
+            )
+
+            async def large_result(_input, _context):
+                return {"content": "result " * 2_600}
+
+            tools = [
+                core.ToolDefinition(
+                    name,
+                    name,
+                    {"type": "object"},
+                    large_result,
+                    concurrency="parallel",
+                )
+                for name in ("first", "second")
+            ]
+            requests: list[dict[str, Any]] = []
+            events: list[tuple[str, dict[str, Any]]] = []
+
+            async def send(request):
+                requests.append(copy.deepcopy(request))
+                if len(requests) == 1:
+                    return {
+                        "model": "gpt-5.6-sol",
+                        "stopReason": "tool_use",
+                        "usage": {"input_tokens": 100, "output_tokens": 10},
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": f"{name}-id",
+                                "name": name,
+                                "input": {},
+                            }
+                            for name in ("first", "second")
+                        ],
+                    }
+                return {
+                    "model": "gpt-5.6-sol",
+                    "stopReason": "end_turn",
+                    "usage": {"input_tokens": 100, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "done"}],
+                }
+
+            run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime=bind_test_runtime(
+                        session,
+                        {
+                            "tools": tools,
+                            "emitEvent": lambda event, data: events.append(
+                                (event, data)
+                            ),
+                        },
+                    ),
+                    prompt="run both",
+                    providerOverride={"send": send},
+                )
+            )
+            blocks = [
+                block
+                for message in requests[1]["messages"]
+                if isinstance(message.get("content"), list)
+                for block in message["content"]
+                if block.get("type") == "tool_result"
+            ]
+            self.assertEqual(len(blocks), 2)
+            self.assertTrue(
+                all(serializedContentBytes(block["content"]) <= 12_000 for block in blocks)
+            )
+            self.assertTrue(all('"artifact"' in block["content"] for block in blocks))
+            for block in blocks:
+                envelope = json.loads(block["content"])
+                artifact_path = Path(envelope["artifact"]["filePath"])
+                self.assertTrue(artifact_path.is_file())
+                self.assertGreater(len(artifact_path.read_text()), 18_000)
+            budget = next(data for event, data in events if event == "tool.result_budget")
+            self.assertLessEqual(budget["batch_used_bytes"], 24_000)
+            self.assertEqual(budget["effective_result_budget_bytes"], 12_000)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_logical_turn_budget_is_monotonic_and_resets_on_next_turn(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            core.configureRuntimeHome(str(home))
+            run(core.ensureBaseLayout(str(workspace)))
+            config = _codex_config(home, workspace)
+            config["tools"] = ["large"]
+            config["allowedTools"] = ["large"]
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="openai",
+                providerProfileName="codex",
+                model="gpt-5.6-sol",
+                effort="xhigh",
+                systemPrompt="stable identity",
+                permissionMode="bypassPermissions",
+            )
+
+            async def large_result(_input, _context):
+                return {"content": "durable output " * 3_000}
+
+            tool = core.ToolDefinition(
+                "large",
+                "Return a large result.",
+                {"type": "object"},
+                large_result,
+            )
+
+            def exercise(prompt: str, rounds: int):
+                events: list[tuple[str, dict[str, Any]]] = []
+                calls = 0
+
+                async def send(_request):
+                    nonlocal calls
+                    calls += 1
+                    if calls <= rounds:
+                        return {
+                            "model": "gpt-5.6-sol",
+                            "stopReason": "tool_use",
+                            "usage": {"input_tokens": 100, "output_tokens": 10},
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": f"{prompt}-{calls}",
+                                    "name": "large",
+                                    "input": {},
+                                }
+                            ],
+                        }
+                    return {
+                        "model": "gpt-5.6-sol",
+                        "stopReason": "end_turn",
+                        "usage": {"input_tokens": 100, "output_tokens": 10},
+                        "content": [{"type": "text", "text": "done"}],
+                    }
+
+                run(
+                    core.runAgentPrompt(
+                        session=session,
+                        config=config,
+                        runtime=bind_test_runtime(
+                            session,
+                            {
+                                "tools": [tool],
+                                "emitEvent": lambda event, data: events.append(
+                                    (event, data)
+                                ),
+                            },
+                        ),
+                        prompt=prompt,
+                        providerOverride={"send": send},
+                    )
+                )
+                return [
+                    data
+                    for event, data in events
+                    if event == "tool.result_budget"
+                ]
+
+            first = exercise("first", 3)
+            self.assertEqual(
+                [
+                    event["effective_result_budget_bytes"]
+                    for event in first
+                ],
+                [24_000, 24_000, 16_000],
+            )
+            self.assertEqual(
+                [event["turn_remaining_bytes"] for event in first],
+                [40_000, 16_000, 0],
+            )
+            self.assertLessEqual(
+                sum(event["batch_used_bytes"] for event in first),
+                64_000,
+            )
+
+            second = exercise("second", 1)
+            self.assertEqual(
+                second[0]["effective_result_budget_bytes"],
+                24_000,
+            )
+            self.assertEqual(second[0]["turn_remaining_bytes"], 40_000)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_required_aggregate_artifact_failure_is_truthful_and_closed(self):
+        async def fail_writer(_input):
+            raise RuntimeError("storage unavailable")
+
+        guarded = run(
+            guardToolCallResult(
+                config={"providerKind": "openai", "model": "gpt-5.6-sol"},
+                sessionId="session",
+                toolName="Read",
+                outcome={
+                    "kind": "returned",
+                    "result": {"content": "important " * 4_000},
+                },
+                maxBytes=2_000,
+                requireArtifact=True,
+                artifactWriter=fail_writer,
+            )
+        )
+        self.assertTrue(guarded["result"]["isError"])
+        self.assertTrue(guarded["artifactUnavailable"])
+        self.assertIn("artifact_persistence_failed", guarded["result"]["content"])
+        self.assertNotIn("storage unavailable", guarded["result"]["content"])
+
+        structured = run(
+            guardToolCallResult(
+                config={"providerKind": "openai", "model": "gpt-5.6-sol"},
+                sessionId="session",
+                toolName="List",
+                outcome={
+                    "kind": "returned",
+                    "result": {
+                        "content": json.dumps(
+                            {"items": [{"id": index} for index in range(500)]}
+                        )
+                    },
+                },
+                maxBytes=20_000,
+                requireArtifact=True,
+                artifactWriter=fail_writer,
+            )
+        )
+        self.assertTrue(structured["result"]["isError"])
+        self.assertIn(
+            "artifact_persistence_failed",
+            structured["result"]["content"],
+        )
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            run(
+                guardToolCallResult(
+                    config={
+                        "providerKind": "openai",
+                        "model": "gpt-5.6-sol",
+                    },
+                    sessionId="session",
+                    toolName="Read",
+                    outcome={
+                        "kind": "returned",
+                        "result": {"content": "value"},
+                    },
+                    maxBytes=0,
+                )
+            )

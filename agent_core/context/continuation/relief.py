@@ -57,7 +57,18 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
     retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}
     reactive_attempt = max(0, int(args.get("reactiveAttempt") if args.get("reactiveAttempt") is not None else (1 if args.get("aggressive") else 0)))
     pressure = classifyContextPressure({"session": session, "messages": messages})
-    token_limit = resolveCompactionPolicy((args.get("config") or {}).get("providerProfile") or {}).get("compactionThresholdTokens")
+    token_limit = (
+        _token_limit_or_default(args.get("reliefTokenLimit"))
+        if args.get("reliefTokenLimit") is not None
+        else resolveCompactionPolicy(
+            (args.get("config") or {}).get("providerProfile") or {}
+        ).get("compactionThresholdTokens")
+    )
+    target_limit = (
+        _token_limit_or_default(args.get("reliefTargetTokenLimit"))
+        if args.get("reliefTargetTokenLimit") is not None
+        else token_limit
+    )
     pressure_level = classifyContextReliefPressure(pressure, reactive_attempt, tokenLimit=token_limit)
     modes = chooseContextReliefModes(
         {
@@ -102,30 +113,43 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
         total_dropped += int(step.get("droppedMessageCount") or 0)
         preserved_raw_start_index = max(preserved_raw_start_index, int(result.get("preservedRawStartIndex") or 0))
         pressure = classifyContextPressure({"session": session, "messages": messages})
-        if isContextPressureRelieved(pressure, pressure_level, reactive_attempt):
+        if isContextPressureRelieved(
+            pressure,
+            pressure_level,
+            reactive_attempt,
+            tokenLimit=target_limit,
+        ):
             break
 
     normalized_reinjection_lines = normalizeReinjectionLines(reinjection_lines)
     reinjection_summary = " | ".join(normalized_reinjection_lines[:4]) if normalized_reinjection_lines else None
-    return {
-        "messages": messages,
-        "summary": {
-            "applied": bool(steps),
-            "selectedMode": selected_mode,
-            "appliedModes": [step["mode"] for step in steps],
-            "plannedModes": modes,
-            "pressureLevel": pressure_level,
-            "reactiveAttempt": reactive_attempt,
-            "steps": steps,
-            "preservedRawStartIndex": preserved_raw_start_index,
-            "compactedMessageCount": total_compacted,
-            "droppedMessageCount": total_dropped,
-            "tokensSavedEstimate": total_tokens_saved_estimate,
-            "detail": " · ".join(step.get("detail", "") for step in steps if step.get("detail")) or None,
-            "reinjectionLines": normalized_reinjection_lines,
-            "reinjectionSummary": reinjection_summary,
-        },
+    summary = {
+        "applied": bool(steps),
+        "selectedMode": selected_mode,
+        "appliedModes": [step["mode"] for step in steps],
+        "plannedModes": modes,
+        "pressureLevel": pressure_level,
+        "reactiveAttempt": reactive_attempt,
+        "steps": steps,
+        "preservedRawStartIndex": preserved_raw_start_index,
+        "compactedMessageCount": total_compacted,
+        "droppedMessageCount": total_dropped,
+        "tokensSavedEstimate": total_tokens_saved_estimate,
+        "detail": " · ".join(step.get("detail", "") for step in steps if step.get("detail")) or None,
+        "reinjectionLines": normalized_reinjection_lines,
+        "reinjectionSummary": reinjection_summary,
     }
+    if args.get("reliefTargetTokenLimit") is not None:
+        summary.update(
+            {
+                "thresholdTokens": token_limit,
+                "targetTokens": target_limit,
+                "projectedMessageTokens": pressure.get("totalTokenEstimate"),
+                "targetMet": pressure.get("totalTokenEstimate", 0)
+                <= target_limit,
+            }
+        )
+    return {"messages": messages, "summary": summary}
 
 
 def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
@@ -288,10 +312,17 @@ def classifyContextReliefPressure(pressure: dict[str, Any], reactiveAttempt: int
     return "low"
 
 
-def isContextPressureRelieved(pressure: dict[str, Any], originalPressureLevel: str, reactiveAttempt: int) -> bool:
+def isContextPressureRelieved(
+    pressure: dict[str, Any],
+    originalPressureLevel: str,
+    reactiveAttempt: int,
+    tokenLimit: int | None = None,
+) -> bool:
     if reactiveAttempt > 0:
         return False
-    current = classifyContextReliefPressure(pressure, 0)
+    if pressure.get("totalTokenEstimate", 0) <= _token_limit_or_default(tokenLimit):
+        return True
+    current = classifyContextReliefPressure(pressure, 0, tokenLimit=tokenLimit)
     if originalPressureLevel == "critical":
         return current in {"high", "low"}
     if originalPressureLevel == "high":

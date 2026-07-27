@@ -20,6 +20,8 @@ from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
+from .tool_context import buildToolContext as _build_tool_context
+from .tool_result_budget import ToolResultTurnBudget as _ToolResultTurnBudget
 from .turn_session import (
     resolve_effective_provider_turn_binding as _resolve_effective_provider_turn_binding,
     run_in_provider_turn_session as _run_in_provider_turn_session,
@@ -27,7 +29,6 @@ from .turn_session import (
 )
 from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
-from ..agent_tool_results import createToolResultFinalizer as _create_tool_result_finalizer
 from ..hooks import fireToolHooks as fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
@@ -94,6 +95,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     cost = 0.0
     tool_count = 0
     provider_call_index = 0
+    tool_result_budget = _ToolResultTurnBudget(config.get("providerProfile") or {})
     parent_turn_id = args["logicalTurnId"]
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
@@ -272,30 +274,18 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             await persist_queue.run(commit)
 
         def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
-            return {
-                "cwd": session["cwd"],
-                "allowedRoots": config.get("allowedRoots", []),
-                "config": config,
-                "session": session,
-                "interactive": runtime.get("interactive", False),
-                "outputJson": runtime.get("emitEvent", lambda *_: None),
-                "askQuestion": runtime.get("askQuestion", lambda *_: ""),
-                "persistSession": persist_tool_session,
-                "updateCwd": lambda next_cwd: session.__setitem__("cwd", next_cwd),
-                "getTools": lambda: runtime.get("tools", []),
-                "daemon": runtime.get("daemon"),
-                "abortSignal": runtime.get("abortSignal"),
-                "reserveImageAttachment": lambda image: image_budget.reserve(
-                    image, tool_priorities.get(id(tool_use))
-                ),
-                "currentToolUseId": tool_use.get("id") if isinstance(tool_use, dict) else None,
-                "parentTurnId": parent_turn_id,
-                "subagentLaunchGroupId": parent_turn_id,
-            }
+            return _build_tool_context(
+                session=session, config=config, runtime=runtime,
+                persist=persist_tool_session, imageBudget=image_budget,
+                priority=tool_priorities.get(id(tool_use)), toolUse=tool_use,
+                parentTurnId=parent_turn_id,
+            )
 
-        finish_tool_result = _create_tool_result_finalizer(
-            config=config, sessionId=session["id"],
+        finish_tool_result, effective_result_budget = tool_result_budget.createFinalizer(
+            config=config,
+            sessionId=session["id"],
             assistantMessageIndex=len(session.get("messages", [])) - 1,
+            resultCount=len(tool_uses),
             emit=lambda event, data: _safe_emit(runtime, event, data),
         )
         async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
@@ -454,6 +444,17 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             paused_for_approval = batch["pausedForApproval"]
             paused_message = batch["pausedMessage"]
             _throw_if_turn_cancelled(runtime)
+            budget_event = tool_result_budget.record(tool_results)
+            if budget_event is not None:
+                _safe_emit(
+                    runtime,
+                    "tool.result_budget",
+                    {
+                        "session_id": session["id"],
+                        "effective_result_budget_bytes": effective_result_budget,
+                        **budget_event,
+                    },
+                )
         except Exception as error:
             if _is_turn_abort_error(error, runtime.get("abortSignal")):
                 return await cancel_turn()

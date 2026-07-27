@@ -23,6 +23,8 @@ async def buildContinuationContext(args: dict[str, Any] | None = None, **kwargs:
             "retrievedMemory": retrieved_memory,
             "aggressive": aggressive,
             "reactiveAttempt": reactive_attempt,
+            "reliefTokenLimit": args.get("reliefTokenLimit"),
+            "reliefTargetTokenLimit": args.get("reliefTargetTokenLimit"),
         }
     )
     memory_prompt = renderRetrievedMemoryPrompt(retrieved_memory)
