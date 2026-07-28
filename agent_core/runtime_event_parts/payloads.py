@@ -1,7 +1,11 @@
 from __future__ import annotations
 from .shared import *
 from .prompt_cache import promptCacheEventPayload
+from .provider_payloads import providerEventPayload
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    provider_payload = providerEventPayload(event, data)
+    if provider_payload is not None:
+        return provider_payload
     payload = _camelize_record(data)
     if event == "session.activated":
         return "session.activated", {
@@ -22,11 +26,6 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "message.assistant", {
             "text": _string_field(_field(data, "text")),
             "model": _optional_string(_field(data, "model")),
-        }
-    if event == "message.assistant.partial":
-        return "message.assistant.partial", {
-            "text": _optional_string(_field(data, "text")),
-            "textDelta": _optional_string(_field(data, "text_delta", "textDelta")),
         }
     if event == "transcript.repaired":
         return "transcript.repaired", {
@@ -60,30 +59,6 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "status.updated", {"message": _string_field(_field(data, "message")), "detail": _optional_string(_field(data, "detail"))}
     if event == "status.cleared":
         return "status.cleared", {}
-    if event == "provider.retrying":
-        return "provider.retrying", {
-            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
-            "nextAttempt": _optional_number(_field(data, "next_attempt", "nextAttempt")),
-            "delayMs": _optional_number(_field(data, "delay_ms", "delayMs")),
-        }
-    if event == "provider.recovered":
-        return "provider.recovered", {
-            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
-            "attempts": _optional_number(_field(data, "attempts")),
-        }
-    if event == "provider.failed":
-        return "provider.failed", {
-            "provider": _optional_string(_field(data, "provider")),
-            "providerLabel": _optional_string(_field(data, "provider_label", "providerLabel")),
-            "category": _optional_string(_field(data, "category")),
-            "phase": _optional_string(_field(data, "phase")),
-            "message": _optional_string(_field(data, "message")),
-            "retryable": _optional_boolean(_field(data, "retryable")),
-            "attempt": _optional_number(_field(data, "attempt")),
-            "status": _optional_number(_field(data, "status")),
-            "code": _optional_string(_field(data, "code")),
-            "errorType": _optional_string(_field(data, "error_type", "errorType")),
-        }
     if event == "provider.input_tokens":
         return "provider.input_tokens", {
             "provider": _optional_string(_field(data, "provider")),

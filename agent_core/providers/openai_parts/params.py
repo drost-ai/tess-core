@@ -24,7 +24,12 @@ def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any
     tools = _convert_tools(request.get("tools", []))
     if tools:
         params["tools"] = tools
-    return _merge_request_options(params, args.get("requestOptions"), _RESPONSES_TOP_LEVEL_REQUEST_OPTIONS)
+    merged = _merge_request_options(
+        params, args.get("requestOptions"), _RESPONSES_TOP_LEVEL_REQUEST_OPTIONS
+    )
+    if is_codex:
+        _remove_codex_native_resume_options(merged)
+    return merged
 
 def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     request = {**(request or {}), **kwargs}
@@ -127,6 +132,19 @@ def _merge_request_options(
     if extra_body:
         merged["extra_body"] = extra_body
     return merged
+
+
+def _remove_codex_native_resume_options(params: dict[str, Any]) -> None:
+    params["store"] = False
+    for key in ("background", "previous_response_id", "starting_after"):
+        params.pop(key, None)
+    extra_body = params.get("extra_body")
+    if not isinstance(extra_body, dict):
+        return
+    for key in ("background", "previous_response_id", "starting_after", "store"):
+        extra_body.pop(key, None)
+    if not extra_body:
+        params.pop("extra_body", None)
 
 def _resolve_max_output_tokens(request: dict[str, Any]) -> int:
     for key in ("maxOutputTokens", "max_output_tokens", "maxTokens", "max_tokens"):

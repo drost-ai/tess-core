@@ -86,9 +86,7 @@ ProviderFailureCategory = Literal[
 ]
 
 
-class ProviderFailureRecord(TypedDict):
-    """createProviderFailureRecord output (provider_errors.py) — all keys present."""
-
+class _ProviderFailureRequired(TypedDict):
     provider: str
     providerLabel: str
     phase: str
@@ -105,3 +103,16 @@ class ProviderFailureRecord(TypedDict):
     rawMessage: str | None
     rawBody: str | None
     streamEventType: str | None
+
+
+class ProviderFailureRecord(_ProviderFailureRequired, total=False):
+    """Bounded failure evidence; Package 43 lineage fields are present when known."""
+
+    requestId: str | None
+    logicalCallId: str | None
+    generation: int | None
+    partialOutputMode: Literal["buffered", "replaceable", "append_only"] | None
+    responseId: str | None
+    sequenceNumber: int | None
+    recoveryFailure: str | None
+    interruptedPreview: dict[str, Any] | None

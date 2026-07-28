@@ -73,11 +73,25 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     metadata = session.setdefault("metadata", {})
     metadata["providerFailureCount"] = metadata.get("providerFailureCount", 0) + 1
     metadata["lastProviderFailure"] = copy.deepcopy(failure)
+    interrupted = failure.get("interruptedPreview")
+    if isinstance(interrupted, dict):
+        metadata["lastAssistantInterruptedPreview"] = copy.deepcopy(interrupted)
     snapshot = copy.deepcopy(session)
     snapshot["messages"] = _strip_in_memory_image_data(snapshot.get("messages", []))
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed)
-    await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_failure", "session_id": session["id"], "persisted_at": now_iso(), "failure": failure}])
+    persisted_at = now_iso()
+    entries = [{"type": "provider_failure", "session_id": session["id"], "persisted_at": persisted_at, "failure": failure}]
+    if isinstance(interrupted, dict):
+        entries.append(
+            {
+                "type": "assistant_interrupted_preview",
+                "session_id": session["id"],
+                "persisted_at": persisted_at,
+                "receipt": copy.deepcopy(interrupted),
+            }
+        )
+    await appendSessionTranscriptLogEntries(session["id"], entries)
 
 
 async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any], details: dict[str, Any]) -> None:
