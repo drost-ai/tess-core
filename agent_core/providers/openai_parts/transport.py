@@ -120,7 +120,7 @@ def _create_openai_timeout(provider_label: str, phase: str, attempt: int, had_ou
             providerLabel=provider_label,
             phase=phase,
             category="timeout",
-            retryable=not had_output and not had_tool_use,
+            retryable=True,
             attempt=attempt,
             hadAssistantOutput=had_output,
             hadToolUse=had_tool_use,

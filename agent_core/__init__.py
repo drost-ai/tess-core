@@ -80,6 +80,7 @@ _INTERNAL_MODULES = {
     "notebook_payload",
     "payload_cursor",
     "partial_output",
+    "partial_output_state",
     "prompt_cache_state",
     "prompt_cache_state_schema",
     "process_identity_darwin",

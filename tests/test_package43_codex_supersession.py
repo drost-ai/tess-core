@@ -9,7 +9,7 @@ from agent_core.partial_output import PartialOutputDelivery
 
 
 class _Sink:
-    schemaVersion = 1
+    schemaVersion = 2
 
     def __init__(
         self,
@@ -59,6 +59,10 @@ class _Sink:
         if self.interrupt_ack:
             self.text = f"{operation['text']}\n\n[Response interrupted before completion.]"
         return self.interrupt_ack
+
+    async def recover(self, operation: dict[str, Any]) -> bool:
+        self.operations.append(("recover", dict(operation)))
+        return True
 
 
 def _request(messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:

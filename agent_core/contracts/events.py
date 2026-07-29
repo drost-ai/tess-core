@@ -26,6 +26,7 @@ RuntimeEventName = Literal[
     "message.user",
     "message.assistant",
     "message.assistant.partial",
+    "message.assistant.thinking.partial",
     "transcript.repaired",
     "turn.started",
     "turn.cancelling",

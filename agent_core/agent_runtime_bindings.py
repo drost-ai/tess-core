@@ -5,7 +5,10 @@ from types import MappingProxyType
 from typing import Any
 
 from .runtime_generation import RuntimeSessionBinding, createRuntimeSessionBinding
-from .partial_output import assertPartialOutputSink as _assert_partial_output_sink
+from .partial_output import (
+    assertPartialOutputSink as _assert_partial_output_sink,
+    assertPartialOutputStateStore as _assert_partial_output_state_store,
+)
 
 
 AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION = 1
@@ -77,6 +80,7 @@ def assertAgentRuntimeBindings(
     tools = value.get("tools")
     try:
         _assert_partial_output_sink(value.get("partialOutputSink"))
+        _assert_partial_output_state_store(value.get("partialOutputStateStore"))
     except ValueError as exc:
         raise _error("runtime_bindings_invalid", str(exc)) from exc
     if (
@@ -123,6 +127,7 @@ def materializeAgentExecutionRuntime(bindings: Mapping[str, Any]) -> dict[str, A
         "abortSignal",
         "shouldStopAfterStableBoundary",
         "partialOutputSink",
+        "partialOutputStateStore",
         "partialOutputAckTimeoutMs",
     ):
         if name in bindings:
@@ -140,6 +145,7 @@ def materializeAgentExecutionRuntime(bindings: Mapping[str, Any]) -> dict[str, A
         "abortSignal",
         "shouldStopAfterStableBoundary",
         "partialOutputSink",
+        "partialOutputStateStore",
         "partialOutputAckTimeoutMs",
     }
     runtime.update({key: value for key, value in bindings.items() if key not in contract_fields})

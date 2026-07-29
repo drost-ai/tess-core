@@ -34,8 +34,8 @@ def extractOpenAiSdkException(error: Any, provider: Any) -> dict[str, Any] | Non
         "body": _serialize_sdk_body(body_value),
         "errorType": _bound_optional(structured_type, 256),
         "code": _bound_optional(structured_code, 256),
-        "message": _bound_optional(structured_message, 2_048),
-        "rawMessage": _bound_optional(str(error), 2_048),
+        "message": _bound_redacted_optional(structured_message, 2_048),
+        "rawMessage": _bound_redacted_optional(str(error), 2_048),
         "requestId": _bound_optional(
             getattr(error, "request_id", None) or getattr(error, "requestId", None),
             256,
@@ -82,8 +82,10 @@ def _serialize_sdk_body(value: Any) -> str | None:
 def _safe_sdk_value(value: Any, *, depth: int) -> Any:
     if depth > 6:
         return "<depth-limit>"
-    if value is None or isinstance(value, (bool, int, str)):
+    if value is None or isinstance(value, (bool, int)):
         return value
+    if isinstance(value, str):
+        return _bound(_redact_sensitive_text(value), 2_048)
     if isinstance(value, float):
         return value if math.isfinite(value) else str(value)
     if isinstance(value, Mapping):
@@ -94,7 +96,12 @@ def _safe_sdk_value(value: Any, *, depth: int) -> Any:
             if index >= 100:
                 out["<truncated>"] = True
                 break
-            out[_bound(str(key), 256)] = _safe_sdk_value(item, depth=depth + 1)
+            bounded_key = _bound(str(key), 256)
+            out[bounded_key] = (
+                "<redacted>"
+                if _sensitive_body_key(bounded_key)
+                else _safe_sdk_value(item, depth=depth + 1)
+            )
         return out
     if isinstance(value, (list, tuple)):
         out = [_safe_sdk_value(item, depth=depth + 1) for item in value[:100]]
@@ -113,6 +120,55 @@ def _bound_optional(value: Any, maximum: int) -> str | None:
     if value is None:
         return None
     return _bound(str(value), maximum) or None
+
+
+def _bound_redacted_optional(value: Any, maximum: int) -> str | None:
+    if value is None:
+        return None
+    return _bound(_redact_sensitive_text(str(value)), maximum) or None
+
+
+def _sensitive_body_key(key: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9]+", "_", key.lower()).strip("_")
+    if normalized in {"message", "error_message", "request_id", "requestid"}:
+        return False
+    parts = set(normalized.split("_"))
+    return bool(
+        parts
+        & {
+            "authorization",
+            "apikey",
+            "token",
+            "secret",
+            "password",
+            "cookie",
+            "header",
+            "headers",
+            "request",
+            "input",
+            "prompt",
+            "messages",
+            "content",
+            "output",
+        }
+        or "api_key" in normalized
+    )
+
+
+def _redact_sensitive_text(value: str) -> str:
+    redacted = re.sub(
+        r"(?i)(\b(?:authorization|api[_ -]?key|token|secret|password|"
+        r"input|prompt|messages?|content|request)\b\s*[:=]\s*)"
+        r"(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)",
+        r"\1<redacted>",
+        value,
+    )
+    redacted = re.sub(
+        r"(?i)\bbearer\s+[a-z0-9._~+/=-]+",
+        "Bearer <redacted>",
+        redacted,
+    )
+    return re.sub(r"\bsk-[a-zA-Z0-9_-]{8,}\b", "sk-<redacted>", redacted)
 
 
 def _valid_http_status(value: Any) -> int | None:
@@ -159,7 +215,8 @@ def _looks_like_transport(message: str) -> bool:
     return bool(
         re.search(
             r"terminated|socket hang up|econnreset|econnrefused|enotfound|network|"
-            r"fetch failed|connection closed|other side closed|premature close|broken pipe",
+            r"fetch failed|connection closed|connection error|apiconnectionerror|"
+            r"other side closed|premature close|broken pipe",
             message,
         )
     )

@@ -9,7 +9,10 @@ if _typing.TYPE_CHECKING:
 from .shared import *
 from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
 from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
-from .providers import _emit_provider_response_completed
+from .providers import (
+    _emit_provider_response_completed,
+    _persist_partial_output_commit,
+)
 from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
 from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
@@ -86,6 +89,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
     tool_count = 0
     provider_call_index = 0
     parent_turn_id = f"turn-{uuid.uuid4()}"
+    runtime["turnAuthorityId"] = parent_turn_id
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
     last_stable_snapshot = copy.deepcopy(session)
@@ -231,6 +235,7 @@ async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
             _safe_emit(runtime, "message.assistant", {"text": text, "model": response["model"], "session_id": session["id"]})
 
         tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
+        await _persist_partial_output_commit(session, config, runtime, response)
         if not tool_uses:
             await persistSession(session, config)
             await _record_prompt_cache_eviction_intent_at_finalization(

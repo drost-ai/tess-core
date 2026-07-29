@@ -379,11 +379,9 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
                 }
             )
         )
-        self.assertEqual(response["content"][0], {"type": "text", "text": "Plan"})
+        self.assertEqual(response["content"][0], {"type": "text", "text": "Plan done"})
         self.assertEqual(response["content"][1], {"type": "tool_use", "id": "call_1", "name": "Read", "input": {"path": "a.txt"}})
-        self.assertEqual(response["content"][2], {"type": "tool_use", "id": "call_2", "name": "Write", "input": {}})
-        self.assertEqual(response["content"][3], {"type": "text", "text": " done"})
-        self.assertEqual(response["content"][4], {"type": "tool_use", "id": "call_3", "name": "List", "input": {"dir": "."}})
+        self.assertEqual(response["content"][2], {"type": "tool_use", "id": "call_3", "name": "List", "input": {"dir": "."}})
         self.assertEqual([block["id"] for block in response["content"] if block["type"] == "tool_use"].count("call_1"), 1)
         self.assertEqual(response["usage"], {"input_tokens": 12, "output_tokens": 4})
         self.assertEqual(response["stopReason"], "tool_calls")

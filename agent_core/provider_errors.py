@@ -295,6 +295,12 @@ def _bounded_interrupted_preview(value: Any) -> dict[str, Any] | None:
         "deliveryMode": _partial_output_mode(value.get("deliveryMode")),
         "textHash": _bound_optional_diagnostic_text(value.get("textHash"), 128),
         "textLength": _nonnegative_optional_integer(value.get("textLength")),
+        "reasoningTextHash": _bound_optional_diagnostic_text(
+            value.get("reasoningTextHash"), 128
+        ),
+        "reasoningTextLength": _nonnegative_optional_integer(
+            value.get("reasoningTextLength")
+        ),
         "deliveryAcknowledged": bool(value.get("deliveryAcknowledged")),
         "reason": _bound_optional_diagnostic_text(value.get("reason"), 256),
     }

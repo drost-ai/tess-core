@@ -2,12 +2,16 @@ from __future__ import annotations
 from ...contracts.providers import ProviderResponse
 from ...partial_output import PartialOutputDelivery
 from .recovery import (
+    authoritative_openai_response,
     attach_openai_failure_lineage,
     attach_recovery_failure,
+    append_openai_partial,
     can_retry_openai_generation,
     create_openai_logical_call_id,
+    commit_openai_delivery,
     finalize_interrupted_openai_preview,
     openai_retry_delay_ms,
+    partial_openai_event_lineage,
     sink_failure,
     supersede_openai_generation,
 )
@@ -26,11 +30,20 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
     last_failure = None
     runtime = args.get("runtime") or {}
     logical_call_id = create_openai_logical_call_id()
-    delivery = PartialOutputDelivery(runtime, logical_call_id) if mode == "codex" else None
+    delivery = (
+        PartialOutputDelivery(
+            runtime,
+            logical_call_id,
+            session_id=args["request"].get("sessionId"),
+        )
+        if mode == "codex"
+        else None
+    )
     for attempt in range(1, max_attempts + 1):
         phase = "request_start"
         had_output = False
         had_tool_use = False
+        had_provisional_tool_call = False
         blocks: list[dict[str, Any]] = []
         usage: dict[str, Any] = {}
         stop_reason = "stop"
@@ -47,6 +60,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         response_committed = False
         response_id: str | None = None
         sequence_number: int | None = None
+        partial_output_commit: dict[str, Any] | None = None
         preview_published = False
         generation_lineage = {"logicalCallId": logical_call_id, "generation": attempt, "partialOutputMode": delivery.mode if delivery else None} if mode == "codex" else {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
@@ -150,27 +164,14 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         continue
                     had_output = True
                     emitted_text += delta
-                    if delivery is not None:
-                        appended = await delivery.append(
-                            attempt,
-                            delta=delta,
-                            text=emitted_text,
-                            response_id=response_id,
-                            sequence_number=sequence_number,
-                        )
-                        if not appended["acknowledged"]:
-                            raise sink_failure(
-                                provider_label=provider_label,
-                                phase=phase,
-                                attempt=attempt,
-                                had_output=had_output,
-                                had_tool_use=had_tool_use,
-                                logical_call_id=logical_call_id,
-                                delivery_mode=delivery.mode,
-                                reason=str(appended["reason"]),
-                                response_id=response_id,
-                            )
-                        preview_published = preview_published or bool(appended["published"])
+                    appended = await append_openai_partial(
+                        delivery, generation=attempt, content_kind="assistant",
+                        delta=delta, text=emitted_text, response_id=response_id,
+                        sequence_number=sequence_number, provider_label=provider_label,
+                        phase=phase, had_output=had_output, had_tool_use=had_tool_use,
+                        logical_call_id=logical_call_id,
+                    )
+                    preview_published = preview_published or bool(appended["published"])
                     if runtime.get("includePartialMessages"):
                         _emit(runtime, "message.assistant.partial", {"session_id": None, "model": args["request"]["model"], "text_delta": delta, "text": emitted_text, **({"logicalCallId": logical_call_id, "generation": attempt, "responseId": response_id, "sequenceNumber": sequence_number, "deliveryMode": delivery.mode if delivery else "append_only"} if mode == "codex" else {})})
                     _append_text_block(blocks, delta)
@@ -183,6 +184,15 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     if not delta:
                         continue
                     reasoning_text += delta
+                    appended = await append_openai_partial(
+                        delivery, generation=attempt, content_kind="reasoning",
+                        delta=delta, text=reasoning_text, response_id=response_id,
+                        sequence_number=sequence_number, provider_label=provider_label,
+                        phase=phase, had_output=had_output,
+                        had_tool_use=had_provisional_tool_call,
+                        logical_call_id=logical_call_id,
+                    )
+                    preview_published = preview_published or bool(appended["published"])
                     if runtime.get("includePartialMessages"):
                         _emit(
                             runtime,
@@ -192,6 +202,12 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                                 "model": args["request"]["model"],
                                 "thinking_delta": delta,
                                 "thinking": reasoning_text,
+                                **partial_openai_event_lineage(
+                                    mode=mode, delivery=delivery,
+                                    logical_call_id=logical_call_id,
+                                    generation=attempt, response_id=response_id,
+                                    sequence_number=sequence_number,
+                                ),
                             },
                         )
                     continue
@@ -204,6 +220,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         raise incomplete_response(f"output item {item_id} started more than once")
                     open_output_items[item_id] = str(get_value(item, "type", "unknown") or "unknown")
                     if get_value(item, "type") == "function_call":
+                        had_provisional_tool_call = True
                         call_id = str(get_value(item, "call_id", "") or "")
                         if call_id:
                             item_to_call_id[item_id] = call_id
@@ -238,6 +255,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         "raw": raw,
                         "input": input_value,
                     }
+                    had_provisional_tool_call = True
                     continue
                 if typ == "response.output_item.done":
                     item = get_value(event, "item", {})
@@ -298,60 +316,25 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     output = get_value(completed, "output", [])
                     output = output if isinstance(output, list) else []
                     try:
-                        final_blocks = _extract_output_blocks(output)
+                        (
+                            blocks,
+                            authoritative_text,
+                            had_output,
+                            had_tool_use,
+                            stop_reason,
+                        ) = authoritative_openai_response(output)
                     except Exception as exc:
                         raise incomplete_response(str(exc) or "final output was malformed") from exc
-                    for block in final_blocks:
-                        if block["type"] == "text":
-                            final_text = block["text"]
-                            if final_text.startswith(emitted_text) and len(final_text) > len(emitted_text):
-                                _append_text_block(blocks, final_text[len(emitted_text):])
-                                emitted_text = final_text
-                                had_output = True
-                            elif not emitted_text and final_text:
-                                _append_text_block(blocks, final_text)
-                                emitted_text = final_text
-                                had_output = True
-                        elif block["id"] not in emitted_tool_ids:
-                            emitted_tool_ids.add(block["id"])
-                            had_tool_use = True
-                            blocks.append(block)
+                    emitted_text = authoritative_text
                     _apply_openai_usage(usage, get_value(completed, "usage"))
-                    stop_reason = "tool_calls" if any(block["type"] == "tool_use" for block in blocks) else "stop"
-                    authoritative_text = "".join(
-                        block.get("text", "") for block in blocks if block.get("type") == "text"
+                    partial_output_commit = await commit_openai_delivery(
+                        delivery, generation=attempt,
+                        authoritative_text=authoritative_text,
+                        reasoning_text=reasoning_text, response_id=response_id,
+                        provider_label=provider_label, phase=phase,
+                        had_output=had_output, had_tool_use=had_tool_use,
+                        logical_call_id=logical_call_id,
                     )
-                    if delivery is not None:
-                        reconciled = await delivery.reconcile(
-                            attempt, authoritative_text, response_id
-                        )
-                        if not reconciled["acknowledged"]:
-                            raise sink_failure(
-                                provider_label=provider_label,
-                                phase=phase,
-                                attempt=attempt,
-                                had_output=had_output,
-                                had_tool_use=had_tool_use,
-                                logical_call_id=logical_call_id,
-                                delivery_mode=delivery.mode,
-                                reason=str(reconciled["reason"]),
-                                response_id=response_id,
-                            )
-                        committed = await delivery.commit(
-                            attempt, authoritative_text, response_id
-                        )
-                        if not committed["acknowledged"]:
-                            raise sink_failure(
-                                provider_label=provider_label,
-                                phase=phase,
-                                attempt=attempt,
-                                had_output=had_output,
-                                had_tool_use=had_tool_use,
-                                logical_call_id=logical_call_id,
-                                delivery_mode=delivery.mode,
-                                reason=str(committed["reason"]),
-                                response_id=response_id,
-                            )
                     saw_completed = True
                     continue
                 if typ == "response.failed":
@@ -430,6 +413,10 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
             result = {"content": blocks, "usage": usage, "model": args["request"]["model"], "stopReason": stop_reason}
             if mode == "codex":
                 result["provider_metadata"] = {"logicalCallId": logical_call_id, "generation": attempt, "responseId": response_id}
+                if partial_output_commit is not None:
+                    result["provider_metadata"]["partialOutputCommit"] = (
+                        partial_output_commit
+                    )
             return result
         except Exception as exc:
             failure = normalizeUnknownProviderFailure(
@@ -460,9 +447,11 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 response_committed=response_committed,
                 tool_effect_committed=bool(runtime.get("toolEffectCommitted")),
                 delivery=delivery,
+                had_tentative_output=bool(emitted_text or reasoning_text),
+                had_provisional_tool_call=had_provisional_tool_call,
             )
             if can_retry:
-                if had_output or had_tool_use:
+                if emitted_text or reasoning_text or had_provisional_tool_call:
                     _emit(runtime, "provider.attempt_superseding", {**failure.record, "next_generation": attempt + 1})
                 superseded = await supersede_openai_generation(
                     delivery,
@@ -473,7 +462,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 if not superseded["acknowledged"]:
                     attach_recovery_failure(failure, str(superseded["reason"]))
                     can_retry = False
-                elif had_output or had_tool_use:
+                elif emitted_text or reasoning_text or had_provisional_tool_call:
                     _emit(runtime, "provider.attempt_superseded", {**failure.record, "next_generation": attempt + 1})
             if can_retry:
                 delay_ms = openai_retry_delay_ms(args, attempt, providerRetryDelayMs)
@@ -482,12 +471,13 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 await asyncio.sleep(delay_ms / 1000)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 continue
-            if had_output and mode == "codex":
+            if (emitted_text or reasoning_text) and mode == "codex":
                 await finalize_interrupted_openai_preview(
                     failure,
                     delivery=delivery,
                     runtime=runtime,
                     emitted_text=emitted_text,
+                    reasoning_text=reasoning_text,
                     preview_published=preview_published,
                     logical_call_id=logical_call_id,
                     generation=attempt,

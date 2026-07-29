@@ -13,10 +13,17 @@ from .shared import (
 def providerEventPayload(
     event: str, data: dict[str, Any]
 ) -> tuple[str, dict[str, Any]] | None:
-    if event == "message.assistant.partial":
+    if event in {
+        "message.assistant.partial",
+        "message.assistant.thinking.partial",
+    }:
         return event, _without_none({
             "text": _optional_string(_field(data, "text")),
             "textDelta": _optional_string(_field(data, "text_delta", "textDelta")),
+            "thinking": _optional_string(_field(data, "thinking")),
+            "thinkingDelta": _optional_string(
+                _field(data, "thinking_delta", "thinkingDelta")
+            ),
             "logicalCallId": _optional_string(
                 _field(data, "logical_call_id", "logicalCallId")
             ),
