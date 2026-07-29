@@ -22,6 +22,15 @@ def providerTypedPayload(
                 "thinkingDelta": _optional_string(
                     _field(data, "thinking_delta", "thinkingDelta")
                 ),
+                "reasoningKind": _closed_reasoning_kind(
+                    _field(data, "reasoning_kind", "reasoningKind")
+                ),
+                "userVisible": _optional_boolean(
+                    _field(data, "user_visible", "userVisible")
+                ),
+                "providerEventType": _closed_reasoning_provider_event_type(
+                    _field(data, "provider_event_type", "providerEventType")
+                ),
                 **_partial_output_lineage(data),
             }
         )
@@ -239,6 +248,20 @@ def _provider_recovery_lineage(data: dict[str, Any]) -> dict[str, Any]:
 
 def _without_none(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item is not None}
+
+
+def _closed_reasoning_kind(value: Any) -> str | None:
+    return value if value in {"summary", "raw_thinking", "unknown"} else None
+
+
+def _closed_reasoning_provider_event_type(value: Any) -> str | None:
+    allowed = {
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_text.delta",
+        "content_block_delta.thinking_delta",
+        "provider.interrupted_reasoning",
+    }
+    return value if value in allowed else None
 
 
 __all__ = ["providerTypedPayload"]

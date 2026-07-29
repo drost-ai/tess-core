@@ -65,6 +65,8 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         stop_reason = "stop"
         emitted_text = ""
         reasoning_text = ""
+        reasoning_summary_text = ""
+        raw_reasoning_text = ""
         emitted_tool_ids: set[str] = set()
         pending_by_item_id: dict[str, dict[str, Any]] = {}
         item_to_call_id: dict[str, str] = {}
@@ -249,6 +251,12 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     if not delta:
                         continue
                     reasoning_text += delta
+                    if typ == "response.reasoning_summary_text.delta":
+                        reasoning_summary_text += delta
+                        projected_reasoning_text = reasoning_summary_text
+                    else:
+                        raw_reasoning_text += delta
+                        projected_reasoning_text = raw_reasoning_text
                     appended = await append_openai_partial(
                         delivery, generation=attempt, content_kind="reasoning",
                         delta=delta, text=reasoning_text, response_id=response_id,
@@ -266,7 +274,16 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                                 "session_id": None,
                                 "model": args["request"]["model"],
                                 "thinking_delta": delta,
-                                "thinking": reasoning_text,
+                                "thinking": projected_reasoning_text,
+                                "reasoning_kind": (
+                                    "summary"
+                                    if typ == "response.reasoning_summary_text.delta"
+                                    else "raw_thinking"
+                                ),
+                                "user_visible": (
+                                    typ == "response.reasoning_summary_text.delta"
+                                ),
+                                "provider_event_type": typ,
                                 **partial_openai_event_lineage(
                                     mode=mode, delivery=delivery,
                                     logical_call_id=logical_call_id,

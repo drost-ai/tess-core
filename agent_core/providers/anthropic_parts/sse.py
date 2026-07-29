@@ -174,6 +174,9 @@ class AnthropicSseAccumulator:
                                 for item in self.blocks
                                 if item and item.get("type") == "thinking"
                             ),
+                            "reasoning_kind": "raw_thinking",
+                            "user_visible": False,
+                            "provider_event_type": "content_block_delta.thinking_delta",
                         },
                     )
             elif block["type"] == "thinking" and delta.get("type") == "signature_delta":

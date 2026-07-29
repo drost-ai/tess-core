@@ -202,6 +202,8 @@ async def finalize_interrupted_openai_preview(
                 **payload,
                 "thinking_delta": marker,
                 "thinking": f"{reasoning_text}{marker}",
+                "reasoning_kind": "unknown", "user_visible": False,
+                "provider_event_type": "provider.interrupted_reasoning",
             }
         emit(event, payload)
         acknowledged = True
@@ -433,9 +435,7 @@ async def recover_openai_attempt(
             )
     if can_retry:
         delay_ms = openai_retry_delay_ms(args, attempt, retry_delay)
-        _raise_openai_cancelled(
-            runtime, provider_label, phase, attempt, had_output, had_tool_use
-        )
+        _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
         _emit(
             runtime,
             "provider.retrying",

@@ -399,6 +399,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
         )
 
     def test_productive_reasoning_without_text_renews_stream_idle(self):
+        emitted: list[tuple[str, dict[str, Any]]] = []
+
         class ReasoningStream:
             async def __aiter__(self):
                 for index in range(4):
@@ -441,7 +443,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                         "tools": [],
                     },
                     "runtime": {
-                        "emitEvent": lambda *_: None,
+                        "includePartialMessages": True,
+                        "emitEvent": lambda event, data: emitted.append((event, data)),
                         "providerActivityEmitter": emitter,
                     },
                     "maxAttempts": 1,
@@ -459,3 +462,11 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             4,
         )
         self.assertNotIn("private-", json.dumps(activity))
+        raw_thinking = next(
+            data
+            for event, data in emitted
+            if event == "message.assistant.thinking.partial"
+        )
+        self.assertEqual(raw_thinking["reasoning_kind"], "raw_thinking")
+        self.assertFalse(raw_thinking["user_visible"])
+        self.assertEqual(raw_thinking["provider_event_type"], "response.reasoning_text.delta")

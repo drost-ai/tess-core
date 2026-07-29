@@ -76,6 +76,7 @@ class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
         self.assertEqual(raised.exception.details["partialToolArgumentBytes"], 8)
 
     def test_accepts_closed_thinking_text_and_fragmented_tool_blocks(self):
+        emitted = []
         events = [
             {
                 "type": "message_start",
@@ -131,7 +132,14 @@ class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
             },
             {"type": "message_stop"},
         ]
-        response = testing.normalizeAnthropicSseResponse(_sse(events), REQUEST)
+        response = testing.normalizeAnthropicSseResponse(
+            _sse(events),
+            REQUEST,
+            {
+                "includePartialMessages": True,
+                "emitEvent": lambda event, data: emitted.append((event, data)),
+            },
+        )
         self.assertEqual(
             response["content"],
             [
@@ -147,6 +155,17 @@ class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
         )
         self.assertEqual(response["stopReason"], "tool_use")
         self.assertEqual(response["usage"], {"input_tokens": 2, "output_tokens": 8})
+        thinking = next(
+            data
+            for event, data in emitted
+            if event == "message.assistant.thinking.partial"
+        )
+        self.assertEqual(thinking["reasoning_kind"], "raw_thinking")
+        self.assertFalse(thinking["user_visible"])
+        self.assertEqual(
+            thinking["provider_event_type"],
+            "content_block_delta.thinking_delta",
+        )
 
 
 if __name__ == "__main__":

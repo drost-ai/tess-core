@@ -214,6 +214,9 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
         self.assertEqual(thinking["generation"], 1)
         self.assertTrue(thinking["logicalCallId"])
         self.assertEqual(thinking["deliveryMode"], "replaceable")
+        self.assertEqual(thinking["reasoning_kind"], "summary")
+        self.assertTrue(thinking["user_visible"])
+        self.assertEqual(thinking["provider_event_type"], "response.reasoning_summary_text.delta")
 
     def test_partial_idle_timeout_can_supersede_with_replaceable_sink(self) -> None:
         sink = _Sink()
