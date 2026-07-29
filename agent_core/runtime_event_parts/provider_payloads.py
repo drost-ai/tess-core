@@ -8,6 +8,23 @@ def providerTypedPayload(
     event: str,
     data: dict[str, Any],
 ) -> tuple[str, dict[str, Any]] | None:
+    if event in {
+        "message.assistant.partial",
+        "message.assistant.thinking.partial",
+    }:
+        return event, _without_none(
+            {
+                "text": _optional_string(_field(data, "text")),
+                "textDelta": _optional_string(
+                    _field(data, "text_delta", "textDelta")
+                ),
+                "thinking": _optional_string(_field(data, "thinking")),
+                "thinkingDelta": _optional_string(
+                    _field(data, "thinking_delta", "thinkingDelta")
+                ),
+                **_partial_output_lineage(data),
+            }
+        )
     if event == "provider.retrying":
         return event, {
             "providerLabel": _optional_string(
@@ -17,6 +34,7 @@ def providerTypedPayload(
                 _field(data, "next_attempt", "nextAttempt")
             ),
             "delayMs": _optional_number(_field(data, "delay_ms", "delayMs")),
+            **_provider_recovery_lineage(data),
         }
     if event == "provider.recovered":
         return event, {
@@ -24,7 +42,20 @@ def providerTypedPayload(
                 _field(data, "provider_label", "providerLabel")
             ),
             "attempts": _optional_number(_field(data, "attempts")),
+            **_provider_recovery_lineage(data),
         }
+    if event in {"provider.attempt_superseding", "provider.attempt_superseded"}:
+        return event, _without_none(
+            {
+                "provider": _optional_string(_field(data, "provider")),
+                "category": _optional_string(_field(data, "category")),
+                "phase": _optional_string(_field(data, "phase")),
+                "nextGeneration": _optional_number(
+                    _field(data, "next_generation", "nextGeneration")
+                ),
+                **_provider_recovery_lineage(data),
+            }
+        )
     if event == "provider.failed":
         return event, {
             "provider": _optional_string(_field(data, "provider")),
@@ -40,6 +71,19 @@ def providerTypedPayload(
             "code": _optional_string(_field(data, "code")),
             "errorType": _optional_string(
                 _field(data, "error_type", "errorType")
+            ),
+            **_provider_recovery_lineage(data),
+            **_without_none(
+                {
+                    "recoveryFailure": _optional_string(
+                        _field(data, "recovery_failure", "recoveryFailure")
+                    ),
+                    "interruptedPreview": _field(
+                        data,
+                        "interrupted_preview",
+                        "interruptedPreview",
+                    ),
+                }
             ),
         }
     if event == "provider.activity":
@@ -155,6 +199,46 @@ def providerTypedPayload(
             "error": _optional_string(_field(data, "error")),
         }
     return None
+
+
+def _partial_output_lineage(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "logicalCallId": _optional_string(
+            _field(data, "logical_call_id", "logicalCallId")
+        ),
+        "generation": _optional_number(_field(data, "generation")),
+        "responseId": _optional_string(
+            _field(data, "response_id", "responseId")
+        ),
+        "sequenceNumber": _optional_number(
+            _field(data, "sequence_number", "sequenceNumber")
+        ),
+        "deliveryMode": _optional_string(
+            _field(data, "delivery_mode", "deliveryMode")
+        ),
+    }
+
+
+def _provider_recovery_lineage(data: dict[str, Any]) -> dict[str, Any]:
+    return _without_none(
+        {
+            "category": _optional_string(_field(data, "category")),
+            "logicalCallId": _optional_string(
+                _field(data, "logical_call_id", "logicalCallId")
+            ),
+            "generation": _optional_number(_field(data, "generation")),
+            "requestId": _optional_string(
+                _field(data, "request_id", "requestId")
+            ),
+            "deliveryMode": _optional_string(
+                _field(data, "partial_output_mode", "partialOutputMode")
+            ),
+        }
+    )
+
+
+def _without_none(value: dict[str, Any]) -> dict[str, Any]:
+    return {key: item for key, item in value.items() if item is not None}
 
 
 __all__ = ["providerTypedPayload"]

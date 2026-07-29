@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import random
 import re
 from collections.abc import Mapping as _Mapping
@@ -10,6 +9,20 @@ from typing import Any
 import typing as _typing
 
 from ._utils import now_iso
+from .provider_error_diagnostics import (
+    boundDiagnosticCount as _bound_diagnostic_count,
+    boundedInterruptedPreview as _bounded_interrupted_preview,
+    boundDiagnosticText as _bound_diagnostic_text,
+    boundOptionalDiagnosticText as _bound_optional_diagnostic_text,
+    nonnegativeOptionalInteger as _nonnegative_optional_integer,
+    partialOutputMode as _partial_output_mode,
+    positiveOptionalInteger as _positive_optional_integer,
+    validHttpStatus as _valid_http_status,
+)
+from .provider_error_sdk import (
+    classifyOpenAiSdkEvidence as _classify_openai_sdk_evidence,
+    extractOpenAiSdkException as _extract_openai_sdk_exception,
+)
 
 if _typing.TYPE_CHECKING:
     from .contracts.providers import ProviderFailureRecord
@@ -35,10 +48,10 @@ def isProviderRequestError(error: BaseException | Any) -> bool:
 
 def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderFailureRecord:
     args = {**(args or {}), **kwargs}
-    return {
-        "provider": args["provider"],
-        "providerLabel": args["providerLabel"],
-        "phase": args["phase"],
+    record: ProviderFailureRecord = {
+        "provider": _bound_diagnostic_text(str(args["provider"]), 64),
+        "providerLabel": _bound_diagnostic_text(str(args["providerLabel"]), 128),
+        "phase": _bound_diagnostic_text(str(args["phase"]), 64),
         "category": args["category"],
         "message": _format_provider_failure_message(args),
         "retryable": bool(args["retryable"]),
@@ -46,13 +59,25 @@ def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: An
         "hadAssistantOutput": bool(args["hadAssistantOutput"]),
         "hadToolUse": bool(args["hadToolUse"]),
         "occurredAt": now_iso(),
-        "status": args.get("status"),
-        "code": args.get("code"),
-        "errorType": args.get("errorType"),
-        "rawMessage": args.get("rawMessage"),
-        "rawBody": args.get("rawBody"),
-        "streamEventType": args.get("streamEventType"),
+        "status": _valid_http_status(args.get("status")),
+        "code": _bound_optional_diagnostic_text(args.get("code"), 256),
+        "errorType": _bound_optional_diagnostic_text(args.get("errorType"), 256),
+        "rawMessage": _bound_optional_diagnostic_text(args.get("rawMessage"), 2_048),
+        "rawBody": _bound_optional_diagnostic_text(args.get("rawBody"), 8_192),
+        "streamEventType": _bound_optional_diagnostic_text(args.get("streamEventType"), 256),
     }
+    optional = {
+        "requestId": _bound_optional_diagnostic_text(args.get("requestId"), 256),
+        "logicalCallId": _bound_optional_diagnostic_text(args.get("logicalCallId"), 128),
+        "generation": _positive_optional_integer(args.get("generation")),
+        "partialOutputMode": _partial_output_mode(args.get("partialOutputMode")),
+        "responseId": _bound_optional_diagnostic_text(args.get("responseId"), 256),
+        "sequenceNumber": _nonnegative_optional_integer(args.get("sequenceNumber")),
+        "recoveryFailure": _bound_optional_diagnostic_text(args.get("recoveryFailure"), 128),
+        "interruptedPreview": _bounded_interrupted_preview(args.get("interruptedPreview")),
+    }
+    record.update({key: value for key, value in optional.items() if value is not None})
+    return record
 
 
 def createProviderRequestError(record: dict[str, Any]) -> ProviderRequestError:
@@ -121,7 +146,8 @@ def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: An
                 **args,
                 "category": category,
                 "retryable": retryable,
-                "rawMessage": _build_raw_message(args.get("body"), args.get("errorType"), args.get("code")),
+                "rawMessage": args.get("rawMessage")
+                or _build_raw_message(args.get("body"), args.get("errorType"), args.get("code")),
                 "rawBody": args.get("body"),
             }
         )
@@ -161,8 +187,11 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
         return createProviderRequestError(record)
     raw = str(error)
     lower = raw.lower()
+    sdk_evidence = _extract_openai_sdk_exception(error, args.get("provider"))
+    if sdk_evidence is not None:
+        return _classify_openai_sdk_exception(args, sdk_evidence)
     sdk_http = _parse_openai_sdk_http_error(raw)
-    if sdk_http is not None:
+    if sdk_http is not None and args.get("provider") == "openai":
         return classifyProviderHttpFailure(
             {
                 "provider": args["provider"],
@@ -175,10 +204,15 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
                 "body": sdk_http["body"],
                 "errorType": sdk_http.get("errorType"),
                 "code": sdk_http.get("code"),
+                "rawMessage": raw,
                 "streamEventType": args.get("streamEventType"),
             }
         )
-    sdk_stream = _extract_openai_sdk_stream_error(error)
+    sdk_stream = (
+        _extract_openai_sdk_stream_error(error)
+        if args.get("provider") == "openai"
+        else None
+    )
     if sdk_stream is not None:
         status = sdk_stream.get("status")
         if isinstance(status, int) and not isinstance(status, bool):
@@ -268,24 +302,6 @@ def fallbackEligibleProviderFailure(error: Any) -> bool:
 
 def providerRetryDelayMs(attempt: int) -> int:
     return (350 if attempt <= 1 else 700) + random.randint(0, 119)
-
-
-def _bound_diagnostic_text(value: str, max_length: int) -> str:
-    normalized = re.sub(r"[\r\n\t]+", " ", value).strip()
-    if len(normalized) <= max_length:
-        return normalized
-    return f"{normalized[: max_length - 1]}…"
-
-
-def _bound_diagnostic_count(value: Any) -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or value <= 0
-    ):
-        return 0
-    return min(9_007_199_254_740_991, int(value))
 
 
 def _format_provider_failure_message(args: dict[str, Any]) -> str:
@@ -411,6 +427,39 @@ def _looks_like_quota(message: str) -> bool:
     return bool(re.search(r"quota|credit|billing|insufficient funds|payment required|usage limit|out of extra usage", message))
 
 
+def _classify_openai_sdk_exception(
+    args: dict[str, Any], evidence: dict[str, Any]
+) -> ProviderRequestError:
+    common = {
+        "provider": args["provider"],
+        "providerLabel": args["providerLabel"],
+        "phase": args["phase"],
+        "attempt": args["attempt"],
+        "hadAssistantOutput": args["hadAssistantOutput"],
+        "hadToolUse": args["hadToolUse"],
+        "status": evidence.get("status"),
+        "body": evidence.get("body"),
+        "errorType": evidence.get("errorType"),
+        "code": evidence.get("code"),
+        "requestId": evidence.get("requestId"),
+        "rawMessage": evidence.get("rawMessage"),
+        "streamEventType": (
+            args.get("streamEventType") or evidence.get("streamEventType")
+        ),
+    }
+    if evidence.get("status") is not None:
+        return classifyProviderHttpFailure(common)
+    category, retryable = _classify_openai_sdk_evidence(evidence)
+    return createProviderRequestError(
+        createProviderFailureRecord(
+            {
+                **common,
+                "category": category,
+                "retryable": retryable,
+                "rawBody": evidence.get("body"),
+            }
+        )
+    )
 def _parse_openai_sdk_http_error(raw: str) -> dict[str, Any] | None:
     match = re.search(r"Error code:\s*(\d{3})\s*-\s*(.*)", raw, re.S)
     if not match:

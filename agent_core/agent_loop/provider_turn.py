@@ -44,15 +44,18 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         perCallOptions=args.get("providerRequestOptions") or {},
         runtimeContract=args.get("runtimeContract"),
     )
+    logical_turn_id = args.get("logicalTurnId") or f"turn-{uuid.uuid4()}"
+    logical_call_id = (
+        f"{args.get('logicalTurnId')}-call-"
+        f"{max(1, int(args.get('logicalCallIndex') or 1))}"
+        if args.get("logicalTurnId")
+        else f"call-{uuid.uuid4()}"
+    )
     activity = ProviderActivityEmitter(
         emitEvent=runtime.get("emitEvent", lambda *_: None),
         sessionId=session["id"],
-        logicalTurnId=args.get("logicalTurnId") or f"turn-{uuid.uuid4()}",
-        logicalCallId=(
-            f"{args.get('logicalTurnId')}-call-{max(1, int(args.get('logicalCallIndex') or 1))}"
-            if args.get("logicalTurnId")
-            else f"call-{uuid.uuid4()}"
-        ),
+        logicalTurnId=logical_turn_id,
+        logicalCallId=logical_call_id,
         provider=config.get("provider"),
         profile=config.get("providerProfileName") or config.get("provider"),
         model=args["activeModel"],
@@ -65,6 +68,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         **runtime,
         "abortSignal": deadlines.signal,
         "providerActivityEmitter": activity,
+        "logicalCallId": logical_call_id,
     }
     provider = args.get("providerOverride") or _create_provider(
         config,

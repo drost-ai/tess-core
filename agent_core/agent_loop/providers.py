@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from .shared import *
+from ..partial_output_state import (
+    createPartialOutputStateStore as _create_partial_output_state_store,
+    finalizePartialOutputState as _finalize_partial_output_state,
+)
 from ..provider_timeouts import resolveProviderTimeoutPolicy
 from ..runtime_secret_provider import resolveProviderConfigSecrets
 
@@ -75,7 +79,15 @@ def _create_provider(
     if config.get("provider") == "openai":
         if not config.get("openaiToken"):
             return {"send": lambda request: _missing_openai_credential_response(config, request)}
+        state_store = _partial_output_state_store(config, runtime, session)
+        provider_runtime = runtime
+        if state_store is not None and runtime.get("partialOutputStateStore") is None:
+            provider_runtime = {
+                **runtime,
+                "partialOutputStateStore": state_store,
+            }
         async def send_openai(request: dict[str, Any]) -> dict[str, Any]:
+            await _heal_partial_output_commit(session, state_store)
             resolved = await resolveProviderConfigSecrets(config)
             return await sendOpenAiRequest(
                 token=resolved["openaiToken"],
@@ -85,7 +97,7 @@ def _create_provider(
                 config=resolved,
                 request=request,
                 requestOptions=(resolved.get("providerProfile") or {}).get("requestOptions") or {},
-                runtime=runtime,
+                runtime=provider_runtime,
                 clientFactory=runtime.get("openaiClientFactory") or resolved.get("openaiClientFactory"),
                 turnSession=provider_turn_session,
                 **timeout_policy,
@@ -105,6 +117,56 @@ def _create_provider(
         )
 
     return {"send": send_anthropic}
+
+
+async def _persist_partial_output_commit(
+    session: dict[str, Any],
+    config: dict[str, Any],
+    runtime: dict[str, Any],
+    response: dict[str, Any],
+) -> bool:
+    provider_metadata = response.get("provider_metadata")
+    receipt = (
+        provider_metadata.get("partialOutputCommit")
+        if isinstance(provider_metadata, dict)
+        else None
+    )
+    if not isinstance(receipt, dict):
+        return False
+    session.setdefault("metadata", {})["partialOutputCommit"] = copy.deepcopy(receipt)
+    await persistSession(session, config)
+    store = _partial_output_state_store(config, runtime, session)
+    if store is not None:
+        await _finalize_partial_output_state(store, receipt)
+    return True
+
+
+def _partial_output_state_store(
+    config: dict[str, Any],
+    runtime: dict[str, Any],
+    session: dict[str, Any] | None,
+) -> Any:
+    if runtime.get("partialOutputStateStore") is not None:
+        return runtime["partialOutputStateStore"]
+    if isinstance(session, dict) and config.get("sessionPersistence", True):
+        return _create_partial_output_state_store(session["id"])
+    return None
+
+
+async def _heal_partial_output_commit(
+    session: dict[str, Any] | None,
+    store: Any,
+) -> None:
+    metadata = (
+        session.get("metadata")
+        if isinstance(session, dict) and isinstance(session.get("metadata"), dict)
+        else {}
+    )
+    if store is not None:
+        await _finalize_partial_output_state(
+            store,
+            metadata.get("partialOutputCommit"),
+        )
 
 def _missing_openai_credential_response(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
     env_var = (((config.get("providerProfile") or {}).get("auth") or {}).get("envVar")) or "the required bearer token env var"

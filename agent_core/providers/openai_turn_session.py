@@ -174,7 +174,7 @@ class OpenAiProviderTurnSession(ProviderTurnSession):
     async def record_responses_failure(
         self, prepared: PreparedOpenAiRequest, failure: BaseException
     ) -> None:
-        return None
+        self._clear_chain("generation_failed")
 
     def fallback_to_sse(
         self, prepared: PreparedOpenAiRequest, reason: str

@@ -8,6 +8,7 @@ from ..openai_turn_session import (
     websocket_fallback_safe,
 )
 
+from .params import convertMessagesToInput
 from .shared import *
 from .transport import _emit, _race_openai_activity
 
@@ -195,3 +196,85 @@ def extract_turn_state(value: Any) -> str | None:
         cleaned = str(item or "").strip()
         return cleaned or None
     return None
+
+
+async def finalize_responses_success(
+    *,
+    args: dict[str, Any],
+    mode: str,
+    runtime: dict[str, Any],
+    turn_session: Any,
+    prepared: _PreparedOpenAiRequest,
+    active_stream: Any,
+    completed_output: list[Any],
+    completed_response_id: str | None,
+    completed_turn_state: str | None,
+    blocks: list[dict[str, Any]],
+    usage: dict[str, Any],
+    stop_reason: str,
+    attempt: int,
+    last_failure: Any,
+    generation_lineage: dict[str, Any],
+    logical_call_id: str,
+    response_id: str | None,
+    partial_output_commit: dict[str, Any] | None,
+) -> dict[str, Any]:
+    canonical_output = convertMessagesToInput(
+        [{"role": "assistant", "content": blocks}]
+    )
+    if turn_session is not None and hasattr(
+        turn_session, "record_responses_success"
+    ):
+        await turn_session.record_responses_success(
+            prepared,
+            output_items=completed_output,
+            canonical_output_items=canonical_output,
+            response_id=completed_response_id,
+            turn_state=completed_turn_state,
+        )
+        await turn_session.release_stream(active_stream)
+    if attempt > 1:
+        _emit(
+            runtime,
+            "provider.recovered",
+            {
+                "provider": "openai",
+                "provider_label": getOpenAiProviderLabel(
+                    mode,
+                    resolveOpenAiBaseUrl(mode, args.get("baseUrl")),
+                ),
+                "model": args["request"]["model"],
+                "attempts": attempt,
+                "category": (
+                    last_failure.record.get("category")
+                    if last_failure is not None
+                    else None
+                ),
+                **generation_lineage,
+            },
+        )
+    result = {
+        "content": blocks,
+        "usage": usage,
+        "model": args["request"]["model"],
+        "stopReason": stop_reason,
+        "_providerTelemetry": {
+            **projection_event_fields(prepared),
+            **(
+                turn_session.latency_telemetry()
+                if turn_session is not None
+                else {}
+            ),
+        },
+    }
+    if mode == "codex":
+        result["provider_metadata"] = {
+            "logicalCallId": logical_call_id,
+            "generation": attempt,
+            "responseId": response_id,
+        }
+        if partial_output_commit is not None:
+            result["provider_metadata"]["partialOutputCommit"] = (
+                partial_output_commit
+            )
+    return result

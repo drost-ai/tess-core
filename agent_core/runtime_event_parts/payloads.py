@@ -23,11 +23,6 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "text": _string_field(_field(data, "text")),
             "model": _optional_string(_field(data, "model")),
         }
-    if event == "message.assistant.partial":
-        return "message.assistant.partial", {
-            "text": _optional_string(_field(data, "text")),
-            "textDelta": _optional_string(_field(data, "text_delta", "textDelta")),
-        }
     if event == "transcript.repaired":
         return "transcript.repaired", {
             "truncatedFrom": _optional_number(_field(data, "truncated_from", "truncatedFrom")),

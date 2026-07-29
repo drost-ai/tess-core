@@ -1,24 +1,38 @@
 from __future__ import annotations
-
 from ...contracts.providers import ProviderResponse
+from ...partial_output import PartialOutputDelivery
 from ...provider_activity import emitProviderActivity
 from ..openai_turn_session import PreparedOpenAiRequest as _PreparedOpenAiRequest
-
-from .shared import *
+from .recovery import (
+    authoritative_openai_response,
+    attach_openai_failure_lineage,
+    attach_recovery_failure,
+    append_openai_partial,
+    can_retry_openai_generation,
+    commit_openai_delivery,
+    create_openai_logical_call_id,
+    finalize_interrupted_openai_preview,
+    openai_retry_delay_ms,
+    partial_openai_event_lineage,
+    recover_openai_attempt,
+    sink_failure,
+    supersede_openai_generation,
+)
 from .responses_session import (
     extract_turn_state as _extract_turn_state,
+    finalize_responses_success as _finalize_responses_success,
     projection_event_fields as _projection_event_fields,
     responses_activity_kind as _responses_activity_kind,
     start_responses_stream as _start_responses_stream,
     stateless_prepared_request as _stateless_prepared_request,
 )
-
+from .responses_failures import response_terminal_failure
+from .shared import *
 async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
     if args["mode"] == "chat_completions":
         return await sendOpenAiChatCompletionsRequest(args)
     return await sendOpenAiResponsesRequest(args)
-
 async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
@@ -27,10 +41,25 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
     max_attempts = max(1, int(args.get("maxAttempts") or 2))
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
+    runtime = args.get("runtime") or {}
+    logical_call_id = (
+        str(runtime.get("logicalCallId") or "").strip()
+        or create_openai_logical_call_id()
+    )
+    delivery = (
+        PartialOutputDelivery(
+            runtime,
+            logical_call_id,
+            session_id=args["request"].get("sessionId"),
+        )
+        if mode == "codex"
+        else None
+    )
     for attempt in range(1, max_attempts + 1):
         phase = "request_start"
         had_output = False
         had_tool_use = False
+        had_provisional_tool_call = False
         blocks: list[dict[str, Any]] = []
         usage: dict[str, Any] = {}
         stop_reason = "stop"
@@ -49,10 +78,14 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         completed_turn_state: str | None = None
         active_stream: Any = None
         prepared_attempt: _PreparedOpenAiRequest | None = None
-        runtime = args.get("runtime") or {}
+        response_committed = False
+        response_id: str | None = None
+        sequence_number: int | None = None
+        partial_output_commit: dict[str, Any] | None = None
+        preview_published = False
+        generation_lineage = {"logicalCallId": logical_call_id, "generation": attempt, "partialOutputMode": delivery.mode if delivery else None} if mode == "codex" else {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
-
         def incomplete_response(reason: str) -> Any:
             return createProviderIncompleteResponseError(
                 provider="openai",
@@ -70,6 +103,19 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
             )
 
         try:
+            if delivery is not None:
+                begun = await delivery.begin(attempt)
+                if not begun["acknowledged"]:
+                    raise sink_failure(
+                        provider_label=provider_label,
+                        phase=phase,
+                        attempt=attempt,
+                        had_output=False,
+                        had_tool_use=False,
+                        logical_call_id=logical_call_id,
+                        delivery_mode=delivery.mode,
+                        reason=str(begun["reason"]),
+                    )
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
             client, connection_reused = await _acquire_openai_client(args, base_url)
             emitProviderActivity(runtime, "request_started", attempt=attempt)
@@ -109,6 +155,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     "model": args["request"]["model"],
                     "attempt": attempt,
                     **_projection_event_fields(prepared_attempt),
+                    **generation_lineage,
                 },
             )
             response, prepared_attempt = await _start_responses_stream(
@@ -161,20 +208,37 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     _responses_activity_kind(typ),
                     attempt=attempt,
                 )
+                event_sequence = get_value(event, "sequence_number")
+                if isinstance(event_sequence, int) and not isinstance(event_sequence, bool) and event_sequence >= 0:
+                    sequence_number = event_sequence
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": typ, "model": args["request"]["model"], "payload": event})
                 if saw_completed:
                     raise incomplete_response(
                         f"event {typ or '<unknown>'} arrived after response.completed"
                     )
+                if typ == "response.created":
+                    created = get_value(event, "response", {}) or {}
+                    candidate_id = str(get_value(created, "id", "") or "")
+                    if candidate_id:
+                        response_id = candidate_id
+                    continue
                 if typ == "response.output_text.delta":
                     delta = str(get_value(event, "delta", "") or "")
                     if not delta:
                         continue
                     had_output = True
                     emitted_text += delta
+                    appended = await append_openai_partial(
+                        delivery, generation=attempt, content_kind="assistant",
+                        delta=delta, text=emitted_text, response_id=response_id,
+                        sequence_number=sequence_number, provider_label=provider_label,
+                        phase=phase, had_output=had_output, had_tool_use=had_tool_use,
+                        logical_call_id=logical_call_id,
+                    )
+                    preview_published = preview_published or bool(appended["published"])
                     if runtime.get("includePartialMessages"):
-                        _emit(runtime, "message.assistant.partial", {"session_id": None, "model": args["request"]["model"], "text_delta": delta, "text": emitted_text})
+                        _emit(runtime, "message.assistant.partial", {"session_id": None, "model": args["request"]["model"], "text_delta": delta, "text": emitted_text, **({"logicalCallId": logical_call_id, "generation": attempt, "responseId": response_id, "sequenceNumber": sequence_number, "deliveryMode": delivery.mode if delivery else "append_only"} if mode == "codex" else {})})
                     _append_text_block(blocks, delta)
                     continue
                 if typ in {
@@ -185,6 +249,15 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     if not delta:
                         continue
                     reasoning_text += delta
+                    appended = await append_openai_partial(
+                        delivery, generation=attempt, content_kind="reasoning",
+                        delta=delta, text=reasoning_text, response_id=response_id,
+                        sequence_number=sequence_number, provider_label=provider_label,
+                        phase=phase, had_output=had_output,
+                        had_tool_use=had_provisional_tool_call,
+                        logical_call_id=logical_call_id,
+                    )
+                    preview_published = preview_published or bool(appended["published"])
                     if runtime.get("includePartialMessages"):
                         _emit(
                             runtime,
@@ -194,6 +267,12 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                                 "model": args["request"]["model"],
                                 "thinking_delta": delta,
                                 "thinking": reasoning_text,
+                                **partial_openai_event_lineage(
+                                    mode=mode, delivery=delivery,
+                                    logical_call_id=logical_call_id,
+                                    generation=attempt, response_id=response_id,
+                                    sequence_number=sequence_number,
+                                ),
                             },
                         )
                     continue
@@ -206,6 +285,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         raise incomplete_response(f"output item {item_id} started more than once")
                     open_output_items[item_id] = str(get_value(item, "type", "unknown") or "unknown")
                     if get_value(item, "type") == "function_call":
+                        had_provisional_tool_call = True
                         call_id = str(get_value(item, "call_id", "") or "")
                         if call_id:
                             item_to_call_id[item_id] = call_id
@@ -240,6 +320,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         "raw": raw,
                         "input": input_value,
                     }
+                    had_provisional_tool_call = True
                     continue
                 if typ == "response.output_item.done":
                     item = get_value(event, "item", {})
@@ -288,6 +369,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     continue
                 if typ == "response.completed":
                     phase = "response_complete"
+                    response_committed = True
                     if open_output_items or pending_by_item_id:
                         raise incomplete_response(
                             "response.completed arrived while output items were still open"
@@ -300,6 +382,9 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         raise incomplete_response(
                             f"response.completed carried non-completed status {completed_status}"
                         )
+                    completed_id = str(get_value(completed, "id", "") or "")
+                    if completed_id:
+                        response_id = completed_id
                     output = get_value(completed, "output", [])
                     output = output if isinstance(output, list) else []
                     completed_response_output = _plain_openai_value(output)
@@ -310,130 +395,50 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         _extract_turn_state(completed) or completed_turn_state
                     )
                     try:
-                        final_blocks = _extract_output_blocks(output)
+                        (
+                            blocks,
+                            authoritative_text,
+                            had_output,
+                            had_tool_use,
+                            stop_reason,
+                        ) = authoritative_openai_response(output)
                     except Exception as exc:
                         raise incomplete_response(str(exc) or "final output was malformed") from exc
-                    for block in final_blocks:
-                        if block["type"] == "text":
-                            final_text = block["text"]
-                            if final_text.startswith(emitted_text) and len(final_text) > len(emitted_text):
-                                _append_text_block(blocks, final_text[len(emitted_text):])
-                                emitted_text = final_text
-                                had_output = True
-                            elif not emitted_text and final_text:
-                                _append_text_block(blocks, final_text)
-                                emitted_text = final_text
-                                had_output = True
-                        elif block["id"] not in emitted_tool_ids:
-                            emitted_tool_ids.add(block["id"])
-                            had_tool_use = True
-                            blocks.append(block)
+                    emitted_text = authoritative_text
                     _apply_openai_usage(usage, get_value(completed, "usage"))
-                    stop_reason = "tool_calls" if any(block["type"] == "tool_use" for block in blocks) else "stop"
+                    partial_output_commit = await commit_openai_delivery(
+                        delivery, generation=attempt,
+                        authoritative_text=authoritative_text,
+                        reasoning_text=reasoning_text, response_id=response_id,
+                        provider_label=provider_label, phase=phase,
+                        had_output=had_output, had_tool_use=had_tool_use,
+                        logical_call_id=logical_call_id,
+                    )
                     saw_completed = True
                     continue
-                if typ == "response.failed":
-                    raise createProviderRequestError(
-                        createProviderFailureRecord(
-                            provider="openai",
-                            providerLabel=provider_label,
-                            phase=phase,
-                            category="server",
-                            retryable=True,
-                            attempt=attempt,
-                            hadAssistantOutput=had_output,
-                            hadToolUse=had_tool_use,
-                            rawMessage=_response_error_text(get_value(event, "response")),
-                            streamEventType=typ,
-                        )
-                    )
-                if typ == "response.cancelled":
-                    phase = "response_complete"
-                    raise createProviderRequestError(
-                        createProviderFailureRecord(
-                            provider="openai",
-                            providerLabel=provider_label,
-                            phase=phase,
-                            category="cancelled",
-                            retryable=False,
-                            attempt=attempt,
-                            hadAssistantOutput=had_output,
-                            hadToolUse=had_tool_use,
-                            rawMessage=_response_error_text(get_value(event, "response")) or "OpenAI response was cancelled.",
-                            streamEventType=typ,
-                        )
-                    )
-                if typ == "response.incomplete":
-                    phase = "response_complete"
-                    raise createProviderRequestError(
-                        createProviderFailureRecord(
-                            provider="openai",
-                            providerLabel=provider_label,
-                            phase=phase,
-                            category="protocol",
-                            retryable=False,
-                            attempt=attempt,
-                            hadAssistantOutput=had_output,
-                            hadToolUse=had_tool_use,
-                            rawMessage=_response_error_text(get_value(event, "response")),
-                            streamEventType=typ,
-                        )
-                    )
-                if typ == "error":
-                    message = str(get_value(event, "message", "") or "")
-                    code = str(get_value(event, "code", "") or "")
-                    combined = f"{code} {message}".lower()
-                    category = "rate_limit" if "rate" in combined or "limit" in combined else "auth" if "auth" in combined or "unauthor" in combined or "forbidden" in combined else "server"
-                    raise createProviderRequestError(
-                        createProviderFailureRecord(
-                            provider="openai",
-                            providerLabel=provider_label,
-                            phase=phase,
-                            category=category,
-                            retryable=category in ("rate_limit", "server"),
-                            attempt=attempt,
-                            hadAssistantOutput=had_output,
-                            hadToolUse=had_tool_use,
-                            rawMessage=f"{code}: {message}" if code and message else message or "OpenAI stream error",
-                            code=code or None,
-                            streamEventType=typ,
-                        )
-                    )
+                terminal_failure = response_terminal_failure(
+                    typ, event, provider_label=provider_label, phase=phase,
+                    attempt=attempt, had_output=had_output,
+                    had_tool_use=had_tool_use,
+                )
+                if terminal_failure is not None:
+                    raise terminal_failure
             if not saw_completed:
                 raise incomplete_response(
                     "the transport reached EOF before response.completed"
                 )
-            canonical_output_items = convertMessagesToInput(
-                [{"role": "assistant", "content": blocks}]
+            return await _finalize_responses_success(
+                args=args, mode=mode, runtime=runtime,
+                turn_session=turn_session, prepared=prepared_attempt,
+                active_stream=active_stream,
+                completed_output=completed_response_output,
+                completed_response_id=completed_response_id,
+                completed_turn_state=completed_turn_state, blocks=blocks,
+                usage=usage, stop_reason=stop_reason, attempt=attempt,
+                last_failure=last_failure, generation_lineage=generation_lineage,
+                logical_call_id=logical_call_id, response_id=response_id,
+                partial_output_commit=partial_output_commit,
             )
-            if turn_session is not None and hasattr(
-                turn_session, "record_responses_success"
-            ):
-                await turn_session.record_responses_success(
-                    prepared_attempt,
-                    output_items=completed_response_output,
-                    canonical_output_items=canonical_output_items,
-                    response_id=completed_response_id,
-                    turn_state=completed_turn_state,
-                )
-                await turn_session.release_stream(active_stream)
-                active_stream = None
-            if attempt > 1:
-                _emit(runtime, "provider.recovered", {"provider": "openai", "provider_label": provider_label, "model": args["request"]["model"], "attempts": attempt, "category": last_failure.record.get("category") if last_failure else None})
-            return {
-                "content": blocks,
-                "usage": usage,
-                "model": args["request"]["model"],
-                "stopReason": stop_reason,
-                "_providerTelemetry": {
-                    **_projection_event_fields(prepared_attempt),
-                    **(
-                        turn_session.latency_telemetry()
-                        if turn_session is not None
-                        else {}
-                    ),
-                },
-            }
         except Exception as exc:
             if turn_session is not None and active_stream is not None:
                 await turn_session.release_stream(active_stream)
@@ -444,28 +449,29 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 and hasattr(turn_session, "record_responses_failure")
             ):
                 await turn_session.record_responses_failure(prepared_attempt, exc)
-            failure = normalizeUnknownProviderFailure(
+            failure, should_retry = await recover_openai_attempt(
                 error=exc,
-                provider="openai",
-                providerLabel=provider_label,
+                args=args,
+                mode=mode,
+                provider_label=provider_label,
                 phase=phase,
                 attempt=attempt,
-                hadAssistantOutput=had_output,
-                hadToolUse=had_tool_use,
+                max_attempts=max_attempts,
+                had_output=had_output,
+                had_tool_use=had_tool_use,
+                emitted_text=emitted_text,
+                reasoning_text=reasoning_text,
+                had_provisional_tool_call=had_provisional_tool_call,
+                response_committed=response_committed,
+                delivery=delivery,
+                preview_published=preview_published,
+                logical_call_id=logical_call_id,
+                response_id=response_id,
+                sequence_number=sequence_number,
+                retry_delay=providerRetryDelayMs,
             )
             last_failure = failure
-            if canRetryProviderFailure(failure, max_attempts):
-                delay_ms = providerRetryDelayMs(attempt)
-                _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
-                _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
-                emitProviderActivity(
-                    runtime,
-                    "retry_wait",
-                    attempt=attempt,
-                    force=True,
-                )
-                await asyncio.sleep(delay_ms / 1000)
-                _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
+            if should_retry:
                 continue
             raise failure
     raise last_failure or RuntimeError("OpenAI request failed unexpectedly.")
