@@ -8,7 +8,6 @@ from ...provider_activity import emitProviderActivity
 from ...provider_errors import (
     ProviderRequestError,
     normalizeUnknownProviderFailure,
-    providerRetryDelayMs,
 )
 from .recovery import (
     attach_openai_failure_lineage,
@@ -18,6 +17,7 @@ from .recovery import (
     supersede_openai_generation,
 )
 from .transport import _emit, _raise_openai_cancelled
+from .shared import providerRetryDelayMs
 
 
 async def recover_openai_attempt(

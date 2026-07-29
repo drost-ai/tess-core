@@ -22,6 +22,10 @@ from .responses_session import (
 )
 from .responses_failures import response_terminal_failure
 from .shared import *
+
+_OPENAI_DEFAULT_MAX_ATTEMPTS = 6
+
+
 async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
     if args["mode"] == "chat_completions":
@@ -32,7 +36,10 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
     mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
     base_url = resolveOpenAiBaseUrl(mode, args.get("baseUrl"))
     provider_label = getOpenAiProviderLabel(mode, base_url)
-    max_attempts = max(1, int(args.get("maxAttempts") or 2))
+    max_attempts = max(
+        1,
+        int(args.get("maxAttempts") or _OPENAI_DEFAULT_MAX_ATTEMPTS),
+    )
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
     runtime = args.get("runtime") or {}

@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from ...provider_activity import emitProviderActivity
+from .recovery_attempt import openai_retry_delay_ms as _openai_retry_delay_ms
 from .shared import *
+
+_OPENAI_DEFAULT_MAX_ATTEMPTS = 6
+
 
 async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     base_url = resolveOpenAiBaseUrl("chat_completions", args.get("baseUrl"))
     provider_label = getOpenAiProviderLabel("chat_completions", base_url)
-    max_attempts = max(1, int(args.get("maxAttempts") or 2))
+    max_attempts = max(
+        1,
+        int(args.get("maxAttempts") or _OPENAI_DEFAULT_MAX_ATTEMPTS),
+    )
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
     for attempt in range(1, max_attempts + 1):
@@ -247,7 +254,11 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             )
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
-                delay_ms = providerRetryDelayMs(attempt)
+                delay_ms = _openai_retry_delay_ms(
+                    args,
+                    attempt,
+                    providerRetryDelayMs,
+                )
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
                 emitProviderActivity(
