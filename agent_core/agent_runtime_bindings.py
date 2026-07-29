@@ -9,6 +9,9 @@ from .partial_output import (
     assertPartialOutputSink as _assert_partial_output_sink,
     assertPartialOutputStateStore as _assert_partial_output_state_store,
 )
+from ._partial_output_recovery import (
+    assertPartialOutputRecoveryPolicy as _assert_partial_output_recovery_policy,
+)
 
 
 AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION = 1
@@ -81,6 +84,7 @@ def assertAgentRuntimeBindings(
     try:
         _assert_partial_output_sink(value.get("partialOutputSink"))
         _assert_partial_output_state_store(value.get("partialOutputStateStore"))
+        _assert_partial_output_recovery_policy(value.get("partialOutputRecoveryPolicy"))
     except ValueError as exc:
         raise _error("runtime_bindings_invalid", str(exc)) from exc
     if (

@@ -6,12 +6,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from ._utils import maybe_await, now_iso
+from ._partial_output_recovery import (
+    partialOutputRecoveryPolicy,
+    recoverAbandonedPartialOutput,
+)
 from .partial_output_state import (
     assertPartialOutputStateStore,
     clonePartialOutputState,
-    isTerminalPartialOutputState,
     partialOutputRuntimeAuthority,
-    sanitizePartialOutputState,
     stateStoreValue,
 )
 
@@ -37,6 +39,7 @@ class PartialOutputDelivery:
         self.state_store = runtime.get("partialOutputStateStore")
         assertPartialOutputStateStore(self.state_store)
         self.mode = partialOutputMode(runtime)
+        self.recovery_policy = partialOutputRecoveryPolicy(runtime)
         self.timeout_ms = _positive_timeout(
             runtime.get("partialOutputAckTimeoutMs"),
             PARTIAL_OUTPUT_ACK_TIMEOUT_MS,
@@ -320,54 +323,16 @@ class PartialOutputDelivery:
         }
 
     async def _recover_abandoned(self) -> dict[str, Any]:
-        if self.state_store is None:
-            return _result(True, "no_state_store")
-        try:
-            existing = await maybe_await(stateStoreValue(self.state_store, "load")())
-        except Exception:
-            return _result(False, "state_load_failed")
-        state = sanitizePartialOutputState(
-            existing,
-            expected_session_id=self.session_id,
+        return await recoverAbandonedPartialOutput(
+            state_store=self.state_store,
+            sink=self.sink,
+            recovery_policy=self.recovery_policy,
+            session_id=self.session_id,
+            logical_call_id=self.logical_call_id,
+            mode=self.mode,
+            runtime_authority=self.runtime_authority,
+            invoke=self._invoke,
         )
-        if state is None or isTerminalPartialOutputState(state):
-            return _result(True, "no_abandoned_state")
-        if self.sink is None and not state.get("previewPublished"):
-            state["terminalState"] = "interrupted"
-            state["updatedAt"] = now_iso()
-            try:
-                saved = await maybe_await(stateStoreValue(self.state_store, "save")(state))
-            except Exception:
-                return _result(False, "state_persist_failed")
-            return _result(bool(saved), "abandoned_buffer_discarded")
-        if self.sink is None:
-            return _result(False, "recover_unavailable")
-        result = await self._invoke(
-            "recover",
-            {
-                "logicalCallId": self.logical_call_id,
-                "deliveryMode": self.mode,
-                "abandoned": clonePartialOutputState(state),
-                "runtimeAuthority": self.runtime_authority,
-                "sameTurnAuthority": _same_turn_authority(
-                    state.get("runtimeAuthority"), self.runtime_authority
-                ),
-                "operationId": (
-                    f"{self.logical_call_id}:recover:"
-                    f"{state['logicalCallId']}:{state['generation']}"
-                ),
-            },
-        )
-        if not result["acknowledged"]:
-            return result
-        state["recoveryAcknowledged"] = True
-        state["terminalState"] = "interrupted"
-        state["updatedAt"] = now_iso()
-        try:
-            saved = await maybe_await(stateStoreValue(self.state_store, "save")(state))
-        except Exception:
-            return _result(False, "state_persist_failed")
-        return result if saved else _result(False, "state_persist_failed")
 
     def _new_state(self, generation: int) -> dict[str, Any] | None:
         if self.state_store is None or self.session_id is None:
@@ -475,15 +440,6 @@ def _positive_timeout(value: Any, default: int) -> int:
 
 def _text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _same_turn_authority(left: Any, right: Any) -> bool:
-    return bool(
-        isinstance(left, Mapping)
-        and isinstance(right, Mapping)
-        and left.get("turnAuthorityId")
-        and left.get("turnAuthorityId") == right.get("turnAuthorityId")
-    )
 
 
 def _result(
