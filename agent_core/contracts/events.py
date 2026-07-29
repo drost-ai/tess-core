@@ -37,6 +37,7 @@ RuntimeEventName = Literal[
     "status.cleared",
     "provider.retrying",
     "provider.recovered",
+    "provider.consumer_sink_degraded",
     "provider.attempt_superseding",
     "provider.attempt_superseded",
     "provider.failed",

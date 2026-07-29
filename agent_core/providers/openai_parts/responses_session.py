@@ -218,6 +218,7 @@ async def finalize_responses_success(
     logical_call_id: str,
     response_id: str | None,
     partial_output_commit: dict[str, Any] | None,
+    reconciliation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     canonical_output = convertMessagesToInput(
         [{"role": "assistant", "content": blocks}]
@@ -277,4 +278,6 @@ async def finalize_responses_success(
             result["provider_metadata"]["partialOutputCommit"] = (
                 partial_output_commit
             )
+        if reconciliation is not None:
+            result["provider_metadata"]["reconciliation"] = reconciliation
     return result

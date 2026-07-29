@@ -3,21 +3,15 @@ from ...contracts.providers import ProviderResponse
 from ...partial_output import PartialOutputDelivery
 from ...provider_activity import emitProviderActivity
 from ..openai_turn_session import PreparedOpenAiRequest as _PreparedOpenAiRequest
+from .reconcile import close_openai_output_item as _close_openai_output_item
 from .recovery import (
-    authoritative_openai_response,
-    attach_openai_failure_lineage,
-    attach_recovery_failure,
     append_openai_partial,
-    can_retry_openai_generation,
-    commit_openai_delivery,
     create_openai_logical_call_id,
-    finalize_interrupted_openai_preview,
-    openai_retry_delay_ms,
     partial_openai_event_lineage,
-    recover_openai_attempt,
     sink_failure,
-    supersede_openai_generation,
 )
+from .recovery_attempt import recover_openai_attempt
+from .responses_terminal import handle_response_completed as _handle_response_completed
 from .responses_session import (
     extract_turn_state as _extract_turn_state,
     finalize_responses_success as _finalize_responses_success,
@@ -74,6 +68,11 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         open_output_items: dict[str, str] = {}
         completed_output_items: set[str] = set()
         tool_argument_bytes_by_item: dict[str, int] = {}
+        item_text: dict[str, str] = {}
+        completed_item_order: list[str] = []
+        completed_item_records: dict[str, dict[str, Any]] = {}
+        open_message_item: str | None = None
+        reconciliation: dict[str, Any] | None = None
         saw_completed = False
         completed_response_output: list[Any] = []
         completed_response_id: str | None = None
@@ -117,6 +116,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         logical_call_id=logical_call_id,
                         delivery_mode=delivery.mode,
                         reason=str(begun["reason"]),
+                        operation="begin",
                     )
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
             client, connection_reused = await _acquire_openai_client(args, base_url)
@@ -231,6 +231,12 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         continue
                     had_output = True
                     emitted_text += delta
+                    delta_item_id = (
+                        str(get_value(event, "item_id", "") or "")
+                        or (open_message_item or "")
+                    )
+                    if delta_item_id:
+                        item_text[delta_item_id] = item_text.get(delta_item_id, "") + delta
                     appended = await append_openai_partial(
                         delivery, generation=attempt, content_kind="assistant",
                         delta=delta, text=emitted_text, response_id=response_id,
@@ -301,6 +307,8 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     if item_id in open_output_items or item_id in completed_output_items:
                         raise incomplete_response(f"output item {item_id} started more than once")
                     open_output_items[item_id] = str(get_value(item, "type", "unknown") or "unknown")
+                    if get_value(item, "type") == "message":
+                        open_message_item = item_id
                     if get_value(item, "type") == "function_call":
                         had_provisional_tool_call = True
                         call_id = str(get_value(item, "call_id", "") or "")
@@ -340,97 +348,61 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     had_provisional_tool_call = True
                     continue
                 if typ == "response.output_item.done":
-                    item = get_value(event, "item", {})
-                    item_id = str(get_value(item, "id", None) or get_value(event, "item_id", "") or "")
-                    if not item_id or item_id not in open_output_items:
-                        raise incomplete_response(
-                            "an output item completed without a matching start event"
-                        )
-                    if get_value(item, "type") == "function_call":
-                        pending = pending_by_item_id.get(item_id)
-                        call_id = str(
-                            get_value(item, "call_id", "")
-                            or item_to_call_id.get(item_id, "")
-                            or ""
-                        )
-                        name = str(get_value(item, "name", "") or (pending or {}).get("name") or "")
-                        raw_value = get_value(item, "arguments")
-                        raw = raw_value if isinstance(raw_value, str) else str((pending or {}).get("raw") or "")
-                        if not call_id or not name:
-                            raise incomplete_response(
-                                f"function-call output item {item_id} completed without a call id and name"
-                            )
-                        if call_id in emitted_tool_ids:
-                            raise incomplete_response(f"function call {call_id} completed more than once")
-                        input_value = (pending or {}).get("input")
-                        if not isinstance(input_value, dict) or raw != (pending or {}).get("raw"):
-                            try:
-                                input_value = _parse_complete_json_object(raw)
-                            except Exception as exc:
-                                tool_argument_bytes_by_item[item_id] = len(raw.encode("utf-8"))
-                                raise incomplete_response(str(exc) or "tool arguments were malformed") from exc
-                        tool_argument_bytes_by_item[item_id] = len(raw.encode("utf-8"))
-                        emitted_tool_ids.add(call_id)
+                    if _close_openai_output_item(
+                        {
+                            "event": event,
+                            "incomplete_response": incomplete_response,
+                            "open_output_items": open_output_items,
+                            "completed_output_items": completed_output_items,
+                            "pending_by_item_id": pending_by_item_id,
+                            "item_to_call_id": item_to_call_id,
+                            "item_to_name": item_to_name,
+                            "tool_argument_bytes_by_item": tool_argument_bytes_by_item,
+                            "emitted_tool_ids": emitted_tool_ids,
+                            "item_text": item_text,
+                            "completed_item_records": completed_item_records,
+                            "completed_item_order": completed_item_order,
+                            "blocks": blocks,
+                        }
+                    ):
                         had_tool_use = True
-                        blocks.append(
-                            {
-                                "type": "tool_use",
-                                "id": call_id,
-                                "name": name,
-                                "input": input_value,
-                            }
-                        )
-                    del open_output_items[item_id]
-                    completed_output_items.add(item_id)
-                    pending_by_item_id.pop(item_id, None)
                     continue
                 if typ == "response.completed":
                     phase = "response_complete"
+                    terminal = await _handle_response_completed(
+                        {
+                            "event": event,
+                            "incomplete_response": incomplete_response,
+                            "open_output_items": open_output_items,
+                            "pending_by_item_id": pending_by_item_id,
+                            "completed_item_order": completed_item_order,
+                            "completed_item_records": completed_item_records,
+                            "provider_label": provider_label,
+                            "phase": phase,
+                            "attempt": attempt,
+                            "had_output": had_output,
+                            "had_tool_use": had_tool_use,
+                            "logical_call_id": logical_call_id,
+                            "response_id": response_id,
+                            "reasoning_text": reasoning_text,
+                            "completed_turn_state": completed_turn_state,
+                            "usage": usage,
+                            "delivery": delivery,
+                            "runtime": runtime,
+                        }
+                    )
+                    blocks = terminal["blocks"]
+                    emitted_text = terminal["authoritative_text"]
+                    had_output = terminal["had_output"]
+                    had_tool_use = terminal["had_tool_use"]
+                    stop_reason = terminal["stop_reason"]
+                    response_id = terminal["response_id"]
+                    completed_response_output = terminal["completed_response_output"]
+                    completed_response_id = terminal["completed_response_id"]
+                    completed_turn_state = terminal["completed_turn_state"]
+                    reconciliation = terminal["reconciliation"]
+                    partial_output_commit = terminal["partial_output_commit"]
                     response_committed = True
-                    if open_output_items or pending_by_item_id:
-                        raise incomplete_response(
-                            "response.completed arrived while output items were still open"
-                        )
-                    completed = get_value(event, "response", {}) or {}
-                    completed_status = str(
-                        get_value(completed, "status", "") or ""
-                    ).strip()
-                    if completed_status and completed_status != "completed":
-                        raise incomplete_response(
-                            f"response.completed carried non-completed status {completed_status}"
-                        )
-                    completed_id = str(get_value(completed, "id", "") or "")
-                    if completed_id:
-                        response_id = completed_id
-                    output = get_value(completed, "output", [])
-                    output = output if isinstance(output, list) else []
-                    completed_response_output = _plain_openai_value(output)
-                    completed_response_id = str(
-                        get_value(completed, "id", "") or ""
-                    ).strip() or None
-                    completed_turn_state = (
-                        _extract_turn_state(completed) or completed_turn_state
-                    )
-                    try:
-                        (
-                            blocks,
-                            authoritative_text,
-                            had_output,
-                            had_tool_use,
-                            stop_reason,
-                        ) = authoritative_openai_response(output)
-                    except Exception as exc:
-                        raise incomplete_response(str(exc) or "final output was malformed") from exc
-                    emitted_text = authoritative_text
-                    _apply_openai_usage(usage, get_value(completed, "usage"))
-                    partial_output_commit = await commit_openai_delivery(
-                        delivery, generation=attempt,
-                        authoritative_text=authoritative_text,
-                        reasoning_text=reasoning_text, response_id=response_id,
-                        provider_label=provider_label, phase=phase,
-                        had_output=had_output, had_tool_use=had_tool_use,
-                        logical_call_id=logical_call_id,
-                    )
                     saw_completed = True
                     continue
                 terminal_failure = response_terminal_failure(
@@ -455,6 +427,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 last_failure=last_failure, generation_lineage=generation_lineage,
                 logical_call_id=logical_call_id, response_id=response_id,
                 partial_output_commit=partial_output_commit,
+                reconciliation=reconciliation,
             )
         except Exception as exc:
             if turn_session is not None and active_stream is not None:

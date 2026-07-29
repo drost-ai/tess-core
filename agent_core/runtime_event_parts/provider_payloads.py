@@ -53,6 +53,18 @@ def providerTypedPayload(
             "attempts": _optional_number(_field(data, "attempts")),
             **_provider_recovery_lineage(data),
         }
+    if event == "provider.consumer_sink_degraded":
+        return event, _without_none(
+            {
+                "component": _optional_string(_field(data, "component")),
+                "operation": _optional_string(_field(data, "operation")),
+                "reason": _optional_string(_field(data, "reason")),
+                "responseId": _optional_string(
+                    _field(data, "response_id", "responseId")
+                ),
+                **_provider_recovery_lineage(data),
+            }
+        )
     if event in {"provider.attempt_superseding", "provider.attempt_superseded"}:
         return event, _without_none(
             {

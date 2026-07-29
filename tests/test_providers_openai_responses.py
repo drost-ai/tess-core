@@ -381,7 +381,11 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         )
         self.assertEqual(response["content"][0], {"type": "text", "text": "Plan done"})
         self.assertEqual(response["content"][1], {"type": "tool_use", "id": "call_1", "name": "Read", "input": {"path": "a.txt"}})
-        self.assertEqual(response["content"][2], {"type": "tool_use", "id": "call_3", "name": "List", "input": {"dir": "."}})
+        # Package 131: a complete accumulated tool call omitted from the
+        # terminal projection is never silently discarded; the deterministic
+        # union anchors it after its streamed predecessor.
+        self.assertEqual(response["content"][2], {"type": "tool_use", "id": "call_2", "name": "Write", "input": {}})
+        self.assertEqual(response["content"][3], {"type": "tool_use", "id": "call_3", "name": "List", "input": {"dir": "."}})
         self.assertEqual([block["id"] for block in response["content"] if block["type"] == "tool_use"].count("call_1"), 1)
         self.assertEqual(response["usage"], {"input_tokens": 12, "output_tokens": 4})
         self.assertEqual(response["stopReason"], "tool_calls")

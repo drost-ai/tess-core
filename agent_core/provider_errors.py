@@ -75,6 +75,8 @@ def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: An
         "sequenceNumber": _nonnegative_optional_integer(args.get("sequenceNumber")),
         "recoveryFailure": _bound_optional_diagnostic_text(args.get("recoveryFailure"), 128),
         "interruptedPreview": _bounded_interrupted_preview(args.get("interruptedPreview")),
+        "component": _bound_optional_diagnostic_text(args.get("component"), 64),
+        "operation": _bound_optional_diagnostic_text(args.get("operation"), 32),
     }
     record.update({key: value for key, value in optional.items() if value is not None})
     return record
@@ -321,6 +323,8 @@ def _format_provider_failure_message(args: dict[str, Any]) -> str:
         return f"{label} stream terminated unexpectedly before a response was produced."
     if category == "protocol":
         return f"{label} returned a malformed or incomplete streaming response."
+    if category == "consumer_sink":
+        return f"A local response-presentation component failed while handling the {label} response."
     if category == "server":
         status = f" ({args['status']})" if isinstance(args.get("status"), int) else ""
         return f"{label} request failed with a server error{status}."

@@ -1,21 +1,17 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import uuid
 from typing import Any
 
 from ...partial_output import PartialOutputDelivery, interruptedPreviewReceipt
-from ...provider_activity import emitProviderActivity
 from ...provider_errors import (
     ProviderRequestError,
     createProviderFailureRecord,
     createProviderRequestError,
-    normalizeUnknownProviderFailure,
-    providerRetryDelayMs,
 )
 from .normalization import _extract_output_blocks
-from .transport import _emit, _raise_openai_cancelled
+from .transport import _emit
 
 
 def create_openai_logical_call_id() -> str:
@@ -102,6 +98,7 @@ def sink_failure(
     logical_call_id: str,
     delivery_mode: str,
     reason: str,
+    operation: str,
     response_id: str | None = None,
 ) -> ProviderRequestError:
     return createProviderRequestError(
@@ -109,12 +106,14 @@ def sink_failure(
             provider="openai",
             providerLabel=provider_label,
             phase=phase,
-            category="protocol",
+            category="consumer_sink",
             retryable=False,
             attempt=attempt,
             hadAssistantOutput=had_output,
             hadToolUse=had_tool_use,
             rawMessage=f"Partial output sink rejected {reason}.",
+            component="partial_output_sink",
+            operation=operation,
             logicalCallId=logical_call_id,
             generation=attempt,
             partialOutputMode=delivery_mode,
@@ -274,6 +273,7 @@ async def append_openai_partial(
             logical_call_id=logical_call_id,
             delivery_mode=delivery.mode,
             reason=str(appended["reason"]),
+            operation="append",
             response_id=response_id,
         )
     return appended
@@ -291,19 +291,20 @@ async def commit_openai_delivery(
     had_output: bool,
     had_tool_use: bool,
     logical_call_id: str,
+    has_text: bool = True,
+    runtime: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     if delivery is None:
         return None
-    common = {
-        "provider_label": provider_label,
-        "phase": phase,
-        "attempt": generation,
-        "had_output": had_output,
-        "had_tool_use": had_tool_use,
-        "logical_call_id": logical_call_id,
-        "delivery_mode": delivery.mode,
-        "response_id": response_id,
-    }
+    if not has_text:
+        return _terminal_delivery_receipt(
+            logical_call_id=logical_call_id,
+            generation=generation,
+            authoritative_text="",
+            reasoning_text=reasoning_text,
+            response_id=response_id,
+            extra={"textualDelivery": "skipped_no_text"},
+        )
     reconciled = await delivery.reconcile(
         generation,
         authoritative_text,
@@ -311,7 +312,16 @@ async def commit_openai_delivery(
         reasoning_text=reasoning_text,
     )
     if not reconciled["acknowledged"]:
-        raise sink_failure(reason=str(reconciled["reason"]), **common)
+        return _degraded_delivery_commit(
+            runtime=runtime,
+            operation="reconcile",
+            reason=str(reconciled["reason"]),
+            logical_call_id=logical_call_id,
+            generation=generation,
+            authoritative_text=authoritative_text,
+            reasoning_text=reasoning_text,
+            response_id=response_id,
+        )
     committed = await delivery.commit(
         generation,
         authoritative_text,
@@ -319,16 +329,99 @@ async def commit_openai_delivery(
         reasoning_text=reasoning_text,
     )
     if not committed["acknowledged"]:
-        raise sink_failure(reason=str(committed["reason"]), **common)
+        return _degraded_delivery_commit(
+            runtime=runtime,
+            operation="commit",
+            reason=str(committed["reason"]),
+            logical_call_id=logical_call_id,
+            generation=generation,
+            authoritative_text=authoritative_text,
+            reasoning_text=reasoning_text,
+            response_id=response_id,
+        )
     if delivery.state_store is None:
         return None
-    return {
+    return _terminal_delivery_receipt(
+        logical_call_id=logical_call_id,
+        generation=generation,
+        authoritative_text=authoritative_text,
+        reasoning_text=reasoning_text,
+        response_id=response_id,
+    )
+
+
+def _terminal_delivery_receipt(
+    *,
+    logical_call_id: str,
+    generation: int,
+    authoritative_text: str,
+    reasoning_text: str,
+    response_id: str | None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    receipt = {
         "logicalCallId": logical_call_id,
         "generation": generation,
         "assistantTextHash": _recovery_text_hash(authoritative_text),
         "reasoningTextHash": _recovery_text_hash(reasoning_text),
         "responseId": response_id,
     }
+    receipt.update(extra or {})
+    return receipt
+
+
+def _degraded_delivery_commit(
+    *,
+    runtime: dict[str, Any] | None,
+    operation: str,
+    reason: str,
+    logical_call_id: str,
+    generation: int,
+    authoritative_text: str,
+    reasoning_text: str,
+    response_id: str | None,
+) -> dict[str, Any]:
+    _emit_consumer_sink_degraded(
+        runtime,
+        operation=operation,
+        reason=reason,
+        logical_call_id=logical_call_id,
+        generation=generation,
+        response_id=response_id,
+    )
+    return _terminal_delivery_receipt(
+        logical_call_id=logical_call_id,
+        generation=generation,
+        authoritative_text=authoritative_text,
+        reasoning_text=reasoning_text,
+        response_id=response_id,
+        extra={"degraded": True, "degradedOperation": operation},
+    )
+
+
+def _emit_consumer_sink_degraded(
+    runtime: dict[str, Any] | None,
+    *,
+    operation: str,
+    reason: str,
+    logical_call_id: str,
+    generation: int,
+    response_id: str | None,
+) -> None:
+    if not isinstance(runtime, dict):
+        return
+    _emit(
+        runtime,
+        "provider.consumer_sink_degraded",
+        {
+            "component": "partial_output_sink",
+            "operation": operation,
+            "reason": reason[:128],
+            "logicalCallId": logical_call_id,
+            "generation": generation,
+            "responseId": _bounded_identifier(response_id),
+        },
+    )
 
 
 def partial_openai_event_lineage(
@@ -353,138 +446,6 @@ def partial_openai_event_lineage(
 
 def _recovery_text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-async def recover_openai_attempt(
-    *,
-    error: Exception,
-    args: dict[str, Any],
-    mode: str,
-    provider_label: str,
-    phase: str,
-    attempt: int,
-    max_attempts: int,
-    had_output: bool,
-    had_tool_use: bool,
-    emitted_text: str,
-    reasoning_text: str,
-    had_provisional_tool_call: bool,
-    response_committed: bool,
-    delivery: PartialOutputDelivery | None,
-    preview_published: bool,
-    logical_call_id: str,
-    response_id: str | None,
-    sequence_number: int | None,
-    retry_delay: Any,
-) -> tuple[ProviderRequestError, bool]:
-    runtime = args.get("runtime") or {}
-    failure = normalizeUnknownProviderFailure(
-        error=error,
-        provider="openai",
-        providerLabel=provider_label,
-        phase=phase,
-        attempt=attempt,
-        hadAssistantOutput=had_output,
-        hadToolUse=had_tool_use,
-    )
-    attach_openai_failure_lineage(
-        failure,
-        mode=mode,
-        logical_call_id=logical_call_id,
-        generation=attempt,
-        delivery_mode=delivery.mode if delivery else (
-            "append_only" if runtime.get("includePartialMessages") else "buffered"
-        ),
-        response_id=response_id,
-        sequence_number=sequence_number,
-    )
-    can_retry = can_retry_openai_generation(
-        failure,
-        mode=mode,
-        max_attempts=max_attempts,
-        response_committed=response_committed,
-        tool_effect_committed=bool(runtime.get("toolEffectCommitted")),
-        delivery=delivery,
-        had_tentative_output=bool(emitted_text or reasoning_text),
-        had_provisional_tool_call=had_provisional_tool_call,
-    )
-    has_tentative_state = bool(
-        emitted_text or reasoning_text or had_provisional_tool_call
-    )
-    if can_retry:
-        if has_tentative_state:
-            _emit(
-                runtime,
-                "provider.attempt_superseding",
-                {**failure.record, "next_generation": attempt + 1},
-            )
-        superseded = await supersede_openai_generation(
-            delivery,
-            old_generation=attempt,
-            new_generation=attempt + 1,
-            failure=failure,
-        )
-        if not superseded["acknowledged"]:
-            attach_recovery_failure(failure, str(superseded["reason"]))
-            can_retry = False
-        elif has_tentative_state:
-            _emit(
-                runtime,
-                "provider.attempt_superseded",
-                {**failure.record, "next_generation": attempt + 1},
-            )
-    if can_retry:
-        delay_ms = openai_retry_delay_ms(args, attempt, retry_delay)
-        _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
-        _emit(
-            runtime,
-            "provider.retrying",
-            {
-                **failure.record,
-                "next_attempt": attempt + 1,
-                **({"next_generation": attempt + 1} if mode == "codex" else {}),
-                "delay_ms": delay_ms,
-            },
-        )
-        emitProviderActivity(
-            runtime,
-            "retry_wait",
-            attempt=attempt,
-            force=True,
-        )
-        await asyncio.sleep(delay_ms / 1_000)
-        _raise_openai_cancelled(
-            runtime, provider_label, phase, attempt, had_output, had_tool_use
-        )
-        return failure, True
-    if (emitted_text or reasoning_text) and mode == "codex":
-        await finalize_interrupted_openai_preview(
-            failure,
-            delivery=delivery,
-            runtime=runtime,
-            emitted_text=emitted_text,
-            reasoning_text=reasoning_text,
-            preview_published=preview_published,
-            logical_call_id=logical_call_id,
-            generation=attempt,
-            response_id=response_id,
-            sequence_number=sequence_number,
-            model=args["request"]["model"],
-            emit=lambda event, data: _emit(runtime, event, data),
-        )
-    return failure, False
-
-
-def openai_retry_delay_ms(
-    args: dict[str, Any], attempt: int, default_delay: Any = providerRetryDelayMs
-) -> int:
-    override = args.get("retryDelay")
-    if callable(override):
-        try:
-            return max(0, int(override(attempt)))
-        except (TypeError, ValueError):
-            pass
-    return int(default_delay(attempt))
 
 
 def _bounded_identifier(value: str | None) -> str | None:
