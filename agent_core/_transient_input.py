@@ -4,6 +4,7 @@ import copy
 from typing import Any
 
 from ._media_persistence import sanitizeMediaForPersistence
+from .message_origin import isGenuineUserRequest as _is_genuine_user_request
 
 
 def createTransientExecutionSession(
@@ -17,7 +18,7 @@ def createTransientExecutionSession(
     if not isinstance(overlay, dict):
         raise TypeError("transientInputOverlay must be an object.")
     message = overlay.get("message")
-    if not isinstance(message, dict) or message.get("role") != "user":
+    if not _is_genuine_user_request(message):
         raise ValueError("transientInputOverlay.message must be a user message.")
     session_messages = session.get("messages")
     if not isinstance(session_messages, list):
@@ -27,8 +28,7 @@ def createTransientExecutionSession(
         raise ValueError("transientInputOverlay target is outside canonical history.")
     canonical_message = session_messages[target_index]
     if (
-        not isinstance(canonical_message, dict)
-        or canonical_message.get("role") != "user"
+        not _is_genuine_user_request(canonical_message)
     ):
         raise ValueError(
             "transientInputOverlay target must be a canonical user message."

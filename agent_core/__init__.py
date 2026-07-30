@@ -79,6 +79,7 @@ _INTERNAL_MODULES = {
     "exception_groups",
     "image_budget",
     "mcp_payloads",
+    "message_origin",
     "notebook_payload",
     "payload_cursor",
     "partial_output",

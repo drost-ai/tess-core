@@ -3,6 +3,10 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from ..message_origin import (
+    isGenuineUserRequest as _is_genuine_user_request,
+    syntheticUserMessage as _synthetic_user_message,
+)
 from ..providers.prompt_cache import resolvePromptCachePolicy
 
 
@@ -25,7 +29,7 @@ def injectSystemContextIntoMessages(
     dynamic_block = _dynamic_context_text_block(system_context)
     for index in range(len(messages) - 1, -1, -1):
         message = messages[index]
-        if not isinstance(message, dict) or message.get("role") != "user":
+        if not _is_genuine_user_request(message):
             continue
         content = message.get("content")
         if isinstance(content, str):
@@ -47,7 +51,10 @@ def injectSystemContextIntoMessages(
 
 
 def _dynamic_context_message(system_context: Any) -> dict[str, Any]:
-    return {"role": "user", "content": _dynamic_context_text_block(system_context)["text"]}
+    return _synthetic_user_message(
+        _dynamic_context_text_block(system_context)["text"],
+        kind="dynamic_context",
+    )
 
 
 def _dynamic_context_text_block(system_context: Any) -> dict[str, str]:

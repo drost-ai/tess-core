@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
 
 
 def _split_subcommand(arg_text: str) -> tuple[str, str]:
@@ -43,7 +44,7 @@ def _session_matches(session: dict[str, Any], query: str) -> bool:
 
 def _first_user_text(session: dict[str, Any]) -> str:
     for message in session.get("messages") or []:
-        if message.get("role") != "user":
+        if not _is_genuine_user_request(message):
             continue
         content = message.get("content")
         if isinstance(content, str):

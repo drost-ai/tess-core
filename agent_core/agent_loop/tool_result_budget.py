@@ -6,24 +6,23 @@ from ..agent_tool_results import createToolResultFinalizer
 from ..provider_token_budget import resolve_interactive_context_policy
 from ..tool_result_guard import (
     MIN_EFFECTIVE_TOOL_RESULT_BYTES,
+    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
     serializedContentBytes,
 )
 
 
-class ToolResultTurnBudget:
+class ToolResultBatchBudget:
     def __init__(self, profile: dict[str, Any]) -> None:
         policy = resolve_interactive_context_policy(profile)
         self.batch_bytes = policy.get("inlineToolResultBatchBytes")
-        self.remaining_bytes = policy.get("inlineToolResultTurnBytes")
         self.source = policy.get("toolBudgetSource")
 
     def perResultLimit(self, result_count: int) -> int | None:
-        if self.batch_bytes is None or self.remaining_bytes is None:
+        if self.batch_bytes is None:
             return None
-        available = min(int(self.batch_bytes), int(self.remaining_bytes))
         return max(
             MIN_EFFECTIVE_TOOL_RESULT_BYTES,
-            available // max(1, int(result_count)),
+            int(self.batch_bytes) // max(1, int(result_count)),
         )
 
     def createFinalizer(
@@ -48,29 +47,60 @@ class ToolResultTurnBudget:
             outcome: dict[str, Any],
             **kwargs: Any,
         ) -> dict[str, Any]:
+            artifact_page = tool_use.get("name") == "ReadToolArtifact"
             return await base(
                 tool_use,
                 outcome,
-                max_bytes=effective_limit,
-                require_artifact=effective_limit is not None,
+                max_bytes=(
+                    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES
+                    if artifact_page
+                    else effective_limit
+                ),
+                require_artifact=effective_limit is not None and not artifact_page,
+                never_artifact=artifact_page,
                 **kwargs,
             )
 
         return finish, effective_limit
 
-    def record(self, blocks: list[dict[str, Any] | None]) -> dict[str, Any] | None:
-        if self.remaining_bytes is None:
+    def record(
+        self,
+        blocks: list[dict[str, Any] | None],
+        tool_uses: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        if self.batch_bytes is None:
             return None
+        artifact_page_ids = {
+            str(tool_use.get("id") or "")
+            for tool_use in (tool_uses or [])
+            if tool_use.get("name") == "ReadToolArtifact"
+        }
         used = sum(
             serializedContentBytes(str(block.get("content") or ""))
             for block in blocks
-            if isinstance(block, dict) and block.get("type") == "tool_result"
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "tool_result"
+                and str(block.get("tool_use_id") or "") not in artifact_page_ids
+            )
         )
-        before = int(self.remaining_bytes)
-        self.remaining_bytes = max(0, before - used)
+        reserved_used = sum(
+            serializedContentBytes(str(block.get("content") or ""))
+            for block in blocks
+            if (
+                isinstance(block, dict)
+                and block.get("type") == "tool_result"
+                and str(block.get("tool_use_id") or "") in artifact_page_ids
+            )
+        )
         return {
-            "batch_budget_bytes": min(int(self.batch_bytes or 0), before),
+            "batch_budget_bytes": int(self.batch_bytes),
             "batch_used_bytes": used,
-            "turn_remaining_bytes": self.remaining_bytes,
+            "artifact_page_reserved_bytes": reserved_used,
             "source": self.source,
         }
+
+
+# Compatibility import for consumers that referenced the Package 38 class.
+# The alias has batch-local, stateless semantics.
+ToolResultTurnBudget = ToolResultBatchBudget

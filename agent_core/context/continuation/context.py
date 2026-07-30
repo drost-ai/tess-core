@@ -13,43 +13,11 @@ async def buildContinuationContext(args: dict[str, Any] | None = None, **kwargs:
     aggressive = bool(args.get("aggressive", False))
     reactive_attempt = max(0, int(args.get("reactiveAttempt") if args.get("reactiveAttempt") is not None else (1 if aggressive else 0)))
 
-    relief_target = _positive_token_limit(args.get("reliefTargetTokenLimit"))
-    checkpoint_target = (
-        min(12_000, max(2_000, relief_target // 2))
-        if relief_target is not None
-        else None
-    )
-    checkpoint_projection = await _buildCompactionSystemPromptProjection(
-        session,
-        tokenLimit=checkpoint_target,
-    )
+    checkpoint_projection = await _buildCompactionSystemPromptProjection(session)
     compaction_context = checkpoint_projection["text"]
     retrieved_memory = await retrieveRelevantDurableMemory({"session": session, "prompt": prompt})
     continuation_overlay = renderContinuationOverlay(session)
     base_messages = buildMessagesForWorkingContext(session)
-    fixed_overlay_tokens = sum(
-        estimateTextTokens(value or "")
-        for value in (
-            compaction_context,
-            continuation_overlay,
-            renderRetrievedMemoryPrompt(retrieved_memory),
-        )
-    )
-    relief_reserve_tokens = 1_024 if relief_target is not None else 0
-    message_target = (
-        max(1, relief_target - fixed_overlay_tokens - relief_reserve_tokens)
-        if relief_target is not None
-        else args.get("reliefTargetTokenLimit")
-    )
-    relief_threshold = _positive_token_limit(args.get("reliefTokenLimit"))
-    message_threshold = (
-        max(
-            int(message_target),
-            relief_threshold - fixed_overlay_tokens - relief_reserve_tokens,
-        )
-        if relief_threshold is not None and relief_target is not None
-        else args.get("reliefTokenLimit")
-    )
     relief = applyContextReliefModes(
         {
             "session": session,
@@ -59,8 +27,6 @@ async def buildContinuationContext(args: dict[str, Any] | None = None, **kwargs:
             "retrievedMemory": retrieved_memory,
             "aggressive": aggressive,
             "reactiveAttempt": reactive_attempt,
-            "reliefTokenLimit": message_threshold,
-            "reliefTargetTokenLimit": message_target,
         }
     )
     memory_prompt = renderRetrievedMemoryPrompt(retrieved_memory)
@@ -83,16 +49,7 @@ async def buildContinuationContext(args: dict[str, Any] | None = None, **kwargs:
         "retrievedMemory": retrieved_memory,
         "relief": relief["summary"],
         "preflightSegments": preflight_segments,
-        "checkpointProjection": checkpoint_projection,
     }
-
-
-def _positive_token_limit(value: Any) -> int | None:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 0 else None
 
 
 def classifyContextPressure(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

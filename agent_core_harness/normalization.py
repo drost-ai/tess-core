@@ -18,6 +18,7 @@ class NormalizationContext:
         self.bridge_event_key_map: dict[str, str] = {}
         self.health_spec_digest_map: dict[str, str] = {}
         self.health_authority_fingerprint_map: dict[str, str] = {}
+        self.progress_fingerprint_map: dict[str, str] = {}
         self.pid_map: dict[str, str] = {}
         self.port_map: dict[str, str] = {}
 
@@ -41,6 +42,15 @@ class NormalizationContext:
         return value
 
     def _normalize_dynamic_dict(self, value: dict[str, Any], key_path: tuple[str, ...]) -> dict[str, Any]:
+        if key_path and key_path[-1] == "batchOccurrences":
+            value = {
+                self._placeholder(
+                    self.progress_fingerprint_map,
+                    fingerprint,
+                    "progress-fingerprint",
+                ): count
+                for fingerprint, count in value.items()
+            }
         for key in ("expectedCommandDigest", "expected_command_digest"):
             if key in value:
                 value[key] = "<expected-command-digest>"
@@ -189,6 +199,18 @@ class NormalizationContext:
             return "<request-fingerprint>"
         if canonical_key == "turnidhash" and _SHA256_PATTERN.fullmatch(normalized):
             return "<turn-id-hash>"
+        if (
+            _PROGRESS_FINGERPRINT_PATTERN.fullmatch(normalized)
+            and (
+                canonical_key in {"lastbatchfingerprint", "cyclefingerprint"}
+                or "recentBatchFingerprints" in key_path
+            )
+        ):
+            return self._placeholder(
+                self.progress_fingerprint_map,
+                normalized,
+                "progress-fingerprint",
+            )
         if _SHA256_PATTERN.fullmatch(normalized):
             if canonical_key == "specdigest":
                 return self._placeholder(
@@ -325,6 +347,7 @@ _EMBEDDED_GIT_BRANCH_FIELD_PATTERN = re.compile(r'("(?:git_branch|gitBranch)":)(
 _UNITTEST_DURATION_PATTERN = re.compile(r"(Ran \d+ tests? in )\d+(?:\.\d+)?s")
 _UUID_PATTERN = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I)
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}", re.I)
+_PROGRESS_FINGERPRINT_PATTERN = re.compile(r"[0-9a-f]{24}", re.I)
 _PAYLOAD_CURSOR_PATTERN = re.compile(r"acp1\.[A-Za-z0-9_-]+")
 _BRIDGE_EVENT_ID_PATTERN = re.compile(
     r"(?P<kind>queued|delivery)-(?P<digest>[0-9a-f]{32,64})",

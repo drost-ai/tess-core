@@ -6,6 +6,8 @@ import copy
 import re
 from typing import Any
 
+from ..message_origin import syntheticUserMessage as _synthetic_user_message
+
 STRICT_TOOL_PROTOCOL_PROVIDERS = {"anthropic", "openai"}
 _IMAGE_PLACEHOLDER_RE = re.compile(r"^<image:(?P<mime>[^:>]+)(?::(?P<path>.*?))?:current-turn-only>$")
 
@@ -151,10 +153,11 @@ def _tool_use_ids(message: dict[str, Any]) -> list[str]:
 
 
 def _missing_tool_results_message(tool_ids: list[str]) -> dict[str, Any]:
-    return {
-        "role": "user",
-        "content": [_synthetic_tool_result_block(tool_id) for tool_id in tool_ids],
-    }
+    return _synthetic_user_message(
+        [_synthetic_tool_result_block(tool_id) for tool_id in tool_ids],
+        actor="tool",
+        kind="tool_result_batch",
+    )
 
 
 def _synthetic_tool_result_block(tool_id: str) -> dict[str, Any]:
@@ -167,10 +170,11 @@ def _synthetic_tool_result_block(tool_id: str) -> dict[str, Any]:
 
 
 def _historical_tool_results_message(blocks: list[Any]) -> dict[str, Any]:
-    return {
-        "role": "user",
-        "content": _historical_tool_results_text(blocks),
-    }
+    return _synthetic_user_message(
+        _historical_tool_results_text(blocks),
+        actor="tool",
+        kind="historical_tool_context",
+    )
 
 
 def _historical_tool_results_text(blocks: list[Any]) -> str:

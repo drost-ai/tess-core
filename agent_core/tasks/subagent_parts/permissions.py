@@ -34,6 +34,8 @@ def mapStopReasonToStatus(stopReason: str | None) -> str:
         return "awaiting_input"
     if stopReason == "cancelled":
         return "cancelled"
+    if stopReason == "no_progress":
+        return "stopped"
     if stopReason in _OUTPUT_LIMIT_STOP_REASONS or stopReason in _SUBAGENT_LIMIT_STOP_REASONS:
         return "truncated"
     if stopReason in _BUDGET_STOP_REASONS or stopReason == "plan_rejected":
@@ -63,6 +65,7 @@ def mapStopReasonToCompletionReason(stopReason: str | None) -> str | None:
     return {
         "end_turn": "worker_completed",
         "cancelled": "cancelled",
+        "no_progress": "no_progress",
         "plan_rejected": "plan_rejected",
     }.get(stopReason)
 

@@ -47,6 +47,7 @@ PLAN_SAFE_TOOL_NAMES = {
     "Mcp",
     "ListMcpResources",
     "ReadMcpResource",
+    "ReadToolArtifact",
 }
 
 IMAGE_INPUT_UNSUPPORTED_MESSAGE = "This model does not support image inputs."

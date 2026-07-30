@@ -204,7 +204,7 @@ def _assert_tool_protocol(messages: list[dict[str, Any]]) -> None:
 
 
 class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
-    def test_large_checkpoint_and_live_tail_converge_without_mutating_authority(
+    def test_large_checkpoint_remains_authoritative_without_projection(
         self,
     ) -> None:
         root, home, workspace, previous = self.temp_context()
@@ -317,22 +317,19 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
                 if event == "provider.request_preflight"
             )
             relief = preflight["interactive_relief"]
-            self.assertTrue(relief["applied"])
-            self.assertGreater(relief["originalInputTokens"], 64_000)
-            self.assertLessEqual(relief["projectedInputTokens"], 48_000)
+            self.assertFalse(relief["applied"])
+            self.assertIsNone(relief["originalInputTokens"])
+            self.assertIsNone(relief["thresholdTokens"])
+            self.assertIsNone(relief["targetTokens"])
             self.assertTrue(relief["targetMet"])
-            self.assertGreaterEqual(relief["attemptCount"], 1)
-            checkpoint = relief["checkpointProjection"]
-            self.assertTrue(checkpoint["applied"])
-            self.assertGreater(
-                checkpoint["originalTokens"],
-                checkpoint["projectedTokens"],
-            )
+            self.assertNotIn("attemptCount", relief)
+            self.assertNotIn("checkpointProjection", relief)
             request_text = json.dumps(requests[0], ensure_ascii=False)
             self.assertIn("What time was the latest restart?", request_text)
             self.assertIn("Keep owner conversation responsive.", request_text)
             self.assertIn("Never mutate existing sessions.", request_text)
-            self.assertIn(
+            self.assertIn("historical trace evidence", request_text)
+            self.assertNotIn(
                 "checkpoint_projection_omitted_lower_priority_context=true",
                 request_text,
             )

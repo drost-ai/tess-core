@@ -1,7 +1,11 @@
 from __future__ import annotations
 from .shared import *
 from .provider_payloads import providerTypedPayload
+from .progress_payloads import progressTypedPayload
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    progress_payload = progressTypedPayload(event, data)
+    if progress_payload is not None:
+        return progress_payload
     payload = _camelize_record(data)
     if event == "session.activated":
         return "session.activated", {

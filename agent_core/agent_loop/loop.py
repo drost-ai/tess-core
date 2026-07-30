@@ -11,8 +11,9 @@ from .providers import (
     _persist_partial_output_commit,
 )
 from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
-from .prompt_content import normalize_agent_prompt as _normalize_agent_prompt
-from .stable_boundary import run_stable_boundary_hook as _run_stable_boundary_hook
+from .prompt_content import extractAssistantText as extractAssistantText, normalize_agent_prompt as _normalize_agent_prompt
+from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, appendToolResultBatch as _append_tool_result_batch, noProgressEventData as _no_progress_event_data, noProgressTurnResult as _no_progress_turn_result
+from .stable_boundary import finish_stable_boundary as _finish_stable_boundary
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
 from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
 from .tool_hooks import run_pre_tool_hook as _run_pre_tool_hook
@@ -21,7 +22,7 @@ from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
 from .tool_context import buildToolContext as _build_tool_context
-from .tool_result_budget import ToolResultTurnBudget as _ToolResultTurnBudget
+from .tool_result_budget import ToolResultBatchBudget as _ToolResultBatchBudget
 from .turn_session import (
     resolve_effective_provider_turn_binding as _resolve_effective_provider_turn_binding,
     run_in_provider_turn_session as _run_in_provider_turn_session,
@@ -32,6 +33,7 @@ from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgen
 from ..hooks import fireToolHooks as fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
+from ..message_origin import userRequestMessage as _user_request_message
 from ..permission_rules import findDispatchDenyRule
 from ..providers.prompt_cache_finalization import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
 from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
@@ -93,8 +95,9 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     cost = 0.0
     tool_count = 0
     provider_call_index = 0
-    tool_result_budget = _ToolResultTurnBudget(config.get("providerProfile") or {})
+    tool_result_budget = _ToolResultBatchBudget(config.get("providerProfile") or {})
     parent_turn_id = args["logicalTurnId"]
+    progress_ledger = _LogicalTurnProgressLedger(session, parent_turn_id)
     runtime["turnAuthorityId"] = parent_turn_id
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
@@ -135,6 +138,12 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     if _is_turn_cancelled(runtime):
         return await cancel_turn()
 
+    prior_no_progress = progress_ledger.terminalResult()
+    if prior_no_progress is not None:
+        event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=prior_no_progress, recovered=True)
+        _safe_emit(runtime, "agent.no_progress", event)
+        return _no_progress_turn_result(receipt=prior_no_progress, text="", tool_count=0, usage=total_usage, model=active_model, estimated_cost_usd=0.0)
+
     appended_reconciliations = await appendPendingSubagentReconciliationsToSession(
         session,
         runtime=runtime,
@@ -145,7 +154,8 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         await consumeAppendedSubagentReconciliations(session, appended_reconciliations, runtime=runtime)
 
     if prompt_content is not None:
-        session.setdefault("messages", []).append({"role": "user", "content": prompt_content})
+        message = _user_request_message(prompt_content, lineage={"logicalTurnId": parent_turn_id})
+        session.setdefault("messages", []).append(message)
         await persistSession(session, config)
         _safe_emit(runtime, "message.user", {"text": prompt_text, "session_id": session["id"]})
 
@@ -247,6 +257,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
         await _persist_partial_output_commit(session, config, runtime, response)
         if not tool_uses:
+            progress_ledger.complete(provider_call_index=provider_call_index)
             await persistSession(session, config)
             await _record_prompt_cache_eviction_intent_at_finalization(
                 {
@@ -444,7 +455,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             paused_for_approval = batch["pausedForApproval"]
             paused_message = batch["pausedMessage"]
             _throw_if_turn_cancelled(runtime)
-            budget_event = tool_result_budget.record(tool_results)
+            budget_event = tool_result_budget.record(tool_results, tool_uses)
             if budget_event is not None:
                 _safe_emit(
                     runtime,
@@ -460,7 +471,14 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                 return await cancel_turn()
             raise
 
-        session["messages"].append({"role": "user", "content": [result for result in tool_results if result is not None]})
+        no_progress = _append_tool_result_batch(
+            session=session,
+            ledger=progress_ledger,
+            logical_turn_id=parent_turn_id,
+            tool_uses=tool_uses,
+            tool_results=tool_results,
+            provider_call_index=provider_call_index,
+        )
         await persistSession(session, config)
         last_stable_snapshot = copy.deepcopy(session)
         last_stable_snapshot["messages"] = _strip_in_memory_image_data(last_stable_snapshot.get("messages", []))
@@ -468,33 +486,10 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             if paused_message:
                 text_parts.append(paused_message)
             return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "approval_required"}
-        stable_boundary = await _run_stable_boundary_hook(
-            runtime.get("shouldStopAfterStableBoundary")
-        )
-        if stable_boundary and stable_boundary["stop"]:
-            boundary_text = stable_boundary["text"].strip()
-            if boundary_text and (not text_parts or text_parts[-1] != boundary_text):
-                text_parts.append(boundary_text)
-            _safe_emit(
-                runtime,
-                "turn.stable_boundary_stopped",
-                {
-                    "session_id": session["id"],
-                    "model": active_model,
-                    "tool_count": tool_count,
-                },
-            )
-            return {
-                "text": "\n\n".join(text_parts).strip(),
-                "toolCount": tool_count,
-                "usage": total_usage,
-                "model": active_model,
-                "estimatedCostUsd": _round_usd(cost),
-                "stopReason": "stable_boundary",
-            }
-
-def extractAssistantText(message: dict[str, Any]) -> str:
-    content = message.get("content")
-    if isinstance(content, str):
-        return content
-    return "".join(block.get("text", "") for block in content or [] if block.get("type") == "text")
+        if no_progress is not None:
+            event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=no_progress)
+            _safe_emit(runtime, "agent.no_progress", event)
+            return _no_progress_turn_result(receipt=no_progress, text="\n\n".join(text_parts).strip(), tool_count=tool_count, usage=total_usage, model=active_model, estimated_cost_usd=_round_usd(cost))
+        stable_boundary = await _finish_stable_boundary(hook=runtime.get("shouldStopAfterStableBoundary"), text_parts=text_parts, tool_count=tool_count, usage=total_usage, model=active_model, estimated_cost_usd=_round_usd(cost), session_id=session["id"], emit=lambda event, data: _safe_emit(runtime, event, data))
+        if stable_boundary is not None:
+            return stable_boundary

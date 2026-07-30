@@ -31,6 +31,7 @@ BUILTIN_TOOL_ORDER = [
     "ReadMcpResource",
     "EnterWorktree",
     "ExitWorktree",
+    "ReadToolArtifact",
 ]
 
 
@@ -61,6 +62,7 @@ BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
     "ReadMcpResource": "Read a resource published by a connected MCP server.",
     "EnterWorktree": "Create and enter a git worktree for isolated work.",
     "ExitWorktree": "Return to the original workspace and optionally leave the worktree intact.",
+    "ReadToolArtifact": "Read one bounded page from a complete tool-result artifact by artifact id. Use this operation, not Read or Bash, when a truncated tool result names an artifact.",
 }
 
 
@@ -148,6 +150,27 @@ BUILTIN_TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "ReadMcpResource": {"type": "object", "properties": {"server": {"type": "string"}, "uri": {"type": "string"}, "offset": {"type": "number"}, "cursor": {"type": "string", "description": "Opaque continuation cursor returned by a previous resource page. Do not combine with offset."}, "limit": {"type": "number"}}, "required": ["server", "uri"]},
     "EnterWorktree": {"type": "object", "properties": {"name": {"type": "string"}}},
     "ExitWorktree": {"type": "object"},
+    "ReadToolArtifact": {
+        "type": "object",
+        "properties": {
+            "artifact_id": {
+                "type": "string",
+                "description": "Artifact id from a truncated tool-result envelope.",
+            },
+            "offset_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Byte offset returned by the previous page. Defaults to zero.",
+            },
+            "max_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 24000,
+                "description": "Requested page bytes. Defaults to 16384.",
+            },
+        },
+        "required": ["artifact_id"],
+    },
 }
 
 for _schema in BUILTIN_TOOL_INPUT_SCHEMAS.values():

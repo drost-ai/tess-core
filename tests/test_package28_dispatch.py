@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from tests.support.agent_core_case import *
 
 from agent_core.agent_loop.plan_policy import resolve_plan_mode_mcp_verdict
@@ -29,6 +28,7 @@ class Package28DispatchTests(AgentCoreTestCase):
                 "TaskMonitorStop",
                 "ListMcpResources",
                 "ReadMcpResource",
+                "ReadToolArtifact",
             },
         )
         self.assertNotIn(None, tools.values())

@@ -104,6 +104,8 @@ def _build_candidate(args: dict[str, Any], max_summary_bytes: int) -> dict[str, 
             "filePath": sliceUtf8Prefix(artifact["filePath"], 1_024),
             "bytes": artifact["bytes"],
             "contentType": artifact["contentType"],
+            "readWith": "ReadToolArtifact",
+            "nextOffsetBytes": 0,
         }
     if args.get("artifactUnavailable"):
         payload["artifactUnavailable"] = True

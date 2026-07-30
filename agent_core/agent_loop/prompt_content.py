@@ -18,3 +18,14 @@ def normalize_agent_prompt(value: Any) -> tuple[str | list[dict[str, Any]] | Non
         if str(block.get("type") or "") in {"text", "input_text"} and str(block.get("text") or "").strip()
     )
     return blocks, text
+
+
+def extractAssistantText(message: dict[str, Any]) -> str:
+    content = message.get("content")
+    if isinstance(content, str):
+        return content
+    return "".join(
+        block.get("text", "")
+        for block in content or []
+        if block.get("type") == "text"
+    )

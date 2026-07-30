@@ -46,7 +46,7 @@ class ToolAgentTests(AgentCoreTestCase):
             self.assertEqual(persisted["count"], 1)
             self.assertEqual(parent["metadata"]["childAgentIds"], [payload["agent_id"]])
             self.assertEqual(parent["metadata"]["childSessionIds"], [payload["session_id"]])
-            self.assertEqual(captured["childSession"]["messages"], [{"role": "user", "content": "Find the issue"}])
+            self.assertEqual((captured["childSession"]["messages"][0]["content"], captured["childSession"]["messages"][0]["metadata"]["agentCoreOrigin"]["kind"]), ("Find the issue", "subagent_task_prompt"))
             self.assertEqual(captured["childSession"]["permissionMode"], "plan")
             self.assertEqual(captured["childSession"]["metadata"]["depth"], 1)
             self.assertEqual(captured["childSession"]["metadata"]["parentSessionId"], parent["id"])

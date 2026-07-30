@@ -128,4 +128,5 @@ def defaultToolList() -> list[str]:
         "ReadMcpResource",
         "EnterWorktree",
         "ExitWorktree",
+        "ReadToolArtifact",
     ]

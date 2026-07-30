@@ -33,6 +33,7 @@ RuntimeEventName = Literal[
     "turn.completed",
     "turn.failed",
     "turn.cancelled",
+    "agent.no_progress",
     "status.updated",
     "status.cleared",
     "provider.retrying",

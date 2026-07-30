@@ -6,12 +6,12 @@ import uuid
 from typing import Any
 
 from ._utils import now_iso
+from .message_origin import syntheticUserMessage as _synthetic_user_message
 from .storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
 
 
 TERMINAL_RECONCILIATION_STATUSES = {"completed", "failed", "stopped", "timed_out"}
 _SUMMARY_LIMIT = 1200
-
 def subagentReconciliationLogPath(parentSessionId: str) -> str:
     return os.path.join(sessionArchiveDir(parentSessionId), "subagent-reconciliations.jsonl")
 
@@ -286,7 +286,7 @@ async def appendPendingSubagentReconciliationsToSession(
         return {"records": [], "messageIndex": None}
     message_index = len(session.setdefault("messages", []))
     text = renderSubagentReconciliationMessage(records)
-    session["messages"].append({"role": "user", "content": text})
+    session["messages"].append(_synthetic_user_message(text, actor="subagent", kind="subagent_reconciliation", lineage={"logicalTurnId": str(parentTurnId or "")}))
     metadata = session.setdefault("metadata", {})
     metadata["subagentReconciliation"] = {
         "lastInjectedAt": now_iso(),
@@ -362,7 +362,7 @@ def _terminal_status_from_values(
         return "timed_out"
     if raw in {"completed", "end_turn", "success", "succeeded"}:
         return "completed"
-    if raw in {"cancelled", "canceled", "stopped", "terminated"}:
+    if raw in {"cancelled", "canceled", "stopped", "terminated", "no_progress"}:
         return "stopped"
     return "failed"
 

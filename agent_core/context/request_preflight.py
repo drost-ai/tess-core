@@ -6,6 +6,10 @@ import json
 from typing import Any
 
 from .._image_redaction import redactImagePayloads
+from ..message_origin import (
+    isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
+    messageForStableFingerprint as _message_for_stable_fingerprint,
+)
 from .request_preflight_relief import (
     interactiveReliefProjection as _interactive_relief_projection,
 )
@@ -307,17 +311,7 @@ def _classify_messages(
 def _find_current_plain_user_index(messages: list[Any]) -> int:
     for index in range(len(messages) - 1, -1, -1):
         message = messages[index]
-        if not isinstance(message, dict) or message.get("role") != "user":
-            continue
-        blocks = message.get("content")
-        if not isinstance(blocks, list):
-            return index
-        meaningful = [
-            block
-            for block in blocks
-            if not isinstance(block, dict) or block.get("type") != "tool_result"
-        ]
-        if meaningful:
+        if _is_plain_user_turn_anchor(message):
             return index
     return -1
 
@@ -438,7 +432,10 @@ def _request_fingerprint(request: dict[str, Any]) -> str:
         "model": request.get("model"),
         "effort": request.get("effort"),
         "system": request.get("system"),
-        "messages": request.get("messages") or [],
+        "messages": [
+            _message_for_stable_fingerprint(message)
+            for message in request.get("messages") or []
+        ],
         "tools": request.get("tools") or [],
     }
     serialized = json.dumps(

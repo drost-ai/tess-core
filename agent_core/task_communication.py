@@ -17,6 +17,7 @@ from .storage import (
     writeJsonFile,
 )
 from .session import persistSession
+from .message_origin import syntheticUserMessage as _synthetic_user_message
 
 
 def task_mailbox_path(task_id: str) -> str:
@@ -145,7 +146,17 @@ async def deliver_queued_task_messages_to_session(session: dict[str, Any], confi
     if not messages:
         return []
     for message in messages:
-        session.setdefault("messages", []).append({"role": "user", "content": _message_envelope(message)})
+        session.setdefault("messages", []).append(
+            _synthetic_user_message(
+                _message_envelope(message),
+                actor="task",
+                kind="task_notification",
+                lineage={
+                    "taskId": str(message.get("taskId") or ""),
+                    "messageId": str(message.get("messageId") or ""),
+                },
+            )
+        )
         await mark_task_message_delivered(task_id, message["messageId"])
     if config is not None:
         await persistSession(session, config)

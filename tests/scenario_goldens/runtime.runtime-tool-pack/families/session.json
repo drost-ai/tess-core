@@ -6,6 +6,18 @@
   "messages": [
     {
       "content": "Read README.md and summarize it.",
+      "metadata": {
+        "agentCoreOrigin": {
+          "actor": "user",
+          "intentAuthority": "request",
+          "kind": "user_request",
+          "lineage": {
+            "logicalTurnId": "turn-<uuid:2>"
+          },
+          "schemaVersion": 1,
+          "synthetic": false
+        }
+      },
       "role": "user"
     },
     {
@@ -30,6 +42,18 @@
           "type": "tool_result"
         }
       ],
+      "metadata": {
+        "agentCoreOrigin": {
+          "actor": "tool",
+          "intentAuthority": "none",
+          "kind": "tool_result_batch",
+          "lineage": {
+            "logicalTurnId": "turn-<uuid:2>"
+          },
+          "schemaVersion": 1,
+          "synthetic": true
+        }
+      },
       "role": "user"
     },
     {
@@ -226,6 +250,29 @@
         "safetyMarginTokens": null,
         "source": "openai_responses_estimate"
       }
+    },
+    "turnProgress": {
+      "artifactFailures": {},
+      "artifactOffsets": {},
+      "batchOccurrences": {
+        "<progress-fingerprint:1>": 1
+      },
+      "completed": true,
+      "completionReason": "provider_response",
+      "consecutiveNoProgress": 0,
+      "lastBatchFingerprint": "<progress-fingerprint:1>",
+      "lastBatchOccurrenceCount": 1,
+      "lastBatchTotalOccurrences": 1,
+      "lastProgressReason": "novel_reachable_evidence",
+      "logicalTurnId": "turn-<uuid:2>",
+      "providerCallIndex": 2,
+      "recentBatchFingerprints": [
+        "<progress-fingerprint:1>"
+      ],
+      "schemaVersion": 1,
+      "terminalReason": null,
+      "toolBatchIndex": 1,
+      "updatedAt": "<timestamp>"
     },
     "usage": {
       "cacheCreation1hInputTokens": 0,

@@ -11,7 +11,10 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
     status = mapStopReasonToStatus(result.get("stopReason"))
     completed_at = now_iso()
     summary = (result.get("text") or "").strip()[:280] or None
-    retryable = status in {"failed", "stopped", "truncated", "cancelled"}
+    retryable = (
+        status in {"failed", "stopped", "truncated", "cancelled"}
+        and result.get("stopReason") != "no_progress"
+    )
     completed_like = status in {"completed", "failed", "truncated", "cancelled", "stopped"}
     structured_fields = await _background_structured_result_fields(task_id, session, result.get("text") or "")
 

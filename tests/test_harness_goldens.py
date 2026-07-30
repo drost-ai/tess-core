@@ -87,6 +87,14 @@ class HarnessGoldenTests(AgentCoreTestCase):
                         "authorityFingerprint": "e" * 64,
                         "unrelatedSha256": "f" * 64,
                     },
+                    "turnProgress": {
+                        "batchOccurrences": {
+                            "1" * 24: 2,
+                            "2" * 24: 1,
+                        },
+                        "lastBatchFingerprint": "1" * 24,
+                        "recentBatchFingerprints": ["2" * 24, "1" * 24],
+                    },
                 }
                 normalized = normalize_observations(raw, sandbox)
                 self.assertEqual(normalized["run"]["id"], "<run-id>")
@@ -146,6 +154,20 @@ class HarnessGoldenTests(AgentCoreTestCase):
                     "<health-authority-fingerprint:1>",
                 )
                 self.assertEqual(normalized["health"]["unrelatedSha256"], "f" * 64)
+                self.assertEqual(
+                    normalized["turnProgress"],
+                    {
+                        "batchOccurrences": {
+                            "<progress-fingerprint:1>": 2,
+                            "<progress-fingerprint:2>": 1,
+                        },
+                        "lastBatchFingerprint": "<progress-fingerprint:1>",
+                        "recentBatchFingerprints": [
+                            "<progress-fingerprint:2>",
+                            "<progress-fingerprint:1>",
+                        ],
+                    },
+                )
             finally:
                 sandbox.cleanup_sandbox(passed=True)
 

@@ -5,6 +5,7 @@ import uuid
 from typing import Any
 
 from .._utils import maybe_await, merge_usage
+from ..message_origin import syntheticUserMessage as _synthetic_user_message
 from ..provider_prompt_cache import (
     attachPreparedPromptCacheContext,
     commitProviderPromptCacheObservation,
@@ -205,13 +206,12 @@ def isEmptyAssistantResponse(response: dict[str, Any]) -> bool:
 def addEmptyResponseContinuationNudge(prepared: dict[str, Any]) -> dict[str, Any]:
     next_prepared = copy.deepcopy(prepared)
     messages = next_prepared["request"].setdefault("messages", [])
-    latest = messages[-1] if messages else None
-    if not isinstance(latest, dict) or latest.get("role") != "user":
-        messages.append({"role": "user", "content": _EMPTY_RESPONSE_NUDGE})
-    elif isinstance(latest.get("content"), list):
-        latest["content"].append({"type": "text", "text": _EMPTY_RESPONSE_NUDGE})
-    else:
-        latest["content"] = f"{latest.get('content') or ''}\n\n{_EMPTY_RESPONSE_NUDGE}"
+    messages.append(
+        _synthetic_user_message(
+            _EMPTY_RESPONSE_NUDGE,
+            kind="empty_response_nudge",
+        )
+    )
     return next_prepared
 
 

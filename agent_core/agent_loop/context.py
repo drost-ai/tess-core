@@ -24,15 +24,10 @@ from .dynamic_context import (
     injectSystemContextIntoMessages as _inject_system_context_into_messages,
 )
 from .interactive_context import (
-    interactiveReliefReceipt as _interactive_relief_receipt,
-    planInteractiveContextRelief as _plan_interactive_context_relief,
-    raiseInteractiveContextConvergenceFailure as _raise_interactive_context_convergence_failure,
+    retiredInteractiveReliefReceipt as _retired_interactive_relief_receipt,
 )
 from ..image_budget import assertImageContextCapacity as _assert_image_context_capacity
 from ..tool_attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
-
-_MAX_CONTEXT_PREPARATION_ATTEMPTS = 6
-
 
 async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
@@ -43,26 +38,19 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     active_model = args["activeModel"]
     prompt = args["prompt"]
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
-    prepared_request: dict[str, Any] | None = None
     last_compaction_outcome: dict[str, Any] | None = None
-    interactive_relief_message_threshold: int | None = None
-    interactive_relief_message_target: int | None = None
-    interactive_relief_original_tokens: int | None = None
-    interactive_relief_attempts = 0
 
     raw_checkpoint_outcome = await maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": runtime})
     durable_compaction_applied = bool(raw_checkpoint_outcome and raw_checkpoint_outcome.get("status") == "completed")
 
-    for _attempt in range(_MAX_CONTEXT_PREPARATION_ATTEMPTS):
+    while True:
         request_context = await buildContinuationContext(
             {
                 "session": session,
                 "config": config,
                 "prompt": prompt,
                 "aggressive": reactive_attempt > 0,
-                "reactiveAttempt": reactive_attempt + interactive_relief_attempts,
-                "reliefTokenLimit": interactive_relief_message_threshold,
-                "reliefTargetTokenLimit": interactive_relief_message_target,
+                "reactiveAttempt": reactive_attempt,
             }
         )
         emitContinuationRelief(runtime, session, request_context)
@@ -94,12 +82,6 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "messages": request_context["messages"],
             "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
         }
-        prepared_request = {
-            "request": request,
-            "continuity": request_context,
-            "reactiveAttempt": reactive_attempt,
-            "unsupportedImageInputs": unsupported_image_inputs,
-        }
         measurement = await measureRequestInputTokens(
             {
                 "config": config,
@@ -125,28 +107,9 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         if compacted and compacted.get("status") == "completed":
             durable_compaction_applied = True
             continue
-        interactive_step = _plan_interactive_context_relief(
+        request_context["interactiveRelief"] = _retired_interactive_relief_receipt(
             config=config,
-            measurement=measurement,
-            currentMessageThreshold=interactive_relief_message_threshold,
-            projectionAttempt=interactive_relief_attempts,
-        )
-        if interactive_step["action"] == "project":
-            if interactive_relief_original_tokens is None:
-                interactive_relief_original_tokens = int(measurement["inputTokens"])
-            interactive_relief_message_threshold = interactive_step[
-                "messageThreshold"
-            ]
-            interactive_relief_message_target = interactive_step["messageTarget"]
-            interactive_relief_attempts += 1
-            continue
-        request_context["interactiveRelief"] = _interactive_relief_receipt(
-            policy=interactive_step["policy"],
-            originalInputTokens=interactive_relief_original_tokens,
-            projectedInputTokens=int(measurement["inputTokens"]),
-            applied=interactive_relief_message_threshold is not None,
-            attemptCount=interactive_relief_attempts,
-            checkpointProjection=request_context.get("checkpointProjection"),
+            measuredInputTokens=int(measurement["inputTokens"]),
         )
         budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
         _assert_image_context_capacity(measurement, budget)
@@ -225,11 +188,6 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         )
         await persistSession(session, config)
         return prepared_request
-
-    _raise_interactive_context_convergence_failure(
-        config=config,
-        measurement=measurement,
-    )
 
 
 def _admit_request_images(

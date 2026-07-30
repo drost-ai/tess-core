@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from .shared import *
+from ...message_origin import (
+    isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
+    syntheticUserMessage as _synthetic_user_message,
+)
 
 
 def choosePreservedRawStart(messages: list[dict[str, Any]]) -> int:
@@ -33,12 +37,7 @@ def _startsWithToolResultWithoutPreviousToolUse(messages: list[dict[str, Any]], 
 def findLastPlainUserIndex(messages: list[dict[str, Any]]) -> int | None:
     for index in range(len(messages) - 1, -1, -1):
         message = messages[index]
-        if message.get("role") != "user":
-            continue
-        content = message.get("content")
-        if not isinstance(content, list):
-            return index
-        if not any(isinstance(block, dict) and block.get("type") == "tool_result" for block in content):
+        if _is_plain_user_turn_anchor(message):
             return index
     return None
 
@@ -162,7 +161,10 @@ def applyPartialCompaction(messages: list[dict[str, Any]], reactiveAttempt: int 
     region = messages[:preserved_raw_start_index]
     region_summary = summarizeContinuationRegion(region)
     reinjection_lines = normalizeReinjectionLines(renderRegionSummaryReinjectionLines(region_summary))
-    summary_message = {"role": "user", "content": renderPartialCompactionSummary(region_summary, reactiveAttempt)}
+    summary_message = _synthetic_user_message(
+        renderPartialCompactionSummary(region_summary, reactiveAttempt),
+        kind="partial_compaction_summary",
+    )
     next_messages = [summary_message, *messages[preserved_raw_start_index:]]
     return {
         "applied": True,

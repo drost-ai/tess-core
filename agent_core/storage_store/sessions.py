@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
+from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
 from ..usage_costs import createUsageTotals
 from .shared import *
@@ -247,7 +248,7 @@ async def saveCompactionCheckpoint(checkpoint: dict[str, Any]) -> None:
 
 def hasPersistableSessionMessages(session: SessionRecord) -> bool:
     for message in session.get("messages", []):
-        if message.get("role") != "user":
+        if not _is_genuine_user_request(message):
             continue
         content = message.get("content")
         if isinstance(content, str) and content.strip():

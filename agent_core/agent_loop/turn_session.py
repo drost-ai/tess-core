@@ -128,7 +128,7 @@ async def run_in_provider_turn_session(
     runtime_bindings = args.get("runtime")
     assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
     runtime = materializeAgentExecutionRuntime(runtime_bindings)
-    logical_turn_id = f"turn-{uuid.uuid4()}"
+    logical_turn_id = _resolve_logical_turn_id(args.get("logicalTurnId"))
     provider_turn_session = createProviderTurnSession(
         logical_turn_id=logical_turn_id,
         session=session,
@@ -148,6 +148,23 @@ async def run_in_provider_turn_session(
         if is_cancelled(runtime):
             await provider_turn_session.cancel("turn_cancelled")
         await provider_turn_session.close()
+
+
+def _resolve_logical_turn_id(value: Any) -> str:
+    if value is None:
+        return f"turn-{uuid.uuid4()}"
+    if not isinstance(value, str):
+        raise TypeError("logicalTurnId must be a string when provided.")
+    logical_turn_id = value.strip()
+    if (
+        not logical_turn_id
+        or len(logical_turn_id) > 128
+        or any(ord(character) < 0x20 for character in logical_turn_id)
+    ):
+        raise ValueError(
+            "logicalTurnId must contain 1-128 visible characters."
+        )
+    return logical_turn_id
 
 
 __all__ = [

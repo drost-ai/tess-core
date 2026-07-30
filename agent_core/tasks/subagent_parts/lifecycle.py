@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...message_origin import messageWithOrigin as _message_with_origin
 from ...agent_authority import (
     captureAgentAuthority,
     deriveChildAgentAuthority,
@@ -178,7 +179,21 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         metadata["subagentRuntimeContract"] = runtime_contract
     metadata["childSessionIds"] = []
     metadata["childAgentIds"] = []
-    child_session["messages"].append({"role": "user", "content": prompt})
+    child_session["messages"].append(
+        _message_with_origin(
+            {"role": "user", "content": prompt},
+            actor="subagent",
+            kind="subagent_task_prompt",
+            intentAuthority="request",
+            synthetic=True,
+            lineage={
+                "parentSessionId": parent["id"],
+                "parentTurnId": metadata.get("parentTurnId"),
+                "parentToolUseId": metadata.get("parentToolUseId"),
+                "taskId": metadata.get("parentTaskId"),
+            },
+        )
+    )
 
     child_config = {
         **config,

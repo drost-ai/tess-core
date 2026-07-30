@@ -57,6 +57,17 @@ def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any])
         lines.append(f"  auth       {auth_text}")
         if profile.get("description"):
             lines.append(f"  about      {profile.get('description')}")
+        if any(
+            profile.get(key) is not None
+            for key in (
+                "contextReliefThresholdTokens",
+                "contextReliefTargetTokens",
+                "inlineToolResultTurnBytes",
+            )
+        ):
+            lines.append(
+                "  retired    interactive relief and turn budget settings are ignored"
+            )
         sections.append("\n".join(lines))
     return "\n\n".join(sections) if sections else "No provider profiles configured."
 

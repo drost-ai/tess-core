@@ -22,28 +22,40 @@ MAX_TOOL_IDENTITY_BYTES = 256
 MAX_ARTIFACT_PATH_BYTES = 1_024
 MAX_ERROR_MESSAGE_BYTES = 2_000
 MIN_EFFECTIVE_TOOL_RESULT_BYTES = 512
+NON_ARTIFACT_TOOL_RESULT_MAX_BYTES = 32_000
 
 
 async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
     configured_limit_bytes = getToolResultMaxBytes(values["config"])
     requested_limit_bytes = values.get("maxBytes")
+    never_artifact = bool(values.get("neverArtifact"))
     limit_bytes = configured_limit_bytes
     if requested_limit_bytes is not None:
         try:
             parsed_limit_bytes = int(requested_limit_bytes)
             if parsed_limit_bytes <= 0:
                 raise ValueError
-            limit_bytes = min(
-                configured_limit_bytes,
-                max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
-            )
+            if never_artifact:
+                limit_bytes = min(
+                    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
+                    max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
+                )
+            else:
+                limit_bytes = min(
+                    configured_limit_bytes,
+                    max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
+                )
         except (TypeError, ValueError, OverflowError):
             raise ValueError("maxBytes must be a positive integer") from None
     normalized = _normalize_outcome(values["outcome"], limit_bytes)
     original_bytes = serializedContentBytes(normalized["content"])
     diagnostics = list(normalized["diagnostics"])
-    structured = analyzeStructuredResult(normalized["content"]) if original_bytes <= limit_bytes else None
+    structured = (
+        analyzeStructuredResult(normalized["content"])
+        if original_bytes <= limit_bytes and not never_artifact
+        else None
+    )
     if original_bytes <= limit_bytes:
         if structured and structured["requiresShaping"]:
             artifact, artifact_unavailable = await _try_artifact(values, normalized["content"], "json")
@@ -96,6 +108,14 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
             result["cardinality"] = structured["cardinality"]
         return result
 
+    if never_artifact:
+        return _non_artifact_overflow(
+            normalized,
+            original_bytes,
+            limit_bytes,
+            diagnostics,
+        )
+
     content_type = "json" if _looks_like_json(normalized["content"]) else "text"
     artifact, artifact_unavailable = await _try_artifact(values, normalized["content"], content_type)
     if artifact_unavailable and values.get("requireArtifact"):
@@ -122,6 +142,8 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
             "filePath": sliceUtf8Prefix(artifact["filePath"], MAX_ARTIFACT_PATH_BYTES),
             "bytes": artifact["bytes"],
             "contentType": artifact["contentType"],
+            "readWith": "ReadToolArtifact",
+            "nextOffsetBytes": 0,
         }
     if artifact_unavailable:
         envelope["artifactUnavailable"] = True
@@ -210,6 +232,45 @@ def _required_artifact_failure(
             *diagnostics,
             _diagnostic(
                 "artifact_required_unavailable",
+                original_bytes,
+                final_bytes,
+                limit_bytes,
+                None,
+            ),
+        ],
+    }
+
+
+def _non_artifact_overflow(
+    normalized: dict[str, Any],
+    original_bytes: int,
+    limit_bytes: int,
+    diagnostics: list[dict[str, Any]],
+) -> dict[str, Any]:
+    content = json.dumps(
+        {
+            "type": "tool_artifact_page_error",
+            "code": "artifact_page_result_too_large",
+            "message": (
+                "The artifact page exceeded its reserved inline result "
+                "allowance and was not recursively artifactized."
+            ),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    final_bytes = serializedContentBytes(content)
+    return {
+        "result": {"content": content, "isError": True},
+        "originalBytes": original_bytes,
+        "finalBytes": final_bytes,
+        "limitBytes": limit_bytes,
+        "truncated": True,
+        "artifactUnavailable": False,
+        "diagnostics": [
+            *diagnostics,
+            _diagnostic(
+                "artifact_page_result_too_large",
                 original_bytes,
                 final_bytes,
                 limit_bytes,

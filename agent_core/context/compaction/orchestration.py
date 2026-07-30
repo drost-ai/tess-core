@@ -5,6 +5,7 @@ import math
 from .shared import *
 from ..._compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
 from ..._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ...message_origin import syntheticUserMessage as _synthetic_user_message
 from ...provider_token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO as _DEFAULT_COMPACTION_PRESERVATION_RATIO
 from ...usage_costs import mergeProviderUsage as _merge_provider_usage
 
@@ -53,7 +54,13 @@ def buildMessagesForWorkingContext(session: dict[str, Any]) -> list[dict[str, An
     recent_messages = list(session.get("messages", [])[cutoff:])
     if not recent_messages or recent_messages[0].get("role") == "user":
         return recent_messages
-    return [{"role": "user", "content": CONTINUATION_BRIDGE_MESSAGE}, *recent_messages]
+    return [
+        _synthetic_user_message(
+            CONTINUATION_BRIDGE_MESSAGE,
+            kind="continuation_bridge",
+        ),
+        *recent_messages,
+    ]
 
 
 async def buildCompactionSystemPromptContext(session: dict[str, Any]) -> str | None:
@@ -63,15 +70,12 @@ async def buildCompactionSystemPromptContext(session: dict[str, Any]) -> str | N
 
 async def _buildCompactionSystemPromptProjection(
     session: dict[str, Any],
-    *,
-    tokenLimit: int | None = None,
 ) -> dict[str, Any]:
     state = session.get("metadata", {}).get("compactionState")
     if not state:
         return {
             "text": None,
             "applied": False,
-            "targetTokens": tokenLimit,
             "originalTokens": 0,
             "projectedTokens": 0,
         }
@@ -79,10 +83,6 @@ async def _buildCompactionSystemPromptProjection(
     working_context = await loadWorkingContextArtifact(artifacts.get("workingContext"))
     if working_context:
         original = renderWorkingContextPromptContext(working_context)
-        projected = renderWorkingContextPromptContext(
-            working_context,
-            tokenLimit=tokenLimit,
-        )
     else:
         summary_path = artifacts.get("summary")
         summary = _read_text(summary_path).strip() if summary_path else ""
@@ -90,7 +90,6 @@ async def _buildCompactionSystemPromptProjection(
             return {
                 "text": None,
                 "applied": False,
-                "targetTokens": tokenLimit,
                 "originalTokens": 0,
                 "projectedTokens": 0,
             }
@@ -103,25 +102,12 @@ async def _buildCompactionSystemPromptProjection(
                 summary,
             ]
         )
-        if tokenLimit is None:
-            projected = original
-        else:
-            max_chars = max(1_200, int(tokenLimit) * 4)
-            omission = (
-                "\ncheckpoint_projection_omitted_lower_priority_context=true"
-            )
-            projected = (
-                f"{truncate(original, max(1, max_chars - len(omission)))}"
-                f"{omission}"
-            )
     original_tokens = estimateTextTokens(original)
-    projected_tokens = estimateTextTokens(projected)
     return {
-        "text": projected,
-        "applied": projected_tokens < original_tokens,
-        "targetTokens": tokenLimit,
+        "text": original,
+        "applied": False,
         "originalTokens": original_tokens,
-        "projectedTokens": projected_tokens,
+        "projectedTokens": original_tokens,
     }
 
 

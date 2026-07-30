@@ -9,6 +9,7 @@ import agent_core as core
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
 from agent_core.provider_token_budget import resolve_interactive_context_policy
+from agent_core.agent_loop.tool_result_budget import ToolResultBatchBudget
 from agent_core.tool_result_guard import guardToolCallResult, serializedContentBytes
 
 
@@ -51,15 +52,25 @@ def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:
 
 
 class Package38InteractiveContextReliefTests(AgentCoreTestCase):
-    def test_codex_defaults_and_explicit_validation(self):
+    def test_hundreds_of_batches_keep_the_full_later_allowance(self):
+        budget = ToolResultBatchBudget(
+            {"profileName": "codex", "kind": "openai", "apiMode": "codex"}
+        )
+        self.assertEqual(
+            [budget.perResultLimit(1) for _ in range(500)],
+            [24_000] * 500,
+        )
+
+    def test_removed_settings_are_inert_and_batch_default_remains(self):
         policy = resolve_interactive_context_policy(
             {"profileName": "codex", "kind": "openai", "apiMode": "codex"}
         )
-        self.assertEqual(policy["contextReliefThresholdTokens"], 64_000)
-        self.assertEqual(policy["contextReliefTargetTokens"], 48_000)
+        self.assertIsNone(policy["contextReliefThresholdTokens"])
+        self.assertIsNone(policy["contextReliefTargetTokens"])
         self.assertEqual(policy["inlineToolResultBatchBytes"], 24_000)
-        self.assertEqual(policy["inlineToolResultTurnBytes"], 64_000)
-        self.assertEqual(policy["reliefSource"], "codex_inferred")
+        self.assertIsNone(policy["inlineToolResultTurnBytes"])
+        self.assertEqual(policy["reliefSource"], "disabled")
+        self.assertEqual(policy["toolBudgetSource"], "codex_inferred")
 
         disabled = resolve_interactive_context_policy(
             {"profileName": "anthropic", "kind": "anthropic"}
@@ -67,24 +78,25 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
         self.assertIsNone(disabled["contextReliefThresholdTokens"])
         self.assertIsNone(disabled["inlineToolResultBatchBytes"])
 
-        with self.assertRaisesRegex(
-            ValueError, "contextReliefTargetTokens"
-        ):
-            resolve_interactive_context_policy(
-                {
-                    "contextReliefThresholdTokens": 50_000,
-                    "contextReliefTargetTokens": 50_000,
-                }
-            )
-        with self.assertRaisesRegex(ValueError, "inlineToolResultTurnBytes"):
-            resolve_interactive_context_policy(
-                {
-                    "inlineToolResultBatchBytes": 20_000,
-                    "inlineToolResultTurnBytes": 10_000,
-                }
-            )
+        historical = resolve_interactive_context_policy(
+            {
+                "profileName": "codex",
+                "kind": "openai",
+                "apiMode": "codex",
+                "contextReliefThresholdTokens": "invalid but inert",
+                "contextReliefTargetTokens": -1,
+                "inlineToolResultBatchBytes": 20_000,
+                "inlineToolResultTurnBytes": "invalid but inert",
+            }
+        )
+        self.assertIsNone(historical["contextReliefThresholdTokens"])
+        self.assertIsNone(historical["contextReliefTargetTokens"])
+        self.assertIsNone(historical["inlineToolResultTurnBytes"])
+        self.assertEqual(historical["inlineToolResultBatchBytes"], 20_000)
+        self.assertEqual(historical["reliefSource"], "deprecated_ignored")
+        self.assertTrue(historical["deprecatedTurnBudgetIgnored"])
 
-    def test_irreducible_fixed_prompt_fails_before_provider_dispatch(self):
+    def test_removed_interactive_target_does_not_block_provider_dispatch(self):
         root, home, workspace, previous = self.temp_context()
         try:
             core.configureRuntimeHome(str(home))
@@ -101,36 +113,32 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
                 systemPrompt=system_prompt,
                 permissionMode="bypassPermissions",
             )
-            dispatched = False
+            requests: list[dict[str, Any]] = []
 
-            async def send(_request):
-                nonlocal dispatched
-                dispatched = True
-                raise AssertionError("provider dispatch must remain closed")
+            async def send(request):
+                requests.append(copy.deepcopy(request))
+                return {
+                    "model": "gpt-5.6-sol",
+                    "stopReason": "end_turn",
+                    "usage": {"input_tokens": 30_000, "output_tokens": 10},
+                    "content": [{"type": "text", "text": "dispatched"}],
+                }
 
-            with self.assertRaises(core.ProviderRequestError) as raised:
-                run(
-                    core.runAgentPrompt(
-                        session=session,
-                        config=config,
-                        runtime=bind_test_runtime(session),
-                        prompt="current request",
-                        providerOverride={"send": send},
-                    )
+            result = run(
+                core.runAgentPrompt(
+                    session=session,
+                    config=config,
+                    runtime=bind_test_runtime(session),
+                    prompt="current request",
+                    providerOverride={"send": send},
                 )
-            self.assertFalse(dispatched)
-            self.assertEqual(
-                raised.exception.record["code"],
-                "interactive_context_relief_failed",
             )
-            self.assertIn(
-                "configured_target_below_irreducible_request",
-                str(raised.exception.record["rawMessage"]),
-            )
+            self.assertEqual(result["text"], "dispatched")
+            self.assertEqual(len(requests), 1)
         finally:
             self.restore_home(root, previous)
 
-    def test_live_shaped_first_request_projects_below_target_without_message_mutation(self):
+    def test_live_shaped_first_request_is_not_projected_or_mutated(self):
         root, home, workspace, previous = self.temp_context()
         try:
             core.configureRuntimeHome(str(home))
@@ -187,16 +195,16 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
                 if event == "provider.request_preflight"
             )
             relief = preflight["interactive_relief"]
-            self.assertTrue(relief["applied"])
-            self.assertGreater(relief["originalInputTokens"], 64_000)
-            self.assertLessEqual(relief["projectedInputTokens"], 48_000)
+            self.assertFalse(relief["applied"])
+            self.assertIsNone(relief["originalInputTokens"])
+            self.assertIsNone(relief["thresholdTokens"])
+            self.assertIsNone(relief["targetTokens"])
             self.assertTrue(relief["targetMet"])
             self.assertGreater(preflight["categories"]["systemIdentity"], 25_000)
             self.assertEqual(session["messages"][:20], original_messages)
-            self.assertLess(
-                len(json.dumps(requests[0]["messages"])),
-                len(json.dumps(original_messages)),
-            )
+            request_text = json.dumps(requests[0]["messages"])
+            self.assertIn("historical-0", request_text)
+            self.assertIn("historical-19", request_text)
         finally:
             self.restore_home(root, previous)
 
@@ -287,18 +295,30 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
                 all(serializedContentBytes(block["content"]) <= 12_000 for block in blocks)
             )
             self.assertTrue(all('"artifact"' in block["content"] for block in blocks))
+            reader = next(
+                tool
+                for tool in core.createBuiltinTools()
+                if tool.name == "ReadToolArtifact"
+            )
             for block in blocks:
                 envelope = json.loads(block["content"])
                 artifact_path = Path(envelope["artifact"]["filePath"])
                 self.assertTrue(artifact_path.is_file())
                 self.assertGreater(len(artifact_path.read_text()), 18_000)
+                page = run(
+                    reader.handler(
+                        {"artifact_id": envelope["artifact"]["artifactId"]},
+                        {"session": session, "config": config, "cwd": str(workspace)},
+                    )
+                )
+                self.assertIn("result result", json.loads(page["content"])["content"])
             budget = next(data for event, data in events if event == "tool.result_budget")
             self.assertLessEqual(budget["batch_used_bytes"], 24_000)
             self.assertEqual(budget["effective_result_budget_bytes"], 12_000)
         finally:
             self.restore_home(root, previous)
 
-    def test_logical_turn_budget_is_monotonic_and_resets_on_next_turn(self):
+    def test_batch_budget_resets_every_iteration_and_next_turn(self):
         root, home, workspace, previous = self.temp_context()
         try:
             core.configureRuntimeHome(str(home))
@@ -383,13 +403,12 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
                     event["effective_result_budget_bytes"]
                     for event in first
                 ],
-                [24_000, 24_000, 16_000],
+                [24_000, 24_000, 24_000],
             )
-            self.assertEqual(
-                [event["turn_remaining_bytes"] for event in first],
-                [40_000, 16_000, 0],
+            self.assertTrue(
+                all("turn_remaining_bytes" not in event for event in first)
             )
-            self.assertLessEqual(
+            self.assertGreater(
                 sum(event["batch_used_bytes"] for event in first),
                 64_000,
             )
@@ -399,7 +418,7 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
                 second[0]["effective_result_budget_bytes"],
                 24_000,
             )
-            self.assertEqual(second[0]["turn_remaining_bytes"], 40_000)
+            self.assertNotIn("turn_remaining_bytes", second[0])
         finally:
             self.restore_home(root, previous)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
 
 
 def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, previousCutoff: int = 0) -> int | None:
@@ -76,7 +77,7 @@ def isSafeWorkingSetStart(messages: list[dict[str, Any]], index: int) -> bool:
     current = messages[index] if 0 <= index < len(messages) else None
     if not current:
         return False
-    if current.get("role") == "user":
+    if _is_plain_user_turn_anchor(current):
         if messageHasToolResults(current):
             return False
         previous = messages[index - 1] if index > 0 else None

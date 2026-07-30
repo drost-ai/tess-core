@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .agent import _agent_tool
+from .artifacts import _read_tool_artifact
 from .code_search import _glob_tool, _grep_tool
 from .definitions import ToolConcurrency, ToolDefinition
 from .files import _edit_tool, _read_tool, _write_tool
@@ -54,6 +55,7 @@ def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefini
         _read_mcp_resource_tool(options.get("mcpRuntime")),
         _enter_worktree_tool(options.get("workspaceController")),
         _exit_worktree_tool(options.get("workspaceController")),
+        _read_tool_artifact(),
     ]
     for tool in tools:
         # Centralizing this reviewed table keeps the wire-contract fixtures
@@ -92,4 +94,5 @@ _BUILTIN_TOOL_CONCURRENCY: dict[str, ToolConcurrency] = {
     "ReadMcpResource": "parallel",
     "EnterWorktree": "exclusive",
     "ExitWorktree": "exclusive",
+    "ReadToolArtifact": "parallel",
 }

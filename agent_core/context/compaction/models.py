@@ -4,6 +4,7 @@ import math
 
 from .shared import *
 from .artifacts import mergeCompactionUsageIntoSession
+from ...message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ...provider_token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO, resolveCompactionRequestOutputTokens
 from ...usage_costs import mergeProviderUsage as _merge_provider_usage
 from ..compaction_models import resolveCompactionTokenPolicy
@@ -392,7 +393,7 @@ def buildEvidenceBackedCompactionSynthesis(args: dict[str, Any]) -> dict[str, An
 def _extract_recent_user_requests(messages: list[dict[str, Any]]) -> list[str]:
     requests: list[str] = []
     for message in messages:
-        if message.get("role") != "user":
+        if not _is_genuine_user_request(message):
             continue
         text = _extract_message_text(message)
         if text:

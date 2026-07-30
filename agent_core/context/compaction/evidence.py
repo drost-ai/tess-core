@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
+from ...message_origin import isRuntimeSyntheticMessage as _is_runtime_synthetic_message
 
 
 def buildCompactionEvidence(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -61,15 +62,30 @@ def buildCompactionEvidence(args: dict[str, Any] | None = None, **kwargs: Any) -
 def buildEvidenceEntriesForMessage(message: dict[str, Any], messageIndex: int, toolUses: dict[str, dict[str, Any]], cwd: str) -> list[dict[str, str]]:
     content = message.get("content")
     role = message.get("role", "user")
+    synthetic = _is_runtime_synthetic_message(message)
+    text_label = (
+        "synthetic_runtime_message"
+        if synthetic
+        else "user_message"
+        if role == "user"
+        else "assistant_text"
+    )
+    block_label = (
+        "synthetic_runtime_text_block"
+        if synthetic
+        else "user_text_block"
+        if role == "user"
+        else "assistant_text_block"
+    )
     if isinstance(content, str):
-        return [buildTextEvidenceEntry({"messageIndex": messageIndex, "role": role, "label": "user_message" if role == "user" else "assistant_text", "text": content})]
+        return [buildTextEvidenceEntry({"messageIndex": messageIndex, "role": role, "label": text_label, "text": content})]
     if not isinstance(content, list):
         return []
 
     entries: list[dict[str, str]] = []
     text_blocks = "\n\n".join(str(block.get("text", "")) for block in content if block.get("type") == "text").strip()
     if text_blocks:
-        entries.append(buildTextEvidenceEntry({"messageIndex": messageIndex, "role": role, "label": "user_text_block" if role == "user" else "assistant_text_block", "text": text_blocks}))
+        entries.append(buildTextEvidenceEntry({"messageIndex": messageIndex, "role": role, "label": block_label, "text": text_blocks}))
     for block in content:
         if block.get("type") == "tool_use":
             tool_uses_id = str(block.get("id") or "")

@@ -94,6 +94,7 @@ class ProviderProfile(TypedDict, total=False):
     inlineToolResultTurnBytes: int | None
     reliefSource: str
     toolBudgetSource: str
+    deprecatedTurnBudgetIgnored: bool
     reasoningEffortEnabled: bool | None
     reasoningEffort: str | None
     openAiChatReasoning: dict[str, Any]

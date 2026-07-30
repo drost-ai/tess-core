@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from .shared import *
+from ...message_origin import (
+    isGenuineUserRequest as _is_genuine_user_request,
+    isRuntimeSyntheticMessage as _is_runtime_synthetic_message,
+)
 from ...todo_policy import TODO_WRITE_LIMITS as _TODO_WRITE_LIMITS
 from ...todo_policy import boundTodoViewText as _bound_todo_view_text
 from ...todo_policy import selectTodoState as _select_todo_state
@@ -113,7 +117,14 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
     for message in messages:
         content = message.get("content")
         if isinstance(content, str):
-            push_line(requests if message.get("role") == "user" else findings, content, 220)
+            if _is_genuine_user_request(message):
+                push_line(
+                    requests,
+                    content,
+                    220,
+                )
+            elif not _is_runtime_synthetic_message(message):
+                push_line(findings, content, 220)
             continue
         if not isinstance(content, list):
             continue
@@ -121,7 +132,14 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
             if not isinstance(block, dict):
                 continue
             if block.get("type") == "text":
-                push_line(requests if message.get("role") == "user" else findings, str(block.get("text") or ""), 220)
+                if _is_genuine_user_request(message):
+                    push_line(
+                        requests,
+                        str(block.get("text") or ""),
+                        220,
+                    )
+                elif not _is_runtime_synthetic_message(message):
+                    push_line(findings, str(block.get("text") or ""), 220)
                 continue
             if block.get("type") == "tool_use":
                 input_value = block.get("input") if isinstance(block.get("input"), dict) else {}

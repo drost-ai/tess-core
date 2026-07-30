@@ -28,3 +28,34 @@ async def run_stable_boundary_hook(
         stop = bool(getattr(directive, "stop", False))
         text = str(getattr(directive, "text", "") or "")
     return {"stop": stop, "text": text}
+
+
+async def finish_stable_boundary(
+    *,
+    hook: Callable[[], Any] | None,
+    text_parts: list[str],
+    tool_count: int,
+    usage: dict[str, Any],
+    model: str,
+    estimated_cost_usd: float,
+    session_id: str,
+    emit: Callable[[str, dict[str, Any]], Any],
+) -> dict[str, Any] | None:
+    directive = await run_stable_boundary_hook(hook)
+    if not directive or not directive["stop"]:
+        return None
+    boundary_text = directive["text"].strip()
+    if boundary_text and (not text_parts or text_parts[-1] != boundary_text):
+        text_parts.append(boundary_text)
+    emit(
+        "turn.stable_boundary_stopped",
+        {"session_id": session_id, "model": model, "tool_count": tool_count},
+    )
+    return {
+        "text": "\n\n".join(text_parts).strip(),
+        "toolCount": tool_count,
+        "usage": usage,
+        "model": model,
+        "estimatedCostUsd": estimated_cost_usd,
+        "stopReason": "stable_boundary",
+    }
