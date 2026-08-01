@@ -13,6 +13,7 @@ from .fault_contract import (
     buildFaultContract,
     summarizeFaultContract,
 )
+from .fault_evaluator import evaluateFaultContract
 from .fault_probes import runOpenAiFaultProbesAsync
 
 REPORT_SCHEMA = "agent-core.provider-fault-matrix.v1"
@@ -62,6 +63,8 @@ def runAnthropicFaultMatrix() -> dict[str, Any]:
 async def runProviderFaultMatrixAsync() -> dict[str, Any]:
     anthropic_probes = await runAnthropicFaultMatrixAsync()
     anthropic_contract = buildFaultContract("anthropic_messages_sse")
+    anthropic_evaluations = evaluateFaultContract(anthropic_contract)
+    anthropic_evaluation_failures = [item for item in anthropic_evaluations if item["verdict"] != "matched"]
     anthropic = {
         **anthropic_probes,
         "scope": "package47b-complete-contract-and-dual-transport-probes",
@@ -69,22 +72,31 @@ async def runProviderFaultMatrixAsync() -> dict[str, Any]:
             **summarizeFaultContract(anthropic_contract),
             "executedCases": len(anthropic_probes["cases"]),
             "executedUniqueCells": len({(probe["state"], probe["fault"]) for probe in anthropic_probes["cases"]}),
+            "evaluatedCells": len(anthropic_evaluations),
+            "matchedCells": len(anthropic_evaluations) - len(anthropic_evaluation_failures),
         },
         "contract": anthropic_contract,
+        "evaluations": anthropic_evaluations,
         "probes": anthropic_probes["cases"],
+        "status": "failed" if anthropic_probes["status"] != "passed" or anthropic_evaluation_failures else "passed",
     }
     openai_contract = buildFaultContract("openai_responses")
+    openai_evaluations = evaluateFaultContract(openai_contract)
+    openai_evaluation_failures = [item for item in openai_evaluations if item["verdict"] != "matched"]
     openai_probes = await runOpenAiFaultProbesAsync()
     openai_failed = [probe for probe in openai_probes if probe["verdict"] != "matched"]
     openai = {
         "providerFamily": "openai_responses",
-        "status": "failed" if openai_failed else "passed",
+        "status": "failed" if openai_failed or openai_evaluation_failures else "passed",
         "coverage": {
             **summarizeFaultContract(openai_contract),
             "executedCases": len(openai_probes),
             "executedUniqueCells": len({(probe["state"], probe["fault"]) for probe in openai_probes}),
+            "evaluatedCells": len(openai_evaluations),
+            "matchedCells": len(openai_evaluations) - len(openai_evaluation_failures),
         },
         "contract": openai_contract,
+        "evaluations": openai_evaluations,
         "probes": openai_probes,
     }
     families = [anthropic, openai]
@@ -104,6 +116,8 @@ async def runProviderFaultMatrixAsync() -> dict[str, Any]:
             "remainingCells": 0,
             "complete": True,
             "executedCases": sum(item["coverage"]["executedCases"] for item in families),
+            "evaluatedCells": sum(item["coverage"]["evaluatedCells"] for item in families),
+            "matchedCells": sum(item["coverage"]["matchedCells"] for item in families),
         },
         "families": families,
     }

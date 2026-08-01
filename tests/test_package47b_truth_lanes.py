@@ -30,6 +30,8 @@ class Package47BFaultMatrixTests(AgentCoreTestCase):
         self.assertEqual(report["status"], "passed")
         self.assertEqual(report["coverage"]["declaredCells"], 280)
         self.assertEqual(report["coverage"]["classifiedCells"], 280)
+        self.assertEqual(report["coverage"]["evaluatedCells"], 280)
+        self.assertEqual(report["coverage"]["matchedCells"], 280)
         self.assertEqual(report["coverage"]["unknownCells"], 0)
         self.assertTrue(report["coverage"]["complete"])
         self.assertEqual([family["providerFamily"] for family in report["families"]], list(PROVIDER_FAMILIES))
@@ -38,6 +40,13 @@ class Package47BFaultMatrixTests(AgentCoreTestCase):
                 probe["verdict"] == "matched"
                 for family in report["families"]
                 for probe in family["probes"]
+            )
+        )
+        self.assertTrue(
+            all(
+                evaluation["verdict"] == "matched"
+                for family in report["families"]
+                for evaluation in family["evaluations"]
             )
         )
         self.assertEqual(report["families"][0]["connectionModeParity"]["status"], "passed")
