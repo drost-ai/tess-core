@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-performance:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      AGENT_CORE_TYPESCRIPT_REPO: ${{ github.workspace }}/typescript-agent-core
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out pinned TypeScript parity peer
+        uses: actions/checkout@v4
+        with:
+          repository: agent-core
+          ref: 928c0cf5c2a1d8090a7728ce5e7c95ed3631674d
+          path: typescript-agent-core
+          token: ${{ secrets.AGENT_CORE_REPOSITORIES_TOKEN || github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: typescript-agent-core/package-lock.json
+      - name: Build pinned TypeScript parity peer
+        working-directory: typescript-agent-core
+        run: |
+          npm ci
+          npm run build
+      - run: python -m pip install -e '.[dev]'
+      - name: Event corpus is reproducible
+        run: python -m agent_core_harness export-event-corpus --check
+      - name: Provider fault matrix
+        run: python -m agent_core_harness fault-matrix all --output reports/fault-matrix.json
+      - name: Performance and cache economics
+        run: python -m agent_core_harness performance-lane --output reports/performance-lane.json
+      - name: Shard-safe suite under 150 seconds
+        run: python -m agent_core_harness suite-speed --workers 4 --target-seconds 150 --output reports/suite-speed.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: package47b-reports
+          path: reports/

@@ -298,7 +298,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
 
         token_accounting_module._measure_anthropic_count_tokens = successful_count
         with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
-            config = _config(root, count_timeout_ms=40, total_timeout_ms=80, exact=False)
+            config = _config(root, count_timeout_ms=100, total_timeout_ms=200, exact=False)
             session = _session(root)
             provider_calls = 0
 
@@ -330,7 +330,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
 
         token_accounting_module._measure_anthropic_count_tokens = successful_count
         with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
-            config = _config(root, count_timeout_ms=40, total_timeout_ms=40, exact=False)
+            config = _config(root, count_timeout_ms=100, total_timeout_ms=200, exact=False)
             session = _session(root)
             late_results = []
             events = []

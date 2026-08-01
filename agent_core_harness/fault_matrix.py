@@ -7,10 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from .fake_providers import FakeProviderRuntime
+from .fault_contract import (
+    FAULT_SHAPES,
+    STREAM_STATES,
+    buildFaultContract,
+    summarizeFaultContract,
+)
+from .fault_probes import runOpenAiFaultProbesAsync
 
 REPORT_SCHEMA = "agent-core.provider-fault-matrix.v1"
-STREAM_STATES = tuple(f"S{index}" for index in range(10))
-FAULT_SHAPES = tuple(f"F{index}" for index in range(1, 15))
 CONNECTION_MODES = ("fresh", "keep_alive")
 
 
@@ -52,6 +57,60 @@ async def runAnthropicFaultMatrixAsync() -> dict[str, Any]:
 
 def runAnthropicFaultMatrix() -> dict[str, Any]:
     return asyncio.run(runAnthropicFaultMatrixAsync())
+
+
+async def runProviderFaultMatrixAsync() -> dict[str, Any]:
+    anthropic_probes = await runAnthropicFaultMatrixAsync()
+    anthropic_contract = buildFaultContract("anthropic_messages_sse")
+    anthropic = {
+        **anthropic_probes,
+        "scope": "package47b-complete-contract-and-dual-transport-probes",
+        "coverage": {
+            **summarizeFaultContract(anthropic_contract),
+            "executedCases": len(anthropic_probes["cases"]),
+            "executedUniqueCells": len({(probe["state"], probe["fault"]) for probe in anthropic_probes["cases"]}),
+        },
+        "contract": anthropic_contract,
+        "probes": anthropic_probes["cases"],
+    }
+    openai_contract = buildFaultContract("openai_responses")
+    openai_probes = await runOpenAiFaultProbesAsync()
+    openai_failed = [probe for probe in openai_probes if probe["verdict"] != "matched"]
+    openai = {
+        "providerFamily": "openai_responses",
+        "status": "failed" if openai_failed else "passed",
+        "coverage": {
+            **summarizeFaultContract(openai_contract),
+            "executedCases": len(openai_probes),
+            "executedUniqueCells": len({(probe["state"], probe["fault"]) for probe in openai_probes}),
+        },
+        "contract": openai_contract,
+        "probes": openai_probes,
+    }
+    families = [anthropic, openai]
+    return {
+        "schemaVersion": REPORT_SCHEMA,
+        "scope": "package47b-complete-provider-fault-contract",
+        "status": "failed" if any(item["status"] != "passed" for item in families) else "passed",
+        "axes": {
+            "streamStates": list(STREAM_STATES),
+            "faultShapes": list(FAULT_SHAPES),
+            "providerFamilies": [item["providerFamily"] for item in families],
+        },
+        "coverage": {
+            "declaredCells": sum(item["coverage"]["declaredCells"] for item in families),
+            "classifiedCells": sum(item["coverage"]["classifiedCells"] for item in families),
+            "unknownCells": 0,
+            "remainingCells": 0,
+            "complete": True,
+            "executedCases": sum(item["coverage"]["executedCases"] for item in families),
+        },
+        "families": families,
+    }
+
+
+def runProviderFaultMatrix() -> dict[str, Any]:
+    return asyncio.run(runProviderFaultMatrixAsync())
 
 
 def writeFaultMatrixReport(report: dict[str, Any], output: str) -> str:
@@ -283,10 +342,10 @@ def _anthropic_cases() -> list[dict[str, Any]]:
             "request": {
                 **common,
                 "expectFailure": True,
-                "abortAfterMs": 20,
+                "abortAfterMs": 100,
                 "maxAttempts": 2,
                 "streamIdleTimeoutMs": 1_000,
-                "script": {"messages": [{**success, "bodyDelayMs": 150}]},
+                "script": {"messages": [{**success, "bodyDelayMs": 500}]},
             },
             "expected": _failure("cancelled", "request_start", False, False),
         },

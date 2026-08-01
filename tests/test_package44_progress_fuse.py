@@ -169,10 +169,58 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
                     ],
                 }
 
+            async def persist_without_io(_session: dict[str, Any], _config: dict[str, Any]) -> None:
+                return None
+
+            async def request_without_prompt_rebuild(_args: dict[str, Any]) -> dict[str, Any]:
+                return {"preparedRequest": {}, "response": await send({})}
+
+            async def no_queued_messages(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
+                return []
+
+            async def no_dispatch_rule(*_args: Any, **_kwargs: Any) -> None:
+                return None
+
+            async def allow_tool_hook(*_args: Any, **_kwargs: Any) -> dict[str, str]:
+                return {"decision": "continue"}
+
+            async def no_tool_hook(*_args: Any, **_kwargs: Any) -> None:
+                return None
+
             clock = iter(index * 3_600 for index in range(20_000))
-            with patch(
-                "agent_core.agent_loop.loop._time",
-                SimpleNamespace(monotonic=lambda: next(clock)),
+            with (
+                patch(
+                    "agent_core.agent_loop.loop._time",
+                    SimpleNamespace(monotonic=lambda: next(clock)),
+                ),
+                patch(
+                    "agent_core.agent_loop.loop.persistSession",
+                    persist_without_io,
+                ),
+                patch(
+                    "agent_core.agent_loop.loop._request_provider_response",
+                    request_without_prompt_rebuild,
+                ),
+                patch(
+                    "agent_core.agent_loop.loop.deliver_queued_task_messages_to_session",
+                    no_queued_messages,
+                ),
+                patch(
+                    "agent_core.agent_loop.loop.findDispatchDenyRule",
+                    no_dispatch_rule,
+                ),
+                patch(
+                    "agent_core.agent_loop.loop._run_pre_tool_hook",
+                    allow_tool_hook,
+                ),
+                patch(
+                    "agent_core.agent_loop.loop._run_post_tool_hook",
+                    no_tool_hook,
+                ),
+                patch(
+                    "agent_core.agent_loop.loop._strip_in_memory_image_data",
+                    lambda messages: messages,
+                ),
             ):
                 result = run(
                     core.runAgentPrompt(

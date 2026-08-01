@@ -186,11 +186,11 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
         self.assertEqual(recovered["generation"], 2)
 
     def test_replacement_rejection_or_timeout_never_starts_generation_two(self) -> None:
-        for sink, timeout_ms in (
-            (_Sink(supersede_ack=False), 100),
-            (_Sink(supersede_delay=0.05), 1),
+        for label, sink, timeout_ms in (
+            ("rejected", _Sink(supersede_ack=False), 100),
+            ("timed-out", _Sink(supersede_delay=0.05), 1),
         ):
-            with self.subTest(sink=sink, timeout_ms=timeout_ms):
+            with self.subTest(sink=label, timeout_ms=timeout_ms):
                 attempts = 0
 
                 async def create(_params: dict[str, Any]) -> AsyncChunks:
