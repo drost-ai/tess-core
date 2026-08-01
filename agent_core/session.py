@@ -7,6 +7,10 @@ from typing import Any
 
 from ._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ._utils import now_iso
+from .persistence_metrics import (
+    beginPersistenceCall as _begin_persistence_call,
+    finishPersistenceCall as _finish_persistence_call,
+)
 from .session_fork import createForkArchiveHeader, createForkedSession
 from .storage import (
     appendSessionTranscriptLogEntries,
@@ -52,19 +56,27 @@ async def persistSession(
     options: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | None:
-    if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
-        return None
-    snapshot = _sanitize_media_for_persistence(session)
-    repair = repairSessionTranscript(snapshot)
-    await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
-    persist_options = {**(options or {}), **kwargs}
-    if persist_options.get("touch", True):
-        snapshot["updatedAt"] = now_iso()
-    transcript_log, _appended = await _persist_session_transcript_log(snapshot, repair)
-    snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
-    committed = await _commit_prepared_session_snapshot(snapshot)
-    _sync_committed_session_state(session, committed)
-    return copy.deepcopy(committed["session"])
+    measurement = _begin_persistence_call(str(session.get("id") or ""), len(session.get("messages") or []))
+    try:
+        if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
+            _finish_persistence_call(measurement, "skipped")
+            return None
+        snapshot = _sanitize_media_for_persistence(session)
+        repair = repairSessionTranscript(snapshot)
+        await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
+        persist_options = {**(options or {}), **kwargs}
+        if persist_options.get("touch", True):
+            snapshot["updatedAt"] = now_iso()
+        transcript_log, _appended = await _persist_session_transcript_log(snapshot, repair)
+        snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
+        committed = await _commit_prepared_session_snapshot(snapshot)
+        _sync_committed_session_state(session, committed)
+        result = copy.deepcopy(committed["session"])
+        _finish_persistence_call(measurement, "persisted", revision=committed["revision"])
+        return result
+    except BaseException:
+        _finish_persistence_call(measurement, "error")
+        raise
 
 
 async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any], failure: dict[str, Any]) -> None:

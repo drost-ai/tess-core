@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,6 +33,7 @@ class FakeProviderRuntime:
         signal = AbortSignal()
         runtime = self._runtime_options(data, signal)
         result = {"provider": provider, "api": api, "status": "passed"}
+        abort_task = _schedule_abort(data, signal)
         try:
             response = await self._dispatch(provider, api, data, runtime, signal)
             result["response"] = json_safe(response)
@@ -40,6 +43,11 @@ class FakeProviderRuntime:
             if not data.get("expectFailure"):
                 self.results.append(result)
                 raise ScenarioAssertionError(f"{provider}.{api} provider request failed: {failure.get('rawMessage') or exc}", category="provider")
+        finally:
+            if abort_task:
+                abort_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await abort_task
         self.results.append(result)
         return result
 
@@ -191,6 +199,17 @@ def _copy_timeout_options(source: dict[str, Any], target: dict[str, Any]) -> Non
     for key in ("requestStartTimeoutMs", "streamIdleTimeoutMs", "jsonResponseTimeoutMs"):
         if key in source:
             target[key] = source[key]
+
+
+def _schedule_abort(data: dict[str, Any], signal: AbortSignal) -> asyncio.Task[None] | None:
+    if "abortAfterMs" not in data:
+        return None
+
+    async def abort_later() -> None:
+        await asyncio.sleep(max(0, int(data["abortAfterMs"])) / 1000)
+        signal.aborted = True
+
+    return asyncio.create_task(abort_later())
 
 
 def _failure_record(exc: Exception) -> dict[str, Any]:

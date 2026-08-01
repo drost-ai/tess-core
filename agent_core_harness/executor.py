@@ -22,6 +22,7 @@ from .context_driver import (
 )
 from .debug_bundle import write_debug_bundle
 from .fake_providers import FakeProviderRuntime, assert_provider_capture, assert_provider_response
+from .fault_matrix import run_anthropic_fault_matrix_step
 from .goldens import compare_golden, expected_observations, render_diff, update_golden
 from .loader import load_scenario
 from .mcp_driver import (
@@ -227,6 +228,8 @@ async def _execute_step(
         state["provider_results"] = runtime.results
         state["provider_last_result"] = result
         return ["provider_response", "provider_requests", "provider_events"]
+    if step_type == "run_anthropic_fault_matrix":
+        return await run_anthropic_fault_matrix_step(data, sandbox, state)
     if step_type == "seed_context_session":
         return await seed_context_session(data, sandbox, state)
     if step_type == "run_context_compaction":

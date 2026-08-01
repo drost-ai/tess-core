@@ -7,6 +7,11 @@ import time as _time
 import weakref as _weakref
 from typing import Callable
 
+from ..persistence_metrics import (
+    persistenceObserversActive as _persistence_observers_active,
+    recordPersistenceIo as _record_persistence_io,
+)
+
 try:
     import fcntl as _fcntl
 except ImportError:  # pragma: no cover - non-POSIX platforms
@@ -250,18 +255,29 @@ async def readJsonFile(filePath: str, fallback: Any) -> Any:
         return fallback
 
 async def writeJsonFile(filePath: str, value: Any) -> None:
+    measure = _persistence_observers_active()
+    started_ns = _time.perf_counter_ns() if measure else 0
     os.makedirs(os.path.dirname(filePath), exist_ok=True)
     tmp = f"{filePath}.{os.getpid()}.{uuid.uuid4()}.tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(value, handle, indent=2, ensure_ascii=False)
         handle.write("\n")
+    byte_count = os.path.getsize(tmp) if measure else 0
     os.replace(tmp, filePath)
+    if measure:
+        _record_persistence_io("write", filePath, byte_count, _time.perf_counter_ns() - started_ns)
 
 async def appendJsonLine(filePath: str, value: Any) -> None:
+    measure = _persistence_observers_active()
+    started_ns = _time.perf_counter_ns() if measure else 0
     os.makedirs(os.path.dirname(filePath), exist_ok=True)
+    previous_size = os.path.getsize(filePath) if measure and os.path.exists(filePath) else 0
     with open(filePath, "a", encoding="utf-8") as handle:
         json.dump(value, handle, ensure_ascii=False)
         handle.write("\n")
+    if measure:
+        byte_count = os.path.getsize(filePath) - previous_size
+        _record_persistence_io("append", filePath, byte_count, _time.perf_counter_ns() - started_ns)
 
 def parseJsonString(value: str | None) -> Any:
     if not value:

@@ -84,6 +84,7 @@ _INTERNAL_MODULES = {
     "payload_cursor",
     "partial_output",
     "partial_output_state",
+    "persistence_metrics",
     "prompt_cache_state",
     "prompt_cache_state_schema",
     "process_identity_darwin",

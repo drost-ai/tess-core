@@ -6,9 +6,11 @@ import sys
 
 from .ci_runner import run_ci_suite
 from .executor import run_scenario
+from .fault_matrix import runAnthropicFaultMatrix, writeFaultMatrixReport
 from .loader import load_scenarios
 from .model import ScenarioValidationError
 from .parity_runner import run_parity_scenario
+from .performance import runPersistenceBenchmark, writePerformanceReport
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,6 +41,16 @@ def main(argv: list[str] | None = None) -> int:
     ci_parser.add_argument("--disable-capability", action="append", dest="disabled_capabilities")
     ci_parser.add_argument("--typescript-repo")
     ci_parser.add_argument("--fail-fast", action="store_true")
+    benchmark_parser = subparsers.add_parser("benchmark")
+    benchmark_parser.add_argument("benchmark", choices=["persistence"])
+    benchmark_parser.add_argument("--message-counts", default="200,1000,5000")
+    benchmark_parser.add_argument("--samples", type=int, default=5)
+    benchmark_parser.add_argument("--persists-per-sample", type=int, default=3)
+    benchmark_parser.add_argument("--content-bytes", type=int, default=1536)
+    benchmark_parser.add_argument("--output")
+    fault_parser = subparsers.add_parser("fault-matrix")
+    fault_parser.add_argument("provider", choices=["anthropic"])
+    fault_parser.add_argument("--output")
     args = parser.parse_args(argv)
     try:
         if args.command == "list":
@@ -49,6 +61,10 @@ def main(argv: list[str] | None = None) -> int:
             return _parity(args)
         if args.command == "ci":
             return _ci(args)
+        if args.command == "benchmark":
+            return _benchmark(args)
+        if args.command == "fault-matrix":
+            return _fault_matrix(args)
     except ScenarioValidationError as exc:
         print(f"harness validation error: {exc}", file=sys.stderr)
         return 2
@@ -129,3 +145,25 @@ def _ci(args: argparse.Namespace) -> int:
         return 0
     print(f"ci suite failed: report={result.reports.get('markdown')}", file=sys.stderr)
     return 1
+
+
+def _benchmark(args: argparse.Namespace) -> int:
+    message_counts = [int(value.strip()) for value in args.message_counts.split(",") if value.strip()]
+    report = runPersistenceBenchmark(
+        message_counts=message_counts,
+        samples=args.samples,
+        persists_per_sample=args.persists_per_sample,
+        content_bytes=args.content_bytes,
+    )
+    if args.output:
+        writePerformanceReport(report, args.output)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def _fault_matrix(args: argparse.Namespace) -> int:
+    report = runAnthropicFaultMatrix()
+    if args.output:
+        writeFaultMatrixReport(report, args.output)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["status"] == "passed" else 1

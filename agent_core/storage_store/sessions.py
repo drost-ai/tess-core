@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import copy
+import time
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
 from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
+from ..persistence_metrics import (
+    persistenceObserversActive as _persistence_observers_active,
+    recordPersistenceIo as _record_persistence_io,
+)
 from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
 from ..usage_costs import createUsageTotals
 from .shared import *
@@ -57,10 +62,20 @@ async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) 
     path = sessionTranscriptLogPath(sessionId)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if entries:
+        measure = _persistence_observers_active()
+        started_ns = time.perf_counter_ns() if measure else 0
+        previous_size = os.path.getsize(path) if measure and os.path.exists(path) else 0
         with open(path, "a", encoding="utf-8") as handle:
             for entry in entries:
                 json.dump(_sanitize_media_for_persistence(entry), handle, ensure_ascii=False)
                 handle.write("\n")
+        if measure:
+            _record_persistence_io(
+                "append",
+                path,
+                os.path.getsize(path) - previous_size,
+                time.perf_counter_ns() - started_ns,
+            )
     return path
 
 _ADDITIVE_SESSION_METADATA_LISTS = {

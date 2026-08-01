@@ -185,6 +185,8 @@ def collect_observations(
             observations["provider_response"] = provider_observations["provider_results"]
         if "provider_state" in selected:
             observations["provider_state"] = provider_observations["provider_state"]
+    if "provider_fault_matrix" in selected:
+        observations["provider_fault_matrix"] = state.get("provider_fault_matrix") or {}
     return observations
 
 

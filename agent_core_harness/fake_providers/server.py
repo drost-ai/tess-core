@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import time
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
@@ -37,7 +39,12 @@ class FakeProviderHttpServer:
                 outer._handle_post(self)
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.server.daemon_threads = True
+        self.server.block_on_close = False
+        self.thread = threading.Thread(
+            target=lambda: self.server and self.server.serve_forever(poll_interval=0.01),
+            daemon=True,
+        )
         self.thread.start()
         host, port = self.server.server_address
         self.base_url = f"http://{host}:{port}/v1"
@@ -69,17 +76,32 @@ class FakeProviderHttpServer:
             }
         )
         response = _select_attempt(self.script, api, attempt)
-        delay_ms = int(response.get("delayMs") or 0)
+        delay_ms = int(response.get("headersDelayMs") or response.get("delayMs") or 0)
         if delay_ms > 0:
             time.sleep(delay_ms / 1000)
+        if response.get("fault") == "disconnect_before_headers":
+            handler.close_connection = True
+            with suppress(OSError):
+                handler.connection.shutdown(socket.SHUT_RDWR)
+            handler.connection.close()
+            return
         status = int(response.get("status") or 200)
         content_type = str(response.get("contentType") or "application/json")
-        body = _response_body(response)
+        chunks = _response_chunks(response)
+        body = b"".join(chunk[1] for chunk in chunks)
         handler.send_response(status)
         handler.send_header("content-type", content_type)
         handler.send_header("content-length", str(len(body)))
         handler.end_headers()
-        handler.wfile.write(body)
+        body_delay_ms = int(response.get("bodyDelayMs") or 0)
+        if body_delay_ms > 0:
+            time.sleep(body_delay_ms / 1000)
+        for chunk_delay_ms, chunk in chunks:
+            if chunk_delay_ms > 0:
+                time.sleep(chunk_delay_ms / 1000)
+            with suppress(BrokenPipeError, ConnectionResetError, OSError):
+                handler.wfile.write(chunk)
+                handler.wfile.flush()
 
 
 def _normalize_script(script: dict[str, Any] | None) -> dict[str, Any]:
@@ -116,6 +138,22 @@ def _response_body(response: dict[str, Any]) -> bytes:
     if isinstance(body, str):
         return body.encode("utf-8")
     return json.dumps(body).encode("utf-8")
+
+
+def _response_chunks(response: dict[str, Any]) -> list[tuple[int, bytes]]:
+    raw_chunks = response.get("chunks")
+    if not isinstance(raw_chunks, list):
+        return [(0, _response_body(response))]
+    chunks: list[tuple[int, bytes]] = []
+    for item in raw_chunks:
+        if isinstance(item, dict):
+            delay_ms = int(item.get("delayMs") or 0)
+            raw = item.get("raw", item.get("body", ""))
+        else:
+            delay_ms = 0
+            raw = item
+        chunks.append((delay_ms, str(raw).encode("utf-8")))
+    return chunks
 
 
 def _parse_json(value: str) -> Any:

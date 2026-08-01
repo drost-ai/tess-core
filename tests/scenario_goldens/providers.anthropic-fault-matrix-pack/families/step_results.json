@@ -1,0 +1,25 @@
+[
+  {
+    "finishedAt": "<timestamp>",
+    "index": 0,
+    "observationKeys": [
+      "provider_fault_matrix"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "run_anthropic_fault_matrix"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 1,
+    "observationKeys": [
+      "provider_fault_matrix",
+      "run",
+      "scenario",
+      "step_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "capture"
+  }
+]

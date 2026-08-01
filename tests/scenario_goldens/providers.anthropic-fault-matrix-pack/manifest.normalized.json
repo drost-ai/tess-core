@@ -1,0 +1,41 @@
+{
+  "area": "providers",
+  "capabilities": [
+    "network_loopback"
+  ],
+  "capture": {
+    "include": [
+      "provider_fault_matrix",
+      "step_results"
+    ]
+  },
+  "ci": {
+    "required": true
+  },
+  "id": "providers.anthropic-fault-matrix-pack",
+  "mode": [
+    "python"
+  ],
+  "setup": {
+    "workspace": {}
+  },
+  "steps": [
+    {
+      "run_anthropic_fault_matrix": {}
+    },
+    {
+      "capture": {
+        "include": [
+          "provider_fault_matrix",
+          "step_results"
+        ]
+      }
+    }
+  ],
+  "tags": [
+    "package47a",
+    "fault-matrix",
+    "anthropic"
+  ],
+  "title": "Anthropic Provider Fault Matrix \u2014 Package 47A Initial Cells"
+}
