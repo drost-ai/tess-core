@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import contextlib as _contextlib
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -117,7 +117,7 @@ class ProviderRequestWatchdog:
             if not task.done():
                 await asyncio.wait({task}, timeout=0.05)
             if task.done():
-                with contextlib.suppress(asyncio.CancelledError, Exception):
+                with _contextlib.suppress(asyncio.CancelledError, Exception):
                     task.result()
             else:
                 task.add_done_callback(_consume_task_result)
@@ -191,7 +191,7 @@ def _signal_reason(signal: Any) -> BaseException:
 
 
 def _consume_task_result(task: asyncio.Future[Any]) -> None:
-    with contextlib.suppress(asyncio.CancelledError, Exception):
+    with _contextlib.suppress(asyncio.CancelledError, Exception):
         task.result()
 
 

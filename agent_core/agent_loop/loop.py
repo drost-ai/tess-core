@@ -101,8 +101,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     runtime["turnAuthorityId"] = parent_turn_id
     turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
-    last_stable_snapshot = copy.deepcopy(session)
-    last_stable_snapshot["messages"] = _strip_in_memory_image_data(last_stable_snapshot.get("messages", []))
+    last_stable_snapshot = _capture_session_rollback(session)
 
     def subagent_limit_state(tool_calls: int | None = None) -> dict[str, Any]:
         return {
@@ -480,8 +479,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             provider_call_index=provider_call_index,
         )
         await persistSession(session, config)
-        last_stable_snapshot = copy.deepcopy(session)
-        last_stable_snapshot["messages"] = _strip_in_memory_image_data(last_stable_snapshot.get("messages", []))
+        last_stable_snapshot = _capture_session_rollback(session)
         if paused_for_approval:
             if paused_message:
                 text_parts.append(paused_message)

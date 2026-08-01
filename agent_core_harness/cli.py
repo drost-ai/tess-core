@@ -13,6 +13,7 @@ from .parity_runner import run_parity_scenario
 from .performance import (
     runAnthropicTransportBenchmark,
     runPersistenceBenchmark,
+    runRollbackSnapshotBenchmark,
     writePerformanceReport,
 )
 
@@ -46,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     ci_parser.add_argument("--typescript-repo")
     ci_parser.add_argument("--fail-fast", action="store_true")
     benchmark_parser = subparsers.add_parser("benchmark")
-    benchmark_parser.add_argument("benchmark", choices=["persistence", "transport"])
+    benchmark_parser.add_argument("benchmark", choices=["persistence", "rollback", "transport"])
     benchmark_parser.add_argument("--message-counts", default="200,1000,5000")
     benchmark_parser.add_argument("--samples", type=int, default=5)
     benchmark_parser.add_argument("--persists-per-sample", type=int, default=3)
@@ -159,6 +160,13 @@ def _benchmark(args: argparse.Namespace) -> int:
             samples=args.samples,
             calls_per_turn=args.calls_per_turn,
             connection_setup_delay_ms=args.setup_delay_ms,
+        )
+    elif args.benchmark == "rollback":
+        message_counts = [int(value.strip()) for value in args.message_counts.split(",") if value.strip()]
+        report = runRollbackSnapshotBenchmark(
+            message_counts=message_counts,
+            samples=args.samples,
+            content_bytes=args.content_bytes,
         )
     else:
         message_counts = [int(value.strip()) for value in args.message_counts.split(",") if value.strip()]

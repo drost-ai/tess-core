@@ -11,6 +11,7 @@ from ..persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
 )
+from .io_executor import runStorageIo as _run_storage_io
 
 try:
     import fcntl as _fcntl
@@ -102,6 +103,21 @@ def _try_flock(handle: Any) -> bool:
         return False
 
 
+def _open_lock_handle(path: str) -> Any:
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    return open(f"{path}.lock", "a+", encoding="utf-8")
+
+
+def _release_lock_handle(handle: Any) -> None:
+    try:
+        if _fcntl is not None:
+            _fcntl.flock(handle.fileno(), _fcntl.LOCK_UN)
+    finally:
+        handle.close()
+
+
 @_contextlib.asynccontextmanager
 async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
     """Advisory lock for read-modify-write sequences on a JSON record file.
@@ -138,22 +154,21 @@ async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
                 f"{path}.lock",
             )
         if _fcntl is not None:
-            directory = os.path.dirname(path)
-            if directory:
-                os.makedirs(directory, exist_ok=True)
-            handle = open(f"{path}.lock", "a+", encoding="utf-8")
+            handle = await _run_storage_io(
+                _open_lock_handle,
+                path,
+                cancelCleanup=_release_lock_handle,
+            )
+            os_handle = handle
             acquired_os = False
             while True:
-                if await asyncio.to_thread(_try_flock, handle):
+                if await _run_storage_io(_try_flock, handle):
                     acquired_os = True
                     break
                 if _time.monotonic() >= deadline:
                     break
                 await asyncio.sleep(0.01)
-            if acquired_os:
-                os_handle = handle
-            else:
-                handle.close()
+            if not acquired_os:
                 payload = {
                     "path": path,
                     "layer": "os",
@@ -168,13 +183,13 @@ async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
                 )
         yield
     finally:
-        if os_handle is not None:
-            with _contextlib.suppress(Exception):
-                _fcntl.flock(os_handle.fileno(), _fcntl.LOCK_UN)
-            with _contextlib.suppress(Exception):
-                os_handle.close()
-        if in_process_acquired:
-            in_process.release()
+        try:
+            if os_handle is not None:
+                with _contextlib.suppress(Exception):
+                    await _run_storage_io(_release_lock_handle, os_handle)
+        finally:
+            if in_process_acquired:
+                in_process.release()
 
 
 async def mutateJsonFile(filePath: str, mutate: Callable[[Any], Any], fallback: Any = None) -> Any:
@@ -247,37 +262,51 @@ async def mutateJsonRecord(
         return {"value": result["value"], "changed": changed, "lockPath": f"{lock_path}.lock"}
 
 
-async def readJsonFile(filePath: str, fallback: Any) -> Any:
+def _read_json_file_sync(file_path: str, fallback: Any) -> Any:
     try:
-        with open(filePath, "r", encoding="utf-8") as handle:
+        with open(file_path, "r", encoding="utf-8") as handle:
             return json.load(handle)
     except FileNotFoundError:
         return fallback
 
-async def writeJsonFile(filePath: str, value: Any) -> None:
+
+async def readJsonFile(filePath: str, fallback: Any) -> Any:
+    return await _run_storage_io(_read_json_file_sync, filePath, fallback)
+
+
+def _write_json_file_sync(file_path: str, value: Any) -> None:
     measure = _persistence_observers_active()
     started_ns = _time.perf_counter_ns() if measure else 0
-    os.makedirs(os.path.dirname(filePath), exist_ok=True)
-    tmp = f"{filePath}.{os.getpid()}.{uuid.uuid4()}.tmp"
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    tmp = f"{file_path}.{os.getpid()}.{uuid.uuid4()}.tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(value, handle, indent=2, ensure_ascii=False)
         handle.write("\n")
     byte_count = os.path.getsize(tmp) if measure else 0
-    os.replace(tmp, filePath)
+    os.replace(tmp, file_path)
     if measure:
-        _record_persistence_io("write", filePath, byte_count, _time.perf_counter_ns() - started_ns)
+        _record_persistence_io("write", file_path, byte_count, _time.perf_counter_ns() - started_ns)
 
-async def appendJsonLine(filePath: str, value: Any) -> None:
+
+async def writeJsonFile(filePath: str, value: Any) -> None:
+    await _run_storage_io(_write_json_file_sync, filePath, value)
+
+
+def _append_json_line_sync(file_path: str, value: Any) -> None:
     measure = _persistence_observers_active()
     started_ns = _time.perf_counter_ns() if measure else 0
-    os.makedirs(os.path.dirname(filePath), exist_ok=True)
-    previous_size = os.path.getsize(filePath) if measure and os.path.exists(filePath) else 0
-    with open(filePath, "a", encoding="utf-8") as handle:
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    previous_size = os.path.getsize(file_path) if measure and os.path.exists(file_path) else 0
+    with open(file_path, "a", encoding="utf-8") as handle:
         json.dump(value, handle, ensure_ascii=False)
         handle.write("\n")
     if measure:
-        byte_count = os.path.getsize(filePath) - previous_size
-        _record_persistence_io("append", filePath, byte_count, _time.perf_counter_ns() - started_ns)
+        byte_count = os.path.getsize(file_path) - previous_size
+        _record_persistence_io("append", file_path, byte_count, _time.perf_counter_ns() - started_ns)
+
+
+async def appendJsonLine(filePath: str, value: Any) -> None:
+    await _run_storage_io(_append_json_line_sync, filePath, value)
 
 def parseJsonString(value: str | None) -> Any:
     if not value:
@@ -309,8 +338,12 @@ async def loadAuth() -> dict[str, Any] | None:
     return migration["auth"]
 
 async def loadCodexAuthToken(authPath: str) -> str | None:
+    return await _run_storage_io(_load_codex_auth_token_sync, authPath)
+
+
+def _load_codex_auth_token_sync(auth_path: str) -> str | None:
     try:
-        with open(authPath, "r", encoding="utf-8") as handle:
+        with open(auth_path, "r", encoding="utf-8") as handle:
             payload = json.load(handle)
         api_key = str(payload.get("OPENAI_API_KEY") or "").strip()
         if api_key:
@@ -327,8 +360,12 @@ async def saveAuth(auth: dict[str, Any]) -> None:
     await writeJsonFile(os.path.join(getStateRoot(), "auth.json"), normalized["auth"])
 
 async def clearAuth() -> None:
+    await _run_storage_io(_clear_auth_sync, os.path.join(getStateRoot(), "auth.json"))
+
+
+def _clear_auth_sync(auth_path: str) -> None:
     try:
-        os.remove(os.path.join(getStateRoot(), "auth.json"))
+        os.remove(auth_path)
     except FileNotFoundError:
         pass
 

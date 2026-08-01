@@ -11,6 +11,7 @@ from ..persistence_metrics import (
 )
 from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
 from ..usage_costs import createUsageTotals
+from .io_executor import runStorageIo as _run_storage_io
 from .shared import *
 
 def sessionPath(sessionId: str) -> str:
@@ -60,6 +61,15 @@ async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
 
 async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
     path = sessionTranscriptLogPath(sessionId)
+    # The former synchronous body also serialized same-process callers by
+    # blocking the event loop. Preserve that ordering explicitly now that the
+    # append runs on a worker.
+    async with _in_process_lock(f"{path}#transcript-append"):
+        await _run_storage_io(_append_session_transcript_log_entries_sync, path, entries)
+    return path
+
+
+def _append_session_transcript_log_entries_sync(path: str, entries: list[Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if entries:
         measure = _persistence_observers_active()
@@ -76,7 +86,6 @@ async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) 
                 os.path.getsize(path) - previous_size,
                 time.perf_counter_ns() - started_ns,
             )
-    return path
 
 _ADDITIVE_SESSION_METADATA_LISTS = {
     "backgroundSessionIds",
@@ -219,7 +228,10 @@ MAX_SHALLOW_SESSION_BYTES = 16 * 1024 * 1024
 async def loadSessionRecordShallow(sessionId: str) -> SessionRecord | None:
     """Read only the bounded session JSON record; never open its archive."""
 
-    path = sessionPath(sessionId)
+    return await _run_storage_io(_load_session_record_shallow_sync, sessionPath(sessionId), sessionId)
+
+
+def _load_session_record_shallow_sync(path: str, session_id: str) -> SessionRecord | None:
     try:
         stat_result = os.stat(path)
         if stat_result.st_size > MAX_SHALLOW_SESSION_BYTES:
@@ -228,7 +240,7 @@ async def loadSessionRecordShallow(sessionId: str) -> SessionRecord | None:
             record = json.load(handle)
     except (FileNotFoundError, OSError, ValueError, json.JSONDecodeError):
         return None
-    if not _valid_shallow_session(record, sessionId):
+    if not _valid_shallow_session(record, session_id):
         return None
     return record
 
@@ -276,10 +288,7 @@ def hasPersistableSessionMessages(session: SessionRecord) -> bool:
 
 async def listSessions() -> list[SessionRecord]:
     directory = os.path.join(getStateRoot(), "sessions")
-    try:
-        names = [name for name in os.listdir(directory) if name.endswith(".json")]
-    except FileNotFoundError:
-        return []
+    names = await _run_storage_io(_list_json_names_sync, directory)
     records: list[dict[str, Any]] = []
     for name in names:
         try:
@@ -299,21 +308,12 @@ def createSessionListCache() -> dict[str, Any]:
 
     async def list_cached() -> list[dict[str, Any]]:
         directory = os.path.join(getStateRoot(), "sessions")
-        try:
-            names = [name for name in os.listdir(directory) if name.endswith(".json")]
-        except FileNotFoundError:
-            names = []
+        scanned = await _run_storage_io(_scan_session_directory_sync, directory)
         seen: set[str] = set()
         summaries: list[dict[str, Any]] = []
-        stats["scanned"] += len(names)
-        for name in names:
-            path = os.path.realpath(os.path.join(directory, name))
-            try:
-                file_stat = os.stat(path)
-            except OSError:
-                continue
+        stats["scanned"] += len(scanned)
+        for name, path, fingerprint in scanned:
             seen.add(path)
-            fingerprint = (file_stat.st_mtime_ns, file_stat.st_size)
             cached = entries.get(path)
             if cached and cached.get("fingerprint") == fingerprint:
                 stats["cacheHits"] += 1
@@ -347,6 +347,25 @@ def createSessionListCache() -> dict[str, Any]:
         entries.pop(os.path.realpath(sessionPath(session_id)), None)
 
     return {"list": list_cached, "getStats": get_stats, "invalidate": invalidate}
+
+
+def _list_json_names_sync(directory: str) -> list[str]:
+    try:
+        return [name for name in os.listdir(directory) if name.endswith(".json")]
+    except FileNotFoundError:
+        return []
+
+
+def _scan_session_directory_sync(directory: str) -> list[tuple[str, str, tuple[int, int]]]:
+    scanned: list[tuple[str, str, tuple[int, int]]] = []
+    for name in _list_json_names_sync(directory):
+        path = os.path.realpath(os.path.join(directory, name))
+        try:
+            file_stat = os.stat(path)
+        except OSError:
+            continue
+        scanned.append((name, path, (file_stat.st_mtime_ns, file_stat.st_size)))
+    return scanned
 
 
 def _session_list_summary(record: SessionRecord) -> dict[str, Any]:

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
+import json
 import os
 import platform
 import statistics
@@ -15,14 +17,14 @@ import agent_core as core
 from agent_core.persistence_metrics import registerPersistenceObserver
 from agent_core.provider_turn_session import createProviderTurnSession
 from agent_core.provider_watchdog import AbortSignal
+from agent_core.agent_loop.cancellation import _capture_session_rollback
 
 from .fake_providers.server import FakeProviderHttpServer
 
 REPORT_SCHEMA = "agent-core.performance.v1"
 PERSISTENCE_BENCHMARK = "persist_session_steady_state"
 ANTHROPIC_TRANSPORT_BENCHMARK = "anthropic_turn_transport"
-
-
+ROLLBACK_SNAPSHOT_BENCHMARK = "session_rollback_snapshot"
 class PersistenceMeasurementCollector:
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -126,8 +128,44 @@ async def runPersistenceBenchmarkAsync(
 
 def runPersistenceBenchmark(**kwargs: Any) -> dict[str, Any]:
     return asyncio.run(runPersistenceBenchmarkAsync(**kwargs))
-
-
+def runRollbackSnapshotBenchmark(
+    *,
+    message_counts: Iterable[int] = (200, 1_000, 5_000),
+    samples: int = 25,
+    content_bytes: int = 1_536,
+) -> dict[str, Any]:
+    counts = _validated_counts(message_counts)
+    if samples < 1 or content_bytes < 1:
+        raise ValueError("samples and content_bytes must be positive")
+    calibration = runCpuCalibration()
+    with tempfile.TemporaryDirectory(prefix="agent-core-rollback-performance-") as tmp:
+        workspace = Path(tmp)
+        series = [
+            _measure_rollback_snapshot_count(
+                workspace,
+                message_count,
+                samples,
+                content_bytes,
+            )
+            for message_count in counts
+        ]
+    return {
+        "schemaVersion": REPORT_SCHEMA,
+        "benchmark": ROLLBACK_SNAPSHOT_BENCHMARK,
+        "measurementPolicy": {
+            "legacy": "deepcopy whole session; Package 46 pre-S2a behavior",
+            "after": "deepcopy non-message head plus message watermark/source authority",
+            "elapsedMetrics": "informational before/after evidence; functional equivalence is hard-gated in tests",
+        },
+        "environment": _environment(),
+        "calibration": calibration,
+        "parameters": {
+            "messageCounts": counts,
+            "samplesPerMessageCount": samples,
+            "contentBytesPerMessage": content_bytes,
+        },
+        "series": series,
+    }
 async def runAnthropicTransportBenchmarkAsync(
     *,
     samples: int = 3,
@@ -185,12 +223,48 @@ def runAnthropicTransportBenchmark(**kwargs: Any) -> dict[str, Any]:
 
 
 def writePerformanceReport(report: dict[str, Any], output: str) -> str:
-    import json
-
     path = Path(output)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return str(path)
+
+
+def _measure_rollback_snapshot_count(
+    workspace: Path,
+    message_count: int,
+    samples: int,
+    content_bytes: int,
+) -> dict[str, Any]:
+    session = _synthetic_session(workspace, message_count, content_bytes, 0)
+    legacy_ns: list[int] = []
+    rollback_ns: list[int] = []
+    rollback_head_bytes: list[int] = []
+    for _ in range(samples):
+        started = time.perf_counter_ns()
+        legacy = copy.deepcopy(session)
+        legacy_ns.append(time.perf_counter_ns() - started)
+
+        started = time.perf_counter_ns()
+        rollback = _capture_session_rollback(session)
+        rollback_ns.append(time.perf_counter_ns() - started)
+        rollback_head_bytes.append(
+            len(json.dumps(rollback.head, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        )
+        if len(legacy["messages"]) != rollback.messageWatermark:
+            raise RuntimeError("Rollback watermark diverged from the legacy snapshot")
+        if rollback.messageSource is not session["messages"]:
+            raise RuntimeError("Rollback capture unexpectedly cloned message history")
+    legacy_median = int(statistics.median(legacy_ns))
+    rollback_median = int(statistics.median(rollback_ns))
+    return {
+        "messageCount": message_count,
+        "legacyDeepcopyMedianNs": legacy_median,
+        "rollbackCaptureMedianNs": rollback_median,
+        "rollbackHeadBytesMedian": int(statistics.median(rollback_head_bytes)),
+        "speedupRatio": round(legacy_median / max(1, rollback_median), 3),
+        "legacySamplesNs": legacy_ns,
+        "rollbackSamplesNs": rollback_ns,
+    }
 
 
 async def _measure_message_count(

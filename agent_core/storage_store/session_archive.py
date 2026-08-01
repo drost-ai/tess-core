@@ -6,6 +6,7 @@ from typing import Any
 
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
+from .io_executor import runStorageIo as _run_storage_io
 from .shared import *
 
 
@@ -47,7 +48,7 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
     async with withRecordTransaction("session", sessionId):
         record = await readJsonFile(path, None)
         if not record:
-            recovered = _rebuild_session_from_transcript_archive(sessionId)
+            recovered = await _rebuild_session_from_transcript_archive(sessionId)
             if recovered is None:
                 return {"record": None, "changed": False, "reason": None}
             safe_recovered = _sanitize_media_for_persistence(recovered)
@@ -67,10 +68,8 @@ async def loadSession(sessionId: str) -> SessionRecord | None:
 
 async def _reconcile_session_record(session_id: str, record: SessionRecord) -> dict[str, Any]:
     transcript_path = sessionTranscriptLogPath(session_id)
-    try:
-        with open(transcript_path, "r", encoding="utf-8") as handle:
-            raw = handle.read()
-    except FileNotFoundError:
+    raw = await _run_storage_io(_read_text_sync, transcript_path, False)
+    if raw is None:
         return {"record": record, "changed": False, "reason": None}
     archived = _parse_archived_messages(raw)
     latest = _latest_archived_timestamp(raw)
@@ -100,11 +99,10 @@ async def _reconcile_session_record(session_id: str, record: SessionRecord) -> d
     }
 
 
-def _rebuild_session_from_transcript_archive(session_id: str) -> SessionRecord | None:
+async def _rebuild_session_from_transcript_archive(session_id: str) -> SessionRecord | None:
     transcript_path = sessionTranscriptLogPath(session_id)
-    try:
-        raw = Path(transcript_path).read_text(encoding="utf-8")
-    except (FileNotFoundError, OSError):
+    raw = await _run_storage_io(_read_text_sync, transcript_path, True)
+    if raw is None:
         return None
     messages = _parse_archived_messages(raw)
     if not messages:
@@ -120,6 +118,17 @@ def _rebuild_session_from_transcript_archive(session_id: str) -> SessionRecord |
         "lastArchivedAt": latest or header.get("updatedAt"),
     }
     return header
+
+
+def _read_text_sync(path: str, suppress_os_errors: bool) -> str | None:
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError:
+        if suppress_os_errors:
+            return None
+        raise
 
 
 def _parse_archived_session_header(raw: str, session_id: str) -> SessionRecord | None:
