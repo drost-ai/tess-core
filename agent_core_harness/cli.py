@@ -10,7 +10,11 @@ from .fault_matrix import runAnthropicFaultMatrix, writeFaultMatrixReport
 from .loader import load_scenarios
 from .model import ScenarioValidationError
 from .parity_runner import run_parity_scenario
-from .performance import runPersistenceBenchmark, writePerformanceReport
+from .performance import (
+    runAnthropicTransportBenchmark,
+    runPersistenceBenchmark,
+    writePerformanceReport,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,11 +46,13 @@ def main(argv: list[str] | None = None) -> int:
     ci_parser.add_argument("--typescript-repo")
     ci_parser.add_argument("--fail-fast", action="store_true")
     benchmark_parser = subparsers.add_parser("benchmark")
-    benchmark_parser.add_argument("benchmark", choices=["persistence"])
+    benchmark_parser.add_argument("benchmark", choices=["persistence", "transport"])
     benchmark_parser.add_argument("--message-counts", default="200,1000,5000")
     benchmark_parser.add_argument("--samples", type=int, default=5)
     benchmark_parser.add_argument("--persists-per-sample", type=int, default=3)
     benchmark_parser.add_argument("--content-bytes", type=int, default=1536)
+    benchmark_parser.add_argument("--calls-per-turn", type=int, default=3)
+    benchmark_parser.add_argument("--setup-delay-ms", type=int, default=80)
     benchmark_parser.add_argument("--output")
     fault_parser = subparsers.add_parser("fault-matrix")
     fault_parser.add_argument("provider", choices=["anthropic"])
@@ -148,13 +154,20 @@ def _ci(args: argparse.Namespace) -> int:
 
 
 def _benchmark(args: argparse.Namespace) -> int:
-    message_counts = [int(value.strip()) for value in args.message_counts.split(",") if value.strip()]
-    report = runPersistenceBenchmark(
-        message_counts=message_counts,
-        samples=args.samples,
-        persists_per_sample=args.persists_per_sample,
-        content_bytes=args.content_bytes,
-    )
+    if args.benchmark == "transport":
+        report = runAnthropicTransportBenchmark(
+            samples=args.samples,
+            calls_per_turn=args.calls_per_turn,
+            connection_setup_delay_ms=args.setup_delay_ms,
+        )
+    else:
+        message_counts = [int(value.strip()) for value in args.message_counts.split(",") if value.strip()]
+        report = runPersistenceBenchmark(
+            message_counts=message_counts,
+            samples=args.samples,
+            persists_per_sample=args.persists_per_sample,
+            content_bytes=args.content_bytes,
+        )
     if args.output:
         writePerformanceReport(report, args.output)
     print(json.dumps(report, indent=2, sort_keys=True))

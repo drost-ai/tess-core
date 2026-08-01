@@ -151,6 +151,10 @@ def createProviderTurnSession(
         from .providers.openai_turn_session import OpenAiProviderTurnSession
 
         return OpenAiProviderTurnSession(config=config, **values)
+    if values["provider"] == "anthropic":
+        from .providers.anthropic_turn_session import AnthropicProviderTurnSession
+
+        return AnthropicProviderTurnSession(config=config, **values)
     return StatelessProviderTurnSession(**values)
 
 

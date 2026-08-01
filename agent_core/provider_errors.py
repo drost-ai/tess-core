@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import http.client as _http_client
 import random
 import re
 from collections.abc import Mapping as _Mapping
@@ -264,7 +265,7 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
     if _looks_like_timeout(lower):
         category = "timeout"
         retryable = True
-    elif _looks_like_transport(lower):
+    elif isinstance(error, (ConnectionError, OSError, EOFError, _http_client.HTTPException)) or _looks_like_transport(lower):
         category = "transport"
         retryable = True
     elif _looks_like_protocol(lower):
@@ -346,7 +347,7 @@ def _looks_like_timeout(message: str) -> bool:
 
 
 def _looks_like_transport(message: str) -> bool:
-    return bool(re.search(r"terminated|socket hang up|econnreset|econnrefused|enotfound|network|fetch failed|connection closed|other side closed|premature close|broken pipe", message))
+    return bool(re.search(r"terminated|socket hang up|econnreset|econnrefused|enotfound|network|fetch failed|connection closed|connection without response|remote end closed|other side closed|premature close|broken pipe", message))
 
 
 def _looks_like_protocol(message: str) -> bool:

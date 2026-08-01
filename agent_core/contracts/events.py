@@ -47,6 +47,7 @@ RuntimeEventName = Literal[
     "provider.response_completed",
     "provider.prompt_cache",
     "provider.fallback",
+    "provider.transport_thread_leak",
     "tool.started",
     "tool.completed",
     "context.raw_pressure",

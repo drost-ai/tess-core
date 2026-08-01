@@ -1,9 +1,9 @@
 {
   "id": "providers.anthropic-fault-matrix-pack",
-  "title": "Anthropic Provider Fault Matrix — Package 47A Initial Cells",
+  "title": "Anthropic Provider Fault Matrix — Package 45 Dual Transport",
   "area": "providers",
   "mode": ["python"],
-  "tags": ["package47a", "fault-matrix", "anthropic"],
+  "tags": ["package45", "package47a", "fault-matrix", "anthropic", "keep-alive"],
   "capabilities": ["network_loopback"],
   "ci": {
     "required": true

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 
 class AbortError(RuntimeError):
@@ -15,12 +17,17 @@ class AbortSignal:
     def __init__(self) -> None:
         self.aborted = False
         self.reason: BaseException | None = None
+        self.event = asyncio.Event()
 
     def abort(self, reason: BaseException | None = None) -> None:
         if self.aborted:
             return
         self.aborted = True
         self.reason = reason or AbortError()
+        self.event.set()
+
+    async def wait(self) -> None:
+        await self.event.wait()
 
 
 class ProviderRequestWatchdog:
@@ -38,6 +45,8 @@ class ProviderRequestWatchdog:
         self._timed_out = False
         self._timeout_error: BaseException | None = None
         self._disposed = False
+        self._deadline_changed = asyncio.Event()
+        self._deadline_generation = 0
         self.signal = AbortSignal()
         self.reset(self._initial_timeout_ms)
         if _signal_aborted(parentSignal):
@@ -51,6 +60,8 @@ class ProviderRequestWatchdog:
         self._timed_out = False
         self._timeout_error = None
         self._deadline = time.monotonic() + (max(1, int(timeoutMs or self._initial_timeout_ms)) / 1000)
+        self._deadline_generation += 1
+        self._deadline_changed.set()
 
     async def race(self, awaitable: Awaitable[Any]) -> Any:
         task = asyncio.ensure_future(awaitable)
@@ -58,41 +69,72 @@ class ProviderRequestWatchdog:
         # Promise.race observes an already-fired watchdog. Give the Python
         # coroutine the same single scheduling turn before checking deadlines.
         await asyncio.sleep(0)
+        parent_waiter = asyncio.create_task(_wait_for_signal(self._parent_signal))
+        signal_waiter = asyncio.create_task(self.signal.wait())
         try:
             while True:
                 if task.done():
                     try:
                         return task.result()
-                    except BaseException as exc:
+                    except BaseException:
                         self._refresh_timeout()
                         if self._timed_out:
                             raise self._timeout_error or self._make_timeout_error()
-                        raise exc
+                        raise
                 self._raise_if_parent_aborted()
                 self._refresh_timeout()
                 if self._timed_out:
                     raise self._timeout_error or self._make_timeout_error()
                 remaining = max(0.0, self._deadline - time.monotonic())
-                await asyncio.wait(
-                    {task},
-                    timeout=min(0.05, remaining or 0.001),
+                deadline_waiter = asyncio.create_task(asyncio.sleep(remaining))
+                deadline_generation = self._deadline_generation
+                reset_waiter = asyncio.create_task(
+                    self._wait_for_deadline_change(deadline_generation)
                 )
+                try:
+                    done, _pending = await asyncio.wait(
+                        {task, parent_waiter, signal_waiter, deadline_waiter, reset_waiter},
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                finally:
+                    for waiter in (deadline_waiter, reset_waiter):
+                        if not waiter.done():
+                            waiter.cancel()
+                    await asyncio.gather(
+                        deadline_waiter,
+                        reset_waiter,
+                        return_exceptions=True,
+                    )
+                if task in done:
+                    return task.result()
+                if parent_waiter in done:
+                    self._raise_if_parent_aborted()
+                if signal_waiter in done and self.signal.aborted:
+                    raise self.signal.reason or AbortError()
         except BaseException:
             if not task.done():
                 task.cancel()
             if not task.done():
                 await asyncio.wait({task}, timeout=0.05)
             if task.done():
-                try:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     task.result()
-                except (asyncio.CancelledError, Exception):
-                    pass
             else:
                 task.add_done_callback(_consume_task_result)
             raise
+        finally:
+            for waiter in (parent_waiter, signal_waiter):
+                if not waiter.done():
+                    waiter.cancel()
+            await asyncio.gather(
+                parent_waiter,
+                signal_waiter,
+                return_exceptions=True,
+            )
 
     def dispose(self) -> None:
         self._disposed = True
+        self._deadline_changed.set()
 
     def __getitem__(self, key: str) -> Any:
         return getattr(self, key)
@@ -116,6 +158,14 @@ class ProviderRequestWatchdog:
     def _make_timeout_error(self) -> BaseException:
         error = self._build_timeout_error()
         return error if isinstance(error, BaseException) else RuntimeError(str(error))
+
+    async def _wait_for_deadline_change(self, generation: int) -> None:
+        if self._deadline_generation != generation:
+            return
+        self._deadline_changed.clear()
+        if self._deadline_generation != generation:
+            return
+        await self._deadline_changed.wait()
 
 
 def createProviderRequestWatchdog(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestWatchdog:
@@ -141,10 +191,24 @@ def _signal_reason(signal: Any) -> BaseException:
 
 
 def _consume_task_result(task: asyncio.Future[Any]) -> None:
-    try:
+    with contextlib.suppress(asyncio.CancelledError, Exception):
         task.result()
-    except (asyncio.CancelledError, Exception):
-        pass
+
+
+async def _wait_for_signal(signal: Any) -> None:
+    if signal is None:
+        await asyncio.Event().wait()
+        return
+    waiter = getattr(signal, "wait", None)
+    if callable(waiter):
+        await waiter()
+        return
+    event = signal.get("event") if isinstance(signal, dict) else getattr(signal, "event", None)
+    if isinstance(event, asyncio.Event):
+        await event.wait()
+        return
+    while not _signal_aborted(signal):
+        await asyncio.sleep(0.05)
 
 
 __all__ = ["AbortError", "AbortSignal", "ProviderRequestWatchdog", "createProviderRequestWatchdog"]

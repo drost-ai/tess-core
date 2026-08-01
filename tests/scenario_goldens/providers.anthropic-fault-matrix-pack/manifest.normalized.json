@@ -33,9 +33,11 @@
     }
   ],
   "tags": [
+    "package45",
     "package47a",
     "fault-matrix",
-    "anthropic"
+    "anthropic",
+    "keep-alive"
   ],
-  "title": "Anthropic Provider Fault Matrix \u2014 Package 47A Initial Cells"
+  "title": "Anthropic Provider Fault Matrix \u2014 Package 45 Dual Transport"
 }

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from dataclasses import dataclass
 from typing import Any
 
 import agent_core as core
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
+from agent_core.provider_turn_session import createProviderTurnSession
 
 from ..model import ScenarioAssertionError
 from .model import get_path, json_safe
@@ -15,9 +15,19 @@ from .openai import FakeOpenAIClientFactory
 from .server import FakeProviderHttpServer
 
 
-@dataclass
 class AbortSignal:
-    aborted: bool = False
+    def __init__(self) -> None:
+        self.aborted = False
+        self.reason: BaseException | None = None
+        self.event = asyncio.Event()
+
+    def abort(self, reason: BaseException | None = None) -> None:
+        self.aborted = True
+        self.reason = reason
+        self.event.set()
+
+    async def wait(self) -> None:
+        await self.event.wait()
 
 
 class FakeProviderRuntime:
@@ -58,7 +68,14 @@ class FakeProviderRuntime:
 
     def observations(self) -> dict[str, Any]:
         return {
-            "provider_requests": self.requests,
+            "provider_requests": [
+                {
+                    key: value
+                    for key, value in request.items()
+                    if key not in {"connectionId", "clientDisconnected"}
+                }
+                for request in self.requests
+            ],
             "provider_events": self.events,
             "provider_results": self.results,
             "provider_state": {
@@ -108,11 +125,23 @@ class FakeProviderRuntime:
     async def _run_anthropic_messages(self, data: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
         server = FakeProviderHttpServer(provider="anthropic", script=data.get("script"), request_recorder=self.requests).start()
         self.servers.append(server)
+        config = _anthropic_config(server, data)
+        turn_session = data.get("_turnSession")
+        owns_turn_session = turn_session is None
+        if owns_turn_session:
+            turn_session = createProviderTurnSession(
+                logical_turn_id="harness-anthropic-turn",
+                session={"id": "harness-anthropic-session", "provider": "anthropic"},
+                config=config,
+                runtime=runtime,
+                model=str(data.get("model") or "claude-sonnet-4-6"),
+            )
         args = {
-            "config": _anthropic_config(server, data),
+            "config": config,
             "request": _request(provider="anthropic", data=data),
             "runtime": runtime,
             "maxAttempts": data.get("maxAttempts", 1),
+            "turnSession": turn_session,
         }
         _copy_timeout_options(data, args)
         original_delay = anthropic_module.providerRetryDelayMs
@@ -121,6 +150,8 @@ class FakeProviderRuntime:
             return await core.sendAnthropicMessagesRequest(args)
         finally:
             anthropic_module.providerRetryDelayMs = original_delay
+            if owns_turn_session:
+                await turn_session.close()
 
     async def _run_anthropic_count_tokens(self, data: dict[str, Any]) -> dict[str, Any]:
         server = FakeProviderHttpServer(provider="anthropic", script=data.get("script"), request_recorder=self.requests).start()
@@ -192,6 +223,7 @@ def _anthropic_config(server: FakeProviderHttpServer, data: dict[str, Any]) -> d
         "anthropicBaseUrl": server.base_url,
         "apiKey": data.get("apiKey", "test-anthropic-key"),
         "customHeaders": data.get("headers") or {},
+        "providerCapabilities": data.get("providerCapabilities") or {},
     }
 
 
@@ -207,7 +239,7 @@ def _schedule_abort(data: dict[str, Any], signal: AbortSignal) -> asyncio.Task[N
 
     async def abort_later() -> None:
         await asyncio.sleep(max(0, int(data["abortAfterMs"])) / 1000)
-        signal.aborted = True
+        signal.abort()
 
     return asyncio.create_task(abort_later())
 

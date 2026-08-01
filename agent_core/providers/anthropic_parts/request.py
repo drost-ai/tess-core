@@ -6,8 +6,14 @@ import time
 from ...contracts.providers import ProviderResponse
 from ...provider_activity import emitProviderActivity
 from ...runtime_secret_provider import resolveProviderConfigSecrets
+from ..anthropic_http_transport import (
+    AnthropicHttpConnectionOwner as _AnthropicHttpConnectionOwner,
+    startAnthropicTransportWorker as _start_anthropic_transport_worker,
+)
 
 from .shared import *
+
+_DEFAULT_URLOPEN = urlopen
 
 async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
@@ -39,26 +45,43 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             emitProviderActivity(runtime, "request_started", attempt=attempt)
             payload = envelope["payload"]
             if stream:
+                activity_loop = asyncio.get_running_loop()
                 stream_activity_state = {
                     "last_activity": time.monotonic(),
                     "saw_activity": False,
                     "had_assistant_output": False,
                     "had_tool_use": False,
+                    "activity_event": asyncio.Event(),
+                    "activity_loop": activity_loop,
                 }
-                response = await _race_anthropic_activity(
-                    _send_anthropic_messages_streaming_async(
-                        config,
-                        payload,
-                        timeout_ms,
-                        request,
-                        runtime,
-                        attempt,
-                        envelope.get("headerFeatures"),
-                        on_activity=lambda accumulator=None: _record_anthropic_turn_activity(
-                            stream_activity_state,
-                            accumulator,
-                        ),
+                stream_sender = _send_anthropic_messages_streaming_async(
+                    config,
+                    payload,
+                    timeout_ms,
+                    request,
+                    runtime,
+                    attempt,
+                    envelope.get("headerFeatures"),
+                    on_activity=lambda accumulator=None: _record_anthropic_turn_activity(
+                        stream_activity_state,
+                        accumulator,
                     ),
+                ) if turn_session is None else _send_anthropic_messages_streaming_async(
+                    config,
+                    payload,
+                    timeout_ms,
+                    request,
+                    runtime,
+                    attempt,
+                    envelope.get("headerFeatures"),
+                    on_activity=lambda accumulator=None: _record_anthropic_turn_activity(
+                        stream_activity_state,
+                        accumulator,
+                    ),
+                    turn_session=turn_session,
+                )
+                response = await _race_anthropic_activity(
+                    stream_sender,
                     timeout_ms=timeout_ms,
                     attempt=attempt,
                     phase=phase,
@@ -69,10 +92,18 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                     turnSession=turn_session,
                 )
             else:
+                sender = _send_anthropic_messages_async(
+                    config, payload, timeout_ms, stream, envelope.get("headerFeatures")
+                ) if turn_session is None else _send_anthropic_messages_async(
+                    config,
+                    payload,
+                    timeout_ms,
+                    stream,
+                    envelope.get("headerFeatures"),
+                    turn_session=turn_session,
+                )
                 raw, content_type = await _race_anthropic_activity(
-                    _send_anthropic_messages_async(
-                        config, payload, timeout_ms, stream, envelope.get("headerFeatures")
-                    ),
+                    sender,
                     timeout_ms=timeout_ms,
                     attempt=attempt,
                     phase=phase,
@@ -107,6 +138,8 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             return response
         except HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
+            with contextlib.suppress(Exception):
+                exc.close()
             parsed = _safe_json_parse(body) or {}
             error_payload = parsed.get("error") if isinstance(parsed.get("error"), dict) else {}
             error_type = error_payload.get("type") if isinstance(error_payload.get("type"), str) else parsed.get("type") if isinstance(parsed.get("type"), str) else None
@@ -159,11 +192,29 @@ def _send_anthropic_messages_sync(
     timeout_ms: int,
     stream: bool = False,
     header_features: dict[str, Any] | None = None,
+    transport: _AnthropicHttpConnectionOwner | None = None,
 ) -> tuple[str, str]:
+    url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
+    body = json.dumps(payload).encode("utf-8")
+    headers = buildAnthropicHeaders(config, {"stream": stream}, header_features)
+    if transport is not None:
+        def consume(response: Any) -> tuple[str, str]:
+            return (
+                response.read().decode("utf-8"),
+                response.headers.get("content-type", ""),
+            )
+
+        return transport.request(
+            url=url,
+            body=body,
+            headers=headers,
+            timeout_seconds=max(1, timeout_ms) / 1000,
+            consume=consume,
+        )
     req = Request(
-        resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
-        data=json.dumps(payload).encode("utf-8"),
-        headers=buildAnthropicHeaders(config, {"stream": stream}, header_features),
+        url,
+        data=body,
+        headers=headers,
         method="POST",
     )
     with urlopen(req, timeout=max(1, timeout_ms) / 1000) as response:
@@ -177,32 +228,19 @@ def _send_anthropic_messages_async(
     timeout_ms: int,
     stream: bool = False,
     header_features: dict[str, Any] | None = None,
+    turn_session: Any = None,
 ) -> asyncio.Future[tuple[str, str]]:
-    loop = asyncio.get_running_loop()
-    future: asyncio.Future[tuple[str, str]] = loop.create_future()
-
-    def complete_result(result: tuple[str, str]) -> None:
-        if not future.done():
-            future.set_result(result)
-
-    def complete_error(error: BaseException) -> None:
-        if not future.done():
-            future.set_exception(error)
-
-    def worker() -> None:
-        try:
-            result = _send_anthropic_messages_sync(
-                config, payload, timeout_ms, stream, header_features
-            )
-        except BaseException as exc:
-            with contextlib.suppress(RuntimeError):
-                loop.call_soon_threadsafe(complete_error, exc)
-            return
-        with contextlib.suppress(RuntimeError):
-            loop.call_soon_threadsafe(complete_result, result)
-
-    threading.Thread(target=worker, name="agent-core-anthropic-request", daemon=True).start()
-    return future
+    transport = _acquire_anthropic_transport(turn_session)
+    if urlopen is not _DEFAULT_URLOPEN:
+        transport = None
+    return _start_anthropic_transport_worker(
+        target=lambda: _send_anthropic_messages_sync(
+            config, payload, timeout_ms, stream, header_features, transport
+        ),
+        owner=transport,
+        turn_session=turn_session,
+        name="agent-core-anthropic-request",
+    )
 
 
 def _send_anthropic_messages_streaming_async(
@@ -214,39 +252,34 @@ def _send_anthropic_messages_streaming_async(
     attempt: int,
     header_features: dict[str, Any] | None = None,
     on_activity: Any | None = None,
+    turn_session: Any = None,
 ) -> asyncio.Future[dict[str, Any]]:
-    loop = asyncio.get_running_loop()
-    future: asyncio.Future[dict[str, Any]] = loop.create_future()
-
-    def complete_result(result: dict[str, Any]) -> None:
-        if not future.done():
-            future.set_result(result)
-
-    def complete_error(error: BaseException) -> None:
-        if not future.done():
-            future.set_exception(error)
-
-    def worker() -> None:
-        try:
-            result = _send_anthropic_messages_streaming_sync(
-                config,
-                payload,
-                timeout_ms,
-                request,
-                runtime,
-                attempt,
-                header_features=header_features,
-                should_stop=lambda: future.cancelled(),
-                on_activity=on_activity,
-            )
-        except BaseException as exc:
-            with contextlib.suppress(RuntimeError):
-                loop.call_soon_threadsafe(complete_error, exc)
-            return
-        with contextlib.suppress(RuntimeError):
-            loop.call_soon_threadsafe(complete_result, result)
-
-    threading.Thread(target=worker, name="agent-core-anthropic-stream", daemon=True).start()
+    transport = _acquire_anthropic_transport(turn_session)
+    if urlopen is not _DEFAULT_URLOPEN:
+        transport = None
+    future_holder: dict[str, asyncio.Future[dict[str, Any]]] = {}
+    future: asyncio.Future[dict[str, Any]]
+    future = _start_anthropic_transport_worker(
+        target=lambda: _send_anthropic_messages_streaming_sync(
+            config,
+            payload,
+            timeout_ms,
+            request,
+            runtime,
+            attempt,
+            header_features=header_features,
+            should_stop=lambda: bool(
+                future_holder.get("future")
+                and future_holder["future"].cancelled()
+            ),
+            on_activity=on_activity,
+            transport=transport,
+        ),
+        owner=transport,
+        turn_session=turn_session,
+        name="agent-core-anthropic-stream",
+    )
+    future_holder["future"] = future
     return future
 
 
@@ -260,19 +293,34 @@ def _send_anthropic_messages_streaming_sync(
     header_features: dict[str, Any] | None = None,
     should_stop: Any | None = None,
     on_activity: Any | None = None,
+    transport: _AnthropicHttpConnectionOwner | None = None,
 ) -> dict[str, Any]:
+    url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
+    body = json.dumps(payload).encode("utf-8")
+    headers = buildAnthropicHeaders(config, {"stream": True}, header_features)
+    if transport is not None:
+        return transport.request(
+            url=url,
+            body=body,
+            headers=headers,
+            timeout_seconds=max(1, timeout_ms) / 1000,
+            consume=lambda response: _consume_anthropic_stream_response(
+                response,
+                request=request,
+                runtime=runtime,
+                attempt=attempt,
+                should_stop=should_stop,
+                on_activity=on_activity,
+            ),
+        )
     req = Request(
-        resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl")),
-        data=json.dumps(payload).encode("utf-8"),
-        headers=buildAnthropicHeaders(config, {"stream": True}, header_features),
+        url,
+        data=body,
+        headers=headers,
         method="POST",
     )
     with urlopen(req, timeout=max(1, timeout_ms) / 1000) as response:
-        content_type = response.headers.get("content-type", "")
-        if "text/event-stream" not in content_type:
-            raw = response.read().decode("utf-8")
-            return _normalize_anthropic_json_response(json.loads(raw), request)
-        return _read_anthropic_sse_response_live(
+        return _consume_anthropic_stream_response(
             response,
             request=request,
             runtime=runtime,
@@ -280,6 +328,36 @@ def _send_anthropic_messages_streaming_sync(
             should_stop=should_stop,
             on_activity=on_activity,
         )
+
+
+def _consume_anthropic_stream_response(
+    response: Any,
+    *,
+    request: dict[str, Any],
+    runtime: dict[str, Any],
+    attempt: int,
+    should_stop: Any | None,
+    on_activity: Any | None,
+) -> dict[str, Any]:
+    content_type = response.headers.get("content-type", "")
+    if "text/event-stream" not in content_type:
+        raw = response.read().decode("utf-8")
+        return _normalize_anthropic_json_response(json.loads(raw), request)
+    return _read_anthropic_sse_response_live(
+        response,
+        request=request,
+        runtime=runtime,
+        attempt=attempt,
+        should_stop=should_stop,
+        on_activity=on_activity,
+    )
+
+
+def _acquire_anthropic_transport(turn_session: Any) -> _AnthropicHttpConnectionOwner:
+    acquire = getattr(turn_session, "acquire_anthropic_transport", None)
+    if callable(acquire):
+        return acquire()
+    return _AnthropicHttpConnectionOwner()
 
 
 def _read_anthropic_sse_response_live(
@@ -330,6 +408,11 @@ def _record_anthropic_turn_activity(
     accumulator: Any | None,
 ) -> None:
     _mark_anthropic_stream_activity(target, accumulator)
+    event = target.get("activity_event")
+    loop = target.get("activity_loop")
+    if isinstance(event, asyncio.Event) and loop is not None:
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(event.set)
 
 
 def _process_anthropic_sse_frame(

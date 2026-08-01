@@ -8,26 +8,32 @@ from typing import Any
 
 from .fake_providers import FakeProviderRuntime
 
-
 REPORT_SCHEMA = "agent-core.provider-fault-matrix.v1"
 STREAM_STATES = tuple(f"S{index}" for index in range(10))
 FAULT_SHAPES = tuple(f"F{index}" for index in range(1, 15))
+CONNECTION_MODES = ("fresh", "keep_alive")
 
 
 async def runAnthropicFaultMatrixAsync() -> dict[str, Any]:
     cases = _anthropic_cases()
     _validate_cases(cases)
-    results = [await _run_case(case) for case in cases]
+    results = [
+        await _run_case(case, mode)
+        for case in cases
+        for mode in CONNECTION_MODES
+    ]
+    parity_mismatches = _connection_mode_mismatches(results)
     failed = [result for result in results if result["verdict"] != "matched"]
     executed_cells = {(result["state"], result["fault"]) for result in results}
     return {
         "schemaVersion": REPORT_SCHEMA,
         "providerFamily": "anthropic_messages_sse",
-        "scope": "package47a-initial-cells",
-        "status": "failed" if failed else "passed",
+        "scope": "package45-dual-transport-cells",
+        "status": "failed" if failed or parity_mismatches else "passed",
         "axes": {
             "streamStates": list(STREAM_STATES),
             "faultShapes": list(FAULT_SHAPES),
+            "connectionModes": list(CONNECTION_MODES),
         },
         "coverage": {
             "declaredCells": len(STREAM_STATES) * len(FAULT_SHAPES),
@@ -35,6 +41,10 @@ async def runAnthropicFaultMatrixAsync() -> dict[str, Any]:
             "executedUniqueCells": len(executed_cells),
             "remainingCells": len(STREAM_STATES) * len(FAULT_SHAPES) - len(executed_cells),
             "complete": False,
+        },
+        "connectionModeParity": {
+            "status": "failed" if parity_mismatches else "passed",
+            "mismatches": parity_mismatches,
         },
         "cases": results,
     }
@@ -64,16 +74,22 @@ async def run_anthropic_fault_matrix_step(
     return ["provider_fault_matrix"]
 
 
-async def _run_case(case: dict[str, Any]) -> dict[str, Any]:
+async def _run_case(case: dict[str, Any], mode: str) -> dict[str, Any]:
     runtime = FakeProviderRuntime()
     try:
-        result = await runtime.run(copy.deepcopy(case["request"]))
+        request = copy.deepcopy(case["request"])
+        request["providerCapabilities"] = {
+            "anthropicHttpKeepAlive": mode == "keep_alive"
+        }
+        result = await runtime.run(request)
         actual = _actual_verdict(result, runtime)
     finally:
         runtime.close()
     mismatches = _compare_verdict(case["expected"], actual)
     return {
-        "id": case["id"],
+        "id": f"{case['id']}[{mode}]",
+        "caseId": case["id"],
+        "connectionMode": mode,
         "title": case["title"],
         "state": case["state"],
         "fault": case["fault"],
@@ -91,6 +107,7 @@ def _actual_verdict(result: dict[str, Any], runtime: FakeProviderRuntime) -> dic
         "status": result["status"],
         "requestCount": len(runtime.requests),
         "eventNames": event_names,
+        "connectionCount": len({request.get("connectionId") for request in runtime.requests}),
     }
     if result["status"] == "failed":
         failure = result.get("failure") or {}
@@ -140,6 +157,19 @@ def _validate_cases(cases: list[dict[str, Any]]) -> None:
             raise ValueError(f"Incomplete expected verdict for {case['id']}")
 
 
+def _connection_mode_mismatches(results: list[dict[str, Any]]) -> list[str]:
+    grouped: dict[str, dict[str, dict[str, Any]]] = {}
+    for result in results:
+        actual = copy.deepcopy(result["actual"])
+        actual.pop("connectionCount", None)
+        grouped.setdefault(result["caseId"], {})[result["connectionMode"]] = actual
+    mismatches = []
+    for case_id, modes in grouped.items():
+        if modes.get("fresh") != modes.get("keep_alive"):
+            mismatches.append(case_id)
+    return mismatches
+
+
 def _anthropic_cases() -> list[dict[str, Any]]:
     success = _success_sse("recovered")
     common = {
@@ -176,17 +206,16 @@ def _anthropic_cases() -> list[dict[str, Any]]:
         },
         {
             "id": "anthropic.s0.f1-disconnect-retry",
-            "title": "Disconnect before headers records the current classification gap",
+            "title": "Disconnect before headers retries as transport and recovers",
             "state": "S0",
             "fault": "F1",
-            "tags": ["transport", "output-free", "known-gap:disconnect-classification"],
+            "tags": ["transport", "output-free", "package45-closed"],
             "request": {
                 **common,
-                "expectFailure": True,
                 "maxAttempts": 2,
                 "script": {"messages": [{"fault": "disconnect_before_headers"}, success]},
             },
-            "expected": _failure("unknown", "request_start", False, False),
+            "expected": _success_after_retry(),
         },
         {
             "id": "anthropic.s2.f6-idle-timeout",

@@ -7,15 +7,20 @@ import platform
 import statistics
 import tempfile
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import agent_core as core
 from agent_core.persistence_metrics import registerPersistenceObserver
+from agent_core.provider_turn_session import createProviderTurnSession
+from agent_core.provider_watchdog import AbortSignal
 
+from .fake_providers.server import FakeProviderHttpServer
 
 REPORT_SCHEMA = "agent-core.performance.v1"
 PERSISTENCE_BENCHMARK = "persist_session_steady_state"
+ANTHROPIC_TRANSPORT_BENCHMARK = "anthropic_turn_transport"
 
 
 class PersistenceMeasurementCollector:
@@ -123,6 +128,62 @@ def runPersistenceBenchmark(**kwargs: Any) -> dict[str, Any]:
     return asyncio.run(runPersistenceBenchmarkAsync(**kwargs))
 
 
+async def runAnthropicTransportBenchmarkAsync(
+    *,
+    samples: int = 3,
+    calls_per_turn: int = 3,
+    connection_setup_delay_ms: int = 80,
+) -> dict[str, Any]:
+    if samples < 1 or calls_per_turn < 2 or connection_setup_delay_ms < 1:
+        raise ValueError("samples and setup delay must be positive; calls_per_turn must be at least 2")
+    modes: dict[str, list[dict[str, Any]]] = {"capability_off": [], "capability_on": []}
+    for enabled, name in ((False, "capability_off"), (True, "capability_on")):
+        for _ in range(samples):
+            modes[name].append(
+                await _measure_anthropic_transport_turn(
+                    enabled=enabled,
+                    calls_per_turn=calls_per_turn,
+                    setup_delay_ms=connection_setup_delay_ms,
+                )
+            )
+    cancel = await _measure_anthropic_cancel()
+    summaries = {
+        name: {
+            "elapsedMsMedian": round(statistics.median(item["elapsedMs"] for item in items), 3),
+            "connectionCountMedian": int(statistics.median(item["connectionCount"] for item in items)),
+            "reusedRequestsMedian": int(statistics.median(item["reusedRequests"] for item in items)),
+            "samples": items,
+        }
+        for name, items in modes.items()
+    }
+    before_connections = summaries["capability_off"]["connectionCountMedian"]
+    after_connections = summaries["capability_on"]["connectionCountMedian"]
+    return {
+        "schemaVersion": REPORT_SCHEMA,
+        "benchmark": ANTHROPIC_TRANSPORT_BENCHMARK,
+        "environment": _environment(),
+        "parameters": {
+            "samplesPerMode": samples,
+            "callsPerTurn": calls_per_turn,
+            "modeledConnectionSetupDelayMs": connection_setup_delay_ms,
+            "endpoint": "offline-loopback-fake-provider",
+        },
+        "beforeAfter": {
+            "before": summaries["capability_off"],
+            "after": summaries["capability_on"],
+            "connectionsAvoidedPerTurn": before_connections - after_connections,
+            "modeledSetupLatencyAvoidedMs": (
+                before_connections - after_connections
+            ) * connection_setup_delay_ms,
+        },
+        "cancellation": cancel,
+    }
+
+
+def runAnthropicTransportBenchmark(**kwargs: Any) -> dict[str, Any]:
+    return asyncio.run(runAnthropicTransportBenchmarkAsync(**kwargs))
+
+
 def writePerformanceReport(report: dict[str, Any], output: str) -> str:
     import json
 
@@ -163,6 +224,133 @@ async def _measure_message_count(
         "serializedSessionBytesMedian": int(statistics.median(serialized_bytes)),
         "samples": results,
         "median": _median_sample(results),
+    }
+
+
+async def _measure_anthropic_transport_turn(
+    *, enabled: bool, calls_per_turn: int, setup_delay_ms: int
+) -> dict[str, Any]:
+    requests: list[dict[str, Any]] = []
+    server = FakeProviderHttpServer(
+        provider="anthropic",
+        script={"connectionSetupDelayMs": setup_delay_ms},
+        request_recorder=requests,
+    ).start()
+    runtime = {"emitEvent": lambda *_: None}
+    config = _benchmark_anthropic_config(server, enabled)
+    turn = createProviderTurnSession(
+        logical_turn_id="package45-benchmark",
+        session={"id": "package45-benchmark", "provider": "anthropic"},
+        config=config,
+        runtime=runtime,
+        model="claude-sonnet-4-6",
+    )
+    started = time.perf_counter()
+    try:
+        for _ in range(calls_per_turn):
+            await core.sendAnthropicMessagesRequest(
+                config=config,
+                request=_benchmark_anthropic_request(),
+                runtime=runtime,
+                maxAttempts=1,
+                turnSession=turn,
+            )
+        elapsed_ms = (time.perf_counter() - started) * 1_000
+        telemetry = turn.transport_telemetry()
+    finally:
+        await turn.close()
+        server.close()
+    return {
+        "elapsedMs": round(elapsed_ms, 3),
+        "connectionCount": len({item["connectionId"] for item in requests}),
+        "requestCount": len(requests),
+        "reusedRequests": telemetry["reusedRequests"],
+        "liveThreadsAfterClose": telemetry["threadsStarted"] - telemetry["threadsSettled"],
+    }
+
+
+async def _measure_anthropic_cancel() -> dict[str, Any]:
+    requests: list[dict[str, Any]] = []
+    server = FakeProviderHttpServer(
+        provider="anthropic",
+        script={"messages": [{"bodyDelayMs": 500}]},
+        request_recorder=requests,
+    ).start()
+    signal = AbortSignal()
+    runtime = {"abortSignal": signal, "streamProviderMessages": True, "emitEvent": lambda *_: None}
+    config = _benchmark_anthropic_config(server, False)
+    turn = createProviderTurnSession(
+        logical_turn_id="package45-cancel",
+        session={"id": "package45-cancel", "provider": "anthropic"},
+        config=config,
+        runtime=runtime,
+        model="claude-sonnet-4-6",
+    )
+    abort_at = 0.0
+
+    async def abort_after_headers() -> None:
+        nonlocal abort_at
+        while not requests:
+            await asyncio.sleep(0)
+        await asyncio.sleep(0.005)
+        abort_at = time.perf_counter()
+        signal.abort()
+
+    abort_task = asyncio.create_task(abort_after_headers())
+    category = None
+    try:
+        await core.sendAnthropicMessagesRequest(
+            config=config,
+            request=_benchmark_anthropic_request(),
+            runtime=runtime,
+            maxAttempts=1,
+            streamIdleTimeoutMs=1_000,
+            turnSession=turn,
+        )
+    except core.ProviderRequestError as exc:
+        category = exc.record.get("category")
+    settled_at = time.perf_counter()
+    await abort_task
+    await turn.close()
+    for _ in range(20):
+        if requests and requests[0].get("clientDisconnected"):
+            break
+        await asyncio.sleep(0.005)
+    telemetry = turn.transport_telemetry()
+    server.close()
+    return {
+        "baseline": {
+            "abortPollIntervalMs": 50,
+            "socketCloseOnCancel": False,
+            "workerThreadsTracked": False,
+        },
+        "after": {
+            "cancelToSettlementMs": round((settled_at - abort_at) * 1_000, 3),
+            "serverObservedDisconnect": bool(requests and requests[0].get("clientDisconnected")),
+            "failureCategory": category,
+            "liveThreadsAfterClose": telemetry["threadsStarted"] - telemetry["threadsSettled"],
+        },
+    }
+
+
+def _benchmark_anthropic_config(
+    server: FakeProviderHttpServer, enabled: bool
+) -> dict[str, Any]:
+    return {
+        "provider": "anthropic",
+        "anthropicBaseUrl": server.base_url,
+        "apiKey": "package45-test-key",
+        "customHeaders": {},
+        "providerCapabilities": {"anthropicHttpKeepAlive": enabled},
+    }
+
+
+def _benchmark_anthropic_request() -> dict[str, Any]:
+    return {
+        "model": "claude-sonnet-4-6",
+        "system": "Package 45 benchmark.",
+        "messages": [{"role": "user", "content": "measure transport"}],
+        "tools": [],
     }
 
 

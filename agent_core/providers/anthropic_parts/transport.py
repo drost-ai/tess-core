@@ -3,6 +3,10 @@ from __future__ import annotations
 import math
 import time
 
+from ..anthropic_http_transport import (
+    cancelAnthropicTransportFuture as _cancel_anthropic_transport_future,
+)
+
 from .shared import *
 
 async def _race_anthropic_activity(
@@ -23,44 +27,84 @@ async def _race_anthropic_activity(
         turnSession.bind_activity_task(task)
     timeout_seconds = max(1, timeout_ms) / 1000
     deadline = time.monotonic() + timeout_seconds
-    poll_seconds = ANTHROPIC_ABORT_POLL_INTERVAL_MS / 1000
-    while True:
-        if task.done():
-            if turnSession is not None:
-                turnSession.clear_activity_task(task)
-            return task.result()
-        if _signal_aborted(abortSignal):
-            await _cancel_anthropic_activity_task(task)
-            _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
-        if activityState is not None:
-            last_activity = activityState.get("last_activity")
-            if isinstance(last_activity, (int, float)):
-                deadline = float(last_activity) + timeout_seconds
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            await _cancel_anthropic_activity_task(task)
-            _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
-            raise _create_anthropic_timeout(
-                (
-                    "stream_read"
-                    if activityState is not None
-                    and activityState.get("saw_activity") is True
-                    else phase
-                ),
-                attempt,
-                _activity_state_bool(activityState, "had_assistant_output", hadAssistantOutput),
-                _activity_state_bool(activityState, "had_tool_use", hadToolUse),
-                timeout_ms,
-            )
-        try:
-            return await asyncio.wait_for(asyncio.shield(task), timeout=min(poll_seconds, remaining))
-        except asyncio.TimeoutError:
+    abort_waiter = asyncio.create_task(_wait_for_anthropic_abort(abortSignal))
+    activity_event = (
+        activityState.get("activity_event")
+        if isinstance(activityState, dict)
+        else None
+    )
+    try:
+        while True:
             if task.done():
                 return task.result()
-            continue
-        finally:
-            if task.done() and turnSession is not None:
-                turnSession.clear_activity_task(task)
+            if _signal_aborted(abortSignal):
+                await _cancel_anthropic_activity_task(task)
+                _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
+            if activityState is not None:
+                last_activity = activityState.get("last_activity")
+                if isinstance(last_activity, (int, float)):
+                    deadline = float(last_activity) + timeout_seconds
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                await _cancel_anthropic_activity_task(task)
+                _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
+                raise _create_anthropic_timeout(
+                    (
+                        "stream_read"
+                        if activityState is not None
+                        and activityState.get("saw_activity") is True
+                        else phase
+                    ),
+                    attempt,
+                    _activity_state_bool(activityState, "had_assistant_output", hadAssistantOutput),
+                    _activity_state_bool(activityState, "had_tool_use", hadToolUse),
+                    timeout_ms,
+                )
+            deadline_waiter = asyncio.create_task(asyncio.sleep(remaining))
+            activity_waiter = (
+                asyncio.create_task(activity_event.wait())
+                if isinstance(activity_event, asyncio.Event)
+                else None
+            )
+            waiters = {task, abort_waiter, deadline_waiter}
+            if activity_waiter is not None:
+                waiters.add(activity_waiter)
+            try:
+                done, _pending = await asyncio.wait(
+                    waiters,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                transient = [
+                    waiter
+                    for waiter in (deadline_waiter, activity_waiter)
+                    if waiter is not None
+                ]
+                for waiter in transient:
+                    if not waiter.done():
+                        waiter.cancel()
+                if transient:
+                    await asyncio.gather(*transient, return_exceptions=True)
+            if task in done:
+                return task.result()
+            if abort_waiter in done:
+                await _cancel_anthropic_activity_task(task)
+                _raise_anthropic_cancelled({"abortSignal": abortSignal}, phase, attempt, hadAssistantOutput, hadToolUse)
+            if activity_waiter is not None and activity_waiter in done:
+                activity_event.clear()
+            if deadline_waiter in done:
+                continue
+    except BaseException:
+        if not task.done():
+            await _cancel_anthropic_activity_task(task)
+        raise
+    finally:
+        if not abort_waiter.done():
+            abort_waiter.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await abort_waiter
+        if turnSession is not None:
+            turnSession.clear_activity_task(task)
 
 
 def _activity_state_bool(activityState: dict[str, Any] | None, key: str, fallback: bool) -> bool:
@@ -92,11 +136,25 @@ def _create_anthropic_timeout(phase: str, attempt: int, hadAssistantOutput: bool
     )
 
 async def _cancel_anthropic_activity_task(task: asyncio.Future[Any]) -> None:
-    if task.done():
-        return
-    task.cancel()
+    await _cancel_anthropic_transport_future(task)
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await task
+
+
+async def _wait_for_anthropic_abort(signal: Any) -> None:
+    if signal is None:
+        await asyncio.Event().wait()
+        return
+    waiter = getattr(signal, "wait", None)
+    if callable(waiter):
+        await waiter()
+        return
+    event = signal.get("event") if isinstance(signal, dict) else getattr(signal, "event", None)
+    if isinstance(event, asyncio.Event):
+        await event.wait()
+        return
+    while not _signal_aborted(signal):
+        await asyncio.sleep(ANTHROPIC_ABORT_POLL_INTERVAL_MS / 1000)
 
 def _raise_anthropic_cancelled(runtime: dict[str, Any], phase: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool) -> None:
     if not _signal_aborted(runtime.get("abortSignal")):

@@ -132,8 +132,10 @@ class Package47AAnthropicFaultMatrixTests(AgentCoreTestCase):
             self.assertEqual(result.status, "passed", result.failure)
             observations = json.loads(Path(result.observationsPath).read_text(encoding="utf-8"))
             matrix = observations["provider_fault_matrix"]
-            self.assertEqual(matrix["coverage"]["executedCases"], 8)
+            self.assertEqual(matrix["coverage"]["executedCases"], 16)
             self.assertFalse(matrix["coverage"]["complete"])
             self.assertTrue(all(case["verdict"] == "matched" for case in matrix["cases"]))
-            disconnect = next(case for case in matrix["cases"] if case["id"] == "anthropic.s0.f1-disconnect-retry")
-            self.assertIn("known-gap:disconnect-classification", disconnect["tags"])
+            disconnects = [case for case in matrix["cases"] if case["caseId"] == "anthropic.s0.f1-disconnect-retry"]
+            self.assertEqual(len(disconnects), 2)
+            self.assertTrue(all("package45-closed" in case["tags"] for case in disconnects))
+            self.assertEqual(matrix["connectionModeParity"]["status"], "passed")
