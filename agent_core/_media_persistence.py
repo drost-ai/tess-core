@@ -70,13 +70,15 @@ def _sanitize(
     parent_key: str,
 ) -> Any:
     if isinstance(value, list):
+        persistence_values = getattr(value, "persistence_values", None)
+        source = persistence_values() if callable(persistence_values) else value
         return [
             _sanitize(
                 item,
                 include_byte_length=include_byte_length,
                 parent_key=parent_key,
             )
-            for item in value
+            for item in source
         ]
     if isinstance(value, str):
         return _sanitize_string(

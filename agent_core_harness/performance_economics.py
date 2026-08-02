@@ -57,6 +57,9 @@ async def runPersistenceEconomicsAsync(
         "representativeReloadExact": representative["reloadExact"],
         "v2ByteReductionAtLeast80Percent": production["comparison"]["byteReductionRatio"] >= 0.80,
         "v2RecoveryWithinFourTimesV1": production["comparison"]["recoveryCostRatio"] <= 4.0,
+        "v2FastPathCutsHydratedCpuAtLeast40Percent": (
+            production["comparison"]["fastPathVsHydratedCpuRatio"] <= 0.60
+        ),
         "v2CrashBoundaryFailsClosed": production["crashBoundary"]["passed"],
         "v2WriteBackExact": production["writeBack"]["exact"],
     }
@@ -65,7 +68,7 @@ async def runPersistenceEconomicsAsync(
         "benchmark": PERSISTENCE_ECONOMICS_BENCHMARK,
         "measurementPolicy": {
             "representative": "two real runAgentPrompt turns: provider failure, then recovery and successful commit; every storage_io event is counted",
-            "comparison": "same session and runner, legacy full-record write versus the production v2 transaction and loader",
+            "comparison": "same session and runner: legacy full-record write, authority-free hydrated v2 fallback, and the production append-watermark path; recovery measures the persisted head/body loader without transcript reconciliation",
             "schemaStatus": "production session schema v2",
         },
         "environment": _environment(),
@@ -234,8 +237,14 @@ async def _measure_v1_v2_production(
 ) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="agent-core-v2-production-") as tmp:
         root = Path(tmp)
-        timings = {key: [] for key in ("v1WriteNs", "v2WriteNs", "v1RecoveryNs", "v2RecoveryNs")}
-        measurements = {"v1Bytes": [], "v2Bytes": [], "v1Writes": [], "v2Writes": [], "v2Appends": []}
+        timing_names = (
+            "v1WriteNs", "v1WriteCpuNs", "v1RecoveryNs", "v2HydratedWriteNs", "v2HydratedWriteCpuNs", "v2HydratedRecoveryNs", "v2FastWriteNs", "v2FastWriteCpuNs", "v2FastRecoveryNs",
+        )
+        measurement_names = (
+            "v1Bytes", "v1Writes", "v2HydratedBytes", "v2HydratedWrites", "v2HydratedAppends", "v2FastBytes", "v2FastWrites", "v2FastAppends",
+        )
+        timings = {key: [] for key in timing_names}
+        measurements = {key: [] for key in measurement_names}
         for sample in range(samples):
             session = _synthetic_session(root, message_count, content_bytes, sample)
             base = copy.deepcopy(session)
@@ -252,8 +261,8 @@ async def _measure_v1_v2_production(
                 started = time.perf_counter_ns()
                 recovered_v1 = await core.readJsonFile(core.sessionPath(session["id"]), None)
                 timings["v1RecoveryNs"].append(time.perf_counter_ns() - started)
-            v2_home = root / f"v2-{sample}"
-            async with core.scopedRuntimeHome(str(v2_home)):
+            hydrated_home = root / f"v2-hydrated-{sample}"
+            async with core.scopedRuntimeHome(str(hydrated_home)):
                 await core.saveSession(base)
 
                 async def commit(_latest: dict[str, Any] | None) -> dict[str, Any]:
@@ -262,12 +271,54 @@ async def _measure_v1_v2_production(
                 observed = await _observe_storage_io(
                     core.mutateSessionRecordTransaction(session["id"], commit)
                 )
-                _record_observation(observed, measurements, timings, "v2")
+                _record_observation(
+                    observed, measurements, timings, "v2Hydrated"
+                )
                 started = time.perf_counter_ns()
-                recovered_v2 = await core.loadSession(session["id"])
-                timings["v2RecoveryNs"].append(time.perf_counter_ns() - started)
-            if recovered_v1 != expected or recovered_v2 != expected:
+                hydrated_head = await core.readJsonFile(
+                    core.sessionPath(session["id"]), None
+                )
+                recovered_hydrated = (
+                    await core.hydratePersistedSession(
+                        session["id"], hydrated_head, repairHead=False
+                    )
+                )["record"]
+                timings["v2HydratedRecoveryNs"].append(
+                    time.perf_counter_ns() - started
+                )
+            fast_home = root / f"v2-fast-{sample}"
+            async with core.scopedRuntimeHome(str(fast_home)):
+                fast_session = copy.deepcopy(base)
+                await core.persistSession(
+                    fast_session, {"sessionPersistence": True}, touch=False
+                )
+                fast_session["messages"].extend(
+                    copy.deepcopy(session["messages"][stable_watermark:])
+                )
+                observed = await _observe_storage_io(
+                    core.persistSession(
+                        fast_session,
+                        {"sessionPersistence": True},
+                        touch=False,
+                    )
+                )
+                _record_observation(observed, measurements, timings, "v2Fast")
+                started = time.perf_counter_ns()
+                fast_head = await core.readJsonFile(
+                    core.sessionPath(session["id"]), None
+                )
+                recovered_fast = (
+                    await core.hydratePersistedSession(
+                        session["id"], fast_head, repairHead=False
+                    )
+                )["record"]
+                timings["v2FastRecoveryNs"].append(
+                    time.perf_counter_ns() - started
+                )
+            if recovered_v1 != expected or recovered_hydrated != expected:
                 raise RuntimeError("Production v1/v2 recovery diverged from the source session")
+            if recovered_fast is None or recovered_fast["messages"] != session["messages"]:
+                raise RuntimeError("Production v2 fast-path recovery diverged from the source messages")
         crash = await _production_crash_boundary(root, message_count, content_bytes, stable_watermark)
         write_back = await _production_write_back(root, message_count, content_bytes)
         return _production_report(stable_watermark, message_count, timings, measurements, crash, write_back)
@@ -277,13 +328,20 @@ async def _observe_storage_io(operation: Any) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
     unsubscribe = registerPersistenceObserver(events.append)
     started = time.perf_counter_ns()
+    cpu_started = time.process_time_ns()
     try:
         result = await operation
     finally:
+        cpu_elapsed = time.process_time_ns() - cpu_started
         elapsed = time.perf_counter_ns() - started
         unsubscribe()
     io = [event for event in events if event.get("event") == "storage_io"]
-    return {"result": result, "elapsedNs": elapsed, "events": io}
+    return {
+        "result": result,
+        "elapsedNs": elapsed,
+        "cpuNs": cpu_elapsed,
+        "events": io,
+    }
 
 
 def _record_observation(
@@ -294,10 +352,13 @@ def _record_observation(
 ) -> None:
     events = observed["events"]
     timings[f"{version}WriteNs"].append(observed["elapsedNs"])
+    timings[f"{version}WriteCpuNs"].append(observed["cpuNs"])
     measurements[f"{version}Bytes"].append(sum(int(event["byteCount"]) for event in events))
     measurements[f"{version}Writes"].append(sum(event["operation"] == "write" for event in events))
-    if version == "v2":
-        measurements["v2Appends"].append(sum(event["operation"] == "append" for event in events))
+    if version.startswith("v2"):
+        measurements[f"{version}Appends"].append(
+            sum(event["operation"] == "append" for event in events)
+        )
 
 
 async def _production_crash_boundary(
@@ -312,27 +373,37 @@ async def _production_crash_boundary(
         pass
 
     async with core.scopedRuntimeHome(str(home)):
-        await core.saveSession(base)
-
-        async def commit(_latest: dict[str, Any] | None) -> dict[str, Any]:
-            return {"session": session, "changed": True}
+        await core.persistSession(base, {"sessionPersistence": True}, touch=False)
+        committed_messages = copy.deepcopy(base["messages"])
+        base["messages"].extend(
+            copy.deepcopy(session["messages"][watermark:])
+        )
 
         def inject(boundary: str) -> None:
             if boundary == "after_body":
                 raise InjectedCrash(boundary)
 
         try:
-            await core.mutateSessionRecordTransaction(session["id"], commit, faultInjector=inject)
+            await core.persistSession(
+                base,
+                {"sessionPersistence": True},
+                touch=False,
+                faultInjector=inject,
+            )
         except InjectedCrash:
             pass
-        restored = await core.loadSession(session["id"])
         head = await core.readJsonFile(core.sessionPath(session["id"]), None)
+        restored = (
+            await core.hydratePersistedSession(
+                session["id"], head, repairHead=False
+            )
+        )["record"]
     return {
-        "injected": "production commit interrupted after durable body append and before head replace",
+        "injected": "runtime fast path interrupted after durable body append and before head replace",
         "committedMessages": len(restored["messages"]),
         "expectedCommittedMessages": watermark,
         "headMessageCount": head["messageCount"],
-        "passed": restored["messages"] == base["messages"] and head["messageCount"] == watermark,
+        "passed": restored["messages"] == committed_messages and head["messageCount"] == watermark,
     }
 
 
@@ -362,29 +433,55 @@ def _production_report(
 ) -> dict[str, Any]:
     medians = {key: int(statistics.median(value)) for key, value in timings.items()}
     values = {key: int(statistics.median(value)) for key, value in measurements.items()}
-    v1_bytes, v2_bytes = values["v1Bytes"], values["v2Bytes"]
+    v1_bytes = values["v1Bytes"]
+    hydrated_bytes = values["v2HydratedBytes"]
+    fast_bytes = values["v2FastBytes"]
     return {
         "v1": {
             "bytesPerCommit": v1_bytes,
             "physicalWriteCount": values["v1Writes"],
             "writeMedianNs": medians["v1WriteNs"],
+            "writeCpuMedianNs": medians["v1WriteCpuNs"],
             "recoveryMedianNs": medians["v1RecoveryNs"],
         },
         "v2Production": {
-            "bytesPerCommit": v2_bytes,
-            "physicalWriteCount": values["v2Writes"] + values["v2Appends"],
-            "headWriteCount": values["v2Writes"],
-            "bodyAppendCount": values["v2Appends"],
-            "writeMedianNs": medians["v2WriteNs"],
-            "recoveryMedianNs": medians["v2RecoveryNs"],
+            "bytesPerCommit": fast_bytes,
+            "physicalWriteCount": values["v2FastWrites"] + values["v2FastAppends"],
+            "headWriteCount": values["v2FastWrites"],
+            "bodyAppendCount": values["v2FastAppends"],
+            "writeMedianNs": medians["v2FastWriteNs"],
+            "writeCpuMedianNs": medians["v2FastWriteCpuNs"],
+            "recoveryMedianNs": medians["v2FastRecoveryNs"],
             "baseMessageCount": stable_watermark,
             "appendedMessageCount": message_count - stable_watermark,
         },
+        "v2HydratedFallback": {
+            "bytesPerCommit": hydrated_bytes,
+            "physicalWriteCount": values["v2HydratedWrites"] + values["v2HydratedAppends"],
+            "headWriteCount": values["v2HydratedWrites"],
+            "bodyAppendCount": values["v2HydratedAppends"],
+            "writeMedianNs": medians["v2HydratedWriteNs"],
+            "writeCpuMedianNs": medians["v2HydratedWriteCpuNs"],
+            "recoveryMedianNs": medians["v2HydratedRecoveryNs"],
+        },
         "comparison": {
-            "byteReductionRatio": round(1 - (v2_bytes / max(1, v1_bytes)), 6),
-            "writeLatencyRatio": round(medians["v2WriteNs"] / max(1, medians["v1WriteNs"]), 6),
-            "recoveryCostRatio": round(medians["v2RecoveryNs"] / max(1, medians["v1RecoveryNs"]), 6),
-            "writeCountDelta": 1,
+            "byteReductionRatio": round(1 - (fast_bytes / max(1, v1_bytes)), 6),
+            "writeLatencyRatio": round(medians["v2FastWriteNs"] / max(1, medians["v1WriteNs"]), 6),
+            "recoveryCostRatio": round(medians["v2FastRecoveryNs"] / max(1, medians["v1RecoveryNs"]), 6),
+            "fastPathVsHydratedLatencyRatio": round(
+                medians["v2FastWriteNs"] / max(1, medians["v2HydratedWriteNs"]),
+                6,
+            ),
+            "fastPathVsHydratedCpuRatio": round(
+                medians["v2FastWriteCpuNs"]
+                / max(1, medians["v2HydratedWriteCpuNs"]),
+                6,
+            ),
+            "fastPathVsHydratedByteRatio": round(
+                fast_bytes / max(1, hydrated_bytes),
+                6,
+            ),
+            "writeCountDelta": values["v2FastWrites"] + values["v2FastAppends"] - values["v1Writes"],
         },
         "crashBoundary": crash,
         "writeBack": write_back,

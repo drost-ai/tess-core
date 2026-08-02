@@ -6,14 +6,12 @@ if _typing.TYPE_CHECKING:
 from .shared import *
 from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
 from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
-from .providers import (
-    _emit_provider_response_completed,
-    _persist_partial_output_commit,
-)
+from .providers import _emit_provider_response_completed, _persist_partial_output_commit
 from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
 from .prompt_content import extractAssistantText as extractAssistantText, normalize_agent_prompt as _normalize_agent_prompt
 from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, appendToolResultBatch as _append_tool_result_batch, noProgressEventData as _no_progress_event_data, noProgressTurnResult as _no_progress_turn_result
 from .stable_boundary import finish_stable_boundary as _finish_stable_boundary
+from ..session_message_history import replaceSessionMessagesWithPersistedCanonical as _replace_session_messages_with_persisted_canonical
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
 from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
 from .tool_hooks import run_pre_tool_hook as _run_pre_tool_hook
@@ -248,7 +246,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             prepared_request=prepared_request,
             call_index=provider_call_index,
         )
-        session["messages"][:] = _strip_in_memory_image_data(session["messages"])
+        _replace_session_messages_with_persisted_canonical(session, _strip_in_memory_image_data(session["messages"]))
         session["messages"].append({"role": "assistant", "content": response["content"]})
         merge_usage(total_usage, response.get("usage") or {})
         _merge_usage_into_session(session, response.get("usage") or {})

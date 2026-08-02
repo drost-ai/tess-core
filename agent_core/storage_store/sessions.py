@@ -10,6 +10,10 @@ from ..persistence_metrics import (
     recordPersistenceIo as _record_persistence_io,
 )
 from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
+from ..session_message_history import (
+    createSessionMessageList as _create_session_message_list,
+    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+)
 from ..usage_costs import createUsageTotals
 from .io_executor import runStorageIo as _run_storage_io
 from .shared import *
@@ -33,7 +37,14 @@ async def saveSession(session: SessionRecord) -> None:
                 normalizeSessionRevision(merged.get("revision")),
             )
         if current != merged or not isSessionHeadV2(raw):
-            await commitSessionV2(session["id"], raw, current, merged)
+            commit = await commitSessionV2(session["id"], raw, current, merged)
+            committed = commit["session"]
+            _set_session_persistence_checkpoint(
+                session,
+                normalizeSessionRevision(committed.get("revision")),
+                len(session.get("messages") or []),
+                commit["bodyCommitId"],
+            )
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
     """Locked read-modify-write for cross-process session metadata updates.
 
@@ -430,7 +441,7 @@ def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> S
         "effort": params.get("effort"),
         "systemPrompt": params["systemPrompt"],
         "permissionMode": params["permissionMode"],
-        "messages": [],
+        "messages": _create_session_message_list(),
         "todos": [],
         "metadata": {
             "originalCwd": params.get("originalCwd") or params["cwd"],

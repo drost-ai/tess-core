@@ -1,20 +1,27 @@
 from __future__ import annotations
 
 import copy
-import json
 import os
-import time
 import uuid
 from typing import Any, Callable
 
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media
 from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
-from ..persistence_metrics import (
-    persistenceObserversActive as _persistence_observers_active,
-    recordPersistenceIo as _record_persistence_io,
-)
 from ..runtime_identifiers import parseSessionId
+from ..session_message_history import (
+    createSessionMessageList as _create_session_message_list,
+    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+)
 from .io_executor import runStorageIo as _run_storage_io
+from .session_body_v2 import (
+    _append_body_sync,
+    _body_commit_id,
+    _commit_entry,
+    _message_entry,
+    _read_body_sync,
+    _replace_body_sync,
+    _scan_body_bytes,
+)
 from .shared import *
 
 SESSION_SCHEMA_V2 = 2
@@ -54,18 +61,32 @@ async def hydratePersistedSession(
 ) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
     if raw is None:
-        return {"record": None, "changed": False, "reason": None}
+        return {"record": None, "changed": False, "reason": None, "bodyCommitId": None}
     if not isinstance(raw, dict) or raw.get("id") != session_id:
         raise ValueError(f"Session record identity mismatch for {session_id}.")
     assertSessionSchemaSupported(raw)
     if not isSessionHeadV2(raw):
         if not isinstance(raw.get("messages"), list):
             raise ValueError(f"Legacy session {session_id} has no message list.")
-        return {"record": copy.deepcopy(raw), "changed": False, "reason": None}
+        return {
+            "record": copy.deepcopy(raw),
+            "changed": False,
+            "reason": None,
+            "bodyCommitId": None,
+        }
     _validate_v2_head(raw, session_id)
-    body = await _run_storage_io(_read_body_sync, sessionMessagesPath(session_id), session_id)
+    body_commit_id = _body_commit_id(raw)
+    body = await _run_storage_io(
+        _read_body_sync,
+        sessionMessagesPath(session_id),
+        session_id,
+        body_commit_id,
+    )
     committed_count = raw["messageCount"]
     available_count = len(body["messages"])
+    commit_missing = bool(body_commit_id and not body["commitFound"])
+    if commit_missing and available_count >= committed_count:
+        raise ValueError(f"Session body commit marker is missing: {session_id}.")
     selected_count = min(committed_count, available_count)
     record = _hydrate_head(raw, body["messages"][:selected_count])
     reason = None
@@ -74,13 +95,35 @@ async def hydratePersistedSession(
         reason = "body_shorter"
         changed = True
         if repairHead:
-            repaired = _head_from_session(record)
+            if commit_missing:
+                body_commit_id = str(uuid.uuid4())
+                await _run_storage_io(
+                    _append_body_sync,
+                    sessionMessagesPath(session_id),
+                    [_commit_entry(session_id, body_commit_id, available_count)],
+                    None,
+                )
+            repaired = _head_from_session(
+                record,
+                body_commit_id=body_commit_id,
+            )
             await writeJsonFile(sessionPath(session_id), repaired)
-    elif available_count > committed_count:
+    elif body["bodyAhead"] or available_count > committed_count:
         reason = "body_ahead"
     elif body["truncatedTail"]:
         reason = "body_tail_ignored"
-    return {"record": record, "changed": changed, "reason": reason}
+    _set_session_persistence_checkpoint(
+        record,
+        _normalize_revision(record.get("revision")),
+        len(record.get("messages") or []),
+        body_commit_id,
+    )
+    return {
+        "record": record,
+        "changed": changed,
+        "reason": reason,
+        "bodyCommitId": body_commit_id,
+    }
 
 
 def hydrateSessionHeadFromBodyBytes(
@@ -89,12 +132,26 @@ def hydrateSessionHeadFromBodyBytes(
     """Hydrate source bytes already captured by a bounded recovery scanner."""
     session_id = parseSessionId(sessionId)
     _validate_v2_head(head, session_id)
-    body = _scan_body_bytes(bodyBytes, session_id)
+    body_commit_id = _body_commit_id(head)
+    body = _scan_body_bytes(bodyBytes, session_id, body_commit_id)
+    if (
+        body_commit_id
+        and not body["commitFound"]
+        and len(body["messages"]) >= head["messageCount"]
+    ):
+        raise ValueError(f"Session body commit marker is missing: {session_id}.")
     count = min(head["messageCount"], len(body["messages"]))
+    record = _hydrate_head(head, body["messages"][:count])
+    _set_session_persistence_checkpoint(
+        record,
+        _normalize_revision(record.get("revision")),
+        len(record.get("messages") or []),
+        body_commit_id,
+    )
     return {
-        "record": _hydrate_head(head, body["messages"][:count]),
+        "record": record,
         "bodyShorter": len(body["messages"]) < head["messageCount"],
-        "bodyAhead": len(body["messages"]) > head["messageCount"],
+        "bodyAhead": body["bodyAhead"] or len(body["messages"]) > head["messageCount"],
         "truncatedTail": body["truncatedTail"],
     }
 
@@ -118,13 +175,94 @@ async def commitSessionV2(
     )
     new_messages = safe["messages"]
     entries = _body_delta(session_id, old_messages, new_messages, isSessionHeadV2(previousRaw))
+    previous_commit_id = _body_commit_id(previousRaw)
+    body_commit_id = previous_commit_id
+    if entries or body_commit_id is None:
+        body_commit_id = str(uuid.uuid4())
+        entries.append(_commit_entry(session_id, body_commit_id, len(new_messages)))
     await _inject(faultInjector, "before_body")
     if entries:
-        await _run_storage_io(_append_body_sync, sessionMessagesPath(session_id), entries)
+        await _run_storage_io(
+            _append_body_sync,
+            sessionMessagesPath(session_id),
+            entries,
+            previous_commit_id,
+        )
     await _inject(faultInjector, "after_body")
-    await writeJsonFile(sessionPath(session_id), _head_from_session(safe))
+    head = _head_from_session(safe, body_commit_id=body_commit_id)
+    await writeJsonFile(sessionPath(session_id), head)
     await _inject(faultInjector, "after_head")
-    return safe
+    return {"session": safe, "persistedHead": head, "bodyCommitId": body_commit_id}
+
+
+async def commitSessionV2Delta(
+    sessionId: str,
+    previousRaw: dict[str, Any],
+    nextHead: dict[str, Any],
+    messages: list[Any],
+    *,
+    faultInjector: Callable[[str], Any] | None = None,
+) -> dict[str, Any]:
+    """Commit an authority-checked append suffix without hydrating its prefix."""
+
+    session_id = parseSessionId(sessionId)
+    _validate_v2_head(previousRaw, session_id)
+    previous_commit_id = _body_commit_id(previousRaw)
+    if previous_commit_id is None:
+        raise ValueError("A v2 delta commit requires a persisted body commit marker.")
+    base_count = previousRaw["messageCount"]
+    if len(messages) < base_count:
+        raise ValueError("A session delta cannot truncate its persisted message prefix.")
+    safe_head = _sanitize_media(
+        {key: value for key, value in nextHead.items() if key not in _HEAD_FIELDS and key != "messages"}
+    )
+    if not isinstance(safe_head, dict) or safe_head.get("id") != session_id:
+        raise ValueError(f"Invalid live session head for v2 delta commit: {session_id}.")
+    safe_suffix = _sanitize_media(messages[base_count:])
+    if not isinstance(safe_suffix, list):
+        raise TypeError("Sanitized session delta must remain a message list.")
+    entries = [
+        _message_entry(session_id, base_count + offset, message)
+        for offset, message in enumerate(safe_suffix)
+    ]
+    body_commit_id = previous_commit_id
+    if entries:
+        body_commit_id = str(uuid.uuid4())
+        entries.append(_commit_entry(session_id, body_commit_id, len(messages)))
+    await _inject(faultInjector, "before_body")
+    if entries:
+        await _run_storage_io(
+            _append_body_sync,
+            sessionMessagesPath(session_id),
+            entries,
+            previous_commit_id,
+        )
+    await _inject(faultInjector, "after_body")
+    head = _head_from_delta(
+        previousRaw,
+        safe_head,
+        safe_suffix,
+        len(messages),
+        body_commit_id,
+    )
+    await writeJsonFile(sessionPath(session_id), head)
+    await _inject(faultInjector, "after_head")
+    return {
+        "head": safe_head,
+        "persistedHead": head,
+        "appendedMessages": safe_suffix,
+        "bodyCommitId": body_commit_id,
+    }
+
+
+def sessionLiveHeadFromV2(sessionId: str, raw: dict[str, Any]) -> dict[str, Any]:
+    session_id = parseSessionId(sessionId)
+    _validate_v2_head(raw, session_id)
+    return {
+        key: copy.deepcopy(value)
+        for key, value in raw.items()
+        if key not in _HEAD_FIELDS
+    }
 
 
 async def migrateSessionToV2(
@@ -180,9 +318,21 @@ async def compactSessionMessageBody(sessionId: str) -> dict[str, Any]:
             raise FileNotFoundError(f"Session not found: {session_id}")
         if not isSessionHeadV2(raw):
             raise ValueError("Session body compaction requires schema v2.")
+        body_commit_id = _body_commit_id(raw) or str(uuid.uuid4())
         entries = [_message_entry(session_id, index, message) for index, message in enumerate(record["messages"])]
+        entries.append(
+            _commit_entry(session_id, body_commit_id, len(record["messages"]))
+        )
         byte_count = await _run_storage_io(_replace_body_sync, sessionMessagesPath(session_id), entries)
-        return {"sessionId": session_id, "messageCount": len(entries), "bytes": byte_count}
+        if _body_commit_id(raw) is None:
+            repaired_head = copy.deepcopy(raw)
+            repaired_head["bodyRef"]["commitId"] = body_commit_id
+            await writeJsonFile(sessionPath(session_id), repaired_head)
+        return {
+            "sessionId": session_id,
+            "messageCount": len(record["messages"]),
+            "bytes": byte_count,
+        }
 
 
 def _validate_v2_head(head: dict[str, Any], session_id: str) -> None:
@@ -197,6 +347,10 @@ def _validate_v2_head(head: dict[str, Any], session_id: str) -> None:
         and body_ref.get("path") == expected_name
         and isinstance(body_ref.get("messageKeyIndex"), int)
         and body_ref["messageKeyIndex"] >= 0
+        and (
+            body_ref.get("commitId") is None
+            or isinstance(body_ref.get("commitId"), str)
+        )
         and isinstance(head.get("hasPersistableContent"), bool)
         and isinstance(head.get("firstUserText"), str)
         and "messages" not in head
@@ -205,7 +359,9 @@ def _validate_v2_head(head: dict[str, Any], session_id: str) -> None:
         raise ValueError(f"Malformed session schema v2 head: {session_id}.")
 
 
-def _head_from_session(session: dict[str, Any]) -> dict[str, Any]:
+def _head_from_session(
+    session: dict[str, Any], *, body_commit_id: str | None = None
+) -> dict[str, Any]:
     session_id = parseSessionId(session["id"])
     keys = [key for key in session if key not in _HEAD_FIELDS]
     message_index = keys.index("messages") if "messages" in keys else len(keys)
@@ -219,9 +375,38 @@ def _head_from_session(session: dict[str, Any]) -> dict[str, Any]:
                 "path": f"{session_id}.messages.jsonl",
                 "format": SESSION_BODY_FORMAT,
                 "messageKeyIndex": message_index,
+                **({"commitId": body_commit_id} if body_commit_id else {}),
             },
             "hasPersistableContent": _has_persistable_messages(messages),
             "firstUserText": _first_user_text(messages),
+        }
+    )
+    return head
+
+
+def _head_from_delta(
+    previous: dict[str, Any],
+    live_head: dict[str, Any],
+    safe_suffix: list[Any],
+    message_count: int,
+    body_commit_id: str,
+) -> dict[str, Any]:
+    body_ref = copy.deepcopy(previous["bodyRef"])
+    body_ref["commitId"] = body_commit_id
+    first_user_text = str(previous.get("firstUserText") or "")
+    if not first_user_text:
+        first_user_text = _first_user_text(safe_suffix)
+    head = copy.deepcopy(live_head)
+    head.update(
+        {
+            "schemaVersion": SESSION_SCHEMA_V2,
+            "messageCount": message_count,
+            "bodyRef": body_ref,
+            "hasPersistableContent": bool(
+                previous.get("hasPersistableContent")
+                or _has_persistable_messages(safe_suffix)
+            ),
+            "firstUserText": first_user_text,
         }
     )
     return head
@@ -231,8 +416,12 @@ def _hydrate_head(head: dict[str, Any], messages: list[dict[str, Any]]) -> dict[
     index = head["bodyRef"]["messageKeyIndex"]
     items = [(key, copy.deepcopy(value)) for key, value in head.items() if key not in _HEAD_FIELDS]
     index = min(index, len(items))
-    items.insert(index, ("messages", copy.deepcopy(messages)))
+    items.insert(index, ("messages", _create_session_message_list(messages)))
     return dict(items)
+
+
+def _normalize_revision(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
 def _has_persistable_messages(messages: list[Any]) -> bool:
@@ -287,125 +476,6 @@ def _body_delta(
         entries.append({"type": "truncate", "session_id": session_id, "message_count": common})
     entries.extend(_message_entry(session_id, index, new_messages[index]) for index in range(common, len(new_messages)))
     return entries
-
-
-def _message_entry(session_id: str, index: int, message: Any) -> dict[str, Any]:
-    return {"type": "message", "session_id": session_id, "message_index": index, "message": message}
-
-
-def _read_body_sync(path: str, session_id: str) -> dict[str, Any]:
-    return _scan_body_sync(path, session_id)
-
-
-def _scan_body_sync(path: str, session_id: str) -> dict[str, Any]:
-    try:
-        with open(path, "rb") as handle:
-            raw = handle.read()
-    except FileNotFoundError:
-        return {"messages": [], "truncatedTail": False, "validBytes": 0}
-    return _scan_body_bytes(raw, session_id)
-
-
-def _scan_body_bytes(raw: bytes, session_id: str) -> dict[str, Any]:
-    if not raw:
-        return {"messages": [], "truncatedTail": False, "validBytes": 0}
-    complete_end = len(raw) if raw.endswith(b"\n") else raw.rfind(b"\n") + 1
-    complete = raw[:complete_end]
-    try:
-        payload = complete.rstrip(b"\n")
-        entries = json.loads(b"[" + payload.replace(b"\n", b",") + b"]") if payload else []
-        messages = _apply_body_entries(entries, session_id)
-    except (TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError):
-        return _scan_body_fallback(raw, session_id)
-    return {
-        "messages": messages,
-        "truncatedTail": complete_end < len(raw),
-        "validBytes": complete_end,
-    }
-
-
-def _apply_body_entries(entries: Any, session_id: str) -> list[dict[str, Any]]:
-    if not isinstance(entries, list):
-        raise ValueError("Session body is not a JSONL record sequence.")
-    messages: list[dict[str, Any]] = []
-    for entry in entries:
-        messages = _apply_body_entry(messages, entry, session_id)
-    return messages
-
-
-def _apply_body_entry(
-    messages: list[dict[str, Any]], entry: Any, session_id: str
-) -> list[dict[str, Any]]:
-    if not isinstance(entry, dict) or entry.get("session_id") != session_id:
-        raise ValueError("Session body identity mismatch.")
-    if entry.get("type") == "truncate":
-        count = entry.get("message_count")
-        if not isinstance(count, int) or isinstance(count, bool) or count < 0 or count > len(messages):
-            raise ValueError("Invalid session body truncate marker.")
-        del messages[count:]
-        return messages
-    index = entry.get("message_index")
-    message = entry.get("message")
-    if entry.get("type") != "message" or not isinstance(index, int) or index < 0 or not isinstance(message, dict):
-        raise ValueError("Invalid session body message record.")
-    if index > len(messages):
-        raise ValueError("Non-contiguous session body message index.")
-    del messages[index:]
-    messages.append(message)
-    return messages
-
-
-def _scan_body_fallback(raw: bytes, session_id: str) -> dict[str, Any]:
-    messages: list[dict[str, Any]] = []
-    valid_bytes = 0
-    offset = 0
-    for raw_line in raw.splitlines(keepends=True):
-        offset += len(raw_line)
-        if not raw_line.strip():
-            valid_bytes = offset
-            continue
-        try:
-            entry = json.loads(raw_line.decode("utf-8"))
-            messages = _apply_body_entry(messages, entry, session_id)
-        except (TypeError, UnicodeDecodeError, ValueError, json.JSONDecodeError):
-            break
-        valid_bytes = offset
-    return {
-        "messages": messages,
-        "truncatedTail": valid_bytes < len(raw),
-        "validBytes": valid_bytes,
-    }
-
-
-def _append_body_sync(path: str, entries: list[dict[str, Any]]) -> None:
-    started = time.perf_counter_ns() if _persistence_observers_active() else 0
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    encoded = "".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries).encode("utf-8")
-    scan = _scan_body_sync(path, str(entries[0]["session_id"]))
-    mode = "r+b" if os.path.exists(path) else "w+b"
-    with open(path, mode) as handle:
-        handle.truncate(scan["validBytes"])
-        handle.seek(0, os.SEEK_END)
-        handle.write(encoded)
-        handle.flush()
-        os.fsync(handle.fileno())
-    if started:
-        _record_persistence_io("append", path, len(encoded), time.perf_counter_ns() - started)
-
-
-def _replace_body_sync(path: str, entries: list[dict[str, Any]]) -> int:
-    started = time.perf_counter_ns() if _persistence_observers_active() else 0
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    encoded = "".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries).encode("utf-8")
-    tmp = f"{path}.{os.getpid()}.{uuid.uuid4()}.tmp"
-    with open(tmp, "wb") as handle:
-        handle.write(encoded)
-        handle.flush()
-        os.fsync(handle.fileno())
-    os.replace(tmp, path)
-    if started:
-        _record_persistence_io("write", path, len(encoded), time.perf_counter_ns() - started)
-    return len(encoded)
 
 
 async def _inject(injector: Callable[[str], Any] | None, boundary: str) -> None:

@@ -26,6 +26,7 @@ BUDGETS = {
     "import.agent_core_ms": {"maximum": 400.0, "ownerPackage": 47},
     "economics.v2_bytes_ratio": {"maximum": 0.20, "ownerPackage": 46},
     "economics.v2_recovery_cost_ratio": {"maximum": 4.0, "ownerPackage": 46},
+    "economics.v2_fast_path_cpu_ratio": {"maximum": 0.60, "ownerPackage": 46},
 }
 
 
@@ -51,9 +52,10 @@ def runPerformanceLane(*, inject_regression: bool = False, quick: bool = False) 
     economics = runPersistenceEconomics(
         message_count=5_000,
         # Recovery economics are dominated by parser shape; retain the qualified
-        # 1.5 KiB record class even in the latency-shortened quick lane.
+        # 1.5 KiB record class and five-sample median even in the quick lane.
+        # Sparse fsync samples are too noisy for a hard relative-latency gate.
         content_bytes=1_536,
-        samples=1 if quick else 3,
+        samples=5,
     )
     measurements = _measurements(persistence, rollback, transport, economics)
     if inject_regression:
@@ -120,6 +122,9 @@ def _measurements(
         "import.agent_core_ms": _import_time_ms(),
         "economics.v2_bytes_ratio": 1.0 - float(economics_comparison["byteReductionRatio"]),
         "economics.v2_recovery_cost_ratio": float(economics_comparison["recoveryCostRatio"]),
+        "economics.v2_fast_path_cpu_ratio": float(
+            economics_comparison["fastPathVsHydratedCpuRatio"]
+        ),
     }
 
 

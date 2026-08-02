@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import signal
@@ -8,6 +9,7 @@ import sys
 from pathlib import Path
 
 import agent_core as core
+from agent_core.persistence_metrics import registerPersistenceObserver
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
@@ -220,6 +222,128 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             )
             run(core.saveSession(child))
             self.assertEqual(run(core.loadSession(child["id"]))["messages"], restored_parent["messages"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_append_watermark_commits_without_hydrating_the_persisted_prefix(self):
+        root, _home, workspace, previous = self.temp_context()
+        schema = importlib.import_module("agent_core.storage_store.session_schema_v2")
+        original_read = schema._read_body_sync
+        try:
+            session = self._session(workspace, "package46-fast-watermark", 3)
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            session = run(core.loadSession(session["id"]))
+            events: list[dict] = []
+            session["messages"].append({"role": "assistant", "content": "delta"})
+
+            def forbidden_read(*_args):
+                raise AssertionError("fast append hydrated the persisted body")
+
+            schema._read_body_sync = forbidden_read
+            unsubscribe = registerPersistenceObserver(events.append)
+            try:
+                committed = run(
+                    core.persistSession(
+                        session, {"sessionPersistence": True}, touch=False
+                    )
+                )
+            finally:
+                unsubscribe()
+            io = [event for event in events if event.get("event") == "storage_io"]
+            self.assertEqual([event["operation"] for event in io], ["append", "append", "write"])
+            self.assertEqual(committed["messages"][-1]["content"], "delta")
+        finally:
+            schema._read_body_sync = original_read
+            self.restore_home(root, previous)
+
+    def test_nested_prefix_mutation_falls_back_and_persists_the_edit(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = self._session(workspace, "package46-prefix-edit", 2)
+            session["messages"][0]["content"] = [
+                {"type": "text", "text": "original"}
+            ]
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            session["messages"][0]["content"][0]["text"] = "edited"
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            restored = run(core.loadSession(session["id"]))
+            self.assertEqual(
+                restored["messages"][0]["content"][0]["text"], "edited"
+            )
+            body_types = [
+                json.loads(line)["type"]
+                for line in Path(core.sessionMessagesPath(session["id"]))
+                .read_text()
+                .splitlines()
+            ]
+            self.assertIn("truncate", body_types[1:])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_repaired_history_rebinds_nested_mutation_authority(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = self._session(workspace, "package46-repair-rebind", 0)
+            session["messages"] = [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "original"}],
+                },
+                {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "missing-result",
+                            "name": "Read",
+                            "input": {},
+                        }
+                    ],
+                },
+            ]
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            repair = core.repairSessionTranscript(session)
+            self.assertTrue(repair["repaired"])
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+
+            session["messages"][0]["content"][0]["text"] = "edited after repair"
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            restored = run(core.loadSession(session["id"]))
+            self.assertEqual(
+                restored["messages"][0]["content"][0]["text"],
+                "edited after repair",
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_commit_marker_hides_same_length_after_body_crash(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = self._session(workspace, "package46-same-length-crash", 2)
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            original = run(core.loadSession(session["id"]))
+
+            async def replace_prefix(latest):
+                latest["messages"][0]["content"] = "uncommitted replacement"
+                return {"session": latest, "changed": True}
+
+            def inject(boundary):
+                if boundary == "after_body":
+                    raise RuntimeError("injected after-body crash")
+
+            with self.assertRaisesRegex(RuntimeError, "after-body"):
+                run(
+                    core.mutateSessionRecordTransaction(
+                        session["id"], replace_prefix, faultInjector=inject
+                    )
+                )
+            self.assertEqual(run(core.loadSession(session["id"])), original)
+
+            session["messages"].append({"role": "assistant", "content": "retry"})
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            restored = run(core.loadSession(session["id"]))
+            self.assertEqual(restored["messages"][-1]["content"], "retry")
+            self.assertNotIn("uncommitted replacement", json.dumps(restored))
         finally:
             self.restore_home(root, previous)
 

@@ -142,6 +142,7 @@ class SessionBodyRef(TypedDict):
     path: str
     format: str
     messageKeyIndex: int
+    commitId: str
 
 
 class PersistedSessionHeadV2(TypedDict, total=False):
@@ -186,10 +187,18 @@ class SessionBodyTruncateRecord(TypedDict):
     message_count: int
 
 
+class SessionBodyCommitRecord(TypedDict):
+    type: str
+    session_id: str
+    commit_id: str
+    message_count: int
+
+
 __all__ = [
     "CompactionState",
     "FullTranscriptLog",
     "PersistedSessionHeadV2",
+    "SessionBodyCommitRecord",
     "SessionBodyMessageRecord",
     "SessionBodyRef",
     "SessionBodyTruncateRecord",

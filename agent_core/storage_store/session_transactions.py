@@ -5,6 +5,10 @@ from typing import Any, Callable
 
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..runtime_identifiers import parseSessionId
+from ..session_message_history import (
+    SessionMessageList,
+    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+)
 from .shared import *
 
 
@@ -64,38 +68,137 @@ async def mutateSessionRecordTransaction(
             if latest is None:
                 raise ValueError(f"Session transaction cannot no-op a missing record: {session_id}.")
             if not isSessionHeadV2(raw):
-                session = await commitSessionV2(
+                commit = await commitSessionV2(
                     session_id,
                     raw,
                     latest,
                     _sanitize_media_for_persistence(latest),
                     faultInjector=settings.get("faultInjector"),
                 )
+                session = commit["session"]
                 return {
                     "changed": True,
                     "revision": normalizeSessionRevision(session.get("revision")),
                     "session": session,
+                    "bodyCommitId": commit["bodyCommitId"],
                 }
             return {
                 "changed": hydrated["changed"],
                 "revision": normalizeSessionRevision(latest.get("revision")),
                 "session": latest,
+                "bodyCommitId": raw.get("bodyRef", {}).get("commitId"),
             }
         committed = copy.deepcopy(next_session)
         committed["revision"] = current_revision + 1
         safe = _sanitize_media_for_persistence(committed)
-        session = await commitSessionV2(
+        commit = await commitSessionV2(
             session_id,
             raw,
             latest,
             safe,
             faultInjector=settings.get("faultInjector"),
         )
+        session = commit["session"]
         return {
             "changed": True,
             "revision": normalizeSessionRevision(session.get("revision")),
             "session": session,
+            "bodyCommitId": commit["bodyCommitId"],
         }
+
+
+async def mutateSessionHeadDeltaTransaction(
+    sessionId: str,
+    messages: list[Any],
+    mutation: Callable[[dict[str, Any]], Any],
+    options: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any] | None:
+    """Use a tracked append watermark to avoid loading the persisted body.
+
+    ``None`` means the caller must use the full transaction. This is a normal,
+    fail-safe result for v1 records, stale revisions, replaced lists, prefix
+    edits, and other histories without owned append authority.
+    """
+
+    if not isinstance(messages, SessionMessageList):
+        return None
+    checkpoint = messages.checkpoint()
+    if checkpoint is None:
+        return None
+    session_id = parseSessionId(sessionId)
+    settings = {**(options or {}), **kwargs}
+    timeout_ms = int(settings.get("timeoutMs", STORAGE_LOCK_TIMEOUT_MS))
+    async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
+        raw = await readJsonFile(sessionPath(session_id), None)
+        if not isSessionHeadV2(raw):
+            return None
+        current_revision = normalizeSessionRevision(raw.get("revision"))
+        body_ref = raw.get("bodyRef") if isinstance(raw.get("bodyRef"), dict) else {}
+        raw_commit_id = body_ref.get("commitId")
+        if (
+            checkpoint.revision != current_revision
+            or checkpoint.messageCount != raw.get("messageCount")
+            or checkpoint.bodyCommitId != raw_commit_id
+            or checkpoint.bodyCommitId is None
+        ):
+            return None
+        latest_head = sessionLiveHeadFromV2(session_id, raw)
+        result = await _await_mutation(mutation(copy.deepcopy(latest_head)))
+        if not isinstance(result, dict) or "session" not in result or "changed" not in result:
+            raise TypeError("Session head mutation must return {'session': ..., 'changed': bool}.")
+        next_head = result["session"]
+        if not isinstance(next_head, dict) or "messages" in next_head:
+            raise TypeError("Session head mutation must return a head-only session record.")
+        if next_head.get("id") != session_id:
+            raise ValueError(
+                f"Session head transaction cannot change identity ({session_id} -> {next_head.get('id')})."
+            )
+        changed = bool(result["changed"] or len(messages) != checkpoint.messageCount)
+        if not changed:
+            _set_session_persistence_checkpoint(
+                {"messages": messages},
+                current_revision,
+                len(messages),
+                checkpoint.bodyCommitId,
+            )
+            return {
+                "changed": False,
+                "fastPath": True,
+                "revision": current_revision,
+                "session": _materialize_live_session(latest_head, messages),
+                "bodyCommitId": checkpoint.bodyCommitId,
+            }
+        committed_head = copy.deepcopy(next_head)
+        committed_head["revision"] = current_revision + 1
+        committed = await commitSessionV2Delta(
+            session_id,
+            raw,
+            committed_head,
+            messages,
+            faultInjector=settings.get("faultInjector"),
+        )
+        safe_head = committed["head"]
+        revision = normalizeSessionRevision(safe_head.get("revision"))
+        body_commit_id = committed["bodyCommitId"]
+        _set_session_persistence_checkpoint(
+            {"messages": messages}, revision, len(messages), body_commit_id
+        )
+        return {
+            "changed": True,
+            "fastPath": True,
+            "revision": revision,
+            "session": _materialize_live_session(safe_head, messages),
+            "bodyCommitId": body_commit_id,
+        }
+
+
+def _materialize_live_session(
+    head: dict[str, Any], messages: list[Any]
+) -> dict[str, Any]:
+    session = copy.deepcopy(head)
+    session["messages"] = messages
+    return session
 
 
 async def _await_mutation(value: Any) -> Any:
@@ -106,4 +209,5 @@ async def _await_mutation(value: Any) -> Any:
 
 update_session_record = updateSessionRecord
 mutate_session_record_transaction = mutateSessionRecordTransaction
+mutate_session_head_delta_transaction = mutateSessionHeadDeltaTransaction
 normalize_session_revision = normalizeSessionRevision

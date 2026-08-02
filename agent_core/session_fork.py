@@ -4,6 +4,7 @@ import copy
 from typing import Any
 
 from .usage_costs import createUsageTotals
+from .session_message_history import createSessionMessageList as _create_session_message_list
 
 
 SESSION_FORK_METADATA_DISPOSITIONS = {
@@ -107,7 +108,7 @@ def createForkedSession(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         "effort": values.get("effort"),
         "systemPrompt": values["systemPrompt"],
         "permissionMode": values["permissionMode"],
-        "messages": copy.deepcopy(parent.get("messages") or []),
+        "messages": _create_session_message_list(copy.deepcopy(parent.get("messages") or [])),
         "todos": [],
         "metadata": metadata,
     }

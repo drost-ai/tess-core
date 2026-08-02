@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 import json
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -9,7 +11,7 @@ from agent_core_harness.cache_economics import runCacheEconomicLane
 from agent_core_harness.event_corpus import CORPUS_SCHEMA, DEFAULT_CORPUS_DIR, verifyEventCorpus
 from agent_core_harness.fault_contract import PROVIDER_FAMILIES, buildFaultContract
 from agent_core_harness.fault_matrix import runProviderFaultMatrix
-from agent_core_harness.performance_lane import BUDGETS, _evaluate, runPerformanceLane
+from agent_core_harness.performance_lane import BUDGETS, _evaluate
 from agent_core_harness.paths import REPO_ROOT
 from agent_core_harness.suite_speed import (
     CRITICAL_TIMING_FILES,
@@ -186,13 +188,37 @@ class Package47BCacheEconomicTests(AgentCoreTestCase):
 
 class Package47BPerformanceLaneTests(AgentCoreTestCase):
     def test_quick_lane_exercises_real_measurements_and_hard_gates(self):
-        report = runPerformanceLane(quick=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "performance.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "agent_core_harness",
+                    "performance-lane",
+                    "--quick",
+                    "--output",
+                    str(output),
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "passed", report["regressions"])
         self.assertTrue(all(gate["status"] == "passed" for gate in report["functionalGates"]))
         economics = report["persistenceEconomics"]
         self.assertEqual(economics["benchmark"], "representative_iteration_and_production_v2")
         self.assertEqual(economics["measurementPolicy"]["schemaStatus"], "production session schema v2")
         self.assertIn("v2Production", economics["schemaV2Economics"])
+        self.assertIn("v2HydratedFallback", economics["schemaV2Economics"])
+        self.assertLessEqual(
+            economics["schemaV2Economics"]["comparison"][
+                "fastPathVsHydratedCpuRatio"
+            ],
+            0.60,
+        )
         self.assertTrue(all(economics["decisionGates"].values()))
 
     def test_two_x_injection_turns_every_metric_red(self):

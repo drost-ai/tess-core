@@ -12,12 +12,17 @@ from .persistence_metrics import (
     finishPersistenceCall as _finish_persistence_call,
 )
 from .session_fork import createForkArchiveHeader, createForkedSession
+from .session_message_history import (
+    createSessionMessageList as _create_session_message_list,
+    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+)
 from .storage import (
     appendSessionTranscriptLogEntries,
     createEmptySession,
     hasPersistableSessionMessages,
     listSessions,
     loadSession,
+    mutateSessionHeadDeltaTransaction,
     mutateSessionRecordTransaction,
 )
 from .workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
@@ -65,7 +70,7 @@ async def persistSession(
         ):
             _finish_persistence_call(measurement, "skipped")
             return None
-        snapshot = _sanitize_media_for_persistence(session)
+        snapshot = _copy_session_for_persist(session)
         repair = repairSessionTranscript(snapshot)
         await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
         if persist_options.get("touch", True):
@@ -76,9 +81,20 @@ async def persistSession(
             truncate=bool(persist_options.get("truncateTranscript")),
         )
         snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
-        committed = await _commit_prepared_session_snapshot(snapshot)
-        _sync_committed_session_state(session, committed)
-        result = copy.deepcopy(committed["session"])
+        committed = await _commit_prepared_session_snapshot(
+            snapshot,
+            fault_injector=persist_options.get("faultInjector"),
+        )
+        _sync_committed_session_state(
+            session,
+            committed,
+            message_source=snapshot.get("messages"),
+        )
+        result = (
+            _sanitize_media_for_persistence(committed["session"])
+            if committed.get("fastPath")
+            else copy.deepcopy(committed["session"])
+        )
         _finish_persistence_call(measurement, "persisted", revision=committed["revision"])
         return result
     except BaseException:
@@ -95,9 +111,9 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     interrupted = failure.get("interruptedPreview")
     if isinstance(interrupted, dict):
         metadata["lastAssistantInterruptedPreview"] = copy.deepcopy(interrupted)
-    snapshot = _sanitize_media_for_persistence(session)
+    snapshot = _copy_session_for_persist(session)
     committed = await _commit_prepared_session_snapshot(snapshot)
-    _sync_committed_session_state(session, committed)
+    _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
     persisted_at = now_iso()
     entries = [{"type": "provider_failure", "session_id": session["id"], "persisted_at": persisted_at, "failure": failure}]
     if isinstance(interrupted, dict):
@@ -116,9 +132,9 @@ async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any
     if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
-    snapshot = _sanitize_media_for_persistence(session)
+    snapshot = _copy_session_for_persist(session)
     committed = await _commit_prepared_session_snapshot(snapshot)
-    _sync_committed_session_state(session, committed)
+    _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
     await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])
 
 
@@ -169,15 +185,50 @@ def _merge_concurrent_operational_state(
     return merged
 
 
-async def _commit_prepared_session_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+async def _commit_prepared_session_snapshot(
+    snapshot: dict[str, Any], *, fault_injector: Any = None
+) -> dict[str, Any]:
+    messages = snapshot.get("messages")
+    desired_head = {
+        key: value for key, value in snapshot.items() if key != "messages"
+    }
+
+    async def commit_head(latest: dict[str, Any]) -> dict[str, Any]:
+        merged = _merge_concurrent_operational_state(desired_head, latest)
+        return {"changed": merged != latest, "session": merged}
+
+    if isinstance(messages, list):
+        fast = await mutateSessionHeadDeltaTransaction(
+            snapshot["id"],
+            messages,
+            commit_head,
+            faultInjector=fault_injector,
+        )
+        if fast is not None:
+            return fast
+
     async def commit(latest: dict[str, Any] | None) -> dict[str, Any]:
         merged = _merge_concurrent_operational_state(snapshot, latest)
         return {"changed": latest is None or merged != latest, "session": merged}
 
-    return await mutateSessionRecordTransaction(snapshot["id"], commit)
+    return await mutateSessionRecordTransaction(
+        snapshot["id"], commit, faultInjector=fault_injector
+    )
 
 
-def _sync_committed_session_state(target: dict[str, Any], committed: dict[str, Any]) -> None:
+def _copy_session_for_persist(session: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value if key == "messages" else copy.deepcopy(value)
+        for key, value in session.items()
+    }
+
+
+def _sync_committed_session_state(
+    target: dict[str, Any],
+    committed: dict[str, Any],
+    *,
+    message_source: Any = None,
+) -> None:
     persisted = committed["session"]
     target["revision"] = committed["revision"]
     target_metadata = target.setdefault("metadata", {})
@@ -193,6 +244,13 @@ def _sync_committed_session_state(target: dict[str, Any], committed: dict[str, A
         if field not in target_metadata and field in persisted_metadata:
             target_metadata[field] = copy.deepcopy(persisted_metadata[field])
     target["updatedAt"] = persisted["updatedAt"]
+    if target.get("messages") is message_source:
+        _set_session_persistence_checkpoint(
+            target,
+            committed["revision"],
+            len(target.get("messages") or []),
+            committed.get("bodyCommitId"),
+        )
 
 
 def repairSessionTranscript(session: dict[str, Any]) -> dict[str, Any]:
@@ -200,7 +258,9 @@ def repairSessionTranscript(session: dict[str, Any]) -> dict[str, Any]:
     if not invalid:
         return {"repaired": False, "removedCount": 0, "missingToolUseIds": []}
     removed = len(session.get("messages", [])) - invalid["index"]
-    session["messages"] = session.get("messages", [])[: invalid["index"]]
+    session["messages"] = _create_session_message_list(
+        session.get("messages", [])[: invalid["index"]]
+    )
     return {"repaired": True, "truncatedFrom": invalid["index"], "removedCount": removed, "missingToolUseIds": invalid["missingToolUseIds"]}
 
 

@@ -6,6 +6,9 @@ from typing import Any
 
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
+from ..session_message_history import (
+    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+)
 from .io_executor import runStorageIo as _run_storage_io
 from .shared import *
 
@@ -57,14 +60,28 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
             if recovered is None:
                 return {"record": None, "changed": False, "reason": None}
             safe_recovered = _sanitize_media_for_persistence(recovered)
-            await commitSessionV2(sessionId, None, None, safe_recovered)
+            commit = await commitSessionV2(sessionId, None, None, safe_recovered)
+            _set_session_persistence_checkpoint(
+                safe_recovered,
+                normalizeSessionRevision(safe_recovered.get("revision")),
+                len(safe_recovered.get("messages") or []),
+                commit["bodyCommitId"],
+            )
             return {"record": safe_recovered, "changed": True, "reason": "archive_recovery"}
         hydration = await hydratePersistedSession(sessionId, raw)
         record = hydration["record"]
         result = await _reconcile_session_record(sessionId, record)
         safe_record = _sanitize_media_for_persistence(result["record"])
+        body_commit_id = hydration.get("bodyCommitId")
         if result["changed"]:
-            await commitSessionV2(sessionId, raw, record, safe_record)
+            commit = await commitSessionV2(sessionId, raw, record, safe_record)
+            body_commit_id = commit["bodyCommitId"]
+        _set_session_persistence_checkpoint(
+            safe_record,
+            normalizeSessionRevision(safe_record.get("revision")),
+            len(safe_record.get("messages") or []),
+            body_commit_id,
+        )
         changed = bool(result["changed"] or hydration["changed"])
         reason = result["reason"] or hydration["reason"]
         return {**result, "record": safe_record, "changed": changed, "reason": reason}
