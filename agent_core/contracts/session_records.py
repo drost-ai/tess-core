@@ -118,7 +118,7 @@ class SessionMetadata(TypedDict, total=False):
 
 
 class SessionRecord(TypedDict):
-    """Session record at ``sessions/{id}.json``."""
+    """Hydrated live session contract returned by storage loaders."""
 
     id: str
     cwd: str
@@ -136,9 +136,63 @@ class SessionRecord(TypedDict):
     metadata: SessionMetadata
 
 
+class SessionBodyRef(TypedDict):
+    """Validated relative reference from a v2 head to its message body."""
+
+    path: str
+    format: str
+    messageKeyIndex: int
+
+
+class PersistedSessionHeadV2(TypedDict, total=False):
+    """Slim schema-v2 record at ``sessions/{id}.json``.
+
+    Runtime validation owns required-field enforcement; ``total=False`` keeps
+    the contract honest about optional live-session fields such as effort and
+    revision without duplicating a second metadata hierarchy.
+    """
+
+    id: str
+    cwd: str
+    createdAt: str
+    updatedAt: str
+    name: str | None
+    provider: str
+    providerProfileName: str | None
+    model: str
+    effort: str | None
+    systemPrompt: str
+    permissionMode: str
+    todos: list[dict[str, Any]]
+    metadata: SessionMetadata
+    revision: int
+    schemaVersion: int
+    messageCount: int
+    bodyRef: SessionBodyRef
+    hasPersistableContent: bool
+    firstUserText: str
+
+
+class SessionBodyMessageRecord(TypedDict):
+    type: str
+    session_id: str
+    message_index: int
+    message: dict[str, Any]
+
+
+class SessionBodyTruncateRecord(TypedDict):
+    type: str
+    session_id: str
+    message_count: int
+
+
 __all__ = [
     "CompactionState",
     "FullTranscriptLog",
+    "PersistedSessionHeadV2",
+    "SessionBodyMessageRecord",
+    "SessionBodyRef",
+    "SessionBodyTruncateRecord",
     "SessionMetadata",
     "SessionRecord",
     "SessionUsageTotals",

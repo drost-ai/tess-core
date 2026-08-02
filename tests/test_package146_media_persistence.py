@@ -266,8 +266,9 @@ class Package146MediaSanitizerTests(unittest.TestCase):
                     self.assertTrue(result["changed"])
                     self.assertEqual(result["reason"], "archive_recovery")
                     self.assertNotIn(_SENTINEL, json.dumps(result["record"]))
-                    session_raw = Path(core.sessionPath(recovered["id"])).read_text(
-                        encoding="utf-8"
+                    session_raw = (
+                        Path(core.sessionPath(recovered["id"])).read_text(encoding="utf-8")
+                        + Path(core.sessionMessagesPath(recovered["id"])).read_text(encoding="utf-8")
                     )
                     self.assertNotIn(_SENTINEL, session_raw)
                     self.assertIn(_SENTINEL, archive.read_text(encoding="utf-8"))

@@ -30,6 +30,10 @@ _SESSION_FILE_UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$",
     re.IGNORECASE,
 )
+_SESSION_BODY_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.messages\.jsonl$",
+    re.IGNORECASE,
+)
 _ARCHIVE_TAIL_BYTES = 1024 * 1024
 _MAX_SAMPLES = 100
 _MAX_STORE_ENTRIES = 100_000
@@ -90,6 +94,10 @@ async def buildSessionHygieneReport(options: dict[str, Any] | None = None, **kwa
             continue
         if ".tmp" in name or name.endswith(".temp"):
             _sample(report["strayTempFiles"], name, sample_limit)
+            continue
+        if name.endswith(".messages.jsonl"):
+            if not _SESSION_BODY_UUID_RE.fullmatch(name):
+                _sample(report["foreignEntries"], name, sample_limit)
             continue
         if not name.endswith(".json"):
             _sample(report["foreignEntries"], name, sample_limit)

@@ -14,6 +14,7 @@ from ..config import resolveConfig
 from ..runtime import bootstrapRuntime
 from ..session import resolveSession
 from ..session_runtime import activeSessionPayload
+from ..storage import scopedRuntimeHome, writeBackSessionV1
 from .stream import JsonStreamSink
 
 
@@ -112,6 +113,15 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
 def headless_main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "session-write-back-v1":
+        try:
+            with scopedRuntimeHome(args.runtime_home):
+                report = asyncio.run(writeBackSessionV1(args.session_id))
+            sys.stdout.write(json.dumps(report, ensure_ascii=False, separators=(",", ":")) + "\n")
+            return 0
+        except Exception as exc:
+            sys.stderr.write(f"agent_core session-write-back-v1 failed: {exc}\n")
+            return 1
     if args.command != "run":
         parser.print_help()
         return 2
@@ -159,6 +169,12 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--output-format", choices=["text", "json", "stream-json"], default="text")
     run.add_argument("--max-turns", type=int, default=1)
     run.add_argument("--no-session-persistence", action="store_true")
+    write_back = sub.add_parser(
+        "session-write-back-v1",
+        help="Rewrite one schema-v2 session head as a legacy schema-v1 full record.",
+    )
+    write_back.add_argument("session_id", help="Session id to write back.")
+    write_back.add_argument("--runtime-home", dest="runtime_home", required=True)
     return parser
 
 

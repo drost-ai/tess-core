@@ -23,15 +23,17 @@ def sessionTranscriptLogPath(sessionId: str) -> str:
 async def saveSession(session: SessionRecord) -> None:
     path = sessionPath(session["id"])
     async with withRecordTransaction("session", session["id"]):
-        current = await readJsonFile(path, None)
+        raw = await readJsonFile(path, None)
+        hydrated = await hydratePersistedSession(session["id"], raw)
+        current = hydrated["record"]
         merged = _sanitize_media_for_persistence(_merge_session_for_full_save(current, session))
         if isinstance(current, dict) and ("revision" in current or "revision" in merged):
             merged["revision"] = max(
                 normalizeSessionRevision(current.get("revision")),
                 normalizeSessionRevision(merged.get("revision")),
             )
-        if current != merged:
-            await writeJsonFile(path, merged)
+        if current != merged or not isSessionHeadV2(raw):
+            await commitSessionV2(session["id"], raw, current, merged)
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
     """Locked read-modify-write for cross-process session metadata updates.
 
@@ -253,7 +255,16 @@ def _valid_shallow_session(value: Any, expected_id: str) -> bool:
         and isinstance(value.get("createdAt"), str)
         and isinstance(value.get("updatedAt"), str)
         and isinstance(value.get("metadata"), dict)
-        and isinstance(value.get("messages"), list)
+        and (
+            isinstance(value.get("messages"), list)
+            or (
+                isSessionHeadV2(value)
+                and isinstance(value.get("messageCount"), int)
+                and isinstance(value.get("bodyRef"), dict)
+                and isinstance(value.get("hasPersistableContent"), bool)
+                and isinstance(value.get("firstUserText"), str)
+            )
+        )
     )
 
 async def loadCompactionManifest(sessionId: str) -> dict[str, Any] | None:
@@ -274,6 +285,8 @@ async def saveCompactionCheckpoint(checkpoint: dict[str, Any]) -> None:
     )
 
 def hasPersistableSessionMessages(session: SessionRecord) -> bool:
+    if isSessionHeadV2(session) and isinstance(session.get("hasPersistableContent"), bool):
+        return session["hasPersistableContent"]
     for message in session.get("messages", []):
         if not _is_genuine_user_request(message):
             continue
@@ -398,6 +411,7 @@ def _session_list_summary(record: SessionRecord) -> dict[str, Any]:
         "model": record.get("model"),
         "permissionMode": record.get("permissionMode"),
         "metadata": summary_metadata,
+        "firstUserText": record.get("firstUserText"),
         "hasPersistableContent": True,
     }
 

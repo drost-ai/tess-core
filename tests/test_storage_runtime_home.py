@@ -177,7 +177,10 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
 
             loaded = run(persist())
 
-            session_text = (home / "sessions" / "vision-session.json").read_text()
+            session_text = (
+                (home / "sessions" / "vision-session.json").read_text()
+                + Path(core.sessionMessagesPath("vision-session")).read_text()
+            )
             transcript_text = (
                 home / "sessions" / "vision-session" / "full-transcript-with-tools.jsonl"
             ).read_text()

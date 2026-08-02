@@ -40,7 +40,10 @@ async def mutateSessionRecordTransaction(
     settings = {**(options or {}), **kwargs}
     timeout_ms = int(settings.get("timeoutMs", STORAGE_LOCK_TIMEOUT_MS))
 
-    async def apply(latest: dict[str, Any] | None) -> dict[str, Any]:
+    async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
+        raw = await readJsonFile(sessionPath(session_id), None)
+        hydrated = await hydratePersistedSession(session_id, raw)
+        latest = hydrated["record"]
         if latest is not None and latest.get("id") != session_id:
             raise ValueError(
                 f"Session transaction record identity mismatch ({session_id} != {latest.get('id')})."
@@ -60,30 +63,39 @@ async def mutateSessionRecordTransaction(
         if not changed:
             if latest is None:
                 raise ValueError(f"Session transaction cannot no-op a missing record: {session_id}.")
-            return {"value": latest, "changed": False}
+            if not isSessionHeadV2(raw):
+                session = await commitSessionV2(
+                    session_id,
+                    raw,
+                    latest,
+                    _sanitize_media_for_persistence(latest),
+                    faultInjector=settings.get("faultInjector"),
+                )
+                return {
+                    "changed": True,
+                    "revision": normalizeSessionRevision(session.get("revision")),
+                    "session": session,
+                }
+            return {
+                "changed": hydrated["changed"],
+                "revision": normalizeSessionRevision(latest.get("revision")),
+                "session": latest,
+            }
         committed = copy.deepcopy(next_session)
         committed["revision"] = current_revision + 1
+        safe = _sanitize_media_for_persistence(committed)
+        session = await commitSessionV2(
+            session_id,
+            raw,
+            latest,
+            safe,
+            faultInjector=settings.get("faultInjector"),
+        )
         return {
-            "value": _sanitize_media_for_persistence(committed),
             "changed": True,
+            "revision": normalizeSessionRevision(session.get("revision")),
+            "session": session,
         }
-
-    result = await mutateJsonRecord(
-        namespace="session",
-        key=session_id,
-        filePath=sessionPath(session_id),
-        fallback=None,
-        mutate=apply,
-        timeoutMs=timeout_ms,
-    )
-    session = result["value"]
-    if session is None:
-        raise SessionRecordNotFoundError(f"Session not found: {session_id}")
-    return {
-        "changed": result["changed"],
-        "revision": normalizeSessionRevision(session.get("revision")),
-        "session": session,
-    }
 
 
 async def _await_mutation(value: Any) -> Any:

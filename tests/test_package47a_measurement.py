@@ -40,11 +40,15 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
             self.assertEqual(finished[0]["outcome"], "persisted")
             self.assertEqual(started[0]["persistenceCallId"], finished[0]["persistenceCallId"])
             self.assertTrue(all(event["persistenceCallId"] == started[0]["persistenceCallId"] for event in io_events))
-            self.assertEqual([event["operation"] for event in io_events], ["append", "write"])
-            append_event, write_event = io_events
+            self.assertEqual([event["operation"] for event in io_events], ["append", "append", "write"])
+            transcript_event, body_event, write_event = io_events
             self.assertEqual(
-                append_event["byteCount"],
+                transcript_event["byteCount"],
                 Path(core.sessionTranscriptLogPath(session["id"])).stat().st_size,
+            )
+            self.assertEqual(
+                body_event["byteCount"],
+                Path(core.sessionMessagesPath(session["id"])).stat().st_size,
             )
             self.assertEqual(
                 write_event["byteCount"],

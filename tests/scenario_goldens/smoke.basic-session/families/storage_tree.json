@@ -61,11 +61,18 @@
   },
   {
     "json": {
+      "bodyRef": {
+        "format": "agent-core.session-messages.jsonl.v1",
+        "messageKeyIndex": 11,
+        "path": "<uuid:1>.messages.jsonl"
+      },
       "createdAt": "<timestamp>",
       "cwd": "<workspace>",
       "effort": "xhigh",
+      "firstUserText": "",
+      "hasPersistableContent": false,
       "id": "<uuid:1>",
-      "messages": [],
+      "messageCount": 0,
       "metadata": {
         "assistantDescription": null,
         "assistantName": null,
@@ -94,11 +101,17 @@
       "permissionMode": "bypassPermissions",
       "provider": "openai",
       "providerProfileName": "openai",
+      "schemaVersion": 2,
       "systemPrompt": "You are assistant, a helpful and reliable software engineering agent.\nWork directly in the user's codebase.\nPrefer concrete actions over long explanations.\nUse tools when needed, keep edits minimal, and preserve user intent.\nBefore modifying files, inspect the relevant code and respect the existing style.\nUse SetStatus to keep the live UI updated when you change phases or begin a meaningful chunk of work. Keep statuses brief and concrete, for example: 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",
       "todos": [],
       "updatedAt": "<timestamp>"
     },
     "path": "sessions/<uuid:1>.json",
+    "size": "<size>",
+    "type": "file"
+  },
+  {
+    "path": "sessions/<uuid:1>.messages.jsonl",
     "size": "<size>",
     "type": "file"
   },

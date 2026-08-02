@@ -84,7 +84,7 @@ class SessionTransactionTests(AgentCoreTestCase):
                 process.join(20)
                 self.assertEqual(process.exitcode, 0)
 
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.loadSession(session["id"]))
             self.assertIsNotNone(persisted)
             self.assertEqual(set(persisted["metadata"]["taskIds"]), set(task_ids))
             self.assertEqual(len(persisted["metadata"]["taskIds"]), 25)
@@ -144,7 +144,7 @@ class SessionTransactionTests(AgentCoreTestCase):
             )
             session["messages"] = [{"role": "user", "content": "durable"}]
             run(core.saveSession(session))
-            stale = run(core.loadSessionRecordShallow(session["id"]))
+            stale = run(core.loadSession(session["id"]))
             task_id = str(uuid.uuid4())
             run(core.updateSessionRecord(
                 session["id"],
@@ -164,7 +164,7 @@ class SessionTransactionTests(AgentCoreTestCase):
             stale["messages"].append({"role": "assistant", "content": "new turn"})
             run(core.persistSession(stale, {"sessionPersistence": True}, touch=False))
 
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.loadSession(session["id"]))
             self.assertEqual(persisted["name"], "foreground update")
             self.assertEqual(persisted["metadata"]["taskIds"], [task_id])
             self.assertEqual(persisted["metadata"]["daemonUnavailable"]["reason"], "sentinel")

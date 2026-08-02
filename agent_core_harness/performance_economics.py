@@ -22,7 +22,7 @@ from .performance_support import environment as _environment
 from .runtime_bindings import bind_agent_runtime
 
 
-PERSISTENCE_ECONOMICS_BENCHMARK = "representative_iteration_and_v2_prototype"
+PERSISTENCE_ECONOMICS_BENCHMARK = "representative_iteration_and_production_v2"
 
 
 async def runPersistenceEconomicsAsync(
@@ -32,7 +32,7 @@ async def runPersistenceEconomicsAsync(
     content_bytes: int = 1_536,
     samples: int = 3,
 ) -> dict[str, Any]:
-    """Measure the real persistence surface and a non-committing v2 prototype."""
+    """Measure a representative turn and production v1/v2 persistence paths."""
 
     if message_count < 4 or content_bytes < 1 or samples < 1:
         raise ValueError("message_count >= 4 and positive content_bytes/samples are required")
@@ -40,7 +40,7 @@ async def runPersistenceEconomicsAsync(
     if watermark < 1 or watermark >= message_count:
         raise ValueError("stable_watermark must leave at least one appended message")
     representative = await _measure_representative_persistence_iteration()
-    prototype = _measure_v1_v2_prototype(
+    production = await _measure_v1_v2_production(
         message_count=message_count,
         stable_watermark=watermark,
         content_bytes=content_bytes,
@@ -55,18 +55,18 @@ async def runPersistenceEconomicsAsync(
         "failureRecoveryRecorded": representative["transcriptKinds"]
         == ["provider_failure", "provider_recovered"],
         "representativeReloadExact": representative["reloadExact"],
-        "v2ByteReductionAtLeast80Percent": prototype["comparison"]["byteReductionRatio"] >= 0.80,
-        "v2RecoveryWithinFourTimesV1": prototype["comparison"]["recoveryCostRatio"] <= 4.0,
-        "v2CrashBoundaryFailsClosed": prototype["crashBoundary"]["passed"],
-        "v2WriteBackExact": prototype["writeBack"]["exact"],
+        "v2ByteReductionAtLeast80Percent": production["comparison"]["byteReductionRatio"] >= 0.80,
+        "v2RecoveryWithinFourTimesV1": production["comparison"]["recoveryCostRatio"] <= 4.0,
+        "v2CrashBoundaryFailsClosed": production["crashBoundary"]["passed"],
+        "v2WriteBackExact": production["writeBack"]["exact"],
     }
     return {
         "schemaVersion": REPORT_SCHEMA,
         "benchmark": PERSISTENCE_ECONOMICS_BENCHMARK,
         "measurementPolicy": {
             "representative": "two real runAgentPrompt turns: provider failure, then recovery and successful commit; every storage_io event is counted",
-            "prototype": "same session and runner, v1 full-record rewrite versus v2 slim head plus append-only message suffix",
-            "schemaStatus": "measurement-only prototype; no persisted contract change",
+            "comparison": "same session and runner, legacy full-record write versus the production v2 transaction and loader",
+            "schemaStatus": "production session schema v2",
         },
         "environment": _environment(),
         "parameters": {
@@ -77,7 +77,7 @@ async def runPersistenceEconomicsAsync(
             "samples": samples,
         },
         "representativeIteration": representative,
-        "schemaPrototypeEconomics": prototype,
+        "schemaV2Economics": production,
         "decisionGates": gates,
         "status": "passed" if all(gates.values()) else "failed",
     }
@@ -229,96 +229,156 @@ async def _representative_summary(
     return summary
 
 
-def _measure_v1_v2_prototype(
+async def _measure_v1_v2_production(
     *, message_count: int, stable_watermark: int, content_bytes: int, samples: int
 ) -> dict[str, Any]:
-    with tempfile.TemporaryDirectory(prefix="agent-core-v2-prototype-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="agent-core-v2-production-") as tmp:
         root = Path(tmp)
-        session = _synthetic_session(root, message_count, content_bytes, 47)
-        messages = copy.deepcopy(session["messages"])
-        full_bytes = _json_bytes(session)
-        head = copy.deepcopy(session)
-        head.pop("messages", None)
-        head["messageStore"] = {
-            "schemaVersion": 2,
-            "format": "jsonl",
-            "messageWatermark": message_count,
-        }
-        head_bytes = _json_bytes(head)
-        base_lines = b"".join(
-            _json_bytes(message) + b"\n" for message in messages[:stable_watermark]
-        )
-        suffix_lines = b"".join(
-            _json_bytes(message) + b"\n" for message in messages[stable_watermark:]
-        )
         timings = {key: [] for key in ("v1WriteNs", "v2WriteNs", "v1RecoveryNs", "v2RecoveryNs")}
-        recovered_v2: dict[str, Any] | None = None
+        measurements = {"v1Bytes": [], "v2Bytes": [], "v1Writes": [], "v2Writes": [], "v2Appends": []}
         for sample in range(samples):
-            v1_path = root / f"v1-{sample}.json"
-            message_path = root / f"v2-{sample}.messages.jsonl"
-            head_path = root / f"v2-{sample}.head.json"
-            message_path.write_bytes(base_lines)
-            _timed_write(v1_path, full_bytes, timings["v1WriteNs"])
-            started = time.perf_counter_ns()
-            with message_path.open("ab") as handle:
-                handle.write(suffix_lines)
-            head_path.write_bytes(head_bytes)
-            timings["v2WriteNs"].append(time.perf_counter_ns() - started)
-            started = time.perf_counter_ns()
-            recovered_v1 = json.loads(v1_path.read_text(encoding="utf-8"))
-            timings["v1RecoveryNs"].append(time.perf_counter_ns() - started)
-            started = time.perf_counter_ns()
-            recovered_head = json.loads(head_path.read_text(encoding="utf-8"))
-            recovered_head.pop("messageStore", None)
-            recovered_head["messages"] = _recover_complete_jsonl(message_path)
-            recovered_v2 = recovered_head
-            timings["v2RecoveryNs"].append(time.perf_counter_ns() - started)
-            if recovered_v1 != session or recovered_v2 != session:
-                raise RuntimeError("v1/v2 prototype recovery diverged from the source session")
-        return _prototype_report(
-            root, session, messages, base_lines, suffix_lines, head_bytes, full_bytes,
-            stable_watermark, timings, recovered_v2,
-        )
+            session = _synthetic_session(root, message_count, content_bytes, sample)
+            base = copy.deepcopy(session)
+            base["messages"] = base["messages"][:stable_watermark]
+            expected = copy.deepcopy(session)
+            expected["revision"] = 1
+            v1_home = root / f"v1-{sample}"
+            async with core.scopedRuntimeHome(str(v1_home)):
+                await core.writeJsonFile(core.sessionPath(session["id"]), base)
+                observed = await _observe_storage_io(
+                    core.writeJsonFile(core.sessionPath(session["id"]), expected)
+                )
+                _record_observation(observed, measurements, timings, "v1")
+                started = time.perf_counter_ns()
+                recovered_v1 = await core.readJsonFile(core.sessionPath(session["id"]), None)
+                timings["v1RecoveryNs"].append(time.perf_counter_ns() - started)
+            v2_home = root / f"v2-{sample}"
+            async with core.scopedRuntimeHome(str(v2_home)):
+                await core.saveSession(base)
+
+                async def commit(_latest: dict[str, Any] | None) -> dict[str, Any]:
+                    return {"session": session, "changed": True}
+
+                observed = await _observe_storage_io(
+                    core.mutateSessionRecordTransaction(session["id"], commit)
+                )
+                _record_observation(observed, measurements, timings, "v2")
+                started = time.perf_counter_ns()
+                recovered_v2 = await core.loadSession(session["id"])
+                timings["v2RecoveryNs"].append(time.perf_counter_ns() - started)
+            if recovered_v1 != expected or recovered_v2 != expected:
+                raise RuntimeError("Production v1/v2 recovery diverged from the source session")
+        crash = await _production_crash_boundary(root, message_count, content_bytes, stable_watermark)
+        write_back = await _production_write_back(root, message_count, content_bytes)
+        return _production_report(stable_watermark, message_count, timings, measurements, crash, write_back)
 
 
-def _timed_write(path: Path, content: bytes, target: list[int]) -> None:
+async def _observe_storage_io(operation: Any) -> dict[str, Any]:
+    events: list[dict[str, Any]] = []
+    unsubscribe = registerPersistenceObserver(events.append)
     started = time.perf_counter_ns()
-    path.write_bytes(content)
-    target.append(time.perf_counter_ns() - started)
+    try:
+        result = await operation
+    finally:
+        elapsed = time.perf_counter_ns() - started
+        unsubscribe()
+    io = [event for event in events if event.get("event") == "storage_io"]
+    return {"result": result, "elapsedNs": elapsed, "events": io}
 
 
-def _prototype_report(
-    root: Path,
-    session: dict[str, Any],
-    messages: list[dict[str, Any]],
-    base_lines: bytes,
-    suffix_lines: bytes,
-    head_bytes: bytes,
-    full_bytes: bytes,
-    stable_watermark: int,
+def _record_observation(
+    observed: dict[str, Any],
+    measurements: dict[str, list[int]],
     timings: dict[str, list[int]],
-    recovered_v2: dict[str, Any] | None,
+    version: str,
+) -> None:
+    events = observed["events"]
+    timings[f"{version}WriteNs"].append(observed["elapsedNs"])
+    measurements[f"{version}Bytes"].append(sum(int(event["byteCount"]) for event in events))
+    measurements[f"{version}Writes"].append(sum(event["operation"] == "write" for event in events))
+    if version == "v2":
+        measurements["v2Appends"].append(sum(event["operation"] == "append" for event in events))
+
+
+async def _production_crash_boundary(
+    root: Path, message_count: int, content_bytes: int, watermark: int
 ) -> dict[str, Any]:
-    crash_path = root / "crash.messages.jsonl"
-    crash_path.write_bytes(base_lines + suffix_lines + b'{"role":"assistant"')
-    crash_recovered = _recover_complete_jsonl(crash_path)
+    home = root / "crash"
+    session = _synthetic_session(root, message_count, content_bytes, 91)
+    base = copy.deepcopy(session)
+    base["messages"] = base["messages"][:watermark]
+
+    class InjectedCrash(RuntimeError):
+        pass
+
+    async with core.scopedRuntimeHome(str(home)):
+        await core.saveSession(base)
+
+        async def commit(_latest: dict[str, Any] | None) -> dict[str, Any]:
+            return {"session": session, "changed": True}
+
+        def inject(boundary: str) -> None:
+            if boundary == "after_body":
+                raise InjectedCrash(boundary)
+
+        try:
+            await core.mutateSessionRecordTransaction(session["id"], commit, faultInjector=inject)
+        except InjectedCrash:
+            pass
+        restored = await core.loadSession(session["id"])
+        head = await core.readJsonFile(core.sessionPath(session["id"]), None)
+    return {
+        "injected": "production commit interrupted after durable body append and before head replace",
+        "committedMessages": len(restored["messages"]),
+        "expectedCommittedMessages": watermark,
+        "headMessageCount": head["messageCount"],
+        "passed": restored["messages"] == base["messages"] and head["messageCount"] == watermark,
+    }
+
+
+async def _production_write_back(root: Path, message_count: int, content_bytes: int) -> dict[str, Any]:
+    home = root / "write-back"
+    session = _synthetic_session(root, message_count, content_bytes, 92)
+    async with core.scopedRuntimeHome(str(home)):
+        await core.writeJsonFile(core.sessionPath(session["id"]), session)
+        before = Path(core.sessionPath(session["id"])).read_bytes()
+        await core.migrateSessionToV2(session["id"])
+        await core.writeBackSessionV1(session["id"])
+        after = Path(core.sessionPath(session["id"])).read_bytes()
+    return {
+        "beforeDigest": hashlib.sha256(before).hexdigest(),
+        "afterDigest": hashlib.sha256(after).hexdigest(),
+        "exact": before == after,
+    }
+
+
+def _production_report(
+    stable_watermark: int,
+    message_count: int,
+    timings: dict[str, list[int]],
+    measurements: dict[str, list[int]],
+    crash: dict[str, Any],
+    write_back: dict[str, Any],
+) -> dict[str, Any]:
     medians = {key: int(statistics.median(value)) for key, value in timings.items()}
-    v1_bytes, v2_bytes = len(full_bytes), len(head_bytes) + len(suffix_lines)
-    expected_digest, recovered_digest = _digest_json(session), _digest_json(recovered_v2)
+    values = {key: int(statistics.median(value)) for key, value in measurements.items()}
+    v1_bytes, v2_bytes = values["v1Bytes"], values["v2Bytes"]
     return {
         "v1": {
             "bytesPerCommit": v1_bytes,
-            "physicalWriteCount": 1,
+            "physicalWriteCount": values["v1Writes"],
             "writeMedianNs": medians["v1WriteNs"],
             "recoveryMedianNs": medians["v1RecoveryNs"],
         },
-        "v2Prototype": {
+        "v2Production": {
             "bytesPerCommit": v2_bytes,
-            "physicalWriteCount": 2,
+            "physicalWriteCount": values["v2Writes"] + values["v2Appends"],
+            "headWriteCount": values["v2Writes"],
+            "bodyAppendCount": values["v2Appends"],
             "writeMedianNs": medians["v2WriteNs"],
             "recoveryMedianNs": medians["v2RecoveryNs"],
             "baseMessageCount": stable_watermark,
-            "appendedMessageCount": len(messages) - stable_watermark,
+            "appendedMessageCount": message_count - stable_watermark,
         },
         "comparison": {
             "byteReductionRatio": round(1 - (v2_bytes / max(1, v1_bytes)), 6),
@@ -326,41 +386,10 @@ def _prototype_report(
             "recoveryCostRatio": round(medians["v2RecoveryNs"] / max(1, medians["v1RecoveryNs"]), 6),
             "writeCountDelta": 1,
         },
-        "crashBoundary": {
-            "injected": "truncated trailing JSONL record after the committed watermark",
-            "recoveredCompleteMessages": len(crash_recovered),
-            "expectedCompleteMessages": len(messages),
-            "passed": crash_recovered == messages,
-        },
-        "writeBack": {
-            "expectedDigest": expected_digest,
-            "recoveredDigest": recovered_digest,
-            "exact": expected_digest == recovered_digest,
-        },
-        "samples": timings,
+        "crashBoundary": crash,
+        "writeBack": write_back,
+        "samples": {**timings, **measurements},
     }
-
-
-def _json_bytes(value: Any) -> bytes:
-    return json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-
-
-def _recover_complete_jsonl(path: Path) -> list[Any]:
-    recovered = []
-    for raw in path.read_bytes().splitlines():
-        if not raw.strip():
-            continue
-        try:
-            recovered.append(json.loads(raw))
-        except json.JSONDecodeError:
-            break
-    return recovered
-
-
-def _digest_json(value: Any) -> str:
-    return hashlib.sha256(_json_bytes(value)).hexdigest()
 
 
 run_persistence_economics = runPersistenceEconomics

@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from .runtime_identifiers import parseSessionId, tryParseBridgeId, tryParseRemoteSessionId
-from .storage import getStateRoot, loadSessionRecordShallow
+from .storage import (
+    getStateRoot,
+    hydrateSessionHeadFromBodyBytes,
+    isSessionHeadV2,
+)
 
 MAX_SCAN_ENTRIES = 4_096
 MAX_SOURCE_BYTES = 64 * 1024 * 1024
@@ -37,7 +41,14 @@ async def analyzeBridgeRecovery(
     session_path = root / "sessions" / f"{session_id}.json"
     session_raw = _read_source(session_path, MAX_SESSION_BYTES, required=True)
     sources.append(_source_record(session_path, session_raw))
-    session = _parse_object(session_raw, f"session {session_id}")
+    session_head = _parse_object(session_raw, f"session {session_id}")
+    if isSessionHeadV2(session_head):
+        body_path = root / "sessions" / f"{session_id}.messages.jsonl"
+        body_raw = _read_source(body_path, MAX_SOURCE_BYTES, required=True)
+        sources.append(_source_record(body_path, body_raw))
+        session = hydrateSessionHeadFromBodyBytes(session_id, session_head, body_raw)["record"]
+    else:
+        session = session_head
     if session.get("id") != session_id or not isinstance(session.get("metadata"), dict):
         raise BridgeRecoveryAnalysisError("Session record failed bridge recovery identity validation.")
 

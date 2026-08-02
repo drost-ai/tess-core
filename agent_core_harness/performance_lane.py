@@ -19,7 +19,7 @@ LANE_SCHEMA = "agent-core.performance-lane.v1"
 BUDGETS = {
     "persistence.1000.elapsed_ms_per_call": {"maximum": 120.0, "ownerPackage": 46},
     "persistence.5000.elapsed_ms_per_call": {"maximum": 300.0, "ownerPackage": 46},
-    "persistence.5000.bytes_per_call": {"maximum": 12_000_000, "ownerPackage": 46},
+    "persistence.5000.bytes_per_call": {"maximum": 64_000, "ownerPackage": 46},
     "rollback.5000.capture_ms": {"maximum": 0.5, "ownerPackage": 46},
     "transport.connections_per_turn": {"maximum": 1, "ownerPackage": 45},
     "transport.cancel_to_socket_close_ms": {"maximum": 100.0, "ownerPackage": 45},
@@ -109,7 +109,7 @@ def _measurements(
     rollback_row = rollback["series"][0]
     after = transport["beforeAfter"]["after"]
     cancel = transport["cancellation"]
-    economics_comparison = economics["schemaPrototypeEconomics"]["comparison"]
+    economics_comparison = economics["schemaV2Economics"]["comparison"]
     return {
         "persistence.1000.elapsed_ms_per_call": series[1_000]["median"]["wallElapsedNs"] / 1_000_000,
         "persistence.5000.elapsed_ms_per_call": series[5_000]["median"]["wallElapsedNs"] / 1_000_000,
@@ -147,7 +147,7 @@ def _functional_gates(
     gates.append(
         {
             "messageCount": economics["parameters"]["messageCount"],
-            "scope": "representative-and-v2-prototype",
+            "scope": "representative-and-production-v2",
             "status": "passed" if all(economics_checks.values()) else "failed",
             "checks": economics_checks,
         }

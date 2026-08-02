@@ -5,7 +5,7 @@ import sys as _sys
 import types as _types
 from importlib import import_module
 
-_MODULE_NAMES = ['shared', 'paths', 'json_io', 'settings', 'sessions', 'session_archive', 'session_transactions', 'records', 'remote', 'daemon', 'commands']
+_MODULE_NAMES = ['shared', 'paths', 'json_io', 'session_schema_v2', 'settings', 'sessions', 'session_archive', 'session_transactions', 'records', 'remote', 'daemon', 'commands']
 
 _modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
 _namespace = {}
@@ -23,6 +23,7 @@ _PUBLIC_EXPORTS += ['RuntimePaths', 'getActiveRuntimePaths', 'resolveRuntimePath
 _PUBLIC_EXPORTS += ['STORAGE_LOCK_TIMEOUT_MS', 'StorageTransactionError', 'fileLock', 'file_lock', 'mutateJsonFile', 'mutate_json_file', 'mutateJsonRecord', 'mutate_json_record', 'registerStorageLockObserver', 'transactionLockPath', 'transaction_lock_path', 'withRecordTransaction', 'with_record_transaction']
 _PUBLIC_EXPORTS += ['mutateChildAgent', 'mutateHealthCheckTask', 'mutateSessionRecord', 'mutateTaskMeta']
 _PUBLIC_EXPORTS += ['SessionRecordNotFoundError', 'mutateSessionRecordTransaction', 'mutate_session_record_transaction', 'normalizeSessionRevision', 'normalize_session_revision', 'updateSessionRecord', 'update_session_record']
+_PUBLIC_EXPORTS += ['SESSION_BODY_FORMAT', 'SESSION_SCHEMA_V2', 'SessionSchemaVersionError', 'assertSessionSchemaSupported', 'compactSessionMessageBody', 'hydratePersistedSession', 'hydrateSessionHeadFromBodyBytes', 'isSessionHeadV2', 'migrateSessionToV2', 'sessionMessagesPath', 'writeBackSessionV1']
 _PUBLIC_EXPORTS += ['mutateAutoMode', 'mutateMarketplaces', 'mutateMcpServers', 'mutatePlugins', 'mutateProjectMemoryRecords', 'mutateSettings']
 _PUBLIC_EXPORTS += ['MAX_SHALLOW_SESSION_BYTES', 'createSessionListCache', 'loadSessionRecordShallow', 'loadSessionWithReconciliation', 'parseLatestArchivedTimestamp']
 _PUBLIC_EXPORTS += ['DAEMON_EVENTS_ROTATE_BYTES', 'DAEMON_EVENTS_TAIL_BYTES', 'MAX_DAEMON_SOCKET_PATH_BYTES', 'readLastDaemonEventCursor', 'rotateDaemonEventsIfOversized']

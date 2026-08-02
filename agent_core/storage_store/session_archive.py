@@ -51,19 +51,23 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
     """Full selected-session load with an explicit, convergent repair verdict."""
     path = sessionPath(sessionId)
     async with withRecordTransaction("session", sessionId):
-        record = await readJsonFile(path, None)
-        if not record:
+        raw = await readJsonFile(path, None)
+        if not raw:
             recovered = await _rebuild_session_from_transcript_archive(sessionId)
             if recovered is None:
                 return {"record": None, "changed": False, "reason": None}
             safe_recovered = _sanitize_media_for_persistence(recovered)
-            await writeJsonFile(path, safe_recovered)
+            await commitSessionV2(sessionId, None, None, safe_recovered)
             return {"record": safe_recovered, "changed": True, "reason": "archive_recovery"}
+        hydration = await hydratePersistedSession(sessionId, raw)
+        record = hydration["record"]
         result = await _reconcile_session_record(sessionId, record)
         safe_record = _sanitize_media_for_persistence(result["record"])
         if result["changed"]:
-            await writeJsonFile(path, safe_record)
-        return {**result, "record": safe_record}
+            await commitSessionV2(sessionId, raw, record, safe_record)
+        changed = bool(result["changed"] or hydration["changed"])
+        reason = result["reason"] or hydration["reason"]
+        return {**result, "record": safe_record, "changed": changed, "reason": reason}
 
 
 async def loadSession(sessionId: str) -> SessionRecord | None:

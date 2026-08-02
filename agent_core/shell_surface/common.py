@@ -43,6 +43,8 @@ def _session_matches(session: dict[str, Any], query: str) -> bool:
 
 
 def _first_user_text(session: dict[str, Any]) -> str:
+    if isinstance(session.get("firstUserText"), str):
+        return session["firstUserText"]
     for message in session.get("messages") or []:
         if not _is_genuine_user_request(message):
             continue

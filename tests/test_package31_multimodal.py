@@ -404,7 +404,10 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             live = json.dumps(session)
             self.assertNotIn(encoded, live)
             self.assertIn("Image attachment was available to the model on the original turn.", live)
-            persisted = Path(home, "sessions", f"{session['id']}.json").read_text(encoding="utf-8")
+            persisted = (
+                Path(home, "sessions", f"{session['id']}.json").read_text(encoding="utf-8")
+                + Path(core.sessionMessagesPath(session["id"])).read_text(encoding="utf-8")
+            )
             self.assertNotIn(encoded, persisted)
             self.assertNotIn("data:image", persisted)
             self.assertIn("Image attachment was available to the model on the original turn.", persisted)

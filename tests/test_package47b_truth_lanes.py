@@ -189,6 +189,11 @@ class Package47BPerformanceLaneTests(AgentCoreTestCase):
         report = runPerformanceLane(quick=True)
         self.assertEqual(report["status"], "passed", report["regressions"])
         self.assertTrue(all(gate["status"] == "passed" for gate in report["functionalGates"]))
+        economics = report["persistenceEconomics"]
+        self.assertEqual(economics["benchmark"], "representative_iteration_and_production_v2")
+        self.assertEqual(economics["measurementPolicy"]["schemaStatus"], "production session schema v2")
+        self.assertIn("v2Production", economics["schemaV2Economics"])
+        self.assertTrue(all(economics["decisionGates"].values()))
 
     def test_two_x_injection_turns_every_metric_red(self):
         for metric, budget in BUDGETS.items():
