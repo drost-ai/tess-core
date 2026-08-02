@@ -47,7 +47,7 @@
       "parity_action": {
         "action": "continuation_relief",
         "fixture": "plain-long",
-        "name": "session-memory-reactive",
+        "name": "durable-memory-reactive",
         "reactiveAttempt": 2,
         "retrievedMemory": true,
         "sessionId": "continuation-memory-session"

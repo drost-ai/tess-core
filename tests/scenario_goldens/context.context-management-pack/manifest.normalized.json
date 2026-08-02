@@ -128,9 +128,9 @@
         "alias": "memory",
         "family": "continuation",
         "modesInclude": [
-          "session_memory_compaction"
+          "partial_compaction"
         ],
-        "textContains": "durable memory:"
+        "textContains": "bounded partial summary"
       }
     },
     {

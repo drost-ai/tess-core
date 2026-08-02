@@ -249,7 +249,11 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
                     "truncated": False,
                 }
             ]
-            context_path = home / "live-shaped-working-context.json"
+            context_path = (
+                Path(core.getSessionCompactionsDir(session["id"]))
+                / "live-shaped-working-context.json"
+            )
+            context_path.parent.mkdir(parents=True, exist_ok=True)
             context_path.write_text(
                 json.dumps(working_context, ensure_ascii=False),
                 encoding="utf-8",

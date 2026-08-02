@@ -80,28 +80,23 @@ async def _buildCompactionSystemPromptProjection(
             "projectedTokens": 0,
         }
     artifacts = state.get("artifacts") or {}
-    working_context = await loadWorkingContextArtifact(artifacts.get("workingContext"))
-    if working_context:
-        original = renderWorkingContextPromptContext(working_context)
-    else:
-        summary_path = artifacts.get("summary")
-        summary = _read_text(summary_path).strip() if summary_path else ""
-        if not summary:
-            return {
-                "text": None,
-                "applied": False,
-                "originalTokens": 0,
-                "projectedTokens": 0,
-            }
-        original = "\n".join(
-            [
-                "Archived working context from earlier turns and compacted portions of the current turn is available below.",
-                "Use it as authoritative background for earlier work and earlier compacted activity in this turn.",
-                "When it conflicts with the recent raw turns, prefer the recent raw turns.",
-                "",
-                summary,
-            ]
-        )
+    working_context_path = artifacts.get("workingContext")
+    if not _isSessionCompactionArtifactPath(session, working_context_path):
+        return {
+            "text": None,
+            "applied": False,
+            "originalTokens": 0,
+            "projectedTokens": 0,
+        }
+    working_context = await loadWorkingContextArtifact(working_context_path)
+    if not working_context or working_context.get("sessionId") != session.get("id"):
+        return {
+            "text": None,
+            "applied": False,
+            "originalTokens": 0,
+            "projectedTokens": 0,
+        }
+    original = renderWorkingContextPromptContext(working_context)
     original_tokens = estimateTextTokens(original)
     return {
         "text": original,
@@ -109,6 +104,23 @@ async def _buildCompactionSystemPromptProjection(
         "originalTokens": original_tokens,
         "projectedTokens": original_tokens,
     }
+
+
+def _isSessionCompactionArtifactPath(
+    session: dict[str, Any],
+    artifactPath: Any,
+) -> bool:
+    session_id = session.get("id")
+    if not isinstance(session_id, str) or not isinstance(artifactPath, str) or not artifactPath:
+        return False
+    try:
+        session_dir = os.path.realpath(getSessionCompactionsDir(session_id))
+        resolved_artifact = os.path.realpath(artifactPath)
+        return resolved_artifact != session_dir and os.path.commonpath(
+            [session_dir, resolved_artifact]
+        ) == session_dir
+    except (OSError, RuntimeError, ValueError):
+        return False
 
 
 async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

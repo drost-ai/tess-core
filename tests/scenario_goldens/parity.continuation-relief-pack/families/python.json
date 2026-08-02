@@ -193,25 +193,23 @@
     },
     {
       "messages": {
-        "afterCount": 4,
+        "afterCount": 3,
         "beforeCount": 48,
         "hasLatestRawTail": false,
-        "hasPartialSummary": false,
+        "hasPartialSummary": true,
         "hasRepeatedFileOmission": false,
         "rolesHead": [
           "user",
-          "assistant",
           "user",
           "assistant"
         ],
         "rolesTail": [
           "user",
-          "assistant",
           "user",
           "assistant"
         ]
       },
-      "name": "session-memory-reactive",
+      "name": "durable-memory-reactive",
       "pressure": {
         "after": {
           "categories": {
@@ -251,36 +249,31 @@
         }
       },
       "reinjection": {
-        "hasDurableMemory": true,
+        "hasDurableMemory": false,
         "hasRelevantFiles": false,
-        "lineCount": 6,
+        "lineCount": 2,
         "lines": [
-          "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.",
-          "recent requests: plain continuation detail 36 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuation d\u2026",
-          "assistant findings: plain continuation detail 37 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuatio\u2026",
-          "durable memory: durable memory item 0: preserve Slice D context relief evidence and reinjection state.",
-          "durable memory: durable memory item 1: preserve Slice D context relief evidence and reinjection state.",
-          "durable memory: durable memory item 2: preserve Slice D context relief evidence and reinjection state."
+          "recent requests: plain continuation detail 38 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuation d\u2026",
+          "assistant findings: plain continuation detail 39 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuatio\u2026"
         ],
-        "summary": "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain continuation detail 36 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuation d\u2026 | assistant findings: plain continuation detail 37 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuatio\u2026 | durable memory: durable memory item 0: preserve Slice D context relief evidence and reinjection state."
+        "summary": "recent requests: plain continuation detail 38 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuation d\u2026 | assistant findings: plain continuation detail 39 carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward current implementation facts. carry forward\u2026 | plain continuatio\u2026"
       },
       "selection": {
         "applied": true,
         "appliedModes": [
           "api_microcompact",
-          "session_memory_compaction"
+          "partial_compaction"
         ],
-        "compactedMessageCount": 46,
-        "droppedMessageCount": 44,
+        "compactedMessageCount": 47,
+        "droppedMessageCount": 45,
         "plannedModes": [
           "api_microcompact",
-          "session_memory_compaction",
           "partial_compaction"
         ],
         "preservedRawStartIndex": 46,
         "pressureLevel": "critical",
         "reactiveAttempt": 2,
-        "selectedMode": "session_memory_compaction",
+        "selectedMode": "partial_compaction",
         "tokensSavedEstimate": "large"
       },
       "steps": [
@@ -294,10 +287,10 @@
         },
         {
           "applied": true,
-          "compactedMessageCount": 0,
-          "detail": "older raw context collapsed into retrieved durable session memory",
-          "droppedMessageCount": 44,
-          "mode": "session_memory_compaction",
+          "compactedMessageCount": 1,
+          "detail": "older continuation region collapsed into a bounded partial summary",
+          "droppedMessageCount": 45,
+          "mode": "partial_compaction",
           "requiresReinjection": true,
           "tokensSavedEstimate": "medium"
         }

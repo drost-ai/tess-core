@@ -1,22 +1,26 @@
 from __future__ import annotations
 
-import copy
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import agent_core as core
 from agent_core.provider_errors import createProviderFailureRecord, createProviderRequestError
 
+from .parity_compaction_fixtures import build_compaction_authority_states
+
 
 async def run_compaction_primitives(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
     config, session = await _build_session(data, paths)
-    compacted = _with_compaction_state(session, paths)
+    compacted_states = build_compaction_authority_states(session, paths)
+    compacted = compacted_states["ownedWorkingContext"]
     plan = core.resolveCompactionExecutionPlan({"config": config, "session": session})
     configured = {**config, "compactionModel": data.get("configuredModel", "gpt-5.4"), "compactionVerificationModel": data.get("configuredVerificationModel", "gpt-5.4-mini")}
     system_none = await core.buildCompactionSystemPromptContext(session)
-    system_summary = await core.buildCompactionSystemPromptContext(compacted)
+    system_contexts = {
+        name: await core.buildCompactionSystemPromptContext(candidate)
+        for name, candidate in compacted_states.items()
+    }
     return _clean(
         {
             "name": data.get("name") or data.get("action"),
@@ -46,7 +50,10 @@ async def run_compaction_primitives(data: dict[str, Any], paths: dict[str, Any])
             },
             "systemPromptContext": {
                 "withoutState": _project_system_context(system_none),
-                "summaryFallback": _project_system_context(system_summary),
+                **{
+                    name: _project_system_context(value)
+                    for name, value in system_contexts.items()
+                },
             },
         }
     )
@@ -152,23 +159,6 @@ def _messages_for_fixture(name: Any) -> list[dict[str, Any]]:
     if name == "short-session":
         return [{"role": "user", "content": "too short"}, {"role": "assistant", "content": "ack"}]
     return _messages()
-
-
-def _with_compaction_state(session: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
-    compacted = copy.deepcopy(session)
-    summary = Path(core.getSessionCompactionsDir(compacted["id"])) / "summary-primitive.md"
-    os.makedirs(summary.parent, exist_ok=True)
-    summary.write_text("# Compacted Summary\n\n- Preserve checkpoint-v2 primitive parity.\n- Continue with deterministic fake model clients.\n", encoding="utf-8")
-    compacted["metadata"]["compactionState"] = {
-        "generation": 1,
-        "compactedThroughMessageIndex": 1,
-        "archiveMessageCount": len(compacted["messages"]) - 4,
-        "compactedContextTokenEstimate": 321,
-        "workingContextTokenEstimate": 500,
-        "workingContextTokenMeasurement": {"inputTokens": 150_500, "source": "scripted"},
-        "artifacts": {"summary": str(summary), "workingContext": str(paths["python_home"] / "missing-working-context.json")},
-    }
-    return compacted
 
 
 def _project_plan(plan: dict[str, Any]) -> dict[str, Any]:

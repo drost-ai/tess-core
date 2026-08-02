@@ -57,7 +57,18 @@ class HarnessParityRunnerTests(AgentCoreTestCase):
             self.assertEqual(python_case["modelPlan"], typescript_case["modelPlan"])
             self.assertEqual(python_case["tokenEstimates"], typescript_case["tokenEstimates"])
             self.assertTrue(python_case["workingMessages"]["compacted"]["hasContinuationBridge"])
-            self.assertTrue(python_case["systemPromptContext"]["summaryFallback"]["containsPrimitiveParity"])
+            context = python_case["systemPromptContext"]
+            self.assertTrue(context["ownedWorkingContext"]["containsPrimitiveParity"])
+            self.assertFalse(context["missingWorkingContext"]["present"])
+            self.assertFalse(context["foreignWorkingContext"]["present"])
+            self.assertFalse(context["outsideWorkingContext"]["present"])
+
+            raw = json.loads(Path(result.observationsPath).read_text(encoding="utf-8"))
+            provenance = raw["typescript"]["provenance"]
+            self.assertEqual(len(provenance["sourceCommit"]), 40)
+            self.assertEqual(len(provenance["sourceIdentity"]), 64)
+            self.assertEqual(len(provenance["distIdentity"]), 64)
+            self.assertTrue(provenance["requiredDistFilesPresent"])
 
     def test_committed_compaction_primitives_golden_compares(self):
         with tempfile.TemporaryDirectory() as runs:
@@ -126,8 +137,11 @@ class HarnessParityRunnerTests(AgentCoreTestCase):
             self.assertTrue(cases["lightweight-baseline"]["pressure"]["lightweight"]["applied"])
             self.assertIn("api_microcompact", cases["api-repeated-payload"]["selection"]["appliedModes"])
             self.assertTrue(cases["api-repeated-payload"]["messages"]["hasRepeatedFileOmission"])
-            self.assertIn("session_memory_compaction", cases["session-memory-reactive"]["selection"]["appliedModes"])
-            self.assertTrue(cases["session-memory-reactive"]["reinjection"]["hasDurableMemory"])
+            memory_case = cases["durable-memory-reactive"]
+            self.assertNotIn("session_memory_compaction", memory_case["selection"]["plannedModes"])
+            self.assertNotIn("session_memory_compaction", memory_case["selection"]["appliedModes"])
+            self.assertIn("partial_compaction", memory_case["selection"]["appliedModes"])
+            self.assertFalse(memory_case["reinjection"]["hasDurableMemory"])
             self.assertIn("partial_compaction", cases["partial-reactive"]["selection"]["appliedModes"])
             self.assertTrue(cases["partial-reactive"]["messages"]["hasPartialSummary"])
 

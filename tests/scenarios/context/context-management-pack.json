@@ -109,8 +109,8 @@
       "assert_context_result": {
         "family": "continuation",
         "alias": "memory",
-        "modesInclude": ["session_memory_compaction"],
-        "textContains": "durable memory:"
+        "modesInclude": ["partial_compaction"],
+        "textContains": "bounded partial summary"
       }
     },
     {

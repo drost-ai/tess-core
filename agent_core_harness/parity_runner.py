@@ -19,6 +19,7 @@ from .loader import load_scenario
 from .model import Scenario, ScenarioAssertionError, ScenarioValidationError
 from .normalization import normalize_observations
 from .parity_model_policy import normalize_compaction_model_policy
+from .parity_provenance import inspect_typescript_peer, provenance_error
 from .parity_compaction import run_compaction_primitives, run_compaction_run
 from .parity_continuation import run_continuation_relief
 from .parity_dispatch import run_tool_dispatch_parity
@@ -79,7 +80,12 @@ def run_parity_scenario(
         _apply_workspace_setup(paths["typescript_workspace"], resolved.setup)
         actions = [step.input for step in resolved.steps if step.type == "parity_action"]
         python_raw = asyncio.run(_run_python_driver(actions, paths))
-        typescript_raw = _run_typescript_driver(actions, paths, typescript_repo)
+        typescript_raw = _run_typescript_driver(
+            actions,
+            paths,
+            typescript_repo,
+            require_trusted_reference=golden == "update",
+        )
         python_norm = _normalize_side(python_raw, paths, "python")
         typescript_norm = _normalize_side(typescript_raw, paths, "typescript")
         comparison = compare_parity_observations(python_norm, typescript_norm)
@@ -198,8 +204,26 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
     )
 
 
-def _run_typescript_driver(actions: list[dict[str, Any]], paths: dict[str, Any], typescript_repo: str | None) -> dict[str, Any]:
+def _run_typescript_driver(
+    actions: list[dict[str, Any]],
+    paths: dict[str, Any],
+    typescript_repo: str | None,
+    *,
+    require_trusted_reference: bool = False,
+) -> dict[str, Any]:
     repo = typescript_repo or os.environ.get("AGENT_CORE_TYPESCRIPT_REPO") or "/Users/dev/agents/agent-core"
+    provenance = inspect_typescript_peer(repo)
+    invalid = provenance_error(
+        provenance,
+        require_trusted_reference=require_trusted_reference,
+    )
+    if invalid:
+        return {
+            "implementation": "typescript",
+            "status": "failed",
+            "provenance": provenance,
+            "error": {"message": invalid, "type": "ParityReferenceError"},
+        }
     input_path = paths["raw"] / "typescript-input.json"
     output_path = paths["raw"] / "typescript-driver-output.json"
     payload = {
@@ -212,8 +236,10 @@ def _run_typescript_driver(actions: list[dict[str, Any]], paths: dict[str, Any],
     input_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     completed = subprocess.run(["node", str(REPO_ROOT / "agent_core_harness" / "parity_ts_driver.mjs"), str(input_path)], text=True, capture_output=True, timeout=30)
     if completed.returncode != 0:
-        return {"implementation": "typescript", "status": "failed", "error": {"message": completed.stderr.strip() or completed.stdout.strip(), "returnCode": completed.returncode}}
-    return json.loads(output_path.read_text(encoding="utf-8"))
+        return {"implementation": "typescript", "status": "failed", "provenance": provenance, "error": {"message": completed.stderr.strip() or completed.stdout.strip(), "returnCode": completed.returncode}}
+    result = json.loads(output_path.read_text(encoding="utf-8"))
+    result["provenance"] = provenance
+    return result
 
 
 def _python_runtime_events(session: dict[str, Any], data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -365,7 +391,8 @@ def _comparison_failure(comparison: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_side(value: dict[str, Any], paths: dict[str, Any], side: str) -> dict[str, Any]:
-    normalized = normalize_observations(value, _view(paths, side))
+    comparable = {key: item for key, item in value.items() if key != "provenance"}
+    normalized = normalize_observations(comparable, _view(paths, side))
     return normalize_compaction_model_policy(normalized)
 
 

@@ -140,9 +140,7 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
     pressure = args["pressure"]
     pressure_level = args["pressureLevel"]
     token_limit = _token_limit_or_default(args.get("tokenLimit"))
-    retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}
     repeated_file_tokens = pressure["categories"]["repeatedFileContentTokens"]
-    strong_session_memory = len(retrieved_memory.get("records") or []) >= 4 and int(retrieved_memory.get("tokenEstimate") or 0) >= 500
     aggressive = bool(args.get("aggressive"))
     scheduled = pressure["totalTokenEstimate"] >= token_limit
     reactive = aggressive or int(args.get("reactiveAttempt") or 0) >= 1
@@ -161,13 +159,6 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
         modes.append("api_microcompact" if supportsApiMicrocompact(args.get("config") or {}) else "microcompact")
     elif scheduled or pressure["categories"]["lowValueTailTokens"] >= 2_000:
         modes.append("microcompact")
-
-    if strong_session_memory and (
-        scheduled
-        or high_pressure
-        or int(args.get("reactiveAttempt") or 0) >= 2
-    ):
-        modes.append("session_memory_compaction")
 
     if (
         scheduled
@@ -234,24 +225,6 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
                 "reinjectionLines": [],
             },
             "preservedRawStartIndex": result["summary"]["preservedRawStartIndex"],
-        }
-    if mode == "session_memory_compaction":
-        result = applySessionMemoryCompaction(args["messages"], args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}, reactive_attempt)
-        return {
-            "applied": result["applied"],
-            "messages": result["messages"],
-            "step": {
-                "mode": "session_memory_compaction",
-                "applied": result["applied"],
-                "compactedMessageCount": result["compactedMessageCount"],
-                "droppedMessageCount": result["droppedMessageCount"],
-                "tokensSavedEstimate": result["tokensSavedEstimate"],
-                "detail": "older raw context collapsed into retrieved durable session memory",
-                "requiresReinjection": True,
-                "reinjectionLines": result["reinjectionLines"],
-                "reinjectionSummary": result.get("reinjectionSummary"),
-            },
-            "preservedRawStartIndex": result["preservedRawStartIndex"],
         }
     if mode == "partial_compaction":
         result = applyPartialCompaction(args["messages"], reactive_attempt)

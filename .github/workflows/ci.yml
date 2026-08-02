@@ -10,6 +10,9 @@ jobs:
     timeout-minutes: 25
     env:
       AGENT_CORE_TYPESCRIPT_REPO: ${{ github.workspace }}/typescript-agent-core
+      AGENT_CORE_TYPESCRIPT_EXPECTED_REF: 928c0cf5c2a1d8090a7728ce5e7c95ed3631674d
+      AGENT_CORE_TYPESCRIPT_REQUIRE_CLEAN: "1"
+      AGENT_CORE_TYPESCRIPT_REQUIRE_FRESH_BUILD: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Check out pinned TypeScript parity peer

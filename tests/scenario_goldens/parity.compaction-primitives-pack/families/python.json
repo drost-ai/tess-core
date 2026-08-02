@@ -75,11 +75,20 @@
       },
       "name": "compaction-primitive-baseline",
       "systemPromptContext": {
-        "summaryFallback": {
+        "foreignWorkingContext": {
+          "present": false
+        },
+        "missingWorkingContext": {
+          "present": false
+        },
+        "outsideWorkingContext": {
+          "present": false
+        },
+        "ownedWorkingContext": {
           "containsPrimitiveParity": true,
-          "containsSummary": true,
+          "containsSummary": false,
           "firstLine": "Archived working context from earlier turns and compacted portions of the current turn is available below.",
-          "lineCount": 8,
+          "lineCount": 25,
           "present": true
         },
         "withoutState": {

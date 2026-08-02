@@ -67,7 +67,7 @@
     }
   },
   {
-    "afterCount": 4,
+    "afterCount": 3,
     "alias": "memory",
     "beforeCount": 44,
     "driver": "apply_context_relief",
@@ -82,49 +82,40 @@
       "totalTokenEstimate": "<token-estimate>"
     },
     "profile": "plain",
-    "renderedPrompt": "<context_reduction_summary>\npressure_level=critical\nreactive_attempt=2\nselected_mode=session_memory_compaction\nreinjection_summary=Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026 | durable memory: Use pytest for focused parity validation.\nreinjection=Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.\nreinjection=recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026\nreinjection=durable memory: Use pytest for focused parity validation.\nreinjection=durable memory: Continuation lives in agent_core/context/continuation.\nreinjection=durable memory: Preserve active plan and todo state.\n</context_reduction_summary>",
+    "renderedPrompt": "<context_reduction_summary>\npressure_level=critical\nreactive_attempt=2\nselected_mode=partial_compaction\nreinjection_summary=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026\nreinjection=recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026\nreinjection=assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026\n</context_reduction_summary>",
     "summary": {
       "applied": true,
       "appliedModes": [
-        "session_memory_compaction"
-      ],
-      "compactedMessageCount": 0,
-      "detail": "older raw context collapsed into retrieved durable session memory",
-      "droppedMessageCount": 40,
-      "plannedModes": [
-        "api_microcompact",
-        "session_memory_compaction",
         "partial_compaction"
       ],
-      "preservedRawStartIndex": 40,
+      "compactedMessageCount": 1,
+      "detail": "older continuation region collapsed into a bounded partial summary",
+      "droppedMessageCount": 41,
+      "plannedModes": [
+        "api_microcompact",
+        "partial_compaction"
+      ],
+      "preservedRawStartIndex": 42,
       "pressureLevel": "critical",
       "reactiveAttempt": 2,
       "reinjectionLines": [
-        "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.",
-        "recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026",
-        "assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026",
-        "durable memory: Use pytest for focused parity validation.",
-        "durable memory: Continuation lives in agent_core/context/continuation.",
-        "durable memory: Preserve active plan and todo state."
+        "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026",
+        "assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026"
       ],
-      "reinjectionSummary": "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026 | durable memory: Use pytest for focused parity validation.",
-      "selectedMode": "session_memory_compaction",
+      "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026",
+      "selectedMode": "partial_compaction",
       "steps": [
         {
           "applied": true,
-          "compactedMessageCount": 0,
-          "detail": "older raw context collapsed into retrieved durable session memory",
-          "droppedMessageCount": 40,
-          "mode": "session_memory_compaction",
+          "compactedMessageCount": 1,
+          "detail": "older continuation region collapsed into a bounded partial summary",
+          "droppedMessageCount": 41,
+          "mode": "partial_compaction",
           "reinjectionLines": [
-            "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.",
-            "recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026",
-            "assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026",
-            "durable memory: Use pytest for focused parity validation.",
-            "durable memory: Continuation lives in agent_core/context/continuation.",
-            "durable memory: Preserve active plan and todo state."
+            "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026",
+            "assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026"
           ],
-          "reinjectionSummary": "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail. | recent requests: plain context message 32 for /tmp/workspace/app.py and pytest | plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 33 for /tmp/workspace/app.py and pytest | plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app\u2026 | durable memory: Use pytest for focused parity validation.",
+          "reinjectionSummary": "recent requests: plain context message 34 for /tmp/workspace/app.py and pytest | plain context message 36 for /tmp/workspace/app.py and pytest | plain context message 38 for /tmp/workspace/app.py and pytest | plain context message 40 for /tmp/workspace/app.py\u2026 | assistant findings: plain context message 35 for /tmp/workspace/app.py and pytest | plain context message 37 for /tmp/workspace/app.py and pytest | plain context message 39 for /tmp/workspace/app.py and pytest | plain context message 41 for /tmp/workspace/app\u2026",
           "requiresReinjection": true,
           "tokensSavedEstimate": "<token-estimate>"
         }

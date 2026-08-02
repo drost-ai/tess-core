@@ -28,6 +28,31 @@
     },
     {
       "classification": "matched",
+      "name": "durable-memory-reactive.pressure",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "durable-memory-reactive.selection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "durable-memory-reactive.steps",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "durable-memory-reactive.messages",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
+      "name": "durable-memory-reactive.reinjection",
+      "status": "matched"
+    },
+    {
+      "classification": "matched",
       "name": "lightweight-baseline.pressure",
       "status": "matched"
     },
@@ -74,31 +99,6 @@
     {
       "classification": "matched",
       "name": "partial-reactive.reinjection",
-      "status": "matched"
-    },
-    {
-      "classification": "matched",
-      "name": "session-memory-reactive.pressure",
-      "status": "matched"
-    },
-    {
-      "classification": "matched",
-      "name": "session-memory-reactive.selection",
-      "status": "matched"
-    },
-    {
-      "classification": "matched",
-      "name": "session-memory-reactive.steps",
-      "status": "matched"
-    },
-    {
-      "classification": "matched",
-      "name": "session-memory-reactive.messages",
-      "status": "matched"
-    },
-    {
-      "classification": "matched",
-      "name": "session-memory-reactive.reinjection",
       "status": "matched"
     }
   ],

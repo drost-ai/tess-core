@@ -50,7 +50,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         self.assertIn("api_microcompact", reactive_relief["summary"]["plannedModes"])
         self.assertEqual(reactive_relief["summary"]["pressureLevel"], "high")
 
-    def test_continuation_session_memory_reinjection_and_partial_summary(self):
+    def test_production_relief_retires_legacy_session_memory_compaction(self):
         session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
         messages = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"message {index} about /tmp/workspace/app.py and command pytest"} for index in range(44)]
         retrieved = {
@@ -65,10 +65,37 @@ class ContextContinuationTests(AgentCoreTestCase):
 
         relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "recover", "messages": messages, "retrievedMemory": retrieved, "reactiveAttempt": 2})
         summary = relief["summary"]
-        self.assertIn("session_memory_compaction", summary["plannedModes"])
-        self.assertIn("session_memory_compaction", summary["appliedModes"])
-        self.assertTrue(any("durable memory:" in line for line in summary["reinjectionLines"]))
+        self.assertNotIn("session_memory_compaction", summary["plannedModes"])
+        self.assertNotIn("session_memory_compaction", summary["appliedModes"])
+        self.assertIn("partial_compaction", summary["appliedModes"])
+        self.assertFalse(any("durable memory:" in line for line in summary["reinjectionLines"]))
         self.assertLess(len(relief["messages"]), len(messages))
+
+        direct_legacy = core.applyContextReliefMode(
+            {
+                "mode": "session_memory_compaction",
+                "session": session,
+                "messages": messages,
+                "retrievedMemory": retrieved,
+                "reactiveAttempt": 2,
+            }
+        )
+        self.assertFalse(direct_legacy["applied"])
+        self.assertEqual(direct_legacy["step"]["mode"], "none")
+
+        historical = core.createRuntimeEvent(
+            {
+                "event": "context_relief.applied",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "data": {
+                    "session_id": session["id"],
+                    "mode": "session_memory_compaction",
+                    "modes": ["session_memory_compaction"],
+                },
+            }
+        )
+        self.assertEqual(historical["payload"]["mode"], "session_memory_compaction")
+        self.assertEqual(historical["payload"]["modes"], ["session_memory_compaction"])
 
         partial = core.applyPartialCompaction(messages, 1)
         self.assertTrue(partial["applied"])
