@@ -164,7 +164,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             if monitor_runtime is None:
                 monitor_runtime = await createMonitorRuntime({"session": session, "config": config, "emit": dispatch, "runtimeBinding": active_binding, "runtimePaths": paths})
             if task_runtime is None:
-                task_runtime = await createTaskRuntime({"session": session, "config": config, "emit": dispatch, "runtimeBinding": active_binding, "runtimePaths": paths})
+                task_runtime = await createTaskRuntime({"session": session, "config": config, "emit": dispatch, "runtimeBinding": active_binding, "runtimePaths": paths, "startTicker": args.get("taskStartTicker", True)})
             if collaboration_runtime is None:
                 collaboration_runtime = await createCollaborationRuntime({"session": session, "config": config, "emit": dispatch, "runtimeBinding": active_binding, "runtimePaths": paths})
 

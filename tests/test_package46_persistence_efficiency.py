@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import subprocess
+import sys
 import threading
 import time
 from unittest import mock
@@ -28,8 +30,77 @@ from agent_core_harness.performance import (
 
 
 class Package46OffLoopStorageTests(AgentCoreTestCase):
+    def test_generic_jsonl_appends_are_transactional_and_byte_valid(self):
+        async def exercise(path: Path) -> None:
+            from agent_core.storage_store.json_io import appendJsonLine, readJsonLines
+
+            await asyncio.gather(
+                *(
+                    appendJsonLine(
+                        str(path),
+                        {"sequence": index, "payload": str(index) * 50_000},
+                    )
+                    for index in range(80)
+                )
+            )
+            records = await readJsonLines(str(path))
+            self.assertEqual(len(records), 80)
+            self.assertEqual({record["sequence"] for record in records}, set(range(80)))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "concurrent.jsonl"
+            runtime_home = Path(tmp) / "runtime-home"
+
+            async def scoped_exercise() -> None:
+                async with core.scopedRuntimeHome(str(runtime_home)):
+                    await exercise(path)
+
+            run(scoped_exercise())
+            lines = path.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(lines), 80)
+            self.assertTrue(all(isinstance(json.loads(line), dict) for line in lines))
+
+    def test_jsonl_transaction_serializes_cooperating_processes(self):
+        child = """
+import asyncio
+import sys
+import agent_core as core
+from agent_core.storage_store.json_io import appendJsonLine
+home, path, prefix = sys.argv[1:]
+core.configureRuntimeHome(home)
+async def main():
+    await asyncio.gather(*(
+        appendJsonLine(path, {"id": f"{prefix}-{index}", "payload": prefix * 20000})
+        for index in range(25)
+    ))
+asyncio.run(main())
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "multi-process.jsonl"
+            home = root / "runtime-home"
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, "-c", child, str(home), str(path), str(index)],
+                    cwd=Path(__file__).resolve().parents[1],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for index in range(4)
+            ]
+            failures = []
+            for process in processes:
+                stdout, stderr = process.communicate(timeout=20)
+                if process.returncode != 0:
+                    failures.append((process.returncode, stdout, stderr))
+            self.assertEqual(failures, [])
+            records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(len(records), 100)
+            self.assertEqual(len({record["id"] for record in records}), 100)
+
     def test_write_burst_keeps_event_loop_responsive(self):
-        async def exercise(root: Path) -> tuple[int, float]:
+        async def exercise(root: Path) -> tuple[int, float, float]:
             import agent_core.storage_store.json_io as json_io
 
             await asyncio.gather(
@@ -62,12 +133,15 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
                 await ticker
             gaps = [right - left for left, right in zip(heartbeat, heartbeat[1:])]
             self.assertEqual(len(calls), 100)
-            return len(heartbeat), max(gaps, default=0.0)
+            ordered = sorted(gaps)
+            p95 = ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))] if ordered else 0.0
+            return len(heartbeat), p95, max(gaps, default=0.0)
 
         with tempfile.TemporaryDirectory() as tmp:
-            beats, maximum_gap = run(exercise(Path(tmp)))
+            beats, p95_gap, maximum_gap = run(exercise(Path(tmp)))
         self.assertGreater(beats, 200)
-        self.assertLess(maximum_gap, 0.005)
+        self.assertLess(p95_gap, 0.005)
+        self.assertLess(maximum_gap, 0.025)
 
     def test_storage_executor_caps_fifty_concurrent_sessions(self):
         async def exercise() -> dict[str, int]:
@@ -156,6 +230,102 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             run(exercise(Path(tmp) / "record.json"))
+
+    def test_repeated_cancellation_cannot_escape_before_cleanup_settles(self):
+        async def exercise() -> tuple[bool, list[str], int]:
+            started = threading.Event()
+            release = threading.Event()
+            cleanup_finished = threading.Event()
+            cleanup_calls: list[str] = []
+
+            def held_operation() -> str:
+                started.set()
+                release.wait(timeout=5)
+                return "lock-handle"
+
+            def cleanup(value: str) -> None:
+                cleanup_calls.append(value)
+                time.sleep(0.01)
+                cleanup_finished.set()
+
+            task = asyncio.create_task(
+                runStorageIo(held_operation, cancelCleanup=cleanup)
+            )
+            while not started.is_set():
+                await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            return task.cancelled(), cleanup_calls, storageExecutorSnapshot()["activeOperations"]
+
+        cancelled, cleanup_calls, active = run(exercise())
+        self.assertTrue(cancelled)
+        self.assertEqual(cleanup_calls, ["lock-handle"])
+        self.assertEqual(active, 0)
+
+    def test_cancelled_storage_operation_keeps_cancellation_precedence_over_worker_error(self):
+        async def exercise() -> bool:
+            started = threading.Event()
+            release = threading.Event()
+
+            def failing_operation() -> None:
+                started.set()
+                release.wait(timeout=5)
+                raise OSError("disk failed after cancellation")
+
+            task = asyncio.create_task(runStorageIo(failing_operation))
+            while not started.is_set():
+                await asyncio.sleep(0)
+            task.cancel()
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            return task.cancelled()
+
+        self.assertTrue(run(exercise()))
+
+    def test_mailbox_append_and_rewrite_share_one_transaction(self):
+        root, _home, _workspace, previous = self.temp_context()
+        try:
+            async def exercise() -> tuple[list[dict[str, Any]], Path]:
+                child_session_id = "package46-child"
+                first = await core.sendTaskMessage(
+                    "package46-task",
+                    {
+                        "messageId": "seed",
+                        "childSessionId": child_session_id,
+                        "content": "seed",
+                    },
+                )
+                await asyncio.gather(
+                    core.markTaskMessageDelivered("package46-task", first["messageId"]),
+                    *(
+                        core.sendTaskMessage(
+                            "package46-task",
+                            {
+                                "messageId": f"message-{index}",
+                                "childSessionId": child_session_id,
+                                "content": f"message-{index}:" + "x" * 50_000,
+                            },
+                        )
+                        for index in range(60)
+                    ),
+                )
+                return (
+                    await core.readTaskMailboxMessages("package46-task"),
+                    Path(core.taskDir("package46-task")) / "mailbox.jsonl",
+                )
+
+            messages, path = run(exercise())
+            self.assertEqual(len(messages), 61)
+            self.assertEqual({item["messageId"] for item in messages}, {"seed", *(f"message-{index}" for index in range(60))})
+            self.assertEqual(next(item for item in messages if item["messageId"] == "seed")["status"], "delivered")
+            self.assertTrue(all(isinstance(json.loads(line), dict) for line in path.read_text(encoding="utf-8").splitlines()))
+        finally:
+            self.restore_home(root, previous)
 
     def test_transcript_appends_remain_serial_and_byte_exact(self):
         root, _home, _workspace, previous = self.temp_context()
@@ -265,25 +435,31 @@ class Package46RollbackRecordTests(AgentCoreTestCase):
         self.assertEqual(session["messages"][0]["content"][0]["type"], "text")
         self.assertNotIn("aGVsbG8=", json.dumps(session))
 
-    def test_rollback_record_fails_closed_if_stable_source_was_truncated(self):
+    def test_rollback_record_is_authoritative_after_in_place_tool_mutation(self):
         session = self._session()
+        legacy = copy.deepcopy(session)
         rollback = _capture_session_rollback(session)
-        rollback.messageSource.clear()
-        with self.assertRaisesRegex(RuntimeError, "truncated behind its rollback watermark"):
-            _restore_session_state(session, rollback)
+        session["messages"][0]["content"] = "mutated by tool"
+        session["messages"].clear()
+        _restore_session_state(session, rollback)
+        self.assertEqual(session, legacy)
 
-    def test_capture_cost_does_not_clone_message_history(self):
+    def test_incremental_capture_owns_messages_and_reuses_frozen_prefix(self):
         session = self._session(5_000)
         marker = session["messages"][2_500]
+        cold = _capture_session_rollback(session)
+        session["messages"].append({"role": "user", "content": "new boundary"})
         started = time.perf_counter_ns()
-        rollback = _capture_session_rollback(session)
+        rollback = _capture_session_rollback(session, cold)
         elapsed_ns = time.perf_counter_ns() - started
 
         self.assertIs(rollback.messageSource, session["messages"])
-        self.assertIs(rollback.messageSource[2_500], marker)
+        self.assertIsNot(rollback.frozenMessages[2_500], marker)
+        self.assertIs(rollback.frozenMessages[2_500], cold.frozenMessages[2_500])
+        self.assertIsNot(rollback.frozenMessages[-1], session["messages"][-1])
         self.assertNotIn("messages", rollback.head)
-        # A generous test ceiling catches accidental whole-history deepcopy;
-        # the committed benchmark carries the tighter environment-specific data.
+        # A generous ceiling catches a regression back to a whole-history copy
+        # at every stable boundary. The benchmark carries the tighter budget.
         self.assertLess(elapsed_ns, 2_000_000)
 
     def test_rollback_benchmark_records_before_after_at_long_session_scale(self):

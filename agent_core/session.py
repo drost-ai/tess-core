@@ -58,16 +58,23 @@ async def persistSession(
 ) -> dict[str, Any] | None:
     measurement = _begin_persistence_call(str(session.get("id") or ""), len(session.get("messages") or []))
     try:
-        if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
+        persist_options = {**(options or {}), **kwargs}
+        if not config.get("sessionPersistence", True) or (
+            not hasPersistableSessionMessages(session)
+            and not persist_options.get("force")
+        ):
             _finish_persistence_call(measurement, "skipped")
             return None
         snapshot = _sanitize_media_for_persistence(session)
         repair = repairSessionTranscript(snapshot)
         await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
-        persist_options = {**(options or {}), **kwargs}
         if persist_options.get("touch", True):
             snapshot["updatedAt"] = now_iso()
-        transcript_log, _appended = await _persist_session_transcript_log(snapshot, repair)
+        transcript_log, _appended = await _persist_session_transcript_log(
+            snapshot,
+            repair,
+            truncate=bool(persist_options.get("truncateTranscript")),
+        )
         snapshot.setdefault("metadata", {})["fullTranscriptLog"] = transcript_log
         committed = await _commit_prepared_session_snapshot(snapshot)
         _sync_committed_session_state(session, committed)
@@ -233,7 +240,7 @@ async def findSessionsForWorkspace(sessions: list[dict[str, Any]], cwd: str) -> 
 
 
 async def _persist_session_transcript_log(
-    session: dict[str, Any], repair: dict[str, Any]
+    session: dict[str, Any], repair: dict[str, Any], *, truncate: bool = False
 ) -> tuple[dict[str, Any], bool]:
     raw_previous_log = session.get("metadata", {}).get("fullTranscriptLog", {})
     previous_log = raw_previous_log if isinstance(raw_previous_log, dict) else {}
@@ -244,8 +251,8 @@ async def _persist_session_transcript_log(
     fork_header = createForkArchiveHeader(session, archived_at)
     if fork_header:
         entries.append(fork_header)
-    if repair.get("repaired") and previous > len(session.get("messages", [])):
-        entries.append({"type": "repair", "session_id": session["id"], "persisted_at": archived_at, "truncated_to_message_index": len(session.get("messages", [])), "previous_archived_message_count": previous, "removed_count": repair["removedCount"], "missing_tool_use_ids": repair["missingToolUseIds"]})
+    if (repair.get("repaired") or truncate) and previous > len(session.get("messages", [])):
+        entries.append({"type": "repair", "session_id": session["id"], "persisted_at": archived_at, "truncated_to_message_index": len(session.get("messages", [])), "previous_archived_message_count": previous, "removed_count": repair.get("removedCount") or previous - len(session.get("messages", [])), "missing_tool_use_ids": repair.get("missingToolUseIds") or []})
     for index in range(min(previous, len(session.get("messages", []))), len(session.get("messages", []))):
         message = session["messages"][index]
         entries.append({"type": "message", "session_id": session["id"], "message_index": index, "persisted_at": archived_at, "role": message.get("role"), "content": message.get("content")})

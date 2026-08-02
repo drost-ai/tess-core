@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import uuid
 from typing import Any, Mapping
@@ -16,6 +15,7 @@ from .storage import (
     taskDir,
     writeJsonFile,
 )
+from .storage_store.json_io import mutateJsonLines, readJsonLines
 from .session import persistSession
 from .message_origin import syntheticUserMessage as _synthetic_user_message
 
@@ -33,20 +33,7 @@ def task_questions_path(task_id: str) -> str:
 
 
 async def _read_json_lines(path: str) -> list[dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            lines = handle.readlines()
-    except FileNotFoundError:
-        return []
-    records: list[dict[str, Any]] = []
-    for line in lines:
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, dict):
-            records.append(value)
-    return records
+    return await readJsonLines(path)
 
 
 async def append_task_event(task_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
@@ -117,18 +104,127 @@ async def read_undelivered_task_messages(task_id: str, child_session_id: str | N
 
 async def mark_task_message_delivered(task_id: str, message_id: str) -> dict[str, Any] | None:
     delivered_at = now_iso()
-    updated: dict[str, Any] | None = None
-    messages = await read_task_mailbox_messages(task_id)
-    with open(task_mailbox_path(task_id), "w", encoding="utf-8") as handle:
-        for message in messages:
+    def _mark(records: list[dict[str, Any]]) -> dict[str, Any]:
+        messages = _latest_records(records, "messageId")
+        updated: dict[str, Any] | None = None
+        for index, message in enumerate(messages):
             if message.get("messageId") == message_id:
-                message = {**message, "status": "delivered", "deliveredAt": delivered_at}
-                updated = message
-            json.dump(message, handle, ensure_ascii=False)
-            handle.write("\n")
+                updated = {**message, "status": "delivered", "deliveredAt": delivered_at}
+                messages[index] = updated
+                break
+        return {"records": messages, "result": updated, "changed": updated is not None}
+
+    updated = await mutateJsonLines(task_mailbox_path(task_id), _mark)
     if updated:
         await append_task_event(task_id, {"type": "message.delivered", "messageId": message_id, "deliveredAt": delivered_at})
     return updated
+
+
+def _latest_records(records: list[dict[str, Any]], id_field: str) -> list[dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    anonymous: list[dict[str, Any]] = []
+    for record in records:
+        record_id = record.get(id_field)
+        if isinstance(record_id, str):
+            latest[record_id] = record
+        else:
+            anonymous.append(record)
+    return sorted(
+        [*anonymous, *latest.values()],
+        key=lambda item: str(item.get("createdAt") or ""),
+    )
+
+
+async def _claim_undelivered_task_messages(
+    task_id: str,
+    child_session_id: str | None,
+) -> list[dict[str, Any]]:
+    delivered_at = now_iso()
+
+    def _claim(records: list[dict[str, Any]]) -> dict[str, Any]:
+        messages = _latest_records(records, "messageId")
+        claimed: list[dict[str, Any]] = []
+        for index, message in enumerate(messages):
+            matches_session = not child_session_id or message.get("childSessionId") == child_session_id
+            if message.get("status") == "queued" and matches_session:
+                updated = {**message, "status": "delivered", "deliveredAt": delivered_at}
+                messages[index] = updated
+                claimed.append(updated)
+        return {"records": messages, "result": claimed, "changed": bool(claimed)}
+
+    return await mutateJsonLines(task_mailbox_path(task_id), _claim)
+
+
+def _session_task_message_ids(session: Mapping[str, Any]) -> set[str]:
+    found: set[str] = set()
+    for message in session.get("messages") or []:
+        if not isinstance(message, Mapping):
+            continue
+        metadata = message.get("metadata")
+        origin = metadata.get("agentCoreOrigin") if isinstance(metadata, Mapping) else None
+        lineage = origin.get("lineage") if isinstance(origin, Mapping) else None
+        message_id = lineage.get("messageId") if isinstance(lineage, Mapping) else None
+        if isinstance(message_id, str) and message_id:
+            found.add(message_id)
+    return found
+
+
+async def _deliver_mailbox_transaction(
+    task_id: str,
+    session: dict[str, Any],
+    config: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Commit mailbox delivery and its session projection under one record lock.
+
+    The session is persisted before the queued record becomes delivered.  A
+    crash in that narrow boundary is reconciled by the message lineage check,
+    so retry marks the record delivered without appending a duplicate.
+    """
+
+    child_session_id = session.get("id")
+    delivered_at = now_iso()
+
+    async def _commit(records: list[dict[str, Any]]) -> dict[str, Any]:
+        messages = _latest_records(records, "messageId")
+        existing = _session_task_message_ids(session)
+        claimed: list[dict[str, Any]] = []
+        appended = 0
+        for index, message in enumerate(messages):
+            matches_session = not child_session_id or message.get("childSessionId") == child_session_id
+            if message.get("status") != "queued" or not matches_session:
+                continue
+            message_id = message.get("messageId")
+            updated = {**message, "status": "delivered", "deliveredAt": delivered_at}
+            messages[index] = updated
+            claimed.append(updated)
+            if message_id not in existing:
+                session.setdefault("messages", []).append(
+                    _synthetic_user_message(
+                        _message_envelope(message),
+                        actor="task",
+                        kind="task_notification",
+                        lineage={
+                            "taskId": str(message.get("taskId") or ""),
+                            "messageId": str(message_id or ""),
+                        },
+                    )
+                )
+                appended += 1
+        if not claimed:
+            return {"records": messages, "result": [], "changed": False}
+        try:
+            if appended:
+                if config is not None:
+                    await persistSession(session, config)
+                else:
+                    await saveSession(session)
+        except BaseException:
+            if appended:
+                del session["messages"][-appended:]
+            raise
+        return {"records": messages, "result": claimed, "changed": True}
+
+    return await mutateJsonLines(task_mailbox_path(task_id), _commit)
 
 
 def _message_envelope(message: Mapping[str, Any]) -> str:
@@ -142,26 +238,18 @@ async def deliver_queued_task_messages_to_session(session: dict[str, Any], confi
     task_id = metadata.get("subagentTaskId")
     if not isinstance(task_id, str) or not task_id:
         return []
-    messages = await read_undelivered_task_messages(task_id, session.get("id"))
+    messages = await _deliver_mailbox_transaction(task_id, session, config)
     if not messages:
         return []
     for message in messages:
-        session.setdefault("messages", []).append(
-            _synthetic_user_message(
-                _message_envelope(message),
-                actor="task",
-                kind="task_notification",
-                lineage={
-                    "taskId": str(message.get("taskId") or ""),
-                    "messageId": str(message.get("messageId") or ""),
-                },
-            )
+        await append_task_event(
+            task_id,
+            {
+                "type": "message.delivered",
+                "messageId": message["messageId"],
+                "deliveredAt": message.get("deliveredAt"),
+            },
         )
-        await mark_task_message_delivered(task_id, message["messageId"])
-    if config is not None:
-        await persistSession(session, config)
-    else:
-        await saveSession(session)
     return messages
 
 
@@ -203,28 +291,23 @@ async def read_task_questions(task_id: str) -> list[dict[str, Any]]:
     return sorted(questions.values(), key=lambda item: str(item.get("createdAt") or ""))
 
 
-async def _rewrite_questions(task_id: str, records: list[dict[str, Any]]) -> None:
-    os.makedirs(os.path.dirname(task_questions_path(task_id)), exist_ok=True)
-    with open(task_questions_path(task_id), "w", encoding="utf-8") as handle:
-        for record in records:
-            json.dump(record, handle, ensure_ascii=False)
-            handle.write("\n")
-
-
 async def answer_task_question(task_id: str, question_id: str, answer: str) -> dict[str, Any] | None:
     if not isinstance(answer, str) or not answer.strip():
         raise ValueError("Answer must be non-empty.")
     answered_at = now_iso()
-    updated: dict[str, Any] | None = None
-    records = await read_task_questions(task_id)
-    for index, record in enumerate(records):
-        if record.get("questionId") == question_id:
-            updated = {**record, "status": "answered", "answeredAt": answered_at, "answer": answer.strip()}
-            records[index] = updated
-            break
+    def _answer(records: list[dict[str, Any]]) -> dict[str, Any]:
+        questions = _latest_records(records, "questionId")
+        updated: dict[str, Any] | None = None
+        for index, record in enumerate(questions):
+            if record.get("questionId") == question_id:
+                updated = {**record, "status": "answered", "answeredAt": answered_at, "answer": answer.strip()}
+                questions[index] = updated
+                break
+        return {"records": questions, "result": updated, "changed": updated is not None}
+
+    updated = await mutateJsonLines(task_questions_path(task_id), _answer)
     if not updated:
         return None
-    await _rewrite_questions(task_id, records)
     await send_task_message(
         task_id,
         {
@@ -241,16 +324,19 @@ async def answer_task_question(task_id: str, question_id: str, answer: str) -> d
 
 async def skip_task_question(task_id: str, question_id: str, reason: str | None = None) -> dict[str, Any] | None:
     skipped_at = now_iso()
-    updated: dict[str, Any] | None = None
-    records = await read_task_questions(task_id)
-    for index, record in enumerate(records):
-        if record.get("questionId") == question_id:
-            updated = {**record, "status": "skipped", "answeredAt": skipped_at, "answer": reason or ""}
-            records[index] = updated
-            break
+    def _skip(records: list[dict[str, Any]]) -> dict[str, Any]:
+        questions = _latest_records(records, "questionId")
+        updated: dict[str, Any] | None = None
+        for index, record in enumerate(questions):
+            if record.get("questionId") == question_id:
+                updated = {**record, "status": "skipped", "answeredAt": skipped_at, "answer": reason or ""}
+                questions[index] = updated
+                break
+        return {"records": questions, "result": updated, "changed": updated is not None}
+
+    updated = await mutateJsonLines(task_questions_path(task_id), _skip)
     if not updated:
         return None
-    await _rewrite_questions(task_id, records)
     await append_task_event(task_id, {"type": "question.skipped", "questionId": question_id, "reason": reason})
     return updated
 

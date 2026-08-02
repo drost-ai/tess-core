@@ -6,13 +6,16 @@ import time
 from ...contracts.providers import ProviderResponse
 from ...provider_activity import emitProviderActivity
 from ...runtime_secret_provider import resolveProviderConfigSecrets
-from ..anthropic_http_transport import (
-    AnthropicHttpConnectionOwner as _AnthropicHttpConnectionOwner,
-    startAnthropicTransportWorker as _start_anthropic_transport_worker,
+from ..anthropic_async_transport import (
+    AnthropicAsyncHttpConnectionOwner as _AnthropicHttpConnectionOwner,
 )
+from ..anthropic_http_transport import startAnthropicTransportWorker as _start_anthropic_transport_worker
 
 from .shared import *
-
+from .async_request import (
+    sendAnthropicMessagesStreamingViaAsyncTransport as _send_anthropic_messages_streaming_via_async_transport,
+    sendAnthropicMessagesViaAsyncTransport as _send_anthropic_messages_via_async_transport,
+)
 _DEFAULT_URLOPEN = urlopen
 
 async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
@@ -185,14 +188,13 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         raise failure
 
     raise last_failure or RuntimeError("Anthropic request failed unexpectedly.")
-
 def _send_anthropic_messages_sync(
     config: dict[str, Any],
     payload: dict[str, Any],
     timeout_ms: int,
     stream: bool = False,
     header_features: dict[str, Any] | None = None,
-    transport: _AnthropicHttpConnectionOwner | None = None,
+    transport: Any = None,
 ) -> tuple[str, str]:
     url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
     body = json.dumps(payload).encode("utf-8")
@@ -221,7 +223,6 @@ def _send_anthropic_messages_sync(
         raw = response.read().decode("utf-8")
         content_type = response.headers.get("content-type", "")
     return raw, content_type
-
 def _send_anthropic_messages_async(
     config: dict[str, Any],
     payload: dict[str, Any],
@@ -230,19 +231,27 @@ def _send_anthropic_messages_async(
     header_features: dict[str, Any] | None = None,
     turn_session: Any = None,
 ) -> asyncio.Future[tuple[str, str]]:
+    if (
+        urlopen is not _DEFAULT_URLOPEN
+        or _send_anthropic_messages_sync is not _DEFAULT_SEND_ANTHROPIC_MESSAGES_SYNC
+    ):
+        return _start_anthropic_transport_worker(
+            target=lambda: _send_anthropic_messages_sync(
+                config, payload, timeout_ms, stream, header_features, None
+            ),
+            owner=None,
+            turn_session=turn_session,
+            name="agent-core-anthropic-request-test-double",
+        )
     transport = _acquire_anthropic_transport(turn_session)
-    if urlopen is not _DEFAULT_URLOPEN:
-        transport = None
-    return _start_anthropic_transport_worker(
-        target=lambda: _send_anthropic_messages_sync(
+    future = asyncio.create_task(
+        _send_anthropic_messages_via_async_transport(
             config, payload, timeout_ms, stream, header_features, transport
-        ),
-        owner=transport,
-        turn_session=turn_session,
-        name="agent-core-anthropic-request",
+        )
     )
-
-
+    future._anthropic_transport_owner = transport  # type: ignore[attr-defined]
+    future._anthropic_turn_session = turn_session  # type: ignore[attr-defined]
+    return future
 def _send_anthropic_messages_streaming_async(
     config: dict[str, Any],
     payload: dict[str, Any],
@@ -254,32 +263,50 @@ def _send_anthropic_messages_streaming_async(
     on_activity: Any | None = None,
     turn_session: Any = None,
 ) -> asyncio.Future[dict[str, Any]]:
+    if (
+        urlopen is not _DEFAULT_URLOPEN
+        or _send_anthropic_messages_streaming_sync
+        is not _DEFAULT_SEND_ANTHROPIC_MESSAGES_STREAMING_SYNC
+    ):
+        future_holder: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        future = _start_anthropic_transport_worker(
+            target=lambda: _send_anthropic_messages_streaming_sync(
+                config,
+                payload,
+                timeout_ms,
+                request,
+                runtime,
+                attempt,
+                header_features=header_features,
+                should_stop=lambda: bool(
+                    future_holder.get("future")
+                    and future_holder["future"].cancelled()
+                ),
+                on_activity=on_activity,
+                transport=None,
+            ),
+            owner=None,
+            turn_session=turn_session,
+            name="agent-core-anthropic-stream-test-double",
+        )
+        future_holder["future"] = future
+        return future
     transport = _acquire_anthropic_transport(turn_session)
-    if urlopen is not _DEFAULT_URLOPEN:
-        transport = None
-    future_holder: dict[str, asyncio.Future[dict[str, Any]]] = {}
-    future: asyncio.Future[dict[str, Any]]
-    future = _start_anthropic_transport_worker(
-        target=lambda: _send_anthropic_messages_streaming_sync(
+    future = asyncio.create_task(
+        _send_anthropic_messages_streaming_via_async_transport(
             config,
             payload,
             timeout_ms,
             request,
             runtime,
             attempt,
-            header_features=header_features,
-            should_stop=lambda: bool(
-                future_holder.get("future")
-                and future_holder["future"].cancelled()
-            ),
-            on_activity=on_activity,
-            transport=transport,
-        ),
-        owner=transport,
-        turn_session=turn_session,
-        name="agent-core-anthropic-stream",
+            header_features,
+            on_activity,
+            transport,
+        )
     )
-    future_holder["future"] = future
+    future._anthropic_transport_owner = transport  # type: ignore[attr-defined]
+    future._anthropic_turn_session = turn_session  # type: ignore[attr-defined]
     return future
 
 
@@ -293,7 +320,7 @@ def _send_anthropic_messages_streaming_sync(
     header_features: dict[str, Any] | None = None,
     should_stop: Any | None = None,
     on_activity: Any | None = None,
-    transport: _AnthropicHttpConnectionOwner | None = None,
+    transport: Any = None,
 ) -> dict[str, Any]:
     url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
     body = json.dumps(payload).encode("utf-8")
@@ -358,6 +385,12 @@ def _acquire_anthropic_transport(turn_session: Any) -> _AnthropicHttpConnectionO
     if callable(acquire):
         return acquire()
     return _AnthropicHttpConnectionOwner()
+
+
+# Preserve the established test-double seam while production traffic uses the
+# cancellable asyncio transport above.
+_DEFAULT_SEND_ANTHROPIC_MESSAGES_SYNC = _send_anthropic_messages_sync
+_DEFAULT_SEND_ANTHROPIC_MESSAGES_STREAMING_SYNC = _send_anthropic_messages_streaming_sync
 
 
 def _read_anthropic_sse_response_live(

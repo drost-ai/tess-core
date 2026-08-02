@@ -11,10 +11,8 @@ from .fault_contract import (
     FAULT_SHAPES,
     STREAM_STATES,
     buildFaultContract,
-    summarizeFaultContract,
 )
-from .fault_evaluator import evaluateFaultContract
-from .fault_probes import runOpenAiFaultProbesAsync
+from .fault_execution import executeFaultContractAsync
 
 REPORT_SCHEMA = "agent-core.provider-fault-matrix.v1"
 CONNECTION_MODES = ("fresh", "keep_alive")
@@ -61,44 +59,23 @@ def runAnthropicFaultMatrix() -> dict[str, Any]:
 
 
 async def runProviderFaultMatrixAsync() -> dict[str, Any]:
-    anthropic_probes = await runAnthropicFaultMatrixAsync()
+    transport_parity = await runAnthropicFaultMatrixAsync()
     anthropic_contract = buildFaultContract("anthropic_messages_sse")
-    anthropic_evaluations = evaluateFaultContract(anthropic_contract)
-    anthropic_evaluation_failures = [item for item in anthropic_evaluations if item["verdict"] != "matched"]
-    anthropic = {
-        **anthropic_probes,
-        "scope": "package47b-complete-contract-and-dual-transport-probes",
-        "coverage": {
-            **summarizeFaultContract(anthropic_contract),
-            "executedCases": len(anthropic_probes["cases"]),
-            "executedUniqueCells": len({(probe["state"], probe["fault"]) for probe in anthropic_probes["cases"]}),
-            "evaluatedCells": len(anthropic_evaluations),
-            "matchedCells": len(anthropic_evaluations) - len(anthropic_evaluation_failures),
-        },
-        "contract": anthropic_contract,
-        "evaluations": anthropic_evaluations,
-        "probes": anthropic_probes["cases"],
-        "status": "failed" if anthropic_probes["status"] != "passed" or anthropic_evaluation_failures else "passed",
-    }
     openai_contract = buildFaultContract("openai_responses")
-    openai_evaluations = evaluateFaultContract(openai_contract)
-    openai_evaluation_failures = [item for item in openai_evaluations if item["verdict"] != "matched"]
-    openai_probes = await runOpenAiFaultProbesAsync()
-    openai_failed = [probe for probe in openai_probes if probe["verdict"] != "matched"]
-    openai = {
-        "providerFamily": "openai_responses",
-        "status": "failed" if openai_failed or openai_evaluation_failures else "passed",
-        "coverage": {
-            **summarizeFaultContract(openai_contract),
-            "executedCases": len(openai_probes),
-            "executedUniqueCells": len({(probe["state"], probe["fault"]) for probe in openai_probes}),
-            "evaluatedCells": len(openai_evaluations),
-            "matchedCells": len(openai_evaluations) - len(openai_evaluation_failures),
-        },
-        "contract": openai_contract,
-        "evaluations": openai_evaluations,
-        "probes": openai_probes,
-    }
+    anthropic_evaluations, openai_evaluations = await asyncio.gather(
+        executeFaultContractAsync(anthropic_contract),
+        executeFaultContractAsync(openai_contract),
+    )
+    anthropic = _family_execution_report(
+        "anthropic_messages_sse", anthropic_contract, anthropic_evaluations
+    )
+    anthropic["connectionModeParity"] = transport_parity["connectionModeParity"]
+    anthropic["transportParityEvidence"] = transport_parity["cases"]
+    if transport_parity["status"] != "passed":
+        anthropic["status"] = "failed"
+    openai = _family_execution_report(
+        "openai_responses", openai_contract, openai_evaluations
+    )
     families = [anthropic, openai]
     return {
         "schemaVersion": REPORT_SCHEMA,
@@ -113,9 +90,13 @@ async def runProviderFaultMatrixAsync() -> dict[str, Any]:
             "declaredCells": sum(item["coverage"]["declaredCells"] for item in families),
             "classifiedCells": sum(item["coverage"]["classifiedCells"] for item in families),
             "unknownCells": 0,
-            "remainingCells": 0,
-            "complete": True,
+            "remainingCells": sum(item["coverage"]["remainingCells"] for item in families),
+            "complete": all(item["coverage"]["complete"] for item in families),
             "executedCases": sum(item["coverage"]["executedCases"] for item in families),
+            "executableCells": sum(item["coverage"]["executableCells"] for item in families),
+            "impossibleCells": sum(item["coverage"]["impossibleCells"] for item in families),
+            "classifiedImpossibleCells": sum(item["coverage"]["classifiedImpossibleCells"] for item in families),
+            "crashExecutedCells": sum(item["coverage"]["crashExecutedCells"] for item in families),
             "evaluatedCells": sum(item["coverage"]["evaluatedCells"] for item in families),
             "matchedCells": sum(item["coverage"]["matchedCells"] for item in families),
         },
@@ -125,6 +106,49 @@ async def runProviderFaultMatrixAsync() -> dict[str, Any]:
 
 def runProviderFaultMatrix() -> dict[str, Any]:
     return asyncio.run(runProviderFaultMatrixAsync())
+
+
+def _family_execution_report(
+    provider_family: str,
+    contract: list[dict[str, Any]],
+    evaluations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    executable = [cell for cell in contract if cell["disposition"] != "protocol_impossible"]
+    impossible = [cell for cell in contract if cell["disposition"] == "protocol_impossible"]
+    executed = [item for item in evaluations if item["executed"]]
+    classified_impossible = [item for item in evaluations if item["classifiedImpossible"]]
+    matched = [item for item in evaluations if item["verdict"] == "matched"]
+    remaining = (len(executable) - len(executed)) + (
+        len(impossible) - len(classified_impossible)
+    )
+    complete = remaining == 0 and len(matched) == len(contract)
+    return {
+        "schemaVersion": REPORT_SCHEMA,
+        "providerFamily": provider_family,
+        "scope": "package47b-executable-contract",
+        "status": "passed" if complete else "failed",
+        "coverage": {
+            "declaredCells": len(contract),
+            "classifiedCells": len(evaluations),
+            "unknownCells": len(contract) - len(evaluations),
+            "remainingCells": remaining,
+            "complete": complete,
+            "executableCells": len(executable),
+            "executedCases": len(executed),
+            "executedUniqueCells": len({(item["state"], item["fault"]) for item in executed}),
+            "impossibleCells": len(impossible),
+            "classifiedImpossibleCells": len(classified_impossible),
+            "crashExecutedCells": sum(
+                item["executed"] and item["disposition"] == "crash_lane"
+                for item in evaluations
+            ),
+            "evaluatedCells": len(evaluations),
+            "matchedCells": len(matched),
+        },
+        "contract": contract,
+        "evaluations": evaluations,
+        "probes": evaluations,
+    }
 
 
 def writeFaultMatrixReport(report: dict[str, Any], output: str) -> str:

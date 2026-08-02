@@ -155,6 +155,26 @@ def providerTypedPayload(
                 _field(data, "safety_margin_tokens", "safetyMarginTokens")
             ),
         }
+    if event == "provider.request_preflight":
+        return event, {
+            "schemaVersion": _optional_number(
+                _field(data, "schema_version", "schemaVersion")
+            ),
+            "provider": _optional_string(_field(data, "provider")),
+            "profile": _optional_string(_field(data, "profile")),
+            "model": _optional_string(_field(data, "model")),
+            "requestFingerprint": _optional_string(
+                _field(data, "request_fingerprint", "requestFingerprint")
+            ),
+            "measurement": _field(data, "measurement"),
+            "admission": _field(data, "admission"),
+            "categories": _field(data, "categories"),
+            "compaction": _field(data, "compaction"),
+            "interactiveRelief": _field(
+                data, "interactive_relief", "interactiveRelief"
+            ),
+            "provenance": _field(data, "provenance"),
+        }
     if event == "provider.response_completed":
         return event, {
             "provider": _optional_string(_field(data, "provider")),

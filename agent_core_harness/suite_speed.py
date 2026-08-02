@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -13,12 +14,6 @@ from typing import Any
 from .paths import REPO_ROOT
 
 SUITE_SPEED_SCHEMA = "agent-core.suite-speed.v1"
-EXPECTED_EXTERNAL_FAILURES = {
-    "test_committed_compaction_primitives_golden_compares",
-    "test_compaction_primitives_pack_matches_two_codebases",
-    "test_committed_continuation_relief_golden_compares",
-    "test_continuation_relief_pack_matches_two_codebases",
-}
 PROTOCOL_PROCESS_FILES = (
     "test_contracts_typecheck.py",
     "test_headless_cli.py",
@@ -102,6 +97,7 @@ def runSuiteSpeedLane(*, workers: int = 4, target_seconds: float = 150.0) -> dic
         raise ValueError("workers and target_seconds must be positive")
     with tempfile.TemporaryDirectory(prefix="agent-core-suite-speed-") as tmp:
         report_root = Path(tmp)
+        baseline = _run_serial_baseline(report_root / "serial-baseline.xml")
         started = time.perf_counter()
         critical = _run_file_group(
             "serial-event-loop-stall",
@@ -113,27 +109,58 @@ def runSuiteSpeedLane(*, workers: int = 4, target_seconds: float = 150.0) -> dic
         serial = _run_serial(report_root / "serial.xml")
         parallel = _run_parallel(workers, report_root)
         wall_seconds = round(time.perf_counter() - started, 3)
-    parallel_failures = [failure for phase in parallel for failure in phase["failures"]]
-    process_failures = [failure for phase in process for failure in phase["failures"]]
-    failures = sorted(set(parallel_failures + process_failures + critical["failures"] + serial["failures"]))
-    unexpected = sorted(set(failures) - EXPECTED_EXTERNAL_FAILURES)
-    missing_expected = sorted(EXPECTED_EXTERNAL_FAILURES - set(failures))
-    errored = critical["errors"] + sum(phase["errors"] for phase in parallel + process) + serial["errors"]
-    equivalent = not unexpected and not missing_expected and errored == 0
+        qualification_seconds = round(time.perf_counter() - (started - baseline["elapsedSeconds"]), 3)
+    optimized_phases = [critical, *parallel, *process, serial]
+    optimized_outcomes, duplicate_cases = _merge_outcomes(optimized_phases)
+    baseline_outcomes = baseline.pop("_outcomes")
+    for phase in optimized_phases:
+        phase.pop("_outcomes", None)
+    missing_cases = sorted(set(baseline_outcomes) - set(optimized_outcomes))
+    extra_cases = sorted(set(optimized_outcomes) - set(baseline_outcomes))
+    outcome_mismatches = [
+        {
+            "test": case,
+            "serial": baseline_outcomes[case],
+            "optimized": optimized_outcomes[case],
+        }
+        for case in sorted(set(baseline_outcomes) & set(optimized_outcomes))
+        if baseline_outcomes[case] != optimized_outcomes[case]
+    ]
+    phase_failures = [
+        {"phase": phase["name"], "returnCode": phase["returnCode"], "tests": phase["tests"]}
+        for phase in optimized_phases
+        if phase["returnCode"] != 0 or phase["tests"] == 0
+    ]
+    equivalent = not missing_cases and not extra_cases and not outcome_mismatches and not duplicate_cases
+    clean = baseline["returnCode"] == 0 and not phase_failures
     within_target = wall_seconds < target_seconds
     return {
         "schemaVersion": SUITE_SPEED_SCHEMA,
-        "status": "passed" if equivalent and within_target else "failed",
+        "status": "passed" if equivalent and clean and within_target else "failed",
         "workers": workers,
         "targetSeconds": target_seconds,
         "wallSeconds": wall_seconds,
+        "qualificationSeconds": qualification_seconds,
         "withinTarget": within_target,
         "serialEquivalent": equivalent,
-        "expectedExternalFailures": sorted(EXPECTED_EXTERNAL_FAILURES),
-        "observedFailures": failures,
-        "unexpectedFailures": unexpected,
-        "missingExpectedFailures": missing_expected,
-        "phases": [critical, *parallel, *process, serial],
+        "cleanOutcomes": clean,
+        "collection": {
+            "serialCount": len(baseline_outcomes),
+            "optimizedCount": len(optimized_outcomes),
+            "serialDigest": _outcome_digest(baseline_outcomes, include_outcome=False),
+            "optimizedDigest": _outcome_digest(optimized_outcomes, include_outcome=False),
+            "missing": missing_cases,
+            "extra": extra_cases,
+            "duplicates": duplicate_cases,
+        },
+        "outcomeEquivalence": {
+            "serialDigest": _outcome_digest(baseline_outcomes, include_outcome=True),
+            "optimizedDigest": _outcome_digest(optimized_outcomes, include_outcome=True),
+            "mismatches": outcome_mismatches,
+        },
+        "phaseFailures": phase_failures,
+        "baseline": baseline,
+        "phases": optimized_phases,
     }
 
 
@@ -218,6 +245,14 @@ def _run_serial(junit_path: Path) -> dict[str, Any]:
     return _run_phase("serial-tight-timing", command, junit_path)
 
 
+def _run_serial_baseline(junit_path: Path) -> dict[str, Any]:
+    return _run_phase(
+        "serial-reference",
+        [sys.executable, "-m", "pytest", "-q", f"--junitxml={junit_path}", "tests"],
+        junit_path,
+    )
+
+
 def _run_phase(name: str, command: list[str], junit_path: Path) -> dict[str, Any]:
     started = time.perf_counter()
     completed = subprocess.run(
@@ -237,6 +272,10 @@ def _run_phase(name: str, command: list[str], junit_path: Path) -> dict[str, Any
             "tests": 0,
             "failures": [],
             "errors": 1,
+            "skipped": 0,
+            "collectionDigest": _outcome_digest({}, include_outcome=False),
+            "outcomeDigest": _outcome_digest({}, include_outcome=True),
+            "_outcomes": {},
             "stderrTail": completed.stderr[-2_000:],
         }
     parsed = _parse_junit(junit_path)
@@ -255,7 +294,54 @@ def _parse_junit(path: Path) -> dict[str, Any]:
     failures = [case.get("name", "") for case in cases if case.find("failure") is not None]
     errors = sum(case.find("error") is not None for case in cases)
     skipped = sum(case.find("skipped") is not None for case in cases)
-    return {"tests": len(cases), "failures": failures, "errors": errors, "skipped": skipped}
+    outcomes: dict[str, str] = {}
+    for case in cases:
+        identity = _junit_case_id(case)
+        if case.find("failure") is not None:
+            outcome = "failed"
+        elif case.find("error") is not None:
+            outcome = "error"
+        elif case.find("skipped") is not None:
+            outcome = "skipped"
+        else:
+            outcome = "passed"
+        if identity in outcomes:
+            identity = f"{identity}#duplicate-{sum(key.startswith(identity) for key in outcomes) + 1}"
+        outcomes[identity] = outcome
+    return {
+        "tests": len(cases),
+        "failures": failures,
+        "errors": errors,
+        "skipped": skipped,
+        "collectionDigest": _outcome_digest(outcomes, include_outcome=False),
+        "outcomeDigest": _outcome_digest(outcomes, include_outcome=True),
+        "_outcomes": outcomes,
+    }
+
+
+def _junit_case_id(case: ET.Element) -> str:
+    source = case.get("file") or case.get("classname") or "unknown"
+    return f"{source}::{case.get('classname') or ''}::{case.get('name') or ''}"
+
+
+def _merge_outcomes(phases: list[dict[str, Any]]) -> tuple[dict[str, str], list[str]]:
+    merged: dict[str, str] = {}
+    duplicates: list[str] = []
+    for phase in phases:
+        for identity, outcome in phase.get("_outcomes", {}).items():
+            if identity in merged:
+                duplicates.append(identity)
+            else:
+                merged[identity] = outcome
+    return merged, sorted(duplicates)
+
+
+def _outcome_digest(outcomes: dict[str, str], *, include_outcome: bool) -> str:
+    lines = [
+        f"{identity}={outcome}" if include_outcome else identity
+        for identity, outcome in sorted(outcomes.items())
+    ]
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
 run_suite_speed_lane = runSuiteSpeedLane

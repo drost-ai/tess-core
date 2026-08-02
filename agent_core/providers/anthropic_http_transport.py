@@ -215,7 +215,9 @@ def startAnthropicTransportWorker(
             if turn_session is not None:
                 turn_session.unregister_transport_worker(thread)
 
-    thread = threading.Thread(target=worker_target, name=name, daemon=False)
+    # This path now exists only for test doubles that monkeypatch urllib.  A
+    # hostile double must not pin interpreter shutdown after cancellation.
+    thread = threading.Thread(target=worker_target, name=name, daemon=True)
     future._anthropic_transport_owner = owner
     future._anthropic_transport_thread = thread
     future._anthropic_turn_session = turn_session

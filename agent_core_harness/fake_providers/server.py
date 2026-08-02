@@ -20,10 +20,12 @@ class FakeProviderHttpServer:
         provider: str,
         script: dict[str, Any] | None,
         request_recorder: list[dict[str, Any]],
+        record_all_headers: bool = False,
     ) -> None:
         self.provider = provider
         self.script = _normalize_script(script)
         self.request_recorder = request_recorder
+        self.record_all_headers = bool(record_all_headers)
         self.counts: dict[str, int] = {}
         self._connections: dict[tuple[str, int], int] = {}
         self._connection_lock = threading.Lock()
@@ -77,11 +79,31 @@ class FakeProviderHttpServer:
                 "method": "POST",
                 "path": handler.path,
                 "connectionId": connection_id,
-                "headers": selected_headers(dict(handler.headers.items())),
+                "headers": (
+                    {str(key).lower(): str(value) for key, value in handler.headers.items()}
+                    if self.record_all_headers
+                    else selected_headers(dict(handler.headers.items()))
+                ),
                 "body": json_safe(parsed_body if parsed_body is not None else raw_body),
             }
+        if self.record_all_headers:
+            record["rawBodyBytes"] = len(raw_body.encode("utf-8"))
         self.request_recorder.append(record)
         response = _select_attempt(self.script, api, attempt)
+        response_factory = response.get("responseFactory")
+        if callable(response_factory):
+            generated = response_factory(
+                {
+                    "api": api,
+                    "attempt": attempt,
+                    "headers": {str(key).lower(): str(value) for key, value in handler.headers.items()},
+                    "body": parsed_body,
+                    "connectionId": connection_id,
+                }
+            )
+            if not isinstance(generated, dict):
+                raise TypeError("Fake provider responseFactory must return an object")
+            response = generated
         setup_delay_ms = int(self.script.get("connectionSetupDelayMs") or 0)
         if first_on_connection and setup_delay_ms > 0:
             time.sleep(setup_delay_ms / 1000)

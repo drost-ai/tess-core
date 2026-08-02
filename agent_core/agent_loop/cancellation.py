@@ -11,31 +11,53 @@ from ..tool_attachments import stripInMemoryImageData as _strip_in_memory_image_
 class _SessionRollbackRecord:
     messageWatermark: int
     messageSource: list[dict[str, Any]]
+    frozenMessages: tuple[dict[str, Any], ...]
     head: dict[str, Any]
 
 
-def _capture_session_rollback(session: dict[str, Any]) -> _SessionRollbackRecord:
-    """Capture rollback authority without cloning immutable message history."""
+def _capture_session_rollback(
+    session: dict[str, Any],
+    previous: _SessionRollbackRecord | None = None,
+) -> _SessionRollbackRecord:
+    """Capture an owned rollback authority with incremental message copying.
+
+    The first boundary of a turn owns a deep copy of the current history.
+    Later append-only boundaries reuse that frozen prefix and copy only the
+    newly appended suffix.  If the live list identity changes (for example,
+    compaction), the record fails safe by taking a new owned copy.
+    """
 
     messages = session.get("messages")
     if not isinstance(messages, list):
         raise TypeError("Session messages must be a list at a stable boundary.")
+    can_extend = (
+        previous is not None
+        and previous.messageSource is messages
+        and len(messages) >= previous.messageWatermark
+    )
+    frozen_messages = (
+        previous.frozenMessages
+        + tuple(copy.deepcopy(messages[previous.messageWatermark :]))
+        if can_extend and previous is not None
+        else tuple(copy.deepcopy(messages))
+    )
     return _SessionRollbackRecord(
         messageWatermark=len(messages),
         messageSource=messages,
+        frozenMessages=frozen_messages,
         head=copy.deepcopy({key: value for key, value in session.items() if key != "messages"}),
     )
 
 
 def _materialize_rollback_snapshot(record: _SessionRollbackRecord) -> dict[str, Any]:
-    if len(record.messageSource) < record.messageWatermark:
-        raise RuntimeError("Stable session message history was truncated behind its rollback watermark.")
+    if len(record.frozenMessages) != record.messageWatermark:
+        raise RuntimeError("Rollback message authority does not match its stable watermark.")
     snapshot = copy.deepcopy(record.head)
     # Media payload removal stays rollback-equivalent to the legacy stable
     # snapshot, but its O(messages) copy is paid only on rollback, not on each
     # successful stable boundary.
     snapshot["messages"] = _strip_in_memory_image_data(
-        record.messageSource[: record.messageWatermark]
+        list(record.frozenMessages)
     )
     return snapshot
 
@@ -90,6 +112,23 @@ def _restore_session_state(
     live_metadata = session.get("metadata") or {}
     snapshot_metadata = snapshot.get("metadata") or {}
     live_compaction_state = live_metadata.get("compactionState")
+    live_transcript_log = live_metadata.get("fullTranscriptLog")
+    snapshot_transcript_log = snapshot_metadata.get("fullTranscriptLog")
+    live_archive_count = (
+        live_transcript_log.get("archivedMessageCount", 0)
+        if isinstance(live_transcript_log, dict)
+        else 0
+    )
+    snapshot_archive_count = (
+        snapshot_transcript_log.get("archivedMessageCount", 0)
+        if isinstance(snapshot_transcript_log, dict)
+        else 0
+    )
+    newer_transcript_log = (
+        copy.deepcopy(live_transcript_log)
+        if live_archive_count > snapshot_archive_count
+        else None
+    )
     newer_compaction_state = (
         copy.deepcopy(live_compaction_state)
         if _is_compaction_state_newer(live_compaction_state, snapshot_metadata.get("compactionState"))
@@ -114,6 +153,8 @@ def _restore_session_state(
         metadata["compactions"] = newer_compaction_count
         if newer_runtime_restore:
             metadata["runtimeRestore"] = newer_runtime_restore
+    if newer_transcript_log:
+        session.setdefault("metadata", {})["fullTranscriptLog"] = newer_transcript_log
 
 def _now() -> str:
     from .._utils import now_iso

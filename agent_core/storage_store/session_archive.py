@@ -23,6 +23,11 @@ def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
             role = entry.get("role")
             if role in ("user", "assistant") and "content" in entry:
                 indexed[entry["message_index"]] = {"role": role, "content": entry["content"]}
+        elif entry.get("type") == "repair" and isinstance(
+            entry.get("truncated_to_message_index"), int
+        ):
+            cutoff = max(0, entry["truncated_to_message_index"])
+            indexed = {index: message for index, message in indexed.items() if index < cutoff}
     return [indexed[index] for index in sorted(indexed)]
 
 

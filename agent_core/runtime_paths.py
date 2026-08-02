@@ -161,11 +161,19 @@ def runWithRuntimePaths(
         scope.__exit__(None, None, None)
         raise
     if inspect.isawaitable(result):
+        # The callable has run under the requested scope, but its awaitable may
+        # be scheduled in a newly-created asyncio Task (notably by
+        # ``asyncio.run`` in the background runtimes).  ContextVar tokens may
+        # only be reset in the Context that created them, so close this scope
+        # before returning and establish a fresh one inside the awaiting Task.
+        scope.__exit__(None, None, None)
+
         async def await_scoped() -> Any:
-            try:
+            async with RuntimePathsScope(
+                paths,
+                immutable=(options or {}).get("immutable", True) is not False,
+            ):
                 return await result
-            finally:
-                scope.__exit__(None, None, None)
 
         return await_scoped()
     scope.__exit__(None, None, None)

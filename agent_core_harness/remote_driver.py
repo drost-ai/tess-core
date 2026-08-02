@@ -150,13 +150,22 @@ async def update_child_agent_status(data: dict[str, Any], _sandbox: ScenarioSand
 
 async def bootstrap_remote_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, config = await ensure_session_config(data, sandbox, state)
-    boot = await core.bootstrapRuntime({"session": session, "config": config, "cwd": str(sandbox.workspace), "enableBridge": True, "bridgeName": data.get("bridgeName") or "qa", "bridgeStartPolling": False})
-    events = state.setdefault("remote_bootstrap_events", [])
-    boot["subscribeEvents"](
-        lambda envelope: events.append(_json_safe(envelope))
-        if not str(envelope.get("event") or "").startswith("task.")
-        else None
+    boot = await core.bootstrapRuntime(
+        {
+            "session": session,
+            "config": config,
+            "cwd": str(sandbox.workspace),
+            "enableBridge": True,
+            "bridgeName": data.get("bridgeName") or "qa",
+            "bridgeStartPolling": False,
+            # Scenario evidence is step-scoped. Background refresh is covered
+            # by task-runtime tests; leaving it live here makes the captured
+            # event set depend on whether the scenario crosses the 1.5s tick.
+            "taskStartTicker": False,
+        }
     )
+    events = state.setdefault("remote_bootstrap_events", [])
+    boot["subscribeEvents"](lambda envelope: events.append(_json_safe(envelope)))
     boot["emitEvent"]("session.activated", core.activeSessionPayload(session, config))
     runtime_state = _json_safe(boot["getState"]())
     record = {"driver": "bootstrap_remote_runtime", "status": "passed", "toolNames": [_tool_name(tool) for tool in boot.get("tools") or [] if _tool_name(tool)], "hasBridge": bool(boot.get("bridge")), "hasCollaboration": bool(boot.get("collaboration")), "hasTasks": bool(boot.get("tasks")), "hasMonitors": bool(boot.get("monitors")), "bridge": runtime_state.get("bridge"), "collaboration": runtime_state.get("collaboration")}

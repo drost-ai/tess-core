@@ -13,6 +13,7 @@ from .performance import (
     runPersistenceBenchmark,
     runRollbackSnapshotBenchmark,
 )
+from .performance_economics import runPersistenceEconomics
 
 LANE_SCHEMA = "agent-core.performance-lane.v1"
 BUDGETS = {
@@ -23,6 +24,8 @@ BUDGETS = {
     "transport.connections_per_turn": {"maximum": 1, "ownerPackage": 45},
     "transport.cancel_to_socket_close_ms": {"maximum": 100.0, "ownerPackage": 45},
     "import.agent_core_ms": {"maximum": 400.0, "ownerPackage": 47},
+    "economics.v2_bytes_ratio": {"maximum": 0.20, "ownerPackage": 46},
+    "economics.v2_recovery_cost_ratio": {"maximum": 4.0, "ownerPackage": 46},
 }
 
 
@@ -45,12 +48,19 @@ def runPerformanceLane(*, inject_regression: bool = False, quick: bool = False) 
         connection_setup_delay_ms=20 if quick else 80,
     )
     cache = runCacheEconomicLane()
-    measurements = _measurements(persistence, rollback, transport)
+    economics = runPersistenceEconomics(
+        message_count=5_000,
+        # Recovery economics are dominated by parser shape; retain the qualified
+        # 1.5 KiB record class even in the latency-shortened quick lane.
+        content_bytes=1_536,
+        samples=1 if quick else 3,
+    )
+    measurements = _measurements(persistence, rollback, transport, economics)
     if inject_regression:
         measurements = {key: value * 2 for key, value in measurements.items()}
     regressions = _evaluate(measurements)
     regressions.extend(cache["regressions"])
-    functional_gates = _functional_gates(persistence)
+    functional_gates = _functional_gates(persistence, economics)
     regressions.extend(
         {
             "metric": f"persistence.{gate['messageCount']}.{check}",
@@ -70,7 +80,7 @@ def runPerformanceLane(*, inject_regression: bool = False, quick: bool = False) 
         "measurementPolicy": {
             "functional": "exact observed calls, physical writes, and bytes",
             "elapsed": "hard budgets apply to the recorded runner class without CPU normalization",
-            "cache": "existing per-TTL usage fields over a deterministic fake ledger",
+            "cache": "production Anthropic wire requests and parsed per-TTL usage over a deterministic loopback provider",
         },
         "injectedRegression": inject_regression,
         "budgets": BUDGETS,
@@ -78,6 +88,7 @@ def runPerformanceLane(*, inject_regression: bool = False, quick: bool = False) 
         "regressions": regressions,
         "functionalGates": functional_gates,
         "cacheEconomics": cache,
+        "persistenceEconomics": economics,
     }
 
 
@@ -92,11 +103,13 @@ def _measurements(
     persistence: dict[str, Any],
     rollback: dict[str, Any],
     transport: dict[str, Any],
+    economics: dict[str, Any],
 ) -> dict[str, float]:
     series = {item["messageCount"]: item for item in persistence["series"]}
     rollback_row = rollback["series"][0]
     after = transport["beforeAfter"]["after"]
     cancel = transport["cancellation"]
+    economics_comparison = economics["schemaPrototypeEconomics"]["comparison"]
     return {
         "persistence.1000.elapsed_ms_per_call": series[1_000]["median"]["wallElapsedNs"] / 1_000_000,
         "persistence.5000.elapsed_ms_per_call": series[5_000]["median"]["wallElapsedNs"] / 1_000_000,
@@ -105,10 +118,14 @@ def _measurements(
         "transport.connections_per_turn": float(after["connectionCountMedian"]),
         "transport.cancel_to_socket_close_ms": float(cancel["after"]["cancelToSettlementMs"]),
         "import.agent_core_ms": _import_time_ms(),
+        "economics.v2_bytes_ratio": 1.0 - float(economics_comparison["byteReductionRatio"]),
+        "economics.v2_recovery_cost_ratio": float(economics_comparison["recoveryCostRatio"]),
     }
 
 
-def _functional_gates(persistence: dict[str, Any]) -> list[dict[str, Any]]:
+def _functional_gates(
+    persistence: dict[str, Any], economics: dict[str, Any]
+) -> list[dict[str, Any]]:
     gates = []
     for row in persistence["series"]:
         median = row["median"]
@@ -117,7 +134,7 @@ def _functional_gates(persistence: dict[str, Any]) -> list[dict[str, Any]]:
             "persistFinishedCount": median["persistFinishedCount"] == 1,
             "storageWriteCount": median["storageWriteCount"] == 1,
             "storageAppendCount": median["storageAppendCount"] == 0,
-            "storageBytesPositive": median["storageBytes"] > 0,
+            "storageBytesExact": median["storageBytes"] == row["serializedSessionBytesMedian"],
         }
         gates.append(
             {
@@ -126,6 +143,15 @@ def _functional_gates(persistence: dict[str, Any]) -> list[dict[str, Any]]:
                 "checks": checks,
             }
         )
+    economics_checks = dict(economics["decisionGates"])
+    gates.append(
+        {
+            "messageCount": economics["parameters"]["messageCount"],
+            "scope": "representative-and-v2-prototype",
+            "status": "passed" if all(economics_checks.values()) else "failed",
+            "checks": economics_checks,
+        }
+    )
     return gates
 
 

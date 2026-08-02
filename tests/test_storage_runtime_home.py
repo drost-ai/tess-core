@@ -2,12 +2,30 @@ from __future__ import annotations
 
 import asyncio
 import json
+import tempfile
+from pathlib import Path
 
 import agent_core as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
 class RuntimeHomeScopeTests(AgentCoreTestCase):
+    def test_git_root_walk_handles_repository_and_worktree_markers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repository = root / "repository"
+            nested = repository / "a" / "b"
+            nested.mkdir(parents=True)
+            (repository / ".git").mkdir()
+            self.assertEqual(core.findGitRoot(str(nested)), str(repository.resolve()))
+
+            worktree = root / "worktree"
+            child = worktree / "src"
+            child.mkdir(parents=True)
+            (worktree / ".git").write_text("gitdir: ../repository/.git/worktrees/test\n")
+            self.assertEqual(core.findGitRoot(str(child)), str(worktree.resolve()))
+            self.assertIsNone(core.findGitRoot(str(root / "outside")))
+
     def test_scoped_runtime_home_restores_global_home(self):
         root, home, workspace, previous = self.temp_context()
         try:

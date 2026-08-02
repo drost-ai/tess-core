@@ -93,7 +93,7 @@ def _cell(provider: str, state: str, fault: str) -> dict[str, Any]:
         }
     else:
         disposition = "crash_lane" if fault == "F14" else "adapter_probe"
-        verdict = _expected_verdict(state, fault)
+        verdict = _expected_verdict(provider, state, fault)
     return {
         "id": f"{provider}.{state.lower()}.{fault.lower()}",
         "providerFamily": provider,
@@ -111,8 +111,16 @@ def _impossible_reason(provider: str, state: str, fault: str) -> str | None:
     state_index = int(state[1:])
     if fault in {"F7", "F8", "F9"} and state_index >= 2:
         return "An HTTP status is settled before response headers and cannot first occur in this stream state."
-    if fault in {"F10", "F11", "F12"} and state_index < 7:
-        return "This terminal-response shape cannot be known before the pre-terminal state."
+    if fault in {"F3", "F4"} and (state_index < 2 or state_index >= 9):
+        return "Malformed response bytes require headers and cannot invalidate an already committed terminal response."
+    if fault in {"F5", "F6"} and state_index >= 9:
+        return "Pacing or silence after a committed terminal response cannot invalidate that response."
+    if fault == "F10" and state != "S2":
+        return "An empty body is observed only after headers and before any response frame."
+    if fault == "F11" and state != "S9":
+        return "A duplicate terminal can only arrive after the first terminal has committed."
+    if fault == "F12" and state not in {"S7", "S8"}:
+        return "Usage omission is a property of the terminal transition from a pre-terminal state."
     if provider == "openai_responses" and fault == "F3":
         return "The SDK adapter yields decoded events; malformed SSE bytes are below this adapter boundary."
     if provider == "openai_responses" and fault == "F5":
@@ -120,17 +128,20 @@ def _impossible_reason(provider: str, state: str, fault: str) -> str | None:
     return None
 
 
-def _expected_verdict(state: str, fault: str) -> dict[str, Any]:
+def _expected_verdict(provider: str, state: str, fault: str) -> dict[str, Any]:
     output = _has_output(state)
     tool = _has_tool(state)
-    if fault == "F12":
+    if fault == "F12" or (fault == "F11" and provider == "anthropic_messages_sse"):
         return {
             "classification": "success",
             "retry": False,
             "hadAssistantOutput": output,
             "hadToolUse": tool,
             "sessionIntegrity": "terminal_committed_usage_optional",
-            "eventSequence": [],
+            "eventSequence": [
+                "provider.request_preflight",
+                "provider.response_completed",
+            ],
         }
     categories = {
         "F1": "transport",
@@ -147,11 +158,22 @@ def _expected_verdict(state: str, fault: str) -> dict[str, Any]:
         "F13": "cancelled",
         "F14": "process_terminated",
     }
-    retryable = fault in {"F1", "F2", "F5", "F6", "F7", "F8", "F9"}
+    retryable = fault in {"F1", "F2", "F5", "F6", "F7", "F8", "F9", "F10"}
+    # The OpenAI SDK surfaces a decoded-event failure at this boundary and its
+    # recovery adapter explicitly treats an output-free truncated event as a
+    # reconstructable attempt. Anthropic's byte parser classifies the same wire
+    # shape as a non-retryable protocol failure.
+    if provider == "openai_responses" and fault == "F4":
+        retryable = True
     retry = retryable and not output and not tool
-    events = ["provider.retrying"] if retry else []
-    if fault == "F13":
-        events = ["turn.cancelled"]
+    events = (
+        []
+        if fault == "F14"
+        else [
+            "provider.request_preflight",
+            "turn.cancelled" if fault == "F13" else "provider.failed",
+        ]
+    )
     return {
         "classification": categories[fault],
         "retry": retry,
@@ -172,11 +194,11 @@ def _has_tool(state: str) -> bool:
 
 def _session_integrity(state: str, fault: str) -> str:
     if fault == "F14":
-        return "restart_repair_no_duplicate_reconciliation"
+        return "restart_reload_idempotent_stable_boundary"
     if _has_tool(state):
         return "no_orphaned_tool_use"
     if _has_output(state):
-        return "partial_preview_preserved_no_retry"
+        return "partial_output_not_injected_canonical_no_retry"
     return "no_partial_output_revision_consistent"
 
 

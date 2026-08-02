@@ -50,7 +50,7 @@ async def recover_openai_attempt(
         phase=phase,
         attempt=attempt,
         hadAssistantOutput=had_output,
-        hadToolUse=had_tool_use,
+        hadToolUse=had_tool_use or had_provisional_tool_call,
     )
     attach_openai_failure_lineage(
         failure,
@@ -100,7 +100,14 @@ async def recover_openai_attempt(
             )
     if can_retry:
         delay_ms = openai_retry_delay_ms(args, attempt, retry_delay)
-        _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
+        _raise_openai_cancelled(
+            runtime,
+            provider_label,
+            phase,
+            attempt,
+            had_output,
+            had_tool_use or had_provisional_tool_call,
+        )
         _emit(
             runtime,
             "provider.retrying",
@@ -119,7 +126,12 @@ async def recover_openai_attempt(
         )
         await asyncio.sleep(delay_ms / 1_000)
         _raise_openai_cancelled(
-            runtime, provider_label, phase, attempt, had_output, had_tool_use
+            runtime,
+            provider_label,
+            phase,
+            attempt,
+            had_output,
+            had_tool_use or had_provisional_tool_call,
         )
         return failure, True
     if (emitted_text or reasoning_text) and mode == "codex":

@@ -4,6 +4,57 @@ from tests.support.agent_core_case import *
 
 
 class AgentLoopCancellationTests(AgentCoreTestCase):
+    def test_first_turn_cancellation_clears_the_already_persisted_prompt(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = {
+                "cwd": str(workspace),
+                "runtimeHome": str(home),
+                "allowedRoots": [str(workspace)],
+                "agents": {},
+                "provider": "openai",
+                "providerKind": "openai",
+                "providerProfileName": "test",
+                "providerProfile": {"kind": "openai", "name": "test", "maxContextLength": 100_000, "maxOutputTokens": 4_096},
+                "providerProfiles": {},
+                "openaiApiMode": "responses",
+                "model": "gpt-5.4",
+                "effort": "medium",
+                "systemPrompt": "test",
+                "tools": [],
+                "allowedTools": [],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": True,
+            }
+            session = core.createEmptySession(
+                cwd=str(workspace), provider="openai", model="gpt-5.4",
+                systemPrompt="test", permissionMode="bypassPermissions",
+                sessionId="cancelled-first-turn",
+            )
+            signal = SimpleNamespace(aborted=False, reason=None)
+
+            async def send(_request):
+                signal.aborted = True
+                error = RuntimeError("provider aborted")
+                error.name = "AbortError"
+                signal.reason = error
+                raise error
+
+            result = run(core.runAgentPrompt(
+                session=session,
+                config=config,
+                runtime=bind_test_runtime(session, {"abortSignal": signal, "tools": []}),
+                prompt="do not retain me",
+                providerOverride={"send": send},
+            ))
+            restored = run(core.loadSession(session["id"]))
+            self.assertEqual(result["stopReason"], "cancelled")
+            self.assertEqual(session["messages"], [])
+            self.assertEqual(restored["messages"], [])
+        finally:
+            self.restore_home(root, previous)
+
     def test_run_agent_prompt_cancels_turn_and_restores_session(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-cancel-") as cwd:
             config = {

@@ -295,18 +295,90 @@ async def writeJsonFile(filePath: str, value: Any) -> None:
 def _append_json_line_sync(file_path: str, value: Any) -> None:
     measure = _persistence_observers_active()
     started_ns = _time.perf_counter_ns() if measure else 0
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    directory = os.path.dirname(file_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     previous_size = os.path.getsize(file_path) if measure and os.path.exists(file_path) else 0
+    # json.dump may issue many small writes.  Serialize before opening the
+    # append handle so one record is emitted with one write while the record
+    # transaction is held.
+    encoded = json.dumps(value, ensure_ascii=False) + "\n"
     with open(file_path, "a", encoding="utf-8") as handle:
-        json.dump(value, handle, ensure_ascii=False)
-        handle.write("\n")
+        handle.write(encoded)
     if measure:
         byte_count = os.path.getsize(file_path) - previous_size
         _record_persistence_io("append", file_path, byte_count, _time.perf_counter_ns() - started_ns)
 
 
 async def appendJsonLine(filePath: str, value: Any) -> None:
-    await _run_storage_io(_append_json_line_sync, filePath, value)
+    path = os.path.abspath(filePath)
+    async with withRecordTransaction("jsonl", path):
+        await _run_storage_io(_append_json_line_sync, path, value)
+
+
+def _read_json_lines_sync(file_path: str) -> list[dict[str, Any]]:
+    try:
+        with open(file_path, "r", encoding="utf-8") as handle:
+            lines = handle.readlines()
+    except FileNotFoundError:
+        return []
+    records: list[dict[str, Any]] = []
+    for line in lines:
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            # Preserve the historical tolerant-reader contract for records
+            # written by older runtimes.
+            continue
+        if isinstance(value, dict):
+            records.append(value)
+    return records
+
+
+async def readJsonLines(filePath: str) -> list[dict[str, Any]]:
+    path = os.path.abspath(filePath)
+    async with withRecordTransaction("jsonl", path):
+        return await _run_storage_io(_read_json_lines_sync, path)
+
+
+def _write_json_lines_sync(file_path: str, records: list[dict[str, Any]]) -> None:
+    measure = _persistence_observers_active()
+    started_ns = _time.perf_counter_ns() if measure else 0
+    directory = os.path.dirname(file_path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    tmp = f"{file_path}.{os.getpid()}.{uuid.uuid4()}.tmp"
+    encoded = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records)
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(encoded)
+    byte_count = os.path.getsize(tmp) if measure else 0
+    os.replace(tmp, file_path)
+    if measure:
+        _record_persistence_io("write", file_path, byte_count, _time.perf_counter_ns() - started_ns)
+
+
+async def mutateJsonLines(filePath: str, mutate: Callable[[list[dict[str, Any]]], Any]) -> Any:
+    """Atomically read, mutate, and rewrite one JSONL record.
+
+    The callback returns ``{'records': ..., 'result': ..., 'changed': bool}``.
+    The transaction is shared with :func:`appendJsonLine`, including across
+    processes, so an append cannot be lost behind a concurrent rewrite.
+    """
+
+    path = os.path.abspath(filePath)
+    async with withRecordTransaction("jsonl", path):
+        records = await _run_storage_io(_read_json_lines_sync, path)
+        mutation = mutate(records)
+        if hasattr(mutation, "__await__"):
+            mutation = await mutation
+        if not isinstance(mutation, dict) or not {"records", "result", "changed"} <= mutation.keys():
+            raise TypeError("JSONL mutation must return records, result, and changed.")
+        updated = mutation["records"]
+        if not isinstance(updated, list) or not all(isinstance(item, dict) for item in updated):
+            raise TypeError("JSONL mutation records must be a list of objects.")
+        if bool(mutation["changed"]):
+            await _run_storage_io(_write_json_lines_sync, path, updated)
+        return mutation["result"]
 
 def parseJsonString(value: str | None) -> Any:
     if not value:
@@ -372,6 +444,8 @@ def _clear_auth_sync(auth_path: str) -> None:
 read_json_file = readJsonFile
 write_json_file = writeJsonFile
 append_json_line = appendJsonLine
+read_json_lines = readJsonLines
+mutate_json_lines = mutateJsonLines
 mutate_json_file = mutateJsonFile
 mutate_json_record = mutateJsonRecord
 file_lock = fileLock

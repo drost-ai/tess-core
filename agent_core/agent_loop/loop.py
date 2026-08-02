@@ -130,7 +130,14 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
 
     async def cancel_turn() -> dict[str, Any]:
         _restore_session_state(session, last_stable_snapshot)
-        await persistSession(session, config)
+        # The prompt may already have been committed. A first-turn rollback
+        # legitimately restores an empty transcript, so bypass the normal
+        # "do not create empty sessions" optimization for this write-back.
+        await persistSession(
+            session,
+            config,
+            {"force": True, "truncateTranscript": True},
+        )
         _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": active_model, "partial_text": "\n\n".join(text_parts).strip()})
         return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "cancelled"}
 
@@ -241,7 +248,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             prepared_request=prepared_request,
             call_index=provider_call_index,
         )
-        session["messages"] = _strip_in_memory_image_data(session["messages"])
+        session["messages"][:] = _strip_in_memory_image_data(session["messages"])
         session["messages"].append({"role": "assistant", "content": response["content"]})
         merge_usage(total_usage, response.get("usage") or {})
         _merge_usage_into_session(session, response.get("usage") or {})
@@ -479,7 +486,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             provider_call_index=provider_call_index,
         )
         await persistSession(session, config)
-        last_stable_snapshot = _capture_session_rollback(session)
+        last_stable_snapshot = _capture_session_rollback(session, last_stable_snapshot)
         if paused_for_approval:
             if paused_message:
                 text_parts.append(paused_message)

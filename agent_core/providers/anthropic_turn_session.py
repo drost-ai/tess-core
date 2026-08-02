@@ -6,7 +6,7 @@ import threading
 from typing import Any
 
 from ..provider_turn_session import ProviderTurnSession
-from .anthropic_http_transport import AnthropicHttpConnectionOwner
+from .anthropic_async_transport import AnthropicAsyncHttpConnectionOwner
 
 
 class AnthropicProviderTurnSession(ProviderTurnSession):
@@ -20,7 +20,7 @@ class AnthropicProviderTurnSession(ProviderTurnSession):
         }
         self.keep_alive_enabled = capabilities.get("anthropicHttpKeepAlive") is True
         self._fallback_latched = False
-        self._connection_owner: AnthropicHttpConnectionOwner | None = None
+        self._connection_owner: AnthropicAsyncHttpConnectionOwner | None = None
         self._workers: set[threading.Thread] = set()
         self._workers_lock = threading.Lock()
         self._telemetry = {
@@ -35,11 +35,11 @@ class AnthropicProviderTurnSession(ProviderTurnSession):
             "threadLeaks": 0,
         }
 
-    def acquire_anthropic_transport(self) -> AnthropicHttpConnectionOwner:
+    def acquire_anthropic_transport(self) -> AnthropicAsyncHttpConnectionOwner:
         if not self.keep_alive_enabled or self._fallback_latched:
-            return AnthropicHttpConnectionOwner(observe=self._observe_transport)
+            return AnthropicAsyncHttpConnectionOwner(observe=self._observe_transport)
         if self._connection_owner is None:
-            self._connection_owner = AnthropicHttpConnectionOwner(
+            self._connection_owner = AnthropicAsyncHttpConnectionOwner(
                 keep_alive=True,
                 observe=self._observe_transport,
             )

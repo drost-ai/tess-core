@@ -63,10 +63,41 @@ async def runStorageIo(
     try:
         return await asyncio.shield(future)
     except asyncio.CancelledError:
-        result = await asyncio.shield(future)
-        if cancelCleanup is not None:
-            await runStorageIo(cancelCleanup, result)
-        raise
+        # A caller may be cancelled repeatedly while the filesystem operation
+        # is settling.  Once cancellation has won, no later worker or cleanup
+        # exception is allowed to replace it at the public call boundary.
+        operation_succeeded = False
+        result: _Result | None = None
+        while True:
+            try:
+                result = await asyncio.shield(future)
+                operation_succeeded = True
+                break
+            except asyncio.CancelledError:
+                continue
+            except BaseException:
+                break
+
+        if operation_succeeded and cancelCleanup is not None:
+            cleanup_context = contextvars.copy_context()
+            cleanup_call = partial(cancelCleanup, result)
+            cleanup_future = loop.run_in_executor(
+                _STORAGE_EXECUTOR,
+                _run_in_context,
+                cleanup_context,
+                cleanup_call,
+            )
+            while True:
+                try:
+                    await asyncio.shield(cleanup_future)
+                    break
+                except asyncio.CancelledError:
+                    continue
+                except BaseException:
+                    # The original cancellation remains authoritative.  The
+                    # cleanup has nevertheless reached worker settlement.
+                    break
+        raise asyncio.CancelledError from None
 
 
 def storageExecutorSnapshot() -> dict[str, int]:

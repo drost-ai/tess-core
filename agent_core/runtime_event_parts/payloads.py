@@ -75,6 +75,19 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "omittedItemCount": _optional_number(_field(data, "omitted_item_count", "omittedItemCount")),
             "itemsTruncated": _optional_boolean(_field(data, "items_truncated", "itemsTruncated")),
         }
+    if event == "tool.result_budget":
+        return event, {
+            "effectiveResultBudgetBytes": _optional_number(_field(data, "effective_result_budget_bytes", "effectiveResultBudgetBytes")),
+            "batchBudgetBytes": _optional_number(_field(data, "batch_budget_bytes", "batchBudgetBytes")),
+            "batchUsedBytes": _optional_number(_field(data, "batch_used_bytes", "batchUsedBytes")),
+            "originalBytes": _optional_number(
+                _field(data, "original_bytes", "originalBytes")
+            ),
+            "finalBytes": _optional_number(_field(data, "final_bytes", "finalBytes")),
+            "truncatedResultCount": _optional_number(
+                _field(data, "truncated_result_count", "truncatedResultCount")
+            ),
+        }
     if event == "context.raw_pressure":
         return "context.raw_pressure", {
             "rawTokenEstimate": _optional_number(_field(data, "raw_token_estimate", "rawTokenEstimate")),

@@ -65,19 +65,23 @@ def getStateRoot() -> str:
     return getActiveRuntimePaths().home
 
 def findGitRoot(cwd: str) -> str | None:
+    """Resolve the nearest worktree root without spawning ``git``.
+
+    Git represents ordinary repositories with a ``.git`` directory and linked
+    worktrees/submodules with a ``.git`` file. Walking parents is both more
+    responsive on the agent hot path and observes newly-created repositories
+    without a process-lifetime negative cache.
+    """
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=cwd,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-        value = result.stdout.strip()
-        return value or None
-    except Exception:
+        current = Path(cwd).resolve(strict=False)
+        if not current.is_dir():
+            current = current.parent
+        for candidate in (current, *current.parents):
+            if (candidate / ".git").exists():
+                return str(candidate)
+    except (OSError, RuntimeError):
         return None
+    return None
 
 def getProjectRoot(cwd: str) -> str:
     return findGitRoot(cwd) or cwd

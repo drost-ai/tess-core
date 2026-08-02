@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 from agent_core.provider_turn_session import createProviderTurnSession
 from agent_core.provider_watchdog import AbortSignal
 from agent_core.providers.anthropic_http_transport import (
@@ -54,6 +57,60 @@ async def _send(config, runtime, turn, **kwargs):
 
 
 class Package45CancellationTests(unittest.TestCase):
+    def test_cancel_during_dns_settles_without_non_daemon_transport_worker(self):
+        async def exercise():
+            import agent_core.providers.anthropic_async_transport as transport_module
+
+            started = threading.Event()
+            release = threading.Event()
+            original = transport_module.socket.getaddrinfo
+
+            def blocked_dns(*args, **kwargs):
+                started.set()
+                release.wait(timeout=5)
+                return original("127.0.0.1", 9, type=transport_module.socket.SOCK_STREAM)
+
+            signal = AbortSignal()
+            runtime = {
+                "abortSignal": signal,
+                "emitEvent": lambda *_: None,
+            }
+            config = {
+                "provider": "anthropic",
+                "anthropicBaseUrl": "http://package45-blocked.invalid/v1",
+                "apiKey": "package45-key",
+                "customHeaders": {},
+                "providerCapabilities": {"anthropicHttpKeepAlive": True},
+            }
+            turn = _turn(config, runtime, "dns-cancel")
+            try:
+                with mock.patch.object(transport_module.socket, "getaddrinfo", blocked_dns):
+                    task = asyncio.create_task(_send(config, runtime, turn))
+                    while not started.is_set():
+                        await asyncio.sleep(0)
+                    cancelled_at = time.perf_counter()
+                    signal.abort()
+                    with self.assertRaises(core.ProviderRequestError) as ctx:
+                        await asyncio.wait_for(task, timeout=0.25)
+                    elapsed_ms = (time.perf_counter() - cancelled_at) * 1_000
+                    resolver_threads = [
+                        thread
+                        for thread in threading.enumerate()
+                        if thread.name == "agent-core-anthropic-dns"
+                    ]
+            finally:
+                release.set()
+                await turn.close()
+            return ctx.exception.record, elapsed_ms, resolver_threads, turn.transport_telemetry()
+
+        record, elapsed_ms, resolver_threads, telemetry = run(exercise())
+        self.assertEqual(record["category"], "cancelled")
+        self.assertLess(elapsed_ms, 50)
+        self.assertTrue(resolver_threads)
+        self.assertTrue(all(thread.daemon for thread in resolver_threads))
+        self.assertEqual(activeAnthropicTransportThreadCount(), 0)
+        self.assertEqual(telemetry["threadsStarted"], 0)
+
     def test_cancel_closes_socket_settles_worker_and_preserves_verdict(self):
         async def exercise():
             requests = []
@@ -223,7 +280,10 @@ class Package45KeepAliveTests(unittest.TestCase):
         async def exercise(enabled):
             requests = []
             server = FakeProviderHttpServer(
-                provider="anthropic", script={}, request_recorder=requests
+                provider="anthropic",
+                script={},
+                request_recorder=requests,
+                record_all_headers=True,
             ).start()
             runtime = {"emitEvent": lambda *_: None}
             config = _config(server, keep_alive=enabled)
@@ -239,8 +299,91 @@ class Package45KeepAliveTests(unittest.TestCase):
         self.assertEqual(len({item["connectionId"] for item in fresh}), 2)
         self.assertEqual(len({item["connectionId"] for item in reused}), 1)
         self.assertEqual(fresh[0]["body"], reused[0]["body"])
-        self.assertEqual(fresh[0]["headers"], reused[0]["headers"])
+        fresh_headers = {key: value for key, value in fresh[0]["headers"].items() if key not in {"connection", "host"}}
+        reused_headers = {key: value for key, value in reused[0]["headers"].items() if key not in {"connection", "host"}}
+        self.assertEqual(fresh_headers, reused_headers)
+        self.assertEqual(fresh[0]["headers"]["x-package"], "45")
+        self.assertEqual(fresh[0]["headers"]["host"], fresh[1]["headers"]["host"])
+        self.assertTrue(fresh[0]["headers"]["host"].startswith("127.0.0.1:"))
+        self.assertEqual(int(fresh[0]["headers"]["content-length"]), fresh[0]["rawBodyBytes"])
         self.assertEqual(fresh[0]["path"], reused[0]["path"])
+
+    def test_environment_http_proxy_receives_full_wire_request(self):
+        requests = []
+
+        class ProxyHandler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *_args):
+                return
+
+            def do_POST(self):
+                length = int(self.headers.get("content-length") or 0)
+                body = self.rfile.read(length)
+                requests.append(
+                    {
+                        "path": self.path,
+                        "headers": {key.lower(): value for key, value in self.headers.items()},
+                        "body": json.loads(body),
+                    }
+                )
+                response = json.dumps(
+                    {
+                        "model": "claude-sonnet-4-6",
+                        "content": [{"type": "text", "text": "via proxy"}],
+                        "usage": {"input_tokens": 1, "output_tokens": 1},
+                        "stop_reason": "end_turn",
+                    }
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+
+        proxy = ThreadingHTTPServer(("127.0.0.1", 0), ProxyHandler)
+        proxy.daemon_threads = True
+        thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        thread.start()
+        proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
+
+        async def exercise():
+            config = {
+                "provider": "anthropic",
+                "anthropicBaseUrl": "http://package45-target.invalid:8123/v1",
+                "apiKey": "package45-key",
+                "customHeaders": {"x-package": "45"},
+                "providerCapabilities": {"anthropicHttpKeepAlive": False},
+            }
+            runtime = {"emitEvent": lambda *_: None}
+            turn = _turn(config, runtime, "proxy")
+            try:
+                return await _send(config, runtime, turn)
+            finally:
+                await turn.close()
+
+        try:
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "http_proxy": proxy_url,
+                    "HTTP_PROXY": proxy_url,
+                    "no_proxy": "",
+                    "NO_PROXY": "",
+                },
+                clear=False,
+            ):
+                response = run(exercise())
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            thread.join(timeout=1)
+
+        self.assertEqual(response["content"][0]["text"], "via proxy")
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0]["path"], "http://package45-target.invalid:8123/v1/messages?beta=true")
+        self.assertEqual(requests[0]["headers"]["host"], "package45-target.invalid:8123")
+        self.assertEqual(requests[0]["headers"]["x-package"], "45")
 
     def test_stale_connection_latches_one_way_fallback(self):
         async def exercise():

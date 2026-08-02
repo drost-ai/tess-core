@@ -20,6 +20,18 @@ from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
 class RuntimePathsLifecycleTests(AgentCoreTestCase):
+    def test_async_scope_can_be_created_before_asyncio_run(self):
+        paths = resolveRuntimePaths(candidate="/tmp/agent-core-runtime-paths-task")
+
+        async def read_active_home():
+            await asyncio.sleep(0)
+            return getActiveRuntimePaths().home
+
+        pending = runWithRuntimePaths(paths, read_active_home)
+        self.assertNotEqual(getActiveRuntimePaths().home, paths.home)
+        self.assertEqual(asyncio.run(pending), paths.home)
+        self.assertNotEqual(getActiveRuntimePaths().home, paths.home)
+
     def test_runtime_paths_resolve_one_frozen_complete_graph(self):
         paths = resolveRuntimePaths("/workspace", "relative-runtime")
         with self.assertRaises(Exception):

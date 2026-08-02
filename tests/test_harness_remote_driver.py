@@ -29,6 +29,10 @@ class HarnessRemoteDriverTests(AgentCoreTestCase):
             self.assertTrue(bootstrap["hasBridge"])
             self.assertTrue(bootstrap["hasCollaboration"])
             self.assertIn("Agent", bootstrap["toolNames"])
+            self.assertEqual(
+                [event["event"] for event in observations["remote_bootstrap_events"]],
+                ["session.activated"],
+            )
             self.assertEqual(observations["remote_runtime_state"]["bridge"]["lastEventName"], "remote.status_changed")
 
     def test_committed_remote_bridge_collaboration_golden_compares(self):

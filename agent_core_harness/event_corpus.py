@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -7,7 +8,9 @@ from typing import Any
 
 import agent_core as core
 
-from .paths import DEFAULT_GOLDENS_DIR, REPO_ROOT
+from .fake_providers import FakeProviderRuntime
+from .paths import REPO_ROOT
+from .runtime_bindings import bind_agent_runtime
 
 CORPUS_SCHEMA = "agent-core.event-corpus.v1"
 DEFAULT_CORPUS_DIR = REPO_ROOT / "fixtures" / "event-corpus"
@@ -27,11 +30,8 @@ def exportEventCorpus(output_dir: str | Path = DEFAULT_CORPUS_DIR) -> dict[str, 
         "generator": "python -m agent_core_harness export-event-corpus",
         "contractCount": len(contracts),
         "contracts": files,
-        "consumptionTargets": [
-            {"port": "typescript", "package": "25", "gate": "3"},
-            {"port": "rust", "package": "16", "gate": "3"},
-            {"port": "go", "package": "10", "gate": "2"},
-        ],
+        "consumerAcknowledgements": [],
+        "consumerStatus": "unacknowledged",
     }
     _write_json(target / "manifest.json", manifest)
     return manifest
@@ -60,47 +60,37 @@ def verifyEventCorpus(corpus_dir: str | Path = DEFAULT_CORPUS_DIR) -> dict[str, 
 
 
 def _contracts() -> list[dict[str, Any]]:
-    provider_events = _read_events(
-        DEFAULT_GOLDENS_DIR / "providers.fake-provider-pack" / "families" / "provider_events.json"
-    )
-    runtime_events = _read_events(
-        DEFAULT_GOLDENS_DIR / "runtime.runtime-tool-pack" / "families" / "runtime_events.json"
-    )
+    captured = asyncio.run(_capture_isolated_events())
     return [
         _contract(
             "preflight-admission",
-            _select(runtime_events, {"provider.request_preflight"}, limit=1),
-            "runtime.runtime-tool-pack/provider.request_preflight",
+            captured["preflight"],
+            "isolated:runAgentPrompt/preflight",
         ),
         _contract(
             "partial-output",
-            _select(provider_events, {"provider.stream_event", "message.assistant.partial"}),
-            "providers.fake-provider-pack/openai-responses",
+            captured["partial"],
+            "isolated:FakeProviderRuntime/openai-partial",
         ),
         _contract(
             "recovery-retry",
-            _select(provider_events, {"provider.request_started", "provider.retrying", "provider.recovered"}),
-            "providers.fake-provider-pack/retry-attempt-lineage",
+            captured["recovery"],
+            "isolated:FakeProviderRuntime/openai-recovery",
         ),
         _contract(
             "no-progress-ledger",
-            [_runtime_event("agent.no_progress", _no_progress_data())],
-            "agent_core.agent_loop.progress/noProgressEventData",
+            captured["no_progress"],
+            "isolated:runAgentPrompt/no-progress",
         ),
         _contract(
             "result-budgets",
-            [_runtime_event("tool.result_budget", _result_budget_data())],
-            "agent_core.agent_loop.tool_result_budget/ToolResultBatchBudget.record",
+            captured["result_budget"],
+            "isolated:runAgentPrompt/result-budget",
         ),
         _contract(
             "turn-sessions",
-            [
-                _runtime_event("turn.started", {"session_id": "session", "prompt": "work"}),
-                _runtime_event("turn.cancelling", {"session_id": "session"}),
-                _runtime_event("turn.cancelled", {"session_id": "session", "partial_text": "partial"}),
-                _runtime_event("turn.completed", {"session_id": "session", "stop_reason": "end_turn", "model": "model"}),
-            ],
-            "agent_core.session_runtime/SessionRuntime",
+            captured["turn_sessions"],
+            "isolated:createSessionRuntimeController/cancelled+completed",
         ),
     ]
 
@@ -117,51 +107,256 @@ def _contract(identifier: str, events: list[dict[str, Any]], source: str) -> dic
                 "dataKeys": sorted((event.get("data") or {}).keys()),
                 "typedKind": (event.get("typedEvent") or {}).get("kind"),
                 "payloadKeys": sorted(((event.get("typedEvent") or {}).get("payload") or {}).keys()),
+                "scenario": event.get("scenario"),
             }
             for index, event in enumerate(events)
         ],
     }
 
 
-def _read_events(path: Path) -> list[dict[str, Any]]:
-    value = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(value, list):
-        raise ValueError(f"Event source must be a list: {path}")
-    return [item for item in value if isinstance(item, dict) and isinstance(item.get("event"), str)]
-
-
-def _select(events: list[dict[str, Any]], names: set[str], *, limit: int | None = None) -> list[dict[str, Any]]:
-    selected = [event for event in events if event["event"] in names]
-    return selected[:limit] if limit is not None else selected
-
-
-def _runtime_event(event: str, data: dict[str, Any]) -> dict[str, Any]:
+def _runtime_event(event: str, data: dict[str, Any], *, scenario: str) -> dict[str, Any]:
     typed = core.createRuntimeEvent({"event": event, "data": data, "createdAt": "<timestamp>"})
-    return {"event": event, "data": data, "typedEvent": typed}
+    return {"event": event, "data": data, "typedEvent": typed, "scenario": scenario}
 
 
-def _no_progress_data() -> dict[str, Any]:
+async def _capture_isolated_events() -> dict[str, list[dict[str, Any]]]:
     return {
-        "session_id": "session",
-        "logical_turn_id": "turn",
-        "reason": "repeated_tool_cycle",
-        "artifact_id": "artifact",
-        "cycle_fingerprint": "fingerprint",
-        "provider_call_index": 4,
-        "tool_batch_index": 3,
-        "consecutive_no_progress": 3,
-        "recovered_terminal": False,
+        "preflight": await _capture_agent_loop_scenario("preflight"),
+        "partial": await _capture_provider_partial(),
+        "recovery": await _capture_provider_recovery(),
+        "no_progress": await _capture_agent_loop_scenario("no_progress"),
+        "result_budget": await _capture_agent_loop_scenario("result_budget"),
+        "turn_sessions": _capture_turn_sessions(),
     }
 
 
-def _result_budget_data() -> dict[str, Any]:
+async def _capture_agent_loop_scenario(kind: str) -> list[dict[str, Any]]:
+    with tempfile.TemporaryDirectory(prefix=f"agent-core-event-{kind}-") as tmp:
+        root = Path(tmp)
+        home = root / "home"
+        workspace = root / "workspace"
+        home.mkdir()
+        workspace.mkdir()
+        async with core.scopedRuntimeHome(str(home)):
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="openai",
+                model="gpt-5.4",
+                systemPrompt="isolated event corpus",
+                permissionMode="bypassPermissions",
+                sessionId=f"event-{kind}",
+            )
+            profile = {
+                "name": "event-corpus",
+                "kind": "openai",
+                "apiMode": "responses",
+                "maxContextLength": 100_000,
+                "maxOutputTokens": 4_096,
+                "inlineToolResultBatchBytes": 12_000,
+            }
+            config = {
+                "cwd": str(workspace),
+                "runtimeHome": str(home),
+                "allowedRoots": [str(workspace)],
+                "agents": {},
+                "provider": "openai",
+                "providerKind": "openai",
+                "providerProfileName": "event-corpus",
+                "providerProfile": profile,
+                "providerProfiles": {"event-corpus": profile},
+                "customHeaders": {},
+                "openaiApiMode": "responses",
+                "model": "gpt-5.4",
+                "effort": "medium",
+                "assistantName": "Harness",
+                "assistantDescription": "",
+                "systemPrompt": "isolated event corpus",
+                "tools": ["probe"] if kind != "preflight" else [],
+                "allowedTools": ["probe"] if kind != "preflight" else [],
+                "disallowedTools": [],
+                "permissionMode": "bypassPermissions",
+                "sessionPersistence": False,
+            }
+            raw_events: list[tuple[str, dict[str, Any]]] = []
+            calls = 0
+
+            async def probe(_input: dict[str, Any], _context: Any) -> dict[str, Any]:
+                content = "same evidence" if kind == "no_progress" else "large result " * 4_000
+                return {"content": content}
+
+            tool = core.ToolDefinition(
+                "probe",
+                "Produce deterministic evidence.",
+                {"type": "object", "properties": {"value": {"type": "integer"}}},
+                probe,
+            )
+
+            async def send(_request: dict[str, Any]) -> dict[str, Any]:
+                nonlocal calls
+                calls += 1
+                if kind == "preflight" or (kind == "result_budget" and calls > 1):
+                    return _provider_text_response("done")
+                return {
+                    "model": "gpt-5.4",
+                    "stopReason": "tool_use",
+                    "usage": {"input_tokens": 10, "output_tokens": 2},
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": f"probe-{calls}",
+                            "name": "probe",
+                            "input": {"value": 1},
+                        }
+                    ],
+                }
+
+            runtime = bind_agent_runtime(
+                session,
+                {
+                    "tools": [] if kind == "preflight" else [tool],
+                    "emitEvent": lambda event, data: raw_events.append((event, data)),
+                },
+            )
+            await core.runAgentPrompt(
+                session=session,
+                config=config,
+                runtime=runtime,
+                prompt=f"capture {kind}",
+                providerOverride={"send": send},
+            )
+            target = {
+                "preflight": {"provider.request_preflight"},
+                "no_progress": {"agent.no_progress"},
+                "result_budget": {"tool.result_budget"},
+            }[kind]
+            selected = [
+                _runtime_event(event, data, scenario=kind)
+                for event, data in raw_events
+                if event in target
+            ]
+            if not selected:
+                raise RuntimeError(f"Isolated {kind} scenario did not emit its contract event")
+            return selected
+
+
+async def _capture_provider_partial() -> list[dict[str, Any]]:
+    runtime = FakeProviderRuntime()
+    try:
+        await runtime.run(
+            {
+                "provider": "openai",
+                "api": "responses",
+                "runtime": {"streamProviderMessages": True, "includePartialMessages": True},
+                "script": {
+                    "attempts": [
+                        {
+                            "stream": [
+                                {"event": {"type": "response.output_text.delta", "delta": "partial"}},
+                                {
+                                    "event": {
+                                        "type": "response.completed",
+                                        "response": {
+                                            "output": [
+                                                {
+                                                    "type": "message",
+                                                    "content": [{"type": "output_text", "text": "partial"}],
+                                                }
+                                            ],
+                                            "usage": {"input_tokens": 2, "output_tokens": 1},
+                                        },
+                                    }
+                                },
+                            ]
+                        }
+                    ]
+                },
+            }
+        )
+        return _typed_provider_events(runtime.events, {"message.assistant.partial"}, "partial")
+    finally:
+        runtime.close()
+
+
+async def _capture_provider_recovery() -> list[dict[str, Any]]:
+    runtime = FakeProviderRuntime()
+    try:
+        await runtime.run(
+            {
+                "provider": "openai",
+                "api": "responses",
+                "maxAttempts": 2,
+                "runtime": {"streamProviderMessages": True},
+                "script": {
+                    "attempts": [
+                        {"createError": "socket hang up"},
+                        {
+                            "stream": [
+                                {
+                                    "event": {
+                                        "type": "response.completed",
+                                        "response": {
+                                            "output": [
+                                                {
+                                                    "type": "message",
+                                                    "content": [{"type": "output_text", "text": "recovered"}],
+                                                }
+                                            ],
+                                            "usage": {"input_tokens": 2, "output_tokens": 1},
+                                        },
+                                    }
+                                }
+                            ]
+                        },
+                    ]
+                },
+            }
+        )
+        return _typed_provider_events(runtime.events, {"provider.retrying", "provider.recovered"}, "recovery")
+    finally:
+        runtime.close()
+
+
+def _typed_provider_events(
+    events: list[dict[str, Any]], names: set[str], scenario: str
+) -> list[dict[str, Any]]:
+    selected = [
+        _runtime_event(item["event"], item["data"], scenario=scenario)
+        for item in events
+        if item["event"] in names
+    ]
+    if not selected:
+        raise RuntimeError(f"Isolated {scenario} provider scenario emitted no target events")
+    return selected
+
+
+def _capture_turn_sessions() -> list[dict[str, Any]]:
+    captured: list[dict[str, Any]] = []
+
+    def controller(scenario: str) -> dict[str, Any]:
+        return core.createSessionRuntimeController(
+            session={"id": f"turn-{scenario}", "model": "gpt-5.4"},
+            config={},
+            emitRuntimeEvent=lambda event, data: captured.append(
+                _runtime_event(event, data, scenario=scenario)
+            ),
+        )
+
+    cancelled = controller("cancelled-turn")
+    cancelled["startTurn"]({"prompt": "cancel me"})
+    cancelled["setTurnCancelling"]()
+    cancelled["finishTurn"]({"kind": "cancelled", "stopReason": "cancelled"})
+    completed = controller("completed-turn")
+    completed["startTurn"]({"prompt": "complete me"})
+    completed["finishTurn"]({"kind": "completed", "stopReason": "end_turn"})
+    return [event for event in captured if event["event"].startswith("turn.")]
+
+
+def _provider_text_response(text: str) -> dict[str, Any]:
     return {
-        "session_id": "session",
-        "effective_result_budget_bytes": 12000,
-        "batch_budget_bytes": 24000,
-        "original_bytes": 40000,
-        "final_bytes": 24000,
-        "truncated_result_count": 1,
+        "model": "gpt-5.4",
+        "stopReason": "end_turn",
+        "usage": {"input_tokens": 10, "output_tokens": 2},
+        "content": [{"type": "text", "text": text}],
     }
 
 

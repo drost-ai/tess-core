@@ -5,7 +5,6 @@ import copy
 import hashlib
 import json
 import os
-import platform
 import statistics
 import tempfile
 import time
@@ -20,6 +19,12 @@ from agent_core.provider_watchdog import AbortSignal
 from agent_core.agent_loop.cancellation import _capture_session_rollback
 
 from .fake_providers.server import FakeProviderHttpServer
+from .performance_support import (
+    environment as _environment,
+    median_sample as _median_sample,
+    validate_sample as _validate_sample,
+    validated_counts as _validated_counts,
+)
 
 REPORT_SCHEMA = "agent-core.performance.v1"
 PERSISTENCE_BENCHMARK = "persist_session_steady_state"
@@ -40,6 +45,7 @@ class PersistenceMeasurementCollector:
             for event in self.events
             if event["event"] == "storage_io" and event.get("persistenceCallId") is not None
         ]
+        all_io_events = [event for event in self.events if event["event"] == "storage_io"]
         outcomes: dict[str, int] = {}
         for event in finishes:
             outcome = str(event["outcome"])
@@ -54,6 +60,17 @@ class PersistenceMeasurementCollector:
             "storageElapsedNs": sum(int(event["elapsedNs"]) for event in io_events),
             "persistenceElapsedNs": sum(int(event["elapsedNs"]) for event in finishes),
             "wallElapsedNs": wall_elapsed_ns,
+            "allStorageWriteCount": sum(event["operation"] == "write" for event in all_io_events),
+            "allStorageAppendCount": sum(event["operation"] == "append" for event in all_io_events),
+            "allStorageBytes": sum(int(event["byteCount"]) for event in all_io_events),
+            "unscopedStorageWriteCount": sum(
+                event["operation"] == "write" and event.get("persistenceCallId") is None
+                for event in all_io_events
+            ),
+            "unscopedStorageAppendCount": sum(
+                event["operation"] == "append" and event.get("persistenceCallId") is None
+                for event in all_io_events
+            ),
         }
 
 
@@ -154,7 +171,7 @@ def runRollbackSnapshotBenchmark(
         "benchmark": ROLLBACK_SNAPSHOT_BENCHMARK,
         "measurementPolicy": {
             "legacy": "deepcopy whole session; Package 46 pre-S2a behavior",
-            "after": "deepcopy non-message head plus message watermark/source authority",
+            "after": "one owned turn-start copy, then deepcopy non-message head plus appended message suffix",
             "elapsedMetrics": "informational before/after evidence; functional equivalence is hard-gated in tests",
         },
         "environment": _environment(),
@@ -236,24 +253,29 @@ def _measure_rollback_snapshot_count(
     content_bytes: int,
 ) -> dict[str, Any]:
     session = _synthetic_session(workspace, message_count, content_bytes, 0)
+    cold_started = time.perf_counter_ns()
+    authority = _capture_session_rollback(session)
+    cold_capture_ns = time.perf_counter_ns() - cold_started
     legacy_ns: list[int] = []
     rollback_ns: list[int] = []
     rollback_head_bytes: list[int] = []
     for _ in range(samples):
+        session["messages"].append({"role": "user", "content": "incremental-boundary"})
         started = time.perf_counter_ns()
         legacy = copy.deepcopy(session)
         legacy_ns.append(time.perf_counter_ns() - started)
 
         started = time.perf_counter_ns()
-        rollback = _capture_session_rollback(session)
+        rollback = _capture_session_rollback(session, authority)
         rollback_ns.append(time.perf_counter_ns() - started)
+        authority = rollback
         rollback_head_bytes.append(
             len(json.dumps(rollback.head, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
         )
         if len(legacy["messages"]) != rollback.messageWatermark:
             raise RuntimeError("Rollback watermark diverged from the legacy snapshot")
-        if rollback.messageSource is not session["messages"]:
-            raise RuntimeError("Rollback capture unexpectedly cloned message history")
+        if rollback.frozenMessages[-1] is session["messages"][-1]:
+            raise RuntimeError("Rollback capture retained mutable live message authority")
     legacy_median = int(statistics.median(legacy_ns))
     rollback_median = int(statistics.median(rollback_ns))
     return {
@@ -261,6 +283,7 @@ def _measure_rollback_snapshot_count(
         "legacyDeepcopyMedianNs": legacy_median,
         "rollbackCaptureMedianNs": rollback_median,
         "rollbackHeadBytesMedian": int(statistics.median(rollback_head_bytes)),
+        "turnStartColdCaptureNs": cold_capture_ns,
         "speedupRatio": round(legacy_median / max(1, rollback_median), 3),
         "legacySamplesNs": legacy_ns,
         "rollbackSamplesNs": rollback_ns,
@@ -451,47 +474,3 @@ def _synthetic_session(
         for index in range(message_count)
     ]
     return session
-
-
-def _validate_sample(sample: dict[str, Any], expected_calls: int) -> None:
-    if sample["persistCallCount"] != expected_calls:
-        raise RuntimeError(f"Persistence observer saw {sample['persistCallCount']} calls; expected {expected_calls}")
-    if sample["persistFinishedCount"] != expected_calls:
-        raise RuntimeError("A measured persistence call did not finish")
-    if sample["persistOutcomes"] != {"persisted": expected_calls}:
-        raise RuntimeError(f"Unexpected persistence outcomes: {sample['persistOutcomes']}")
-    if sample["storageWriteCount"] != expected_calls or sample["storageBytes"] <= 0:
-        raise RuntimeError("Measured persistence calls did not produce the expected physical writes")
-
-
-def _median_sample(samples: list[dict[str, Any]]) -> dict[str, int]:
-    keys = (
-        "persistCallCount",
-        "persistFinishedCount",
-        "storageWriteCount",
-        "storageAppendCount",
-        "storageBytes",
-        "storageElapsedNs",
-        "persistenceElapsedNs",
-        "wallElapsedNs",
-    )
-    return {key: int(statistics.median([int(sample[key]) for sample in samples])) for key in keys}
-
-
-def _validated_counts(values: Iterable[int]) -> list[int]:
-    counts = [int(value) for value in values]
-    if not counts or any(value < 1 for value in counts):
-        raise ValueError("message_counts must contain positive integers")
-    if len(set(counts)) != len(counts):
-        raise ValueError("message_counts must not contain duplicates")
-    return counts
-
-
-def _environment() -> dict[str, Any]:
-    return {
-        "python": platform.python_version(),
-        "implementation": platform.python_implementation(),
-        "platform": platform.platform(),
-        "machine": platform.machine(),
-        "cpuCount": os.cpu_count(),
-    }
