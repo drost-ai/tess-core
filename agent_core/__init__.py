@@ -394,6 +394,7 @@ from .providers.anthropic import (
     sendAnthropicMessagesViaAsyncTransport,
 )
 from .providers.openai import (
+    OPENAI_RETRY_DELAYS_MS,
     DEFAULT_CODEX_BASE_URL, DEFAULT_CODEX_INSTRUCTIONS, OPENAI_ABORT_POLL_INTERVAL_MS,
     OPENAI_REQUEST_START_TIMEOUT_MS, OPENAI_STREAM_IDLE_TIMEOUT_MS, OpenAiEmptyCompletedResponse,
     OpenAiReconciliationConflict, TERMINAL_RECONCILIATION_SCHEMA_VERSION, append_openai_partial,
@@ -403,8 +404,7 @@ from .providers.openai import (
     create_openai_logical_call_id, extract_turn_state, finalize_interrupted_openai_preview,
     finalize_responses_success, function_call_projection_record, getOpenAiProviderLabel, handle_response_completed,
     isCodexBaseUrl, message_projection_record, normalize_terminal_projection, openai_retry_delay_ms,
-    partial_openai_event_lineage, projection_blocks, projection_event_fields, providerRetryDelayMs,
-    reconciliation_conflict_failure, recover_openai_attempt, resolveOpenAiBaseUrl, resolve_terminal_projection,
+    partial_openai_event_lineage, projection_blocks, projection_event_fields, reconciliation_conflict_failure, recover_openai_attempt, resolveOpenAiBaseUrl, resolve_terminal_projection,
     response_terminal_failure, responses_activity_kind, select_authoritative_projection,
     sendOpenAiChatCompletionsRequest, sendOpenAiRequest, sendOpenAiResponsesRequest, sink_failure,
     start_responses_stream, stateless_prepared_request, supersede_openai_generation,
@@ -412,6 +412,7 @@ from .providers.openai import (
 )
 
 __all__ = [
+    "OPENAI_RETRY_DELAYS_MS",
     "ACTIVE_TASK_STATUSES", "AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION", "ANTHROPIC_ABORT_POLL_INTERVAL_MS",
     "ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS", "ANTHROPIC_REQUEST_START_TIMEOUT_MS", "ANTHROPIC_STREAM_IDLE_TIMEOUT_MS",
     "ARTIFACT_ACQUISITION_FAILURE_LIMIT", "AVAILABLE_TUI_THEMES", "AgentAuthorityError", "AnthropicSseAccumulator",

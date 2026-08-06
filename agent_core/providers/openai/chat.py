@@ -26,7 +26,6 @@ from .params import (
 from .shared import (
     OPENAI_REQUEST_START_TIMEOUT_MS,
     OPENAI_STREAM_IDLE_TIMEOUT_MS,
-    providerRetryDelayMs,
 )
 from .transport import (
     _acquire_openai_client,
@@ -286,11 +285,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             )
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
-                delay_ms = _openai_retry_delay_ms(
-                    args,
-                    attempt,
-                    providerRetryDelayMs,
-                )
+                delay_ms = _openai_retry_delay_ms(args, attempt)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
                 emitProviderActivity(

@@ -40,7 +40,6 @@ async def recover_openai_attempt(
     logical_call_id: str,
     response_id: str | None,
     sequence_number: int | None,
-    retry_delay: Any,
 ) -> tuple[ProviderRequestError, bool]:
     runtime = args.get("runtime") or {}
     failure = normalizeUnknownProviderFailure(
@@ -99,7 +98,7 @@ async def recover_openai_attempt(
                 {**failure.record, "next_generation": attempt + 1},
             )
     if can_retry:
-        delay_ms = openai_retry_delay_ms(args, attempt, retry_delay)
+        delay_ms = openai_retry_delay_ms(args, attempt)
         _raise_openai_cancelled(
             runtime,
             provider_label,
@@ -152,13 +151,11 @@ async def recover_openai_attempt(
     return failure, False
 
 
-def openai_retry_delay_ms(
-    args: dict[str, Any], attempt: int, default_delay: Any = providerRetryDelayMs
-) -> int:
+def openai_retry_delay_ms(args: dict[str, Any], attempt: int) -> int:
     override = args.get("retryDelay")
     if callable(override):
         try:
             return max(0, int(override(attempt)))
         except (TypeError, ValueError):
             pass
-    return int(default_delay(attempt))
+    return int(providerRetryDelayMs(attempt))

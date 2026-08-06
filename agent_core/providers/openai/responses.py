@@ -30,7 +30,6 @@ from .params import buildResponsesCreateParams, getOpenAiProviderLabel, resolveO
 from .shared import (
     OPENAI_REQUEST_START_TIMEOUT_MS,
     OPENAI_STREAM_IDLE_TIMEOUT_MS,
-    providerRetryDelayMs,
 )
 from .transport import (
     _acquire_openai_client,
@@ -483,7 +482,6 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 logical_call_id=logical_call_id,
                 response_id=response_id,
                 sequence_number=sequence_number,
-                retry_delay=providerRetryDelayMs,
             )
             last_failure = failure
             if should_retry:

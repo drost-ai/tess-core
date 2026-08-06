@@ -43,7 +43,7 @@ def _request() -> dict[str, Any]:
 class OpenAiRetryPolicyTests(AgentCoreTestCase):
     def test_exact_openai_backoff_schedule_caps_at_thirty_seconds(self) -> None:
         self.assertEqual(
-            [openai_module.providerRetryDelayMs(attempt) for attempt in range(1, 8)],
+            [openai_module.shared.providerRetryDelayMs(attempt) for attempt in range(1, 8)],
             [1_000, 3_000, 5_000, 10_000, 30_000, 30_000, 30_000],
         )
 

@@ -314,6 +314,11 @@ def providerRetryDelayMs(attempt: int) -> int:
     return (350 if attempt <= 1 else 700) + random.randint(0, 119)
 
 
+def retryDelayFromLadder(ladder: tuple[int, ...], attempt: int) -> int:
+    index = min(max(int(attempt), 1), len(ladder)) - 1
+    return ladder[index]
+
+
 def _format_provider_failure_message(args: dict[str, Any]) -> str:
     label = args["providerLabel"]
     category = args["category"]

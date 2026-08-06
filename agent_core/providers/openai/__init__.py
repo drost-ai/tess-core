@@ -62,15 +62,16 @@ from .responses_session import (
 )
 from .responses_terminal import handle_response_completed
 from .shared import (
+    OPENAI_RETRY_DELAYS_MS,
     DEFAULT_CODEX_BASE_URL,
     DEFAULT_CODEX_INSTRUCTIONS,
     OPENAI_ABORT_POLL_INTERVAL_MS,
     OPENAI_REQUEST_START_TIMEOUT_MS,
     OPENAI_STREAM_IDLE_TIMEOUT_MS,
-    providerRetryDelayMs,
 )
 
 __all__ = [
+    "OPENAI_RETRY_DELAYS_MS",
     "DEFAULT_CODEX_BASE_URL",
     "DEFAULT_CODEX_INSTRUCTIONS",
     "OPENAI_ABORT_POLL_INTERVAL_MS",
@@ -105,7 +106,6 @@ __all__ = [
     "partial_openai_event_lineage",
     "projection_blocks",
     "projection_event_fields",
-    "providerRetryDelayMs",
     "reconciliation_conflict_failure",
     "recover_openai_attempt",
     "resolveOpenAiBaseUrl",
