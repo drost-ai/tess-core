@@ -12,13 +12,20 @@ from .persistence_metrics import (
     recordPersistenceIo as _record_persistence_io,
 )
 from .io_executor import runStorageIo as _run_storage_io
+import asyncio
+import json
+import os
+import re
+import uuid
+from typing import Any
+
+from .paths import expandHome, getStateRoot
 
 try:
     import fcntl as _fcntl
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _fcntl = None
 
-from .shared import *
 
 # Record ownership matrix (package 21, workstream D). Locking is applied only
 # where multiple processes genuinely mutate the same file; single-writer
@@ -441,16 +448,3 @@ def _clear_auth_sync(auth_path: str) -> None:
     except FileNotFoundError:
         pass
 
-read_json_file = readJsonFile
-write_json_file = writeJsonFile
-append_json_line = appendJsonLine
-read_json_lines = readJsonLines
-mutate_json_lines = mutateJsonLines
-mutate_json_file = mutateJsonFile
-mutate_json_record = mutateJsonRecord
-file_lock = fileLock
-with_record_transaction = withRecordTransaction
-transaction_lock_path = transactionLockPath
-resolve_maybe_relative = resolveMaybeRelative
-load_auth = loadAuth
-load_codex_auth_token = loadCodexAuthToken

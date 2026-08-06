@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import re
 import tempfile
-
-from .shared import *
+from pathlib import Path
+from typing import Literal
 from ..runtime.identifiers import parseArtifactId, parseSessionId
 from ..runtime.paths import (
     RuntimePaths,
@@ -191,15 +193,12 @@ async def ensureBaseLayout(cwd: str, paths: RuntimePaths | None = None) -> None:
     for directory in (getProjectStateDir(cwd), getLocalStateDir(cwd)):
         os.makedirs(directory, exist_ok=True)
 
-expand_home = expandHome
-resolve_runtime_home = resolveRuntimeHome
-configure_runtime_home = configureRuntimeHome
-reset_configured_runtime_home = resetConfiguredRuntimeHome
-scoped_runtime_home = scopedRuntimeHome
-get_context_runtime_home = getContextRuntimeHome
-get_state_root = getStateRoot
-find_git_root = findGitRoot
-get_project_root = getProjectRoot
-get_project_state_dir = getProjectStateDir
-get_local_state_dir = getLocalStateDir
-ensure_base_layout = ensureBaseLayout
+
+def sessionPath(sessionId: str) -> str:
+    return os.path.join(getStateRoot(), "sessions", f"{parseSessionId(sessionId)}.json")
+
+def sessionArchiveDir(sessionId: str) -> str:
+    return os.path.join(getStateRoot(), "sessions", parseSessionId(sessionId))
+
+def sessionTranscriptLogPath(sessionId: str) -> str:
+    return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")

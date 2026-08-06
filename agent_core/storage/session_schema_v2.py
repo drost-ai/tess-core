@@ -22,7 +22,8 @@ from .session_body_v2 import (
     _replace_body_sync,
     _scan_body_bytes,
 )
-from .shared import *
+from .json_io import readJsonFile, withRecordTransaction, writeJsonFile
+from .paths import getStateRoot, sessionPath
 
 SESSION_SCHEMA_V2 = 2
 SESSION_BODY_FORMAT = "agent-core.session-messages.jsonl.v1"

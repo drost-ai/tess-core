@@ -9,7 +9,15 @@ from ..session.message_history import (
     SessionMessageList,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
-from .shared import *
+from .json_io import STORAGE_LOCK_TIMEOUT_MS, readJsonFile, withRecordTransaction
+from .paths import sessionPath
+from .session_schema_v2 import (
+    commitSessionV2,
+    commitSessionV2Delta,
+    hydratePersistedSession,
+    isSessionHeadV2,
+    sessionLiveHeadFromV2,
+)
 
 
 class SessionRecordNotFoundError(RuntimeError):
@@ -207,7 +215,3 @@ async def _await_mutation(value: Any) -> Any:
     return value
 
 
-update_session_record = updateSessionRecord
-mutate_session_record_transaction = mutateSessionRecordTransaction
-mutate_session_head_delta_transaction = mutateSessionHeadDeltaTransaction
-normalize_session_revision = normalizeSessionRevision

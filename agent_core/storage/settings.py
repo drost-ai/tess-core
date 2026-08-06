@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from ..contracts.config import AutoModePolicy, SettingsRecord
 
-from .shared import *
+import os
+from typing import Any
+
+from .._utils import clone
+from .json_io import mutateJsonFile, readJsonFile
+from .paths import (
+    Scope,
+    getLocalStateDir,
+    getProjectMemoryRecordsPath,
+    getProjectStateDir,
+    getStateRoot,
+)
 
 DEFAULT_AUTO_MODE = {
     "allow": [

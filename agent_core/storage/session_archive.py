@@ -10,7 +10,18 @@ from ..session.message_history import (
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
 from .io_executor import runStorageIo as _run_storage_io
-from .shared import *
+import json
+
+from ..runtime.identifiers import parseSessionId
+from .json_io import readJsonFile, withRecordTransaction
+from .paths import sessionPath, sessionTranscriptLogPath
+from .session_schema_v2 import commitSessionV2, hydratePersistedSession
+from .session_transactions import (
+    SessionRecordNotFoundError,
+    mutateSessionRecordTransaction,
+    normalizeSessionRevision,
+)
+from .sessions import createEmptySession
 
 
 def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
@@ -196,3 +207,30 @@ def _parse_archived_session_header(raw: str, session_id: str) -> SessionRecord |
         recovered["metadata"].pop("fullTranscriptLog", None)
         return recovered
     return None
+
+async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
+    """Locked read-modify-write for cross-process session metadata updates.
+
+    Reconciles the archived transcript while holding the same record lock,
+    applies ``mutate`` (return the record, or ``None`` after mutating in
+    place), and persists with the same redaction as ``saveSession``. Returns
+    ``None`` without writing when the session does not exist.
+    """
+    async def apply(session: SessionRecord | None) -> dict[str, Any]:
+        if session is None:
+            raise SessionRecordNotFoundError(f"Session not found: {parseSessionId(sessionId)}")
+        before = copy.deepcopy(session)
+        reconciliation = await _reconcile_session_record(sessionId, session)
+        working = reconciliation["record"]
+        updated = mutate(working)
+        if hasattr(updated, "__await__"):
+            updated = await updated
+        if updated is None:
+            updated = working
+        return {"session": updated, "changed": updated != before}
+
+    try:
+        result = await mutateSessionRecordTransaction(sessionId, apply)
+    except SessionRecordNotFoundError:
+        return None
+    return result["session"]

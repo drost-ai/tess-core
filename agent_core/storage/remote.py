@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from .shared import *
+import json
+import os
+import re
+from typing import Any
+
+from .json_io import withRecordTransaction, writeJsonFile
+from .paths import getStateRoot
+from .records import _omit_none_fields
 from ..session.persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
 from ..session.persisted_record_validation import isBridgeRecord, isRemoteSessionRecord
 from ..runtime.identifiers import (
-    RuntimeIdentifierError,
     parseBridgeId,
     parseRemoteSessionId,
     parseSessionId,

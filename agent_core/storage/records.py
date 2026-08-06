@@ -28,7 +28,13 @@ from ..session.persisted_record_validation import (
     isTaskRecord,
 )
 
-from .shared import *
+import os
+import random
+import uuid
+from typing import Any
+
+from .json_io import fileLock, readJsonFile, writeJsonFile
+from .paths import getPlansDir, getStateRoot
 
 def taskDir(taskId: str) -> str:
     return os.path.join(getStateRoot(), "tasks", parseTaskId(taskId))

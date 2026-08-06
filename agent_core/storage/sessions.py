@@ -9,21 +9,30 @@ from .persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
 )
-from ..runtime.identifiers import RuntimeIdentifierError, parseSessionId
+from ..runtime.identifiers import RuntimeIdentifierError
 from ..session.message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
 from ..providers.usage_costs import createUsageTotals
 from .io_executor import runStorageIo as _run_storage_io
-from .shared import *
+import json
+import os
+import uuid
+from typing import Any
 
-def sessionPath(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", f"{parseSessionId(sessionId)}.json")
-def sessionArchiveDir(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", parseSessionId(sessionId))
-def sessionTranscriptLogPath(sessionId: str) -> str:
-    return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
+from .._utils import now_iso
+from .json_io import _in_process_lock, readJsonFile, withRecordTransaction, writeJsonFile
+from .paths import (
+    compactionCheckpointPath,
+    compactionManifestPath,
+    getStateRoot,
+    sessionPath,
+    sessionTranscriptLogPath,
+)
+from .session_schema_v2 import commitSessionV2, hydratePersistedSession, isSessionHeadV2
+from .session_transactions import normalizeSessionRevision
+
 async def saveSession(session: SessionRecord) -> None:
     path = sessionPath(session["id"])
     async with withRecordTransaction("session", session["id"]):
@@ -45,33 +54,6 @@ async def saveSession(session: SessionRecord) -> None:
                 len(session.get("messages") or []),
                 commit["bodyCommitId"],
             )
-async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
-    """Locked read-modify-write for cross-process session metadata updates.
-
-    Reconciles the archived transcript while holding the same record lock,
-    applies ``mutate`` (return the record, or ``None`` after mutating in
-    place), and persists with the same redaction as ``saveSession``. Returns
-    ``None`` without writing when the session does not exist.
-    """
-    async def apply(session: SessionRecord | None) -> dict[str, Any]:
-        if session is None:
-            raise SessionRecordNotFoundError(f"Session not found: {parseSessionId(sessionId)}")
-        before = copy.deepcopy(session)
-        reconciliation = await _reconcile_session_record(sessionId, session)
-        working = reconciliation["record"]
-        updated = mutate(working)
-        if hasattr(updated, "__await__"):
-            updated = await updated
-        if updated is None:
-            updated = working
-        return {"session": updated, "changed": updated != before}
-
-    try:
-        result = await mutateSessionRecordTransaction(sessionId, apply)
-    except SessionRecordNotFoundError:
-        return None
-    return result["session"]
-
 async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
     path = sessionTranscriptLogPath(sessionId)
     # The former synchronous body also serialized same-process callers by
