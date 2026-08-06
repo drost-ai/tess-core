@@ -5,9 +5,9 @@ import os
 import shutil
 from typing import Any
 
-from ._utils import now_iso
-from .platform import collectDoctorReport
-from .storage import (
+from .._utils import now_iso
+from ..platform import collectDoctorReport
+from ..storage import (
     compactionCheckpointPath,
     compactionManifestPath,
     ensureBaseLayout,

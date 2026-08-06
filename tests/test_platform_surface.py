@@ -95,7 +95,7 @@ class PlatformSurfaceTests(AgentCoreTestCase):
             chrome_server = run(core.resolveChromeCompanionServer({"runner": runner, "platform": "linux"}))
             self.assertTrue(chrome_server["available"])
             self.assertTrue(chrome_server["enabled"])
-            self.assertEqual(chrome_server["server"]["args"][:2], ["-m", "agent_core.chrome_companion"])
+            self.assertEqual(chrome_server["server"]["args"][:2], ["-m", "agent_core.platform_support.chrome_companion"])
             rpc_status = run(core.handleChromeCompanionRpcPayload(json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {"name": "chrome_status"}})))
             self.assertEqual(rpc_status["id"], 7)
             self.assertEqual(rpc_status["result"]["content"][0]["type"], "text")

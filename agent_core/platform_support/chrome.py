@@ -10,7 +10,7 @@ async def resolveChromeCompanionServer(args: dict[str, Any] | None = None, **kwa
             "name": "chrome_companion",
             "transport": "stdio",
             "commandOrUrl": sys.executable,
-            "args": ["-m", "agent_core.chrome_companion", "mcp"],
+            "args": ["-m", "agent_core.platform_support.chrome_companion", "mcp"],
             "updatedAt": now_iso(),
         }
         if enabled
@@ -196,9 +196,9 @@ async def _chrome_native_host_wrapper_path(args: dict[str, Any]) -> str:
 async def _write_chrome_native_host_wrapper(host_path: str) -> None:
     os.makedirs(os.path.dirname(host_path), exist_ok=True)
     if host_path.endswith(".cmd"):
-        body = f'@echo off\r\n"{sys.executable}" -m agent_core.chrome_companion native %*\r\n'
+        body = f'@echo off\r\n"{sys.executable}" -m agent_core.platform_support.chrome_companion native %*\r\n'
     else:
-        body = f'#!/bin/sh\nexec {quoteShellArg(sys.executable)} -m agent_core.chrome_companion native "$@"\n'
+        body = f'#!/bin/sh\nexec {quoteShellArg(sys.executable)} -m agent_core.platform_support.chrome_companion native "$@"\n'
     with open(host_path, "w", encoding="utf-8", newline="" if host_path.endswith(".cmd") else None) as handle:
         handle.write(body)
     if not host_path.endswith(".cmd"):

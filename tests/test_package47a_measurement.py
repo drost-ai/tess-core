@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.persistence_metrics import registerPersistenceObserver
+from agent_core.storage.persistence_metrics import registerPersistenceObserver
 from agent_core_harness.executor import run_scenario
 from agent_core_harness.performance import (
     PERSISTENCE_BENCHMARK,

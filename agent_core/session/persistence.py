@@ -7,7 +7,7 @@ from typing import Any
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from .._utils import now_iso
-from ..persistence_metrics import (
+from ..storage.persistence_metrics import (
     beginPersistenceCall as _begin_persistence_call,
     finishPersistenceCall as _finish_persistence_call,
 )

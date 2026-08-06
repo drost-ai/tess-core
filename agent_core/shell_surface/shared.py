@@ -21,7 +21,7 @@ from ..config import (
     normalizeProviderProfileName,
     resolveFallbackProviderProfileName,
 )
-from ..debug_bundle import createDebugBundle
+from .debug_bundle import createDebugBundle
 from ..context.durable_memory import synchronizeManualProjectMemory
 from ..daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ..platform import collectDoctorReport

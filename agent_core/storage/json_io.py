@@ -7,7 +7,7 @@ import time as _time
 import weakref as _weakref
 from typing import Callable
 
-from ..persistence_metrics import (
+from .persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
 )

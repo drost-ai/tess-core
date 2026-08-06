@@ -20,7 +20,7 @@ consumer are preserved exactly, via a `sys.modules` alias that registers the
 *same module object* -- so `import`, `from`-import, `dir()`, and monkeypatching
 all behave as they did. Paths with no observed consumer were retired.
 
-## Retired module paths (53)
+## Retired module paths (54)
 
 `agent_core.<name>` no longer resolves for the following. Each one's code still
 exists, unchanged, at the new path shown in "Where things moved" below.
@@ -28,6 +28,7 @@ exists, unchanged, at the new path shown in "Where things moved" below.
 - `agent_authority`
 - `agent_runtime_bindings`
 - `collaboration_updates`
+- `debug_bundle`
 - `executable_closure`
 - `executable_config`
 - `executable_source_policy`
@@ -125,4 +126,4 @@ from agent_core.session.persistence import persistSession   # explicit
 ```
 
 The top-level `agent_core` *name* surface is otherwise unchanged: this refactor
-removed 53 module-name attributes and added none.
+removed 54 module-name attributes and added none.

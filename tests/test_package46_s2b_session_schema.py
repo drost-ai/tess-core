@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import agent_core as core
-from agent_core.persistence_metrics import registerPersistenceObserver
+from agent_core.storage.persistence_metrics import registerPersistenceObserver
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 

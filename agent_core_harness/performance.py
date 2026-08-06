@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.persistence_metrics import registerPersistenceObserver
+from agent_core.storage.persistence_metrics import registerPersistenceObserver
 from agent_core.providers.turn_session import createProviderTurnSession
 from agent_core.providers.watchdog import AbortSignal
 from agent_core.agent.cancellation import _capture_session_rollback

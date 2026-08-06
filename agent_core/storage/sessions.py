@@ -5,7 +5,7 @@ import time
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
 from ..session.message_origin import isGenuineUserRequest as _is_genuine_user_request
-from ..persistence_metrics import (
+from .persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
 )
