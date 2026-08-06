@@ -1,6 +1,8 @@
 .scenario-runs/
 .tess/
 build/
+.mypy_cache/
+.venv/
 
 __pycache__/
 *.pyc
