@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any
+
+from .._utils import now_iso
 
 def applyPlatformIntegrationMetadata(
     session: dict[str, Any],

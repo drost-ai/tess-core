@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+from .commands import _runner_exec, _runner_exec_text, _runner_which, buildShellCommand
 
 async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}

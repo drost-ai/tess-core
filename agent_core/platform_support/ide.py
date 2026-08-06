@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+from typing import Any
+
+from .commands import _runner_spawn_detached, _runner_which
 
 async def detectIdeTargets(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
     args = {**(args or {}), **kwargs}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from ..platform import runChromeCompanionMcpServer, runChromeNativeHost
+from .chrome import runChromeCompanionMcpServer, runChromeNativeHost
 
 
 async def main(argv: list[str] | None = None) -> None:

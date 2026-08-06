@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+from typing import Any
+
+from ..runtime.workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
+from ..storage import getProjectRoot, getStateRoot, loadAuth, loadDaemonState, loadMcpServers, loadPlugins
+from .chrome import detectChromeCompanionStatus
+from .ide import detectIdeTargets
+from .install import inspectInstallState
+from .session_hygiene import buildSessionHygieneReport
+from .tmux import detectTmuxAvailability
 
 async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}

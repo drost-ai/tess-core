@@ -12,7 +12,7 @@ class PublicApiTests(AgentCoreTestCase):
         self.assertTrue(callable(core.ensureTaskSupervisorDaemon))
 
     def test_reference_module_surfaces(self):
-        import agent_core.platform_support.common as platform_common
+        import agent_core.platform_support as platform_common
         import agent_core.providers.watchdog as provider_watchdog
 
         self.assertTrue(callable(provider_watchdog.createProviderRequestWatchdog))

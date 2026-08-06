@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-from .shared import *
+import asyncio
+import json
+import os
+import re
+import stat
+import sys
+from pathlib import Path
+from typing import Any
+
+from .._utils import now_iso
+from ..storage import getStateRoot
+from .commands import _parse_json_object, _runner_which, quoteShellArg
+from .shared import DEFAULT_CHROME_EXTENSION_ORIGIN, DEFAULT_CHROME_NATIVE_HOST_NAME
 
 async def resolveChromeCompanionServer(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     status = await detectChromeCompanionStatus(args, **kwargs)

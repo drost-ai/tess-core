@@ -2,6 +2,11 @@ from .agent import *
 from .runtime.agent_bindings import *
 from .authority.agent import *
 from .collaboration import *
+from .collaboration.bridge.recovery import (
+    BridgeRecoveryBlockedError,
+    inspectBridgeRecovery,
+    resolveBridgeRecovery,
+)
 from .config import *
 from .daemon import *
 from .context.durable_memory import *

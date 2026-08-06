@@ -22,7 +22,6 @@ PUBLIC_MODULES = [
     "agent_core.interactive_actions",
     "agent_core.mcp",
     "agent_core.platform",
-    "agent_core.platform_support.common",
     "agent_core.provider_watchdog",
     "agent_core.shell",
     "agent_core.storage",
