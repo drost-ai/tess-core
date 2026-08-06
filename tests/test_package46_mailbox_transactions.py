@@ -54,7 +54,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise() -> tuple[dict[str, Any], list[dict[str, Any]], int]:
-                import agent_core.task_communication as communication
+                import agent_core.tasks.communication as communication
 
                 session = core.createEmptySession(
                     cwd=str(workspace),

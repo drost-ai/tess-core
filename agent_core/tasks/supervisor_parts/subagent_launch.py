@@ -5,7 +5,7 @@ from .processes import _worker_env
 from .records import _build_task_record
 from .utils import _dedupe
 from ...subagents.capacity import check_subagent_capacity, resolve_subagent_concurrency_policy
-from ...task_communication import append_task_event
+from ..communication import append_task_event
 from ...process.task_launch import createTaskLaunchReservation
 
 

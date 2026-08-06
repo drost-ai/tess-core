@@ -15,7 +15,7 @@ from typing import Any
 
 from .._utils import pretty_json
 from ..payloads.cursor import fingerprintPayloadSource, resolvePayloadCursor
-from ..search_acquisition import buildStreamingSearchFromOutput, runStreamingSearch
+from ..acquisition.search import buildStreamingSearchFromOutput, runStreamingSearch
 from ..payloads.search_results import buildStreamingGlobPayload, buildStreamingGrepPayload
 from ..payloads.tools import (
     applyDefaultGlobExcludes,

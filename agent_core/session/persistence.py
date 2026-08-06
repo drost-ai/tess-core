@@ -25,7 +25,7 @@ from ..storage import (
     mutateSessionHeadDeltaTransaction,
     mutateSessionRecordTransaction,
 )
-from ..workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
+from ..runtime.workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
 
 async def resolveSession(options: dict[str, Any], config: dict[str, Any], launchContext: dict[str, Any] | None = None) -> dict[str, Any]:

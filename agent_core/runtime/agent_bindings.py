@@ -4,12 +4,12 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
-from .runtime.generation import RuntimeSessionBinding, createRuntimeSessionBinding
-from .partial_output import (
+from .generation import RuntimeSessionBinding, createRuntimeSessionBinding
+from ..providers.partial_output import (
     assertPartialOutputSink as _assert_partial_output_sink,
     assertPartialOutputStateStore as _assert_partial_output_state_store,
 )
-from ._partial_output_recovery import (
+from ..providers.partial_output_recovery import (
     assertPartialOutputRecoveryPolicy as _assert_partial_output_recovery_policy,
 )
 

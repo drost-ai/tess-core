@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
+from ..session.message_origin import isGenuineUserRequest as _is_genuine_user_request
 
 
 def _split_subcommand(arg_text: str) -> tuple[str, str]:

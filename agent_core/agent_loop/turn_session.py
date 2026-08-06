@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from ..agent_runtime_bindings import (
+from ..runtime.agent_bindings import (
     assertAgentRuntimeBindings,
     materializeAgentExecutionRuntime,
 )
@@ -15,7 +15,7 @@ from ..config import (
 )
 from ..providers.turn_session import createProviderTurnSession
 from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
-from .._transient_input import (
+from ..runtime.transient_input import (
     createTransientExecutionSession,
     syncTransientExecutionSession,
 )

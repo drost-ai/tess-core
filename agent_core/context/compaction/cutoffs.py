@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
+from ...session.message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
 
 
 def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, previousCutoff: int = 0) -> int | None:

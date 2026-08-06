@@ -4,9 +4,9 @@ import math
 
 from .shared import *
 from .artifacts import mergeCompactionUsageIntoSession
-from ...message_origin import isGenuineUserRequest as _is_genuine_user_request
+from ...session.message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ...providers.token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO, resolveCompactionRequestOutputTokens
-from ...usage_costs import mergeProviderUsage as _merge_provider_usage
+from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 from ..compaction_models import resolveCompactionTokenPolicy
 
 

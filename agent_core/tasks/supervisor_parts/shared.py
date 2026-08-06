@@ -47,7 +47,7 @@ from ...storage import (
     writeTaskMeta,
 )
 from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
-from ...task_communication import read_task_questions
+from ..communication import read_task_questions
 
 
 _PROCESS_REGISTRY: dict[str, subprocess.Popen[Any]] = {}

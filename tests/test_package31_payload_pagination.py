@@ -10,7 +10,7 @@ from agent_core.payloads.cursor import (
     resolvePayloadCursor,
 )
 from agent_core.mcp_payloads import shapeMcpResourceList, shapeMcpResourceRead
-from agent_core.search_acquisition import runStreamingSearch
+from agent_core.acquisition.search import runStreamingSearch
 from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serializedContentBytes
 from agent_core.payloads.utf8_bounds import sliceUtf8Window, utf8ByteLength
 

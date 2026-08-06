@@ -9,10 +9,10 @@ from .._utils import maybe_await
 from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..collaboration import createCollaborationRuntime
 from ..daemon import ensureTaskSupervisorDaemon
-from ..exception_groups import RuntimeExceptionGroup as _RuntimeExceptionGroup
+from .exception_groups import RuntimeExceptionGroup as _RuntimeExceptionGroup
 from .lifecycle_barrier import createLifecycleBarrier
 from ..mcp import createMcpRuntime
-from ..monitors import createMonitorRuntime
+from ..tasks.monitors import createMonitorRuntime
 from ..authority.plugins import loadPluginRuntime
 from ..collaboration.remote import createBridgeRuntime
 from .events import createRuntimeEvent
@@ -27,7 +27,7 @@ from ..session.runtime import createSessionRuntimeController
 from ..storage import configureRuntimeHome, registerStorageLockObserver
 from ..task_runtime import createTaskRuntime
 from ..tools import createBuiltinTools
-from ..workspace import createWorkspaceController
+from .workspace import createWorkspaceController
 
 
 MAX_STALE_DIAGNOSTICS = 128

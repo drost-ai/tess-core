@@ -1,5 +1,5 @@
 from .agent import *
-from .agent_runtime_bindings import *
+from .runtime.agent_bindings import *
 from .authority.agent import *
 from .collaboration import *
 from .config import *
@@ -9,11 +9,11 @@ from .payloads.execution_descriptors import *
 from .authority.executable_closure import *
 from .authority.executable_config import *
 from .authority.executable_source_policy import *
-from .fetch_proxy import *
+from .acquisition.fetch_proxy import *
 from .authority.hooks import *
 from .runtime.lifecycle_barrier import *
 from .mcp import *
-from .monitors import *
+from .tasks.monitors import *
 from .platform import *
 from .authority.plugin_contracts import *
 from .authority.plugins import *
@@ -34,7 +34,7 @@ from .sandbox import *
 from .session.persistence import *
 from .session.runtime import *
 from .shell import *
-from .shell_command_policy import *
+from .authority.shell_command_policy import *
 from .storage import *
 from .subagents.capacity import *
 from .subagents.continuation import *
@@ -49,14 +49,14 @@ from .subagents.reconciliation_renderer import *
 from .subagents.reconciliation_store import *
 from .subagents.result import *
 from .subagents import *
-from .task_ownership import *
+from .tasks.ownership import *
 from .process.task_launch import *
-from .task_communication import *
+from .tasks.communication import *
 from .task_runtime import *
 from .task_supervisor import *
 from .payloads.tools import *
 from .tools import *
-from .workspace import *
+from .runtime.workspace import *
 from .compaction import *
 from .compaction_models import *
 from .context_policy import *
@@ -74,14 +74,18 @@ from .providers.openai import *
 # monkeypatching a name onto the legacy path all behave exactly as before.
 _LEGACY_MODULE_ALIASES = {
     "agent_authority": "agent_core.authority.agent",
+    "agent_runtime_bindings": "agent_core.runtime.agent_bindings",
     "collaboration_updates": "agent_core.collaboration.updates",
     "executable_closure": "agent_core.authority.executable_closure",
     "executable_config": "agent_core.authority.executable_config",
     "executable_source_policy": "agent_core.authority.executable_source_policy",
     "execution_descriptors": "agent_core.payloads.execution_descriptors",
+    "fetch_proxy": "agent_core.acquisition.fetch_proxy",
     "hooks": "agent_core.authority.hooks",
     "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
     "mcp_origin_policy": "agent_core.authority.mcp_origin_policy",
+    "monitor_bootstrap": "agent_core.tasks.monitor_bootstrap",
+    "monitors": "agent_core.tasks.monitors",
     "owned_process_launch": "agent_core.process.owned_launch",
     "permission_rules": "agent_core.authority.permission_rules",
     "persisted_record_scanner": "agent_core.session.persisted_record_scanner",
@@ -108,6 +112,7 @@ _LEGACY_MODULE_ALIASES = {
     "session_fork": "agent_core.session.fork",
     "session_message_history": "agent_core.session.message_history",
     "session_runtime": "agent_core.session.runtime",
+    "shell_command_policy": "agent_core.authority.shell_command_policy",
     "subagent_capacity": "agent_core.subagents.capacity",
     "subagent_continuation": "agent_core.subagents.continuation",
     "subagent_continuation_recovery": "agent_core.subagents.continuation_recovery",
@@ -120,9 +125,12 @@ _LEGACY_MODULE_ALIASES = {
     "subagent_reconciliation_renderer": "agent_core.subagents.reconciliation_renderer",
     "subagent_reconciliation_store": "agent_core.subagents.reconciliation_store",
     "subagent_result": "agent_core.subagents.result",
+    "task_communication": "agent_core.tasks.communication",
+    "task_ownership": "agent_core.tasks.ownership",
     "task_process_launch": "agent_core.process.task_launch",
     "tool_payloads": "agent_core.payloads.tools",
     "transcript": "agent_core.session.transcript",
+    "workspace": "agent_core.runtime.workspace",
 }
 
 
@@ -160,6 +168,7 @@ _INTERNAL_MODULES = {
     # Subsystem packages introduced by the v1 consolidation that had no
     # top-level module of the same name before, so they are not part of the
     # historical public surface.
+    "acquisition",
     "authority",
     "payloads",
     "process",

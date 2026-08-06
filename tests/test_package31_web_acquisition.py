@@ -6,7 +6,7 @@ import gzip
 import socket
 
 from agent_core.payloads.bounded_io import AcquisitionLimitError, readResponseTextBoundedSync
-from agent_core.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
+from agent_core.acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
 
 
 @contextlib.contextmanager
@@ -50,7 +50,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
                 return None
 
         with mock.patch(
-            "agent_core.bounded_web_fetch.http.client.HTTPSConnection",
+            "agent_core.acquisition.bounded_web_fetch.http.client.HTTPSConnection",
             TimedOutConnection,
         ):
             result = run(

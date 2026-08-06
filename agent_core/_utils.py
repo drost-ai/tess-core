@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable
 
-from .usage_costs import mergeProviderUsage as _merge_provider_usage
+from .providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 
 
 MISSING = object()

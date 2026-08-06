@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from ..sandbox import prepareSandboxedArgv
-from ..shell_command_policy import classifyReadOnlyShellCommand
+from ..authority.shell_command_policy import classifyReadOnlyShellCommand
 from ..tools.permissions import _ensure_tool_permission, _get_effective_permission_mode
 
 

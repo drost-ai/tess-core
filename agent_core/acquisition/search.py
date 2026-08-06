@@ -6,12 +6,12 @@ import os
 import signal
 from typing import Any, Callable
 
-from .process.output import (
+from ..process.output import (
     SUBPROCESS_RING_MAX_BYTES,
     SUBPROCESS_SPOOL_MAX_BYTES,
     createSubprocessOutputCollector,
 )
-from .payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
+from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
 
 
 SEARCH_RECORD_MAX_BYTES = 1024 * 1024

@@ -7,7 +7,7 @@ import subprocess
 import uuid
 from typing import Any
 
-from .storage import findGitRoot
+from ..storage import findGitRoot
 
 
 async def captureWorkspaceSnapshot(cwd: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -169,7 +169,7 @@ def _apply_workspace_snapshot_to_session(session: dict[str, Any], snapshot: dict
 
 
 async def _detect_workspace_integrations(session: dict[str, Any]) -> dict[str, Any]:
-    from .platform import detectChromeCompanionStatus, detectIdeTargets, detectTmuxAvailability
+    from ..platform import detectChromeCompanionStatus, detectIdeTargets, detectTmuxAvailability
 
     metadata = session.setdefault("metadata", {})
     tmux, ide_targets, chrome = await asyncio.gather(

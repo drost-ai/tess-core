@@ -77,6 +77,6 @@ def _controller_method(controller: Any, name: str) -> Any:
 
 
 async def _create_git_worktree(cwd: str, requested_name: str) -> dict[str, str] | None:
-    from ..workspace import createGitWorktree
+    from ..runtime.workspace import createGitWorktree
 
     return await createGitWorktree(cwd=cwd, requestedName=requested_name)

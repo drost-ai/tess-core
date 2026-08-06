@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from ...partial_output import PartialOutputDelivery
+from ..partial_output import PartialOutputDelivery
 from ..activity import emitProviderActivity
 from ..errors import (
     ProviderRequestError,

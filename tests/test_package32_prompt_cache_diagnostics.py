@@ -15,7 +15,7 @@ from agent_core.providers.prompt_cache_diagnostics import (
     normalizePromptCacheProviderReason,
 )
 from agent_core.shell_surface.status import formatUsageBreakdown, formatUsageSummary
-from agent_core.usage_costs import (
+from agent_core.providers.usage_costs import (
     cacheCreationUsageDetail,
     createUsageTotals,
     ensureUsageTotals,

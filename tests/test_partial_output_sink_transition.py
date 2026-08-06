@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent_core.partial_output import PartialOutputDelivery
+from agent_core.providers.partial_output import PartialOutputDelivery
 from tests.support.agent_core_case import (
     AgentCoreTestCase,
     bind_test_runtime,

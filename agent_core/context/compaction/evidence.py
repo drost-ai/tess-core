@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...message_origin import isRuntimeSyntheticMessage as _is_runtime_synthetic_message
+from ...session.message_origin import isRuntimeSyntheticMessage as _is_runtime_synthetic_message
 
 
 def buildCompactionEvidence(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

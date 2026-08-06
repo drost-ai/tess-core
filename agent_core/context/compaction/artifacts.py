@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .shared import *
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
-from ...usage_costs import mergeUsageIntoSession as _merge_usage_into_session
+from ...providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
 def mergeCompactionUsageIntoSession(session: dict[str, Any], usage: dict[str, Any]) -> None:

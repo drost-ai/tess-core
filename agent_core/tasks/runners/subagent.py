@@ -9,7 +9,7 @@ from typing import Any
 
 from ...agent import runAgentPrompt
 from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
-from ...agent_runtime_bindings import createAgentRuntimeBindings
+from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, saveSession
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv

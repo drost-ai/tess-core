@@ -6,7 +6,7 @@ import agent_core.providers.anthropic_parts.request as anthropic_request_module
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
 from agent_core.providers.anthropic_parts.sse import normalizeAnthropicSseResponse
 from agent_core.runtime.paths import resolveRuntimePaths
-from agent_core.usage_costs import estimateUsageCost
+from agent_core.providers.usage_costs import estimateUsageCost
 
 
 class AnthropicPromptCacheTransportTests(AgentCoreTestCase):

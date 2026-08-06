@@ -4,7 +4,7 @@ import copy
 import time
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
-from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
+from ..session.message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ..persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
@@ -14,7 +14,7 @@ from ..session.message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
-from ..usage_costs import createUsageTotals
+from ..providers.usage_costs import createUsageTotals
 from .io_executor import runStorageIo as _run_storage_io
 from .shared import *
 

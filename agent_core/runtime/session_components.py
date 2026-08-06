@@ -4,7 +4,7 @@ import copy
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
-from ..exception_groups import RuntimeExceptionGroup
+from .exception_groups import RuntimeExceptionGroup
 from ..authority.executable_source_policy import selectMcpBootstrapServers
 
 

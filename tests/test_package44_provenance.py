@@ -5,7 +5,7 @@ from typing import Any
 import agent_core as core
 from agent_core.context.compaction.models import _extract_recent_user_requests
 from agent_core.context.request_preflight import _request_fingerprint
-from agent_core.message_origin import (
+from agent_core.session.message_origin import (
     isGenuineUserRequest,
     isPlainUserTurnAnchor,
     messageWithOrigin,

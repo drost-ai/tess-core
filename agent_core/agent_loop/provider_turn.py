@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from .._utils import maybe_await, merge_usage
-from ..message_origin import syntheticUserMessage as _synthetic_user_message
+from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..providers.provider_prompt_cache import (
     attachPreparedPromptCacheContext,
     commitProviderPromptCacheObservation,
@@ -15,7 +15,7 @@ from ..providers.activity import ProviderActivityEmitter, emitProviderActivity
 from ..providers.timeouts import createTurnDeadlineContext
 from ..session.persistence import persistSession
 from ..token_accounting import recordActualTokenUsage
-from ..usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
+from ..providers.usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
 from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled
 from .context import isContextWindowFailure, prepareProviderRequest
 from .providers import _create_provider, _record_provider_failure_if_needed

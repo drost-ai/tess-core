@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping
 from urllib.parse import urlsplit
 
 from .repository_trust import approveRepositoryContent, checkRepositoryApproval
-from ..shell_command_policy import parseSingleShellCommand
+from .shell_command_policy import parseSingleShellCommand
 from ..storage import fileOrJson, getProjectRoot, loadSettings
 
 

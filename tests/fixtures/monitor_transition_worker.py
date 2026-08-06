@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from agent_core._utils import now_iso
-from agent_core.monitors import createMonitorRecord
+from agent_core.tasks.monitors import createMonitorRecord
 from agent_core.storage import configureRuntimeHome
 from agent_core.tasks.monitor_observation import applyMonitorObservation
 from agent_core.tasks.monitor_transactions import (

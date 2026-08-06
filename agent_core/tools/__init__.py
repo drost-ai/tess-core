@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..payloads.execution_descriptors import createTaskExecutionDescriptor, createWorkspaceExecutionDescriptor, summarizeOutputManifest
-from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
+from ..tasks.monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from ..storage import listSessionMonitors, loadAutoMode, loadMonitor, loadSession, readTaskMeta, resolveMaybeRelative, saveMonitor, savePlanApproval, taskMetaPath, taskOutputPath, writePlanFile, writeTaskMeta
 from ..payloads.tools import applyDefaultGlobExcludes, filterDefaultIgnoredGlobMatches, shapeGlobPayload, shapeGrepPayload, shapeReadPayload, shapeTextToolResult, splitToolTextLines
 from .agent import _agent_tool

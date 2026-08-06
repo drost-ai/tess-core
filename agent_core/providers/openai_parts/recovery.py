@@ -4,7 +4,7 @@ import hashlib
 import uuid
 from typing import Any
 
-from ...partial_output import PartialOutputDelivery, interruptedPreviewReceipt
+from ..partial_output import PartialOutputDelivery, interruptedPreviewReceipt
 from ..errors import (
     ProviderRequestError,
     createProviderFailureRecord,

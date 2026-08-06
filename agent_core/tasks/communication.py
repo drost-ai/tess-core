@@ -4,8 +4,8 @@ import os
 import uuid
 from typing import Any, Mapping
 
-from ._utils import now_iso
-from .storage import (
+from .._utils import now_iso
+from ..storage import (
     appendJsonLine,
     loadSession,
     mutateTaskMeta,
@@ -15,9 +15,9 @@ from .storage import (
     taskDir,
     writeJsonFile,
 )
-from .storage_store.json_io import mutateJsonLines, readJsonLines
-from .session.persistence import persistSession
-from .message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage_store.json_io import mutateJsonLines, readJsonLines
+from ..session.persistence import persistSession
+from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
 
 
 def task_mailbox_path(task_id: str) -> str:

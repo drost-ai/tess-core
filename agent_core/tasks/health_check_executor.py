@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from ..bash_lifecycle import runInlineShellCommand
-from ..bounded_web_fetch import boundedWebFetch
+from ..process.bash_lifecycle import runInlineShellCommand
+from ..acquisition.bounded_web_fetch import boundedWebFetch
 from ..payloads.utf8_bounds import sliceUtf8Prefix
 from .health_check_policy import (
     assertHealthCheckExecutionPolicy,

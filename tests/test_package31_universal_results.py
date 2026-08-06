@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.bash_lifecycle import _process_group_live, runInlineShellCommand
+from agent_core.process.bash_lifecycle import _process_group_live, runInlineShellCommand
 from agent_core.payloads.bash_results import buildBashResultPayload
 from agent_core.process.output import createSubprocessOutputCollector
 from agent_core.subagents.result_payload import (

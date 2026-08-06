@@ -4,7 +4,7 @@ import copy
 
 from tests.support.agent_core_case import *
 
-from agent_core._compaction_state import refreshCompactionStateFromManifest
+from agent_core.context.compaction_state import refreshCompactionStateFromManifest
 
 
 class CompactionStateTests(AgentCoreTestCase):

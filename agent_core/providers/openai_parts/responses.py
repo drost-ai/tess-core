@@ -1,6 +1,6 @@
 from __future__ import annotations
 from ...contracts.providers import ProviderResponse
-from ...partial_output import PartialOutputDelivery
+from ..partial_output import PartialOutputDelivery
 from ..activity import emitProviderActivity
 from ..openai_turn_session import PreparedOpenAiRequest as _PreparedOpenAiRequest
 from .reconcile import close_openai_output_item as _close_openai_output_item

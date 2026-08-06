@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from .._utils import pretty_json
-from ..bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
+from ..acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
 from ..authority.permission_rules import findDispatchDenyRule
 from ..payloads.tools import shapeTextToolResult
 from ..payloads.utf8_bounds import sliceUtf8Prefix

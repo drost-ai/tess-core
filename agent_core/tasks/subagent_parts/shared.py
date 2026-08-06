@@ -15,8 +15,8 @@ from ...subagents.reconciliation import createSubagentReconciliationForTerminalC
 from ...subagents.continuation import _maybe_start_ready_parent_continuations
 from ...subagents.contract import runtime_contract_for_agent, summarize_subagent_runtime_contract
 from ...subagents.result import evaluate_subagent_result, persist_structured_subagent_result
-from ...task_communication import append_task_event
-from ...workspace import createGitWorktree
+from ..communication import append_task_event
+from ...runtime.workspace import createGitWorktree
 
 
 PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}

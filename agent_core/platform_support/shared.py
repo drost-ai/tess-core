@@ -13,7 +13,7 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import getProjectRoot, getStateRoot, loadAuth, loadDaemonState, loadMcpServers, loadPlugins
-from ..workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
+from ..runtime.workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

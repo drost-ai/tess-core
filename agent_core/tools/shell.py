@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
-from ..bash_lifecycle import runInlineShellCommand
+from ..process.bash_lifecycle import runInlineShellCommand
 from ..payloads.bash_results import buildBashResultPayload
 from ..payloads.execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
 from ..process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation

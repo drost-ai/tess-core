@@ -25,11 +25,11 @@ from ..tasks.monitor_transactions import (
     monitorTransitionEventFields,
     startMonitorOnce,
 )
-from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
+from ..tasks.monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from ..process.identity import processIdentityFromRecord, signalOwnedProcess
 from ..tasks.terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
 from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath
-from ..task_ownership import requireModelOwnedMonitor, requireModelOwnedTask
+from ..tasks.ownership import requireModelOwnedMonitor, requireModelOwnedTask
 from ..payloads.tools import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition

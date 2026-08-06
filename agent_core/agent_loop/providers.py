@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..partial_output_state import (
+from ..providers.partial_output_state import (
     createPartialOutputStateStore as _create_partial_output_state_store,
     finalizePartialOutputState as _finalize_partial_output_state,
 )

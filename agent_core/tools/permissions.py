@@ -8,7 +8,7 @@ from typing import Any
 from ..authority.agent import AgentAuthorityError, assertValidAgentAuthority
 from .._utils import maybe_await
 from ..authority.permission_rules import loadPermissionRulesCached, matchPermissionRule
-from ..shell_command_policy import classifyReadOnlyShellCommand, parseSingleShellCommand
+from ..authority.shell_command_policy import classifyReadOnlyShellCommand, parseSingleShellCommand
 from ..storage import getProjectRoot, loadAutoMode
 
 

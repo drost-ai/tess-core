@@ -8,7 +8,7 @@ import sys
 from typing import Any
 
 from ...agent import runAgentPrompt
-from ...agent_runtime_bindings import createAgentRuntimeBindings
+from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...runtime.generation import createRuntimeSessionBinding
 from ...storage import configureRuntimeHome, loadSession, saveSession

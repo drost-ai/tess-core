@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass as _dataclass
 
 from .shared import *
-from .._compaction_state import isCompactionStateNewer as _is_compaction_state_newer
+from ..context.compaction_state import isCompactionStateNewer as _is_compaction_state_newer
 from ..payloads.attachments import stripInMemoryImageData as _strip_in_memory_image_data
 from ..session.message_history import createSessionMessageList as _create_session_message_list
 

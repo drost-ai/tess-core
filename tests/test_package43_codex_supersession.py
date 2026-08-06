@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
-from agent_core.partial_output import PartialOutputDelivery
+from agent_core.providers.partial_output import PartialOutputDelivery
 
 
 class _Sink:

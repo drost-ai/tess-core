@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from .storage import loadCompactionManifest
+from ..storage import loadCompactionManifest
 
 
 def isCompactionStateNewer(candidate: dict[str, Any] | None, baseline: dict[str, Any] | None) -> bool:

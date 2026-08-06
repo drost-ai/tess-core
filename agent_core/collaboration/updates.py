@@ -7,7 +7,7 @@ from ..config import ensureProviderForModelSelection, normalizeEffortForModel
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
 from ..runtime.secret_provider import resolveProviderConfigSecrets
-from ..usage_costs import mergeUsageIntoSession as _merge_usage_into_session
+from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
 async def authorCollaborationUpdate(args: dict[str, Any]) -> str:

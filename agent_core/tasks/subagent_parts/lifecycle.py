@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...message_origin import messageWithOrigin as _message_with_origin
+from ...session.message_origin import messageWithOrigin as _message_with_origin
 from ...authority.agent import (
     captureAgentAuthority,
     deriveChildAgentAuthority,

@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..message_origin import syntheticUserMessage as _synthetic_user_message
+from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
 
 

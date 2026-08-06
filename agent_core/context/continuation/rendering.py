@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...message_origin import (
+from ...session.message_origin import (
     isGenuineUserRequest as _is_genuine_user_request,
     isRuntimeSyntheticMessage as _is_runtime_synthetic_message,
 )

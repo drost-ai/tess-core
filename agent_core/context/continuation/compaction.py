@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...message_origin import (
+from ...session.message_origin import (
     isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
     syntheticUserMessage as _synthetic_user_message,
 )

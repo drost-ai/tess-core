@@ -154,7 +154,7 @@ async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str,
         raise RuntimeError("Foreground subagent execution requires getTools, tools, or runSubagent in the runtime context.")
     from ...agent import runAgentPrompt
 
-    from ...agent_runtime_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
+    from ...runtime.agent_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
     from ...runtime.generation import createRuntimeSessionBinding
 
     daemon = context.get("daemon")

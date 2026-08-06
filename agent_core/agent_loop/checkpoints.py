@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from .._compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
+from ..context.compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
 from ..compaction_models import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
 
 

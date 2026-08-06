@@ -28,7 +28,7 @@ from ..providers.openai import sendOpenAiRequest
 from ..session.persistence import persistProviderFailure, persistProviderRecovery, persistSession, repairSessionTranscript
 from ..subagents.reconciliation import appendPendingSubagentReconciliationsToSession, consumeAppendedSubagentReconciliations
 from ..token_accounting import measureRequestInputTokens, recordActualTokenUsage, recordPreflightTokenMeasurement
-from ..usage_costs import MODEL_PRICING
+from ..providers.usage_costs import MODEL_PRICING
 
 
 PLAN_SAFE_TOOL_NAMES = {

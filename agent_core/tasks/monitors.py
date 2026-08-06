@@ -8,23 +8,23 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-from ._utils import now_iso
-from .config import ensureProviderForModelSelection, normalizeEffortForModel
+from .._utils import now_iso
+from ..config import ensureProviderForModelSelection, normalizeEffortForModel
 from .monitor_bootstrap import _MonitorBootstrapBaseline
-from .tasks.monitor_observation import (
+from .monitor_observation import (
     buildMonitorNarrationMutation as _build_monitor_narration_mutation,
     buildMonitorObservationMutation as _build_monitor_observation_mutation,
 )
-from .tasks.monitor_transactions import (
+from .monitor_transactions import (
     commitMonitorMutation as _commit_monitor_mutation,
     monitorTransitionEventFields as _monitor_transition_event_fields,
 )
-from .providers.anthropic import sendAnthropicMessagesRequest
-from .providers.openai import sendOpenAiRequest
-from .runtime.secret_provider import resolveProviderConfigSecrets
-from .session.persistence import persistSession
-from .storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
-from .usage_costs import mergeUsageIntoSession as _merge_usage_into_session
+from ..providers.anthropic import sendAnthropicMessagesRequest
+from ..providers.openai import sendOpenAiRequest
+from ..runtime.secret_provider import resolveProviderConfigSecrets
+from ..session.persistence import persistSession
+from ..storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
+from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 MONITOR_TICK_MS = 1500
 DEFAULT_CHECK_INTERVAL_MS = 5000

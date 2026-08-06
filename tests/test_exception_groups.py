@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_core.exception_groups import RuntimeExceptionGroup
+from agent_core.runtime.exception_groups import RuntimeExceptionGroup
 
 
 def test_runtime_exception_group_preserves_all_failures() -> None:
