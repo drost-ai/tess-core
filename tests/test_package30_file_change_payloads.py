@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, core, run
+from agent_core._utils import pretty_json
 
 
 diff_module = importlib.import_module("agent_core.tools.file_change_diff")
@@ -195,7 +196,7 @@ class Package30FileChangePayloadTests(AgentCoreTestCase):
                     artifactWriter=unavailable,
                 )
             )
-            serialized = core.pretty_json(degraded)
+            serialized = pretty_json(degraded)
             self.assertLessEqual(len(serialized.encode()), 12_000)
             self.assertTrue(degraded["diffView"]["truncated"])
             self.assertTrue(degraded["diffView"]["artifactUnavailable"])

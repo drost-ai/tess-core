@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from agent_core._utils import now_iso
 
 
 hygiene_module = importlib.import_module("agent_core.platform_support.session_hygiene")
@@ -160,7 +161,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
             damaged = self._record(workspace, "77777777-7777-4777-8777-777777777777", updated_at=_BAD)
             self._write_stamped(damaged, _BAD)
             target = Path(core.sessionPath(damaged["id"]))
-            run(core.saveDaemonState({"pid": os.getpid(), "phase": "running", "startedAt": core.now_iso()}))
+            run(core.saveDaemonState({"pid": os.getpid(), "phase": "running", "startedAt": now_iso()}))
             refused = run(core.repairSessionTimestamps({"apply": True}))
             self.assertTrue(refused["refusedDaemonRunning"])
             self.assertFalse(refused["applied"])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+from agent_core._utils import now_iso
 
 
 class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
@@ -148,7 +149,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
         try:
             config, session = self._session(home, workspace)
             task_id = "task-monitor-tool-race"
-            now = core.now_iso()
+            now = now_iso()
             session["metadata"]["taskIds"] = [task_id]
             run(
                 core.saveTaskRecord(

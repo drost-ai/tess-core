@@ -49,17 +49,8 @@ def _resolves(segments: list[str]) -> bool:
     return True
 
 
-def _legacy_aliases() -> set[str]:
-    text = (PACKAGE / "__init__.py").read_text(encoding="utf-8")
-    block = text.split("_LEGACY_MODULE_ALIASES = {")[1].split("}")[0]
-    return set(re.findall(r'"([a-z_0-9]+)":', block))
-
-
 class ModulePathStringTests(unittest.TestCase):
     def test_module_paths_written_as_strings_still_resolve(self):
-        # Only legacy aliases short-circuit: current names are checked by
-        # walking the tree, so a stale *deep* path is caught too.
-        resolvable = _legacy_aliases()
         offenders: list[str] = []
         for base in SEARCH_ROOTS:
             for path in sorted((ROOT / base).rglob("*.py")):
@@ -73,8 +64,6 @@ class ModulePathStringTests(unittest.TestCase):
                         segments = match.group(1).lstrip(".").split(".")
                         if segments[0] in FILE_SUFFIXES:
                             continue
-                        if segments[0] in resolvable:
-                            continue  # a legacy alias resolves via sys.modules
                         if _resolves(segments):
                             continue
                         offenders.append(f"{path.relative_to(ROOT)}:{number}: agent_core.{'.'.join(segments)}")

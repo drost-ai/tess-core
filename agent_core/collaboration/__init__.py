@@ -1,28 +1,88 @@
-"""Collaboration runtime: worker snapshots, narration, remote sessions, bridges."""
+"""Collaboration runtime: worker snapshots, narration, remote sessions, bridges.
 
+The facade re-exports exactly the public names its submodules define.
+"""
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
+from .remote import (
+    canPromptForSelection,
+    createBridgeRuntime,
+    createRemoteSession,
+    findMatchingRemoteSessions,
+    formatBridgeTail,
+    formatRemoteSessionCandidate,
+    getBridgeDiagnostics,
+    listActiveBridgeRows,
+    promptToPickRemoteSession,
+    resolveRemoteSelection,
+    resolveTeleportSession,
+    sendBridgeMessage,
+    updateRemoteSession,
+)
+from .runtime import (
+    COLLABORATION_TICK_MS,
+    MIN_ASSISTANT_UPDATE_SPACING_MS,
+    authorCollaborationUpdate,
+    buildCollaborationWorkers,
+    buildSubagentWorkerSummary,
+    buildUpdateCandidates,
+    collaborationSnapshotPayload,
+    createCollaborationRuntime,
+    createCollaborationSnapshot,
+    emptyCollaborationSnapshot,
+    isRelatedChildAgent,
+    mapChildAgentStatus,
+    mapMonitorStatus,
+    mapRemoteStatus,
+    sendAnthropicMessagesRequest,
+    sendOpenAiRequest,
+    serializeRemote,
+    shouldNarrateWorker,
+    workerEventCandidate,
+)
+from .updates import (
+    appendAssistantCollaborationMessage,
+    authorCollaborationUpdate,
+    authorCollaborationUpdateWithProvider,
+    buildDeterministicCollaborationUpdate,
+    mergeUsage,
+)
 
-from .._utils import packageExports as _package_exports
-from . import runtime as _impl
-from .runtime import *
-
-for _name in vars(_impl):
-    if _name.startswith("_") and not _name.startswith("__"):
-        globals()[_name] = getattr(_impl, _name)
-
-
-class _CollaborationModule(_types.ModuleType):
-    # Tests and embedders replace provider senders on ``agent_core.collaboration``;
-    # forward those onto the implementation module so the running code sees them.
-    def __setattr__(self, name, value):
-        super().__setattr__(name, value)
-        if not name.startswith("__"):
-            setattr(_impl, name, value)
-
-
-_sys.modules[__name__].__class__ = _CollaborationModule
-
-__all__ = _package_exports(globals(), {"bridge", "remote", "runtime", "updates"})
+__all__ = [
+    "COLLABORATION_TICK_MS",
+    "MIN_ASSISTANT_UPDATE_SPACING_MS",
+    "appendAssistantCollaborationMessage",
+    "authorCollaborationUpdate",
+    "authorCollaborationUpdateWithProvider",
+    "buildCollaborationWorkers",
+    "buildDeterministicCollaborationUpdate",
+    "buildSubagentWorkerSummary",
+    "buildUpdateCandidates",
+    "canPromptForSelection",
+    "collaborationSnapshotPayload",
+    "createBridgeRuntime",
+    "createCollaborationRuntime",
+    "createCollaborationSnapshot",
+    "createRemoteSession",
+    "emptyCollaborationSnapshot",
+    "findMatchingRemoteSessions",
+    "formatBridgeTail",
+    "formatRemoteSessionCandidate",
+    "getBridgeDiagnostics",
+    "isRelatedChildAgent",
+    "listActiveBridgeRows",
+    "mapChildAgentStatus",
+    "mapMonitorStatus",
+    "mapRemoteStatus",
+    "mergeUsage",
+    "promptToPickRemoteSession",
+    "resolveRemoteSelection",
+    "resolveTeleportSession",
+    "sendAnthropicMessagesRequest",
+    "sendBridgeMessage",
+    "sendOpenAiRequest",
+    "serializeRemote",
+    "shouldNarrateWorker",
+    "updateRemoteSession",
+    "workerEventCandidate",
+]

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from ..platform import collectDoctorReport
+from ..platform_support import collectDoctorReport
 from ..session.transcript import buildTranscriptSnapshot
 from ..storage import (
     listChildAgents,

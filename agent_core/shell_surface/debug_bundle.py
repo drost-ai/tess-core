@@ -7,7 +7,7 @@ from typing import Any
 
 from .._utils import now_iso
 from .agents import _is_related_child_agent
-from ..platform import collectDoctorReport
+from ..platform_support import collectDoctorReport
 from ..storage import (
     compactionCheckpointPath,
     compactionManifestPath,

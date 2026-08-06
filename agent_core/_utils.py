@@ -97,13 +97,3 @@ def flatten(values: Iterable[Iterable[Any]]) -> list[Any]:
         out.extend(value)
     return out
 
-
-def packageExports(namespace: dict, submodules: set[str]) -> list[str]:
-    """Star-export names for a subsystem package facade.
-
-    Importing a submodule binds its name on the parent package, which would
-    otherwise leak into ``from agent_core.<pkg> import *``. Before the v1
-    consolidation these submodules were separate top-level modules, so the
-    facade's star-export deliberately omits them.
-    """
-    return sorted(name for name in namespace if not name.startswith("_") and name not in submodules)

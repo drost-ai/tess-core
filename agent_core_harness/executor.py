@@ -25,6 +25,7 @@ from .fake_providers import FakeProviderRuntime, assert_provider_capture, assert
 from .fault_matrix import run_anthropic_fault_matrix_step
 from .goldens import compare_golden, expected_observations, render_diff, update_golden
 from .loader import load_scenario
+from agent_core._utils import now_iso
 from .mcp_driver import (
     assert_mcp_bootstrap,
     assert_mcp_event,
@@ -125,17 +126,17 @@ async def run_scenario_async(
     try:
         sandbox.apply_setup(resolved.setup)
         for index, step in enumerate(resolved.steps):
-            started = core.now_iso()
+            started = now_iso()
             try:
                 observation_keys = await _execute_step(step.type, step.input, resolved, sandbox, state, steps, observations)
-                steps.append(StepResult(index, step.type, "passed", started, core.now_iso(), observation_keys))
+                steps.append(StepResult(index, step.type, "passed", started, now_iso(), observation_keys))
             except ScenarioAssertionError as exc:
                 failure = {"category": exc.category, "message": str(exc), "stepIndex": index, "stepType": step.type}
-                steps.append(StepResult(index, step.type, "failed", started, core.now_iso(), [], failure))
+                steps.append(StepResult(index, step.type, "failed", started, now_iso(), [], failure))
                 break
             except Exception as exc:
                 failure = {"category": "runtime", "message": str(exc), "stepIndex": index, "stepType": step.type}
-                steps.append(StepResult(index, step.type, "failed", started, core.now_iso(), [], failure))
+                steps.append(StepResult(index, step.type, "failed", started, now_iso(), [], failure))
                 break
         observations = _final_observations(resolved, sandbox, state, steps)
         raw_path, normalized_path = write_observations(sandbox, observations)

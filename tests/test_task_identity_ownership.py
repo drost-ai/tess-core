@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from tests.support.agent_core_case import *
+from agent_core._utils import now_iso
 import agent_core.process.identity as process_identity_module
 
 
@@ -102,7 +103,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
         try:
             core.configureRuntimeHome(str(home))
             run(core.ensureBaseLayout(str(workspace)))
-            now = core.now_iso()
+            now = now_iso()
             run(
                 core.saveTaskRecord(
                     {
@@ -131,7 +132,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
         try:
             core.configureRuntimeHome(str(home))
             run(core.ensureBaseLayout(str(workspace)))
-            now = core.now_iso()
+            now = now_iso()
 
             def record(task_id: str, session_id: str, kind: str):
                 return {
@@ -189,8 +190,8 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
                 "id": "monitor-owned",
                 "sessionId": "session-owner",
                 "taskId": "task-owned",
-                "createdAt": core.now_iso(),
-                "updatedAt": core.now_iso(),
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
                 "status": "active",
                 "goal": "watch",
                 "checkIntervalMs": 1000,

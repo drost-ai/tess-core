@@ -14,22 +14,15 @@ PUBLIC_API_EXPORTS = ROOT / "tests" / "fixtures" / "public_api" / "exports.json"
 PUBLIC_MODULES = [
     "agent_core",
     "agent_core.agent",
-    "agent_core.compaction",
+    "agent_core.collaboration",
     "agent_core.config",
-    "agent_core.continuation",
     "agent_core.daemon",
-    "agent_core.durable_memory",
-    "agent_core.interactive_actions",
     "agent_core.mcp",
-    "agent_core.platform",
-    "agent_core.provider_watchdog",
-    "agent_core.shell",
+    "agent_core.platform_support",
+    "agent_core.shell_surface",
     "agent_core.storage",
     "agent_core.subagents",
-    "agent_core.task_runtime",
-    "agent_core.task_supervisor",
     "agent_core.testing",
-    "agent_core.token_accounting",
     "agent_core.tools",
     "agent_core.context.compaction",
     "agent_core.context.continuation",
@@ -40,7 +33,10 @@ PUBLIC_MODULES = [
     "agent_core.tasks.supervisor",
 ]
 
-LINE_BUDGET_ALLOWLIST = {}
+# The top-level facade is a generated re-export manifest: one line per public
+# name plus the __all__ literal. Its size tracks the public API surface, not
+# module complexity; shrink it by shrinking the API, not by splitting the file.
+LINE_BUDGET_ALLOWLIST = {"agent_core/__init__.py": 800}
 
 
 def _public_names(module_name: str) -> list[str]:

@@ -9,6 +9,7 @@ import agent_core as core
 from .model import ScenarioAssertionError
 from .runtime_driver import ensure_session_config
 from .sandbox import ScenarioSandbox
+from agent_core._utils import now_iso
 
 
 async def seed_collaboration_fixture(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
@@ -142,7 +143,7 @@ async def update_child_agent_status(data: dict[str, Any], _sandbox: ScenarioSand
     if not record:
         raise ScenarioAssertionError(f"Child agent not found: {agent_id}", category="driver")
     record.update({key: value for key, value in data.items() if key in {"status", "completionReason", "resultSummary", "latestResultAt", "completedAt", "lastUpdatedAt", "retryable", "stoppable"}})
-    record.setdefault("lastUpdatedAt", core.now_iso())
+    record.setdefault("lastUpdatedAt", now_iso())
     await core.saveChildAgent(record)
     state.setdefault("remote_driver_results", []).append({"driver": "update_child_agent_status", "status": "passed", "agentId": agent_id, "nextStatus": record.get("status")})
     return ["remote_driver_results"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+from agent_core._utils import now_iso
 
 from agent_core.tasks import health_check_executor as executor
 from agent_core.tasks import health_check_revalidation as revalidation
@@ -318,7 +319,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 _commit_attempt(
                     task_id,
                     1,
-                    core.now_iso(),
+                    now_iso(),
                     {
                         "okay": True,
                         "outputExcerpt": "late success",
@@ -350,8 +351,8 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 "backoffMultiplier": 2,
                 "maxIntervalMs": 4000,
                 "status": "active",
-                "createdAt": core.now_iso(),
-                "updatedAt": core.now_iso(),
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
             }
             run(core.saveHealthCheckTask(legacy))
             source_path = Path(core.healthCheckMetaPath(task_id))

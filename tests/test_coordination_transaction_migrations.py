@@ -112,7 +112,7 @@ class CoordinationTransactionMigrationTests(AgentCoreTestCase):
                 )
 
             with patch(
-                "agent_core.process_identity._process_identity_observer_for_tests",
+                "agent_core.process.identity._process_identity_observer_for_tests",
                 observe,
             ):
                 run(core.recoverSubagentLaunchGroupContinuations(

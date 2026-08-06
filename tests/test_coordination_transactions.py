@@ -126,7 +126,7 @@ class CoordinationTransactionTests(AgentCoreTestCase):
         try:
             parent_id = "40000000-0000-4000-8000-000000000001"
             marker = {"schemaVersion": 1, "pid": os.getpid(), "startToken": "test", "platform": "test"}
-            with patch("agent_core.subagent_coordination.captureProcessBirthMarker", AsyncMock(return_value=marker)):
+            with patch("agent_core.subagents.coordination.captureProcessBirthMarker", AsyncMock(return_value=marker)):
                 run(_create_group(parent_id, "dual-claim"))
 
                 async def dual_claims() -> list[dict | None]:

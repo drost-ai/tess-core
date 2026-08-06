@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 
 from ..daemon import connectTaskSupervisorDaemonClient
 from ..storage import (
@@ -335,9 +334,7 @@ async def _resolve_task_supervisor(args: dict[str, Any] | None = None) -> tuple[
     supervisor = args.get("daemon") or args.get("taskSupervisor")
     if supervisor:
         return supervisor, False
-    facade = sys.modules.get("agent_core.interactive_actions")
-    connect = getattr(facade, "connectTaskSupervisorDaemonClient", connectTaskSupervisorDaemonClient)
-    supervisor = await connect()
+    supervisor = await connectTaskSupervisorDaemonClient()
     should_close = bool(isinstance(supervisor, dict) and supervisor.get("_daemonClient"))
     return supervisor, should_close
 

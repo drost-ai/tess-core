@@ -7,11 +7,13 @@ import time
 from pathlib import Path
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from agent_core._utils import now_iso
 
 
 live_work = importlib.import_module("agent_core.tasks.supervisor_parts.live_work")
 collaboration_module = importlib.import_module("agent_core.collaboration")
-monitors_module = importlib.import_module("agent_core.monitors")
+collaboration_runtime_module = importlib.import_module("agent_core.collaboration.runtime")
+monitors_module = importlib.import_module("agent_core.tasks.monitors")
 
 _OLD = "2026-01-01T00:00:00Z"
 _DEAD_PID = 99_999_999
@@ -69,7 +71,7 @@ class Package29LiveWorkTests(AgentCoreTestCase):
             )
             run(core.writeTaskMeta("sub-dead", self._task("sub-dead", "child", type="subagent", parent_session_id=session["id"], agent_id="agent-dead", pid=_DEAD_PID)))
             run(core.saveChildAgent({"agentId": "agent-dead", "sessionId": "child", "parentSessionId": session["id"], "status": "backgrounded", "pid": _DEAD_PID, "startedAt": _OLD}))
-            run(core.writeTaskMeta("recent", self._task("recent", session["id"], pid=_DEAD_PID, startedAt=core.now_iso())))
+            run(core.writeTaskMeta("recent", self._task("recent", session["id"], pid=_DEAD_PID, startedAt=now_iso())))
 
             verdict = run(live_work._resolve_session_live_work(session))
             self.assertTrue(verdict["live"])
@@ -140,7 +142,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
     def test_collaboration_bootstrap_is_silent_and_later_transition_narrates(self):
         root, _home, workspace, previous = self.temp_context()
         runtime = None
-        original_send = collaboration_module.sendOpenAiRequest
+        original_send = collaboration_runtime_module.sendOpenAiRequest
         try:
             session = core.createEmptySession(cwd=str(workspace), provider="openai", model="test-model", systemPrompt="test", permissionMode="default", sessionId="66666666-6666-4666-8666-666666666666")
             session["messages"] = [{"role": "user", "content": "delegate"}]
@@ -154,7 +156,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
                 calls.append(args)
                 return {"content": [{"type": "text", "text": "The researcher finished."}], "usage": {}}
 
-            collaboration_module.sendOpenAiRequest = fake_send
+            collaboration_runtime_module.sendOpenAiRequest = fake_send
             target = Path(core.sessionPath(session["id"]))
             before = (target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"]))
             events = []
@@ -163,13 +165,13 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"])), before)
             self.assertTrue(any(event == "subagent.status_changed" for event, _ in events))
 
-            run(core.saveChildAgent({**child, "status": "completed", "completedAt": core.now_iso(), "lastUpdatedAt": core.now_iso(), "resultSummary": "done"}))
+            run(core.saveChildAgent({**child, "status": "completed", "completedAt": now_iso(), "lastUpdatedAt": now_iso(), "resultSummary": "done"}))
             run(runtime["refresh"]())
             self.assertEqual(len(calls), 1)
             self.assertTrue(any(event == "collaboration.assistant_update" for event, _ in events))
             self.assertEqual(session["messages"][-1]["content"], "The researcher finished.")
         finally:
-            collaboration_module.sendOpenAiRequest = original_send
+            collaboration_runtime_module.sendOpenAiRequest = original_send
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)

@@ -23,7 +23,6 @@ def createBuiltinToolContractSnapshot(options: dict[str, Any] | None = None) -> 
     ]
 
 
-create_builtin_tool_contract_snapshot = createBuiltinToolContractSnapshot
 
 
 def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefinition]:
@@ -64,7 +63,6 @@ def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefini
     return tools
 
 
-create_builtin_tools = createBuiltinTools
 
 
 _BUILTIN_TOOL_CONCURRENCY: dict[str, ToolConcurrency] = {

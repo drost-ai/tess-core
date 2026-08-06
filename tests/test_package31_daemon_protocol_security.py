@@ -3,6 +3,7 @@ from __future__ import annotations
 import stat
 
 from tests.support.agent_core_case import *
+from agent_core._utils import now_iso
 
 from agent_core.daemon.protocol import (
     DAEMON_MAX_REQUEST_FRAME_BYTES,
@@ -381,7 +382,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         try:
             run(core.ensureBaseLayout(str(workspace)))
             run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
-            now = core.now_iso()
+            now = now_iso()
             state = {
                 "instanceId": "security-churn",
                 "protocolVersion": DAEMON_PROTOCOL_VERSION,
@@ -421,7 +422,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             run(core.ensureBaseLayout(str(workspace)))
             run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
             auth = run(createDaemonAuthMaterial())
-            now = core.now_iso()
+            now = now_iso()
             run(
                 core.saveDaemonState(
                     {
@@ -446,7 +447,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             run(core.ensureBaseLayout(str(workspace)))
             run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
             auth = run(createDaemonAuthMaterial())
-            now = core.now_iso()
+            now = now_iso()
             epoch = "cleanup-purpose-confusion"
             socket_path = core.daemonSocketPath()
             Path(socket_path).write_bytes(b"operator-owned-evidence")

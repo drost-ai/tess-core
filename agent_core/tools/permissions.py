@@ -222,10 +222,6 @@ def _matches_command_policy(command: str, patterns: list[str]) -> bool:
     return False
 
 
-def _normalize_shell_command(command: str) -> str:
-    return re.sub(r"\s+", " ", command).strip().lower()
-
-
 async def _ask_question_with_detail(context: ToolContext, prompt: str, options: list[str], detail: dict[str, Any], fallback: str) -> str:
     ask = context.get("askQuestion", lambda *_: fallback)
     try:

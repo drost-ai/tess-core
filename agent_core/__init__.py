@@ -1,132 +1,723 @@
-from .agent import *
-from .runtime.agent_bindings import *
-from .authority.agent import *
-from .collaboration import *
-from .collaboration.bridge.recovery import (
-    BridgeRecoveryBlockedError,
-    inspectBridgeRecovery,
-    resolveBridgeRecovery,
+"""agent-core: a dependency-free agent runtime.
+
+This facade re-exports the public API of every subsystem explicitly.
+Import subsystem modules directly for internal names.
+"""
+from __future__ import annotations
+
+from . import headless
+from .agent import (
+    ARTIFACT_ACQUISITION_FAILURE_LIMIT, GENERAL_NO_PROGRESS_LIMIT, IMAGE_INPUT_UNSUPPORTED_MESSAGE,
+    LogicalTurnProgressLedger, MAX_RECORDED_ARTIFACTS, MAX_RECORDED_FINGERPRINTS, MAX_REPEATED_CYCLE_BATCHES,
+    OperatorPolicyDecision, PLAN_SAFE_TOOL_NAMES, PROGRESS_LEDGER_SCHEMA_VERSION, REPEATED_TOOL_CYCLE_LIMIT,
+    STRICT_TOOL_PROTOCOL_PROVIDERS, SerialQueue, ToolDispatchOutcome, ToolResultBatchBudget, ToolResultTurnBudget,
+    addEmptyResponseContinuationNudge, appendToolResultBatch, applyProviderTokenBudget, approval_skip_result,
+    assessContextHeadroom, bounded_mcp_identity, buildToolContext, build_tool_hook_context,
+    completeEmptyProviderResponse, create_serial_queue, dynamicContextBelongsInMessages, emitContinuationRelief,
+    enforceContextHeadroom, extractAssistantText, finish_stable_boundary, headroomEventPayload,
+    injectSystemContextIntoMessages, invalid_tool_input_message, isContextWindowFailure, isEmptyAssistantResponse,
+    maybeAutoCheckpointRawSession, maybeAutoCompactSession, modelSupportsImageInputs, noProgressEventData,
+    noProgressTurnResult, normalizeProviderRequestMessages, normalize_agent_prompt, plan_mode_denial,
+    prepareProviderRequest, recordContinuationRelief, recordEmptyResponseUsage, requestHasImageInputs,
+    requestProviderResponse, resolve_effective_provider_turn_binding, resolve_plan_mode_mcp_verdict,
+    resolve_tool_concurrency, retiredInteractiveReliefReceipt, runAgentPrompt, run_in_provider_turn_session,
+    run_post_tool_hook, run_pre_tool_hook, run_stable_boundary_hook, run_tool_dispatch_batch,
+    run_with_transient_execution_session, unsupportedImageInputResponse,
 )
-from .config import *
-from .daemon import *
-from .context.durable_memory import *
-from .payloads.execution_descriptors import *
-from .authority.executable_closure import *
-from .authority.executable_config import *
-from .authority.executable_source_policy import *
-from .acquisition.fetch_proxy import *
-from .authority.hooks import *
-from .runtime.lifecycle_barrier import *
-from .mcp import *
-from .tasks.monitors import *
-from .platform import *
-from .authority.plugin_contracts import *
-from .authority.plugins import *
-from .authority.permission_rules import *
-from .process.identity import *
-from .providers.errors import *
-from .providers.activity import *
-from .collaboration.remote import *
-from .authority.repository_trust import *
-from .runtime.bootstrap import *
-from .runtime.generation import *
-from .runtime.paths import *
-from .runtime.identifiers import *
-from .runtime.secrets import *
-from .runtime.events import *
-from .runtime.state import *
-from .sandbox import *
-from .session.persistence import *
-from .session.runtime import *
-from .shell import *
-from .authority.shell_command_policy import *
-from .storage import *
-from .subagents.capacity import *
-from .subagents.continuation import *
-from .subagents.coordination import *
-from .subagents.continuation_recovery import *
-from .subagents.contract import *
-from .subagents.depth_policy import *
-from .subagents.groups import *
-from .subagents.limits import *
-from .subagents.reconciliation import *
-from .subagents.reconciliation_renderer import *
-from .subagents.reconciliation_store import *
-from .subagents.result import *
-from .subagents import *
-from .tasks.ownership import *
-from .process.task_launch import *
-from .tasks.communication import *
-from .tasks.runtime import *
-from .tasks.supervisor import *
-from .payloads.tools import *
-from .tools import *
-from .runtime.workspace import *
-from .context.compaction import *
-from .context.compaction_models import *
-from .context.context_policy import *
-from .context.continuation import *
-from .context.token_accounting import *
-from .providers.anthropic import *
-from .providers.openai import *
-
-# --- v1 subsystem consolidation --------------------------------------------
-# A relocated module keeps its historical ``agent_core.<name>`` import path by
-# registering the *same module object* in ``sys.modules`` -- rather than
-# re-exporting it through a shim file -- which preserves object identity. So
-# importing the legacy path, from-importing through it, its membership in
-# ``dir(agent_core)``, and monkeypatching a name onto it all behave as before.
-#
-# Only paths with a known external consumer are kept; the incidental ones that
-# the old star-import layout exposed were retired in the v1 refactor. See
-# PUBLIC_API_CHANGES.md for the full list.
-_LEGACY_MODULE_ALIASES = {
-    "compaction": "agent_core.context.compaction",
-    "compaction_models": "agent_core.context.compaction_models",
-    "context_policy": "agent_core.context.context_policy",
-    "continuation": "agent_core.context.continuation",
-    "durable_memory": "agent_core.context.durable_memory",
-    "monitors": "agent_core.tasks.monitors",
-    "process_identity": "agent_core.process.identity",
-    "provider_watchdog": "agent_core.providers.watchdog",
-    "subagent_coordination": "agent_core.subagents.coordination",
-    "task_process_launch": "agent_core.process.task_launch",
-    "task_runtime": "agent_core.tasks.runtime",
-    "task_supervisor": "agent_core.tasks.supervisor",
-    "token_accounting": "agent_core.context.token_accounting",
-}
-
-
-def _install_legacy_module_aliases() -> None:
-    import importlib
-    import sys
-
-    for alias, target in _LEGACY_MODULE_ALIASES.items():
-        module = importlib.import_module(target)
-        sys.modules[f"{__name__}.{alias}"] = module
-        globals()[alias] = module
-
-
-_install_legacy_module_aliases()
-
-_INTERNAL_MODULES = {
-    # Subsystem packages introduced by the v1 consolidation. Importing a
-    # submodule binds the package name here, but these had no same-named
-    # top-level module before, so they are not part of the public surface.
-    "acquisition",
-    "authority",
-    "payloads",
-    "process",
-}
-
-__all__ = sorted(
-    name for name in globals()
-    if not name.startswith("_") and name != "headless" and name not in _INTERNAL_MODULES
+from .runtime.agent_bindings import (
+    AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION, RuntimeBindingsCompatibilityError, assertAgentRuntimeBindings,
+    createAgentRuntimeBindings, isTaskSupervisorGateway, materializeAgentExecutionRuntime, unavailableDaemonBinding,
+)
+from .authority.agent import (
+    AgentAuthorityError, assertMatchingPersistedChildAuthorities, assertPathWithinAgentAuthority,
+    assertValidAgentAuthority, canonicalizeAuthorityPath, captureAgentAuthority, deriveChildAgentAuthority,
+    enforceSessionAgentAuthority, filterToolsForAgentAuthority, fingerprintAgentAuthority, isNoMorePermissive,
+    isPathWithinAuthority, meetPermissionModes, sandboxConfigForAgentAuthority,
+)
+from .collaboration import (
+    COLLABORATION_TICK_MS, MIN_ASSISTANT_UPDATE_SPACING_MS, appendAssistantCollaborationMessage,
+    authorCollaborationUpdate, authorCollaborationUpdateWithProvider, buildCollaborationWorkers,
+    buildDeterministicCollaborationUpdate, buildSubagentWorkerSummary, buildUpdateCandidates, canPromptForSelection,
+    collaborationSnapshotPayload, createBridgeRuntime, createCollaborationRuntime, createCollaborationSnapshot,
+    createRemoteSession, emptyCollaborationSnapshot, findMatchingRemoteSessions, formatBridgeTail,
+    formatRemoteSessionCandidate, getBridgeDiagnostics, isRelatedChildAgent, listActiveBridgeRows,
+    mapChildAgentStatus, mapMonitorStatus, mapRemoteStatus, mergeUsage, promptToPickRemoteSession,
+    resolveRemoteSelection, resolveTeleportSession, sendAnthropicMessagesRequest, sendBridgeMessage,
+    sendOpenAiRequest, serializeRemote, shouldNarrateWorker, updateRemoteSession, workerEventCandidate,
+)
+from .collaboration.bridge.recovery import BridgeRecoveryBlockedError, inspectBridgeRecovery, resolveBridgeRecovery
+from .config import (
+    BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES, DEFAULT_ASSISTANT_DESCRIPTION, DEFAULT_ASSISTANT_NAME, DEFAULT_EFFORT,
+    DEFAULT_IMAGE_INPUT_MIME_TYPES, DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES, DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
+    DEFAULT_MAX_IMAGE_INPUT_BYTES, DEFAULT_MAX_IMAGE_INPUT_COUNT, DEFAULT_MODEL, DEFAULT_OPENAI_API_MODE,
+    DEFAULT_OPENAI_CODEX_AUTH_PATH, DEFAULT_PROVIDER, DEFAULT_PROVIDER_PROFILE_NAME, DEFAULT_TUI_SCREEN_MODE,
+    MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES, MAX_PROVIDER_ENCODED_IMAGE_REQUEST_BYTES,
+    MAX_PROVIDER_IMAGE_INPUT_BYTES, MAX_PROVIDER_IMAGE_INPUT_COUNT, PROVIDER_DEFAULT_EFFORT, PROVIDER_DEFAULT_MODEL,
+    PROVIDER_MODELS, VALID_EFFORT_LEVELS, buildDefaultSystemPrompt, buildEffectiveSystemPrompt,
+    buildPlanModeSystemPrompt, buildSystemPromptForAgent, defaultToolList, ensureProviderForModelSelection,
+    filterToolsByPolicy, getDefaultAssistantDescription, getDefaultAssistantName, getDefaultEffort,
+    getDefaultEffortForProvider, getDefaultModel, getDefaultModelForProvider, getDefaultProvider,
+    getDefaultSystemPrompt, getDefaultToolList, inferProviderForModel, isPlanRevisionPrompt, listEffortLevels,
+    listModelsForProvider, listProviderProfiles, listProviderProfilesForKind, listProviders, modelSupportsEffort,
+    modelSupportsMaxEffort, modelSupportsXhighEffort, normalizeEffortForModel, normalizeEffortLevel,
+    normalizeModelName, normalizeOpenAiApiModeSetting, normalizeProviderName, normalizeProviderProfileName,
+    normalizeTuiScreenMode, resolveAgentDefinition, resolveCompactionProviderProfileBinding, resolveConfig,
+    resolveFallbackProviderProfileName, resolveModelForAgent, resolveOpenAiApiMode, resolveProviderForModelSelection,
+    resolveProviderProfile, resolveProviderProfiles, resolveSelectedProviderProfileName,
+)
+from .daemon import (
+    AuthenticatedDaemonServer, DAEMON_AUTH_TIMEOUT_MS, DAEMON_MAX_PENDING_GLOBAL, DAEMON_MAX_PENDING_PER_CLIENT,
+    DAEMON_MAX_REQUEST_FRAME_BYTES, DAEMON_MAX_REQUEST_IDS_PER_CONNECTION, DAEMON_MAX_REQUEST_ID_BYTES,
+    DAEMON_MAX_RESPONSE_FRAME_BYTES, DAEMON_PROTOCOL_VERSION, DAEMON_RPC_TIMEOUT_MS, DaemonAbortSignal,
+    DaemonLineDecoder, DaemonProtocolError, DaemonSecurityError, DaemonServerPeer, MAX_DAEMON_STATE_BYTES,
+    MAX_DAEMON_TOKEN_BYTES, MAX_DAEMON_TREE_DEPTH, MAX_DAEMON_TREE_ENTRIES, PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE,
+    boundedProtocolDiagnostic, connectTaskSupervisorDaemonClient, createAuthenticatedDaemonServer,
+    createDaemonAuthMaterial, daemonAuthTokenPath, daemonTokenId, daemonTokensEqual, encodeDaemonFrame,
+    ensureTaskSupervisorDaemon, generateDaemonAuthMaterial, getTaskSupervisorDaemonState, isDaemonAuthRequest,
+    isDaemonAuthResponse, isDaemonEventMessage, isDaemonResponse, isDaemonSocketListenerActive,
+    openAuthenticatedDaemonConnection, parseDaemonFrame, parseDaemonRequest, prepareDaemonRuntimeSecurity,
+    publishDaemonAuthMaterial, readDaemonAuthMaterial, readOneDaemonFrame, removeDaemonAuthMaterialIfOwned,
+    removeInactiveOwnedDaemonSocket, removeOwnedDaemonAuthMaterial, resolveDaemonAuthTimeoutMs,
+    resolveDaemonRpcTimeoutMs, runTaskSupervisorDaemon, stopTaskSupervisorDaemon, verifyOwnedDaemonSocket,
+    verifyPrivateDaemonRuntime,
+)
+from .context.durable_memory import (
+    MANUAL_MEMORY_RECORD_ID, MAX_DURABLE_MEMORY_RECORDS, MAX_MEMORY_TEXT_LENGTH, MAX_RETRIEVED_MEMORY_RECORDS,
+    MAX_RETRIEVED_MEMORY_TOKEN_BUDGET, asStringArray, baseMemoryScore, dedupeMemoryCandidates, deriveKeywords,
+    deriveTagsFromText, durableMemoryId, estimateTextTokens, extractDurableMemoryCandidates, normalizeMemoryText,
+    renderRetrievedMemoryLine, renderRetrievedMemoryPrompt, retrieveRelevantDurableMemory, scoreMemoryRecord,
+    synchronizeManualProjectMemory, truncateMemoryText, updateDurableMemoryFromWorkingContext,
+)
+from .payloads.execution_descriptors import (
+    createMcpActivityDescriptors, createPluginActivityDescriptors, createTaskExecutionDescriptor,
+    createWorkspaceExecutionDescriptor, summarizeOutputManifest,
+)
+from .authority.executable_closure import (
+    DEFAULT_EXECUTABLE_CLOSURE_LIMITS, EXECUTABLE_CLOSURE_POLICY_VERSION, ExecutableClosureError,
+    inspectExecutableClosure, mapClosureRootToSnapshot, snapshotExecutableClosure,
+)
+from .authority.executable_config import (
+    ExecutableConfigValidationError, LEGACY_UPDATED_AT, parseInstalledPluginRecord, parseMarketplaceManifest,
+    parseMcpServerConfig, parseMcpServerConfigList, parsePluginManifestV1,
+)
+from .authority.executable_source_policy import (
+    ExecutableSourceTrustError, SETTING_SOURCES, approveMcpSource, approvePluginSource, executableConfigDigest,
+    inspectMcpSourceTrust, inspectPluginSourceTrust, loadSelectedMcpServers, loadSelectedPluginRecords,
+    parseSettingSources, selectMcpBootstrapServers,
+)
+from .acquisition.fetch_proxy import installEnvironmentProxyFetch, resolveEnvironmentProxyForUrl
+from .authority.hooks import (
+    DEFAULT_HOOK_TIMEOUT_SECONDS, HOOK_EVENTS, approveHooks, fireToolHooks, listUnapprovedHookScopes, loadHooks,
+)
+from .runtime.lifecycle_barrier import (
+    ConstructionCleanup, LifecycleBarrier, LifecycleCloseTimeoutError, LifecycleClosedError, constructWithRollback,
+    createLifecycleBarrier,
+)
+from .mcp import (
+    BoundedNotificationQueue, DEFAULT_INLINE_BYTES, FileMcpTokenStore, HttpMcpClient, JsonRpcClient,
+    LEGACY_PROTOCOL_VERSION, LoopbackListener, MAX_MCP_CONTENTS, MAX_MCP_RESOURCE_PAGE, MCP_CLOSE_GRACE_MS,
+    MCP_CLOSE_KILL_WAIT_MS, MCP_CLOSE_STDIN_GRACE_MS, MCP_DECODED_BODY_MAX_BYTES, MCP_DEFAULT_BODY_IDLE_TIMEOUT_MS,
+    MCP_DEFAULT_CONNECT_TIMEOUT_MS, MCP_DEFAULT_HEADERS_TIMEOUT_MS, MCP_DEFAULT_REQUEST_TIMEOUT_MS,
+    MCP_DEFAULT_STARTUP_TIMEOUT_MS, MCP_FRAME_MAX_BYTES, MCP_HEADER_MAX_BYTES, MCP_NOTIFICATION_QUEUE_MAX,
+    MCP_PENDING_REQUEST_MAX, MCP_SSE_EVENT_MAX_BYTES, MCP_STDERR_TAIL_MAX_BYTES, McpAuthorizationRequiredError,
+    McpOAuthRuntime, McpSseDecoder, McpStdioFrameDecoder, McpTransportError, PREFERRED_PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS, SseMcpClient, StdioMcpClient, bounded_capabilities, canonical_origin,
+    contextlib_suppress, createFileMcpTokenStore, createMcpOAuthRuntime, createMcpRuntime, create_mcp_oauth_runtime,
+    iterateMcpBody, mcpTokenStoreKey, parseSseEvents, readMcpBodyBytes, readMcpBodyText, resolveMcpTransportPolicy,
+    resolve_negotiated_protocol, shapeMcpResourceList, shapeMcpResourceRead, shape_mcp_resource_list,
+    shape_mcp_resource_read, token_store_delete, token_store_get, token_store_set, validateMcpResponseHeaders,
+)
+from .tasks.monitors import (
+    DEFAULT_CHECK_INTERVAL_MS, DEFAULT_HEARTBEAT_INTERVAL_MS, MAX_OUTPUT_EXCERPT_CHARS, MIN_NARRATION_SPACING_MS,
+    MIN_PROGRESS_BYTES, MONITOR_TICK_MS, createMonitorRecord, createMonitorRuntime, defaultMonitorCheckIntervalMs,
+    defaultMonitorHeartbeatIntervalMs, formatMonitorSummary,
+)
+from .platform_support import (
+    DEFAULT_CHROME_EXTENSION_ORIGIN, DEFAULT_CHROME_NATIVE_HOST_NAME, REPO_ROOT, applyPlatformIntegrationMetadata,
+    buildChromeNativeHostManifest, buildSessionHygieneReport, buildShellCommand, collectDoctorReport,
+    detectChromeCompanionStatus, detectIdeTargets, detectTmuxAvailability, execText, findCommandInPath,
+    getChromeNativeHostManifestPath, getNpmCommand, handleChromeCompanionRpcPayload, inspectChromeNativeHostManifest,
+    inspectInstallState, installChromeNativeHostManifest, maybeAutoConnectIde, maybeExecIntoTmux, newestMtimeInTree,
+    pathExists, quoteShellArg, repairSessionTimestamps, resolveChromeCompanionServer, resolveTmuxLaunchContextFromEnv,
+    runChromeCompanionMcpServer, runChromeNativeHost, runRepoInstall, runRepoUpdate, spawnDetached,
+)
+from .authority.plugin_contracts import (
+    normalizePluginMcpServers, parsePluginManifest, summarizePluginCapabilities, validatePluginCapabilityContract,
+    validatePluginManifest,
+)
+from .authority.plugins import loadPluginRuntime
+from .authority.permission_rules import (
+    approvePermissionRules, clearPermissionRulesCache, findDispatchAllowRule, findDispatchDenyRule,
+    loadPermissionRules, loadPermissionRulesCached, matchPermissionRule, matchesBashRulePattern,
+    matchesDomainRulePattern, matchesPathRulePattern, normalizeShellCommand, parsePermissionRule,
+)
+from .process.identity import (
+    MAX_PROCESS_COMMAND_BYTES, ObservedProcessIdentity, PROCESS_IDENTITY_RETRY_DELAYS_SECONDS, ProcessIdentityError,
+    ProcessIdentityObserver, captureOwnedProcessIdentity, captureProcessBirthMarker, digestExpectedCommand,
+    parseOwnedProcessIdentity, processIdentityFromRecord, signalOwnedProcess, verifyOwnedProcessIdentity,
+    verifyProcessBirthMarker,
+)
+from .providers.errors import (
+    ProviderIncompleteResponseError, ProviderRequestError, canRetryProviderFailure, classifyProviderHttpFailure,
+    createProviderFailureRecord, createProviderIncompleteResponseError, createProviderRequestError,
+    fallbackEligibleProviderFailure, isProviderRequestError, normalizeUnknownProviderFailure, providerRetryDelayMs,
+)
+from .providers.activity import PROVIDER_ACTIVITY_KINDS, ProviderActivityEmitter, emitProviderActivity
+from .authority.repository_trust import (
+    REPOSITORY_TRUST_VERSION, approveRepositoryContent, checkRepositoryApproval, getRepositoryTrustStatus,
+    repositoryTrustRecordPath, resolveRepositoryIdentity, revokeRepositoryApproval,
+)
+from .runtime.bootstrap import BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS, MAX_STALE_DIAGNOSTICS, bootstrapRuntime
+from .runtime.generation import (
+    RetiredRuntimeGeneration, RuntimeActivationContext, RuntimeActivationSupersededError, RuntimeSessionBinding,
+    createRuntimeActivationContext, createRuntimeSessionBinding, sameRuntimeBinding,
+)
+from .runtime.paths import (
+    DEFAULT_RUNTIME_HOME, RuntimePaths, RuntimePathsScope, configureActiveRuntimePaths, expandRuntimeHome,
+    getActiveRuntimePaths, getScopedRuntimePaths, resetActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths,
+)
+from .runtime.identifiers import (
+    MAX_RUNTIME_ID_BYTES, RuntimeIdentifierError, formatMonitorTaskReference, formatTaskReference, parseAgentId,
+    parseApprovalRequestId, parseArtifactId, parseBridgeId, parseMonitorId, parseRemoteSessionId, parseSessionId,
+    parseTaskId, parseTaskReference, tryParseAgentId, tryParseApprovalRequestId, tryParseBridgeId, tryParseMonitorId,
+    tryParseRemoteSessionId, tryParseSessionId, tryParseTaskId, tryParseTaskReference,
+)
+from .runtime.secrets import (
+    MAX_RECORD_BYTES, MAX_SECRET_BYTES, RuntimeSecretError, SECRET_READ_DEADLINE_SECONDS, SECRET_STORE_VERSION,
+    SecretWriteAuthorization, assertNoLiteralMcpSecrets, authorizeRuntimeSecretWrite, isRuntimeSecretRef,
+    mcpFieldIsSecret, migrateLegacyMcpServerSecrets, resolveMcpServerConfigSecrets, resolveRuntimeSecret,
+    resolveRuntimeSecretString, storeRuntimeSecret,
+)
+from .runtime.secret_provider import resolveProviderConfigSecrets
+from .runtime.events import (
+    KNOWN_RUNTIME_EVENTS, createRuntimeEvent, progressTypedPayload, promptCacheEventPayload, providerTypedPayload,
+)
+from .runtime.state import (
+    ACTIVE_TASK_STATUSES, BACKGROUND_RUNTIME_STATE_EVENTS, MCP_RUNTIME_STATE_EVENTS, createInitialRuntimeState,
+    createRuntimeStateStore, deriveStoredTurnOutcome, reduceCompactionHeadroom, reduceRuntimeState,
+    reduce_background_runtime_state, reduce_mcp_runtime_state, summarizeSessionRecord,
+)
+from .sandbox import (
+    BubblewrapSandboxBackend, LandlockSandboxBackend, SandboxBackend, SandboxPolicy, SandboxUnavailableError,
+    SeatbeltSandboxBackend, normalizeSandboxConfig, prepareSandboxedArgv, resolveSandboxBackend, resolveSandboxPolicy,
+)
+from .session.fork import createForkedSession
+from .session.persistence import (
+    cloneSession, findMatchingSessions, findSessionsForWorkspace, formatSessionCandidate, persistProviderFailure,
+    persistProviderRecovery, persistSession, repairSessionTranscript, resolveSession, setSessionCwd,
+)
+from .session.runtime import activeSessionPayload, createSessionRuntimeController
+from .session.transcript import (
+    T, buildTranscriptSnapshot, compactTranscriptEntries, formatTranscriptToolLabel, inferToolNameFromLabel,
+    isGlobPayload, isGrepPayload, isReadPayload, makeTextEntry, makeToolEntry, mergeTranscriptEntry,
+    normalizeToolOutput, normalizeTranscriptBody, parseMaybeJson, renderCompactValue, renderTranscriptValue,
+)
+from .shell_surface import (
+    AVAILABLE_TUI_THEMES, PERMISSION_MODES, PERMISSION_MODE_ORDER, buildAgentsReport, buildBackgroundReport,
+    buildCollaborationStatusReport, buildCompactionStatusReport, buildDaemonReport, buildMonitorsReport,
+    buildPermissionsReport, buildPlansReport, buildProviderProfilesReport, buildRemoteFallbackReport,
+    buildRemoteListReport, buildRemoteReport, buildReviewPrompt, buildSlashHelp, buildStatusReport, buildTasksReport,
+    buildTodosReport, collapseWhitespace, compactModelName, createDebugBundle, formatAutoModePolicy,
+    formatChildAgentRecord, formatDebugBundleReport, formatDiagnosticsReport, formatMonitorRecord,
+    formatPlanApprovalRecord, formatPreflightTokenSummary, formatRemoteSessionRecord, formatSessionCandidate,
+    formatTaskInspectReport, formatTaskListReport, formatTaskResultReport, formatTaskSurface, formatTranscriptEntries,
+    formatUsageBreakdown, formatUsageSummary, getSlashCommandAvailability, handleSlashCommand, listSlashCommands,
+    normalizeModel, truncate,
+)
+from .shell_surface.debug_bundle import createDebugBundle
+from .authority.shell_command_policy import (
+    SHELL_COMMAND_CLASSIFIER_REVISION, classifyReadOnlyShellCommand, parseSingleShellCommand,
+)
+from .storage import (
+    BRIDGE_LEDGER_MAX_ENTRIES, BRIDGE_LOG_MAX_ENTRIES, BRIDGE_STORAGE_MAX_BYTES, BridgeStorageError,
+    DAEMON_EVENTS_ROTATE_BYTES, DAEMON_EVENTS_TAIL_BYTES, DEFAULT_AUTO_MODE, DEFAULT_RUNTIME_HOME,
+    MAX_DAEMON_SOCKET_PATH_BYTES, MAX_SHALLOW_SESSION_BYTES, PLAN_ADJECTIVES, PLAN_NOUNS, PersistenceCallMeasurement,
+    PersistenceObserver, RuntimeHomeScope, SESSION_BODY_FORMAT, SESSION_SCHEMA_V2, STORAGE_IO_MAX_WORKERS,
+    STORAGE_LOCK_TIMEOUT_MS, Scope, SessionRecordNotFoundError, SessionSchemaVersionError, StorageTransactionError,
+    appendBridgeEvent, appendBridgeInboxMessage, appendDaemonEvent, appendJsonLine, appendSessionTranscriptLogEntries,
+    assertSessionSchemaSupported, beginPersistenceCall, bridgeEventsPath, bridgeInboxPath, bridgeLedgerPath,
+    bridgePath, bridgeRecoveryPath, childAgentPath, clearAuth, clearDaemonState, commitSessionV2,
+    commitSessionV2Delta, compactSessionMessageBody, compactionCheckpointPath, compactionManifestPath,
+    configureRuntimeHome, createEmptySession, createSessionListCache, daemonEventsPath, daemonLogsDir, daemonPidPath,
+    daemonSocketPath, daemonStatePath, ensureBaseLayout, expandHome, fileLock, fileOrJson, findGitRoot,
+    finishPersistenceCall, getCompactionsDir, getContextRuntimeHome, getDaemonDir, getDefaultAutoMode,
+    getLocalStateDir, getPlansDir, getProjectMemoryPath, getProjectMemoryRecordsPath, getProjectRoot,
+    getProjectStateDir, getSessionCompactionsDir, getSessionToolArtifactsDir, getStateRoot, getToolArtifactsDir,
+    hasPersistableSessionMessages, healthCheckMetaPath, hydratePersistedSession, hydrateSessionHeadFromBodyBytes,
+    isSessionHeadV2, listBridges, listChildAgents, listHealthCheckTasks, listMonitors, listPlanApprovals,
+    listRemoteSessions, listSessionMonitors, listSessionTaskRecords, listSessions, listTaskRecords, loadAuth,
+    loadAutoMode, loadBridge, loadBridgeDeliveryLedger, loadBridgeEvents, loadBridgeInbox, loadBridgeRecoveryRecord,
+    loadChildAgent, loadCodexAuthToken, loadCompactionManifest, loadDaemonEvents, loadDaemonState,
+    loadHealthCheckTask, loadMarketplaces, loadMcpServers, loadMonitor, loadPlanApproval, loadPlugins,
+    loadProjectMemoryRecords, loadRemoteSession, loadSession, loadSessionRecordShallow, loadSessionWithReconciliation,
+    loadSettings, loadSettingsBySources, loadTaskRecord, migrateSessionToV2, monitorPath, mutateAutoMode,
+    mutateChildAgent, mutateHealthCheckTask, mutateJsonFile, mutateJsonLines, mutateJsonRecord, mutateMarketplaces,
+    mutateMcpServers, mutatePlugins, mutateProjectMemoryRecords, mutateSessionHeadDeltaTransaction,
+    mutateSessionRecord, mutateSessionRecordTransaction, mutateSettings, mutateTaskMeta, normalizeSessionRevision,
+    parseJsonString, parseLatestArchivedTimestamp, persistenceObserversActive, planApprovalPath, readJsonFile,
+    readJsonLines, readLastDaemonEventCursor, readTaskMeta, recordPersistenceIo, registerPersistenceObserver,
+    registerStorageLockObserver, remoteSessionPath, replaceBridgeInbox, resetConfiguredRuntimeHome,
+    resetStorageExecutorPeakForTesting, resolveMaybeRelative, resolveRuntimeHome, resolveScope,
+    rotateDaemonEventsIfOversized, runStorageIo, saveAuth, saveAutoMode, saveBridge, saveBridgeDeliveryLedger,
+    saveBridgeRecoveryRecord, saveChildAgent, saveCompactionCheckpoint, saveCompactionManifest, saveDaemonState,
+    saveHealthCheckTask, saveMarketplaces, saveMcpServers, saveMonitor, savePlanApproval, savePlugins,
+    saveProjectMemoryRecords, saveRemoteSession, saveSession, saveSettings, saveTaskRecord, scopedRuntimeHome,
+    sessionArchiveDir, sessionLiveHeadFromV2, sessionMessagesPath, sessionPath, sessionTranscriptLogPath,
+    storageExecutorSnapshot, taskDir, taskMetaPath, taskOutputPath, taskRecordPath, toolArtifactDataPath,
+    toolArtifactMetaPath, transactionLockPath, updateSessionRecord, withRecordTransaction, writeBackSessionV1,
+    writeJsonFile, writePlanFile, writeTaskMeta,
+)
+from .subagents import (
+    ACTIVE_TASK_STATUSES, DEFAULT_CONTINUATION_LEASE_MS, DEFAULT_SUBAGENT_MAX_DEPTH, LEGACY_CLAIM_GRACE_MS,
+    TERMINAL_RECONCILIATION_STATUSES, TERMINAL_TASK_STATUSES, appendLaunchGroupMetadata,
+    appendPendingSubagentReconciliationsToSession, boundedSubagentError, boundedSubagentEventSummary,
+    boundedSubagentRuntimeContract, buildSubagentReconciliationRecord, build_subagent_tool_limit_result,
+    checkSubagentDepthAllowed, check_subagent_capacity, check_subagent_runtime_limits,
+    claimSubagentLaunchGroupContinuation, claimUnconsumedSubagentReconciliations, completeSubagentReconciliationClaim,
+    consumeAppendedSubagentReconciliations, createSubagentReconciliationForTerminalChild,
+    defaultParentContinuationPrompt, evaluateParentContinuationReadiness, evaluate_subagent_result,
+    extract_structured_result_json, filter_tools_for_subagent, finalizeBackgroundSubagentFailureFromEnv,
+    finalizeBackgroundSubagentSuccessFromEnv, inheritParentPermissionMode, listSubagentLaunchGroups,
+    listSubagentReconciliations, listUnconsumedSubagentReconciliations, mapStopReasonToCompletionReason,
+    mapStopReasonToStatus, mapStopReasonToWaitingReason, markSubagentLaunchGroupContinuationCompleted,
+    markSubagentLaunchGroupContinuationRunning, markSubagentLaunchGroupContinuationStarting,
+    markSubagentReconciliationsConsumed, normalize_subagent_runtime_contract, parseAllowedPrompts,
+    persist_structured_subagent_result, prepareSubagent, readSubagentReconciliations,
+    recoverSubagentLaunchGroupContinuations, releaseSubagentLaunchGroupContinuationClaim,
+    releaseSubagentReconciliationClaim, renderSubagentReconciliationMessage,
+    requestParentContinuationForReconciliations, requireSubagentDepthAllowed, resolveSubagentLaunchGroupId,
+    resolveSubagentMaxDepth, resolve_subagent_concurrency_policy, resolve_subagent_runtime_limits,
+    runForegroundSubagent, runParentContinuationFromReconciliations, runtime_contract_for_agent,
+    sanitizePermissionMode, shapeForegroundSubagentResult, startBackgroundSubagent, structured_result_path,
+    subagentReconciliationLogPath, summarize_subagent_runtime_contract, upsertSubagentLaunchGroup,
+    upsertSubagentReconciliation, withSubagentCoordinationTransaction,
+)
+from .tasks.ownership import TaskOwnershipError, requireModelOwnedMonitor, requireModelOwnedTask
+from .process.task_launch import (
+    ReservedProcessLaunch, attachTaskLaunchReservation, createTaskLaunchReservation, failTaskLaunchReservation,
+    launchReservedProcess,
+)
+from .tasks.communication import (
+    answer_task_question, append_task_event, create_task_question, deliver_queued_task_messages_to_session,
+    load_task_session, mark_task_message_delivered, read_task_events, read_task_mailbox_messages, read_task_questions,
+    read_undelivered_task_messages, send_task_message, skip_task_question, task_events_path, task_mailbox_path,
+    task_questions_path,
+)
+from .tasks.communication import (
+    deliverQueuedTaskMessagesToSession, markTaskMessageDelivered, readTaskMailboxMessages, sendTaskMessage,
+)
+from .tasks.supervisor_parts.communication import readTaskOutput
+from .tasks.runtime import createTaskRuntime
+from .tasks.supervisor import createTaskSupervisor
+from .payloads.tools import (
+    DEFAULT_GLOB_EXCLUDES, DEFAULT_IGNORED_DIRECTORIES, TOOL_PAYLOAD_POLICIES, applyDefaultGlobExcludes,
+    deriveToolPayloadClass, filterDefaultIgnoredGlobMatches, getDefaultGlobExcludes, getToolPayloadPolicy,
+    shapeGlobPayload, shapeGrepPayload, shapeReadPayload, shapeTextToolResult, splitToolTextLines,
+)
+from .tools import (
+    BUILTIN_TOOL_DESCRIPTIONS, BUILTIN_TOOL_INPUT_SCHEMAS, BUILTIN_TOOL_ORDER, FetchResponse, PERMISSION_MODES,
+    ToolDefinition, createBuiltinToolContractSnapshot, createBuiltinTools, decodeBingRedirectTarget, fetch,
+    normalizeBingResultUrl, normalizeDuckDuckGoResultUrl, parseAllowedPrompts, parseBingResults,
+    parseDuckDuckGoResults, searchBing, searchDuckDuckGo, searchWeb,
+)
+from .runtime.workspace import (
+    captureWorkspaceSnapshot, createGitWorktree, createWorkspaceController, hydrateSessionWorkspaceMetadata,
+    parsePullRequestReference, summarizeWorkspaceCapabilities,
+)
+from .context.compaction import (
+    COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT, COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT,
+    COMPACTION_EVIDENCE_FALLBACK_BUDGETS, COMPACTION_EVIDENCE_TOKEN_BUDGET, COMPACTION_FILE_PREVIEW_LINES,
+    COMPACTION_MATCH_PREVIEW_LIMIT, COMPACTION_MESSAGE_TEXT_CHAR_LIMIT, COMPACTION_STRATEGY,
+    COMPACTION_SYNTHESIS_MAX_RETRIES, COMPACTION_SYSTEM_PROMPT, COMPACTION_TOOL_INPUT_CHAR_LIMIT,
+    COMPACTION_TOOL_RESULT_CHAR_LIMIT, COMPACTION_VERIFICATION_MAX_RETRIES, COMPACTION_VERIFICATION_SYSTEM_PROMPT,
+    CONTINUATION_BRIDGE_MESSAGE, LOW_VALUE_TAIL_TOOL_NAMES, MAX_ACTIVITY_LINES, MAX_FAILURES,
+    MAX_PRESERVED_TOOL_EXCHANGE_PAIRS, MAX_TODOS, MIN_PRESERVED_TOOL_EXCHANGE_PAIRS, MIN_RECENT_MESSAGE_COUNT,
+    RAW_TAIL_TOKEN_BUDGET, RAW_TAIL_TOKEN_TARGET, WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT, appendActivitySection,
+    appendPlanSection, appendPreservedTrace, appendProjectFactsSection, appendPromptList, appendRelevantFilesSection,
+    appendStringSection, appendSubsection, asRecord, asStringArray, assertModelBackedCompactionArtifacts,
+    assistantToolUsesAreCompleted, buildArtifactPaths, buildCompactionAttemptStrategies, buildCompactionEvidence,
+    buildCompactionQualityFromCandidate, buildCompactionQualityFromSynthesis, buildCompactionSynthesisPrompt,
+    buildCompactionSystemPromptContext, buildCompactionVerificationPrompt, buildEvidenceBackedCompactionSynthesis,
+    buildEvidenceEntriesForMessage, buildFallbackSynthesizedWorkingContext, buildFilePreview,
+    buildMessagesForWorkingContext, buildModelBackedCompactionStateSnapshot, buildPreservedTraceRecord,
+    buildSkippedCompactionSynthesis, buildSynthesizedWorkingContextDocument, buildTextEvidenceEntry,
+    buildToolResultEvidenceEntry, buildToolUseEvidenceEntry, buildWorkingContextDocumentFromCandidate,
+    chooseCompactionCutoff, chooseToolAwareCompactionCutoff, coercePreservedTrace, coerceProjectFacts,
+    coerceRelevantFiles, coerceRepairedCheckpoint, coerceSynthesizedWorkingContextFields,
+    coerceWorkingContextDocument, collapseWhitespace, collectSubstantiveToolExchangeStarts, collectToolResultIds,
+    compactStructuredRecord, describeCompactionSynthesisFailure, estimateMessageTokens, estimateSingleMessageTokens,
+    estimateTextTokens, estimateWorkingContextTokens, extractJsonObjectCandidate, isCompactionContextSizeFailure,
+    isCompactionSynthesisJsonFailure, isLowSignalTodoText, isSafeWorkingSetStart, loadWorkingContextArtifact,
+    mergeCompactionUsageIntoSession, messageHasToolResults, messageHasToolUses, normalizeVerificationConfidence,
+    normalizeVerificationVerdict, parseCompactionSynthesisResponse, parseCompactionVerificationResponse,
+    parseMaybeJson, renderActivityMarkdown, renderDecisionsMarkdown, renderPlanMarkdown, renderSummaryMarkdown,
+    renderWorkingContextPromptContext, resolveLatestPlan, runCompaction, runCompactionCheckpointVerification,
+    runCompactionCheckpointVerificationWithFallback, runModelBackedCompactionSynthesis,
+    runModelBackedCompactionSynthesisWithFallback, shouldAutoCompact, shouldRetryCompactionAttempt,
+    shouldSkipCompactionSynthesisFailure, summarizeTodo, summarizeToolResultForCompaction, trimPathEvidence, truncate,
+)
+from .context.compaction_models import (
+    CODEX_SPARK_COMPACTION_MODEL, CompactionModelClient, DEFAULT_COMPACTION_SYNTHESIS_TIMEOUT_MS,
+    DEFAULT_COMPACTION_VERIFICATION_TIMEOUT_MS, FIXED_COMPACTION_EFFORT, FIXED_COMPACTION_PROVIDER,
+    createDefaultCompactionModelClient, resolveCompactionExecutionPlan, resolveCompactionModelCandidates,
+    resolveCompactionTokenPolicy, resolve_compaction_profile,
+)
+from .context.context_policy import (
+    RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT, decideDurableCheckpoint, estimateRawContextPressure,
+)
+from .context.continuation import (
+    LOW_VALUE_TOOL_NAMES, RELIEF_CONTEXT_TOKEN_LIMIT, RELIEF_MESSAGE_TEXT_CHAR_LIMIT,
+    RELIEF_PREFERRED_RAW_TAIL_TOKENS, RELIEF_PRESERVE_MIN_MESSAGES, RELIEF_TOOL_INPUT_CHAR_LIMIT,
+    RELIEF_TOOL_RESULT_CHAR_LIMIT, appendSummarySection, applyCompactPrefix, applyContextReliefMode,
+    applyContextReliefModes, applyLightweightContextRelief, applyPartialCompaction, applySessionMemoryCompaction,
+    asRecord, buildContinuationContext, chooseContextReliefModes, choosePreservedRawStart, classifyContextPressure,
+    classifyContextReliefPressure, collapseWhitespace, compactHistoricalTail, compactMessageForContinuation,
+    compactToolInput, emptyCompactionResult, emptyReliefSummary, estimateMessagesTokens, estimateTextTokens,
+    estimateTodoAndPlanTokens, extractCommand, extractFilePath, findLastPlainUserIndex, isContextPressureRelieved,
+    normalizeReinjectionLines, omitNone, parseStructuredToolResult, renderContextReliefPrompt,
+    renderContinuationOverlay, renderPartialCompactionSummary, renderPlanOverlay, renderRegionSummaryReinjectionLines,
+    renderTodoOverlay, summarizeContinuationRegion, summarizeToolResultForRelief, supportsApiMicrocompact, truncate,
+)
+from .context.token_accounting import (
+    DEFAULT_ESTIMATE_MARGIN_TOKENS, MAX_CODEX_ERROR_SAMPLES, measureRequestInputTokens, recordActualTokenUsage,
+    recordPreflightTokenMeasurement,
+)
+from .providers.anthropic import (
+    ANTHROPIC_ABORT_POLL_INTERVAL_MS, ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS, ANTHROPIC_REQUEST_START_TIMEOUT_MS,
+    ANTHROPIC_STREAM_IDLE_TIMEOUT_MS, AnthropicSseAccumulator, DEFAULT_API_KEY_BETAS, DEFAULT_OAUTH_BETAS,
+    MESSAGES_API_URL, MESSAGES_COUNT_TOKENS_API_URL, anthropicCacheBreakpointMessageIndices,
+    applyAnthropicUsageSnapshot, buildAnthropicBetaHeader, buildAnthropicCountTokensPayload, buildAnthropicHeaders,
+    buildAnthropicMessagesEnvelope, buildAnthropicMessagesPayload, normalizeAnthropicContentBlocks,
+    normalizeAnthropicSseResponse, normalizeProviderBlocks, parseAnthropicSseEvents, planAnthropicCacheBreakpoints,
+    readAnthropicSseResponseAsync, resolveAnthropicCountTokensUrl, resolveAnthropicMessagesUrl,
+    sendAnthropicMessagesRequest, sendAnthropicMessagesStreamingViaAsyncTransport,
+    sendAnthropicMessagesViaAsyncTransport,
+)
+from .providers.openai import (
+    DEFAULT_CODEX_BASE_URL, DEFAULT_CODEX_INSTRUCTIONS, OPENAI_ABORT_POLL_INTERVAL_MS,
+    OPENAI_REQUEST_START_TIMEOUT_MS, OPENAI_STREAM_IDLE_TIMEOUT_MS, OpenAiEmptyCompletedResponse,
+    OpenAiReconciliationConflict, TERMINAL_RECONCILIATION_SCHEMA_VERSION, append_openai_partial,
+    attach_interrupted_preview, attach_openai_failure_lineage, attach_recovery_failure, authoritative_openai_response,
+    buildChatCompletionsCreateParams, buildResponsesCreateParams, can_retry_openai_generation,
+    close_openai_output_item, commit_openai_delivery, convertMessagesToChatCompletions, convertMessagesToInput,
+    create_openai_logical_call_id, extract_turn_state, finalize_interrupted_openai_preview,
+    finalize_responses_success, function_call_projection_record, getOpenAiProviderLabel, handle_response_completed,
+    isCodexBaseUrl, message_projection_record, normalize_terminal_projection, openai_retry_delay_ms,
+    partial_openai_event_lineage, projection_blocks, projection_event_fields, providerRetryDelayMs,
+    reconciliation_conflict_failure, recover_openai_attempt, resolveOpenAiBaseUrl, resolve_terminal_projection,
+    response_terminal_failure, responses_activity_kind, select_authoritative_projection,
+    sendOpenAiChatCompletionsRequest, sendOpenAiRequest, sendOpenAiResponsesRequest, sink_failure,
+    start_responses_stream, stateless_prepared_request, supersede_openai_generation,
+    supportsOpenAiChatCompletionsReasoningEffort, websocket_response_create_params,
 )
 
-
-def __dir__():
-    return sorted(
-        name for name in globals()
-        if not name.startswith("_") and name != "headless" and name not in _INTERNAL_MODULES
-    )
+__all__ = [
+    "ACTIVE_TASK_STATUSES", "AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION", "ANTHROPIC_ABORT_POLL_INTERVAL_MS",
+    "ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS", "ANTHROPIC_REQUEST_START_TIMEOUT_MS", "ANTHROPIC_STREAM_IDLE_TIMEOUT_MS",
+    "ARTIFACT_ACQUISITION_FAILURE_LIMIT", "AVAILABLE_TUI_THEMES", "AgentAuthorityError", "AnthropicSseAccumulator",
+    "AuthenticatedDaemonServer", "BACKGROUND_RUNTIME_STATE_EVENTS", "BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS",
+    "BRIDGE_LEDGER_MAX_ENTRIES", "BRIDGE_LOG_MAX_ENTRIES", "BRIDGE_STORAGE_MAX_BYTES", "BUILTIN_AGENTS",
+    "BUILTIN_PROVIDER_PROFILES", "BUILTIN_TOOL_DESCRIPTIONS", "BUILTIN_TOOL_INPUT_SCHEMAS", "BUILTIN_TOOL_ORDER",
+    "BoundedNotificationQueue", "BridgeRecoveryBlockedError", "BridgeStorageError", "BubblewrapSandboxBackend",
+    "CODEX_SPARK_COMPACTION_MODEL", "COLLABORATION_TICK_MS", "COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT",
+    "COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT", "COMPACTION_EVIDENCE_FALLBACK_BUDGETS",
+    "COMPACTION_EVIDENCE_TOKEN_BUDGET", "COMPACTION_FILE_PREVIEW_LINES", "COMPACTION_MATCH_PREVIEW_LIMIT",
+    "COMPACTION_MESSAGE_TEXT_CHAR_LIMIT", "COMPACTION_STRATEGY", "COMPACTION_SYNTHESIS_MAX_RETRIES",
+    "COMPACTION_SYSTEM_PROMPT", "COMPACTION_TOOL_INPUT_CHAR_LIMIT", "COMPACTION_TOOL_RESULT_CHAR_LIMIT",
+    "COMPACTION_VERIFICATION_MAX_RETRIES", "COMPACTION_VERIFICATION_SYSTEM_PROMPT", "CONTINUATION_BRIDGE_MESSAGE",
+    "CompactionModelClient", "ConstructionCleanup", "DAEMON_AUTH_TIMEOUT_MS", "DAEMON_EVENTS_ROTATE_BYTES",
+    "DAEMON_EVENTS_TAIL_BYTES", "DAEMON_MAX_PENDING_GLOBAL", "DAEMON_MAX_PENDING_PER_CLIENT",
+    "DAEMON_MAX_REQUEST_FRAME_BYTES", "DAEMON_MAX_REQUEST_IDS_PER_CONNECTION", "DAEMON_MAX_REQUEST_ID_BYTES",
+    "DAEMON_MAX_RESPONSE_FRAME_BYTES", "DAEMON_PROTOCOL_VERSION", "DAEMON_RPC_TIMEOUT_MS", "DEFAULT_API_KEY_BETAS",
+    "DEFAULT_ASSISTANT_DESCRIPTION", "DEFAULT_ASSISTANT_NAME", "DEFAULT_AUTO_MODE", "DEFAULT_CHECK_INTERVAL_MS",
+    "DEFAULT_CHROME_EXTENSION_ORIGIN", "DEFAULT_CHROME_NATIVE_HOST_NAME", "DEFAULT_CODEX_BASE_URL",
+    "DEFAULT_CODEX_INSTRUCTIONS", "DEFAULT_COMPACTION_SYNTHESIS_TIMEOUT_MS",
+    "DEFAULT_COMPACTION_VERIFICATION_TIMEOUT_MS", "DEFAULT_CONTINUATION_LEASE_MS", "DEFAULT_EFFORT",
+    "DEFAULT_ESTIMATE_MARGIN_TOKENS", "DEFAULT_EXECUTABLE_CLOSURE_LIMITS", "DEFAULT_GLOB_EXCLUDES",
+    "DEFAULT_HEARTBEAT_INTERVAL_MS", "DEFAULT_HOOK_TIMEOUT_SECONDS", "DEFAULT_IGNORED_DIRECTORIES",
+    "DEFAULT_IMAGE_INPUT_MIME_TYPES", "DEFAULT_INLINE_BYTES", "DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES",
+    "DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES", "DEFAULT_MAX_IMAGE_INPUT_BYTES", "DEFAULT_MAX_IMAGE_INPUT_COUNT",
+    "DEFAULT_MODEL", "DEFAULT_OAUTH_BETAS", "DEFAULT_OPENAI_API_MODE", "DEFAULT_OPENAI_CODEX_AUTH_PATH",
+    "DEFAULT_PROVIDER", "DEFAULT_PROVIDER_PROFILE_NAME", "DEFAULT_RUNTIME_HOME", "DEFAULT_SUBAGENT_MAX_DEPTH",
+    "DEFAULT_TUI_SCREEN_MODE", "DaemonAbortSignal", "DaemonLineDecoder", "DaemonProtocolError", "DaemonSecurityError",
+    "DaemonServerPeer", "EXECUTABLE_CLOSURE_POLICY_VERSION", "ExecutableClosureError",
+    "ExecutableConfigValidationError", "ExecutableSourceTrustError", "FIXED_COMPACTION_EFFORT",
+    "FIXED_COMPACTION_PROVIDER", "FetchResponse", "FileMcpTokenStore", "GENERAL_NO_PROGRESS_LIMIT", "HOOK_EVENTS",
+    "HttpMcpClient", "IMAGE_INPUT_UNSUPPORTED_MESSAGE", "JsonRpcClient", "KNOWN_RUNTIME_EVENTS",
+    "LEGACY_CLAIM_GRACE_MS", "LEGACY_PROTOCOL_VERSION", "LEGACY_UPDATED_AT", "LOW_VALUE_TAIL_TOOL_NAMES",
+    "LOW_VALUE_TOOL_NAMES", "LandlockSandboxBackend", "LifecycleBarrier", "LifecycleCloseTimeoutError",
+    "LifecycleClosedError", "LogicalTurnProgressLedger", "LoopbackListener", "MANUAL_MEMORY_RECORD_ID",
+    "MAX_ACTIVITY_LINES", "MAX_CODEX_ERROR_SAMPLES", "MAX_DAEMON_SOCKET_PATH_BYTES", "MAX_DAEMON_STATE_BYTES",
+    "MAX_DAEMON_TOKEN_BYTES", "MAX_DAEMON_TREE_DEPTH", "MAX_DAEMON_TREE_ENTRIES", "MAX_DURABLE_MEMORY_RECORDS",
+    "MAX_FAILURES", "MAX_MCP_CONTENTS", "MAX_MCP_RESOURCE_PAGE", "MAX_MEMORY_TEXT_LENGTH", "MAX_OUTPUT_EXCERPT_CHARS",
+    "MAX_PRESERVED_TOOL_EXCHANGE_PAIRS", "MAX_PROCESS_COMMAND_BYTES", "MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES",
+    "MAX_PROVIDER_ENCODED_IMAGE_REQUEST_BYTES", "MAX_PROVIDER_IMAGE_INPUT_BYTES", "MAX_PROVIDER_IMAGE_INPUT_COUNT",
+    "MAX_RECORDED_ARTIFACTS", "MAX_RECORDED_FINGERPRINTS", "MAX_RECORD_BYTES", "MAX_REPEATED_CYCLE_BATCHES",
+    "MAX_RETRIEVED_MEMORY_RECORDS", "MAX_RETRIEVED_MEMORY_TOKEN_BUDGET", "MAX_RUNTIME_ID_BYTES", "MAX_SECRET_BYTES",
+    "MAX_SHALLOW_SESSION_BYTES", "MAX_STALE_DIAGNOSTICS", "MAX_TODOS", "MCP_CLOSE_GRACE_MS", "MCP_CLOSE_KILL_WAIT_MS",
+    "MCP_CLOSE_STDIN_GRACE_MS", "MCP_DECODED_BODY_MAX_BYTES", "MCP_DEFAULT_BODY_IDLE_TIMEOUT_MS",
+    "MCP_DEFAULT_CONNECT_TIMEOUT_MS", "MCP_DEFAULT_HEADERS_TIMEOUT_MS", "MCP_DEFAULT_REQUEST_TIMEOUT_MS",
+    "MCP_DEFAULT_STARTUP_TIMEOUT_MS", "MCP_FRAME_MAX_BYTES", "MCP_HEADER_MAX_BYTES", "MCP_NOTIFICATION_QUEUE_MAX",
+    "MCP_PENDING_REQUEST_MAX", "MCP_RUNTIME_STATE_EVENTS", "MCP_SSE_EVENT_MAX_BYTES", "MCP_STDERR_TAIL_MAX_BYTES",
+    "MESSAGES_API_URL", "MESSAGES_COUNT_TOKENS_API_URL", "MIN_ASSISTANT_UPDATE_SPACING_MS",
+    "MIN_NARRATION_SPACING_MS", "MIN_PRESERVED_TOOL_EXCHANGE_PAIRS", "MIN_PROGRESS_BYTES", "MIN_RECENT_MESSAGE_COUNT",
+    "MONITOR_TICK_MS", "McpAuthorizationRequiredError", "McpOAuthRuntime", "McpSseDecoder", "McpStdioFrameDecoder",
+    "McpTransportError", "OPENAI_ABORT_POLL_INTERVAL_MS", "OPENAI_REQUEST_START_TIMEOUT_MS",
+    "OPENAI_STREAM_IDLE_TIMEOUT_MS", "ObservedProcessIdentity", "OpenAiEmptyCompletedResponse",
+    "OpenAiReconciliationConflict", "OperatorPolicyDecision", "PERMISSION_MODES", "PERMISSION_MODE_ORDER",
+    "PLAN_ADJECTIVES", "PLAN_NOUNS", "PLAN_SAFE_TOOL_NAMES", "PREFERRED_PROTOCOL_VERSION", "PRIVATE_DIRECTORY_MODE",
+    "PRIVATE_FILE_MODE", "PROCESS_IDENTITY_RETRY_DELAYS_SECONDS", "PROGRESS_LEDGER_SCHEMA_VERSION",
+    "PROVIDER_ACTIVITY_KINDS", "PROVIDER_DEFAULT_EFFORT", "PROVIDER_DEFAULT_MODEL", "PROVIDER_MODELS",
+    "PersistenceCallMeasurement", "PersistenceObserver", "ProcessIdentityError", "ProcessIdentityObserver",
+    "ProviderActivityEmitter", "ProviderIncompleteResponseError", "ProviderRequestError",
+    "RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT", "RAW_TAIL_TOKEN_BUDGET", "RAW_TAIL_TOKEN_TARGET",
+    "RELIEF_CONTEXT_TOKEN_LIMIT", "RELIEF_MESSAGE_TEXT_CHAR_LIMIT", "RELIEF_PREFERRED_RAW_TAIL_TOKENS",
+    "RELIEF_PRESERVE_MIN_MESSAGES", "RELIEF_TOOL_INPUT_CHAR_LIMIT", "RELIEF_TOOL_RESULT_CHAR_LIMIT",
+    "REPEATED_TOOL_CYCLE_LIMIT", "REPOSITORY_TRUST_VERSION", "REPO_ROOT", "ReservedProcessLaunch",
+    "RetiredRuntimeGeneration", "RuntimeActivationContext", "RuntimeActivationSupersededError",
+    "RuntimeBindingsCompatibilityError", "RuntimeHomeScope", "RuntimeIdentifierError", "RuntimePaths",
+    "RuntimePathsScope", "RuntimeSecretError", "RuntimeSessionBinding", "SECRET_READ_DEADLINE_SECONDS",
+    "SECRET_STORE_VERSION", "SESSION_BODY_FORMAT", "SESSION_SCHEMA_V2", "SETTING_SOURCES",
+    "SHELL_COMMAND_CLASSIFIER_REVISION", "STORAGE_IO_MAX_WORKERS", "STORAGE_LOCK_TIMEOUT_MS",
+    "STRICT_TOOL_PROTOCOL_PROVIDERS", "SUPPORTED_PROTOCOL_VERSIONS", "SandboxBackend", "SandboxPolicy",
+    "SandboxUnavailableError", "Scope", "SeatbeltSandboxBackend", "SecretWriteAuthorization", "SerialQueue",
+    "SessionRecordNotFoundError", "SessionSchemaVersionError", "SseMcpClient", "StdioMcpClient",
+    "StorageTransactionError", "T", "TERMINAL_RECONCILIATION_SCHEMA_VERSION", "TERMINAL_RECONCILIATION_STATUSES",
+    "TERMINAL_TASK_STATUSES", "TOOL_PAYLOAD_POLICIES", "TaskOwnershipError", "ToolDefinition", "ToolDispatchOutcome",
+    "ToolResultBatchBudget", "ToolResultTurnBudget", "VALID_EFFORT_LEVELS", "WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT",
+    "activeSessionPayload", "addEmptyResponseContinuationNudge", "answer_task_question",
+    "anthropicCacheBreakpointMessageIndices", "appendActivitySection", "appendAssistantCollaborationMessage",
+    "appendBridgeEvent", "appendBridgeInboxMessage", "appendDaemonEvent", "appendJsonLine",
+    "appendLaunchGroupMetadata", "appendPendingSubagentReconciliationsToSession", "appendPlanSection",
+    "appendPreservedTrace", "appendProjectFactsSection", "appendPromptList", "appendRelevantFilesSection",
+    "appendSessionTranscriptLogEntries", "appendStringSection", "appendSubsection", "appendSummarySection",
+    "appendToolResultBatch", "append_openai_partial", "append_task_event", "applyAnthropicUsageSnapshot",
+    "applyCompactPrefix", "applyContextReliefMode", "applyContextReliefModes", "applyDefaultGlobExcludes",
+    "applyLightweightContextRelief", "applyPartialCompaction", "applyPlatformIntegrationMetadata",
+    "applyProviderTokenBudget", "applySessionMemoryCompaction", "approval_skip_result", "approveHooks",
+    "approveMcpSource", "approvePermissionRules", "approvePluginSource", "approveRepositoryContent", "asRecord",
+    "asStringArray", "assertAgentRuntimeBindings", "assertMatchingPersistedChildAuthorities",
+    "assertModelBackedCompactionArtifacts", "assertNoLiteralMcpSecrets", "assertPathWithinAgentAuthority",
+    "assertSessionSchemaSupported", "assertValidAgentAuthority", "assessContextHeadroom",
+    "assistantToolUsesAreCompleted", "attachTaskLaunchReservation", "attach_interrupted_preview",
+    "attach_openai_failure_lineage", "attach_recovery_failure", "authorCollaborationUpdate",
+    "authorCollaborationUpdateWithProvider", "authoritative_openai_response", "authorizeRuntimeSecretWrite",
+    "baseMemoryScore", "beginPersistenceCall", "bootstrapRuntime", "boundedProtocolDiagnostic",
+    "boundedSubagentError", "boundedSubagentEventSummary", "boundedSubagentRuntimeContract", "bounded_capabilities",
+    "bounded_mcp_identity", "bridgeEventsPath", "bridgeInboxPath", "bridgeLedgerPath", "bridgePath",
+    "bridgeRecoveryPath", "buildAgentsReport", "buildAnthropicBetaHeader", "buildAnthropicCountTokensPayload",
+    "buildAnthropicHeaders", "buildAnthropicMessagesEnvelope", "buildAnthropicMessagesPayload", "buildArtifactPaths",
+    "buildBackgroundReport", "buildChatCompletionsCreateParams", "buildChromeNativeHostManifest",
+    "buildCollaborationStatusReport", "buildCollaborationWorkers", "buildCompactionAttemptStrategies",
+    "buildCompactionEvidence", "buildCompactionQualityFromCandidate", "buildCompactionQualityFromSynthesis",
+    "buildCompactionStatusReport", "buildCompactionSynthesisPrompt", "buildCompactionSystemPromptContext",
+    "buildCompactionVerificationPrompt", "buildContinuationContext", "buildDaemonReport", "buildDefaultSystemPrompt",
+    "buildDeterministicCollaborationUpdate", "buildEffectiveSystemPrompt", "buildEvidenceBackedCompactionSynthesis",
+    "buildEvidenceEntriesForMessage", "buildFallbackSynthesizedWorkingContext", "buildFilePreview",
+    "buildMessagesForWorkingContext", "buildModelBackedCompactionStateSnapshot", "buildMonitorsReport",
+    "buildPermissionsReport", "buildPlanModeSystemPrompt", "buildPlansReport", "buildPreservedTraceRecord",
+    "buildProviderProfilesReport", "buildRemoteFallbackReport", "buildRemoteListReport", "buildRemoteReport",
+    "buildResponsesCreateParams", "buildReviewPrompt", "buildSessionHygieneReport", "buildShellCommand",
+    "buildSkippedCompactionSynthesis", "buildSlashHelp", "buildStatusReport", "buildSubagentReconciliationRecord",
+    "buildSubagentWorkerSummary", "buildSynthesizedWorkingContextDocument", "buildSystemPromptForAgent",
+    "buildTasksReport", "buildTextEvidenceEntry", "buildTodosReport", "buildToolContext",
+    "buildToolResultEvidenceEntry", "buildToolUseEvidenceEntry", "buildTranscriptSnapshot", "buildUpdateCandidates",
+    "buildWorkingContextDocumentFromCandidate", "build_subagent_tool_limit_result", "build_tool_hook_context",
+    "canPromptForSelection", "canRetryProviderFailure", "can_retry_openai_generation", "canonical_origin",
+    "canonicalizeAuthorityPath", "captureAgentAuthority", "captureOwnedProcessIdentity", "captureProcessBirthMarker",
+    "captureWorkspaceSnapshot", "checkRepositoryApproval", "checkSubagentDepthAllowed", "check_subagent_capacity",
+    "check_subagent_runtime_limits", "childAgentPath", "chooseCompactionCutoff", "chooseContextReliefModes",
+    "choosePreservedRawStart", "chooseToolAwareCompactionCutoff", "claimSubagentLaunchGroupContinuation",
+    "claimUnconsumedSubagentReconciliations", "classifyContextPressure", "classifyContextReliefPressure",
+    "classifyProviderHttpFailure", "classifyReadOnlyShellCommand", "clearAuth", "clearDaemonState",
+    "clearPermissionRulesCache", "cloneSession", "close_openai_output_item", "coercePreservedTrace",
+    "coerceProjectFacts", "coerceRelevantFiles", "coerceRepairedCheckpoint", "coerceSynthesizedWorkingContextFields",
+    "coerceWorkingContextDocument", "collaborationSnapshotPayload", "collapseWhitespace", "collectDoctorReport",
+    "collectSubstantiveToolExchangeStarts", "collectToolResultIds", "commitSessionV2", "commitSessionV2Delta",
+    "commit_openai_delivery", "compactHistoricalTail", "compactMessageForContinuation", "compactModelName",
+    "compactSessionMessageBody", "compactStructuredRecord", "compactToolInput", "compactTranscriptEntries",
+    "compactionCheckpointPath", "compactionManifestPath", "completeEmptyProviderResponse",
+    "completeSubagentReconciliationClaim", "configureActiveRuntimePaths", "configureRuntimeHome",
+    "connectTaskSupervisorDaemonClient", "constructWithRollback", "consumeAppendedSubagentReconciliations",
+    "contextlib_suppress", "convertMessagesToChatCompletions", "convertMessagesToInput", "createAgentRuntimeBindings",
+    "createAuthenticatedDaemonServer", "createBridgeRuntime", "createBuiltinToolContractSnapshot",
+    "createBuiltinTools", "createCollaborationRuntime", "createCollaborationSnapshot", "createDaemonAuthMaterial",
+    "createDebugBundle", "createDefaultCompactionModelClient", "createEmptySession", "createFileMcpTokenStore",
+    "createForkedSession", "createGitWorktree", "createInitialRuntimeState", "createLifecycleBarrier",
+    "createMcpActivityDescriptors", "createMcpOAuthRuntime", "createMcpRuntime", "createMonitorRecord",
+    "createMonitorRuntime", "createPluginActivityDescriptors", "createProviderFailureRecord",
+    "createProviderIncompleteResponseError", "createProviderRequestError", "createRemoteSession",
+    "createRuntimeActivationContext", "createRuntimeEvent", "createRuntimeSessionBinding", "createRuntimeStateStore",
+    "createSessionListCache", "createSessionRuntimeController", "createSubagentReconciliationForTerminalChild",
+    "createTaskExecutionDescriptor", "createTaskLaunchReservation", "createTaskRuntime", "createTaskSupervisor",
+    "createWorkspaceController", "createWorkspaceExecutionDescriptor", "create_mcp_oauth_runtime",
+    "create_openai_logical_call_id", "create_serial_queue", "create_task_question", "daemonAuthTokenPath",
+    "daemonEventsPath", "daemonLogsDir", "daemonPidPath", "daemonSocketPath", "daemonStatePath", "daemonTokenId",
+    "daemonTokensEqual", "decideDurableCheckpoint", "decodeBingRedirectTarget", "dedupeMemoryCandidates",
+    "defaultMonitorCheckIntervalMs", "defaultMonitorHeartbeatIntervalMs", "defaultParentContinuationPrompt",
+    "defaultToolList", "deliverQueuedTaskMessagesToSession", "deliver_queued_task_messages_to_session",
+    "deriveChildAgentAuthority", "deriveKeywords", "deriveStoredTurnOutcome", "deriveTagsFromText",
+    "deriveToolPayloadClass", "describeCompactionSynthesisFailure", "detectChromeCompanionStatus", "detectIdeTargets",
+    "detectTmuxAvailability", "digestExpectedCommand", "durableMemoryId", "dynamicContextBelongsInMessages",
+    "emitContinuationRelief", "emitProviderActivity", "emptyCollaborationSnapshot", "emptyCompactionResult",
+    "emptyReliefSummary", "encodeDaemonFrame", "enforceContextHeadroom", "enforceSessionAgentAuthority",
+    "ensureBaseLayout", "ensureProviderForModelSelection", "ensureTaskSupervisorDaemon", "estimateMessageTokens",
+    "estimateMessagesTokens", "estimateRawContextPressure", "estimateSingleMessageTokens", "estimateTextTokens",
+    "estimateTodoAndPlanTokens", "estimateWorkingContextTokens", "evaluateParentContinuationReadiness",
+    "evaluate_subagent_result", "execText", "executableConfigDigest", "expandHome", "expandRuntimeHome",
+    "extractAssistantText", "extractCommand", "extractDurableMemoryCandidates", "extractFilePath",
+    "extractJsonObjectCandidate", "extract_structured_result_json", "extract_turn_state", "failTaskLaunchReservation",
+    "fallbackEligibleProviderFailure", "fetch", "fileLock", "fileOrJson", "filterDefaultIgnoredGlobMatches",
+    "filterToolsByPolicy", "filterToolsForAgentAuthority", "filter_tools_for_subagent",
+    "finalizeBackgroundSubagentFailureFromEnv", "finalizeBackgroundSubagentSuccessFromEnv",
+    "finalize_interrupted_openai_preview", "finalize_responses_success", "findCommandInPath", "findDispatchAllowRule",
+    "findDispatchDenyRule", "findGitRoot", "findLastPlainUserIndex", "findMatchingRemoteSessions",
+    "findMatchingSessions", "findSessionsForWorkspace", "fingerprintAgentAuthority", "finishPersistenceCall",
+    "finish_stable_boundary", "fireToolHooks", "formatAutoModePolicy", "formatBridgeTail", "formatChildAgentRecord",
+    "formatDebugBundleReport", "formatDiagnosticsReport", "formatMonitorRecord", "formatMonitorSummary",
+    "formatMonitorTaskReference", "formatPlanApprovalRecord", "formatPreflightTokenSummary",
+    "formatRemoteSessionCandidate", "formatRemoteSessionRecord", "formatSessionCandidate", "formatTaskInspectReport",
+    "formatTaskListReport", "formatTaskReference", "formatTaskResultReport", "formatTaskSurface",
+    "formatTranscriptEntries", "formatTranscriptToolLabel", "formatUsageBreakdown", "formatUsageSummary",
+    "function_call_projection_record", "generateDaemonAuthMaterial", "getActiveRuntimePaths", "getBridgeDiagnostics",
+    "getChromeNativeHostManifestPath", "getCompactionsDir", "getContextRuntimeHome", "getDaemonDir",
+    "getDefaultAssistantDescription", "getDefaultAssistantName", "getDefaultAutoMode", "getDefaultEffort",
+    "getDefaultEffortForProvider", "getDefaultGlobExcludes", "getDefaultModel", "getDefaultModelForProvider",
+    "getDefaultProvider", "getDefaultSystemPrompt", "getDefaultToolList", "getLocalStateDir", "getNpmCommand",
+    "getOpenAiProviderLabel", "getPlansDir", "getProjectMemoryPath", "getProjectMemoryRecordsPath", "getProjectRoot",
+    "getProjectStateDir", "getRepositoryTrustStatus", "getScopedRuntimePaths", "getSessionCompactionsDir",
+    "getSessionToolArtifactsDir", "getSlashCommandAvailability", "getStateRoot", "getTaskSupervisorDaemonState",
+    "getToolArtifactsDir", "getToolPayloadPolicy", "handleChromeCompanionRpcPayload", "handleSlashCommand",
+    "handle_response_completed", "hasPersistableSessionMessages", "headroomEventPayload", "healthCheckMetaPath",
+    "hydratePersistedSession", "hydrateSessionHeadFromBodyBytes", "hydrateSessionWorkspaceMetadata",
+    "inferProviderForModel", "inferToolNameFromLabel", "inheritParentPermissionMode",
+    "injectSystemContextIntoMessages", "inspectBridgeRecovery", "inspectChromeNativeHostManifest",
+    "inspectExecutableClosure", "inspectInstallState", "inspectMcpSourceTrust", "inspectPluginSourceTrust",
+    "installChromeNativeHostManifest", "installEnvironmentProxyFetch", "invalid_tool_input_message", "isCodexBaseUrl",
+    "isCompactionContextSizeFailure", "isCompactionSynthesisJsonFailure", "isContextPressureRelieved",
+    "isContextWindowFailure", "isDaemonAuthRequest", "isDaemonAuthResponse", "isDaemonEventMessage",
+    "isDaemonResponse", "isDaemonSocketListenerActive", "isEmptyAssistantResponse", "isGlobPayload", "isGrepPayload",
+    "isLowSignalTodoText", "isNoMorePermissive", "isPathWithinAuthority", "isPlanRevisionPrompt",
+    "isProviderRequestError", "isReadPayload", "isRelatedChildAgent", "isRuntimeSecretRef", "isSafeWorkingSetStart",
+    "isSessionHeadV2", "isTaskSupervisorGateway", "iterateMcpBody", "launchReservedProcess", "listActiveBridgeRows",
+    "listBridges", "listChildAgents", "listEffortLevels", "listHealthCheckTasks", "listModelsForProvider",
+    "listMonitors", "listPlanApprovals", "listProviderProfiles", "listProviderProfilesForKind", "listProviders",
+    "listRemoteSessions", "listSessionMonitors", "listSessionTaskRecords", "listSessions", "listSlashCommands",
+    "listSubagentLaunchGroups", "listSubagentReconciliations", "listTaskRecords", "listUnapprovedHookScopes",
+    "listUnconsumedSubagentReconciliations", "loadAuth", "loadAutoMode", "loadBridge", "loadBridgeDeliveryLedger",
+    "loadBridgeEvents", "loadBridgeInbox", "loadBridgeRecoveryRecord", "loadChildAgent", "loadCodexAuthToken",
+    "loadCompactionManifest", "loadDaemonEvents", "loadDaemonState", "loadHealthCheckTask", "loadHooks",
+    "loadMarketplaces", "loadMcpServers", "loadMonitor", "loadPermissionRules", "loadPermissionRulesCached",
+    "loadPlanApproval", "loadPluginRuntime", "loadPlugins", "loadProjectMemoryRecords", "loadRemoteSession",
+    "loadSelectedMcpServers", "loadSelectedPluginRecords", "loadSession", "loadSessionRecordShallow",
+    "loadSessionWithReconciliation", "loadSettings", "loadSettingsBySources", "loadTaskRecord",
+    "loadWorkingContextArtifact", "load_task_session", "makeTextEntry", "makeToolEntry", "mapChildAgentStatus",
+    "mapClosureRootToSnapshot", "mapMonitorStatus", "mapRemoteStatus", "mapStopReasonToCompletionReason",
+    "mapStopReasonToStatus", "mapStopReasonToWaitingReason", "markSubagentLaunchGroupContinuationCompleted",
+    "markSubagentLaunchGroupContinuationRunning", "markSubagentLaunchGroupContinuationStarting",
+    "markSubagentReconciliationsConsumed", "markTaskMessageDelivered", "mark_task_message_delivered",
+    "matchPermissionRule", "matchesBashRulePattern", "matchesDomainRulePattern", "matchesPathRulePattern",
+    "materializeAgentExecutionRuntime", "maybeAutoCheckpointRawSession", "maybeAutoCompactSession",
+    "maybeAutoConnectIde", "maybeExecIntoTmux", "mcpFieldIsSecret", "mcpTokenStoreKey", "measureRequestInputTokens",
+    "meetPermissionModes", "mergeCompactionUsageIntoSession", "mergeTranscriptEntry", "mergeUsage",
+    "messageHasToolResults", "messageHasToolUses", "message_projection_record", "migrateLegacyMcpServerSecrets",
+    "migrateSessionToV2", "modelSupportsEffort", "modelSupportsImageInputs", "modelSupportsMaxEffort",
+    "modelSupportsXhighEffort", "monitorPath", "mutateAutoMode", "mutateChildAgent", "mutateHealthCheckTask",
+    "mutateJsonFile", "mutateJsonLines", "mutateJsonRecord", "mutateMarketplaces", "mutateMcpServers",
+    "mutatePlugins", "mutateProjectMemoryRecords", "mutateSessionHeadDeltaTransaction", "mutateSessionRecord",
+    "mutateSessionRecordTransaction", "mutateSettings", "mutateTaskMeta", "newestMtimeInTree", "noProgressEventData",
+    "noProgressTurnResult", "normalizeAnthropicContentBlocks", "normalizeAnthropicSseResponse",
+    "normalizeBingResultUrl", "normalizeDuckDuckGoResultUrl", "normalizeEffortForModel", "normalizeEffortLevel",
+    "normalizeMemoryText", "normalizeModel", "normalizeModelName", "normalizeOpenAiApiModeSetting",
+    "normalizePluginMcpServers", "normalizeProviderBlocks", "normalizeProviderName", "normalizeProviderProfileName",
+    "normalizeProviderRequestMessages", "normalizeReinjectionLines", "normalizeSandboxConfig",
+    "normalizeSessionRevision", "normalizeShellCommand", "normalizeToolOutput", "normalizeTranscriptBody",
+    "normalizeTuiScreenMode", "normalizeUnknownProviderFailure", "normalizeVerificationConfidence",
+    "normalizeVerificationVerdict", "normalize_agent_prompt", "normalize_subagent_runtime_contract",
+    "normalize_terminal_projection", "omitNone", "openAuthenticatedDaemonConnection", "openai_retry_delay_ms",
+    "parseAgentId", "parseAllowedPrompts", "parseAnthropicSseEvents", "parseApprovalRequestId", "parseArtifactId",
+    "parseBingResults", "parseBridgeId", "parseCompactionSynthesisResponse", "parseCompactionVerificationResponse",
+    "parseDaemonFrame", "parseDaemonRequest", "parseDuckDuckGoResults", "parseInstalledPluginRecord",
+    "parseJsonString", "parseLatestArchivedTimestamp", "parseMarketplaceManifest", "parseMaybeJson",
+    "parseMcpServerConfig", "parseMcpServerConfigList", "parseMonitorId", "parseOwnedProcessIdentity",
+    "parsePermissionRule", "parsePluginManifest", "parsePluginManifestV1", "parsePullRequestReference",
+    "parseRemoteSessionId", "parseSessionId", "parseSettingSources", "parseSingleShellCommand", "parseSseEvents",
+    "parseStructuredToolResult", "parseTaskId", "parseTaskReference", "partial_openai_event_lineage", "pathExists",
+    "persistProviderFailure", "persistProviderRecovery", "persistSession", "persist_structured_subagent_result",
+    "persistenceObserversActive", "planAnthropicCacheBreakpoints", "planApprovalPath", "plan_mode_denial",
+    "prepareDaemonRuntimeSecurity", "prepareProviderRequest", "prepareSandboxedArgv", "prepareSubagent",
+    "processIdentityFromRecord", "progressTypedPayload", "projection_blocks", "projection_event_fields",
+    "promptCacheEventPayload", "promptToPickRemoteSession", "providerRetryDelayMs", "providerTypedPayload",
+    "publishDaemonAuthMaterial", "quoteShellArg", "readAnthropicSseResponseAsync", "readDaemonAuthMaterial",
+    "readJsonFile", "readJsonLines", "readLastDaemonEventCursor", "readMcpBodyBytes", "readMcpBodyText",
+    "readOneDaemonFrame", "readSubagentReconciliations", "readTaskMailboxMessages", "readTaskMeta", "readTaskOutput",
+    "read_task_events", "read_task_mailbox_messages", "read_task_questions", "read_undelivered_task_messages",
+    "reconciliation_conflict_failure", "recordActualTokenUsage", "recordContinuationRelief",
+    "recordEmptyResponseUsage", "recordPersistenceIo", "recordPreflightTokenMeasurement",
+    "recoverSubagentLaunchGroupContinuations", "recover_openai_attempt", "reduceCompactionHeadroom",
+    "reduceRuntimeState", "reduce_background_runtime_state", "reduce_mcp_runtime_state",
+    "registerPersistenceObserver", "registerStorageLockObserver", "releaseSubagentLaunchGroupContinuationClaim",
+    "releaseSubagentReconciliationClaim", "remoteSessionPath", "removeDaemonAuthMaterialIfOwned",
+    "removeInactiveOwnedDaemonSocket", "removeOwnedDaemonAuthMaterial", "renderActivityMarkdown",
+    "renderCompactValue", "renderContextReliefPrompt", "renderContinuationOverlay", "renderDecisionsMarkdown",
+    "renderPartialCompactionSummary", "renderPlanMarkdown", "renderPlanOverlay",
+    "renderRegionSummaryReinjectionLines", "renderRetrievedMemoryLine", "renderRetrievedMemoryPrompt",
+    "renderSubagentReconciliationMessage", "renderSummaryMarkdown", "renderTodoOverlay", "renderTranscriptValue",
+    "renderWorkingContextPromptContext", "repairSessionTimestamps", "repairSessionTranscript", "replaceBridgeInbox",
+    "repositoryTrustRecordPath", "requestHasImageInputs", "requestParentContinuationForReconciliations",
+    "requestProviderResponse", "requireModelOwnedMonitor", "requireModelOwnedTask", "requireSubagentDepthAllowed",
+    "resetActiveRuntimePaths", "resetConfiguredRuntimeHome", "resetStorageExecutorPeakForTesting",
+    "resolveAgentDefinition", "resolveAnthropicCountTokensUrl", "resolveAnthropicMessagesUrl",
+    "resolveBridgeRecovery", "resolveChromeCompanionServer", "resolveCompactionExecutionPlan",
+    "resolveCompactionModelCandidates", "resolveCompactionProviderProfileBinding", "resolveCompactionTokenPolicy",
+    "resolveConfig", "resolveDaemonAuthTimeoutMs", "resolveDaemonRpcTimeoutMs", "resolveEnvironmentProxyForUrl",
+    "resolveFallbackProviderProfileName", "resolveLatestPlan", "resolveMaybeRelative",
+    "resolveMcpServerConfigSecrets", "resolveMcpTransportPolicy", "resolveModelForAgent", "resolveOpenAiApiMode",
+    "resolveOpenAiBaseUrl", "resolveProviderConfigSecrets", "resolveProviderForModelSelection",
+    "resolveProviderProfile", "resolveProviderProfiles", "resolveRemoteSelection", "resolveRepositoryIdentity",
+    "resolveRuntimeHome", "resolveRuntimePaths", "resolveRuntimeSecret", "resolveRuntimeSecretString",
+    "resolveSandboxBackend", "resolveSandboxPolicy", "resolveScope", "resolveSelectedProviderProfileName",
+    "resolveSession", "resolveSubagentLaunchGroupId", "resolveSubagentMaxDepth", "resolveTeleportSession",
+    "resolveTmuxLaunchContextFromEnv", "resolve_compaction_profile", "resolve_effective_provider_turn_binding",
+    "resolve_negotiated_protocol", "resolve_plan_mode_mcp_verdict", "resolve_subagent_concurrency_policy",
+    "resolve_subagent_runtime_limits", "resolve_terminal_projection", "resolve_tool_concurrency",
+    "response_terminal_failure", "responses_activity_kind", "retiredInteractiveReliefReceipt",
+    "retrieveRelevantDurableMemory", "revokeRepositoryApproval", "rotateDaemonEventsIfOversized", "runAgentPrompt",
+    "runChromeCompanionMcpServer", "runChromeNativeHost", "runCompaction", "runCompactionCheckpointVerification",
+    "runCompactionCheckpointVerificationWithFallback", "runForegroundSubagent", "runModelBackedCompactionSynthesis",
+    "runModelBackedCompactionSynthesisWithFallback", "runParentContinuationFromReconciliations", "runRepoInstall",
+    "runRepoUpdate", "runStorageIo", "runTaskSupervisorDaemon", "runWithRuntimePaths", "run_in_provider_turn_session",
+    "run_post_tool_hook", "run_pre_tool_hook", "run_stable_boundary_hook", "run_tool_dispatch_batch",
+    "run_with_transient_execution_session", "runtime_contract_for_agent", "sameRuntimeBinding",
+    "sandboxConfigForAgentAuthority", "sanitizePermissionMode", "saveAuth", "saveAutoMode", "saveBridge",
+    "saveBridgeDeliveryLedger", "saveBridgeRecoveryRecord", "saveChildAgent", "saveCompactionCheckpoint",
+    "saveCompactionManifest", "saveDaemonState", "saveHealthCheckTask", "saveMarketplaces", "saveMcpServers",
+    "saveMonitor", "savePlanApproval", "savePlugins", "saveProjectMemoryRecords", "saveRemoteSession", "saveSession",
+    "saveSettings", "saveTaskRecord", "scopedRuntimeHome", "scoreMemoryRecord", "searchBing", "searchDuckDuckGo",
+    "searchWeb", "selectMcpBootstrapServers", "select_authoritative_projection", "sendAnthropicMessagesRequest",
+    "sendAnthropicMessagesStreamingViaAsyncTransport", "sendAnthropicMessagesViaAsyncTransport", "sendBridgeMessage",
+    "sendOpenAiChatCompletionsRequest", "sendOpenAiRequest", "sendOpenAiResponsesRequest", "sendTaskMessage",
+    "send_task_message", "serializeRemote", "sessionArchiveDir", "sessionLiveHeadFromV2", "sessionMessagesPath",
+    "sessionPath", "sessionTranscriptLogPath", "setSessionCwd", "shapeForegroundSubagentResult", "shapeGlobPayload",
+    "shapeGrepPayload", "shapeMcpResourceList", "shapeMcpResourceRead", "shapeReadPayload", "shapeTextToolResult",
+    "shape_mcp_resource_list", "shape_mcp_resource_read", "shouldAutoCompact", "shouldNarrateWorker",
+    "shouldRetryCompactionAttempt", "shouldSkipCompactionSynthesisFailure", "signalOwnedProcess", "sink_failure",
+    "skip_task_question", "snapshotExecutableClosure", "spawnDetached", "splitToolTextLines",
+    "startBackgroundSubagent", "start_responses_stream", "stateless_prepared_request", "stopTaskSupervisorDaemon",
+    "storageExecutorSnapshot", "storeRuntimeSecret", "structured_result_path", "subagentReconciliationLogPath",
+    "summarizeContinuationRegion", "summarizeOutputManifest", "summarizePluginCapabilities", "summarizeSessionRecord",
+    "summarizeTodo", "summarizeToolResultForCompaction", "summarizeToolResultForRelief",
+    "summarizeWorkspaceCapabilities", "summarize_subagent_runtime_contract", "supersede_openai_generation",
+    "supportsApiMicrocompact", "supportsOpenAiChatCompletionsReasoningEffort", "synchronizeManualProjectMemory",
+    "taskDir", "taskMetaPath", "taskOutputPath", "taskRecordPath", "task_events_path", "task_mailbox_path",
+    "task_questions_path", "token_store_delete", "token_store_get", "token_store_set", "toolArtifactDataPath",
+    "toolArtifactMetaPath", "transactionLockPath", "trimPathEvidence", "truncate", "truncateMemoryText",
+    "tryParseAgentId", "tryParseApprovalRequestId", "tryParseBridgeId", "tryParseMonitorId",
+    "tryParseRemoteSessionId", "tryParseSessionId", "tryParseTaskId", "tryParseTaskReference",
+    "unavailableDaemonBinding", "unsupportedImageInputResponse", "updateDurableMemoryFromWorkingContext",
+    "updateRemoteSession", "updateSessionRecord", "upsertSubagentLaunchGroup", "upsertSubagentReconciliation",
+    "validateMcpResponseHeaders", "validatePluginCapabilityContract", "validatePluginManifest",
+    "verifyOwnedDaemonSocket", "verifyOwnedProcessIdentity", "verifyPrivateDaemonRuntime", "verifyProcessBirthMarker",
+    "websocket_response_create_params", "withRecordTransaction", "withSubagentCoordinationTransaction",
+    "workerEventCandidate", "writeBackSessionV1", "writeJsonFile", "writePlanFile", "writeTaskMeta",
+]

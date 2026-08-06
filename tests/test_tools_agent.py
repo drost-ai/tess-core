@@ -217,7 +217,7 @@ class ToolAgentTests(AgentCoreTestCase):
             run(core.saveSession(parent))
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             events = []
-            with mock.patch("agent_core.task_process_launch.captureOwnedProcessIdentity", fake_capture_identity):
+            with mock.patch("agent_core.process.task_launch.captureOwnedProcessIdentity", fake_capture_identity):
                 result = run(
                     agent.handler(
                         {"description": "Local async", "prompt": "Run locally", "run_in_background": True},
