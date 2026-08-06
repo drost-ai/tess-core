@@ -1,6 +1,31 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+from ..platform import collectDoctorReport
+from ..session.transcript import buildTranscriptSnapshot
+from ..storage import (
+    listChildAgents,
+    listSessionMonitors,
+    listSessionTaskRecords,
+    loadBridge,
+    loadRemoteSession,
+)
+from .agents import _is_active_child_agent, _is_related_child_agent
+from .common import (
+    _error,
+    _first_user_text,
+    _handled,
+    _indent_block,
+    _info,
+    _persist,
+    _short_id,
+    collapseWhitespace,
+    truncate,
+)
+from .debug_bundle import createDebugBundle
+from .remote_background import _is_active_task_record, buildBackgroundReport
+from .shared import AVAILABLE_TUI_THEMES
+from typing import Any
 
 
 async def _handle_transcript(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
@@ -216,21 +241,6 @@ def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
     set_mode(arg_text)
     return _info(hooks, "Screen", f"Screen mode set to {arg_text}.")
 
-
-def formatMonitorRecord(record: dict[str, Any]) -> str:
-    lines = [
-        f"{_short_id(record.get('id', ''))}  {record.get('status')}  task {_short_id(record.get('taskId', ''))}",
-        f"goal         {truncate(collapseWhitespace(record.get('goal', '')), 160)}",
-        f"created      {str(record.get('createdAt', ''))[:19]}",
-        f"interval     {record.get('checkIntervalMs')}ms check - {record.get('heartbeatIntervalMs')}ms heartbeat",
-    ]
-    if record.get("lastAssistantUpdateAt"):
-        lines.append(f"last update  {str(record.get('lastAssistantUpdateAt'))[:19]}")
-    if record.get("lastObservedTaskStatus"):
-        lines.append(f"task status  {record.get('lastObservedTaskStatus')}")
-    if record.get("failureReason"):
-        lines.append(f"reason       {truncate(collapseWhitespace(record.get('failureReason')), 160)}")
-    return "\n".join(lines)
 
 
 def formatSessionCandidate(session: dict[str, Any]) -> str:

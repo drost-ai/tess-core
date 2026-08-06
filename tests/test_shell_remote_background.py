@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
+import agent_core.shell_surface.tasks as shell_surface_tasks_module
+
 
 class ShellRemoteBackgroundTests(AgentCoreTestCase):
     def test_shell_daemon_client_fallback_for_tasks_and_agents(self):
@@ -23,7 +25,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                     "close": lambda: calls.append(("close",)),
                 }
 
-            with mock.patch.object(interactive_actions_module, "connectTaskSupervisorDaemonClient", fake_connect):
+            with mock.patch.object(shell_surface_tasks_module, "connectTaskSupervisorDaemonClient", fake_connect):
                 log = run(core.handleSlashCommand({"command": "/tasks log fallback", "session": session, "config": config, "hooks": {}}))
                 stop = run(core.handleSlashCommand({"command": "/tasks stop fallback", "session": session, "config": config, "hooks": {}}))
                 retry = run(core.handleSlashCommand({"command": "/agents retry daemon", "session": session, "config": config, "hooks": {}}))

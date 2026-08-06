@@ -2,7 +2,27 @@ from __future__ import annotations
 
 import sys
 
-from .shared import *
+from ..daemon import connectTaskSupervisorDaemonClient
+from ..storage import (
+    listPlanApprovals,
+    listSessionTaskRecords,
+    loadSession,
+    loadTaskRecord,
+)
+from .common import (
+    _compact_tokens,
+    _error,
+    _handled,
+    _info,
+    _maybe_await,
+    _persist,
+    _resolve_task_record,
+    _short_id,
+    _split_subcommand,
+    collapseWhitespace,
+    truncate,
+)
+from typing import Any
 
 
 async def buildPlansReport(session: dict[str, Any], status_filter: str = "") -> str:

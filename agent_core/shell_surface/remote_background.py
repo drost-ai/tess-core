@@ -1,6 +1,43 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+from .._utils import now_iso
+from ..collaboration.remote import (
+    formatBridgeTail,
+    formatRemoteSessionCandidate,
+    sendBridgeMessage,
+    updateRemoteSession,
+)
+from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
+from ..storage import (
+    listBridges,
+    listChildAgents,
+    listRemoteSessions,
+    listSessionMonitors,
+    listSessionTaskRecords,
+    loadBridge,
+    loadDaemonState,
+    loadRemoteSession,
+    loadSession,
+)
+from .agents import _is_active_child_agent, _is_related_child_agent, formatChildAgentRecord
+from .common import (
+    _call,
+    _call_value,
+    _compact_tokens,
+    _error,
+    _handled,
+    _info,
+    _maybe_await,
+    _persist,
+    _short_id,
+    _split_subcommand,
+    collapseWhitespace,
+    truncate,
+)
+from .common import formatMonitorRecord
+from .tasks import formatTaskInspectReport
+from typing import Any
 from ..collaboration.bridge.runtime import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
 
 
@@ -374,10 +411,6 @@ def _background_remote_tokens(record: dict[str, Any], bridge: dict[str, Any] | N
         (bridge or {}).get("id"),
         (bridge or {}).get("name"),
     )
-
-
-def _compact_tokens(*values: Any) -> list[str]:
-    return [str(value).lower() for value in values if value]
 
 
 def formatRemoteSessionRecord(record: dict[str, Any], bridge: dict[str, Any] | None = None) -> str:

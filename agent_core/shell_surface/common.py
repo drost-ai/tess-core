@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any
 from ..session.message_origin import isGenuineUserRequest as _is_genuine_user_request
 
 
@@ -104,3 +104,23 @@ async def _persist(hooks: dict[str, Any]) -> None:
         result = fn()
         if hasattr(result, "__await__"):
             await result
+
+
+def _compact_tokens(*values: Any) -> list[str]:
+    return [str(value).lower() for value in values if value]
+
+
+def formatMonitorRecord(record: dict[str, Any]) -> str:
+    lines = [
+        f"{_short_id(record.get('id', ''))}  {record.get('status')}  task {_short_id(record.get('taskId', ''))}",
+        f"goal         {truncate(collapseWhitespace(record.get('goal', '')), 160)}",
+        f"created      {str(record.get('createdAt', ''))[:19]}",
+        f"interval     {record.get('checkIntervalMs')}ms check - {record.get('heartbeatIntervalMs')}ms heartbeat",
+    ]
+    if record.get("lastAssistantUpdateAt"):
+        lines.append(f"last update  {str(record.get('lastAssistantUpdateAt'))[:19]}")
+    if record.get("lastObservedTaskStatus"):
+        lines.append(f"task status  {record.get('lastObservedTaskStatus')}")
+    if record.get("failureReason"):
+        lines.append(f"reason       {truncate(collapseWhitespace(record.get('failureReason')), 160)}")
+    return "\n".join(lines)

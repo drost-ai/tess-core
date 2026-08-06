@@ -1,6 +1,48 @@
 from __future__ import annotations
 
-from .shared import *
+from .agents import _handle_agents
+from .common import (
+    _call,
+    _error,
+    _handled,
+    _info,
+)
+from .context_commands import (
+    _handle_compact,
+    _handle_extensions,
+    _handle_memory,
+    _handle_monitor,
+    _handle_resume,
+    buildMonitorsReport,
+)
+from .diagnostics import (
+    _handle_collaboration,
+    _handle_debug,
+    _handle_diagnostics,
+    _handle_mouse,
+    _handle_review,
+    _handle_screen,
+    _handle_statusline,
+    _handle_theme,
+    _handle_transcript,
+)
+from .registry import buildSlashHelp
+from .remote_background import _handle_background, _handle_daemon, _handle_remote
+from .status import (
+    _find_runtime_command,
+    _handle_effort,
+    _handle_model,
+    _handle_permissions,
+    _handle_provider,
+    _parse_command,
+    _sync_effective_provider,
+    buildProviderProfilesReport,
+    buildStatusReport,
+    buildTodosReport,
+    formatUsageBreakdown,
+)
+from .tasks import _handle_plans, _handle_tasks
+from typing import Any
 
 
 async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs: Any) -> dict[str, Any]:

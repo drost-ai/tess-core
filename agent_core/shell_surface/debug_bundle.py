@@ -6,6 +6,7 @@ import shutil
 from typing import Any
 
 from .._utils import now_iso
+from .agents import _is_related_child_agent
 from ..platform import collectDoctorReport
 from ..storage import (
     compactionCheckpointPath,
@@ -126,13 +127,6 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
         "files": included_files,
     }
 
-
-def _is_related_child_agent(session: dict[str, Any], record: dict[str, Any]) -> bool:
-    return (
-        record.get("parentSessionId") == session.get("id")
-        or record.get("sessionId") == session.get("id")
-        or record.get("agentId") in (session.get("metadata", {}).get("childAgentIds") or [])
-    )
 
 
 def _is_related_plan_approval(session: dict[str, Any], record: dict[str, Any]) -> bool:

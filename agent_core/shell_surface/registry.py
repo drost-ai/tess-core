@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any
 
 
 def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:

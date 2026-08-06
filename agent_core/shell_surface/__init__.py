@@ -1,28 +1,115 @@
+"""Slash-command surface: registry, dispatcher, and command handlers.
+
+The facade re-exports exactly the public names its submodules define.
+"""
 from __future__ import annotations
 
-from importlib import import_module
+from .agents import (
+    buildAgentsReport,
+    formatChildAgentRecord,
+)
+from .common import (
+    collapseWhitespace,
+    formatMonitorRecord,
+    truncate,
+)
+from .context_commands import (
+    buildCompactionStatusReport,
+    buildMonitorsReport,
+)
+from .debug_bundle import createDebugBundle
+from .diagnostics import (
+    buildCollaborationStatusReport,
+    buildReviewPrompt,
+    formatDebugBundleReport,
+    formatDiagnosticsReport,
+    formatSessionCandidate,
+    formatTranscriptEntries,
+)
+from .dispatcher import handleSlashCommand
+from .registry import (
+    buildSlashHelp,
+    getSlashCommandAvailability,
+    listSlashCommands,
+)
+from .remote_background import (
+    buildBackgroundReport,
+    buildDaemonReport,
+    buildRemoteFallbackReport,
+    buildRemoteListReport,
+    buildRemoteReport,
+    formatRemoteSessionRecord,
+)
+from .shared import (
+    AVAILABLE_TUI_THEMES,
+    PERMISSION_MODES,
+    PERMISSION_MODE_ORDER,
+)
+from .status import (
+    buildPermissionsReport,
+    buildProviderProfilesReport,
+    buildStatusReport,
+    buildTodosReport,
+    compactModelName,
+    formatAutoModePolicy,
+    formatPreflightTokenSummary,
+    formatUsageBreakdown,
+    formatUsageSummary,
+    normalizeModel,
+)
+from .tasks import (
+    buildPlansReport,
+    buildTasksReport,
+    formatPlanApprovalRecord,
+    formatTaskInspectReport,
+    formatTaskListReport,
+    formatTaskResultReport,
+    formatTaskSurface,
+)
 
-_MODULE_NAMES = [
-    "shared",
-    "registry",
-    "common",
-    "status",
-    "tasks",
-    "agents",
-    "remote_background",
-    "context_commands",
-    "diagnostics",
-    "dispatcher",
+__all__ = [
+    "AVAILABLE_TUI_THEMES",
+    "PERMISSION_MODES",
+    "PERMISSION_MODE_ORDER",
+    "buildAgentsReport",
+    "buildBackgroundReport",
+    "buildCollaborationStatusReport",
+    "buildCompactionStatusReport",
+    "buildDaemonReport",
+    "buildMonitorsReport",
+    "buildPermissionsReport",
+    "buildPlansReport",
+    "buildProviderProfilesReport",
+    "buildRemoteFallbackReport",
+    "buildRemoteListReport",
+    "buildRemoteReport",
+    "buildReviewPrompt",
+    "buildSlashHelp",
+    "buildStatusReport",
+    "buildTasksReport",
+    "buildTodosReport",
+    "collapseWhitespace",
+    "compactModelName",
+    "createDebugBundle",
+    "formatAutoModePolicy",
+    "formatChildAgentRecord",
+    "formatDebugBundleReport",
+    "formatDiagnosticsReport",
+    "formatMonitorRecord",
+    "formatPlanApprovalRecord",
+    "formatPreflightTokenSummary",
+    "formatRemoteSessionRecord",
+    "formatSessionCandidate",
+    "formatTaskInspectReport",
+    "formatTaskListReport",
+    "formatTaskResultReport",
+    "formatTaskSurface",
+    "formatTranscriptEntries",
+    "formatUsageBreakdown",
+    "formatUsageSummary",
+    "getSlashCommandAvailability",
+    "handleSlashCommand",
+    "listSlashCommands",
+    "normalizeModel",
+    "truncate",
 ]
-
-_modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
-_namespace = {}
-for _module in _modules:
-    for _name, _value in vars(_module).items():
-        if not _name.startswith("__"):
-            _namespace[_name] = _value
-for _module in _modules:
-    vars(_module).update(_namespace)
-globals().update(_namespace)
-
-__all__ = sorted(_namespace)
