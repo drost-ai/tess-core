@@ -92,4 +92,3 @@ def createTaskStopCoordinator() -> TaskStopCoordinator:
     return TaskStopCoordinator()
 
 
-__setTaskStopCoordinationTestHookForTests = setTaskStopCoordinationTestHookForTests

@@ -413,4 +413,3 @@ def _valid_base64_image_payload(value: str) -> bool:
         return False
     return True
 
-_build_anthropic_beta_header = buildAnthropicBetaHeader

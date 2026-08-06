@@ -269,6 +269,3 @@ def _error(code: str, message: str) -> RuntimeBindingsCompatibilityError:
     return RuntimeBindingsCompatibilityError(code, message)
 
 
-create_agent_runtime_bindings = createAgentRuntimeBindings
-assert_agent_runtime_bindings = assertAgentRuntimeBindings
-materialize_agent_execution_runtime = materializeAgentExecutionRuntime

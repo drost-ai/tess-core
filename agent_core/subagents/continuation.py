@@ -215,5 +215,3 @@ def _emit(runtime: dict[str, Any] | None, event: str, payload: dict[str, Any]) -
             pass
 
 
-evaluate_parent_continuation_readiness = evaluateParentContinuationReadiness
-default_parent_continuation_prompt = defaultParentContinuationPrompt

@@ -157,5 +157,3 @@ def _format_transition_id(monitor_id: str, revision: int, label: str) -> str:
     return f"monitor:{monitor_id}:r{revision}:{normalized}"
 
 
-commit_monitor_mutation = commitMonitorMutation
-start_monitor_once = startMonitorOnce

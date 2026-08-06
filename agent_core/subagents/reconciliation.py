@@ -486,13 +486,3 @@ def _emit(runtime: dict[str, Any] | None, event: str, payload: dict[str, Any]) -
             pass
 
 
-subagent_reconciliation_log_path = subagentReconciliationLogPath
-read_subagent_reconciliations = readSubagentReconciliations
-list_unconsumed_subagent_reconciliations = listUnconsumedSubagentReconciliations
-upsert_subagent_reconciliation = upsertSubagentReconciliation
-mark_subagent_reconciliations_consumed = markSubagentReconciliationsConsumed
-create_subagent_reconciliation_for_terminal_child = createSubagentReconciliationForTerminalChild
-build_subagent_reconciliation_record = buildSubagentReconciliationRecord
-render_subagent_reconciliation_message = renderSubagentReconciliationMessage
-append_pending_subagent_reconciliations_to_session = appendPendingSubagentReconciliationsToSession
-consume_appended_subagent_reconciliations = consumeAppendedSubagentReconciliations

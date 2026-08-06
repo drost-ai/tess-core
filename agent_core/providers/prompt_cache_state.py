@@ -280,9 +280,3 @@ def _positive_integer(value: Any, fallback: int) -> int:
     return value if not isinstance(value, bool) and isinstance(value, int) and value > 0 else fallback
 
 
-prompt_cache_state_path = promptCacheStatePath
-create_prompt_cache_dispatch_order = createPromptCacheDispatchOrder
-compare_prompt_cache_dispatch_order = comparePromptCacheDispatchOrder
-read_prompt_cache_state = readPromptCacheState
-commit_prompt_cache_observation = commitPromptCacheObservation
-mark_prompt_cache_eviction_intent = markPromptCacheEvictionIntent

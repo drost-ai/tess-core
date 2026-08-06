@@ -103,5 +103,3 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
     return None
 
 
-canonical_mcp_origin = canonicalMcpOrigin
-fetch_mcp_resource_with_bound_credentials = fetchMcpResourceWithBoundCredentials

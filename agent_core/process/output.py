@@ -249,4 +249,3 @@ def _unlink(path: str) -> None:
         pass
 
 
-create_subprocess_output_collector = createSubprocessOutputCollector

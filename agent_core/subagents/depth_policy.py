@@ -60,6 +60,3 @@ def _nested(value: Any, key: str) -> Any:
     return value.get(key) if isinstance(value, dict) else None
 
 
-resolve_subagent_max_depth = resolveSubagentMaxDepth
-check_subagent_depth_allowed = checkSubagentDepthAllowed
-require_subagent_depth_allowed = requireSubagentDepthAllowed

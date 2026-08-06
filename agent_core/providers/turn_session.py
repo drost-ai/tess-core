@@ -168,4 +168,3 @@ async def _close_resource(resource: Any) -> None:
         await maybe_await(closer())
 
 
-create_provider_turn_session = createProviderTurnSession

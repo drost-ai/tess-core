@@ -395,14 +395,3 @@ def _bound_reason(reason: Any) -> str:
     return value if len(value) <= 500 else f"{value[:497]}..."
 
 
-with_subagent_coordination_transaction = withSubagentCoordinationTransaction
-list_subagent_reconciliations = listSubagentReconciliations
-claim_unconsumed_subagent_reconciliations = claimUnconsumedSubagentReconciliations
-complete_subagent_reconciliation_claim = completeSubagentReconciliationClaim
-list_subagent_launch_groups = listSubagentLaunchGroups
-upsert_subagent_launch_group = upsertSubagentLaunchGroup
-claim_subagent_launch_group_continuation = claimSubagentLaunchGroupContinuation
-mark_subagent_launch_group_continuation_starting = markSubagentLaunchGroupContinuationStarting
-mark_subagent_launch_group_continuation_running = markSubagentLaunchGroupContinuationRunning
-release_subagent_launch_group_continuation_claim = releaseSubagentLaunchGroupContinuationClaim
-mark_subagent_launch_group_continuation_completed = markSubagentLaunchGroupContinuationCompleted

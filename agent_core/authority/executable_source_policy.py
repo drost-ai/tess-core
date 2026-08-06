@@ -316,6 +316,3 @@ async def loadSelectedPluginRecords(
     return result
 
 
-parse_setting_sources = parseSettingSources
-executable_config_digest = executableConfigDigest
-select_mcp_bootstrap_servers = selectMcpBootstrapServers

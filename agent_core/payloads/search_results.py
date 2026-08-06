@@ -135,5 +135,3 @@ def _without_none(value: Any) -> Any:
     return value
 
 
-build_streaming_glob_payload = buildStreamingGlobPayload
-build_streaming_grep_payload = buildStreamingGrepPayload

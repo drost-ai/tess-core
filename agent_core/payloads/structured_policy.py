@@ -204,5 +204,3 @@ def _json_stringify(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-analyze_structured_result = analyzeStructuredResult
-build_structured_result_summary = buildStructuredResultSummary

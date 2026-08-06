@@ -183,6 +183,3 @@ def _positive_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
-create_runtime_session_binding = createRuntimeSessionBinding
-create_runtime_activation_context = createRuntimeActivationContext
-same_runtime_binding = sameRuntimeBinding

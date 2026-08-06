@@ -344,5 +344,3 @@ def _exit_signal(returncode: int | None) -> str | None:
         return f"SIG{-returncode}"
 
 
-run_streaming_search = runStreamingSearch
-build_streaming_search_from_output = buildStreamingSearchFromOutput

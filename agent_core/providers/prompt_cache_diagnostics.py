@@ -270,8 +270,3 @@ def _elapsed_ms(value: Any, now: Any) -> int:
     return max(0, int((current - before).total_seconds() * 1000))
 
 
-canonical_prompt_cache_json = canonicalPromptCacheJson
-hash_prompt_cache_value = hashPromptCacheValue
-build_prompt_cache_request_snapshot = buildPromptCacheRequestSnapshot
-diagnose_prompt_cache = diagnosePromptCache
-normalize_prompt_cache_provider_reason = normalizePromptCacheProviderReason

@@ -113,4 +113,3 @@ async def _shape_captured_stream(values: dict[str, Any], kind: str) -> dict[str,
     )
 
 
-build_bash_result_payload = buildBashResultPayload

@@ -242,6 +242,3 @@ async def fireToolHooks(args: Mapping[str, Any]) -> dict[str, Any]:
     return outcome
 
 
-approve_hooks = approveHooks
-load_hooks = loadHooks
-fire_tool_hooks = fireToolHooks

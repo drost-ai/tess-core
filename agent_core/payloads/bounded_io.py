@@ -179,6 +179,3 @@ def _response_content_length(response: Any) -> int | None:
     return int(text) if text.isdigit() else None
 
 
-read_file_tail_bounded = readFileTailBounded
-read_file_prefix_bounded = readFilePrefixBounded
-read_response_text_bounded_sync = readResponseTextBoundedSync

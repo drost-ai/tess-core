@@ -157,6 +157,3 @@ def _finite_number(value: Any) -> bool:
     )
 
 
-encode_payload_cursor = encodePayloadCursor
-resolve_payload_cursor = resolvePayloadCursor
-fingerprint_payload_source = fingerprintPayloadSource

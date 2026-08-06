@@ -456,11 +456,3 @@ def _deep_copy(value: Any) -> Any:
     return value
 
 
-authorize_runtime_secret_write = authorizeRuntimeSecretWrite
-store_runtime_secret = storeRuntimeSecret
-is_runtime_secret_ref = isRuntimeSecretRef
-resolve_runtime_secret = resolveRuntimeSecret
-resolve_runtime_secret_string = resolveRuntimeSecretString
-assert_no_literal_mcp_secrets = assertNoLiteralMcpSecrets
-migrate_legacy_mcp_server_secrets = migrateLegacyMcpServerSecrets
-resolve_mcp_server_config_secrets = resolveMcpServerConfigSecrets

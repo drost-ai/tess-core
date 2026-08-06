@@ -243,10 +243,3 @@ async def migrateLegacyStoredAuthSecrets(auth: Mapping[str, Any]) -> dict[str, A
     return {"auth": result, "changed": changed}
 
 
-normalize_runtime_secret_value = normalizeRuntimeSecretValue
-normalize_provider_headers = normalizeProviderHeaders
-normalize_compaction_provider_secrets = normalizeCompactionProviderSecrets
-resolve_compaction_provider_secrets = resolveCompactionProviderSecrets
-resolve_provider_config_secrets = resolveProviderConfigSecrets
-assert_provider_config_secrets_resolved = assertProviderConfigSecretsResolved
-migrate_legacy_stored_auth_secrets = migrateLegacyStoredAuthSecrets

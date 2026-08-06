@@ -147,9 +147,3 @@ def _emit(runtime: dict[str, Any] | None, event: str, data: dict[str, Any]) -> N
         pass
 
 
-load_previous_prompt_cache_state = loadPreviousPromptCacheState
-attach_prompt_cache_dispatch_context = attachPromptCacheDispatchContext
-resolve_prompt_cache_preparation = resolvePromptCachePreparation
-commit_provider_prompt_cache_observation = commitProviderPromptCacheObservation
-create_prompt_cache_turn_context = createPromptCacheTurnContext
-attach_prepared_prompt_cache_context = attachPreparedPromptCacheContext

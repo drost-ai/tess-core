@@ -196,12 +196,3 @@ def _finite_nonnegative(value: Any) -> int:
     return _finite_optional(value) or 0
 
 
-create_usage_totals = createUsageTotals
-ensure_usage_totals = ensureUsageTotals
-cache_creation_usage_detail = cacheCreationUsageDetail
-merge_provider_usage = mergeProviderUsage
-merge_usage_into_session = mergeUsageIntoSession
-resolve_model_pricing = resolveModelPricing
-estimate_usage_cost = estimateUsageCost
-estimate_usage_cost_usd = estimateUsageCostUsd
-round_usd = roundUsd

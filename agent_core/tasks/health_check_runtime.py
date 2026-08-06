@@ -344,4 +344,3 @@ def _failed_result(error: Exception) -> dict[str, Any]:
     }
 
 
-create_health_check_controller = createHealthCheckController

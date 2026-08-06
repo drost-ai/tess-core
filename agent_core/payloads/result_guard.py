@@ -435,5 +435,3 @@ def _json_stringify(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-guard_tool_call_result = guardToolCallResult
-serialized_content_bytes = serializedContentBytes

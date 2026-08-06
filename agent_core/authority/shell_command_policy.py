@@ -376,5 +376,3 @@ def _classify_date(args: list[str]) -> bool:
     )
 
 
-parse_single_shell_command = parseSingleShellCommand
-classify_read_only_shell_command = classifyReadOnlyShellCommand

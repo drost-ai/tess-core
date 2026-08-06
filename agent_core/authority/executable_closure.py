@@ -416,6 +416,3 @@ def mapClosureRootToSnapshot(snapshot: dict[str, Any], sourcePath: str) -> str |
     return None
 
 
-inspect_executable_closure = inspectExecutableClosure
-snapshot_executable_closure = snapshotExecutableClosure
-map_closure_root_to_snapshot = mapClosureRootToSnapshot

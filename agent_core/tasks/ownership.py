@@ -154,5 +154,3 @@ def _string_field(value: Any, field: str) -> str | None:
     return candidate if isinstance(candidate, str) and candidate else None
 
 
-require_model_owned_task = requireModelOwnedTask
-require_model_owned_monitor = requireModelOwnedMonitor

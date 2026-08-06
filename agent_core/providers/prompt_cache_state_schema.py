@@ -176,4 +176,3 @@ def _timestamp(value: Any) -> bool:
         return False
 
 
-is_prompt_cache_state_v1 = isPromptCacheStateV1

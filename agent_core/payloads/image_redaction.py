@@ -11,4 +11,3 @@ def redactImagePayloads(value: Any) -> Any:
     return sanitizeMediaForPersistence(value, includeByteLength=False)
 
 
-redact_image_payloads = redactImagePayloads

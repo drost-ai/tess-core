@@ -84,5 +84,3 @@ def _emit(runtime: dict[str, Any], payload: dict[str, Any]) -> None:
         pass
 
 
-is_prompt_cache_eviction_terminal_success = isPromptCacheEvictionTerminalSuccess
-record_prompt_cache_eviction_intent_at_finalization = recordPromptCacheEvictionIntentAtFinalization

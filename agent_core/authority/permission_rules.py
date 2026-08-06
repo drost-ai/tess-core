@@ -292,8 +292,3 @@ async def findDispatchAllowRule(args: Mapping[str, Any]) -> dict[str, Any] | Non
     return await _find_dispatch_rule("allow", args)
 
 
-normalize_shell_command = normalizeShellCommand
-parse_permission_rule = parsePermissionRule
-match_permission_rule = matchPermissionRule
-load_permission_rules = loadPermissionRules
-approve_permission_rules = approvePermissionRules

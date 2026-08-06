@@ -164,7 +164,3 @@ def _bounded_error(error: Any) -> str:
     return value if len(value) <= 500 else f"{value[:497]}..."
 
 
-create_task_launch_reservation = createTaskLaunchReservation
-attach_task_launch_reservation = attachTaskLaunchReservation
-fail_task_launch_reservation = failTaskLaunchReservation
-launch_reserved_process = launchReservedProcess

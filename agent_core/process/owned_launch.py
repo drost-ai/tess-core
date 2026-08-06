@@ -44,6 +44,3 @@ def activateOwnedProcessRunner(child: subprocess.Popen[Any], activationToken: st
         child.stdin.close()
 
 
-create_owned_process_runner_argv = createOwnedProcessRunnerArgv
-create_owned_process_activation = createOwnedProcessActivation
-activate_owned_process_runner = activateOwnedProcessRunner

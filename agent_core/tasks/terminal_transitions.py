@@ -124,8 +124,3 @@ def _bound_note(value: str) -> str:
     return raw[:509].decode("utf-8", errors="ignore") + "..."
 
 
-resolve_task_semantic_status = resolveTaskSemanticStatus
-apply_deliberate_task_stop = applyDeliberateTaskStop
-apply_task_process_completion = applyTaskProcessCompletion
-to_task_stop_result = toTaskStopResult
-normalize_task_process_outcome = normalizeTaskProcessOutcome

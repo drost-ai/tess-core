@@ -345,4 +345,3 @@ def _redact_data_urls(value: str) -> str:
     return "".join(output)
 
 
-sanitize_media_for_persistence = sanitizeMediaForPersistence

@@ -137,11 +137,3 @@ def tryParseApprovalRequestId(value: Any) -> str | None:
     return _try_parse(value, parseApprovalRequestId)
 
 
-parse_session_id = parseSessionId
-parse_task_id = parseTaskId
-parse_monitor_id = parseMonitorId
-parse_agent_id = parseAgentId
-parse_bridge_id = parseBridgeId
-parse_remote_session_id = parseRemoteSessionId
-parse_artifact_id = parseArtifactId
-parse_task_reference = parseTaskReference

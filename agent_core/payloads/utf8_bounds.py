@@ -137,9 +137,3 @@ def _normalize_byte_offset(value: int) -> int:
     return value
 
 
-utf8_byte_length = utf8ByteLength
-normalize_utf8_string = normalizeUtf8String
-slice_utf8_prefix = sliceUtf8Prefix
-slice_utf8_suffix = sliceUtf8Suffix
-slice_utf8_window = sliceUtf8Window
-truncate_utf8 = truncateUtf8

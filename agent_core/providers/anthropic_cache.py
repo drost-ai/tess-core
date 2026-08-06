@@ -331,7 +331,3 @@ def _nonnegative_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-plan_anthropic_cache = planAnthropicCache
-apply_anthropic_cache_plan = applyAnthropicCachePlan
-sanitize_anthropic_count_payload = sanitizeAnthropicCountPayload
-count_anthropic_cache_controls = countAnthropicCacheControls

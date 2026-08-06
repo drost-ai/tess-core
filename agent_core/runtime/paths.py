@@ -180,9 +180,3 @@ def runWithRuntimePaths(
     return result
 
 
-expand_runtime_home = expandRuntimeHome
-resolve_runtime_paths = resolveRuntimePaths
-configure_active_runtime_paths = configureActiveRuntimePaths
-get_active_runtime_paths = getActiveRuntimePaths
-reset_active_runtime_paths = resetActiveRuntimePaths
-run_with_runtime_paths = runWithRuntimePaths

@@ -221,7 +221,3 @@ def _normalize_projection_limit(value: Any) -> int:
     return min(TODO_WRITE_LIMITS["maxItems"], math.floor(value))
 
 
-require_todo_items = requireTodoItems
-select_todo_state = selectTodoState
-summarize_todo_state = summarizeTodoState
-serialize_todo_state_summary = serializeTodoStateSummary

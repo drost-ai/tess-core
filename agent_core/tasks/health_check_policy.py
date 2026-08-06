@@ -367,6 +367,3 @@ def _fail(message: str):
     raise ValueError(f"Invalid health check: {message}.")
 
 
-normalize_health_check_spec = normalizeHealthCheckSpec
-authorize_health_check_spec = authorizeHealthCheckSpec
-health_check_spec_digest = healthCheckSpecDigest

@@ -267,4 +267,3 @@ def _throw_if_aborted(signal_value: Any) -> None:
         raise error
 
 
-read_text_file_window = readTextFileWindow

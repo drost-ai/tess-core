@@ -223,4 +223,3 @@ def _aborted(signal: Any) -> bool:
     return bool(getattr(signal, "aborted", False))
 
 
-execute_health_check = executeHealthCheck

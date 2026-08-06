@@ -340,7 +340,3 @@ def _detail_status(transition: dict[str, Any]) -> str:
     return "unexpected_signal" if "unexpected SIG" in transition["summary"] else "failed"
 
 
-prepare_task_stop = prepareTaskStop
-commit_prepared_task_stop = commitPreparedTaskStop
-clear_prepared_task_stop = clearPreparedTaskStop
-commit_task_process_completion = commitTaskProcessCompletion

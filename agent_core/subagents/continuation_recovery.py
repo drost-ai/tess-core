@@ -228,4 +228,3 @@ def _first_timestamp(*values: Any) -> datetime | None:
     return None
 
 
-recover_subagent_launch_group_continuations = recoverSubagentLaunchGroupContinuations

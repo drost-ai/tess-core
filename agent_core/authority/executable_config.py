@@ -349,8 +349,3 @@ def parseMarketplaceManifest(value: Any, field: str = "marketplace") -> dict[str
     }
 
 
-parse_mcp_server_config = parseMcpServerConfig
-parse_mcp_server_config_list = parseMcpServerConfigList
-parse_plugin_manifest_v1 = parsePluginManifestV1
-parse_installed_plugin_record = parseInstalledPluginRecord
-parse_marketplace_manifest = parseMarketplaceManifest

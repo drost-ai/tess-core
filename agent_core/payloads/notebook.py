@@ -251,4 +251,3 @@ def _without_none(value: Any) -> Any:
     return value
 
 
-shape_notebook_payload = shapeNotebookPayload

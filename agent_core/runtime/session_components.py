@@ -210,4 +210,3 @@ def _tool_name(tool: Any) -> str | None:
     )
 
 
-prepare_runtime_session_components = prepareRuntimeSessionComponents

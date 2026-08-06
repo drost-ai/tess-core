@@ -287,4 +287,3 @@ def _exit_signal(returncode: int | None) -> str | None:
         return f"SIG{-returncode}"
 
 
-run_inline_shell_command = runInlineShellCommand

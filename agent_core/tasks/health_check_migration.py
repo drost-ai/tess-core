@@ -197,4 +197,3 @@ def _omit_none(value: Any) -> Any:
     return value
 
 
-migrate_legacy_health_check = migrateLegacyHealthCheck

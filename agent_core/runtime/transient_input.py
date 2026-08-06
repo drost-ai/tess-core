@@ -99,6 +99,3 @@ def _host_turn_id(message: Any) -> str:
     return str(host.get("turn_id") or host.get("turnId") or "").strip()
 
 
-create_transient_execution_session = createTransientExecutionSession
-sync_transient_execution_session = syncTransientExecutionSession
-runtime_with_sanitized_events = runtimeWithSanitizedEvents

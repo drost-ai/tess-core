@@ -431,11 +431,3 @@ def _now_iso() -> str:
     return now_iso()
 
 
-capture_owned_process_identity = captureOwnedProcessIdentity
-capture_process_birth_marker = captureProcessBirthMarker
-verify_process_birth_marker = verifyProcessBirthMarker
-verify_owned_process_identity = verifyOwnedProcessIdentity
-signal_owned_process = signalOwnedProcess
-parse_owned_process_identity = parseOwnedProcessIdentity
-process_identity_from_record = processIdentityFromRecord
-digest_expected_command = digestExpectedCommand

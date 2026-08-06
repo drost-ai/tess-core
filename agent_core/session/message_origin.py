@@ -251,13 +251,3 @@ def _bounded_lineage(value: dict[str, Any]) -> dict[str, str]:
     return result
 
 
-create_message_origin = createMessageOrigin
-message_with_origin = messageWithOrigin
-user_request_message = userRequestMessage
-synthetic_user_message = syntheticUserMessage
-get_message_origin = getMessageOrigin
-is_runtime_synthetic_message = isRuntimeSyntheticMessage
-is_genuine_user_request = isGenuineUserRequest
-is_plain_user_turn_anchor = isPlainUserTurnAnchor
-message_intent_authority = messageIntentAuthority
-message_for_stable_fingerprint = messageForStableFingerprint

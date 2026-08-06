@@ -166,4 +166,3 @@ def _normalize_limit(value: Any, fallback: int) -> int:
     return math.floor(value)
 
 
-summarize_structured_value = summarizeStructuredValue

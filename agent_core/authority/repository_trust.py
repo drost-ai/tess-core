@@ -232,8 +232,3 @@ async def getRepositoryTrustStatus(cwd: str) -> dict[str, Any]:
     }
 
 
-resolve_repository_identity = resolveRepositoryIdentity
-check_repository_approval = checkRepositoryApproval
-approve_repository_content = approveRepositoryContent
-revoke_repository_approval = revokeRepositoryApproval
-get_repository_trust_status = getRepositoryTrustStatus

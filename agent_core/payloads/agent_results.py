@@ -182,4 +182,3 @@ def _cardinality_fields(cardinality: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-finalize_tool_dispatch_result = finalizeToolDispatchResult

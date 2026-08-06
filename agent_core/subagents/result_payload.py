@@ -159,7 +159,3 @@ def _without_none(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item is not None}
 
 
-shape_foreground_subagent_result = shapeForegroundSubagentResult
-bounded_subagent_event_summary = boundedSubagentEventSummary
-bounded_subagent_error = boundedSubagentError
-bounded_subagent_runtime_contract = boundedSubagentRuntimeContract

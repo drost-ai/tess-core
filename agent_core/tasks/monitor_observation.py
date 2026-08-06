@@ -156,4 +156,3 @@ def _parse_iso_ms(value: Any) -> int:
         return 0
 
 
-apply_monitor_observation = applyMonitorObservation

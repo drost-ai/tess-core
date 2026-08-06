@@ -145,5 +145,3 @@ async def constructWithRollback(build: Callable[[ConstructionCleanup], Awaitable
         raise
 
 
-create_lifecycle_barrier = createLifecycleBarrier
-construct_with_rollback = constructWithRollback

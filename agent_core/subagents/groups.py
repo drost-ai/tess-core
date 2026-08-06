@@ -137,5 +137,3 @@ def _string(value: Any) -> str:
     return value.strip() if isinstance(value, str) and value.strip() else ""
 
 
-resolve_subagent_launch_group_id = resolveSubagentLaunchGroupId
-append_launch_group_metadata = appendLaunchGroupMetadata

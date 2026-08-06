@@ -463,6 +463,3 @@ def __setHealthCheckRevalidationTestHookForTests(
     _REVALIDATION_TEST_HOOK = hook
 
 
-inspect_health_check_revalidation = inspectHealthCheckRevalidation
-authorize_health_check_revalidation = authorizeHealthCheckRevalidation
-revalidate_health_check = revalidateHealthCheck

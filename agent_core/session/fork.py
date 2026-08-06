@@ -143,5 +143,3 @@ def createForkArchiveHeader(session: dict[str, Any], persistedAt: str) -> dict[s
     }
 
 
-create_forked_session = createForkedSession
-create_fork_archive_header = createForkArchiveHeader
