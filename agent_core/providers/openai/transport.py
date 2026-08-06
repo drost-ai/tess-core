@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...runtime.events.emit import safeEmit as _emit
+
 import importlib
 from types import SimpleNamespace
 
@@ -217,7 +219,3 @@ def _signal_aborted(signal: Any) -> bool:
         return bool(signal.get("aborted"))
     return bool(getattr(signal, "aborted", False))
 
-def _emit(runtime: dict[str, Any], event: str, data: dict[str, Any]) -> None:
-    fn = runtime.get("emitEvent")
-    if fn:
-        fn(event, data)

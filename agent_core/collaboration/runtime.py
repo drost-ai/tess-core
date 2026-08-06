@@ -120,7 +120,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
                             worker = narratable.get("worker") or {}
                             await _emit_bound(captured_binding, "collaboration.assistant_update", {"source_kind": worker.get("kind"), "source_id": worker.get("id"), "status": worker.get("status"), "label": worker.get("label"), "text": text})
             return get_snapshot()
-        except BaseException as exc:
+        except Exception as exc:
             if not _is_active(captured_binding):
                 await _report_stale(captured_binding, "collaboration.tick_failed")
                 return get_snapshot()
@@ -150,7 +150,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     async def _emit_contained(event: str, data: dict[str, Any]) -> None:
         try:
             await maybe_await(emit(event, data))
-        except BaseException:
+        except Exception:
             return
 
     async def _report_stale(binding: Any, source_event: str) -> None:
