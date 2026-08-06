@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from .shared import *
+import contextlib
+import signal
+from ..._utils import maybe_await, now_iso
+from ...process.identity import signalOwnedProcess
+from ...storage import readTaskMeta
+from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
 from .reconciliation import _mark_subagent_cancelled_from_stop

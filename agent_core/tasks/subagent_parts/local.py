@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+import subprocess
+import sys
+import uuid
+from ...storage import mutateChildAgent, taskOutputPath, writeTaskMeta
+from typing import Any
 from ...process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ...storage import mutateSessionRecord, saveTaskRecord
 from ...process.task_launch import (

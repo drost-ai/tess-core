@@ -4,7 +4,8 @@ import asyncio
 import threading
 from typing import Any, Callable
 
-from .supervisor import _is_active_task_status, _project_session_task_records, _task_record_event_payload
+from .supervisor_parts.mappers import _task_record_event_payload
+from .supervisor_parts.projection import _is_active_task_status, _project_session_task_records
 from ..runtime.identifiers import tryParseTaskId
 from ..runtime.paths import runWithRuntimePaths
 from ..storage import saveTaskRecord  # retained as a compatibility export

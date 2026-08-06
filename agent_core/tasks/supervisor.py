@@ -1,14 +1,51 @@
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
-
-from .supervisor_parts import *
+import asyncio
+import contextlib
+import os
+import sys
+import threading
+import uuid
+from .._utils import maybe_await
+from ..process.task_launch import createTaskLaunchReservation
+from ..storage.paths import ensureBaseLayout
+from ..storage.records import (
+    listChildAgents,
+    listHealthCheckTasks,
+    listSessionMonitors,
+    loadChildAgent,
+    loadHealthCheckTask,
+    loadTaskRecord,
+    readTaskMeta,
+    taskOutputPath,
+)
+from ..storage.session_archive import loadSession
+from .supervisor_parts.communication import createTaskCommunicationApi, readTaskOutput
+from .supervisor_parts.health import _inspect_latest_task_record
+from .supervisor_parts.launch import _create_process_task_launcher
+from .supervisor_parts.live_work import _create_live_work_verdict_cache, _invalidate_live_work_cache
+from .supervisor_parts.processes import _prepare_shell_argv, _worker_env
+from .supervisor_parts.projection import (
+    _annotate_retry_lineage,
+    _collaboration_snapshot,
+    _event_matches_session,
+    _monitor_snapshot,
+    _project_session_task_records,
+    _subscription_session_id,
+    _task_snapshot,
+)
+from .supervisor_parts.reconciliation import _reconcile_persisted_tasks
+from .supervisor_parts.record_issues import _report_persisted_record_issues
+from .supervisor_parts.records import _build_task_record
+from .supervisor_parts.shared import _PROCESS_REGISTRY, _WATCHERS
+from .supervisor_parts.stop import _create_task_stopper
+from .supervisor_parts.subagent_launch import _create_subagent_task_starter
+from .supervisor_parts.utils import _dedupe, _require_string
+from typing import Any, Callable
 from ..contracts.records import launch_task_id
 from .health_check_executor import recordToSpec
 from .health_check_runtime import createHealthCheckController
 from .task_stop_coordination import createTaskStopCoordinator
-from .supervisor_parts import _modules as _SUPERVISOR_PART_MODULES
 
 
 async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -419,23 +456,3 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     }
 
 
-_PUBLIC_EXPORTS = ['Any', 'Callable', 'Path', 'annotations', 'asyncio', 'contextlib', 'createTaskSupervisor', 'ensureBaseLayout', 'listChildAgents', 'listHealthCheckTasks', 'listSessionMonitors', 'listTaskRecords', 'loadBridge', 'loadChildAgent', 'loadHealthCheckTask', 'loadRemoteSession', 'loadSession', 'loadTaskRecord', 'maybe_await', 'now_iso', 'os', 'readTaskMeta', 'readTaskOutput', 'saveChildAgent', 'saveHealthCheckTask', 'saveSession', 'saveTaskRecord', 'signal', 'subprocess', 'sys', 'taskOutputPath', 'threading', 'uuid', 'writeTaskMeta']
-
-__all__ = _PUBLIC_EXPORTS
-
-
-def __dir__():
-    return sorted(_PUBLIC_EXPORTS)
-
-
-class _SupervisorModule(_types.ModuleType):
-    def __setattr__(self, name, value):
-        super().__setattr__(name, value)
-        if name.startswith("__"):
-            return
-        for module in _SUPERVISOR_PART_MODULES:
-            if name in vars(module):
-                setattr(module, name, value)
-
-
-_sys.modules[__name__].__class__ = _SupervisorModule

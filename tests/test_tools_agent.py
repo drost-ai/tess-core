@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-
+import agent_core.tasks.subagent_parts.local as subagent_local_module
 
 class ToolAgentTests(AgentCoreTestCase):
     def test_agent_tool_foreground_prepares_child_session_and_record(self):
@@ -179,7 +179,7 @@ class ToolAgentTests(AgentCoreTestCase):
 
     def test_agent_tool_background_without_supervisor_uses_local_worker_contract(self):
         root, home, workspace, previous = self.temp_context()
-        original_spawn = subagents_module._spawn_local_subagent_worker
+        original_spawn = subagent_local_module._spawn_local_subagent_worker
         try:
             class FakeProc:
                 pid = 4321
@@ -211,7 +211,7 @@ class ToolAgentTests(AgentCoreTestCase):
                     "platform": "test",
                 }
 
-            subagents_module._spawn_local_subagent_worker = fake_spawn
+            subagent_local_module._spawn_local_subagent_worker = fake_spawn
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.saveSession(parent))
@@ -248,7 +248,7 @@ class ToolAgentTests(AgentCoreTestCase):
             self.assertEqual(parent["metadata"]["subagentLaunchGroupRecords"][launch_group_id]["taskIds"], [payload["task_id"]])
             self.assertTrue(any(event == "subagent.backgrounded" and data["pid"] == 4321 for event, data in events))
         finally:
-            subagents_module._spawn_local_subagent_worker = original_spawn
+            subagent_local_module._spawn_local_subagent_worker = original_spawn
             self.restore_home(root, previous)
 
     def test_background_subagent_finalize_env_fallback_records_match_reference(self):

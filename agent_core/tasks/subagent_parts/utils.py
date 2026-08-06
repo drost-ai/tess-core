@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from .shared import *
+from ...runtime.workspace import createGitWorktree
+from typing import Any
 
 
 def _subagent_started_payload(prepared: dict[str, Any], args: dict[str, Any], background: bool) -> dict[str, Any]:

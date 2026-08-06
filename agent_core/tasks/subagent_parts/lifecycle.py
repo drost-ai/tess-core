@@ -1,6 +1,41 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+import uuid
+from ..._utils import maybe_await, now_iso, pretty_json
+from ...config import (
+    buildSystemPromptForAgent,
+    normalizeModelName,
+    resolveModelForAgent,
+    resolveProviderForModelSelection,
+)
+from ...storage import (
+    createEmptySession,
+    saveChildAgent,
+    saveSession,
+    taskOutputPath,
+)
+from ...subagents.contract import (
+    runtime_contract_for_agent,
+    summarize_subagent_runtime_contract,
+)
+from ...subagents.depth_policy import requireSubagentDepthAllowed
+from ...subagents.groups import (
+    _upsert_subagent_launch_group,
+    appendLaunchGroupMetadata,
+    resolveSubagentLaunchGroupId,
+)
+from .local import _start_local_background_subagent
+from .permissions import inheritParentPermissionMode, sanitizePermissionMode
+from .utils import (
+    _create_subagent_worktree,
+    _dedupe,
+    _output,
+    _require_string,
+    _throw_if_subagent_cancelled,
+    _without_none_values,
+)
+from typing import Any
 from ...session.message_origin import messageWithOrigin as _message_with_origin
 from ...authority.agent import (
     captureAgentAuthority,

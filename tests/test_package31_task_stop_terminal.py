@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest import mock
 
 import agent_core.tasks.supervisor as supervisor_module
+import agent_core.tasks.supervisor_parts.launch_reconciliation as supervisor_launch_reconciliation_module
+import agent_core.tasks.supervisor_parts.stop as supervisor_stop_module
 import agent_core.tasks.runners.background as background_runner_module
 from agent_core.tasks.task_stop_coordination import (
     TaskStopCoordinator,
@@ -167,7 +169,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                     *(supervisor["stopTask"](task_id) for _ in range(50))
                 )
 
-            with mock.patch.object(supervisor_module, "signalOwnedProcess", signal_stub):
+            with mock.patch.object(supervisor_stop_module, "signalOwnedProcess", signal_stub), mock.patch.object(supervisor_launch_reconciliation_module, "signalOwnedProcess", signal_stub):
                 results = run(stop_many())
             self.assertEqual(sum(bool(result and result["changed"]) for result in results), 1)
             self.assertTrue(all(result and result["status"] == "stopped" for result in results))

@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from .shared import *
+import os
+from ..._utils import now_iso
+from ...storage import mutateChildAgent, taskOutputPath, writeTaskMeta
+from ...subagents.continuation import _maybe_start_ready_parent_continuations
+from ...subagents.groups import _upsert_subagent_launch_group
+from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
+from ...subagents.result import evaluate_subagent_result, persist_structured_subagent_result
+from ..communication import append_task_event
+from .permissions import (
+    mapStopReasonToCompletionReason,
+    mapStopReasonToStatus,
+    mapStopReasonToWaitingReason,
+)
+from typing import Any
 
 
 async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], result: dict[str, Any]) -> None:

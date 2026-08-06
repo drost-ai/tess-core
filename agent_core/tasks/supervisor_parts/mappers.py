@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from .shared import *
-
-
-def _task_event_payload(meta: dict[str, Any]) -> dict[str, Any]:
-    record = _build_task_record(meta, None)
-    return _task_record_event_payload(record)
+from typing import Any
 
 
 def _task_record_event_payload(record: dict[str, Any]) -> dict[str, Any]:

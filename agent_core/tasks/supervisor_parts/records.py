@@ -1,6 +1,38 @@
 from __future__ import annotations
 
-from .shared import *
+from ..._utils import now_iso
+from ...storage import loadSession, readTaskMeta, taskOutputPath
+from ..communication import read_task_questions
+from .mappers import (
+    _map_child_agent_status_to_task_status,
+    _task_record_event_payload,
+    _map_monitor_status,
+    _map_remote_status,
+    _map_status,
+)
+from .summaries import (
+    _build_background_command_result_summary,
+    _build_detached_main_session_result_summary,
+    _describe_background_command_detail_status,
+    _describe_child_agent_detail_status,
+    _describe_detached_main_session_detail_status,
+    _summarize_background_command_task,
+    _summarize_child_agent_task,
+    _summarize_command,
+    _summarize_detached_main_session_task,
+    _summarize_health_check_task,
+    _summarize_latest_message,
+    _summarize_monitor,
+    _summarize_recovered_subagent,
+)
+from .utils import (
+    _first_text,
+    _latest_timestamp,
+    _output_size,
+    _read_output_preview,
+)
+from pathlib import Path
+from typing import Any
 from ...contracts.records import task_meta_id
 
 
@@ -350,3 +382,8 @@ def _result_summary_for_task_meta(
     if task_type == "subagent":
         return _first_text(meta.get("resultSummary"), meta.get("summary"), meta.get("error"), meta.get("waitingReason"), meta.get("stopReason"))
     return _build_background_command_result_summary(meta, output_preview)
+
+
+def _task_event_payload(meta: dict[str, Any]) -> dict[str, Any]:
+    record = _build_task_record(meta, None)
+    return _task_record_event_payload(record)

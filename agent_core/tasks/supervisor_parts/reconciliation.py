@@ -1,6 +1,34 @@
 from __future__ import annotations
 
-from .shared import *
+import asyncio
+from ..._utils import maybe_await, now_iso
+from ...process.identity import (
+    ProcessIdentityError,
+    processIdentityFromRecord,
+    verifyOwnedProcessIdentity,
+)
+from ...storage import (
+    listTaskRecords,
+    loadChildAgent,
+    loadTaskRecord,
+    mutateChildAgent,
+    readTaskMeta,
+    saveTaskRecord,
+    taskOutputPath,
+    writeTaskMeta,
+)
+from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
+from .mappers import (
+    _event_name_for_task_status,
+    _is_active_child_agent_status,
+    _is_terminal_worker_status,
+    _map_status,
+    _task_record_event_payload,
+)
+from .processes import _process_exit_summary
+from .records import _build_recovered_subagent_task_record, _build_task_record
+from .shared import _PROCESS_REGISTRY, _WATCHERS
+from typing import Any, Callable
 from .launch_reconciliation import (
     _has_interrupted_launch,
     _reconcile_interrupted_launch,
