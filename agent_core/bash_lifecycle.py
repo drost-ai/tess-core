@@ -6,9 +6,9 @@ import os
 import signal
 from typing import Any
 
-from .owned_process_launch import createOwnedProcessActivation
-from .process_identity import captureOwnedProcessIdentity
-from .subprocess_output import createSubprocessOutputCollector
+from .process.owned_launch import createOwnedProcessActivation
+from .process.identity import captureOwnedProcessIdentity
+from .process.output import createSubprocessOutputCollector
 
 
 DEFAULT_STDIO_LEAK_GRACE_MS = 2_000

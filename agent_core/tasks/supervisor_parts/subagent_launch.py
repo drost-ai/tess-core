@@ -6,7 +6,7 @@ from .records import _build_task_record
 from .utils import _dedupe
 from ...subagents.capacity import check_subagent_capacity, resolve_subagent_concurrency_policy
 from ...task_communication import append_task_event
-from ...task_process_launch import createTaskLaunchReservation
+from ...process.task_launch import createTaskLaunchReservation
 
 
 def _create_subagent_task_starter(
@@ -55,13 +55,13 @@ def _create_subagent_task_starter(
             kind="subagent",
         )
         command = (
-            f"{sys.executable} -m agent_core.background_subagent_runner "
+            f"{sys.executable} -m agent_core.process.background_subagent_runner "
             f"--session-id {session_id} --agent-id {agent_id} --task-id {task_id}"
         )
         child_argv = [
             sys.executable,
             "-m",
-            "agent_core.background_subagent_runner",
+            "agent_core.process.background_subagent_runner",
             "--session-id",
             session_id,
             "--agent-id",

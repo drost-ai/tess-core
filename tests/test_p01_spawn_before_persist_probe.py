@@ -12,7 +12,7 @@ from pathlib import Path
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
-from agent_core.owned_process_launch import (
+from agent_core.process.owned_launch import (
     activateOwnedProcessRunner,
     createOwnedProcessActivation,
 )

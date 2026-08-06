@@ -19,7 +19,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 [
                     sys.executable,
                     "-m",
-                    "agent_core.background_task_runner",
+                    "agent_core.process.background_task_runner",
                     task_id,
                     str(meta_path),
                     str(output_path),

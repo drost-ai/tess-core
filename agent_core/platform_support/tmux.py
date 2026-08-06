@@ -22,7 +22,7 @@ async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -
     child_argv = _strip_tmux_launch_flags(args.get("argv") or [])
     command = buildShellCommand(
         sys.executable,
-        ["-m", "agent_core.daemon_worker", *child_argv],
+        ["-m", "agent_core.process.daemon_worker", *child_argv],
         {
             "TESS_TMUX_HANDOFF": "1",
             "TESS_LAUNCH_CWD": launch.get("cwd") or os.getcwd(),

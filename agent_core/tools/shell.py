@@ -14,9 +14,9 @@ from .._utils import maybe_await, now_iso, pretty_json
 from ..bash_lifecycle import runInlineShellCommand
 from ..bash_result_payload import buildBashResultPayload
 from ..execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
-from ..owned_process_launch import activateOwnedProcessRunner, createOwnedProcessActivation
+from ..process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ..storage import readTaskMeta, saveTaskRecord, taskOutputPath, writeTaskMeta
-from ..task_process_launch import (
+from ..process.task_launch import (
     attachTaskLaunchReservation,
     createTaskLaunchReservation,
     failTaskLaunchReservation,

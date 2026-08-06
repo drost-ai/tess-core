@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..process_identity import processIdentityFromRecord
+from ..process.identity import processIdentityFromRecord
 from ..storage import (
     loadHealthCheckTask,
     loadTaskRecord,

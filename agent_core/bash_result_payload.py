@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .subprocess_output import SUBPROCESS_SPOOL_MAX_BYTES
+from .process.output import SUBPROCESS_SPOOL_MAX_BYTES
 from .tool_payloads import shapeTextToolResult
 from .utf8_bounds import sliceUtf8Prefix
 

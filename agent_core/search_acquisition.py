@@ -6,7 +6,7 @@ import os
 import signal
 from typing import Any, Callable
 
-from .subprocess_output import (
+from .process.output import (
     SUBPROCESS_RING_MAX_BYTES,
     SUBPROCESS_SPOOL_MAX_BYTES,
     createSubprocessOutputCollector,

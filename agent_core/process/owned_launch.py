@@ -19,7 +19,7 @@ def createOwnedProcessRunnerArgv(
     return [
         sys.executable,
         "-m",
-        "agent_core.owned_process_runner",
+        "agent_core.process.owned_runner",
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
     ]
 

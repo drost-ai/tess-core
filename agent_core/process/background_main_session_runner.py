@@ -1,5 +1,5 @@
-from .tasks.runners import subagent as _impl
-from .tasks.runners.subagent import *
+from ..tasks.runners import main_session as _impl
+from ..tasks.runners.main_session import *
 
 for _name in dir(_impl):
     if _name.startswith("_") and not _name.startswith("__"):

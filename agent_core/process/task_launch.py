@@ -7,9 +7,9 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping
 
-from ._utils import now_iso
-from .process_identity import ProcessIdentityError, captureOwnedProcessIdentity, signalOwnedProcess
-from .runtime.identifiers import parseSessionId, parseTaskId
+from .._utils import now_iso
+from .identity import ProcessIdentityError, captureOwnedProcessIdentity, signalOwnedProcess
+from ..runtime.identifiers import parseSessionId, parseTaskId
 
 
 @dataclass(slots=True)

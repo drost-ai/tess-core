@@ -18,7 +18,7 @@ from .platform import *
 from .plugin_contracts import *
 from .plugins import *
 from .permission_rules import *
-from .process_identity import *
+from .process.identity import *
 from .providers.errors import *
 from .providers.activity import *
 from .collaboration.remote import *
@@ -50,7 +50,7 @@ from .subagents.reconciliation_store import *
 from .subagents.result import *
 from .subagents import *
 from .task_ownership import *
-from .task_process_launch import *
+from .process.task_launch import *
 from .task_communication import *
 from .task_runtime import *
 from .task_supervisor import *
@@ -75,8 +75,10 @@ from .providers.openai import *
 _LEGACY_MODULE_ALIASES = {
     "collaboration_updates": "agent_core.collaboration.updates",
     "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
+    "owned_process_launch": "agent_core.process.owned_launch",
     "persisted_record_scanner": "agent_core.session.persisted_record_scanner",
     "persisted_record_validation": "agent_core.session.persisted_record_validation",
+    "process_identity": "agent_core.process.identity",
     "provider_errors": "agent_core.providers.errors",
     "provider_timeouts": "agent_core.providers.timeouts",
     "provider_token_budget": "agent_core.providers.token_budget",
@@ -107,6 +109,7 @@ _LEGACY_MODULE_ALIASES = {
     "subagent_reconciliation_renderer": "agent_core.subagents.reconciliation_renderer",
     "subagent_reconciliation_store": "agent_core.subagents.reconciliation_store",
     "subagent_result": "agent_core.subagents.result",
+    "task_process_launch": "agent_core.process.task_launch",
     "transcript": "agent_core.session.transcript",
 }
 
@@ -142,6 +145,10 @@ _INTERNAL_MODULES = {
     "payload_cursor",
     "partial_output",
     "partial_output_state",
+    # Subsystem packages introduced by the v1 consolidation that had no
+    # top-level module of the same name before, so they are not part of the
+    # historical public surface.
+    "process",
     "persistence_metrics",
     "prompt_cache_state",
     "prompt_cache_state_schema",

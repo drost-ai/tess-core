@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from tests.support.agent_core_case import *
-import agent_core.process_identity as process_identity_module
+import agent_core.process.identity as process_identity_module
 
 
 ACCEPTED = {

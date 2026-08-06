@@ -26,7 +26,7 @@ from ..tasks.monitor_transactions import (
     startMonitorOnce,
 )
 from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
-from ..process_identity import processIdentityFromRecord, signalOwnedProcess
+from ..process.identity import processIdentityFromRecord, signalOwnedProcess
 from ..tasks.terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
 from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath
 from ..task_ownership import requireModelOwnedMonitor, requireModelOwnedTask

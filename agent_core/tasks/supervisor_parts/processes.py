@@ -110,7 +110,7 @@ def _spawn_main_session_worker(
             [
                 sys.executable,
                 "-m",
-                "agent_core.background_main_session_runner",
+                "agent_core.process.background_main_session_runner",
                 "--session-id",
                 session_id,
                 "--task-id",
@@ -155,7 +155,7 @@ def _spawn_subagent_worker(
             [
                 sys.executable,
                 "-m",
-                "agent_core.background_subagent_runner",
+                "agent_core.process.background_subagent_runner",
                 "--session-id",
                 session_id,
                 "--agent-id",

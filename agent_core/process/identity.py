@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Literal, Mapping
 
-from .process_identity_darwin import inspect_darwin_process as _native_inspect_darwin_process
+from .identity_darwin import inspect_darwin_process as _native_inspect_darwin_process
 
 
 MAX_PROCESS_COMMAND_BYTES = 128 * 1024
@@ -426,7 +426,7 @@ def _invalid_identity(reason: str) -> ProcessIdentityError:
 
 
 def _now_iso() -> str:
-    from ._utils import now_iso
+    from .._utils import now_iso
 
     return now_iso()
 

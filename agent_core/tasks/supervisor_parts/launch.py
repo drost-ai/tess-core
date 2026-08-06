@@ -4,8 +4,8 @@ from .shared import *
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
 from .processes import _spawn_owned_argv, _watch_process_thread
-from ...owned_process_launch import activateOwnedProcessRunner, createOwnedProcessActivation
-from ...task_process_launch import (
+from ...process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
+from ...process.task_launch import (
     attachTaskLaunchReservation,
     failTaskLaunchReservation,
     launchReservedProcess,

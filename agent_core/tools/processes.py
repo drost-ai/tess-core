@@ -26,7 +26,7 @@ def _background_task_runner_argv(
     argv = [
         sys.executable,
         "-m",
-        "agent_core.background_task_runner",
+        "agent_core.process.background_task_runner",
         "--task-id",
         task_id,
         "--command",

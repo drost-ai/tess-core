@@ -4,8 +4,8 @@ import argparse
 import asyncio
 import os
 
-from .daemon import runTaskSupervisorDaemon
-from .storage import configureRuntimeHome
+from ..daemon import runTaskSupervisorDaemon
+from ..storage import configureRuntimeHome
 
 
 def main() -> None:

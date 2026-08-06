@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .shared import *
 from .mappers import _task_record_event_payload
-from ...task_process_launch import failTaskLaunchReservation
+from ...process.task_launch import failTaskLaunchReservation
 
 
 _ACTIVE_CHILD_STATUSES = {"starting", "backgrounded", "running", "awaiting_input"}

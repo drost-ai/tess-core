@@ -187,7 +187,7 @@ async def run_worker_entrypoint(data: dict[str, Any], sandbox: ScenarioSandbox, 
     shell = data.get("shell") or env["SHELL"]
     repo_root = str(Path(__file__).resolve().parents[1])
     env["PYTHONPATH"] = repo_root if not env.get("PYTHONPATH") else f"{repo_root}{os.pathsep}{env['PYTHONPATH']}"
-    proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "agent_core.background_task_runner", task_id, str(meta_path), str(output_path), str(sandbox.workspace), shell, command, cwd=str(sandbox.workspace), env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "agent_core.process.background_task_runner", task_id, str(meta_path), str(output_path), str(sandbox.workspace), shell, command, cwd=str(sandbox.workspace), env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=float(data.get("timeoutSeconds") or 10))
     meta = _read_json(meta_path)
     failed = proc.returncode != 0 or (isinstance(meta, dict) and (meta.get("status") == "failed" or meta.get("exitCode") not in (0, None)))

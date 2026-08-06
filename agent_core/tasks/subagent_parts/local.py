@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from .shared import *
-from ...owned_process_launch import activateOwnedProcessRunner, createOwnedProcessActivation
+from ...process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ...storage import mutateSessionRecord, saveTaskRecord
-from ...task_process_launch import (
+from ...process.task_launch import (
     attachTaskLaunchReservation,
     createTaskLaunchReservation,
     failTaskLaunchReservation,
@@ -200,7 +200,7 @@ def _local_subagent_worker_argv(task_id: str, session_id: str, agent_id: str) ->
     return [
         sys.executable,
         "-m",
-        "agent_core.background_subagent_runner",
+        "agent_core.process.background_subagent_runner",
         "--session-id",
         session_id,
         "--agent-id",

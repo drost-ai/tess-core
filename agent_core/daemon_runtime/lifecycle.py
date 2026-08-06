@@ -301,7 +301,7 @@ async def _spawn_detached_daemon(cwd: str) -> subprocess.Popen[Any]:
     os.fchmod(fd, 0o600)
     try:
         _DAEMON_PROCESS = subprocess.Popen(
-            [sys.executable, "-m", "agent_core.daemon_worker", "--cwd", cwd],
+            [sys.executable, "-m", "agent_core.process.daemon_worker", "--cwd", cwd],
             cwd=cwd,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -419,7 +419,7 @@ async def _is_daemon_run_process(pid: int) -> bool:
         result = await asyncio.to_thread(inspect)
     except Exception:
         return False
-    return result.returncode == 0 and "agent_core.daemon_worker" in result.stdout
+    return result.returncode == 0 and "agent_core.process.daemon_worker" in result.stdout
 
 
 async def _record_daemon_unavailable(reason: str, detail: str) -> None:
