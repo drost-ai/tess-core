@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ._utils import now_iso
+from .._utils import now_iso
 from .executable_config import parseMcpServerConfigList, parsePluginManifestV1
 
 

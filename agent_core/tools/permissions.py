@@ -5,9 +5,9 @@ from ..contracts.context import ToolContext
 import re
 from typing import Any
 
-from ..agent_authority import AgentAuthorityError, assertValidAgentAuthority
+from ..authority.agent import AgentAuthorityError, assertValidAgentAuthority
 from .._utils import maybe_await
-from ..permission_rules import loadPermissionRulesCached, matchPermissionRule
+from ..authority.permission_rules import loadPermissionRulesCached, matchPermissionRule
 from ..shell_command_policy import classifyReadOnlyShellCommand, parseSingleShellCommand
 from ..storage import getProjectRoot, loadAutoMode
 

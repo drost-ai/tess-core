@@ -26,13 +26,13 @@ from .turn_session import (
     run_in_provider_turn_session as _run_in_provider_turn_session,
     run_with_transient_execution_session as _run_with_transient_execution_session,
 )
-from ..agent_authority import enforceSessionAgentAuthority, filterToolsForAgentAuthority
+from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
-from ..hooks import fireToolHooks as fireToolHooks
+from ..authority.hooks import fireToolHooks as fireToolHooks
 from ..image_budget import ImageBudgetError as _ImageBudgetError
 from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..message_origin import userRequestMessage as _user_request_message
-from ..permission_rules import findDispatchDenyRule
+from ..authority.permission_rules import findDispatchDenyRule
 from ..providers.prompt_cache_finalization import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
 from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from ..subagents.contract import filter_tools_for_subagent

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..hooks import fireToolHooks
+from ..authority.hooks import fireToolHooks
 
 
 def build_tool_hook_context(

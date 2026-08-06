@@ -5,7 +5,7 @@ import os
 import textwrap
 
 from tests.support.agent_core_case import *
-import agent_core.executable_closure as closure_module
+import agent_core.authority.executable_closure as closure_module
 
 
 def _stdio_server(name: str) -> dict[str, Any]:

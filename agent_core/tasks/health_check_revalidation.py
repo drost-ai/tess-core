@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .._utils import maybe_await, now_iso
-from ..hooks import fireToolHooks
+from ..authority.hooks import fireToolHooks
 from ..storage import getStateRoot, loadHealthCheckTask, loadSession, withRecordTransaction
 from ..tools.permissions import _get_effective_permission_mode
 from .health_check_migration import (

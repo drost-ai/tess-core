@@ -6,8 +6,8 @@ from ..runtime.secret_provider import (
     normalizeProviderHeaders,
     normalizeRuntimeSecretValue,
 )
-from ..permission_rules import loadPermissionRules
-from ..hooks import loadHooks
+from ..authority.permission_rules import loadPermissionRules
+from ..authority.hooks import loadHooks
 from ..sandbox import normalizeSandboxConfig
 
 from .shared import *

@@ -1,28 +1,28 @@
 from .agent import *
 from .agent_runtime_bindings import *
-from .agent_authority import *
+from .authority.agent import *
 from .collaboration import *
 from .config import *
 from .daemon import *
 from .durable_memory import *
 from .execution_descriptors import *
-from .executable_closure import *
-from .executable_config import *
-from .executable_source_policy import *
+from .authority.executable_closure import *
+from .authority.executable_config import *
+from .authority.executable_source_policy import *
 from .fetch_proxy import *
-from .hooks import *
+from .authority.hooks import *
 from .runtime.lifecycle_barrier import *
 from .mcp import *
 from .monitors import *
 from .platform import *
-from .plugin_contracts import *
-from .plugins import *
-from .permission_rules import *
+from .authority.plugin_contracts import *
+from .authority.plugins import *
+from .authority.permission_rules import *
 from .process.identity import *
 from .providers.errors import *
 from .providers.activity import *
 from .collaboration.remote import *
-from .repository_trust import *
+from .authority.repository_trust import *
 from .runtime.bootstrap import *
 from .runtime.generation import *
 from .runtime.paths import *
@@ -73,17 +73,27 @@ from .providers.openai import *
 # ``from agent_core.remote import x``, membership in ``dir(agent_core)``, and
 # monkeypatching a name onto the legacy path all behave exactly as before.
 _LEGACY_MODULE_ALIASES = {
+    "agent_authority": "agent_core.authority.agent",
     "collaboration_updates": "agent_core.collaboration.updates",
+    "executable_closure": "agent_core.authority.executable_closure",
+    "executable_config": "agent_core.authority.executable_config",
+    "executable_source_policy": "agent_core.authority.executable_source_policy",
+    "hooks": "agent_core.authority.hooks",
     "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
+    "mcp_origin_policy": "agent_core.authority.mcp_origin_policy",
     "owned_process_launch": "agent_core.process.owned_launch",
+    "permission_rules": "agent_core.authority.permission_rules",
     "persisted_record_scanner": "agent_core.session.persisted_record_scanner",
     "persisted_record_validation": "agent_core.session.persisted_record_validation",
+    "plugin_contracts": "agent_core.authority.plugin_contracts",
+    "plugins": "agent_core.authority.plugins",
     "process_identity": "agent_core.process.identity",
     "provider_errors": "agent_core.providers.errors",
     "provider_timeouts": "agent_core.providers.timeouts",
     "provider_token_budget": "agent_core.providers.token_budget",
     "provider_watchdog": "agent_core.providers.watchdog",
     "remote": "agent_core.collaboration.remote",
+    "repository_trust": "agent_core.authority.repository_trust",
     "runtime_bootstrap": "agent_core.runtime.bootstrap",
     "runtime_events": "agent_core.runtime.events",
     "runtime_generation": "agent_core.runtime.generation",
@@ -148,6 +158,7 @@ _INTERNAL_MODULES = {
     # Subsystem packages introduced by the v1 consolidation that had no
     # top-level module of the same name before, so they are not part of the
     # historical public surface.
+    "authority",
     "process",
     "persistence_metrics",
     "prompt_cache_state",

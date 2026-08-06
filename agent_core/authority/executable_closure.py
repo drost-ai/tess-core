@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Callable
 
 from .repository_trust import resolveRepositoryIdentity
-from .storage_store.paths import getStateRoot
+from ..storage_store.paths import getStateRoot
 
 
 EXECUTABLE_CLOSURE_POLICY_VERSION = 1

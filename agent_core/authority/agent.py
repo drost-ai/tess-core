@@ -9,8 +9,8 @@ from typing import Any
 from .executable_source_policy import executableConfigDigest, loadSelectedPluginRecords
 from .hooks import loadHooks
 from .permission_rules import loadPermissionRulesCached
-from .sandbox import resolveSandboxPolicy
-from .storage import getProjectRoot
+from ..sandbox import resolveSandboxPolicy
+from ..storage import getProjectRoot
 
 
 _FILESYSTEM_RANK = {"read-only": 0, "workspace-write": 1, "full": 2}

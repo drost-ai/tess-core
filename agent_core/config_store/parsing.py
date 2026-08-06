@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from .shared import *
-from ..executable_config import parseMcpServerConfigList
-from ..executable_source_policy import loadSelectedMcpServers, parseSettingSources
+from ..authority.executable_config import parseMcpServerConfigList
+from ..authority.executable_source_policy import loadSelectedMcpServers, parseSettingSources
 from ..runtime.secrets import assertNoLiteralMcpSecrets
 
 def _parse_setting_sources(raw: str | None) -> list[str]:

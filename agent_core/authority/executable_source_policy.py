@@ -17,9 +17,9 @@ from .repository_trust import (
     checkRepositoryApproval,
     resolveRepositoryIdentity,
 )
-from .storage_store.json_io import resolveMaybeRelative
-from .runtime.secrets import assertNoLiteralMcpSecrets, migrateLegacyMcpServerSecrets
-from .storage_store.settings import loadMcpServers, loadPlugins, saveMcpServers
+from ..storage_store.json_io import resolveMaybeRelative
+from ..runtime.secrets import assertNoLiteralMcpSecrets, migrateLegacyMcpServerSecrets
+from ..storage_store.settings import loadMcpServers, loadPlugins, saveMcpServers
 
 
 SETTING_SOURCES = ("user", "project", "local")

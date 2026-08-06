@@ -8,8 +8,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from .storage_store.json_io import fileLock
-from .storage_store.paths import getLocalStateDir, getProjectRoot, getStateRoot
+from ..storage_store.json_io import fileLock
+from ..storage_store.paths import getLocalStateDir, getProjectRoot, getStateRoot
 
 
 REPOSITORY_TRUST_VERSION = 1

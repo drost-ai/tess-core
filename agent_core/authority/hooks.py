@@ -9,8 +9,8 @@ from typing import Any, Mapping
 
 from .permission_rules import matchPermissionRule, parsePermissionRule
 from .repository_trust import approveRepositoryContent, checkRepositoryApproval
-from .sandbox import prepareSandboxedArgv
-from .storage import getProjectRoot, loadSettings
+from ..sandbox import prepareSandboxedArgv
+from ..storage import getProjectRoot, loadSettings
 
 
 HOOK_EVENTS = ("PreToolUse", "PostToolUse", "Stop", "SessionEnd")

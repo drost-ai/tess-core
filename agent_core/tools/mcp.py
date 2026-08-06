@@ -6,7 +6,7 @@ from ..contracts.tools import ToolResult
 from typing import Any
 
 from .._utils import pretty_json
-from ..mcp_origin_policy import fetchMcpResourceWithBoundCredentials
+from ..authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
 from ..mcp_payloads import shapeMcpResourceList, shapeMcpResourceRead
 from ..tool_payloads import shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled

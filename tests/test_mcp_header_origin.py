@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 import agent_core as core
-from agent_core.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
+from agent_core.authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
 from agent_core.runtime.secrets import authorizeRuntimeSecretWrite, storeRuntimeSecret
 
 

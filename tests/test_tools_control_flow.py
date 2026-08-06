@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import agent_core.mcp_origin_policy as mcp_origin_policy_module
+import agent_core.authority.mcp_origin_policy as mcp_origin_policy_module
 
 from tests.support.agent_core_case import *
 

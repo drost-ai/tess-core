@@ -17,7 +17,7 @@ from .plugin_contracts import (
     validatePluginManifest,
 )
 from .executable_source_policy import loadSelectedPluginRecords
-from .storage import loadPlugins, resolveMaybeRelative
+from ..storage import loadPlugins, resolveMaybeRelative
 
 
 async def loadPluginRuntime(

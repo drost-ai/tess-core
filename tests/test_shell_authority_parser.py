@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-from agent_core.permission_rules import matchesBashRulePattern
+from agent_core.authority.permission_rules import matchesBashRulePattern
 from agent_core.tools.permissions import _matches_command_policy
 
 

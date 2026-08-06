@@ -8,7 +8,7 @@ import sys
 from typing import Any
 
 from ...agent import runAgentPrompt
-from ...agent_authority import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
+from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
 from ...agent_runtime_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, saveSession

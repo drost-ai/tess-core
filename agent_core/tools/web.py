@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from .._utils import pretty_json
 from ..bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
-from ..permission_rules import findDispatchDenyRule
+from ..authority.permission_rules import findDispatchDenyRule
 from ..tool_payloads import shapeTextToolResult
 from ..utf8_bounds import sliceUtf8Prefix
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled

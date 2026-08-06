@@ -1,7 +1,7 @@
 from .compaction import *
 from .compaction_models import *
 from .continuation import *
-from .executable_closure import (
+from .authority.executable_closure import (
     __setExecutableClosureTestHookForTests,
     inspectExecutableClosure,
     snapshotExecutableClosure,
