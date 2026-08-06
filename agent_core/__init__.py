@@ -66,71 +66,21 @@ from .providers.anthropic import *
 from .providers.openai import *
 
 # --- v1 subsystem consolidation --------------------------------------------
-# Modules relocated into subsystem packages keep their historical
-# ``agent_core.<name>`` import path. Registering the *same module object* in
-# ``sys.modules`` -- rather than re-exporting through a shim file -- preserves
-# object identity, so ``import agent_core.remote``,
-# ``from agent_core.remote import x``, membership in ``dir(agent_core)``, and
-# monkeypatching a name onto the legacy path all behave exactly as before.
+# A relocated module keeps its historical ``agent_core.<name>`` import path by
+# registering the *same module object* in ``sys.modules`` -- rather than
+# re-exporting it through a shim file -- which preserves object identity. So
+# importing the legacy path, from-importing through it, its membership in
+# ``dir(agent_core)``, and monkeypatching a name onto it all behave as before.
+#
+# Only paths with a known external consumer are kept; the incidental ones that
+# the old star-import layout exposed were retired in the v1 refactor. See
+# PUBLIC_API_CHANGES.md for the full list.
 _LEGACY_MODULE_ALIASES = {
-    "agent_authority": "agent_core.authority.agent",
-    "agent_runtime_bindings": "agent_core.runtime.agent_bindings",
-    "collaboration_updates": "agent_core.collaboration.updates",
-    "executable_closure": "agent_core.authority.executable_closure",
-    "executable_config": "agent_core.authority.executable_config",
-    "executable_source_policy": "agent_core.authority.executable_source_policy",
-    "execution_descriptors": "agent_core.payloads.execution_descriptors",
-    "fetch_proxy": "agent_core.acquisition.fetch_proxy",
-    "hooks": "agent_core.authority.hooks",
-    "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
-    "mcp_origin_policy": "agent_core.authority.mcp_origin_policy",
-    "monitor_bootstrap": "agent_core.tasks.monitor_bootstrap",
     "monitors": "agent_core.tasks.monitors",
-    "owned_process_launch": "agent_core.process.owned_launch",
-    "permission_rules": "agent_core.authority.permission_rules",
-    "persisted_record_scanner": "agent_core.session.persisted_record_scanner",
-    "persisted_record_validation": "agent_core.session.persisted_record_validation",
-    "plugin_contracts": "agent_core.authority.plugin_contracts",
-    "plugins": "agent_core.authority.plugins",
     "process_identity": "agent_core.process.identity",
-    "provider_errors": "agent_core.providers.errors",
-    "provider_timeouts": "agent_core.providers.timeouts",
-    "provider_token_budget": "agent_core.providers.token_budget",
     "provider_watchdog": "agent_core.providers.watchdog",
-    "remote": "agent_core.collaboration.remote",
-    "repository_trust": "agent_core.authority.repository_trust",
-    "runtime_bootstrap": "agent_core.runtime.bootstrap",
-    "runtime_events": "agent_core.runtime.events",
-    "runtime_generation": "agent_core.runtime.generation",
-    "runtime_identifiers": "agent_core.runtime.identifiers",
-    "runtime_paths": "agent_core.runtime.paths",
-    "runtime_secret_provider": "agent_core.runtime.secret_provider",
-    "runtime_secrets": "agent_core.runtime.secrets",
-    "runtime_session_components": "agent_core.runtime.session_components",
-    "runtime_state": "agent_core.runtime.state",
-    "runtime_support": "agent_core.runtime.support",
-    "session_fork": "agent_core.session.fork",
-    "session_message_history": "agent_core.session.message_history",
-    "session_runtime": "agent_core.session.runtime",
-    "shell_command_policy": "agent_core.authority.shell_command_policy",
-    "subagent_capacity": "agent_core.subagents.capacity",
-    "subagent_continuation": "agent_core.subagents.continuation",
-    "subagent_continuation_recovery": "agent_core.subagents.continuation_recovery",
-    "subagent_contract": "agent_core.subagents.contract",
     "subagent_coordination": "agent_core.subagents.coordination",
-    "subagent_depth_policy": "agent_core.subagents.depth_policy",
-    "subagent_groups": "agent_core.subagents.groups",
-    "subagent_limits": "agent_core.subagents.limits",
-    "subagent_reconciliation": "agent_core.subagents.reconciliation",
-    "subagent_reconciliation_renderer": "agent_core.subagents.reconciliation_renderer",
-    "subagent_reconciliation_store": "agent_core.subagents.reconciliation_store",
-    "subagent_result": "agent_core.subagents.result",
-    "task_communication": "agent_core.tasks.communication",
-    "task_ownership": "agent_core.tasks.ownership",
     "task_process_launch": "agent_core.process.task_launch",
-    "tool_payloads": "agent_core.payloads.tools",
-    "transcript": "agent_core.session.transcript",
-    "workspace": "agent_core.runtime.workspace",
 }
 
 
