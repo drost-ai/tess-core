@@ -32,8 +32,8 @@ from .common import (
     _persist,
     _short_id,
     _split_subcommand,
-    collapseWhitespace,
-    truncate,
+    squashWhitespace,
+    truncateAscii,
 )
 from .common import formatMonitorRecord
 from .tasks import formatTaskInspectReport
@@ -425,7 +425,7 @@ def formatRemoteSessionRecord(record: dict[str, Any], bridge: dict[str, Any] | N
     if record.get("lastEventName"):
         lines.append(f"last event   {record.get('lastEventName')}")
     if record.get("lastEventSummary"):
-        lines.append(f"summary      {truncate(collapseWhitespace(record.get('lastEventSummary')), 180)}")
+        lines.append(f"summary      {truncateAscii(squashWhitespace(record.get('lastEventSummary')), 180)}")
     if record.get("unreadBridgeMessages"):
         lines.append(f"queued       {record.get('unreadBridgeMessages')}")
     if bridge:

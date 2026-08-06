@@ -19,8 +19,8 @@ from .common import (
     _info,
     _persist,
     _short_id,
-    collapseWhitespace,
-    truncate,
+    squashWhitespace,
+    truncateAscii,
 )
 from .debug_bundle import createDebugBundle
 from .remote_background import _is_active_task_record, buildBackgroundReport
@@ -245,7 +245,7 @@ def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
 
 def formatSessionCandidate(session: dict[str, Any]) -> str:
     name = session.get("name") or _first_user_text(session) or "untitled"
-    return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncate(collapseWhitespace(name), 90)}"
+    return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncateAscii(squashWhitespace(name), 90)}"
 
 
 def buildReviewPrompt(arg_text: str) -> str:

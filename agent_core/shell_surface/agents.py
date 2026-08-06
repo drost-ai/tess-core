@@ -10,8 +10,8 @@ from .common import (
     _persist,
     _short_id,
     _split_subcommand,
-    collapseWhitespace,
-    truncate,
+    squashWhitespace,
+    truncateAscii,
 )
 from .status import compactModelName
 from .tasks import _close_task_supervisor_if_needed, _resolve_task_supervisor
@@ -200,7 +200,7 @@ def formatChildAgentRecord(record: dict[str, Any]) -> str:
     ]:
         value = record.get(key)
         if value:
-            lines.append(f"{label_name:<12} {truncate(collapseWhitespace(value), limit)}")
+            lines.append(f"{label_name:<12} {truncateAscii(squashWhitespace(value), limit)}")
     if record.get("retryable") is not None or record.get("stoppable") is not None:
         lines.append(
             f"controls     retry {'yes' if record.get('retryable') else 'no'} - stop {'yes' if record.get('stoppable') else 'no'}"

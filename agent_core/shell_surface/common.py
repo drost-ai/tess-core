@@ -62,11 +62,11 @@ def _short_id(value: str) -> str:
     return value[:12] if len(value) > 12 else value
 
 
-def collapseWhitespace(value: Any) -> str:
+def squashWhitespace(value: Any) -> str:
     return str(value or "").replace("\n", " ").replace("\t", " ").strip()
 
 
-def truncate(value: str, limit: int) -> str:
+def truncateAscii(value: str, limit: int) -> str:
     return value if len(value) <= limit else f"{value[: max(0, limit - 1)]}..."
 
 
@@ -113,7 +113,7 @@ def _compact_tokens(*values: Any) -> list[str]:
 def formatMonitorRecord(record: dict[str, Any]) -> str:
     lines = [
         f"{_short_id(record.get('id', ''))}  {record.get('status')}  task {_short_id(record.get('taskId', ''))}",
-        f"goal         {truncate(collapseWhitespace(record.get('goal', '')), 160)}",
+        f"goal         {truncateAscii(squashWhitespace(record.get('goal', '')), 160)}",
         f"created      {str(record.get('createdAt', ''))[:19]}",
         f"interval     {record.get('checkIntervalMs')}ms check - {record.get('heartbeatIntervalMs')}ms heartbeat",
     ]
@@ -122,5 +122,5 @@ def formatMonitorRecord(record: dict[str, Any]) -> str:
     if record.get("lastObservedTaskStatus"):
         lines.append(f"task status  {record.get('lastObservedTaskStatus')}")
     if record.get("failureReason"):
-        lines.append(f"reason       {truncate(collapseWhitespace(record.get('failureReason')), 160)}")
+        lines.append(f"reason       {truncateAscii(squashWhitespace(record.get('failureReason')), 160)}")
     return "\n".join(lines)

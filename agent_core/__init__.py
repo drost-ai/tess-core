@@ -84,7 +84,7 @@ from .daemon import (
 from .context.durable_memory import (
     MANUAL_MEMORY_RECORD_ID, MAX_DURABLE_MEMORY_RECORDS, MAX_MEMORY_TEXT_LENGTH, MAX_RETRIEVED_MEMORY_RECORDS,
     MAX_RETRIEVED_MEMORY_TOKEN_BUDGET, asStringArray, baseMemoryScore, dedupeMemoryCandidates, deriveKeywords,
-    deriveTagsFromText, durableMemoryId, estimateTextTokens, extractDurableMemoryCandidates, normalizeMemoryText,
+    deriveTagsFromText, durableMemoryId, estimateMemoryBytes, extractDurableMemoryCandidates, normalizeMemoryText,
     renderRetrievedMemoryLine, renderRetrievedMemoryPrompt, retrieveRelevantDurableMemory, scoreMemoryRecord,
     synchronizeManualProjectMemory, truncateMemoryText, updateDurableMemoryFromWorkingContext,
 )
@@ -217,12 +217,12 @@ from .shell_surface import (
     buildCollaborationStatusReport, buildCompactionStatusReport, buildDaemonReport, buildMonitorsReport,
     buildPermissionsReport, buildPlansReport, buildProviderProfilesReport, buildRemoteFallbackReport,
     buildRemoteListReport, buildRemoteReport, buildReviewPrompt, buildSlashHelp, buildStatusReport, buildTasksReport,
-    buildTodosReport, collapseWhitespace, compactModelName, createDebugBundle, formatAutoModePolicy,
+    buildTodosReport, squashWhitespace, compactModelName, createDebugBundle, formatAutoModePolicy,
     formatChildAgentRecord, formatDebugBundleReport, formatDiagnosticsReport, formatMonitorRecord,
     formatPlanApprovalRecord, formatPreflightTokenSummary, formatRemoteSessionRecord, formatSessionCandidate,
     formatTaskInspectReport, formatTaskListReport, formatTaskResultReport, formatTaskSurface, formatTranscriptEntries,
     formatUsageBreakdown, formatUsageSummary, getSlashCommandAvailability, handleSlashCommand, listSlashCommands,
-    normalizeModel, truncate,
+    normalizeModel, truncateAscii,
 )
 from .shell_surface.debug_bundle import createDebugBundle
 from .authority.shell_command_policy import (
@@ -532,7 +532,7 @@ __all__ = [
     "classifyProviderHttpFailure", "classifyReadOnlyShellCommand", "clearAuth", "clearDaemonState",
     "clearPermissionRulesCache", "cloneSession", "close_openai_output_item", "coercePreservedTrace",
     "coerceProjectFacts", "coerceRelevantFiles", "coerceRepairedCheckpoint", "coerceSynthesizedWorkingContextFields",
-    "coerceWorkingContextDocument", "collaborationSnapshotPayload", "collapseWhitespace", "collectDoctorReport",
+    "coerceWorkingContextDocument", "collaborationSnapshotPayload", "collapseWhitespace", "squashWhitespace", "collectDoctorReport",
     "collectSubstantiveToolExchangeStarts", "collectToolResultIds", "commitSessionV2", "commitSessionV2Delta",
     "commit_openai_delivery", "compactHistoricalTail", "compactMessageForContinuation", "compactModelName",
     "compactSessionMessageBody", "compactStructuredRecord", "compactToolInput", "compactTranscriptEntries",
@@ -562,7 +562,7 @@ __all__ = [
     "emitContinuationRelief", "emitProviderActivity", "emptyCollaborationSnapshot", "emptyCompactionResult",
     "emptyReliefSummary", "encodeDaemonFrame", "enforceContextHeadroom", "enforceSessionAgentAuthority",
     "ensureBaseLayout", "ensureProviderForModelSelection", "ensureTaskSupervisorDaemon", "estimateMessageTokens",
-    "estimateMessagesTokens", "estimateRawContextPressure", "estimateSingleMessageTokens", "estimateTextTokens",
+    "estimateMessagesTokens", "estimateRawContextPressure", "estimateSingleMessageTokens", "estimateMemoryBytes", "estimateTextTokens",
     "estimateTodoAndPlanTokens", "estimateWorkingContextTokens", "evaluateParentContinuationReadiness",
     "evaluate_subagent_result", "execText", "executableConfigDigest", "expandHome", "expandRuntimeHome",
     "extractAssistantText", "extractCommand", "extractDurableMemoryCandidates", "extractFilePath",
@@ -710,7 +710,7 @@ __all__ = [
     "supportsApiMicrocompact", "supportsOpenAiChatCompletionsReasoningEffort", "synchronizeManualProjectMemory",
     "taskDir", "taskMetaPath", "taskOutputPath", "taskRecordPath", "task_events_path", "task_mailbox_path",
     "task_questions_path", "token_store_delete", "token_store_get", "token_store_set", "toolArtifactDataPath",
-    "toolArtifactMetaPath", "transactionLockPath", "trimPathEvidence", "truncate", "truncateMemoryText",
+    "toolArtifactMetaPath", "transactionLockPath", "trimPathEvidence", "truncate", "truncateAscii", "truncateMemoryText",
     "tryParseAgentId", "tryParseApprovalRequestId", "tryParseBridgeId", "tryParseMonitorId",
     "tryParseRemoteSessionId", "tryParseSessionId", "tryParseTaskId", "tryParseTaskReference",
     "unavailableDaemonBinding", "unsupportedImageInputResponse", "updateDurableMemoryFromWorkingContext",

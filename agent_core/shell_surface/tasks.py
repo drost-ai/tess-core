@@ -18,8 +18,8 @@ from .common import (
     _resolve_task_record,
     _short_id,
     _split_subcommand,
-    collapseWhitespace,
-    truncate,
+    squashWhitespace,
+    truncateAscii,
 )
 from typing import Any
 
@@ -196,7 +196,7 @@ def formatPlanApprovalRecord(record: dict[str, Any]) -> str:
         formatted_prompts = []
         for prompt in prompts:
             if isinstance(prompt, dict):
-                formatted_prompts.append(f"{prompt.get('tool')}({truncate(collapseWhitespace(prompt.get('prompt')), 48)})")
+                formatted_prompts.append(f"{prompt.get('tool')}({truncateAscii(squashWhitespace(prompt.get('prompt')), 48)})")
         if formatted_prompts:
             lines.append(f"prompts      {', '.join(formatted_prompts)}")
     if record.get("reason"):
@@ -204,7 +204,7 @@ def formatPlanApprovalRecord(record: dict[str, Any]) -> str:
     if record.get("filePath"):
         lines.append(f"file         {record.get('filePath')}")
     if record.get("plan"):
-        lines.append(f"plan         {truncate(collapseWhitespace(record.get('plan')), 180)}")
+        lines.append(f"plan         {truncateAscii(squashWhitespace(record.get('plan')), 180)}")
     return "\n".join(lines)
 
 

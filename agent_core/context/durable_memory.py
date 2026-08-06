@@ -194,7 +194,7 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
             continue
         rendered = renderRetrievedMemoryLine(projection["record"])
         next_bytes = _utf8_byte_length(rendered) + separator_bytes
-        next_token_estimate = estimateTextTokens(rendered)
+        next_token_estimate = estimateMemoryBytes(rendered)
         if (
             byte_estimate + next_bytes > max_prompt_bytes
             or token_estimate + next_token_estimate > max_token_budget
@@ -378,7 +378,7 @@ def deriveTagsFromText(value: str) -> list[str]:
     return deriveKeywords([value])[:12]
 
 
-def estimateTextTokens(value: str) -> int:
+def estimateMemoryBytes(value: str) -> int:
     return _utf8_byte_length(value)
 
 

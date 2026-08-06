@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..compaction.utils import collapseWhitespace, estimateTextTokens, truncate
+
 from ..coerce import asRecord
 
 from .shared import LOW_VALUE_TOOL_NAMES, _tool_result_content_string
@@ -31,18 +33,10 @@ def estimateTodoAndPlanTokens(session: dict[str, Any]) -> int:
     return estimateTextTokens(f"{todo_text}\n{plan_text}")
 
 
-def estimateTextTokens(value: str) -> int:
-    return (len(value) + 3) // 4
 
 
-def truncate(value: str, limit: int) -> str:
-    if len(value) <= limit:
-        return value
-    return value[: max(0, limit - 1)].rstrip() + "…"
 
 
-def collapseWhitespace(value: Any) -> str:
-    return re.sub(r"\s+", " ", str(value)).strip()
 
 
 

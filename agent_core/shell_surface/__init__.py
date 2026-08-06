@@ -9,9 +9,9 @@ from .agents import (
     formatChildAgentRecord,
 )
 from .common import (
-    collapseWhitespace,
+    squashWhitespace,
     formatMonitorRecord,
-    truncate,
+    truncateAscii,
 )
 from .context_commands import (
     buildCompactionStatusReport,
@@ -88,7 +88,7 @@ __all__ = [
     "buildStatusReport",
     "buildTasksReport",
     "buildTodosReport",
-    "collapseWhitespace",
+    "squashWhitespace",
     "compactModelName",
     "createDebugBundle",
     "formatAutoModePolicy",
@@ -111,5 +111,5 @@ __all__ = [
     "handleSlashCommand",
     "listSlashCommands",
     "normalizeModel",
-    "truncate",
+    "truncateAscii",
 ]
