@@ -2,7 +2,24 @@ from __future__ import annotations
 
 import math
 
-from .shared import *
+import os
+import re
+from ...providers.errors import fallbackEligibleProviderFailure, isProviderRequestError
+from ..compaction_models import resolveCompactionModelCandidates
+from .evidence import buildCompactionEvidence
+from .parsing import parseCompactionSynthesisResponse, parseCompactionVerificationResponse
+from .prompts import buildCompactionSynthesisPrompt, buildCompactionVerificationPrompt
+from .shared import (
+    COMPACTION_EVIDENCE_FALLBACK_BUDGETS,
+    COMPACTION_EVIDENCE_TOKEN_BUDGET,
+    COMPACTION_SYNTHESIS_MAX_RETRIES,
+    COMPACTION_SYSTEM_PROMPT,
+    COMPACTION_VERIFICATION_MAX_RETRIES,
+    COMPACTION_VERIFICATION_SYSTEM_PROMPT,
+    MAX_FAILURES,
+)
+from .utils import collapseWhitespace, estimateMessageTokens, truncate
+from typing import Any
 from .artifacts import mergeCompactionUsageIntoSession
 from ...session.message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ...providers.token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO, resolveCompactionRequestOutputTokens

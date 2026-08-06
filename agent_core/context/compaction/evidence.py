@@ -1,6 +1,20 @@
 from __future__ import annotations
 
-from .shared import *
+import json
+import os
+from .parsing import asRecord, parseMaybeJson
+from .shared import (
+    COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT,
+    COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT,
+    COMPACTION_EVIDENCE_TOKEN_BUDGET,
+    COMPACTION_FILE_PREVIEW_LINES,
+    COMPACTION_MATCH_PREVIEW_LIMIT,
+    COMPACTION_MESSAGE_TEXT_CHAR_LIMIT,
+    COMPACTION_TOOL_INPUT_CHAR_LIMIT,
+    COMPACTION_TOOL_RESULT_CHAR_LIMIT,
+)
+from .utils import collapseWhitespace, estimateTextTokens, truncate
+from typing import Any
 from ...session.message_origin import isRuntimeSyntheticMessage as _is_runtime_synthetic_message
 
 

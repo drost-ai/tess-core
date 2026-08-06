@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import math
 
-from .shared import *
+import json
+import re
+from ..._utils import now_iso
+from .shared import MAX_ACTIVITY_LINES, MAX_FAILURES, _bound_preserved_trace_record
+from .utils import collapseWhitespace
+from typing import Any
 
 
 def _finite_non_negative_number(value: Any) -> int | float | None:

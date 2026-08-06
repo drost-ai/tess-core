@@ -1,39 +1,243 @@
+"""Checkpoint-v2 compaction: cutoffs, evidence, synthesis, verification, artifacts.
+
+The facade re-exports exactly the public names its submodules define.
+"""
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
-from importlib import import_module
+from .artifacts import (
+    buildArtifactPaths,
+    mergeCompactionUsageIntoSession,
+)
+from .cutoffs import (
+    assistantToolUsesAreCompleted,
+    chooseCompactionCutoff,
+    chooseToolAwareCompactionCutoff,
+    collectSubstantiveToolExchangeStarts,
+    collectToolResultIds,
+    isSafeWorkingSetStart,
+    messageHasToolResults,
+    messageHasToolUses,
+    resolveLatestPlan,
+)
+from .documents import (
+    assertModelBackedCompactionArtifacts,
+    buildCompactionQualityFromCandidate,
+    buildCompactionQualityFromSynthesis,
+    buildModelBackedCompactionStateSnapshot,
+    buildPreservedTraceRecord,
+    buildSynthesizedWorkingContextDocument,
+    buildWorkingContextDocumentFromCandidate,
+    loadWorkingContextArtifact,
+    renderActivityMarkdown,
+    renderDecisionsMarkdown,
+    renderPlanMarkdown,
+    renderSummaryMarkdown,
+)
+from .evidence import (
+    buildCompactionEvidence,
+    buildEvidenceEntriesForMessage,
+    buildFilePreview,
+    buildTextEvidenceEntry,
+    buildToolResultEvidenceEntry,
+    buildToolUseEvidenceEntry,
+    compactStructuredRecord,
+    summarizeToolResultForCompaction,
+    trimPathEvidence,
+)
+from .models import (
+    buildCompactionAttemptStrategies,
+    buildEvidenceBackedCompactionSynthesis,
+    buildFallbackSynthesizedWorkingContext,
+    buildSkippedCompactionSynthesis,
+    describeCompactionSynthesisFailure,
+    isCompactionContextSizeFailure,
+    isCompactionSynthesisJsonFailure,
+    runCompactionCheckpointVerification,
+    runCompactionCheckpointVerificationWithFallback,
+    runModelBackedCompactionSynthesis,
+    runModelBackedCompactionSynthesisWithFallback,
+    shouldRetryCompactionAttempt,
+    shouldSkipCompactionSynthesisFailure,
+)
+from .orchestration import runCompaction
+from .parsing import (
+    asRecord,
+    asStringArray,
+    coercePreservedTrace,
+    coerceProjectFacts,
+    coerceRelevantFiles,
+    coerceRepairedCheckpoint,
+    coerceSynthesizedWorkingContextFields,
+    coerceWorkingContextDocument,
+    extractJsonObjectCandidate,
+    normalizeVerificationConfidence,
+    normalizeVerificationVerdict,
+    parseCompactionSynthesisResponse,
+    parseCompactionVerificationResponse,
+    parseMaybeJson,
+)
+from .projection import (
+    buildCompactionSystemPromptContext,
+    buildMessagesForWorkingContext,
+    estimateWorkingContextTokens,
+    shouldAutoCompact,
+)
+from .prompts import (
+    appendActivitySection,
+    appendPlanSection,
+    appendPreservedTrace,
+    appendProjectFactsSection,
+    appendPromptList,
+    appendRelevantFilesSection,
+    appendStringSection,
+    appendSubsection,
+    buildCompactionSynthesisPrompt,
+    buildCompactionVerificationPrompt,
+    renderWorkingContextPromptContext,
+)
+from .shared import (
+    COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT,
+    COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT,
+    COMPACTION_EVIDENCE_FALLBACK_BUDGETS,
+    COMPACTION_EVIDENCE_TOKEN_BUDGET,
+    COMPACTION_FILE_PREVIEW_LINES,
+    COMPACTION_MATCH_PREVIEW_LIMIT,
+    COMPACTION_MESSAGE_TEXT_CHAR_LIMIT,
+    COMPACTION_STRATEGY,
+    COMPACTION_SYNTHESIS_MAX_RETRIES,
+    COMPACTION_SYSTEM_PROMPT,
+    COMPACTION_TOOL_INPUT_CHAR_LIMIT,
+    COMPACTION_TOOL_RESULT_CHAR_LIMIT,
+    COMPACTION_VERIFICATION_MAX_RETRIES,
+    COMPACTION_VERIFICATION_SYSTEM_PROMPT,
+    CONTINUATION_BRIDGE_MESSAGE,
+    LOW_VALUE_TAIL_TOOL_NAMES,
+    MAX_ACTIVITY_LINES,
+    MAX_FAILURES,
+    MAX_PRESERVED_TOOL_EXCHANGE_PAIRS,
+    MAX_TODOS,
+    MIN_PRESERVED_TOOL_EXCHANGE_PAIRS,
+    MIN_RECENT_MESSAGE_COUNT,
+    RAW_TAIL_TOKEN_BUDGET,
+    RAW_TAIL_TOKEN_TARGET,
+    WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT,
+)
+from .utils import (
+    collapseWhitespace,
+    estimateMessageTokens,
+    estimateSingleMessageTokens,
+    estimateTextTokens,
+    isLowSignalTodoText,
+    summarizeTodo,
+    truncate,
+)
 
-_MODULE_NAMES = ['shared', 'orchestration', 'models', 'prompts', 'parsing', 'documents', 'evidence', 'cutoffs', 'artifacts', 'utils']
-
-_modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
-_namespace = {}
-for _module in _modules:
-    for _name, _value in vars(_module).items():
-        if not _name.startswith("__"):
-            _namespace[_name] = _value
-for _module in _modules:
-    vars(_module).update(_namespace)
-globals().update(_namespace)
-
-
-_PUBLIC_EXPORTS = sorted(name for name in _namespace if not name.startswith("_"))
-
-__all__ = _PUBLIC_EXPORTS
-
-
-def __dir__():
-    return sorted(_PUBLIC_EXPORTS)
-
-
-class _ContextFacadeModule(_types.ModuleType):
-    def __setattr__(self, name, value):
-        super().__setattr__(name, value)
-        if name.startswith("__"):
-            return
-        for module in _modules:
-            if name in vars(module):
-                setattr(module, name, value)
-
-
-_sys.modules[__name__].__class__ = _ContextFacadeModule
+__all__ = [
+    "COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT",
+    "COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT",
+    "COMPACTION_EVIDENCE_FALLBACK_BUDGETS",
+    "COMPACTION_EVIDENCE_TOKEN_BUDGET",
+    "COMPACTION_FILE_PREVIEW_LINES",
+    "COMPACTION_MATCH_PREVIEW_LIMIT",
+    "COMPACTION_MESSAGE_TEXT_CHAR_LIMIT",
+    "COMPACTION_STRATEGY",
+    "COMPACTION_SYNTHESIS_MAX_RETRIES",
+    "COMPACTION_SYSTEM_PROMPT",
+    "COMPACTION_TOOL_INPUT_CHAR_LIMIT",
+    "COMPACTION_TOOL_RESULT_CHAR_LIMIT",
+    "COMPACTION_VERIFICATION_MAX_RETRIES",
+    "COMPACTION_VERIFICATION_SYSTEM_PROMPT",
+    "CONTINUATION_BRIDGE_MESSAGE",
+    "LOW_VALUE_TAIL_TOOL_NAMES",
+    "MAX_ACTIVITY_LINES",
+    "MAX_FAILURES",
+    "MAX_PRESERVED_TOOL_EXCHANGE_PAIRS",
+    "MAX_TODOS",
+    "MIN_PRESERVED_TOOL_EXCHANGE_PAIRS",
+    "MIN_RECENT_MESSAGE_COUNT",
+    "RAW_TAIL_TOKEN_BUDGET",
+    "RAW_TAIL_TOKEN_TARGET",
+    "WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT",
+    "appendActivitySection",
+    "appendPlanSection",
+    "appendPreservedTrace",
+    "appendProjectFactsSection",
+    "appendPromptList",
+    "appendRelevantFilesSection",
+    "appendStringSection",
+    "appendSubsection",
+    "asRecord",
+    "asStringArray",
+    "assertModelBackedCompactionArtifacts",
+    "assistantToolUsesAreCompleted",
+    "buildArtifactPaths",
+    "buildCompactionAttemptStrategies",
+    "buildCompactionEvidence",
+    "buildCompactionQualityFromCandidate",
+    "buildCompactionQualityFromSynthesis",
+    "buildCompactionSynthesisPrompt",
+    "buildCompactionSystemPromptContext",
+    "buildCompactionVerificationPrompt",
+    "buildEvidenceBackedCompactionSynthesis",
+    "buildEvidenceEntriesForMessage",
+    "buildFallbackSynthesizedWorkingContext",
+    "buildFilePreview",
+    "buildMessagesForWorkingContext",
+    "buildModelBackedCompactionStateSnapshot",
+    "buildPreservedTraceRecord",
+    "buildSkippedCompactionSynthesis",
+    "buildSynthesizedWorkingContextDocument",
+    "buildTextEvidenceEntry",
+    "buildToolResultEvidenceEntry",
+    "buildToolUseEvidenceEntry",
+    "buildWorkingContextDocumentFromCandidate",
+    "chooseCompactionCutoff",
+    "chooseToolAwareCompactionCutoff",
+    "coercePreservedTrace",
+    "coerceProjectFacts",
+    "coerceRelevantFiles",
+    "coerceRepairedCheckpoint",
+    "coerceSynthesizedWorkingContextFields",
+    "coerceWorkingContextDocument",
+    "collapseWhitespace",
+    "collectSubstantiveToolExchangeStarts",
+    "collectToolResultIds",
+    "compactStructuredRecord",
+    "describeCompactionSynthesisFailure",
+    "estimateMessageTokens",
+    "estimateSingleMessageTokens",
+    "estimateTextTokens",
+    "estimateWorkingContextTokens",
+    "extractJsonObjectCandidate",
+    "isCompactionContextSizeFailure",
+    "isCompactionSynthesisJsonFailure",
+    "isLowSignalTodoText",
+    "isSafeWorkingSetStart",
+    "loadWorkingContextArtifact",
+    "mergeCompactionUsageIntoSession",
+    "messageHasToolResults",
+    "messageHasToolUses",
+    "normalizeVerificationConfidence",
+    "normalizeVerificationVerdict",
+    "parseCompactionSynthesisResponse",
+    "parseCompactionVerificationResponse",
+    "parseMaybeJson",
+    "renderActivityMarkdown",
+    "renderDecisionsMarkdown",
+    "renderPlanMarkdown",
+    "renderSummaryMarkdown",
+    "renderWorkingContextPromptContext",
+    "resolveLatestPlan",
+    "runCompaction",
+    "runCompactionCheckpointVerification",
+    "runCompactionCheckpointVerificationWithFallback",
+    "runModelBackedCompactionSynthesis",
+    "runModelBackedCompactionSynthesisWithFallback",
+    "shouldAutoCompact",
+    "shouldRetryCompactionAttempt",
+    "shouldSkipCompactionSynthesisFailure",
+    "summarizeTodo",
+    "summarizeToolResultForCompaction",
+    "trimPathEvidence",
+    "truncate",
+]

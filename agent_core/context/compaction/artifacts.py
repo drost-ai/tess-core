@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from .shared import *
+import json
+import os
+from ...storage import (
+    compactionCheckpointPath,
+    compactionManifestPath,
+    getSessionCompactionsDir,
+)
+from typing import Any
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 

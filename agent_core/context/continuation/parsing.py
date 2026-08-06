@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from .shared import *
+import json
+import re
+from .tokens import asRecord, truncate
+from typing import Any
 
 
 def extractFilePath(input: dict[str, Any]) -> str | None:
@@ -78,10 +81,3 @@ def _reject_non_finite_json(value: str) -> None:
     raise ValueError(f"Invalid JSON constant: {value}")
 
 
-def _tool_result_content_string(value: Any) -> str:
-    if isinstance(value, str):
-        return value
-    try:
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
-    except (TypeError, ValueError):
-        return str(value)
