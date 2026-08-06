@@ -15,9 +15,9 @@ from ..config import (
     resolveConfig,
     resolveFallbackProviderProfileName,
 )
-from ..compaction import runCompaction, shouldAutoCompact
-from ..context_policy import decideDurableCheckpoint, estimateRawContextPressure
-from ..continuation import buildContinuationContext
+from ..context.compaction import runCompaction, shouldAutoCompact
+from ..context.context_policy import decideDurableCheckpoint, estimateRawContextPressure
+from ..context.continuation import buildContinuationContext
 from ..providers.errors import createProviderFailureRecord, createProviderRequestError, fallbackEligibleProviderFailure, isProviderRequestError
 from ..providers.token_budget import (
     computeProviderTokenBudget,
@@ -27,7 +27,7 @@ from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
 from ..session.persistence import persistProviderFailure, persistProviderRecovery, persistSession, repairSessionTranscript
 from ..subagents.reconciliation import appendPendingSubagentReconciliationsToSession, consumeAppendedSubagentReconciliations
-from ..token_accounting import measureRequestInputTokens, recordActualTokenUsage, recordPreflightTokenMeasurement
+from ..context.token_accounting import measureRequestInputTokens, recordActualTokenUsage, recordPreflightTokenMeasurement
 from ..providers.usage_costs import MODEL_PRICING
 
 

@@ -21,7 +21,7 @@ from agent_core.providers.anthropic.payloads import (
 from agent_core.providers.anthropic.request import sendAnthropicMessagesRequest
 from agent_core.runtime.paths import resolveRuntimePaths
 from agent_core.storage import ensureBaseLayout
-from agent_core.token_accounting import measureRequestInputTokens
+from agent_core.context.token_accounting import measureRequestInputTokens
 from agent_core.providers.usage_costs import estimateUsageCost
 
 from .package32_canary_evidence import (

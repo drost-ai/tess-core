@@ -25,7 +25,7 @@ from .support import installComponentSurface as _install_component_surface, mayb
 from .state import createInitialRuntimeState, createRuntimeStateStore
 from ..session.runtime import createSessionRuntimeController
 from ..storage import configureRuntimeHome, registerStorageLockObserver
-from ..task_runtime import createTaskRuntime
+from ..tasks.runtime import createTaskRuntime
 from ..tools import createBuiltinTools
 from .workspace import createWorkspaceController
 

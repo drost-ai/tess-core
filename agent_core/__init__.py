@@ -4,7 +4,7 @@ from .authority.agent import *
 from .collaboration import *
 from .config import *
 from .daemon import *
-from .durable_memory import *
+from .context.durable_memory import *
 from .payloads.execution_descriptors import *
 from .authority.executable_closure import *
 from .authority.executable_config import *
@@ -52,16 +52,16 @@ from .subagents import *
 from .tasks.ownership import *
 from .process.task_launch import *
 from .tasks.communication import *
-from .task_runtime import *
-from .task_supervisor import *
+from .tasks.runtime import *
+from .tasks.supervisor import *
 from .payloads.tools import *
 from .tools import *
 from .runtime.workspace import *
-from .compaction import *
-from .compaction_models import *
-from .context_policy import *
-from .continuation import *
-from .token_accounting import *
+from .context.compaction import *
+from .context.compaction_models import *
+from .context.context_policy import *
+from .context.continuation import *
+from .context.token_accounting import *
 from .providers.anthropic import *
 from .providers.openai import *
 
@@ -76,11 +76,19 @@ from .providers.openai import *
 # the old star-import layout exposed were retired in the v1 refactor. See
 # PUBLIC_API_CHANGES.md for the full list.
 _LEGACY_MODULE_ALIASES = {
+    "compaction": "agent_core.context.compaction",
+    "compaction_models": "agent_core.context.compaction_models",
+    "context_policy": "agent_core.context.context_policy",
+    "continuation": "agent_core.context.continuation",
+    "durable_memory": "agent_core.context.durable_memory",
     "monitors": "agent_core.tasks.monitors",
     "process_identity": "agent_core.process.identity",
     "provider_watchdog": "agent_core.providers.watchdog",
     "subagent_coordination": "agent_core.subagents.coordination",
     "task_process_launch": "agent_core.process.task_launch",
+    "task_runtime": "agent_core.tasks.runtime",
+    "task_supervisor": "agent_core.tasks.supervisor",
+    "token_accounting": "agent_core.context.token_accounting",
 }
 
 

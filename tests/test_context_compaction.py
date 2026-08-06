@@ -55,7 +55,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_compaction_model_client_timeout_uses_provider_failure(self):
-        import agent_core.compaction_models as compaction_models
+        import agent_core.context.compaction_models as compaction_models
 
         async def slow_request():
             await asyncio.sleep(0.05)

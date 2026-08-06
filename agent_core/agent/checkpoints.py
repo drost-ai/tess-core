@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .shared import *
 from ..context.compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
-from ..compaction_models import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
+from ..context.compaction_models import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
 
 
 async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] | None:

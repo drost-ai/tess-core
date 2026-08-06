@@ -33,4 +33,4 @@ from ..storage import (
     saveDaemonState,
     withRecordTransaction,
 )
-from ..task_supervisor import createTaskSupervisor
+from ..tasks.supervisor import createTaskSupervisor

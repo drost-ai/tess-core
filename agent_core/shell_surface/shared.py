@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 from .._utils import now_iso
-from ..compaction import runCompaction
+from ..context.compaction import runCompaction
 from ..config import (
     ensureProviderForModelSelection,
     getDefaultEffortForProvider,
@@ -22,7 +22,7 @@ from ..config import (
     resolveFallbackProviderProfileName,
 )
 from ..debug_bundle import createDebugBundle
-from ..durable_memory import synchronizeManualProjectMemory
+from ..context.durable_memory import synchronizeManualProjectMemory
 from ..daemon import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ..platform import collectDoctorReport
 from ..tasks.monitor_transitions import (

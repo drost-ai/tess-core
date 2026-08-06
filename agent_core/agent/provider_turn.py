@@ -14,7 +14,7 @@ from ..providers.provider_prompt_cache import (
 from ..providers.activity import ProviderActivityEmitter, emitProviderActivity
 from ..providers.timeouts import createTurnDeadlineContext
 from ..session.persistence import persistSession
-from ..token_accounting import recordActualTokenUsage
+from ..context.token_accounting import recordActualTokenUsage
 from ..providers.usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
 from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled
 from .context import isContextWindowFailure, prepareProviderRequest
