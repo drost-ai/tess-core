@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..todo_policy import summarizeTodoState as _summarize_todo_state
+from ..payloads.todo_policy import summarizeTodoState as _summarize_todo_state
 
 
 def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:

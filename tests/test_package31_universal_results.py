@@ -3,18 +3,18 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 from agent_core.bash_lifecycle import _process_group_live, runInlineShellCommand
-from agent_core.bash_result_payload import buildBashResultPayload
+from agent_core.payloads.bash_results import buildBashResultPayload
 from agent_core.process.output import createSubprocessOutputCollector
 from agent_core.subagents.result_payload import (
     boundedSubagentError,
     shapeForegroundSubagentResult,
 )
-from agent_core.tool_result_guard import (
+from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guardToolCallResult,
     serializedContentBytes,
 )
-from agent_core.utf8_bounds import hasLoneUtf16Surrogate, utf8ByteLength
+from agent_core.payloads.utf8_bounds import hasLoneUtf16Surrogate, utf8ByteLength
 
 
 _SMALL_CONFIG = {

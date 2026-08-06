@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.request import Request, urlopen
 
-from ..bounded_io import readResponseTextBoundedSync
+from ..payloads.bounded_io import readResponseTextBoundedSync
 from .cancellation import _create_tool_abort_error, _signal_aborted
 
 

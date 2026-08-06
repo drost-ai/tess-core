@@ -11,8 +11,8 @@ import signal
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
-from ..bounded_io import readFileTailBounded
-from ..execution_descriptors import createTaskExecutionDescriptor
+from ..payloads.bounded_io import readFileTailBounded
+from ..payloads.execution_descriptors import createTaskExecutionDescriptor
 from ..tasks.monitor_transitions import monitorStopNote as _monitor_stop_note
 from ..tasks.monitor_transitions import stopMonitorRecord as _stop_monitor_record
 from ..tasks.health_check_policy import (
@@ -30,7 +30,7 @@ from ..process.identity import processIdentityFromRecord, signalOwnedProcess
 from ..tasks.terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
 from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath
 from ..task_ownership import requireModelOwnedMonitor, requireModelOwnedTask
-from ..tool_payloads import getToolPayloadPolicy, shapeTextToolResult
+from ..payloads.tools import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission

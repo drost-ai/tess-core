@@ -12,8 +12,8 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..bash_lifecycle import runInlineShellCommand
-from ..bash_result_payload import buildBashResultPayload
-from ..execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
+from ..payloads.bash_results import buildBashResultPayload
+from ..payloads.execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
 from ..process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ..storage import readTaskMeta, saveTaskRecord, taskOutputPath, writeTaskMeta
 from ..process.task_launch import (

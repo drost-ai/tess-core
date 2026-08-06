@@ -6,8 +6,8 @@ import hashlib
 import re
 from typing import Any
 
-from ._media_persistence import sanitizeMediaForPersistence
-from .config_store.shared import (
+from .media_persistence import sanitizeMediaForPersistence
+from ..config_store.shared import (
     DEFAULT_IMAGE_INPUT_MIME_TYPES,
     DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
     DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,

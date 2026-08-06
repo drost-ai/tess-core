@@ -11,7 +11,7 @@ from .process.output import (
     SUBPROCESS_SPOOL_MAX_BYTES,
     createSubprocessOutputCollector,
 )
-from .utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
+from .payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
 
 
 SEARCH_RECORD_MAX_BYTES = 1024 * 1024

@@ -21,7 +21,7 @@ from agent_core.storage_store.io_executor import (
     runStorageIo,
     storageExecutorSnapshot,
 )
-from agent_core.tool_attachments import stripInMemoryImageData
+from agent_core.payloads.attachments import stripInMemoryImageData
 from agent_core_harness.performance import (
     REPORT_SCHEMA,
     ROLLBACK_SNAPSHOT_BENCHMARK,

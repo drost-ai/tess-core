@@ -117,7 +117,7 @@ def updateActiveTaskFromTodos(session: dict[str, Any], todos: list[dict[str, str
     if active is None:
         metadata.pop("activeTask", None)
         return
-    from ._utils import now_iso
+    from .._utils import now_iso
 
     metadata["activeTask"] = {
         "updatedAt": now_iso(),

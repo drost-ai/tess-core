@@ -20,10 +20,10 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from .._utils import maybe_await, now_iso, pretty_json
-from ..execution_descriptors import createTaskExecutionDescriptor, createWorkspaceExecutionDescriptor, summarizeOutputManifest
+from ..payloads.execution_descriptors import createTaskExecutionDescriptor, createWorkspaceExecutionDescriptor, summarizeOutputManifest
 from ..monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from ..storage import listSessionMonitors, loadAutoMode, loadMonitor, loadSession, readTaskMeta, resolveMaybeRelative, saveMonitor, savePlanApproval, taskMetaPath, taskOutputPath, writePlanFile, writeTaskMeta
-from ..tool_payloads import applyDefaultGlobExcludes, filterDefaultIgnoredGlobMatches, shapeGlobPayload, shapeGrepPayload, shapeReadPayload, shapeTextToolResult, splitToolTextLines
+from ..payloads.tools import applyDefaultGlobExcludes, filterDefaultIgnoredGlobMatches, shapeGlobPayload, shapeGrepPayload, shapeReadPayload, shapeTextToolResult, splitToolTextLines
 from .agent import _agent_tool
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .code_search import _exec_ripgrep_allowing_no_matches, _glob_tool, _grep_tool, _packaged_ripgrep_path, _resolve_ripgrep_binary

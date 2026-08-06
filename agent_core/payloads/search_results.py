@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .payload_cursor import encodePayloadCursor
+from .cursor import encodePayloadCursor
 from .utf8_bounds import utf8ByteLength
 
 

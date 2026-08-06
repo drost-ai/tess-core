@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from .._utils import maybe_await, pretty_json
-from ..notebook_payload import shapeNotebookPayload
-from ..payload_cursor import encodePayloadCursor, fingerprintPayloadSource, resolvePayloadCursor
-from ..text_file_window import readTextFileWindow
-from ..tool_attachments import (
+from ..payloads.notebook import shapeNotebookPayload
+from ..payloads.cursor import encodePayloadCursor, fingerprintPayloadSource, resolvePayloadCursor
+from ..payloads.text_file_window import readTextFileWindow
+from ..payloads.attachments import (
     createImageToolResultAttachment,
     imageAttachmentEligibility,
     resolveRuntimeProviderCapabilities,
 )
-from ..tool_payloads import getToolPayloadPolicy, shapeReadPayload, splitToolTextLines
+from ..payloads.tools import getToolPayloadPolicy, shapeReadPayload, splitToolTextLines
 from .definitions import ToolDefinition
 from .file_change_payloads import (
     build_edit_file_change_payload,

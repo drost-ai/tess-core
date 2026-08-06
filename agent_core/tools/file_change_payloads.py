@@ -4,7 +4,7 @@ import inspect
 from typing import Any, Callable
 
 from .._utils import pretty_json
-from ..tool_payloads import _byte_len, _count_lines, _persist_artifact, _without_none_values
+from ..payloads.tools import _byte_len, _count_lines, _persist_artifact, _without_none_values
 from .file_change_diff import (
     build_create_diff_document,
     build_edit_diff_document,

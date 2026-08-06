@@ -29,8 +29,8 @@ from .turn_session import (
 from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..agent_runtime_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
 from ..authority.hooks import fireToolHooks as fireToolHooks
-from ..image_budget import ImageBudgetError as _ImageBudgetError
-from ..image_budget import createImageBudgetReservation as _create_image_budget_reservation
+from ..payloads.image_budget import ImageBudgetError as _ImageBudgetError
+from ..payloads.image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..message_origin import userRequestMessage as _user_request_message
 from ..authority.permission_rules import findDispatchDenyRule
 from ..providers.prompt_cache_finalization import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
@@ -39,7 +39,7 @@ from ..subagents.contract import filter_tools_for_subagent
 from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
 from .._transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
-from ..tool_attachments import (
+from ..payloads.attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
     resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
     stripInMemoryImageData as _strip_in_memory_image_data,

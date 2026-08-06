@@ -6,7 +6,7 @@ from ..contracts.tools import ToolResult
 from typing import Any
 
 from .._utils import maybe_await, pretty_json
-from ..execution_descriptors import createWorkspaceExecutionDescriptor
+from ..payloads.execution_descriptors import createWorkspaceExecutionDescriptor
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
 from .schemas import _tool_description, _tool_schema

@@ -4,7 +4,7 @@ import math
 
 from .shared import *
 from ..._compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
-from ..._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...message_origin import syntheticUserMessage as _synthetic_user_message
 from ...providers.token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO as _DEFAULT_COMPACTION_PRESERVATION_RATIO
 from ...usage_costs import mergeProviderUsage as _merge_provider_usage

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import time
-from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
 from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ..persistence_metrics import (

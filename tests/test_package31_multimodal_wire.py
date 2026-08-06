@@ -10,7 +10,7 @@ from tests.support.agent_core_case import bind_test_runtime, run
 
 import agent_core as core
 from agent_core import testing
-from agent_core.image_budget import ImageBudgetError
+from agent_core.payloads.image_budget import ImageBudgetError
 
 
 def _block(data: bytes) -> dict:

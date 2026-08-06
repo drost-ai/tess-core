@@ -9,7 +9,7 @@ from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 from ..runtime.identifiers import parseArtifactId
 from ..storage import toolArtifactDataPath, toolArtifactMetaPath
-from ..tool_result_guard import (
+from ..payloads.result_guard import (
     NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
     serializedContentBytes,
 )

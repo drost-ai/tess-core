@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, TextIO
 
-from .._media_persistence import sanitizeMediaForPersistence
+from ..payloads.media_persistence import sanitizeMediaForPersistence
 from ..runtime.events import createRuntimeEvent
 
 

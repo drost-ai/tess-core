@@ -9,7 +9,7 @@ from typing import Any
 from .._utils import maybe_await, now_iso, pretty_json
 from ..storage import savePlanApproval, writePlanFile
 from ..task_communication import create_task_question, read_task_questions
-from ..todo_policy import requireTodoItems, serializeTodoStateSummary, updateActiveTaskFromTodos
+from ..payloads.todo_policy import requireTodoItems, serializeTodoStateSummary, updateActiveTaskFromTodos
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema
@@ -223,7 +223,7 @@ def _normalize_todo_item(value: Any) -> dict[str, str]:
 
 
 def _derive_todo_active_form(content: str) -> str:
-    from ..todo_policy import deriveTodoActiveForm
+    from ..payloads.todo_policy import deriveTodoActiveForm
 
     return deriveTodoActiveForm(content)
 

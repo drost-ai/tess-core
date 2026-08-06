@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._media_persistence import sanitizeMediaForPersistence
+from .media_persistence import sanitizeMediaForPersistence
 
 
 def redactImagePayloads(value: Any) -> Any:

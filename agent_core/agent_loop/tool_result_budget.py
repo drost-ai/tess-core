@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..agent_tool_results import createToolResultFinalizer
+from ..payloads.agent_results import createToolResultFinalizer
 from ..providers.token_budget import resolve_interactive_context_policy
-from ..tool_result_guard import (
+from ..payloads.result_guard import (
     MIN_EFFECTIVE_TOOL_RESULT_BYTES,
     NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
     serializedContentBytes,

@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 import gzip
 import socket
 
-from agent_core.bounded_io import AcquisitionLimitError, readResponseTextBoundedSync
+from agent_core.payloads.bounded_io import AcquisitionLimitError, readResponseTextBoundedSync
 from agent_core.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
 
 

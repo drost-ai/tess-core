@@ -8,7 +8,7 @@ from typing import Any
 from .._utils import pretty_json
 from ..authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
 from ..mcp_payloads import shapeMcpResourceList, shapeMcpResourceRead
-from ..tool_payloads import shapeTextToolResult
+from ..payloads.tools import shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import _tool_description, _tool_schema

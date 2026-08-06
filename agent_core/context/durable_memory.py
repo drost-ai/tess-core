@@ -6,12 +6,12 @@ import re
 from typing import Any
 
 from .._utils import now_iso
-from ..bounded_io import readFilePrefixBounded as _read_file_prefix_bounded
+from ..payloads.bounded_io import readFilePrefixBounded as _read_file_prefix_bounded
 from ..storage import getProjectMemoryPath, getProjectRoot, loadProjectMemoryRecords as _loadProjectMemoryRecords
 from ..storage import mutateProjectMemoryRecords
-from ..todo_policy import selectTodoState as _select_todo_state
-from ..utf8_bounds import sliceUtf8Prefix as _slice_utf8_prefix
-from ..utf8_bounds import utf8ByteLength as _utf8_byte_length
+from ..payloads.todo_policy import selectTodoState as _select_todo_state
+from ..payloads.utf8_bounds import sliceUtf8Prefix as _slice_utf8_prefix
+from ..payloads.utf8_bounds import utf8ByteLength as _utf8_byte_length
 
 
 MANUAL_MEMORY_RECORD_ID = "manual-project-memory"

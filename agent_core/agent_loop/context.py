@@ -26,8 +26,8 @@ from .dynamic_context import (
 from .interactive_context import (
     retiredInteractiveReliefReceipt as _retired_interactive_relief_receipt,
 )
-from ..image_budget import assertImageContextCapacity as _assert_image_context_capacity
-from ..tool_attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
+from ..payloads.image_budget import assertImageContextCapacity as _assert_image_context_capacity
+from ..payloads.attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
 
 async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]

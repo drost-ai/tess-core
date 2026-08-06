@@ -10,7 +10,7 @@ from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, 
 
 from agent_core.providers.token_budget import resolve_interactive_context_policy
 from agent_core.agent_loop.tool_result_budget import ToolResultBatchBudget
-from agent_core.tool_result_guard import guardToolCallResult, serializedContentBytes
+from agent_core.payloads.result_guard import guardToolCallResult, serializedContentBytes
 
 
 def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:

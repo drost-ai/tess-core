@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...todo_policy import selectTodoState as _select_todo_state
+from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
 def buildCompactionQualityFromSynthesis(synthesized: dict[str, Any]) -> dict[str, Any]:

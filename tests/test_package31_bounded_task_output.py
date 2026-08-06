@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-import agent_core.bounded_io as bounded_io_module
-from agent_core.bounded_io import readFilePrefixBounded, readFileTailBounded
-from agent_core.utf8_bounds import utf8ByteLength
+import agent_core.payloads.bounded_io as bounded_io_module
+from agent_core.payloads.bounded_io import readFilePrefixBounded, readFileTailBounded
+from agent_core.payloads.utf8_bounds import utf8ByteLength
 
 
 class _ObservedFile:

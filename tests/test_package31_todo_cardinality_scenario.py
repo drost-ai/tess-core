@@ -5,7 +5,7 @@ import copy
 from tests.support.agent_core_case import *
 
 from agent_core.shell_surface.status import buildTodosReport
-from agent_core.tool_result_guard import TOOL_RESULT_FINAL_BYTES, serializedContentBytes
+from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serializedContentBytes
 
 
 class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):

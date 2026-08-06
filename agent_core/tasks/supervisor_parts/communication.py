@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...bounded_io import readFileTailBounded as _read_file_tail_bounded
+from ...payloads.bounded_io import readFileTailBounded as _read_file_tail_bounded
 from ...task_communication import (
     answer_task_question as _answer_task_question,
     read_task_events as _read_task_events,

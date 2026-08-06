@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.tool_payloads import _persist_artifact
+from agent_core.payloads.tools import _persist_artifact
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable
 
-from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..runtime.identifiers import parseSessionId
 from ..session.message_history import (
     SessionMessageList,

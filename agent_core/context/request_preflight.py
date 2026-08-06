@@ -5,7 +5,7 @@ import hashlib
 import json
 from typing import Any
 
-from .._image_redaction import redactImagePayloads
+from ..payloads.image_redaction import redactImagePayloads
 from ..message_origin import (
     isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
     messageForStableFingerprint as _message_for_stable_fingerprint,

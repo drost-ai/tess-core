@@ -7,8 +7,8 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from .._utils import get_value as _get_value, maybe_await as _maybe_await, now_iso
-from ..image_budget import measureAdmittedImageSet as _measure_admitted_image_set
-from .._image_redaction import redactImagePayloads as _redact_image_payloads
+from ..payloads.image_budget import measureAdmittedImageSet as _measure_admitted_image_set
+from ..payloads.image_redaction import redactImagePayloads as _redact_image_payloads
 from ..providers.errors import (
     createProviderFailureRecord as _create_provider_failure_record,
     createProviderRequestError as _create_provider_request_error,

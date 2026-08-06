@@ -9,9 +9,9 @@ from functools import wraps
 import pytest
 
 import agent_core as core
-from agent_core.agent_tool_results import finalizeToolDispatchResult
+from agent_core.payloads.agent_results import finalizeToolDispatchResult
 from agent_core.shell_surface.status import buildTodosReport
-from agent_core.tool_result_guard import (
+from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guardToolCallResult,
     serializedContentBytes,

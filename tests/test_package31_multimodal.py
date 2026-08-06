@@ -12,8 +12,8 @@ from unittest import mock
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
 import agent_core as core
-from agent_core.agent_tool_results import finalizeToolDispatchResult
-from agent_core.image_budget import (
+from agent_core.payloads.agent_results import finalizeToolDispatchResult
+from agent_core.payloads.image_budget import (
     ImageBudgetError,
     admitImageMessages,
     createImageBudgetReservation,
@@ -22,7 +22,7 @@ from agent_core.image_budget import (
     measureCanonicalBase64,
     assertImageContextCapacity,
 )
-from agent_core.tool_attachments import (
+from agent_core.payloads.attachments import (
     filterImagesForProviderCapabilities,
     resolveRuntimeProviderCapabilities,
     stripInMemoryImageData,

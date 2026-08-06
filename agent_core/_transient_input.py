@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from ._media_persistence import sanitizeMediaForPersistence
+from .payloads.media_persistence import sanitizeMediaForPersistence
 from .message_origin import isGenuineUserRequest as _is_genuine_user_request
 
 

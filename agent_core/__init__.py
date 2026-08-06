@@ -5,7 +5,7 @@ from .collaboration import *
 from .config import *
 from .daemon import *
 from .durable_memory import *
-from .execution_descriptors import *
+from .payloads.execution_descriptors import *
 from .authority.executable_closure import *
 from .authority.executable_config import *
 from .authority.executable_source_policy import *
@@ -54,7 +54,7 @@ from .process.task_launch import *
 from .task_communication import *
 from .task_runtime import *
 from .task_supervisor import *
-from .tool_payloads import *
+from .payloads.tools import *
 from .tools import *
 from .workspace import *
 from .compaction import *
@@ -78,6 +78,7 @@ _LEGACY_MODULE_ALIASES = {
     "executable_closure": "agent_core.authority.executable_closure",
     "executable_config": "agent_core.authority.executable_config",
     "executable_source_policy": "agent_core.authority.executable_source_policy",
+    "execution_descriptors": "agent_core.payloads.execution_descriptors",
     "hooks": "agent_core.authority.hooks",
     "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
     "mcp_origin_policy": "agent_core.authority.mcp_origin_policy",
@@ -120,6 +121,7 @@ _LEGACY_MODULE_ALIASES = {
     "subagent_reconciliation_store": "agent_core.subagents.reconciliation_store",
     "subagent_result": "agent_core.subagents.result",
     "task_process_launch": "agent_core.process.task_launch",
+    "tool_payloads": "agent_core.payloads.tools",
     "transcript": "agent_core.session.transcript",
 }
 
@@ -159,6 +161,7 @@ _INTERNAL_MODULES = {
     # top-level module of the same name before, so they are not part of the
     # historical public surface.
     "authority",
+    "payloads",
     "process",
     "persistence_metrics",
     "prompt_cache_state",

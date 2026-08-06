@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..._image_redaction import redactImagePayloads as _redact_image_payloads
+from ...payloads.image_redaction import redactImagePayloads as _redact_image_payloads
 
 
 def estimateMessageTokens(messages: list[dict[str, Any]]) -> int:

@@ -4,15 +4,15 @@ from tests.support.agent_core_case import *
 
 import sys
 
-from agent_core.payload_cursor import (
+from agent_core.payloads.cursor import (
     encodePayloadCursor,
     fingerprintPayloadSource,
     resolvePayloadCursor,
 )
 from agent_core.mcp_payloads import shapeMcpResourceList, shapeMcpResourceRead
 from agent_core.search_acquisition import runStreamingSearch
-from agent_core.tool_result_guard import TOOL_RESULT_FINAL_BYTES, serializedContentBytes
-from agent_core.utf8_bounds import sliceUtf8Window, utf8ByteLength
+from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serializedContentBytes
+from agent_core.payloads.utf8_bounds import sliceUtf8Window, utf8ByteLength
 
 
 class Package31PayloadPaginationTests(AgentCoreTestCase):

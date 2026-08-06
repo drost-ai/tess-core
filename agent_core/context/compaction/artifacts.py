@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 

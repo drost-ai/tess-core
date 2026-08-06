@@ -3,8 +3,8 @@ from __future__ import annotations
 import inspect
 from typing import Any, Callable
 
-from .tool_result_guard import boundedToolIdentity, guardToolCallResult
-from .tool_attachments import (
+from .result_guard import boundedToolIdentity, guardToolCallResult
+from .attachments import (
     imageAttachmentEligibility,
     imageAttachmentToBlock,
     resolveRuntimeProviderCapabilities,

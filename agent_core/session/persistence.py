@@ -5,7 +5,7 @@ import os
 import re
 from typing import Any
 
-from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from .._utils import now_iso
 from ..persistence_metrics import (
     beginPersistenceCall as _begin_persistence_call,
