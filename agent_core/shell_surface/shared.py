@@ -32,7 +32,7 @@ from ..tasks.monitor_transitions import (
     stopMonitorRecord as _stop_monitor_record,
 )
 from ..tasks.monitor_transactions import commitMonitorMutation as _commit_monitor_mutation
-from ..remote import formatBridgeTail, formatRemoteSessionCandidate, sendBridgeMessage, updateRemoteSession
+from ..collaboration.remote import formatBridgeTail, formatRemoteSessionCandidate, sendBridgeMessage, updateRemoteSession
 from ..storage import (
     compactionCheckpointPath,
     compactionManifestPath,

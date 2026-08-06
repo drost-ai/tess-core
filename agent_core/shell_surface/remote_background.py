@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..bridge_runtime import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
+from ..collaboration.bridge.runtime import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
 
 
 async def buildDaemonReport() -> str:

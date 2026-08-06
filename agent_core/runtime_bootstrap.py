@@ -14,7 +14,7 @@ from .lifecycle_barrier import createLifecycleBarrier
 from .mcp import createMcpRuntime
 from .monitors import createMonitorRuntime
 from .plugins import loadPluginRuntime
-from .remote import createBridgeRuntime
+from .collaboration.remote import createBridgeRuntime
 from .runtime_events import createRuntimeEvent
 from .runtime_generation import RuntimeActivationSupersededError, createRuntimeActivationContext, createRuntimeSessionBinding, sameRuntimeBinding
 from .runtime_paths import RuntimePaths, getActiveRuntimePaths, runWithRuntimePaths

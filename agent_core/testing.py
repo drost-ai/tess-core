@@ -6,7 +6,7 @@ from .executable_closure import (
     inspectExecutableClosure,
     snapshotExecutableClosure,
 )
-from .bridge_recovery import __setBridgeRecoveryTestHookForTests
+from .collaboration.bridge.recovery import __setBridgeRecoveryTestHookForTests
 from .provider_errors import *
 from .providers.anthropic import *
 from .providers.openai import *

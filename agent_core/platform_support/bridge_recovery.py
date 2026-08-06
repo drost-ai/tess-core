@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..bridge_recovery import (
+from ..collaboration.bridge.recovery import (
     BridgeRecoveryBlockedError,
     inspectBridgeRecovery,
     resolveBridgeRecovery,

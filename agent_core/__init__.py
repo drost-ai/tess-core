@@ -21,7 +21,7 @@ from .permission_rules import *
 from .process_identity import *
 from .provider_errors import *
 from .provider_activity import *
-from .remote import *
+from .collaboration.remote import *
 from .repository_trust import *
 from .runtime import *
 from .runtime_generation import *
@@ -64,6 +64,31 @@ from .continuation import *
 from .token_accounting import *
 from .providers.anthropic import *
 from .providers.openai import *
+
+# --- v1 subsystem consolidation --------------------------------------------
+# Modules relocated into subsystem packages keep their historical
+# ``agent_core.<name>`` import path. Registering the *same module object* in
+# ``sys.modules`` -- rather than re-exporting through a shim file -- preserves
+# object identity, so ``import agent_core.remote``,
+# ``from agent_core.remote import x``, membership in ``dir(agent_core)``, and
+# monkeypatching a name onto the legacy path all behave exactly as before.
+_LEGACY_MODULE_ALIASES = {
+    "collaboration_updates": "agent_core.collaboration.updates",
+    "remote": "agent_core.collaboration.remote",
+}
+
+
+def _install_legacy_module_aliases() -> None:
+    import importlib
+    import sys
+
+    for alias, target in _LEGACY_MODULE_ALIASES.items():
+        module = importlib.import_module(target)
+        sys.modules[f"{__name__}.{alias}"] = module
+        globals()[alias] = module
+
+
+_install_legacy_module_aliases()
 
 _INTERNAL_MODULES = {
     "agent_tool_results",

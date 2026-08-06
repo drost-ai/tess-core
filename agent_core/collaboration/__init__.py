@@ -6,13 +6,13 @@ import threading
 import time
 from typing import Any
 
-from ._utils import maybe_await
-from . import collaboration_updates as _collaboration_updates
-from .collaboration_updates import *
-from .session import persistSession
-from .storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
-from .runtime_generation import createRuntimeSessionBinding, sameRuntimeBinding
-from .runtime_paths import runWithRuntimePaths
+from .._utils import maybe_await, packageExports as _package_exports
+from . import updates as _collaboration_updates
+from .updates import *
+from ..session import persistSession
+from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
+from ..runtime_generation import createRuntimeSessionBinding, sameRuntimeBinding
+from ..runtime_paths import runWithRuntimePaths
 
 MIN_ASSISTANT_UPDATE_SPACING_MS = 20_000
 COLLABORATION_TICK_MS = 1_500
@@ -494,3 +494,5 @@ def _dedupe_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]
         seen.add(key)
         out.append(candidate)
     return out
+
+__all__ = _package_exports(globals(), {"bridge", "remote", "updates"})

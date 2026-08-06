@@ -8,11 +8,11 @@ import threading
 import uuid
 from typing import Any
 
-from ._utils import now_iso
-from .bridge_admission import admitBridgeMessage as _admitBridgeMessage
-from .bridge_runtime import createBridgeRuntimeController as _createBridgeRuntimeController
-from .runtime_paths import runWithRuntimePaths
-from .storage import (
+from .._utils import now_iso
+from .bridge.admission import admitBridgeMessage as _admitBridgeMessage
+from .bridge.runtime import createBridgeRuntimeController as _createBridgeRuntimeController
+from ..runtime_paths import runWithRuntimePaths
+from ..storage import (
     appendBridgeEvent,
     appendBridgeInboxMessage,
     loadBridge,
