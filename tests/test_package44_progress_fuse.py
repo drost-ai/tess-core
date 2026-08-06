@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import patch
 
 import agent_core as core
-from agent_core.agent_loop.progress import LogicalTurnProgressLedger
+from agent_core.agent.progress import LogicalTurnProgressLedger
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 
@@ -171,7 +171,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
 
             clock = iter(index * 3_600 for index in range(20_000))
             with patch(
-                "agent_core.agent_loop.loop._time",
+                "agent_core.agent.loop._time",
                 SimpleNamespace(monotonic=lambda: next(clock)),
             ):
                 result = run(

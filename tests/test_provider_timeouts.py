@@ -3,7 +3,7 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 from agent_core.providers.timeouts import resolveProviderTimeoutPolicy
-import agent_core.agent_loop.providers as loop_providers
+import agent_core.agent.providers as loop_providers
 
 
 class ProviderTimeoutPolicyTests(AgentCoreTestCase):

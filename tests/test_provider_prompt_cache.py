@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-import agent_core.agent_loop.context as context_module
+import agent_core.agent.context as context_module
 from agent_core.providers.prompt_cache import (
     anthropicAutomaticCacheEnabled,
     anthropicExplicitCacheEnabled,
@@ -11,7 +11,7 @@ from agent_core.providers.prompt_cache import (
     providerAffinityKey,
     resolvePromptCachePolicy,
 )
-from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesPayload
+from agent_core.providers.anthropic.payloads import buildAnthropicMessagesPayload
 
 
 class ProviderPromptCacheTests(AgentCoreTestCase):

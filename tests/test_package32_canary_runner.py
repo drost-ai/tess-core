@@ -11,7 +11,7 @@ from unittest import mock
 from tests.support.agent_core_case import AgentCoreTestCase
 
 import agent_core as core
-from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesEnvelope
+from agent_core.providers.anthropic.payloads import buildAnthropicMessagesEnvelope
 from agent_core.providers.errors import createProviderFailureRecord, createProviderRequestError
 from agent_core_harness.package32_canary import main, runPackage32AnthropicCanary
 from agent_core_harness.package32_canary_cli import runPackage32CanaryCli

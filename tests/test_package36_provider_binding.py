@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import AgentCoreTestCase
 
-from agent_core.agent_loop.turn_session import (
+from agent_core.agent.turn_session import (
     resolve_effective_provider_turn_binding,
 )
 from agent_core.providers.turn_session import createProviderTurnSession

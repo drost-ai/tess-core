@@ -6,7 +6,7 @@ import time
 from unittest import mock
 
 import agent_core as core
-import agent_core.agent_loop.context as context_module
+import agent_core.agent.context as context_module
 from agent_core.context.request_preflight import (
     RECEIPT_MAX_BYTES,
     buildRequestPreflight,

@@ -14,7 +14,7 @@ from agent_core.providers.prompt_cache_state import (
     promptCacheStatePath,
     readPromptCacheState,
 )
-from agent_core.providers.anthropic_parts.payloads import planAnthropicCacheBreakpoints
+from agent_core.providers.anthropic.payloads import planAnthropicCacheBreakpoints
 from agent_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
     buildPromptCacheRequestSnapshot,

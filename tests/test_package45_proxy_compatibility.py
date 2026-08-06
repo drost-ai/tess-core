@@ -10,7 +10,7 @@ from tests.test_package45_transport import _config, _send, _turn
 
 class Package45ProxyCompatibilityTests(unittest.TestCase):
     def test_capability_off_matches_legacy_urllib_request(self):
-        import agent_core.providers.anthropic_parts.request as request_module
+        import agent_core.providers.anthropic.request as request_module
 
         async def exercise():
             requests = []

@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Sequence, TextIO
 
-from ..agent_loop import runAgentPrompt
+from ..agent import runAgentPrompt
 from ..runtime.agent_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
 from ..config import resolveConfig
 from ..runtime.bootstrap import bootstrapRuntime

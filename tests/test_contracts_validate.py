@@ -237,25 +237,25 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_runtime_event_names_match_known_events(self) -> None:
         from agent_core.contracts.events import RuntimeEventName
-        from agent_core.runtime.event_parts.shared import KNOWN_RUNTIME_EVENTS
+        from agent_core.runtime.events.shared import KNOWN_RUNTIME_EVENTS
 
         self.assertEqual(self._literal_values(RuntimeEventName), set(KNOWN_RUNTIME_EVENTS))
 
     def test_context_relief_modes_match_runtime(self) -> None:
         from agent_core.contracts.events import ContextReliefMode
-        from agent_core.runtime.event_parts.shared import _CONTEXT_RELIEF_MODES
+        from agent_core.runtime.events.shared import _CONTEXT_RELIEF_MODES
 
         self.assertEqual(self._literal_values(ContextReliefMode), set(_CONTEXT_RELIEF_MODES))
 
     def test_task_statuses_match_runtime(self) -> None:
         from agent_core.contracts.records import TaskStatus
-        from agent_core.runtime.event_parts.shared import _TASK_STATUSES
+        from agent_core.runtime.events.shared import _TASK_STATUSES
 
         self.assertEqual(self._literal_values(TaskStatus), set(_TASK_STATUSES))
 
     def test_task_kinds_match_runtime(self) -> None:
         from agent_core.contracts.records import TaskKind
-        from agent_core.runtime.event_parts.shared import _TASK_KINDS
+        from agent_core.runtime.events.shared import _TASK_KINDS
 
         self.assertEqual(self._literal_values(TaskKind), set(_TASK_KINDS))
 
@@ -297,7 +297,7 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(validate(config, ResolvedConfig, strict=True), [])
 
     def test_builtin_agents_and_profiles_validate(self) -> None:
-        from agent_core.config_store.shared import BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES
+        from agent_core.config.shared import BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES
         from agent_core.contracts import AgentDefinition, ProviderProfile
 
         for name, definition in BUILTIN_AGENTS.items():
@@ -307,7 +307,7 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_default_auto_mode_validates_strict(self) -> None:
         from agent_core.contracts import AutoModePolicy
-        from agent_core.storage_store.settings import getDefaultAutoMode
+        from agent_core.storage.settings import getDefaultAutoMode
 
         self.assertEqual(validate(getDefaultAutoMode(), AutoModePolicy, strict=True), [])
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.agent_loop.request_integrity import normalizeProviderRequestMessages
+from agent_core.agent.request_integrity import normalizeProviderRequestMessages
 
 def _tool_use(call_id: str, name: str = "Read") -> dict:
     return {"role": "assistant", "content": [{"type": "tool_use", "id": call_id, "name": name, "input": {}}]}

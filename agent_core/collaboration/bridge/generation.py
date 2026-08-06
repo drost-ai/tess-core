@@ -7,7 +7,7 @@ from ...storage import (
     updateSessionRecord,
     withRecordTransaction,
 )
-from ...storage_store.remote import (
+from ...storage.remote import (
     loadBridge,
     loadRemoteSession,
     saveBridge,

@@ -227,7 +227,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
 
     def test_append_watermark_commits_without_hydrating_the_persisted_prefix(self):
         root, _home, workspace, previous = self.temp_context()
-        schema = importlib.import_module("agent_core.storage_store.session_schema_v2")
+        schema = importlib.import_module("agent_core.storage.session_schema_v2")
         original_read = schema._read_body_sync
         try:
             session = self._session(workspace, "package46-fast-watermark", 3)

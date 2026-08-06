@@ -5,7 +5,7 @@ import copy
 from tests.support.agent_core_case import *
 
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
-from agent_core.providers.anthropic_parts.payloads import (
+from agent_core.providers.anthropic.payloads import (
     buildAnthropicBetaHeader,
     buildAnthropicCountTokensPayload,
     buildAnthropicHeaders,
@@ -13,7 +13,7 @@ from agent_core.providers.anthropic_parts.payloads import (
     buildAnthropicMessagesPayload,
     planAnthropicCacheBreakpoints,
 )
-from agent_core.providers.anthropic_parts.transport import applyAnthropicUsageSnapshot
+from agent_core.providers.anthropic.transport import applyAnthropicUsageSnapshot
 from agent_core.providers.usage_costs import estimateUsageCost, resolveModelPricing
 from agent_core.providers.prompt_cache_diagnostics import normalizePromptCacheProviderReason
 

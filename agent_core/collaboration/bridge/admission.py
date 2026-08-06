@@ -6,7 +6,7 @@ from typing import Any
 
 from ..._utils import now_iso
 from ...storage import loadSessionRecordShallow, withRecordTransaction
-from ...storage_store.remote import (
+from ...storage.remote import (
     appendBridgeEvent,
     appendBridgeInboxMessage,
     loadBridge,

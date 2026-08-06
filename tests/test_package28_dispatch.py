@@ -1,8 +1,8 @@
 from __future__ import annotations
 from tests.support.agent_core_case import *
 
-from agent_core.agent_loop.plan_policy import resolve_plan_mode_mcp_verdict
-from agent_core.agent_loop.tool_dispatch import (
+from agent_core.agent.plan_policy import resolve_plan_mode_mcp_verdict
+from agent_core.agent.tool_dispatch import (
     create_serial_queue,
     resolve_tool_concurrency,
     run_tool_dispatch_batch,

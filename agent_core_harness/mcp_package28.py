@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 import agent_core as core
-from agent_core.agent_loop.tool_dispatch import (
+from agent_core.agent.tool_dispatch import (
     resolve_tool_concurrency,
     run_tool_dispatch_batch,
 )

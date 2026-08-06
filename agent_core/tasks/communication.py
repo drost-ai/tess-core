@@ -15,7 +15,7 @@ from ..storage import (
     taskDir,
     writeJsonFile,
 )
-from ..storage_store.json_io import mutateJsonLines, readJsonLines
+from ..storage.json_io import mutateJsonLines, readJsonLines
 from ..session.persistence import persistSession
 from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
 

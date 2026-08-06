@@ -14,12 +14,12 @@ from agent_core.providers.errors import (
     createProviderRequestError,
     normalizeUnknownProviderFailure,
 )
-from agent_core.providers.anthropic_parts.sse import (
+from agent_core.providers.anthropic.sse import (
     AnthropicSseAccumulator,
     parseAnthropicSseEvents,
 )
-from agent_core.providers.anthropic_parts.transport import _create_anthropic_timeout
-from agent_core.providers.openai_parts.transport import (
+from agent_core.providers.anthropic.transport import _create_anthropic_timeout
+from agent_core.providers.openai.transport import (
     _create_openai_timeout,
     _raise_openai_cancelled,
 )
@@ -174,7 +174,7 @@ def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any], di
             )
             response = accumulator.finalize()
         elif fault == "F13":
-            from agent_core.providers.anthropic_parts.transport import _raise_anthropic_cancelled
+            from agent_core.providers.anthropic.transport import _raise_anthropic_cancelled
 
             _raise_anthropic_cancelled(
                 {"abortSignal": {"aborted": True}},

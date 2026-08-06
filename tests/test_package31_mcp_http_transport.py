@@ -6,17 +6,17 @@ import socket
 from tests.support.agent_core_case import *
 from tests.test_package31_mcp_transport import _Response
 
-from agent_core.mcp_runtime.http_body import (
+from agent_core.mcp.http_body import (
     _BoundedHeaderReader,
     _close_http_response,
     _parse_declared_length,
     iterateMcpBody,
     validateMcpResponseHeaders,
 )
-from agent_core.mcp_runtime.http_transport import HttpMcpClient
-from agent_core.mcp_runtime.auth import McpOAuthRuntime
-from agent_core.mcp_runtime.sse_transport import SseMcpClient
-from agent_core.mcp_runtime.transport_policy import (
+from agent_core.mcp.http_transport import HttpMcpClient
+from agent_core.mcp.auth import McpOAuthRuntime
+from agent_core.mcp.sse_transport import SseMcpClient
+from agent_core.mcp.transport_policy import (
     MCP_DECODED_BODY_MAX_BYTES,
     MCP_FRAME_MAX_BYTES,
     MCP_HEADER_MAX_BYTES,
@@ -336,7 +336,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
                     self.closed = True
 
             with mock.patch(
-                "agent_core.mcp_runtime.http_body.HTTPConnection",
+                "agent_core.mcp.http_body.HTTPConnection",
                 DeadlineConnection,
             ):
                 for mode, code in (("connect", "connect_timeout"), ("headers", "headers_timeout")):
@@ -445,7 +445,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
             )
             oauth._ensure_client = mock.AsyncMock(return_value={"clientId": "client"})
             with mock.patch(
-                "agent_core.mcp_runtime.auth.LoopbackListener",
+                "agent_core.mcp.auth.LoopbackListener",
                 Listener,
             ):
                 task = asyncio.create_task(

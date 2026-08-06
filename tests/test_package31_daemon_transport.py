@@ -5,7 +5,7 @@ import importlib
 
 from tests.support.agent_core_case import *
 
-from agent_core.daemon_runtime.protocol import (
+from agent_core.daemon.protocol import (
     DAEMON_MAX_PENDING_GLOBAL,
     DAEMON_MAX_PENDING_PER_CLIENT,
     DAEMON_MAX_REQUEST_FRAME_BYTES,
@@ -15,13 +15,13 @@ from agent_core.daemon_runtime.protocol import (
     DaemonProtocolError,
     encodeDaemonFrame,
 )
-from agent_core.daemon_runtime.transport import (
+from agent_core.daemon.transport import (
     DaemonServerPeer,
     createAuthenticatedDaemonServer,
     readOneDaemonFrame,
 )
 
-daemon_client_module = importlib.import_module("agent_core.daemon_runtime.client")
+daemon_client_module = importlib.import_module("agent_core.daemon.client")
 
 
 _TOKEN = "a" * 43

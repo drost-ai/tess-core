@@ -12,7 +12,7 @@ from typing import Any
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
-from agent_core.daemon_runtime.security import (
+from agent_core.daemon.security import (
     daemonTokenId,
     readDaemonAuthMaterial,
     verifyOwnedDaemonSocket,

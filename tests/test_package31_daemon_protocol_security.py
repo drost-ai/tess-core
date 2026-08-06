@@ -4,7 +4,7 @@ import stat
 
 from tests.support.agent_core_case import *
 
-from agent_core.daemon_runtime.protocol import (
+from agent_core.daemon.protocol import (
     DAEMON_MAX_REQUEST_FRAME_BYTES,
     DAEMON_PROTOCOL_VERSION,
     DaemonLineDecoder,
@@ -13,11 +13,11 @@ from agent_core.daemon_runtime.protocol import (
     parseDaemonFrame,
     parseDaemonRequest,
 )
-from agent_core.daemon_runtime.transport import (
+from agent_core.daemon.transport import (
     DaemonServerPeer,
     createAuthenticatedDaemonServer,
 )
-from agent_core.daemon_runtime.security import (
+from agent_core.daemon.security import (
     DaemonSecurityError,
     createDaemonAuthMaterial,
     daemonAuthTokenPath,
@@ -27,7 +27,7 @@ from agent_core.daemon_runtime.security import (
     readDaemonAuthMaterial,
     verifyPrivateDaemonRuntime,
 )
-import agent_core.daemon_runtime.server as daemon_server_module
+import agent_core.daemon.server as daemon_server_module
 
 
 class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):

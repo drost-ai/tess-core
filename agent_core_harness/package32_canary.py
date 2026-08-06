@@ -14,11 +14,11 @@ from agent_core.providers.provider_prompt_cache import (
 )
 from agent_core.providers.prompt_cache_state import readPromptCacheState
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
-from agent_core.providers.anthropic_parts.payloads import (
+from agent_core.providers.anthropic.payloads import (
     buildAnthropicHeaders,
     buildAnthropicMessagesEnvelope,
 )
-from agent_core.providers.anthropic_parts.request import sendAnthropicMessagesRequest
+from agent_core.providers.anthropic.request import sendAnthropicMessagesRequest
 from agent_core.runtime.paths import resolveRuntimePaths
 from agent_core.storage import ensureBaseLayout
 from agent_core.token_accounting import measureRequestInputTokens

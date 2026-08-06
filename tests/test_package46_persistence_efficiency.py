@@ -11,11 +11,11 @@ from unittest import mock
 
 from tests.support.agent_core_case import *
 
-from agent_core.agent_loop.cancellation import (
+from agent_core.agent.cancellation import (
     _capture_session_rollback,
     _restore_session_state,
 )
-from agent_core.storage_store.io_executor import (
+from agent_core.storage.io_executor import (
     STORAGE_IO_MAX_WORKERS,
     resetStorageExecutorPeakForTesting,
     runStorageIo,
@@ -32,7 +32,7 @@ from agent_core_harness.performance import (
 class Package46OffLoopStorageTests(AgentCoreTestCase):
     def test_generic_jsonl_appends_are_transactional_and_byte_valid(self):
         async def exercise(path: Path) -> None:
-            from agent_core.storage_store.json_io import appendJsonLine, readJsonLines
+            from agent_core.storage.json_io import appendJsonLine, readJsonLines
 
             await asyncio.gather(
                 *(
@@ -65,7 +65,7 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
 import asyncio
 import sys
 import agent_core as core
-from agent_core.storage_store.json_io import appendJsonLine
+from agent_core.storage.json_io import appendJsonLine
 home, path, prefix = sys.argv[1:]
 core.configureRuntimeHome(home)
 async def main():
@@ -101,7 +101,7 @@ asyncio.run(main())
 
     def test_write_burst_keeps_event_loop_responsive(self):
         async def exercise(root: Path) -> tuple[int, float, float]:
-            import agent_core.storage_store.json_io as json_io
+            import agent_core.storage.json_io as json_io
 
             await asyncio.gather(
                 *(runStorageIo(lambda: None) for _ in range(STORAGE_IO_MAX_WORKERS))
@@ -169,7 +169,7 @@ asyncio.run(main())
 
     def test_cancelled_atomic_write_settles_worker_before_cancellation(self):
         async def exercise(path: Path) -> None:
-            import agent_core.storage_store.json_io as json_io
+            import agent_core.storage.json_io as json_io
 
             original = json_io._write_json_file_sync
             started = threading.Event()
@@ -196,7 +196,7 @@ asyncio.run(main())
 
     def test_cancelled_lock_open_closes_handle_and_releases_process_lock(self):
         async def exercise(path: Path) -> None:
-            import agent_core.storage_store.json_io as json_io
+            import agent_core.storage.json_io as json_io
 
             original = json_io._open_lock_handle
             started = threading.Event()

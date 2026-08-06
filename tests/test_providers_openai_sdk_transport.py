@@ -34,7 +34,7 @@ class OpenAISdkTransportTests(AgentCoreTestCase):
                 self.chat = SimpleNamespace(completions=FakeChatCompletions())
 
         with mock.patch(
-            "agent_core.providers.openai_parts.transport.importlib.import_module",
+            "agent_core.providers.openai.transport.importlib.import_module",
             return_value=SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
         ):
             response = run(

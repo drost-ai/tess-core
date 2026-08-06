@@ -11,7 +11,7 @@ from pathlib import Path
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
 
-sessions_module = importlib.import_module("agent_core.storage_store.sessions")
+sessions_module = importlib.import_module("agent_core.storage.sessions")
 projection_module = importlib.import_module("agent_core.tasks.supervisor_parts.projection")
 
 

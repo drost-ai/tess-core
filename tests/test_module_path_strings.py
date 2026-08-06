@@ -13,7 +13,7 @@ PACKAGE = ROOT / "agent_core"
 # mock.patch targets, and daemon process-table probes. Import rewriting cannot
 # see these, so a module move silently breaks them at runtime instead of at
 # import time -- which is exactly how it presents: a child process that exits 1.
-MODULE_PATH_IN_STRING = re.compile(r"agent_core\.([a-z_][a-z_0-9]*)")
+MODULE_PATH_IN_STRING = re.compile(r"agent_core((?:\.[a-z_][a-z_0-9]*)+)")
 
 SEARCH_ROOTS = ("agent_core", "tests", "agent_core_harness")
 
@@ -27,6 +27,28 @@ def _top_level_names() -> set[str]:
     return names
 
 
+def _resolves(segments: list[str]) -> bool:
+    """Walk a dotted path across the package tree.
+
+    Trailing segments that are attributes rather than modules are fine -- the
+    walk stops as soon as it reaches a ``.py`` module. It only reports failure
+    when a segment is missing while its parent is still a *package directory*,
+    which is what a stale module path looks like.
+    """
+    here = PACKAGE
+    for index, segment in enumerate(segments):
+        if (here / f"{segment}.py").is_file():
+            return True  # reached a module; the rest are attributes
+        # A directory only counts as a package if it still has an __init__.py:
+        # a leftover __pycache__ keeps the directory alive after a move and
+        # would otherwise make every stale path look resolvable.
+        if (here / segment / "__init__.py").is_file():
+            here = here / segment
+            continue
+        return index > 0 and not (here / "__init__.py").is_file()
+    return True
+
+
 def _legacy_aliases() -> set[str]:
     text = (PACKAGE / "__init__.py").read_text(encoding="utf-8")
     block = text.split("_LEGACY_MODULE_ALIASES = {")[1].split("}")[0]
@@ -35,7 +57,9 @@ def _legacy_aliases() -> set[str]:
 
 class ModulePathStringTests(unittest.TestCase):
     def test_module_paths_written_as_strings_still_resolve(self):
-        resolvable = _top_level_names() | _legacy_aliases()
+        # Only legacy aliases short-circuit: current names are checked by
+        # walking the tree, so a stale *deep* path is caught too.
+        resolvable = _legacy_aliases()
         offenders: list[str] = []
         for base in SEARCH_ROOTS:
             for path in sorted((ROOT / base).rglob("*.py")):
@@ -46,11 +70,14 @@ class ModulePathStringTests(unittest.TestCase):
                     if stripped.startswith(("from ", "import ")):
                         continue  # a real import; the interpreter checks these
                     for match in MODULE_PATH_IN_STRING.finditer(line):
-                        name = match.group(1)
-                        if name in FILE_SUFFIXES:
+                        segments = match.group(1).lstrip(".").split(".")
+                        if segments[0] in FILE_SUFFIXES:
                             continue
-                        if name not in resolvable:
-                            offenders.append(f"{path.relative_to(ROOT)}:{number}: agent_core.{name}")
+                        if segments[0] in resolvable:
+                            continue  # a legacy alias resolves via sys.modules
+                        if _resolves(segments):
+                            continue
+                        offenders.append(f"{path.relative_to(ROOT)}:{number}: agent_core.{'.'.join(segments)}")
         self.assertEqual([], offenders)
 
 

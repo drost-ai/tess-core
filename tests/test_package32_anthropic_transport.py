@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-import agent_core.providers.anthropic_parts.request as anthropic_request_module
+import agent_core.providers.anthropic.request as anthropic_request_module
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
-from agent_core.providers.anthropic_parts.sse import normalizeAnthropicSseResponse
+from agent_core.providers.anthropic.sse import normalizeAnthropicSseResponse
 from agent_core.runtime.paths import resolveRuntimePaths
 from agent_core.providers.usage_costs import estimateUsageCost
 

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from tests.support.agent_core_case import *
 
-from agent_core.providers.anthropic_parts.payloads import planAnthropicCacheBreakpoints
+from agent_core.providers.anthropic.payloads import planAnthropicCacheBreakpoints
 from agent_core.providers.provider_prompt_cache import resolvePromptCachePreparation
 from agent_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,

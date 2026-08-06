@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-from agent_core.daemon_runtime.security import DaemonSecurityError
+from agent_core.daemon.security import DaemonSecurityError
 
 
 class TaskSupervisorLifecycleTests(AgentCoreTestCase):

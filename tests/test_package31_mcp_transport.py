@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.mcp_runtime.sse_decoder import McpSseDecoder, parseSseEvents
-from agent_core.mcp_runtime.stdio_decoder import McpStdioFrameDecoder
-from agent_core.mcp_runtime.stdio_transport import StdioMcpClient
-from agent_core.mcp_runtime.transport_policy import (
+from agent_core.mcp.sse_decoder import McpSseDecoder, parseSseEvents
+from agent_core.mcp.stdio_decoder import McpStdioFrameDecoder
+from agent_core.mcp.stdio_transport import StdioMcpClient
+from agent_core.mcp.transport_policy import (
     MCP_FRAME_MAX_BYTES,
     MCP_HEADER_MAX_BYTES,
     MCP_PENDING_REQUEST_MAX,
     MCP_SSE_EVENT_MAX_BYTES,
     McpTransportError,
 )
-from agent_core.mcp_runtime.transport_shared import BoundedNotificationQueue
+from agent_core.mcp.transport_shared import BoundedNotificationQueue
 
 
 def _stdio_config(name: str, mode: str, server: Path, **overrides):
