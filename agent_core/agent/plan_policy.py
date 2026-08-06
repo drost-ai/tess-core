@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from .cancellation import _safe_emit
+from .shared import PLAN_SAFE_TOOL_NAMES
+
 from collections.abc import Callable
 from typing import Any, Literal
 
@@ -66,3 +69,47 @@ def _bounded_text(value: Any, fallback: str) -> str:
         return fallback
     sanitized = "".join(character for character in value.strip() if character >= " " and character != "\x7f")
     return sanitized.encode("utf-8")[:256].decode("utf-8", errors="ignore") or fallback
+
+
+async def plan_mode_denial(
+    *,
+    tool: Any,
+    tool_use: dict[str, Any],
+    runtime: dict[str, Any],
+    config: dict[str, Any],
+    session: dict[str, Any],
+) -> str | None:
+    """Denial message if the tool is unavailable while plan approval is required."""
+    is_mcp_candidate = bool(tool and getattr(tool, "mcp", None) is not None) or str(tool_use["name"]).startswith("mcp__")
+    if is_mcp_candidate:
+        if tool is None:
+            verdict = {"decision": "block", "reason": "unresolved_target"}
+            server, mcp_tool_name = "unknown", "unknown"
+        else:
+            verdict = await resolve_plan_mode_mcp_verdict(
+                tool=tool,
+                repository_identity=str(
+                    runtime.get("repositoryIdentity")
+                    or config.get("repositoryIdentity")
+                    or session.get("cwd")
+                    or ""
+                ),
+                resolve_operator_policy=runtime.get("resolveMcpOperatorPolicy")
+                or runtime.get("resolve_mcp_operator_policy"),
+            )
+            server, mcp_tool_name = bounded_mcp_identity(tool)
+        event_name = "plan.mcp_tool_allowed" if verdict["decision"] == "allow" else "plan.mcp_tool_blocked"
+        _safe_emit(
+            runtime,
+            event_name,
+            {"server": server, "tool": mcp_tool_name, "reason": verdict["reason"]},
+        )
+        if verdict["decision"] != "allow":
+            return (
+                f"MCP tool {server}/{mcp_tool_name} is blocked while plan approval is required "
+                f"({verdict['reason']})."
+            )
+        return None
+    if tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
+        return f"{tool_use['name']} is not available while plan approval is still required."
+    return None

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+import agent_core.agent.checkpoints as agent_checkpoints_module
+import agent_core.agent.context as agent_context_module
 
 from agent_core.agent.context_budget import assessContextHeadroom
 from agent_core.providers.activity import ProviderActivityEmitter
@@ -240,8 +242,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
 
     def test_oversized_rebuilt_request_fails_closed_after_one_generation(self):
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_module.measureRequestInputTokens
-        original_compact = agent_module.runCompaction
+        original_measure = agent_context_module.measureRequestInputTokens
+        original_compact = agent_checkpoints_module.runCompaction
         try:
             config = run(
                 core.resolveConfig(
@@ -294,8 +296,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                 provider_calls += 1
                 raise AssertionError("oversized request must not dispatch")
 
-            agent_module.measureRequestInputTokens = measure
-            agent_module.runCompaction = compact
+            agent_context_module.measureRequestInputTokens = measure
+            agent_checkpoints_module.runCompaction = compact
             with self.assertRaises(core.ProviderRequestError) as raised:
                 run(
                     core.runAgentPrompt(
@@ -310,8 +312,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             self.assertEqual(compact_calls, 1)
             self.assertEqual(provider_calls, 0)
         finally:
-            agent_module.measureRequestInputTokens = original_measure
-            agent_module.runCompaction = original_compact
+            agent_context_module.measureRequestInputTokens = original_measure
+            agent_checkpoints_module.runCompaction = original_compact
             self.restore_home(root, previous)
 
     def test_headroom_degraded_is_typed_and_requires_output_safety(self):

@@ -16,7 +16,7 @@ from ..providers.timeouts import createTurnDeadlineContext
 from ..session.persistence import persistSession
 from ..context.token_accounting import recordActualTokenUsage
 from ..providers.usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
-from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled
+from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled, _safe_emit
 from .context import isContextWindowFailure, prepareProviderRequest
 from .providers import _create_provider, _record_provider_failure_if_needed
 from .shared import (
@@ -260,14 +260,3 @@ async def completeEmptyProviderResponse(args: dict[str, Any]) -> dict[str, Any] 
     }
 
 
-def _safe_emit(runtime: dict[str, Any], event: str, data: dict[str, Any]) -> None:
-    try:
-        runtime.get("emitEvent", lambda *_: None)(event, data)
-    except Exception:
-        pass
-
-
-request_provider_response = requestProviderResponse
-is_empty_assistant_response = isEmptyAssistantResponse
-add_empty_response_continuation_nudge = addEmptyResponseContinuationNudge
-complete_empty_provider_response = completeEmptyProviderResponse

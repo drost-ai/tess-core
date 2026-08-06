@@ -8,6 +8,7 @@ from typing import Any
 
 import agent_core as core
 import agent_core.agent as agent_module
+import agent_core.agent.context as agent_context_module
 
 from .context_fixtures import ContextLimitFallbackClient, ScriptedCompactionClient, build_context_messages, retrieved_memory_payload
 from .model import ScenarioAssertionError
@@ -180,7 +181,7 @@ def assert_context_runtime_state(state: dict[str, Any], data: dict[str, Any]) ->
 
 
 async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, Any], *, cancel: bool) -> dict[str, Any]:
-    original_measure = agent_module.measureRequestInputTokens
+    original_measure = agent_context_module.measureRequestInputTokens
     config = state.get("config") or await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": "bypassPermissions"}, str(sandbox.workspace))
     session = core.createEmptySession(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
     session["messages"] = build_context_messages("plain", 22, "/tmp/workspace")
@@ -209,7 +210,7 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
         return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
 
     try:
-        agent_module.measureRequestInputTokens = fake_measure
+        agent_context_module.measureRequestInputTokens = fake_measure
         result = await core.runAgentPrompt(
             session=session,
             config=config,
@@ -225,7 +226,7 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
             providerOverride={"send": send},
         )
     finally:
-        agent_module.measureRequestInputTokens = original_measure
+        agent_context_module.measureRequestInputTokens = original_measure
     return {
         "driver": "run_reactive_context_cancellation" if cancel else "run_reactive_context_retry",
         "status": "passed",

@@ -3,7 +3,20 @@ from __future__ import annotations
 import hashlib
 import json
 
-from .shared import *
+import re
+from ..config import normalizeEffortForModel
+from ..context.continuation import buildContinuationContext
+from ..context.token_accounting import (
+    measureRequestInputTokens,
+    recordPreflightTokenMeasurement,
+)
+from ..providers.errors import isProviderRequestError
+from ..providers.token_budget import computeProviderTokenBudget, resolveCompactionPolicy
+from ..session.persistence import persistSession
+from .cancellation import _now, _safe_emit
+from .shared import modelSupportsImageInputs, requestHasImageInputs
+from .usage import _apply_plan_mode_overlay
+from typing import Any
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
 from .context_budget import (
     applyProviderTokenBudget as _apply_provider_token_budget,
@@ -17,7 +30,7 @@ from ..context.request_preflight import (
     preflightEventPayload as _preflight_event_payload,
 )
 # Retained as a compatibility export from this module; dynamic_context owns use.
-from ..providers.prompt_cache import resolvePromptCachePolicy
+
 from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
 from .dynamic_context import (
     dynamicContextBelongsInMessages as _dynamic_context_belongs_in_messages,

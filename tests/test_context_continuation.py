@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+import agent_core.agent.context as agent_context_module
 
 
 class ContextContinuationTests(AgentCoreTestCase):
@@ -199,7 +200,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_module.measureRequestInputTokens
+        original_measure = agent_context_module.measureRequestInputTokens
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
@@ -230,7 +231,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                     )
                 return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
 
-            agent_module.measureRequestInputTokens = fake_measure
+            agent_context_module.measureRequestInputTokens = fake_measure
             result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "recovered")
@@ -243,14 +244,14 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefReactiveAttempt"], 1)
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefKind"], "circuit_breaker")
         finally:
-            agent_module.measureRequestInputTokens = original_measure
+            agent_context_module.measureRequestInputTokens = original_measure
             self.restore_home(root, previous)
 
     def test_agent_prompt_cancels_while_rebuilding_reactive_relief_request(self):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_module.measureRequestInputTokens
+        original_measure = agent_context_module.measureRequestInputTokens
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
@@ -287,7 +288,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                     )
                 )
 
-            agent_module.measureRequestInputTokens = fake_measure
+            agent_context_module.measureRequestInputTokens = fake_measure
             result = run(
                 core.runAgentPrompt(
                     session=session,
@@ -305,5 +306,5 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.assertTrue(any(event == "turn.cancelled" for event, _ in events))
             self.assertFalse(any(event == "provider.failed" for event, _ in events))
         finally:
-            agent_module.measureRequestInputTokens = original_measure
+            agent_context_module.measureRequestInputTokens = original_measure
             self.restore_home(root, previous)

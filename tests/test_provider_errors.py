@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+import agent_core.agent.provider_turn as agent_provider_turn_module
 
 
 class ProviderErrorTests(AgentCoreTestCase):
@@ -191,7 +192,7 @@ class ProviderErrorTests(AgentCoreTestCase):
             "providerProfile": {"name": "codex", "kind": "openai", "auth": {"envVar": "OPENAI_API_KEY"}},
             "openaiToken": None,
         }
-        openai_response = agent_module._create_provider(openai_config, {})["send"](request)
+        openai_response = agent_provider_turn_module._create_provider(openai_config, {})["send"](request)
         self.assertEqual(
             openai_response["content"][0]["text"],
             "No credential is configured for provider profile 'codex'. Set OPENAI_API_KEY, provide a Codex auth file, or run `tess auth login --openai` for official OpenAI access.",
@@ -206,7 +207,7 @@ class ProviderErrorTests(AgentCoreTestCase):
             "apiKey": None,
             "authToken": None,
         }
-        anthropic_response = agent_module._create_provider(anthropic_config, {})["send"]({**request, "model": "claude-sonnet-4-6"})
+        anthropic_response = agent_provider_turn_module._create_provider(anthropic_config, {})["send"]({**request, "model": "claude-sonnet-4-6"})
         self.assertEqual(
             anthropic_response["content"][0]["text"],
             "No credential is configured for provider profile 'anthropic-claude-code'. Set ANTHROPIC_AUTH_TOKEN or run `tess auth login` to enable model-backed responses.",

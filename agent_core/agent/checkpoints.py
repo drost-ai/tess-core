@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from .shared import *
+from ..context.compaction import runCompaction, shouldAutoCompact
+from ..context.context_policy import decideDurableCheckpoint
+from ..providers.errors import isProviderRequestError
+from ..providers.token_budget import resolveCompactionPolicy
+from ..session.persistence import persistProviderFailure, persistSession
+from .cancellation import _now, _safe_emit
+from typing import Any
 from ..context.compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
 from ..context.compaction_models import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
 

@@ -3,9 +3,38 @@ import time as _time
 import typing as _typing
 if _typing.TYPE_CHECKING:
     from ..contracts.context import ToolContext
-from .shared import *
-from .plan_policy import bounded_mcp_identity as _bounded_mcp_identity
-from .plan_policy import resolve_plan_mode_mcp_verdict as _resolve_plan_mode_mcp_verdict
+import copy
+from .._utils import maybe_await, merge_usage
+from ..config import filterToolsByPolicy
+from ..context.token_accounting import recordActualTokenUsage
+from ..session.persistence import (
+    persistProviderRecovery,
+    persistSession,
+    repairSessionTranscript,
+)
+from ..subagents.reconciliation import (
+    appendPendingSubagentReconciliationsToSession,
+    consumeAppendedSubagentReconciliations,
+)
+from .cancellation import (
+    _capture_session_rollback,
+    _is_turn_abort_error,
+    _is_turn_cancelled,
+    _now,
+    _restore_session_state,
+    _safe_emit,
+    _throw_if_turn_cancelled,
+)
+from .shared import PLAN_SAFE_TOOL_NAMES
+from .usage import (
+    _ensure_usage_totals,
+    _estimate_usage_cost,
+    _merge_usage_into_session,
+    _requires_plan_approval,
+    _round_usd,
+)
+from typing import Any
+from .plan_policy import plan_mode_denial as _plan_mode_denial
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit
 from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
 from .prompt_content import extractAssistantText as extractAssistantText, normalize_agent_prompt as _normalize_agent_prompt
@@ -326,46 +355,13 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     rejected=True,
                 )
             if _requires_plan_approval(session):
-                is_mcp_candidate = bool(tool and getattr(tool, "mcp", None) is not None) or str(tool_use["name"]).startswith("mcp__")
-                if is_mcp_candidate:
-                    if tool is None:
-                        verdict = {"decision": "block", "reason": "unresolved_target"}
-                        server, mcp_tool_name = "unknown", "unknown"
-                    else:
-                        verdict = await _resolve_plan_mode_mcp_verdict(
-                            tool=tool,
-                            repository_identity=str(
-                                runtime.get("repositoryIdentity")
-                                or config.get("repositoryIdentity")
-                                or session.get("cwd")
-                                or ""
-                            ),
-                            resolve_operator_policy=runtime.get("resolveMcpOperatorPolicy")
-                            or runtime.get("resolve_mcp_operator_policy"),
-                        )
-                        server, mcp_tool_name = _bounded_mcp_identity(tool)
-                    event_name = "plan.mcp_tool_allowed" if verdict["decision"] == "allow" else "plan.mcp_tool_blocked"
-                    _safe_emit(
-                        runtime,
-                        event_name,
-                        {"server": server, "tool": mcp_tool_name, "reason": verdict["reason"]},
-                    )
-                    if verdict["decision"] != "allow":
-                        message = (
-                            f"MCP tool {server}/{mcp_tool_name} is blocked while plan approval is required "
-                            f"({verdict['reason']})."
-                        )
-                        return await finish_tool_result(
-                            tool_use,
-                            {"kind": "synthesized", "content": message, "isError": True},
-                            blocked_by_plan_contract=True,
-                            rejected=True,
-                        )
-                elif tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
-                    message = f"{tool_use['name']} is not available while plan approval is still required."
+                denial = await _plan_mode_denial(
+                    tool=tool, tool_use=tool_use, runtime=runtime, config=config, session=session
+                )
+                if denial is not None:
                     return await finish_tool_result(
                         tool_use,
-                        {"kind": "synthesized", "content": message, "isError": True},
+                        {"kind": "synthesized", "content": denial, "isError": True},
                         blocked_by_plan_contract=True,
                         rejected=True,
                     )

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+import agent_core.agent.context as agent_context_module
+import agent_core.agent.checkpoints as agent_checkpoints_module
 
 
 class ContextCompactionTests(AgentCoreTestCase):
@@ -329,8 +331,8 @@ class ContextCompactionTests(AgentCoreTestCase):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_module.measureRequestInputTokens
-        original_run_compaction = agent_module.runCompaction
+        original_measure = agent_context_module.measureRequestInputTokens
+        original_run_compaction = agent_checkpoints_module.runCompaction
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
@@ -380,8 +382,8 @@ class ContextCompactionTests(AgentCoreTestCase):
 
             def openai_factory(_options):
                 return SimpleNamespace()
-            agent_module.measureRequestInputTokens = fake_measure
-            agent_module.runCompaction = fake_run_compaction
+            agent_context_module.measureRequestInputTokens = fake_measure
+            agent_checkpoints_module.runCompaction = fake_run_compaction
             result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "done")
@@ -394,15 +396,15 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 1_000 for event, data in events))
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastCompactionMode"], "full_checkpoint_compaction")
         finally:
-            agent_module.measureRequestInputTokens = original_measure
-            agent_module.runCompaction = original_run_compaction
+            agent_context_module.measureRequestInputTokens = original_measure
+            agent_checkpoints_module.runCompaction = original_run_compaction
             self.restore_home(root, previous)
 
     def test_raw_session_checkpoint_runs_before_request_relief(self):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_run_compaction = agent_module.runCompaction
+        original_run_compaction = agent_checkpoints_module.runCompaction
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
@@ -437,8 +439,8 @@ class ContextCompactionTests(AgentCoreTestCase):
                     "artifacts": {"summary": "summary.md", "state": "state.json", "workingContext": "working-context.json", "checkpoint": "checkpoint.json"},
                 }
 
-            agent_module.runCompaction = fake_run_compaction
-            result = run(agent_module.maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}}))
+            agent_checkpoints_module.runCompaction = fake_run_compaction
+            result = run(agent_context_module.maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}}))
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(len(compaction_calls), 1)
@@ -450,5 +452,5 @@ class ContextCompactionTests(AgentCoreTestCase):
             started = next(data for event, data in events if event == "compaction.started")
             self.assertEqual(started["current_token_source"], "raw_session_estimate")
         finally:
-            agent_module.runCompaction = original_run_compaction
+            agent_checkpoints_module.runCompaction = original_run_compaction
             self.restore_home(root, previous)

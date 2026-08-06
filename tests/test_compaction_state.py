@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 
 from tests.support.agent_core_case import *
+import agent_core.agent.loop as agent_loop_module
 
 from agent_core.context.compaction_state import refreshCompactionStateFromManifest
 
@@ -53,7 +54,7 @@ class CompactionStateTests(AgentCoreTestCase):
             "lastCompactionMode": "full_checkpoint_compaction",
         }
 
-        agent_module._restore_session_state(session, snapshot)
+        agent_loop_module._restore_session_state(session, snapshot)
 
         self.assertEqual(session["metadata"]["compactionState"]["latestCompactionGeneration"], 2)
         self.assertEqual(session["metadata"]["compactions"], 2)
