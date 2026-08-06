@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from tests.support.agent_core_case import *
-from agent_core.persisted_record_scanner import (
+from agent_core.session.persisted_record_scanner import (
     DEFAULT_MAX_SCAN_BYTES,
     DEFAULT_MAX_SCAN_ENTRIES,
     DEFAULT_READ_CONCURRENCY,

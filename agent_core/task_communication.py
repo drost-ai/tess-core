@@ -16,7 +16,7 @@ from .storage import (
     writeJsonFile,
 )
 from .storage_store.json_io import mutateJsonLines, readJsonLines
-from .session import persistSession
+from .session.persistence import persistSession
 from .message_origin import syntheticUserMessage as _synthetic_user_message
 
 

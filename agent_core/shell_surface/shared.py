@@ -58,7 +58,7 @@ from ..storage import (
     saveSettings,
     saveMonitor,
 )
-from ..transcript import buildTranscriptSnapshot
+from ..session.transcript import buildTranscriptSnapshot
 
 AVAILABLE_TUI_THEMES = ["tess", "copper", "ocean", "forest"]
 PERMISSION_MODE_ORDER = ["acceptEdits", "bypassPermissions", "default", "dontAsk", "plan", "auto"]

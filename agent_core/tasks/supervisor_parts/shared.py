@@ -18,7 +18,7 @@ from ...process_identity import (
     signalOwnedProcess,
     verifyOwnedProcessIdentity,
 )
-from ...persisted_record_scanner import getPersistedRecordIssue, listPersistedRecordIssues
+from ...session.persisted_record_scanner import getPersistedRecordIssue, listPersistedRecordIssues
 from ...storage import (
     ensureBaseLayout,
     hasPersistableSessionMessages,

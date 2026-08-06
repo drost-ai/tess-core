@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..runtime.identifiers import parseSessionId
-from ..session_message_history import (
+from ..session.message_history import (
     SessionMessageList,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )

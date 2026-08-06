@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import agent_core as core
-from agent_core.session_fork import SESSION_FORK_METADATA_DISPOSITIONS
+from agent_core.session.fork import SESSION_FORK_METADATA_DISPOSITIONS
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 

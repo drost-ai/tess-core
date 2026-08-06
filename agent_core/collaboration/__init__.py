@@ -9,7 +9,7 @@ from typing import Any
 from .._utils import maybe_await, packageExports as _package_exports
 from . import updates as _collaboration_updates
 from .updates import *
-from ..session import persistSession
+from ..session.persistence import persistSession
 from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
 from ..runtime.paths import runWithRuntimePaths

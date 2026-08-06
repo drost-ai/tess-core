@@ -10,7 +10,7 @@ from ..persistence_metrics import (
     recordPersistenceIo as _record_persistence_io,
 )
 from ..runtime.identifiers import RuntimeIdentifierError, parseSessionId
-from ..session_message_history import (
+from ..session.message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )

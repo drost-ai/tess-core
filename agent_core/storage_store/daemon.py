@@ -3,8 +3,8 @@ from __future__ import annotations
 import contextlib as _contextlib
 
 from .shared import *
-from ..persisted_record_scanner import readPersistedJsonRecord
-from ..persisted_record_validation import isDaemonStateRecord
+from ..session.persisted_record_scanner import readPersistedJsonRecord
+from ..session.persisted_record_validation import isDaemonStateRecord
 
 DAEMON_EVENTS_TAIL_BYTES = 64 * 1024
 DAEMON_EVENTS_ROTATE_BYTES = 32 * 1024 * 1024

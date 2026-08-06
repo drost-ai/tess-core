@@ -12,8 +12,8 @@ from ..agent_loop import runAgentPrompt
 from ..agent_runtime_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
 from ..config import resolveConfig
 from ..runtime.bootstrap import bootstrapRuntime
-from ..session import resolveSession
-from ..session_runtime import activeSessionPayload
+from ..session.persistence import resolveSession
+from ..session.runtime import activeSessionPayload
 from ..storage import scopedRuntimeHome, writeBackSessionV1
 from .stream import JsonStreamSink
 

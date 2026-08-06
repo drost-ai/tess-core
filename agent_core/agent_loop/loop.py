@@ -11,7 +11,7 @@ from .provider_turn import completeEmptyProviderResponse as _complete_empty_prov
 from .prompt_content import extractAssistantText as extractAssistantText, normalize_agent_prompt as _normalize_agent_prompt
 from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, appendToolResultBatch as _append_tool_result_batch, noProgressEventData as _no_progress_event_data, noProgressTurnResult as _no_progress_turn_result
 from .stable_boundary import finish_stable_boundary as _finish_stable_boundary
-from ..session_message_history import replaceSessionMessagesWithPersistedCanonical as _replace_session_messages_with_persisted_canonical
+from ..session.message_history import replaceSessionMessagesWithPersistedCanonical as _replace_session_messages_with_persisted_canonical
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
 from .tool_hooks import run_post_tool_hook as _run_post_tool_hook
 from .tool_hooks import run_pre_tool_hook as _run_pre_tool_hook

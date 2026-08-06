@@ -8,7 +8,7 @@ from typing import Any, Callable
 from .._media_persistence import sanitizeMediaForPersistence as _sanitize_media
 from ..message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ..runtime.identifiers import parseSessionId
-from ..session_message_history import (
+from ..session.message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )

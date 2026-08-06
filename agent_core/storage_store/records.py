@@ -18,8 +18,8 @@ from ..runtime.identifiers import (
     tryParseMonitorId,
     tryParseTaskId,
 )
-from ..persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
-from ..persisted_record_validation import (
+from ..session.persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
+from ..session.persisted_record_validation import (
     isChildAgentRecord,
     isHealthCheckTaskRecord,
     isMonitorRecord,

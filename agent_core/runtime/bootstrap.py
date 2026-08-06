@@ -23,7 +23,7 @@ from .support import StagedRuntimeSource as _StagedRuntimeSource, acquireCommit 
 from .support import callMethod as _call_method, closeMany as _close_many, daemonSnapshotPayload as _daemon_snapshot_payload, getMethod as _get_method, hasMethod as _has_method
 from .support import installComponentSurface as _install_component_surface, maybeCall as _maybe_call, runtimePathGraphId as _path_graph_id, taskSnapshotFromState as _task_snapshot_from_state
 from .state import createInitialRuntimeState, createRuntimeStateStore
-from ..session_runtime import createSessionRuntimeController
+from ..session.runtime import createSessionRuntimeController
 from ..storage import configureRuntimeHome, registerStorageLockObserver
 from ..task_runtime import createTaskRuntime
 from ..tools import createBuiltinTools

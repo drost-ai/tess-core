@@ -5,7 +5,7 @@ from dataclasses import dataclass as _dataclass
 from .shared import *
 from .._compaction_state import isCompactionStateNewer as _is_compaction_state_newer
 from ..tool_attachments import stripInMemoryImageData as _strip_in_memory_image_data
-from ..session_message_history import createSessionMessageList as _create_session_message_list
+from ..session.message_history import createSessionMessageList as _create_session_message_list
 
 
 @_dataclass(frozen=True)

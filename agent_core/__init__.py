@@ -31,8 +31,8 @@ from .runtime.secrets import *
 from .runtime.events import *
 from .runtime.state import *
 from .sandbox import *
-from .session import *
-from .session_runtime import *
+from .session.persistence import *
+from .session.runtime import *
 from .shell import *
 from .shell_command_policy import *
 from .storage import *
@@ -75,6 +75,8 @@ from .providers.openai import *
 _LEGACY_MODULE_ALIASES = {
     "collaboration_updates": "agent_core.collaboration.updates",
     "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
+    "persisted_record_scanner": "agent_core.session.persisted_record_scanner",
+    "persisted_record_validation": "agent_core.session.persisted_record_validation",
     "remote": "agent_core.collaboration.remote",
     "runtime_bootstrap": "agent_core.runtime.bootstrap",
     "runtime_events": "agent_core.runtime.events",
@@ -86,6 +88,9 @@ _LEGACY_MODULE_ALIASES = {
     "runtime_session_components": "agent_core.runtime.session_components",
     "runtime_state": "agent_core.runtime.state",
     "runtime_support": "agent_core.runtime.support",
+    "session_fork": "agent_core.session.fork",
+    "session_message_history": "agent_core.session.message_history",
+    "session_runtime": "agent_core.session.runtime",
     "subagent_capacity": "agent_core.subagents.capacity",
     "subagent_continuation": "agent_core.subagents.continuation",
     "subagent_continuation_recovery": "agent_core.subagents.continuation_recovery",
@@ -98,6 +103,7 @@ _LEGACY_MODULE_ALIASES = {
     "subagent_reconciliation_renderer": "agent_core.subagents.reconciliation_renderer",
     "subagent_reconciliation_store": "agent_core.subagents.reconciliation_store",
     "subagent_result": "agent_core.subagents.result",
+    "transcript": "agent_core.session.transcript",
 }
 
 

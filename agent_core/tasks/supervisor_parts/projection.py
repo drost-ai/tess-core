@@ -176,7 +176,7 @@ async def _sync_projected_task_metadata(session: dict[str, Any], records: list[d
     metadata["runtimeRestore"] = restore
     # Observer projection is bookkeeping, not semantic session activity.
     # Import locally to avoid a package initialization cycle.
-    from ...session import persistSession
+    from ...session.persistence import persistSession
 
     if hasPersistableSessionMessages(session):
         await persistSession(session, {"sessionPersistence": True}, touch=False)
