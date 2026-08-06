@@ -1,6 +1,56 @@
 from __future__ import annotations
 
-from .shared import *
+import asyncio
+import contextlib
+import json
+import os
+import signal
+import uuid
+from typing import Any
+
+from .._utils import now_iso
+from ..storage import (
+    appendDaemonEvent,
+    daemonPidPath,
+    daemonSocketPath,
+    daemonStatePath,
+    ensureBaseLayout,
+    getStateRoot,
+    loadDaemonState,
+    readLastDaemonEventCursor,
+    rotateDaemonEventsIfOversized,
+    saveDaemonState,
+    withRecordTransaction,
+)
+from ..tasks.supervisor import createTaskSupervisor
+from .events import (
+    _publish_daemon_event,
+    _record_daemon_lifecycle_event,
+    _replay_daemon_events,
+    _send_bootstrap_snapshots,
+)
+from .lifecycle import (
+    _cleanup_stale_daemon_artifacts,
+    _daemon_instance_wait_ms,
+    _is_process_alive,
+)
+from .protocol import DAEMON_PROTOCOL_VERSION
+from .requests import _handle_daemon_request, _normalise_daemon_method
+from .security import (
+    DaemonSecurityError,
+    daemonAuthTokenPath,
+    generateDaemonAuthMaterial,
+    prepareDaemonRuntimeSecurity,
+    publishDaemonAuthMaterial,
+    removeDaemonAuthMaterialIfOwned,
+    verifyOwnedDaemonSocket,
+)
+from .transport import (
+    AuthenticatedDaemonServer,
+    DaemonAbortSignal,
+    DaemonServerPeer,
+    createAuthenticatedDaemonServer,
+)
 
 
 async def runTaskSupervisorDaemon(cwd: str) -> None:
@@ -226,14 +276,6 @@ async def _rotate_daemon_events_periodically(shutdown: asyncio.Event) -> None:
             await asyncio.wait_for(shutdown.wait(), timeout=5 * 60)
         except asyncio.TimeoutError:
             await rotateDaemonEventsIfOversized()
-
-
-def _daemon_instance_wait_ms() -> int:
-    try:
-        value = int(os.environ.get("AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS") or 5_000)
-    except ValueError:
-        value = 5_000
-    return min(30_000, max(100, value))
 
 
 def _inject_daemon_boot_fault(stage: str) -> None:

@@ -1,6 +1,28 @@
 from __future__ import annotations
 
-from .shared import *
+import asyncio
+import contextlib
+import socket
+import threading
+import uuid
+from typing import Any, Callable
+
+from .protocol import (
+    DAEMON_MAX_PENDING_PER_CLIENT,
+    DAEMON_MAX_REQUEST_FRAME_BYTES,
+    DAEMON_MAX_RESPONSE_FRAME_BYTES,
+    DAEMON_PROTOCOL_VERSION,
+    DaemonLineDecoder,
+    DaemonProtocolError,
+    encodeDaemonFrame,
+    isDaemonAuthResponse,
+    isDaemonEventMessage,
+    isDaemonResponse,
+    parseDaemonFrame,
+    resolveDaemonAuthTimeoutMs,
+    resolveDaemonRpcTimeoutMs,
+)
+from .transport import openAuthenticatedDaemonConnection, readOneDaemonFrame
 
 
 def _create_daemon_client(

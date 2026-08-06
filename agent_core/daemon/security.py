@@ -1,10 +1,37 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hashlib
+import json
+import os
+import re
 import secrets
+import socket
 import stat
+import uuid
+from pathlib import Path
+from typing import Any
 
-from .shared import *
+from ..storage import (
+    daemonLogsDir,
+    daemonSocketPath,
+    daemonStatePath,
+    getDaemonDir,
+    getStateRoot,
+)
+from .protocol import DAEMON_PROTOCOL_VERSION
+
+def _is_process_alive(pid: int) -> bool:
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
 
 
 PRIVATE_DIRECTORY_MODE = 0o700

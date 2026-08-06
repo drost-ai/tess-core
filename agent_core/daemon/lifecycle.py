@@ -1,15 +1,44 @@
 from __future__ import annotations
 
-from .shared import *
-from .._utils import maybe_await
-from .client import _normalise_subscribe_args
-from .events import (
-    _collaboration_snapshot_payload,
-    _event_matches_session,
-    _make_snapshot_record,
-    _monitor_snapshot_payload,
-    _task_snapshot_payload,
+import asyncio
+import contextlib
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from .._utils import now_iso
+from ..storage import (
+    appendDaemonEvent,
+    clearDaemonState,
+    daemonLogsDir,
+    daemonSocketPath,
+    ensureBaseLayout,
+    getDaemonDir,
+    getStateRoot,
+    loadDaemonState,
+    saveDaemonState,
+    withRecordTransaction,
 )
+from ..tasks.supervisor import createTaskSupervisor
+from .client import _create_daemon_client
+from .protocol import DaemonProtocolError
+from .security import (
+    DaemonSecurityError,
+    _is_process_alive,
+    prepareDaemonRuntimeSecurity,
+    readDaemonAuthMaterial,
+    removeDaemonAuthMaterialIfOwned,
+    removeInactiveOwnedDaemonSocket,
+    removeOwnedDaemonAuthMaterial,
+    verifyPrivateDaemonRuntime,
+)
+from .in_process import _install_in_process_subscription_parity
 
 
 _SUPERVISOR: dict[str, Any] | None = None
@@ -222,71 +251,6 @@ async def _ensure_in_process_supervisor(cwd: str) -> dict[str, Any]:
     return _SUPERVISOR
 
 
-def _install_in_process_subscription_parity(supervisor: dict[str, Any]) -> None:
-    live_subscribe = supervisor["subscribe"]
-
-    def subscribe(*args: Any, **kwargs: Any):
-        listener, session_id, after_cursor = _normalise_subscribe_args(args, kwargs)
-        unsubscribe_live = live_subscribe(listener, session_id)
-        release_attachment = supervisor["addAttachment"](session_id)
-        replay_task: asyncio.Task[Any] | None = None
-
-        async def replay() -> None:
-            records = await loadDaemonEvents()
-            for record in records:
-                cursor = record.get("cursor")
-                if isinstance(cursor, int) and cursor <= (after_cursor or 0):
-                    continue
-                if _event_matches_session(record, session_id):
-                    await maybe_await(listener(record))
-            if not session_id:
-                return
-            bootstrap = await supervisor["getBootstrap"](session_id)
-            next_cursor = max(
-                [record.get("cursor", 0) for record in records if isinstance(record.get("cursor"), int)],
-                default=0,
-            )
-            snapshots = (
-                ("task.snapshot", _task_snapshot_payload(session_id, bootstrap.get("taskSnapshot") or {})),
-                ("monitor.snapshot", _monitor_snapshot_payload(session_id, bootstrap.get("monitorSnapshot") or {})),
-                ("collaboration.snapshot", _collaboration_snapshot_payload(bootstrap.get("collaborationSnapshot") or {})),
-            )
-            for event_name, data in snapshots:
-                next_cursor += 1
-                await maybe_await(
-                    listener(
-                        _make_snapshot_record(
-                            next_cursor,
-                            session_id,
-                            event_name,
-                            data,
-                        )
-                    )
-                )
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(replay())
-        else:
-            replay_task = loop.create_task(replay())
-        unsubscribed = False
-
-        def unsubscribe() -> None:
-            nonlocal unsubscribed
-            if unsubscribed:
-                return
-            unsubscribed = True
-            if replay_task is not None and not replay_task.done():
-                replay_task.cancel()
-            unsubscribe_live()
-            release_attachment()
-
-        return unsubscribe
-
-    supervisor["subscribe"] = subscribe
-
-
 async def _spawn_detached_daemon(cwd: str) -> subprocess.Popen[Any]:
     global _DAEMON_PROCESS
     await ensureBaseLayout(cwd)
@@ -460,13 +424,9 @@ def _local_supervisor_fallback() -> dict[str, Any] | None:
     return _SUPERVISOR if _SUPERVISOR and not _SUPERVISOR.get("_daemonClient") else None
 
 
-def _is_process_alive(pid: int) -> bool:
-    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
-        return False
+def _daemon_instance_wait_ms() -> int:
     try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
+        value = int(os.environ.get("AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS") or 5_000)
+    except ValueError:
+        value = 5_000
+    return min(30_000, max(100, value))

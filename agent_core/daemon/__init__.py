@@ -1,48 +1,123 @@
+"""Task-supervisor daemon: lifecycle, wire protocol, transport, security.
 
+The facade re-exports exactly the public names its submodules define.
+"""
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
-from importlib import import_module
+from .lifecycle import (
+    connectTaskSupervisorDaemonClient,
+    ensureTaskSupervisorDaemon,
+    getTaskSupervisorDaemonState,
+    stopTaskSupervisorDaemon,
+)
+from .protocol import (
+    DAEMON_AUTH_TIMEOUT_MS,
+    DAEMON_MAX_PENDING_GLOBAL,
+    DAEMON_MAX_PENDING_PER_CLIENT,
+    DAEMON_MAX_REQUEST_FRAME_BYTES,
+    DAEMON_MAX_REQUEST_IDS_PER_CONNECTION,
+    DAEMON_MAX_REQUEST_ID_BYTES,
+    DAEMON_MAX_RESPONSE_FRAME_BYTES,
+    DAEMON_PROTOCOL_VERSION,
+    DAEMON_RPC_TIMEOUT_MS,
+    DaemonLineDecoder,
+    DaemonProtocolError,
+    boundedProtocolDiagnostic,
+    daemonTokensEqual,
+    encodeDaemonFrame,
+    isDaemonAuthRequest,
+    isDaemonAuthResponse,
+    isDaemonEventMessage,
+    isDaemonResponse,
+    parseDaemonFrame,
+    parseDaemonRequest,
+    resolveDaemonAuthTimeoutMs,
+    resolveDaemonRpcTimeoutMs,
+)
+from .security import (
+    DaemonSecurityError,
+    MAX_DAEMON_STATE_BYTES,
+    MAX_DAEMON_TOKEN_BYTES,
+    MAX_DAEMON_TREE_DEPTH,
+    MAX_DAEMON_TREE_ENTRIES,
+    PRIVATE_DIRECTORY_MODE,
+    PRIVATE_FILE_MODE,
+    createDaemonAuthMaterial,
+    daemonAuthTokenPath,
+    daemonTokenId,
+    generateDaemonAuthMaterial,
+    isDaemonSocketListenerActive,
+    prepareDaemonRuntimeSecurity,
+    publishDaemonAuthMaterial,
+    readDaemonAuthMaterial,
+    removeDaemonAuthMaterialIfOwned,
+    removeInactiveOwnedDaemonSocket,
+    removeOwnedDaemonAuthMaterial,
+    verifyOwnedDaemonSocket,
+    verifyPrivateDaemonRuntime,
+)
+from .server import runTaskSupervisorDaemon
+from .transport import (
+    AuthenticatedDaemonServer,
+    DaemonAbortSignal,
+    DaemonServerPeer,
+    createAuthenticatedDaemonServer,
+    openAuthenticatedDaemonConnection,
+    readOneDaemonFrame,
+)
 
-_MODULE_NAMES = [
-    'shared',
-    'events',
-    'protocol',
-    'security',
-    'transport',
-    'requests',
-    'client',
-    'lifecycle',
-    'server',
+__all__ = [
+    "AuthenticatedDaemonServer",
+    "DAEMON_AUTH_TIMEOUT_MS",
+    "DAEMON_MAX_PENDING_GLOBAL",
+    "DAEMON_MAX_PENDING_PER_CLIENT",
+    "DAEMON_MAX_REQUEST_FRAME_BYTES",
+    "DAEMON_MAX_REQUEST_IDS_PER_CONNECTION",
+    "DAEMON_MAX_REQUEST_ID_BYTES",
+    "DAEMON_MAX_RESPONSE_FRAME_BYTES",
+    "DAEMON_PROTOCOL_VERSION",
+    "DAEMON_RPC_TIMEOUT_MS",
+    "DaemonAbortSignal",
+    "DaemonLineDecoder",
+    "DaemonProtocolError",
+    "DaemonSecurityError",
+    "DaemonServerPeer",
+    "MAX_DAEMON_STATE_BYTES",
+    "MAX_DAEMON_TOKEN_BYTES",
+    "MAX_DAEMON_TREE_DEPTH",
+    "MAX_DAEMON_TREE_ENTRIES",
+    "PRIVATE_DIRECTORY_MODE",
+    "PRIVATE_FILE_MODE",
+    "boundedProtocolDiagnostic",
+    "connectTaskSupervisorDaemonClient",
+    "createAuthenticatedDaemonServer",
+    "createDaemonAuthMaterial",
+    "daemonAuthTokenPath",
+    "daemonTokenId",
+    "daemonTokensEqual",
+    "encodeDaemonFrame",
+    "ensureTaskSupervisorDaemon",
+    "generateDaemonAuthMaterial",
+    "getTaskSupervisorDaemonState",
+    "isDaemonAuthRequest",
+    "isDaemonAuthResponse",
+    "isDaemonEventMessage",
+    "isDaemonResponse",
+    "isDaemonSocketListenerActive",
+    "openAuthenticatedDaemonConnection",
+    "parseDaemonFrame",
+    "parseDaemonRequest",
+    "prepareDaemonRuntimeSecurity",
+    "publishDaemonAuthMaterial",
+    "readDaemonAuthMaterial",
+    "readOneDaemonFrame",
+    "removeDaemonAuthMaterialIfOwned",
+    "removeInactiveOwnedDaemonSocket",
+    "removeOwnedDaemonAuthMaterial",
+    "resolveDaemonAuthTimeoutMs",
+    "resolveDaemonRpcTimeoutMs",
+    "runTaskSupervisorDaemon",
+    "stopTaskSupervisorDaemon",
+    "verifyOwnedDaemonSocket",
+    "verifyPrivateDaemonRuntime",
 ]
-
-_modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
-_namespace = {}
-for _module in _modules:
-    for _name, _value in vars(_module).items():
-        if not _name.startswith("__"):
-            _namespace[_name] = _value
-for _module in _modules:
-    vars(_module).update(_namespace)
-globals().update(_namespace)
-
-_PUBLIC_EXPORTS = ['Any', 'Callable', 'Path', 'annotations', 'appendDaemonEvent', 'asyncio', 'clearDaemonState', 'connectTaskSupervisorDaemonClient', 'contextlib', 'createTaskSupervisor', 'daemonLogsDir', 'daemonPidPath', 'daemonSocketPath', 'ensureBaseLayout', 'ensureTaskSupervisorDaemon', 'getStateRoot', 'getTaskSupervisorDaemonState', 'json', 'loadDaemonEvents', 'loadDaemonState', 'now_iso', 'os', 'runTaskSupervisorDaemon', 'saveDaemonState', 'signal', 'socket', 'stopTaskSupervisorDaemon', 'subprocess', 'sys', 'threading', 'uuid']
-__all__ = _PUBLIC_EXPORTS
-
-
-def __dir__():
-    return sorted(_PUBLIC_EXPORTS)
-
-
-class _DaemonRuntimeModule(_types.ModuleType):
-    def __setattr__(self, name, value):
-        super().__setattr__(name, value)
-        if name.startswith("__"):
-            return
-        for module in _modules:
-            if name in vars(module):
-                setattr(module, name, value)
-
-
-_sys.modules[__name__].__class__ = _DaemonRuntimeModule

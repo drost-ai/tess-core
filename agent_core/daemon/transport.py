@@ -1,6 +1,29 @@
 from __future__ import annotations
 
-from .shared import *
+import asyncio
+import contextlib
+import uuid
+from typing import Any, Callable
+
+from .protocol import (
+    DAEMON_MAX_PENDING_GLOBAL,
+    DAEMON_MAX_PENDING_PER_CLIENT,
+    DAEMON_MAX_REQUEST_FRAME_BYTES,
+    DAEMON_MAX_REQUEST_IDS_PER_CONNECTION,
+    DAEMON_MAX_RESPONSE_FRAME_BYTES,
+    DAEMON_PROTOCOL_VERSION,
+    DaemonLineDecoder,
+    DaemonProtocolError,
+    boundedProtocolDiagnostic,
+    daemonTokensEqual,
+    encodeDaemonFrame,
+    isDaemonAuthRequest,
+    isDaemonAuthResponse,
+    parseDaemonFrame,
+    parseDaemonRequest,
+    resolveDaemonAuthTimeoutMs,
+    resolveDaemonRpcTimeoutMs,
+)
 
 
 _DAEMON_CLOSE_GRACE_SECONDS = 0.25

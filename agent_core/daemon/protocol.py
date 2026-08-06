@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hmac
-
-from .shared import *
+import json
+import os
+from typing import Any
 
 
 DAEMON_PROTOCOL_VERSION = 2
