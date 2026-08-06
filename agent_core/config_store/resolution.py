@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..contracts.config import ResolvedConfig
-from ..runtime_secret_provider import (
+from ..runtime.secret_provider import (
     normalizeCompactionProviderSecrets,
     normalizeProviderHeaders,
     normalizeRuntimeSecretValue,

@@ -6,7 +6,7 @@ from ..partial_output_state import (
     finalizePartialOutputState as _finalize_partial_output_state,
 )
 from ..provider_timeouts import resolveProviderTimeoutPolicy
-from ..runtime_secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolveProviderConfigSecrets
 
 
 async def _record_provider_failure_if_needed(

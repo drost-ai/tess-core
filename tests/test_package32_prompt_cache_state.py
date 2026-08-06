@@ -19,7 +19,7 @@ from agent_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
     buildPromptCacheRequestSnapshot,
 )
-from agent_core.runtime_paths import (
+from agent_core.runtime.paths import (
     configureActiveRuntimePaths,
     resetActiveRuntimePaths,
     resolveRuntimePaths,

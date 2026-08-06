@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from .._utils import now_iso as now_iso
+from ..._utils import now_iso as now_iso
 
 KNOWN_RUNTIME_EVENTS = {
     "system.init",

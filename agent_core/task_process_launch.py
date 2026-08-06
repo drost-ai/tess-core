@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable, Mapping
 
 from ._utils import now_iso
 from .process_identity import ProcessIdentityError, captureOwnedProcessIdentity, signalOwnedProcess
-from .runtime_identifiers import parseSessionId, parseTaskId
+from .runtime.identifiers import parseSessionId, parseTaskId
 
 
 @dataclass(slots=True)

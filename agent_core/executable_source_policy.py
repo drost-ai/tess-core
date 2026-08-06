@@ -18,7 +18,7 @@ from .repository_trust import (
     resolveRepositoryIdentity,
 )
 from .storage_store.json_io import resolveMaybeRelative
-from .runtime_secrets import assertNoLiteralMcpSecrets, migrateLegacyMcpServerSecrets
+from .runtime.secrets import assertNoLiteralMcpSecrets, migrateLegacyMcpServerSecrets
 from .storage_store.settings import loadMcpServers, loadPlugins, saveMcpServers
 
 

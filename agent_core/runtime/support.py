@@ -5,9 +5,9 @@ import hashlib
 import threading
 from typing import Any, Callable, Mapping
 
-from ._utils import maybe_await
-from .config import getDefaultToolList
-from .runtime_paths import RuntimePaths
+from .._utils import maybe_await
+from ..config import getDefaultToolList
+from .paths import RuntimePaths
 
 
 class StagedRuntimeSource:

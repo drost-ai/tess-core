@@ -5,8 +5,8 @@ import threading
 from typing import Any, Callable
 
 from .supervisor import _is_active_task_status, _project_session_task_records, _task_record_event_payload
-from ..runtime_identifiers import tryParseTaskId
-from ..runtime_paths import runWithRuntimePaths
+from ..runtime.identifiers import tryParseTaskId
+from ..runtime.paths import runWithRuntimePaths
 from ..storage import saveTaskRecord  # retained as a compatibility export
 from .terminal_store import saveProjectedTaskRecord as _save_projected_task_record
 

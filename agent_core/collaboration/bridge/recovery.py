@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from ..._utils import now_iso
 from .recovery_analysis import analyzeBridgeRecovery
-from ...runtime_identifiers import parseBridgeId, parseSessionId
+from ...runtime.identifiers import parseBridgeId, parseSessionId
 from ...storage import (
     getStateRoot,
     loadSessionRecordShallow,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ..runtime_secrets import resolveMcpServerConfigSecrets
+from ..runtime.secrets import resolveMcpServerConfigSecrets
 
 
 async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

@@ -18,7 +18,7 @@ from ..provider_timeouts import DEFAULT_TOKEN_COUNT_TIMEOUT_MS as _DEFAULT_TOKEN
 from ..provider_watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
-from ..runtime_secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolveProviderConfigSecrets
 
 DEFAULT_ESTIMATE_MARGIN_TOKENS = 2000
 MAX_CODEX_ERROR_SAMPLES = 12

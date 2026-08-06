@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
-from .runtime_secrets import isRuntimeSecretRef
+from .runtime.secrets import isRuntimeSecretRef
 
 
 LEGACY_UPDATED_AT = "1970-01-01T00:00:00.000Z"

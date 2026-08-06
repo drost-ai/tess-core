@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-from agent_core.runtime_secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
-from agent_core.runtime_secrets import isRuntimeSecretRef
+from agent_core.runtime.secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
+from agent_core.runtime.secrets import isRuntimeSecretRef
 
 
 class ConfigProfileTests(AgentCoreTestCase):

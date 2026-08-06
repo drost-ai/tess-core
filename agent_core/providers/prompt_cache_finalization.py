@@ -6,7 +6,7 @@ from typing import Any
 
 from .prompt_cache import resolvePromptCachePolicy
 from ..prompt_cache_state import markPromptCacheEvictionIntent
-from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths
+from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths
 
 
 _TERMINAL_SUCCESS_REASONS = {"end_turn", "stop", "completed"}

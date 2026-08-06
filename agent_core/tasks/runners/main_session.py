@@ -10,7 +10,7 @@ from typing import Any
 from ...agent import runAgentPrompt
 from ...agent_runtime_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
-from ...runtime_generation import createRuntimeSessionBinding
+from ...runtime.generation import createRuntimeSessionBinding
 from ...storage import configureRuntimeHome, loadSession, saveSession
 from ...tools import createBuiltinTools
 

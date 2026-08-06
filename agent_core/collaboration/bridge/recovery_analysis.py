@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ...runtime_identifiers import parseSessionId, tryParseBridgeId, tryParseRemoteSessionId
+from ...runtime.identifiers import parseSessionId, tryParseBridgeId, tryParseRemoteSessionId
 from ...storage import (
     getStateRoot,
     hydrateSessionHeadFromBodyBytes,

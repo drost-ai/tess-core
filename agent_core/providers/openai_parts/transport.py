@@ -22,7 +22,7 @@ def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
 
 
 def _assert_openai_transport_secrets(args: dict[str, Any]) -> None:
-    from ...runtime_secrets import RuntimeSecretError
+    from ...runtime.secrets import RuntimeSecretError
 
     token = args.get("token")
     headers = args.get("headers") or {}

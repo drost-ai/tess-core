@@ -224,7 +224,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_lock_timeout_event_name_is_known(self):
-        from agent_core.runtime_event_parts.shared import KNOWN_RUNTIME_EVENTS
+        from agent_core.runtime.event_parts.shared import KNOWN_RUNTIME_EVENTS
 
         self.assertIn("storage.lock_timeout", KNOWN_RUNTIME_EVENTS)
 

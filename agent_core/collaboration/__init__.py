@@ -11,8 +11,8 @@ from . import updates as _collaboration_updates
 from .updates import *
 from ..session import persistSession
 from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
-from ..runtime_generation import createRuntimeSessionBinding, sameRuntimeBinding
-from ..runtime_paths import runWithRuntimePaths
+from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
+from ..runtime.paths import runWithRuntimePaths
 
 MIN_ASSISTANT_UPDATE_SPACING_MS = 20_000
 COLLABORATION_TICK_MS = 1_500

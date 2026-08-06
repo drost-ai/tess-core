@@ -17,7 +17,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
-from .storage_store.paths import getStateRoot
+from ..storage_store.paths import getStateRoot
 
 
 SECRET_STORE_VERSION = 1

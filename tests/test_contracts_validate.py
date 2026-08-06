@@ -237,25 +237,25 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_runtime_event_names_match_known_events(self) -> None:
         from agent_core.contracts.events import RuntimeEventName
-        from agent_core.runtime_event_parts.shared import KNOWN_RUNTIME_EVENTS
+        from agent_core.runtime.event_parts.shared import KNOWN_RUNTIME_EVENTS
 
         self.assertEqual(self._literal_values(RuntimeEventName), set(KNOWN_RUNTIME_EVENTS))
 
     def test_context_relief_modes_match_runtime(self) -> None:
         from agent_core.contracts.events import ContextReliefMode
-        from agent_core.runtime_event_parts.shared import _CONTEXT_RELIEF_MODES
+        from agent_core.runtime.event_parts.shared import _CONTEXT_RELIEF_MODES
 
         self.assertEqual(self._literal_values(ContextReliefMode), set(_CONTEXT_RELIEF_MODES))
 
     def test_task_statuses_match_runtime(self) -> None:
         from agent_core.contracts.records import TaskStatus
-        from agent_core.runtime_event_parts.shared import _TASK_STATUSES
+        from agent_core.runtime.event_parts.shared import _TASK_STATUSES
 
         self.assertEqual(self._literal_values(TaskStatus), set(_TASK_STATUSES))
 
     def test_task_kinds_match_runtime(self) -> None:
         from agent_core.contracts.records import TaskKind
-        from agent_core.runtime_event_parts.shared import _TASK_KINDS
+        from agent_core.runtime.event_parts.shared import _TASK_KINDS
 
         self.assertEqual(self._literal_values(TaskKind), set(_TASK_KINDS))
 
@@ -266,7 +266,7 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(self._literal_values(PermissionMode), set(PERMISSION_MODES))
 
     def test_created_runtime_event_envelope_validates_strict(self) -> None:
-        from agent_core.runtime_events import createRuntimeEvent
+        from agent_core.runtime.events import createRuntimeEvent
 
         envelope = createRuntimeEvent(
             {"event": "task.updated", "data": {"task_id": "t-1", "session_id": "s-1"}}

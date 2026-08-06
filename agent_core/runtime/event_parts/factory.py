@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..contracts.events import RuntimeEventEnvelope
+from ...contracts.events import RuntimeEventEnvelope
 
 from .shared import *
 

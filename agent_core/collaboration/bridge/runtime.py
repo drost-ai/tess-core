@@ -11,7 +11,7 @@ from ..._utils import now_iso
 from .admission import admitBridgeMessage
 from .generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
 from .recovery import activateBridgeGeneration
-from ...runtime_paths import getActiveRuntimePaths, runWithRuntimePaths
+from ...runtime.paths import getActiveRuntimePaths, runWithRuntimePaths
 from ...storage import (
     loadSessionRecordShallow,
     saveSession,

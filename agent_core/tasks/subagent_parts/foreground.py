@@ -155,7 +155,7 @@ async def _execute_foreground_subagent(args: dict[str, Any], prepared: dict[str,
     from ...agent import runAgentPrompt
 
     from ...agent_runtime_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
-    from ...runtime_generation import createRuntimeSessionBinding
+    from ...runtime.generation import createRuntimeSessionBinding
 
     daemon = context.get("daemon")
     runtime = createAgentRuntimeBindings({

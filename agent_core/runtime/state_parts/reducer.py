@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..contracts.events import event_kind, event_payload, event_time
+from ...contracts.events import event_kind, event_payload, event_time
 
 from .compaction import reduceCompactionHeadroom
 from .shared import *

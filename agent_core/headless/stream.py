@@ -4,7 +4,7 @@ import json
 from typing import Any, TextIO
 
 from .._media_persistence import sanitizeMediaForPersistence
-from ..runtime_events import createRuntimeEvent
+from ..runtime.events import createRuntimeEvent
 
 
 class JsonStreamSink:

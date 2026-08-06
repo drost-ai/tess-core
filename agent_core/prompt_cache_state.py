@@ -16,8 +16,8 @@ from .providers.prompt_cache_diagnostics import (
     MAX_RESPONSE_ID_BYTES,
     diagnosePromptCache,
 )
-from .runtime_identifiers import parseSessionId
-from .runtime_paths import RuntimePaths, runWithRuntimePaths
+from .runtime.identifiers import parseSessionId
+from .runtime.paths import RuntimePaths, runWithRuntimePaths
 from .storage import withRecordTransaction
 
 

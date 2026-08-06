@@ -3,7 +3,7 @@ from __future__ import annotations
 from .shared import *
 from ..executable_config import parseMcpServerConfigList
 from ..executable_source_policy import loadSelectedMcpServers, parseSettingSources
-from ..runtime_secrets import assertNoLiteralMcpSecrets
+from ..runtime.secrets import assertNoLiteralMcpSecrets
 
 def _parse_setting_sources(raw: str | None) -> list[str]:
     return parseSettingSources(raw)

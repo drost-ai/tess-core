@@ -11,7 +11,7 @@ from typing import Any, Sequence, TextIO
 from ..agent_loop import runAgentPrompt
 from ..agent_runtime_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
 from ..config import resolveConfig
-from ..runtime import bootstrapRuntime
+from ..runtime.bootstrap import bootstrapRuntime
 from ..session import resolveSession
 from ..session_runtime import activeSessionPayload
 from ..storage import scopedRuntimeHome, writeBackSessionV1

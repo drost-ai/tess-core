@@ -5,13 +5,13 @@ import os
 from pathlib import Path
 
 import agent_core as core
-from agent_core.lifecycle_barrier import (
+from agent_core.runtime.lifecycle_barrier import (
     LifecycleCloseTimeoutError,
     LifecycleClosedError,
     constructWithRollback,
     createLifecycleBarrier,
 )
-from agent_core.runtime_paths import (
+from agent_core.runtime.paths import (
     getActiveRuntimePaths,
     resolveRuntimePaths,
     runWithRuntimePaths,

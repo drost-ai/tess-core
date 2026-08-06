@@ -3,7 +3,7 @@ from __future__ import annotations
 from .shared import *
 from ..persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
 from ..persisted_record_validation import isBridgeRecord, isRemoteSessionRecord
-from ..runtime_identifiers import (
+from ..runtime.identifiers import (
     RuntimeIdentifierError,
     parseBridgeId,
     parseRemoteSessionId,

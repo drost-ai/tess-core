@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from agent_core.prompt_cache_state import commitPromptCacheObservation
-from agent_core.runtime_paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolveRuntimePaths
 
 
 async def main() -> None:

@@ -11,7 +11,7 @@ from .executable_config import *
 from .executable_source_policy import *
 from .fetch_proxy import *
 from .hooks import *
-from .lifecycle_barrier import *
+from .runtime.lifecycle_barrier import *
 from .mcp import *
 from .monitors import *
 from .platform import *
@@ -23,13 +23,13 @@ from .provider_errors import *
 from .provider_activity import *
 from .collaboration.remote import *
 from .repository_trust import *
-from .runtime import *
-from .runtime_generation import *
-from .runtime_paths import *
-from .runtime_identifiers import *
-from .runtime_secrets import *
-from .runtime_events import *
-from .runtime_state import *
+from .runtime.bootstrap import *
+from .runtime.generation import *
+from .runtime.paths import *
+from .runtime.identifiers import *
+from .runtime.secrets import *
+from .runtime.events import *
+from .runtime.state import *
 from .sandbox import *
 from .session import *
 from .session_runtime import *
@@ -74,7 +74,18 @@ from .providers.openai import *
 # monkeypatching a name onto the legacy path all behave exactly as before.
 _LEGACY_MODULE_ALIASES = {
     "collaboration_updates": "agent_core.collaboration.updates",
+    "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
     "remote": "agent_core.collaboration.remote",
+    "runtime_bootstrap": "agent_core.runtime.bootstrap",
+    "runtime_events": "agent_core.runtime.events",
+    "runtime_generation": "agent_core.runtime.generation",
+    "runtime_identifiers": "agent_core.runtime.identifiers",
+    "runtime_paths": "agent_core.runtime.paths",
+    "runtime_secret_provider": "agent_core.runtime.secret_provider",
+    "runtime_secrets": "agent_core.runtime.secrets",
+    "runtime_session_components": "agent_core.runtime.session_components",
+    "runtime_state": "agent_core.runtime.state",
+    "runtime_support": "agent_core.runtime.support",
     "subagent_capacity": "agent_core.subagents.capacity",
     "subagent_continuation": "agent_core.subagents.continuation",
     "subagent_continuation_recovery": "agent_core.subagents.continuation_recovery",

@@ -10,7 +10,7 @@ from ..provider_timeouts import resolveProviderTimeoutPolicy
 from ..provider_token_budget import resolveCompactionPolicy
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import DEFAULT_CODEX_BASE_URL, getOpenAiProviderLabel, sendOpenAiRequest
-from ..runtime_secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
 from ..storage import loadCodexAuthToken
 
 

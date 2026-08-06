@@ -49,7 +49,7 @@ def buildAnthropicHeaders(
     options: dict[str, Any] | None = None,
     features: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    from ...runtime_secret_provider import assertProviderConfigSecretsResolved
+    from ...runtime.secret_provider import assertProviderConfigSecretsResolved
 
     config = assertProviderConfigSecretsResolved(config)
     options = options or {}
@@ -85,7 +85,7 @@ def buildAnthropicHeaders(
 def buildAnthropicBetaHeader(
     config: dict[str, Any], features: dict[str, Any] | None = None
 ) -> str:
-    from ...runtime_secret_provider import assertProviderConfigSecretsResolved
+    from ...runtime.secret_provider import assertProviderConfigSecretsResolved
 
     config = assertProviderConfigSecretsResolved(config)
     features = features or {}

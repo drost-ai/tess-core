@@ -14,7 +14,7 @@ from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, saveSession
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...tools import createBuiltinTools
-from ...runtime_generation import createRuntimeSessionBinding
+from ...runtime.generation import createRuntimeSessionBinding
 
 
 async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:

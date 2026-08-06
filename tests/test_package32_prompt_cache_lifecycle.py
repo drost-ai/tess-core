@@ -12,7 +12,7 @@ from agent_core.providers.prompt_cache_finalization import (
     isPromptCacheEvictionTerminalSuccess,
     recordPromptCacheEvictionIntentAtFinalization,
 )
-from agent_core.runtime_paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolveRuntimePaths
 
 
 class PromptCacheLifecycleTests(AgentCoreTestCase):

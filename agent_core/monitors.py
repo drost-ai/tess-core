@@ -21,7 +21,7 @@ from .tasks.monitor_transactions import (
 )
 from .providers.anthropic import sendAnthropicMessagesRequest
 from .providers.openai import sendOpenAiRequest
-from .runtime_secret_provider import resolveProviderConfigSecrets
+from .runtime.secret_provider import resolveProviderConfigSecrets
 from .session import persistSession
 from .storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 from .usage_costs import mergeUsageIntoSession as _merge_usage_into_session

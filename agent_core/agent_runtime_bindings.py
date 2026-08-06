@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
-from .runtime_generation import RuntimeSessionBinding, createRuntimeSessionBinding
+from .runtime.generation import RuntimeSessionBinding, createRuntimeSessionBinding
 from .partial_output import (
     assertPartialOutputSink as _assert_partial_output_sink,
     assertPartialOutputStateStore as _assert_partial_output_state_store,

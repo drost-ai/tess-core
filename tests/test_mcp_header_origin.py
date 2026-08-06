@@ -9,7 +9,7 @@ from pathlib import Path
 
 import agent_core as core
 from agent_core.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
-from agent_core.runtime_secrets import authorizeRuntimeSecretWrite, storeRuntimeSecret
+from agent_core.runtime.secrets import authorizeRuntimeSecretWrite, storeRuntimeSecret
 
 
 class _Server:

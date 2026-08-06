@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 import agent_core as core
-from agent_core.runtime_secret_provider import resolveProviderConfigSecrets
-from agent_core.runtime_secrets import (
+from agent_core.runtime.secret_provider import resolveProviderConfigSecrets
+from agent_core.runtime.secrets import (
     RuntimeSecretError,
     authorizeRuntimeSecretWrite,
     isRuntimeSecretRef,

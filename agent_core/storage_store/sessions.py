@@ -9,7 +9,7 @@ from ..persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
 )
-from ..runtime_identifiers import RuntimeIdentifierError, parseSessionId
+from ..runtime.identifiers import RuntimeIdentifierError, parseSessionId
 from ..session_message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,

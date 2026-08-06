@@ -3,9 +3,9 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable, Mapping
 
-from ._utils import maybe_await
-from .exception_groups import RuntimeExceptionGroup
-from .executable_source_policy import selectMcpBootstrapServers
+from .._utils import maybe_await
+from ..exception_groups import RuntimeExceptionGroup
+from ..executable_source_policy import selectMcpBootstrapServers
 
 
 async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, Any]:

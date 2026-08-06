@@ -5,7 +5,7 @@ import hashlib
 import re
 from typing import Any, Iterable, Mapping
 
-from .runtime_secrets import (
+from .secrets import (
     RuntimeSecretError,
     authorizeRuntimeSecretWrite,
     isRuntimeSecretRef,

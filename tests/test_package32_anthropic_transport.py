@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 import agent_core.providers.anthropic_parts.request as anthropic_request_module
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
 from agent_core.providers.anthropic_parts.sse import normalizeAnthropicSseResponse
-from agent_core.runtime_paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolveRuntimePaths
 from agent_core.usage_costs import estimateUsageCost
 
 

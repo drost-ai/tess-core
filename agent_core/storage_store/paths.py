@@ -4,8 +4,8 @@ import hashlib
 import tempfile
 
 from .shared import *
-from ..runtime_identifiers import parseArtifactId, parseSessionId
-from ..runtime_paths import (
+from ..runtime.identifiers import parseArtifactId, parseSessionId
+from ..runtime.paths import (
     RuntimePaths,
     RuntimePathsScope,
     configureActiveRuntimePaths,

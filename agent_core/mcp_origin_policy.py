@@ -6,7 +6,7 @@ from urllib.error import HTTPError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from .runtime_secrets import resolveMcpServerConfigSecrets
+from .runtime.secrets import resolveMcpServerConfigSecrets
 
 
 class McpResourceResponse:

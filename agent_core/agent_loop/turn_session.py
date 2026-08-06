@@ -14,7 +14,7 @@ from ..config import (
     resolveFallbackProviderProfileName,
 )
 from ..provider_turn_session import createProviderTurnSession
-from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
+from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from .._transient_input import (
     createTransientExecutionSession,
     syncTransientExecutionSession,

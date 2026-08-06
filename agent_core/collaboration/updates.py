@@ -6,7 +6,7 @@ from typing import Any
 from ..config import ensureProviderForModelSelection, normalizeEffortForModel
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
-from ..runtime_secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolveProviderConfigSecrets
 from ..usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 

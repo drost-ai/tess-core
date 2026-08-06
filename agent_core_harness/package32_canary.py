@@ -19,7 +19,7 @@ from agent_core.providers.anthropic_parts.payloads import (
     buildAnthropicMessagesEnvelope,
 )
 from agent_core.providers.anthropic_parts.request import sendAnthropicMessagesRequest
-from agent_core.runtime_paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolveRuntimePaths
 from agent_core.storage import ensureBaseLayout
 from agent_core.token_accounting import measureRequestInputTokens
 from agent_core.usage_costs import estimateUsageCost
