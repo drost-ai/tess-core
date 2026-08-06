@@ -102,21 +102,6 @@ async def completeSubagentReconciliationClaim(
     return completed
 
 
-async def releaseSubagentReconciliationClaim(parentSessionId: str, claimToken: str) -> None:
-    path = _reconciliations.subagentReconciliationLogPath(parentSessionId)
-    async with withSubagentCoordinationTransaction(parentSessionId):
-        records = await _reconciliations._read_records(path)
-        changed = False
-        next_records = []
-        for record in records:
-            claim = record.get("consumptionClaim") if isinstance(record.get("consumptionClaim"), dict) else {}
-            if not record.get("consumedAt") and claim.get("token") == claimToken:
-                record = {**record, "revision": _revision(record) + 1}
-                record.pop("consumptionClaim", None)
-                changed = True
-            next_records.append(record)
-        if changed:
-            await _reconciliations._write_records(path, _reconciliations._sort_records(next_records))
 
 
 async def listSubagentLaunchGroups(parentSessionId: str) -> list[dict[str, Any]]:
@@ -414,7 +399,6 @@ with_subagent_coordination_transaction = withSubagentCoordinationTransaction
 list_subagent_reconciliations = listSubagentReconciliations
 claim_unconsumed_subagent_reconciliations = claimUnconsumedSubagentReconciliations
 complete_subagent_reconciliation_claim = completeSubagentReconciliationClaim
-release_subagent_reconciliation_claim = releaseSubagentReconciliationClaim
 list_subagent_launch_groups = listSubagentLaunchGroups
 upsert_subagent_launch_group = upsertSubagentLaunchGroup
 claim_subagent_launch_group_continuation = claimSubagentLaunchGroupContinuation

@@ -57,8 +57,6 @@ async def upsertSubagentReconciliation(record: dict[str, Any]) -> dict[str, Any]
                     "parentMessageAppendedAt",
                     "parentMessageIndex",
                     "parentTurnId",
-                    "continuationRequestedAt",
-                    "continuationRunId",
                     "continuationStartedAt",
                     "continuationCompletedAt",
                     "continuationFailedAt",

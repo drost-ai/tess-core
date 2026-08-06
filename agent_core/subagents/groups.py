@@ -77,50 +77,8 @@ async def _upsert_subagent_launch_group(parentSessionId: str, group: dict[str, A
     return merged
 
 
-async def _mark_subagent_launch_group_continuation_requested(parentSessionId: str, groupId: str, *, prompt: str, runId: str) -> dict[str, Any] | None:
-    now = now_iso()
-    path = _subagent_launch_groups_path(parentSessionId)
-    async with withRecordTransaction("subagent-coordination", parentSessionId):
-        records = await _read_subagent_launch_groups(parentSessionId)
-        updated: dict[str, Any] | None = None
-        next_records = []
-        for record in records:
-            if record.get("id") == groupId:
-                updated = {
-                    **record,
-                    "continuationRequestedAt": record.get("continuationRequestedAt") or now,
-                    "continuationRunId": record.get("continuationRunId") or runId,
-                    "continuationPrompt": record.get("continuationPrompt") or prompt,
-                    "continuationAttemptCount": int(record.get("continuationAttemptCount") or 0) + 1,
-                    "updatedAt": now,
-                }
-                next_records.append(updated)
-            else:
-                next_records.append(record)
-        await _write_subagent_launch_groups(path, _sort_groups(next_records))
-    return updated
 
 
-async def _record_subagent_launch_group_continuation_task(parentSessionId: str, groupId: str, taskId: str, *, runId: str | None = None) -> dict[str, Any] | None:
-    now = now_iso()
-    path = _subagent_launch_groups_path(parentSessionId)
-    async with withRecordTransaction("subagent-coordination", parentSessionId):
-        records = await _read_subagent_launch_groups(parentSessionId)
-        updated: dict[str, Any] | None = None
-        next_records = []
-        for record in records:
-            if record.get("id") == groupId:
-                updated = {
-                    **record,
-                    "continuationTaskId": taskId,
-                    "continuationRunId": record.get("continuationRunId") or runId,
-                    "updatedAt": now,
-                }
-                next_records.append(updated)
-            else:
-                next_records.append(record)
-        await _write_subagent_launch_groups(path, _sort_groups(next_records))
-    return updated
 
 
 def _merge_group_record(current: dict[str, Any], group: dict[str, Any], parent_session_id: str, group_id: str, now: str) -> dict[str, Any]:

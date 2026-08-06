@@ -68,8 +68,8 @@ class SubagentContinuationEdgeTests(AgentCoreTestCase):
             )
             run(core.markSubagentReconciliationsConsumed(parent["id"], [record["id"]], parentMessageIndex=0, parentTurnId="turn-after-a"))
 
-            outcome = run(core.requestParentContinuationForReconciliations(parent["id"], waitFor="all"))
-            self.assertFalse(outcome["requested"])
+            records = run(core.listUnconsumedSubagentReconciliations(parent["id"]))
+            outcome = core.evaluateParentContinuationReadiness(records, {"waitFor": "all"})
             self.assertFalse(outcome["ready"])
             self.assertEqual(outcome["total"], 0)
             self.assertEqual(outcome["terminal"], 0)

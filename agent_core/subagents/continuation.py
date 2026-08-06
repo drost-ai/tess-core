@@ -7,9 +7,7 @@ from .._utils import now_iso
 from ..contracts.records import launch_task_id as _launch_task_id
 from ..storage import fileLock, loadSession, saveSession
 from .groups import (
-    _mark_subagent_launch_group_continuation_requested,
     _read_subagent_launch_groups,
-    _record_subagent_launch_group_continuation_task,
 )
 from .reconciliation import (
     TERMINAL_RECONCILIATION_STATUSES,
@@ -22,43 +20,6 @@ from .reconciliation import (
 )
 
 
-async def requestParentContinuationForReconciliations(
-    parentSessionId: str,
-    *,
-    waitFor: str = "manual",
-    prompt: str | None = None,
-    launchGroupId: str | None = None,
-) -> dict[str, Any]:
-    records = await readSubagentReconciliations(parentSessionId)
-    unconsumed_records = await listUnconsumedSubagentReconciliations(parentSessionId)
-    if launchGroupId:
-        records = [record for record in records if record.get("launchGroupId") == launchGroupId]
-        unconsumed_records = [record for record in unconsumed_records if record.get("launchGroupId") == launchGroupId]
-    readiness_records = records if launchGroupId else unconsumed_records
-    ready = evaluateParentContinuationReadiness(readiness_records, {"waitFor": waitFor})
-    if not ready["ready"]:
-        return {"requested": False, **ready}
-    requested_at = now_iso()
-    run_id = f"continuation-{uuid.uuid4()}"
-    path = subagentReconciliationLogPath(parentSessionId)
-    wanted = {record.get("id") for record in unconsumed_records if record.get("id")}
-    if not wanted:
-        return {"requested": False, **ready, "reason": "satisfied_intent"}
-    async with fileLock(path):
-        current = await _read_records(path)
-        next_records = []
-        for record in current:
-            if record.get("id") in wanted:
-                record = {
-                    **record,
-                    "continuationRequestedAt": record.get("continuationRequestedAt") or requested_at,
-                    "continuationRunId": record.get("continuationRunId") or run_id,
-                    "continuationPrompt": prompt or defaultParentContinuationPrompt(),
-                    "updatedAt": requested_at,
-                }
-            next_records.append(record)
-        await _write_records(path, _sort_records(next_records))
-    return {"requested": True, "continuationRunId": run_id, "recordIds": sorted(wanted), **ready}
 
 
 def evaluateParentContinuationReadiness(records: list[dict[str, Any]], policy: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -93,32 +54,6 @@ def evaluateParentContinuationReadiness(records: list[dict[str, Any]], policy: d
     return {"ready": terminal >= quorum, "reason": "quorum", "total": total, "terminal": terminal, "quorum": quorum}
 
 
-async def runParentContinuationFromReconciliations(
-    parentSessionId: str,
-    config: dict[str, Any],
-    runtime: dict[str, Any],
-    *,
-    prompt: str | None = None,
-    providerOverride: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    session = await loadSession(parentSessionId)
-    if not session:
-        raise RuntimeError(f"Parent session not found: {parentSessionId}")
-    _emit(runtime, "subagent.continuation.started", {"session_id": parentSessionId})
-    from ..agent import runAgentPrompt
-
-    result = await runAgentPrompt(
-        {
-            "session": session,
-            "config": config,
-            "runtime": runtime,
-            "prompt": prompt or defaultParentContinuationPrompt(),
-            "providerOverride": providerOverride,
-        }
-    )
-    await saveSession(session)
-    _emit(runtime, "subagent.continuation.completed", {"session_id": parentSessionId, "stop_reason": result.get("stopReason")})
-    return result
 
 
 def defaultParentContinuationPrompt() -> str:
@@ -281,6 +216,4 @@ def _emit(runtime: dict[str, Any] | None, event: str, payload: dict[str, Any]) -
 
 
 evaluate_parent_continuation_readiness = evaluateParentContinuationReadiness
-request_parent_continuation_for_reconciliations = requestParentContinuationForReconciliations
-run_parent_continuation_from_reconciliations = runParentContinuationFromReconciliations
 default_parent_continuation_prompt = defaultParentContinuationPrompt

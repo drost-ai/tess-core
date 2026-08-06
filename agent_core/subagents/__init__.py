@@ -8,8 +8,6 @@ from .capacity import ACTIVE_TASK_STATUSES, check_subagent_capacity, resolve_sub
 from .continuation import (
     defaultParentContinuationPrompt,
     evaluateParentContinuationReadiness,
-    requestParentContinuationForReconciliations,
-    runParentContinuationFromReconciliations,
 )
 from .continuation_recovery import LEGACY_CLAIM_GRACE_MS, TERMINAL_TASK_STATUSES, recoverSubagentLaunchGroupContinuations
 from .contract import (
@@ -29,7 +27,6 @@ from .coordination import (
     markSubagentLaunchGroupContinuationRunning,
     markSubagentLaunchGroupContinuationStarting,
     releaseSubagentLaunchGroupContinuationClaim,
-    releaseSubagentReconciliationClaim,
     upsertSubagentLaunchGroup,
     withSubagentCoordinationTransaction,
 )
@@ -127,16 +124,13 @@ __all__ = [
     "readSubagentReconciliations",
     "recoverSubagentLaunchGroupContinuations",
     "releaseSubagentLaunchGroupContinuationClaim",
-    "releaseSubagentReconciliationClaim",
     "renderSubagentReconciliationMessage",
-    "requestParentContinuationForReconciliations",
     "requireSubagentDepthAllowed",
     "resolveSubagentLaunchGroupId",
     "resolveSubagentMaxDepth",
     "resolve_subagent_concurrency_policy",
     "resolve_subagent_runtime_limits",
     "runForegroundSubagent",
-    "runParentContinuationFromReconciliations",
     "runtime_contract_for_agent",
     "sanitizePermissionMode",
     "shapeForegroundSubagentResult",
