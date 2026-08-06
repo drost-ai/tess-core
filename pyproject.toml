@@ -42,3 +42,6 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = "agent_core.contracts.*"
 ignore_errors = false
+
+[tool.pyright]
+typeCheckingMode = "standard"

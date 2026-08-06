@@ -21,6 +21,6 @@ class _PlatformModule(_types.ModuleType):
 
 _sys.modules[__name__].__class__ = _PlatformModule
 
-_parent = _sys.modules.get(__package__)
-if _parent is not None and hasattr(_parent, 'platform_support'):
-    delattr(_parent, 'platform_support')
+_parent = _sys.modules.get(__package__ or "")
+if _parent is not None and hasattr(_parent, "platform_support"):
+    delattr(_parent, "platform_support")

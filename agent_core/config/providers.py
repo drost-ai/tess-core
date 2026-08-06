@@ -318,6 +318,14 @@ def _resolve_provider_capabilities(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _default_image_input_capability(record: dict[str, Any]) -> bool:
+    for key in ("supportsVision", "supports_vision", "vision"):
+        if isinstance(record.get(key), bool):
+            return record[key]
+    capabilities = record.get("capabilities")
+    if isinstance(capabilities, dict):
+        for key in ("vision", "image_inputs", "imageInputs", "multimodal"):
+            if isinstance(capabilities.get(key), bool):
+                return capabilities[key]
     model = str(record.get("defaultModel") or "").strip().lower()
     if record.get("kind") == "anthropic":
         return model.startswith("claude-") and bool(re.search(r"(?:opus|sonnet|haiku)-4-|claude-4", model))
