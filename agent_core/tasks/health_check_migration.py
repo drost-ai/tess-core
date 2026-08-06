@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .health_check_record import _omit_none
+
 import base64
 import hashlib
 import json
@@ -187,13 +189,5 @@ def _missing_authority(
 def _bounded_reason(error: Any) -> str:
     value = str(error)
     return value if len(value) <= 500 else f"{value[:497]}..."
-
-
-def _omit_none(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _omit_none(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [_omit_none(item) for item in value]
-    return value
 
 

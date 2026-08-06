@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import safe_int as _safe_int
+
 import json
 from datetime import datetime, timezone
 from typing import Any
@@ -127,11 +129,6 @@ def _clamp_checkpoint_message_count(value: Any, message_count: int) -> int:
     return max(0, min(message_count, _safe_int(value)))
 
 
-def _safe_int(value: Any) -> int:
-    try:
-        return max(0, int(value or 0))
-    except Exception:
-        return 0
 
 
 def _elapsed_ms(now: datetime, value: Any) -> int | None:

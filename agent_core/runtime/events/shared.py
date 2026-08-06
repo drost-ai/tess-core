@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..._utils import field as _field
+
 import math
 from typing import Any
 
@@ -123,11 +125,6 @@ _TASK_STATUSES = {
     "idle",
 }
 
-def _field(data: dict[str, Any], *names: str) -> Any:
-    for name in names:
-        if name in data:
-            return data.get(name)
-    return None
 
 def _optional_string(value: Any) -> str | None:
     return value if isinstance(value, str) and value.strip() else None

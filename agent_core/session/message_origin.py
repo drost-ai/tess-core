@@ -18,7 +18,7 @@ _VALID_ACTORS = {
 }
 _VALID_INTENT_AUTHORITIES = {"request", "response", "evidence", "none"}
 
-_CONTINUATION_BRIDGE_MESSAGE = (
+CONTINUATION_BRIDGE_MESSAGE = (
     "Continuation context: earlier history and older parts of the current "
     "tool-driven turn were compacted into the working context provided in "
     "the system prompt. Continue from the recent raw messages below."
@@ -182,7 +182,7 @@ def _is_legacy_synthetic_message(message: dict[str, Any]) -> bool:
     text = _message_text(message).strip()
     if not text:
         return False
-    if text == _CONTINUATION_BRIDGE_MESSAGE:
+    if text == CONTINUATION_BRIDGE_MESSAGE:
         return True
     if text.startswith(_PARTIAL_COMPACTION_PREFIX):
         return True

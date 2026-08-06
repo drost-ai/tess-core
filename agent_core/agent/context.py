@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import safe_int as _safe_int
+
 import hashlib
 import json
 
@@ -358,8 +360,3 @@ def _context_relief_projection_hash(relief: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
 
 
-def _safe_int(value: Any) -> int:
-    try:
-        return max(0, int(value or 0))
-    except Exception:
-        return 0

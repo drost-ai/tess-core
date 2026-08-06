@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._shared import _dedupe, _string, withSubagentCoordinationTransaction
+
 import json
 import os
 import re
@@ -67,7 +69,7 @@ async def _upsert_subagent_launch_group(parentSessionId: str, group: dict[str, A
         raise ValueError("Subagent launch group requires an id.")
     now = now_iso()
     path = _subagent_launch_groups_path(parentSessionId)
-    async with withRecordTransaction("subagent-coordination", parentSessionId):
+    async with withSubagentCoordinationTransaction(parentSessionId):
         records = await _read_subagent_launch_groups(parentSessionId)
         current = next((record for record in records if record.get("id") == group_id), None)
         merged = _merge_group_record(current or {}, group, parentSessionId, group_id, now)
@@ -114,26 +116,11 @@ def _sort_groups(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(records, key=lambda item: (_string(item.get("createdAt")), _string(item.get("id"))))
 
 
-def _dedupe(values: list[Any]) -> list[str]:
-    out: list[str] = []
-    seen = set()
-    for value in values:
-        if not isinstance(value, str) or not value:
-            continue
-        if value in seen:
-            continue
-        seen.add(value)
-        out.append(value)
-    return out
 
 
 def _slug(value: Any) -> str:
     text = value if isinstance(value, str) else str(value or "")
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:48] or "default"
-
-
-def _string(value: Any) -> str:
-    return value.strip() if isinstance(value, str) and value.strip() else ""
 
 

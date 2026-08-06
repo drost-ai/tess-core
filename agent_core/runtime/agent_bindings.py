@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import is_positive_int as _positive_integer
+
 from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
@@ -257,8 +259,6 @@ def _valid_abort_signal(value: Any) -> bool:
     return isinstance(getattr(value, "aborted", None), bool)
 
 
-def _positive_integer(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
 def _bounded_string(value: Any, maximum: int) -> bool:

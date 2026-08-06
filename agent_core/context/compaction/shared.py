@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...session.message_origin import CONTINUATION_BRIDGE_MESSAGE
+
 from typing import Any
 
 
@@ -14,10 +16,6 @@ MIN_PRESERVED_TOOL_EXCHANGE_PAIRS = 3
 MAX_ACTIVITY_LINES = 16
 MAX_FAILURES = 8
 MAX_TODOS = 12
-CONTINUATION_BRIDGE_MESSAGE = (
-    "Continuation context: earlier history and older parts of the current tool-driven turn were compacted into the working "
-    "context provided in the system prompt. Continue from the recent raw messages below."
-)
 LOW_VALUE_TAIL_TOOL_NAMES = {"SetStatus", "TodoWrite", "Config"}
 COMPACTION_SYNTHESIS_MAX_RETRIES = 3
 COMPACTION_VERIFICATION_MAX_RETRIES = 3

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import safe_int as _safe_int
+
 from ..context.compaction import runCompaction, shouldAutoCompact
 from ..context.context_policy import decideDurableCheckpoint
 from ..providers.errors import isProviderRequestError
@@ -343,8 +345,3 @@ def _is_hard_compaction_trigger(trigger: str) -> bool:
     return trigger in {"auto_hard_limit", "auto_raw_hard_limit"}
 
 
-def _safe_int(value: Any) -> int:
-    try:
-        return max(0, int(value or 0))
-    except Exception:
-        return 0

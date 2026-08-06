@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..._utils import parse_iso_ms as _parse_iso_ms
+
 from ..._utils import now_iso
 from pathlib import Path
 from typing import Any
@@ -53,15 +55,6 @@ def _truncate(value: str, max_length: int) -> str:
     return f"{value[: max(0, max_length - 3)].rstrip()}..."
 
 
-def _parse_iso_ms(value: Any) -> float | None:
-    if not isinstance(value, str) or not value:
-        return None
-    import datetime
-
-    try:
-        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000
-    except Exception:
-        return None
 
 
 def _bucket_ms(value: float) -> int:

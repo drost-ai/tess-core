@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..._utils import field as _field
+
 import copy
 from typing import Any
 
@@ -23,11 +25,6 @@ def summarizeSessionRecord(session: dict[str, Any]) -> dict[str, Any]:
         "bridgeId": _field(session, "bridgeId", "bridge_id") or metadata.get("bridgeId"),
     }
 
-def _field(data: dict[str, Any], *names: str, default: Any = None) -> Any:
-    for name in names:
-        if name in data:
-            return data.get(name)
-    return default
 
 def _extract_last_assistant_text(session: dict[str, Any]) -> str:
     for message in reversed(session.get("messages") or []):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import is_positive_int as _positive_integer
+
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -177,9 +179,5 @@ def _freeze_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
         else:
             frozen[key] = item
     return MappingProxyType(frozen)
-
-
-def _positive_integer(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 

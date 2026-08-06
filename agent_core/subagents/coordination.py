@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._shared import withSubagentCoordinationTransaction
+
 import contextlib
 import copy
 import os
@@ -17,10 +19,6 @@ from . import reconciliation as _reconciliations
 DEFAULT_CONTINUATION_LEASE_MS = 30_000
 
 
-@contextlib.asynccontextmanager
-async def withSubagentCoordinationTransaction(parentSessionId: str) -> AsyncIterator[None]:
-    async with withRecordTransaction("subagent-coordination", parentSessionId):
-        yield
 
 
 async def listSubagentReconciliations(parentSessionId: str) -> list[dict[str, Any]]:

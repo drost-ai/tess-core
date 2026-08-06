@@ -129,7 +129,7 @@ from .mcp import (
 )
 from .tasks.monitors import (
     DEFAULT_CHECK_INTERVAL_MS, DEFAULT_HEARTBEAT_INTERVAL_MS, MAX_OUTPUT_EXCERPT_CHARS, MIN_NARRATION_SPACING_MS,
-    MIN_PROGRESS_BYTES, MONITOR_TICK_MS, createMonitorRecord, createMonitorRuntime, defaultMonitorCheckIntervalMs,
+    MONITOR_TICK_MS, createMonitorRecord, createMonitorRuntime, defaultMonitorCheckIntervalMs,
     defaultMonitorHeartbeatIntervalMs, formatMonitorSummary,
 )
 from .platform_support import (
@@ -460,7 +460,7 @@ __all__ = [
     "MCP_DEFAULT_STARTUP_TIMEOUT_MS", "MCP_FRAME_MAX_BYTES", "MCP_HEADER_MAX_BYTES", "MCP_NOTIFICATION_QUEUE_MAX",
     "MCP_PENDING_REQUEST_MAX", "MCP_RUNTIME_STATE_EVENTS", "MCP_SSE_EVENT_MAX_BYTES", "MCP_STDERR_TAIL_MAX_BYTES",
     "MESSAGES_API_URL", "MESSAGES_COUNT_TOKENS_API_URL", "MIN_ASSISTANT_UPDATE_SPACING_MS",
-    "MIN_NARRATION_SPACING_MS", "MIN_PRESERVED_TOOL_EXCHANGE_PAIRS", "MIN_PROGRESS_BYTES", "MIN_RECENT_MESSAGE_COUNT",
+    "MIN_NARRATION_SPACING_MS", "MIN_PRESERVED_TOOL_EXCHANGE_PAIRS", "MIN_RECENT_MESSAGE_COUNT",
     "MONITOR_TICK_MS", "McpAuthorizationRequiredError", "McpOAuthRuntime", "McpSseDecoder", "McpStdioFrameDecoder",
     "McpTransportError", "OPENAI_ABORT_POLL_INTERVAL_MS", "OPENAI_REQUEST_START_TIMEOUT_MS",
     "OPENAI_STREAM_IDLE_TIMEOUT_MS", "ObservedProcessIdentity", "OpenAiEmptyCompletedResponse",

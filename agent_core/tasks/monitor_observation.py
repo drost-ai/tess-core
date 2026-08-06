@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import parse_iso_ms
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -127,7 +129,7 @@ def _narration_reason(
     progress = max(0, output_size - int(monitor.get("lastNarratedOutputSize") or 0))
     if output_size != int(monitor.get("lastObservedOutputSize") or 0) and progress >= MIN_PROGRESS_BYTES:
         return "progress"
-    if now - _parse_iso_ms(monitor.get("lastAssistantUpdateAt") or monitor.get("createdAt")) >= int(monitor.get("heartbeatIntervalMs") or 0):
+    if now - int(parse_iso_ms(monitor.get("lastAssistantUpdateAt") or monitor.get("createdAt")) or 0) >= int(monitor.get("heartbeatIntervalMs") or 0):
         return "heartbeat"
     return None
 
@@ -143,16 +145,5 @@ def _observation_changed(previous: dict[str, Any], current: dict[str, Any]) -> b
         "lastObservedOutputSize",
     )
     return any(previous.get(key) != current.get(key) for key in keys)
-
-
-def _parse_iso_ms(value: Any) -> int:
-    if not isinstance(value, str):
-        return 0
-    try:
-        return round(
-            datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000
-        )
-    except ValueError:
-        return 0
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .generation import requireBridgeLedger as _require_ledger
+
 import copy
 import hashlib
 import inspect
@@ -455,11 +457,6 @@ async def _require_bridge(bridge_id):
     return bridge
 
 
-async def _require_ledger(bridge):
-    ledger = await loadBridgeDeliveryLedger(bridge["id"])
-    if not ledger or ledger.get("sessionId") != bridge["sessionId"] or ledger.get("generation") != bridge.get("generation"):
-        raise RuntimeError("Active bridge delivery ledger is missing or generation-mismatched.")
-    return ledger
 
 
 def _assert_exact_decisions(keys, decisions):

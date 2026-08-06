@@ -97,3 +97,29 @@ def flatten(values: Iterable[Iterable[Any]]) -> list[Any]:
         out.extend(value)
     return out
 
+
+def field(data: dict[str, Any], *names: str, default: Any = None) -> Any:
+    for name in names:
+        if name in data:
+            return data.get(name)
+    return default
+
+
+def safe_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except Exception:
+        return 0
+
+
+def is_positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
+def parse_iso_ms(value: Any) -> float | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000
+    except Exception:
+        return None

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .generation import requireBridgeLedger as _require_ledger
+
 import asyncio
 import hashlib
 import inspect
@@ -372,11 +374,6 @@ async def createBridgeRuntimeController(args):
     return await controller.start()
 
 
-async def _require_ledger(bridge):
-    ledger = await loadBridgeDeliveryLedger(bridge["id"])
-    if not ledger or ledger.get("sessionId") != bridge["sessionId"] or ledger.get("generation") != bridge["generation"]:
-        raise RuntimeError("Active bridge delivery ledger is missing or generation-mismatched.")
-    return ledger
 
 
 async def _commit_ledger(ledger, **updates):

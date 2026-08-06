@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._shared import withSubagentCoordinationTransaction
+
 from ..runtime.events.emit import safeEmit as _emit
 
 import json
@@ -46,7 +48,7 @@ async def upsertSubagentReconciliation(record: dict[str, Any]) -> dict[str, Any]
     }
     path = subagentReconciliationLogPath(parent_session_id)
 
-    async with withRecordTransaction("subagent-coordination", parent_session_id):
+    async with withSubagentCoordinationTransaction(parent_session_id):
         records = await _read_records(path)
         replaced = False
         next_records: list[dict[str, Any]] = []
@@ -90,7 +92,7 @@ async def markSubagentReconciliationsConsumed(
     path = subagentReconciliationLogPath(parentSessionId)
     consumed_at = now_iso()
     changed: list[dict[str, Any]] = []
-    async with withRecordTransaction("subagent-coordination", parentSessionId):
+    async with withSubagentCoordinationTransaction(parentSessionId):
         records = await _read_records(path)
         next_records = []
         for record in records:

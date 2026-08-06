@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...storage import loadBridgeDeliveryLedger
+
 from ..._utils import now_iso
 from ...storage import (
     listRemoteSessions,
@@ -80,3 +82,10 @@ def _terminal_remote(status):
 
 
 __all__ = ["closeCurrentBridgeGeneration", "isCurrentBridgeGeneration"]
+
+
+async def requireBridgeLedger(bridge):
+    ledger = await loadBridgeDeliveryLedger(bridge["id"])
+    if not ledger or ledger.get("sessionId") != bridge["sessionId"] or ledger.get("generation") != bridge.get("generation"):
+        raise RuntimeError("Active bridge delivery ledger is missing or generation-mismatched.")
+    return ledger

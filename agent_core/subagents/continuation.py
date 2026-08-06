@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._shared import _string
+
 from ..runtime.events.emit import safeEmit as _emit
 
 import uuid
@@ -200,9 +202,5 @@ def _record_belongs_to_group(record: dict[str, Any], group: dict[str, Any]) -> b
     child_ids = {child_id for child_id in (group.get("childAgentIds") or []) if isinstance(child_id, str)}
     task_ids = {task_id for task_id in (group.get("taskIds") or []) if isinstance(task_id, str)}
     return record.get("launchGroupId") == group.get("id") or record.get("childAgentId") in child_ids or record.get("taskId") in task_ids
-
-
-def _string(value: Any) -> str:
-    return value.strip() if isinstance(value, str) and value.strip() else ""
 
 

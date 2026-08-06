@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..coerce import asRecord
+
 from .shared import LOW_VALUE_TOOL_NAMES, _tool_result_content_string
 
 import json
@@ -43,8 +45,6 @@ def collapseWhitespace(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value)).strip()
 
 
-def asRecord(value: Any) -> dict[str, Any] | None:
-    return value if isinstance(value, dict) else None
 
 
 def classifyContextPressure(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

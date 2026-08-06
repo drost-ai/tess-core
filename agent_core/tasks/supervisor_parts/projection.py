@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...daemon.events import _event_matches_session
+
 from ..._utils import now_iso
 from ...session.persisted_record_scanner import (
     getPersistedRecordIssue,
@@ -320,8 +322,3 @@ def _subscription_session_id(value: str | dict[str, Any] | None) -> str | None:
     return None
 
 
-def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> bool:
-    if not session_id:
-        return True
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    return payload.get("sessionId") == session_id or data.get("sessionId") == session_id or data.get("session_id") == session_id

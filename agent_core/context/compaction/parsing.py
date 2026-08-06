@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from ..coerce import asRecord, asStringArray
+
+from ...session.transcript import parseMaybeJson
+
 import math
 
 import json
@@ -252,16 +256,6 @@ def normalizeVerificationConfidence(value: Any) -> str:
     return value if value in {"low", "medium", "high"} else "medium"
 
 
-def parseMaybeJson(value: Any) -> Any:
-    if not isinstance(value, str):
-        return value
-    trimmed = value.strip()
-    if not trimmed or (not trimmed.startswith("{") and not trimmed.startswith("[")):
-        return value
-    try:
-        return json.loads(trimmed)
-    except Exception:
-        return value
 
 
 def extractJsonObjectCandidate(value: str) -> str | None:
@@ -278,9 +272,5 @@ def extractJsonObjectCandidate(value: str) -> str | None:
     return None
 
 
-def asRecord(value: Any) -> dict[str, Any] | None:
-    return value if isinstance(value, dict) else None
 
 
-def asStringArray(value: Any) -> list[str]:
-    return [entry for entry in value if isinstance(entry, str)] if isinstance(value, list) else []

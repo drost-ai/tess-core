@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import safe_int as _safe_int
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -73,11 +75,6 @@ def _compaction_state_from_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _safe_int(value: Any) -> int:
-    try:
-        return max(0, int(value or 0))
-    except Exception:
-        return 0
 
 
 def _parse_datetime(value: Any) -> datetime | None:

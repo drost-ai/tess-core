@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .health_check_record import _omit_none
+
 import asyncio
 import hashlib
 import json
@@ -435,12 +437,6 @@ def _clone(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 
-def _omit_none(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _omit_none(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [_omit_none(item) for item in value]
-    return value
 
 
 async def _run_test_hook(phase: str) -> None:

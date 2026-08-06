@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import parse_iso_ms
+
 import asyncio
 import json
 import math
@@ -30,7 +32,6 @@ MONITOR_TICK_MS = 1500
 DEFAULT_CHECK_INTERVAL_MS = 5000
 DEFAULT_HEARTBEAT_INTERVAL_MS = 60000
 MIN_NARRATION_SPACING_MS = 20000
-MIN_PROGRESS_BYTES = 120
 MAX_OUTPUT_EXCERPT_CHARS = 6000
 
 
@@ -111,7 +112,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         if not reason or next_monitor.get("muted") or foreground_busy:
             return
         if reason in {"progress", "heartbeat"}:
-            elapsed = now_ms - _parse_iso_ms(next_monitor.get("lastAssistantUpdateAt") or next_monitor.get("createdAt"))
+            elapsed = now_ms - int(parse_iso_ms(next_monitor.get("lastAssistantUpdateAt") or next_monitor.get("createdAt")) or 0)
             if elapsed < MIN_NARRATION_SPACING_MS:
                 return
         excerpt = _read_output_excerpt(monitor.get("taskId"), int(next_monitor.get("lastNarratedOutputSize") or 0), output_size, MAX_OUTPUT_EXCERPT_CHARS)
@@ -258,7 +259,7 @@ def _monitor_snapshot_payload(session: dict[str, Any], snapshot: dict[str, Any])
 def _should_check_monitor(monitor: dict[str, Any], now_ms: int) -> bool:
     if monitor.get("status") not in {"active", "muted"}:
         return False
-    return now_ms - _parse_iso_ms(monitor.get("lastCheckAt")) >= int(monitor.get("checkIntervalMs") or DEFAULT_CHECK_INTERVAL_MS)
+    return now_ms - int(parse_iso_ms(monitor.get("lastCheckAt")) or 0) >= int(monitor.get("checkIntervalMs") or DEFAULT_CHECK_INTERVAL_MS)
 
 
 async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
@@ -429,7 +430,7 @@ def _compute_snapshot(monitors: list[dict[str, Any]], now_ms: int) -> dict[str, 
     active = [monitor for monitor in monitors if monitor.get("status") == "active"]
     next_check = None
     if active:
-        next_check = _bucket_ms(max(0, min(_parse_iso_ms(monitor.get("lastCheckAt")) + int(monitor.get("checkIntervalMs") or DEFAULT_CHECK_INTERVAL_MS) - now_ms for monitor in active)))
+        next_check = _bucket_ms(max(0, min(int(parse_iso_ms(monitor.get("lastCheckAt")) or 0) + int(monitor.get("checkIntervalMs") or DEFAULT_CHECK_INTERVAL_MS) - now_ms for monitor in active)))
     return {
         "total": len(monitors),
         "active": len(active),
@@ -454,15 +455,6 @@ def _bucket_ms(value: float) -> int:
     return int(math.ceil(value / 5000) * 5000)
 
 
-def _parse_iso_ms(value: Any) -> int:
-    if not isinstance(value, str) or not value:
-        return 0
-    import datetime
-
-    try:
-        return int(datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
-    except Exception:
-        return 0
 
 
 def _now_ms() -> int:

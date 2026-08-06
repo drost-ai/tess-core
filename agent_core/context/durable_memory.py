@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .coerce import asStringArray
+
 import hashlib
 import os
 import re
@@ -416,5 +418,3 @@ def _prompt_fixed_bytes() -> int:
     )
 
 
-def asStringArray(value: Any) -> list[str]:
-    return [entry for entry in value if isinstance(entry, str)] if isinstance(value, list) else []
