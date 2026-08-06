@@ -105,52 +105,13 @@ def _install_legacy_module_aliases() -> None:
 _install_legacy_module_aliases()
 
 _INTERNAL_MODULES = {
-    "agent_tool_results",
-    "bash_lifecycle",
-    "bash_result_payload",
-    "bridge_admission",
-    "bridge_generation",
-    "bridge_recovery",
-    "bridge_recovery_analysis",
-    "bridge_runtime",
-    "bounded_io",
-    "bounded_web_fetch",
-    "exception_groups",
-    "image_budget",
-    "mcp_payloads",
-    "message_origin",
-    "notebook_payload",
-    "payload_cursor",
-    "partial_output",
-    "partial_output_state",
-    # Subsystem packages introduced by the v1 consolidation that had no
-    # top-level module of the same name before, so they are not part of the
-    # historical public surface.
+    # Subsystem packages introduced by the v1 consolidation. Importing a
+    # submodule binds the package name here, but these had no same-named
+    # top-level module before, so they are not part of the public surface.
     "acquisition",
     "authority",
     "payloads",
     "process",
-    "persistence_metrics",
-    "prompt_cache_state",
-    "prompt_cache_state_schema",
-    "process_identity_darwin",
-    "provider_activity",
-    "provider_error_diagnostics",
-    "provider_prompt_cache",
-    "provider_turn_session",
-    "provider_error_sdk",
-    "search_acquisition",
-    "search_result_payload",
-    "structured_result_policy",
-    "structured_value",
-    "subagent_result_payload",
-    "subprocess_output",
-    "text_file_window",
-    "tool_attachments",
-    "todo_policy",
-    "tool_result_guard",
-    "usage_costs",
-    "utf8_bounds",
 }
 
 __all__ = sorted(
