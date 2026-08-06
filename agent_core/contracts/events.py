@@ -1,7 +1,7 @@
 """Runtime event envelope contract.
 
-Producer: ``agent_core/runtime_event_parts/factory.py`` (``createRuntimeEvent``).
-Consumers: ``runtime_state_parts/reducer.py``, collaboration/monitor runtimes,
+Producer: ``agent_core/runtime/events/factory.py`` (``createRuntimeEvent``).
+Consumers: ``runtime/state/reducer.py``, collaboration/monitor runtimes,
 daemon replay (``runtime.py``), shell transcript rendering.
 
 The envelope deliberately carries every historical spelling so all readers are
@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any, Literal, Mapping, TypedDict
 
 
-# Mirrors KNOWN_RUNTIME_EVENTS in runtime_event_parts/shared.py; a sync test
+# Mirrors KNOWN_RUNTIME_EVENTS in runtime/events/shared.py; a sync test
 # asserts the two sets are identical. The envelope's name fields stay ``str``
 # because createRuntimeEvent accepts arbitrary event names.
 RuntimeEventName = Literal[
@@ -141,7 +141,7 @@ RuntimeEventName = Literal[
     "tool.result_guard",
 ]
 
-# Mirrors _CONTEXT_RELIEF_MODES in runtime_event_parts/shared.py (sync-tested).
+# Mirrors _CONTEXT_RELIEF_MODES in runtime/events/shared.py (sync-tested).
 ContextReliefMode = Literal[
     "microcompact",
     "api_microcompact",

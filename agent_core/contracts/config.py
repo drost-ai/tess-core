@@ -1,8 +1,8 @@
 """Resolved config and settings contracts.
 
-Producers: ``agent_core/config_store/resolution.py`` (``resolveConfig``),
-``agent_core/config_store/shared.py`` (builtin agents and provider profiles),
-``agent_core/storage_store/settings.py`` (persisted settings records).
+Producers: ``agent_core/config/resolution.py`` (``resolveConfig``),
+``agent_core/config/shared.py`` (builtin agents and provider profiles),
+``agent_core/storage/settings.py`` (persisted settings records).
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class AgentDefinition(TypedDict, total=False):
 
 
 class AutoModePolicy(TypedDict, total=False):
-    """Auto-mode policy record (storage_store/settings.py DEFAULT_AUTO_MODE)."""
+    """Auto-mode policy record (storage/settings.py DEFAULT_AUTO_MODE)."""
 
     allow: list[str]
     deny: list[str]
@@ -65,9 +65,9 @@ class WebSearchSettings(TypedDict, total=False):
 class ProviderProfile(TypedDict, total=False):
     """Provider profile shape.
 
-    Builtin profiles (config_store/shared.py BUILTIN_PROVIDER_PROFILES) carry
+    Builtin profiles (config/shared.py BUILTIN_PROVIDER_PROFILES) carry
     the kind/apiMode/defaultModel/auth/description subset; the resolved and
-    normalized profile (config_store/providers.py resolveProviderProfile)
+    normalized profile (config/providers.py resolveProviderProfile)
     additionally always carries name/headers/supportsVision/capabilities/
     effortLevel/requestOptions/limits.
     """
@@ -111,7 +111,7 @@ class ProviderProfile(TypedDict, total=False):
 
 
 class SettingsRecord(TypedDict, total=False):
-    """Persisted settings.json shape (storage_store/settings.py). Sparse file."""
+    """Persisted settings.json shape (storage/settings.py). Sparse file."""
 
     provider: str
     model: str
@@ -160,7 +160,7 @@ class _ResolvedConfigRequired(TypedDict):
 
 
 class ResolvedConfig(_ResolvedConfigRequired, total=False):
-    """Output of resolveConfig (config_store/resolution.py).
+    """Output of resolveConfig (config/resolution.py).
 
     All keys below are emitted by resolveConfig today; they are optional here
     because callers construct partial config dicts in tests and subagent

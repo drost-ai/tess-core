@@ -94,7 +94,7 @@ def resolve_interactive_context_policy(input: dict[str, Any] | None = None) -> d
     if codex_profile:
         batch_bytes = batch_bytes or DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES
     return {
-        # Package 44 retires Package 38/41 admission-time interactive relief.
+        # Admission-time interactive relief is retired; the policy resolver stays for config compatibility.
         # Historical keys remain accepted as inert compatibility input.
         "contextReliefThresholdTokens": None,
         "contextReliefTargetTokens": None,

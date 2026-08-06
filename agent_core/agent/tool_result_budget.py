@@ -101,6 +101,6 @@ class ToolResultBatchBudget:
         }
 
 
-# Compatibility import for consumers that referenced the Package 38 class.
+# Compatibility alias for consumers of the earlier class name.
 # The alias has batch-local, stateless semantics.
 ToolResultTurnBudget = ToolResultBatchBudget

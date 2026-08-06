@@ -1,7 +1,7 @@
 """Provider request/response contracts (the internal block model).
 
-Producers: ``agent_core/providers/anthropic_parts/`` (request building, SSE
-normalization), ``agent_core/providers/openai_parts/`` (params building,
+Producers: ``agent_core/providers/anthropic/`` (request building, SSE
+normalization), ``agent_core/providers/openai/`` (params building,
 stream normalization), ``agent_core/provider_errors.py`` (failure records).
 
 Both providers normalize their streams into the same block model consumed by
@@ -106,7 +106,7 @@ class _ProviderFailureRequired(TypedDict):
 
 
 class ProviderFailureRecord(_ProviderFailureRequired, total=False):
-    """Bounded failure evidence; Package 43 lineage fields are present when known."""
+    """Bounded failure evidence; recovery lineage fields are present when known."""
 
     requestId: str | None
     logicalCallId: str | None

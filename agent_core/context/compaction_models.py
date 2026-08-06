@@ -104,15 +104,10 @@ def _resolve_openai_client_factory(
     source_runtime = args.get("runtime") or {}
     return (
         args.get("openaiClientFactory")
-        or args.get("openAiClientFactory")
         or source_runtime.get("openaiClientFactory")
-        or source_runtime.get("openAiClientFactory")
         or runtime.get("openaiClientFactory")
-        or runtime.get("openAiClientFactory")
         or options.get("openaiClientFactory")
-        or options.get("openAiClientFactory")
         or config.get("openaiClientFactory")
-        or config.get("openAiClientFactory")
     )
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, Mapping, TypedDict
 
 
-# Mirrors _TASK_STATUSES in runtime_event_parts/shared.py (sync-tested).
+# Mirrors _TASK_STATUSES in runtime/events/shared.py (sync-tested).
 TaskStatus = Literal[
     "queued",
     "running",
@@ -19,7 +19,7 @@ TaskStatus = Literal[
     "idle",
 ]
 
-# Mirrors _TASK_KINDS in runtime_event_parts/shared.py (sync-tested).
+# Mirrors _TASK_KINDS in runtime/events/shared.py (sync-tested).
 TaskKind = Literal[
     "background_command",
     "monitor",

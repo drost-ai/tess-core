@@ -31,6 +31,10 @@ from .processes import _is_process_alive
 _DEAD_WORK_GRACE_MS = 15 * 60 * 1000
 _LIVE_WORK_CACHE_TTL_MS = 30_000
 _MAX_VERDICT_DETAILS = 128
+# NOTE: these per-kind sets differ from reconciliation.py's _ACTIVE_STATUSES
+# (which also treats backgrounded/degraded background commands as live). The
+# asymmetry predates the v1 refactor and its intent is unconfirmed — do not
+# unify without deciding which semantics daemon-restart reconciliation wants.
 _ACTIVE_PROCESS_STATUSES = {
     "background_command": {"running", "reconciling"},
     "main_session": {"running", "reconciling"},
@@ -191,7 +195,7 @@ async def _resolve_session_live_work(
                 bridge_id = remote.get("bridgeId")
             bridge = context.get("bridge") if "bridge" in context else await _load_bridge(bridge_id) if isinstance(bridge_id, str) else None
             if remote is None:
-                # Source-compatible opaque marker: Package 31 replaces this
+                # Source-compatible opaque marker: superseded by the terminal store; this
                 # with generation-aware authority.
                 mark_family("remote")
             elif _remote_is_live(remote, bridge):

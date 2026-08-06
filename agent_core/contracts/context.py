@@ -1,6 +1,6 @@
 """Tool handler context contract.
 
-Producer: ``build_context`` in ``agent_core/agent_loop/loop.py`` (the agent
+Producer: ``build_context`` in ``agent_core/agent/loop.py`` (the agent
 loop's per-tool-call constructor). Subagent and test harness contexts add the
 ``taskSupervisor``/``runSubagent``/``tools`` keys.
 

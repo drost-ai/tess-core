@@ -27,7 +27,7 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
     _fcntl = None
 
 
-# Record ownership matrix (package 21, workstream D). Locking is applied only
+# Record ownership matrix. Locking is applied only
 # where multiple processes genuinely mutate the same file; single-writer
 # records stay unlocked-fast with owner discipline:
 #

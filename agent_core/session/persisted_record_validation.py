@@ -50,7 +50,7 @@ def isBridgeRecord(value: Any, candidate: dict[str, Any]) -> bool:
 
 
 def isHealthCheckTaskRecord(value: Any, candidate: dict[str, Any]) -> bool:
-    # Package 21-era Python health records may lack the later projection-only
+    # Early-schema health records may lack the later projection-only
     # session/mode/timestamp fields. Identity plus a status discriminator is
     # the safe legacy admission floor; current writers emit the full shape.
     return _matches_id(value, "taskId", candidate.get("id")) and _has_strings(value, ("status",))

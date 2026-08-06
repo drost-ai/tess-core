@@ -1,4 +1,4 @@
-"""Typed contract boundaries for agent-core-python (package 22).
+"""Typed contract boundaries for agent-core-python.
 
 This package is the single place to look up the shape of every persisted and
 cross-process contract: session/task/child-agent records, runtime event
@@ -7,7 +7,7 @@ shapes. The TypedDicts describe the dicts the runtime already produces —
 byte-for-byte, including legacy duplicate spellings — so adopting them never
 changes a serialized record.
 
-Rules (see product-planning/22-typed-contract-boundaries/):
+Rules:
 
 - Contracts import nothing from runtime modules; runtime modules import from
   contracts.

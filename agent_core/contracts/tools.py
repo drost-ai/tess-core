@@ -1,7 +1,7 @@
 """Tool result and payload manifest contracts (the model-facing surface).
 
 Producers: every handler in ``agent_core/tools/*.py`` (result envelope),
-``agent_core/tool_payloads.py`` (payload manifests and artifact references),
+``agent_core/payloads/tools.py`` (payload manifests and artifact references),
 ``agent_core/execution_descriptors.py`` (execution/activity descriptors
 attached under ``meta.execution``).
 """
@@ -25,7 +25,7 @@ class ToolResult(_ToolResultRequired, total=False):
     attachments: list[dict[str, Any]]  # in-memory current-turn binary attachments
 
 
-# Excerpt strategies emitted by tool_payloads.py shapers.
+# Excerpt strategies emitted by the payload shapers.
 PayloadStrategy = Literal[
     "inline_full",
     "inline_head_tail",
@@ -51,7 +51,7 @@ class _ToolArtifactRefRequired(TypedDict):
 
 
 class ToolArtifactRef(_ToolArtifactRefRequired, total=False):
-    """Persisted artifact reference for large tool outputs (tool_payloads.py)."""
+    """Persisted artifact reference for large tool outputs (payloads/tools.py)."""
 
     taskId: str
     itemCount: int | None

@@ -183,7 +183,7 @@ def select_authoritative_projection(
     accumulated: list[dict[str, Any]],
     terminal: dict[str, Any],
 ) -> dict[str, Any]:
-    """Select the authoritative block set per the Package 131 contract."""
+    """Select the authoritative block set per the terminal-reconciliation contract."""
     a_records = list(accumulated)
     t_records: list[dict[str, Any]] = list(terminal["records"])
     unsupported = int(terminal["unsupported"])
