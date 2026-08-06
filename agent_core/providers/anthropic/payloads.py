@@ -2,10 +2,20 @@ from __future__ import annotations
 
 import copy
 
-from .shared import *
+import base64
+import binascii
+import re
+from ..anthropic_cache import (
+    applyAnthropicCachePlan,
+    countAnthropicCacheControls,
+    planAnthropicCache,
+    sanitizeAnthropicCountPayload,
+)
+from ..prompt_cache import isKimiAnthropicCodingBackend, resolvePromptCachePolicy
+from .shared import MESSAGES_API_URL, MESSAGES_COUNT_TOKENS_API_URL
+from typing import Any
 from ..prompt_cache_diagnostics import (
     buildPromptCacheRequestSnapshot,
-    normalizePromptCacheProviderReason,
 )
 
 

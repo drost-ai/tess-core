@@ -21,7 +21,25 @@ from .responses_session import (
     stateless_prepared_request as _stateless_prepared_request,
 )
 from .responses_failures import response_terminal_failure
-from .shared import *
+from ..._utils import get_value, to_async_iter
+from ..errors import createProviderIncompleteResponseError
+from ..prompt_cache import openAiPromptCacheRequestOptions
+from .chat import sendOpenAiChatCompletionsRequest
+from .normalization import _append_text_block, _parse_complete_json_object
+from .params import buildResponsesCreateParams, getOpenAiProviderLabel, resolveOpenAiBaseUrl
+from .shared import (
+    OPENAI_REQUEST_START_TIMEOUT_MS,
+    OPENAI_STREAM_IDLE_TIMEOUT_MS,
+    providerRetryDelayMs,
+)
+from .transport import (
+    _acquire_openai_client,
+    _emit,
+    _infer_openai_responses_mode,
+    _race_openai_activity,
+    _raise_openai_cancelled,
+)
+from typing import Any
 
 _OPENAI_DEFAULT_MAX_ATTEMPTS = 6
 

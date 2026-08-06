@@ -4,7 +4,7 @@ from typing import Any
 
 from ..errors import createProviderFailureRecord, createProviderRequestError
 from .normalization import _parse_complete_json_object
-from .shared import get_value
+from ..._utils import get_value
 
 TERMINAL_RECONCILIATION_SCHEMA_VERSION = 1
 

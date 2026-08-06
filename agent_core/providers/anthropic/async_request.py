@@ -7,9 +7,9 @@ from ..anthropic_async_transport import (
     AsyncAnthropicHttpResponse as _AsyncAnthropicHttpResponse,
 )
 from .payloads import buildAnthropicHeaders, resolveAnthropicMessagesUrl
-from .shared import json
-from .sse import AnthropicSseAccumulator, normalizeProviderBlocks, parseAnthropicSseEvents
-from .transport import _apply_usage_snapshot
+import json
+from .sse import AnthropicSseAccumulator, parseAnthropicSseEvents
+from .stream_consume import _normalize_anthropic_json_response
 
 
 async def sendAnthropicMessagesViaAsyncTransport(
@@ -117,24 +117,4 @@ def _process_frame(frame_lines: list[str], accumulator: Any) -> None:
         accumulator.process_raw_event(raw_event)
 
 
-def _normalize_anthropic_json_response(
-    parsed: dict[str, Any], request: dict[str, Any]
-) -> dict[str, Any]:
-    usage: dict[str, Any] = {}
-    _apply_usage_snapshot(usage, parsed.get("usage") or {})
-    response = {
-        "content": normalizeProviderBlocks(parsed.get("content", [])),
-        "usage": usage,
-        "model": parsed.get("model") or request["model"],
-        "stopReason": parsed.get("stop_reason"),
-    }
-    response["_anthropicResponseId"] = (
-        parsed.get("id") if isinstance(parsed.get("id"), str) else None
-    )
-    response["_anthropicDiagnosticsFieldPresent"] = "diagnostics" in parsed
-    response["_anthropicDiagnostics"] = parsed.get("diagnostics")
-    return response
 
-
-send_anthropic_messages_via_async_transport = sendAnthropicMessagesViaAsyncTransport
-send_anthropic_messages_streaming_via_async_transport = sendAnthropicMessagesStreamingViaAsyncTransport

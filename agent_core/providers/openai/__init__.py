@@ -1,46 +1,125 @@
+"""OpenAI adapter: chat completions and Responses, streaming, recovery.
 
+The facade re-exports exactly the public names its submodules define.
+"""
 from __future__ import annotations
 
-import sys as _sys
-import types as _types
-from importlib import import_module
+from .chat import sendOpenAiChatCompletionsRequest
+from .params import (
+    buildChatCompletionsCreateParams,
+    buildResponsesCreateParams,
+    convertMessagesToChatCompletions,
+    convertMessagesToInput,
+    getOpenAiProviderLabel,
+    isCodexBaseUrl,
+    resolveOpenAiBaseUrl,
+    supportsOpenAiChatCompletionsReasoningEffort,
+)
+from .reconcile import (
+    OpenAiEmptyCompletedResponse,
+    OpenAiReconciliationConflict,
+    TERMINAL_RECONCILIATION_SCHEMA_VERSION,
+    close_openai_output_item,
+    function_call_projection_record,
+    message_projection_record,
+    normalize_terminal_projection,
+    projection_blocks,
+    reconciliation_conflict_failure,
+    resolve_terminal_projection,
+    select_authoritative_projection,
+)
+from .recovery import (
+    append_openai_partial,
+    attach_interrupted_preview,
+    attach_openai_failure_lineage,
+    attach_recovery_failure,
+    authoritative_openai_response,
+    can_retry_openai_generation,
+    commit_openai_delivery,
+    create_openai_logical_call_id,
+    finalize_interrupted_openai_preview,
+    partial_openai_event_lineage,
+    sink_failure,
+    supersede_openai_generation,
+)
+from .recovery_attempt import (
+    openai_retry_delay_ms,
+    recover_openai_attempt,
+)
+from .responses import (
+    sendOpenAiRequest,
+    sendOpenAiResponsesRequest,
+)
+from .responses_failures import response_terminal_failure
+from .responses_session import (
+    extract_turn_state,
+    finalize_responses_success,
+    projection_event_fields,
+    responses_activity_kind,
+    start_responses_stream,
+    stateless_prepared_request,
+    websocket_response_create_params,
+)
+from .responses_terminal import handle_response_completed
+from .shared import (
+    DEFAULT_CODEX_BASE_URL,
+    DEFAULT_CODEX_INSTRUCTIONS,
+    OPENAI_ABORT_POLL_INTERVAL_MS,
+    OPENAI_REQUEST_START_TIMEOUT_MS,
+    OPENAI_STREAM_IDLE_TIMEOUT_MS,
+    providerRetryDelayMs,
+)
 
-_MODULE_NAMES = [
-    "shared",
-    "normalization",
-    "transport",
-    "params",
-    "chat",
-    "responses_session",
-    "responses",
+__all__ = [
+    "DEFAULT_CODEX_BASE_URL",
+    "DEFAULT_CODEX_INSTRUCTIONS",
+    "OPENAI_ABORT_POLL_INTERVAL_MS",
+    "OPENAI_REQUEST_START_TIMEOUT_MS",
+    "OPENAI_STREAM_IDLE_TIMEOUT_MS",
+    "OpenAiEmptyCompletedResponse",
+    "OpenAiReconciliationConflict",
+    "TERMINAL_RECONCILIATION_SCHEMA_VERSION",
+    "append_openai_partial",
+    "attach_interrupted_preview",
+    "attach_openai_failure_lineage",
+    "attach_recovery_failure",
+    "authoritative_openai_response",
+    "buildChatCompletionsCreateParams",
+    "buildResponsesCreateParams",
+    "can_retry_openai_generation",
+    "close_openai_output_item",
+    "commit_openai_delivery",
+    "convertMessagesToChatCompletions",
+    "convertMessagesToInput",
+    "create_openai_logical_call_id",
+    "extract_turn_state",
+    "finalize_interrupted_openai_preview",
+    "finalize_responses_success",
+    "function_call_projection_record",
+    "getOpenAiProviderLabel",
+    "handle_response_completed",
+    "isCodexBaseUrl",
+    "message_projection_record",
+    "normalize_terminal_projection",
+    "openai_retry_delay_ms",
+    "partial_openai_event_lineage",
+    "projection_blocks",
+    "projection_event_fields",
+    "providerRetryDelayMs",
+    "reconciliation_conflict_failure",
+    "recover_openai_attempt",
+    "resolveOpenAiBaseUrl",
+    "resolve_terminal_projection",
+    "response_terminal_failure",
+    "responses_activity_kind",
+    "select_authoritative_projection",
+    "sendOpenAiChatCompletionsRequest",
+    "sendOpenAiRequest",
+    "sendOpenAiResponsesRequest",
+    "sink_failure",
+    "start_responses_stream",
+    "stateless_prepared_request",
+    "supersede_openai_generation",
+    "supportsOpenAiChatCompletionsReasoningEffort",
+    "websocket_response_create_params",
 ]
-
-_modules = [import_module(f"{__name__}.{name}") for name in _MODULE_NAMES]
-_namespace = {}
-for _module in _modules:
-    for _name, _value in vars(_module).items():
-        if not _name.startswith("__"):
-            _namespace[_name] = _value
-for _module in _modules:
-    vars(_module).update(_namespace)
-globals().update(_namespace)
-
-_PUBLIC_EXPORTS = ['Any', 'DEFAULT_CODEX_BASE_URL', 'DEFAULT_CODEX_INSTRUCTIONS', 'OPENAI_ABORT_POLL_INTERVAL_MS', 'OPENAI_REQUEST_START_TIMEOUT_MS', 'OPENAI_STREAM_IDLE_TIMEOUT_MS', 'annotations', 'asyncio', 'buildChatCompletionsCreateParams', 'buildResponsesCreateParams', 'canRetryProviderFailure', 'compact_json', 'contextlib', 'convertMessagesToChatCompletions', 'convertMessagesToInput', 'createProviderFailureRecord', 'createProviderRequestError', 'getOpenAiProviderLabel', 'get_value', 'isCodexBaseUrl', 'json', 'maybe_await', 'normalizeUnknownProviderFailure', 'providerRetryDelayMs', 'resolveOpenAiBaseUrl', 'sendOpenAiChatCompletionsRequest', 'sendOpenAiRequest', 'sendOpenAiResponsesRequest', 'supportsOpenAiChatCompletionsReasoningEffort', 'to_async_iter', 'urlparse']
-__all__ = _PUBLIC_EXPORTS
-
-
-def __dir__():
-    return sorted(_PUBLIC_EXPORTS)
-
-
-class _OpenAiPartsModule(_types.ModuleType):
-    def __setattr__(self, name, value):
-        super().__setattr__(name, value)
-        if name.startswith("__"):
-            return
-        for module in _modules:
-            if name in vars(module):
-                setattr(module, name, value)
-
-
-_sys.modules[__name__].__class__ = _OpenAiPartsModule

@@ -11,7 +11,7 @@ from .reconcile import (
 )
 from .recovery import commit_openai_delivery
 from .responses_session import extract_turn_state as _extract_turn_state
-from .shared import get_value
+from ..._utils import get_value
 from .transport import _plain_openai_value
 
 

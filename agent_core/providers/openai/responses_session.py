@@ -9,7 +9,10 @@ from ..openai_turn_session import (
 )
 
 from .params import convertMessagesToInput
-from .shared import *
+import json
+from ..._utils import get_value, maybe_await
+from .params import getOpenAiProviderLabel, resolveOpenAiBaseUrl
+from typing import Any
 from .transport import _emit, _race_openai_activity
 
 _WEBSOCKET_RESPONSE_CREATE_FIELDS = {

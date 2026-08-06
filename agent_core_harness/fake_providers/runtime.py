@@ -112,15 +112,15 @@ class FakeProviderRuntime:
             "clientFactory": fake.client_factory,
         }
         _copy_timeout_options(data, args)
-        original_delay = openai_module.providerRetryDelayMs
-        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        original_delay = openai_module.shared.providerRetryDelayMs
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             if api == "chat_completions":
                 return await core.sendOpenAiChatCompletionsRequest(args)
             args["mode"] = "codex" if api == "codex" else data.get("mode", "responses")
             return await core.sendOpenAiResponsesRequest(args)
         finally:
-            openai_module.providerRetryDelayMs = original_delay
+            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
 
     async def _run_anthropic_messages(self, data: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
         server = FakeProviderHttpServer(provider="anthropic", script=data.get("script"), request_recorder=self.requests).start()
@@ -144,12 +144,12 @@ class FakeProviderRuntime:
             "turnSession": turn_session,
         }
         _copy_timeout_options(data, args)
-        original_delay = anthropic_module.providerRetryDelayMs
-        anthropic_module.providerRetryDelayMs = lambda _attempt: 0
+        original_delay = anthropic_module.request.providerRetryDelayMs
+        anthropic_module.request.providerRetryDelayMs = lambda _attempt: 0
         try:
             return await core.sendAnthropicMessagesRequest(args)
         finally:
-            anthropic_module.providerRetryDelayMs = original_delay
+            anthropic_module.request.providerRetryDelayMs = original_delay
             if owns_turn_session:
                 await turn_session.close()
 

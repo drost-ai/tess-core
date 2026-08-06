@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from .shared import *
+import json
+import re
+from ..errors import (
+    createProviderFailureRecord,
+    createProviderIncompleteResponseError,
+    createProviderRequestError,
+)
+from .transport import _apply_usage_snapshot
+from typing import Any
 from ..activity import emitProviderActivity
 
 def parseAnthropicSseEvents(raw: str) -> list[dict[str, Any]]:

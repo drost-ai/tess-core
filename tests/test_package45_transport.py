@@ -175,7 +175,7 @@ class Package45CancellationTests(unittest.TestCase):
             future = asyncio.get_running_loop().create_future()
             started = time.perf_counter()
             task = asyncio.create_task(
-                anthropic_module._race_anthropic_activity(
+                anthropic_module.transport._race_anthropic_activity(
                     future,
                     timeout_ms=5_000,
                     abortSignal=signal,

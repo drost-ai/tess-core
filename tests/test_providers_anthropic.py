@@ -260,13 +260,13 @@ class AnthropicProviderTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_anthropic_messages_request_timeout(self):
-        original_send = anthropic_module._send_anthropic_messages_sync
+        original_send = anthropic_module.request._send_anthropic_messages_sync
 
         def slow_send(*_args):
             time.sleep(0.05)
             return "{}", "application/json"
 
-        anthropic_module._send_anthropic_messages_sync = slow_send
+        anthropic_module.request._send_anthropic_messages_sync = slow_send
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
@@ -283,7 +283,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             self.assertEqual(ctx.exception.record["phase"], "request_start")
             self.assertTrue(ctx.exception.record["retryable"])
         finally:
-            anthropic_module._send_anthropic_messages_sync = original_send
+            anthropic_module.request._send_anthropic_messages_sync = original_send
 
     def test_anthropic_streaming_emits_live_partials_before_response_completes(self):
         partial_seen = threading.Event()
@@ -439,7 +439,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             server.server_close()
 
     def test_anthropic_streaming_timeout_after_partial_output_is_not_retried(self):
-        original_stream = anthropic_module._send_anthropic_messages_streaming_async
+        original_stream = anthropic_module.request._send_anthropic_messages_streaming_async
         calls = {"count": 0}
 
         class PartialAccumulator:
@@ -455,7 +455,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             future = loop.create_future()
             return future
 
-        anthropic_module._send_anthropic_messages_streaming_async = stalled_stream
+        anthropic_module.request._send_anthropic_messages_streaming_async = stalled_stream
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
@@ -479,4 +479,4 @@ class AnthropicProviderTests(AgentCoreTestCase):
             self.assertFalse(ctx.exception.record["retryable"])
             self.assertEqual(calls["count"], 1)
         finally:
-            anthropic_module._send_anthropic_messages_streaming_async = original_stream
+            anthropic_module.request._send_anthropic_messages_streaming_async = original_stream

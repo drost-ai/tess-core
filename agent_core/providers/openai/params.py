@@ -4,7 +4,16 @@ import base64
 import binascii
 import re
 
-from .shared import *
+from ..._utils import compact_json
+from .normalization import (
+    _convert_chat_completion_tools,
+    _convert_tools,
+    _extract_provider_reasoning_content,
+    _resolve_instructions,
+)
+from .shared import DEFAULT_CODEX_BASE_URL
+from typing import Any
+from urllib.parse import urlparse
 
 def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}

@@ -2,7 +2,39 @@ from __future__ import annotations
 
 from ..activity import emitProviderActivity
 from .recovery_attempt import openai_retry_delay_ms as _openai_retry_delay_ms
-from .shared import *
+import asyncio
+import json
+from ..._utils import get_value, maybe_await, to_async_iter
+from ..errors import (
+    canRetryProviderFailure,
+    createProviderIncompleteResponseError,
+    normalizeUnknownProviderFailure,
+)
+from ..prompt_cache import openAiPromptCacheRequestOptions
+from .normalization import (
+    _append_text_block,
+    _apply_chat_completion_usage,
+    _emit_pending_chat_tool_calls,
+    _merge_tool_call_name,
+)
+from .params import (
+    buildChatCompletionsCreateParams,
+    getOpenAiProviderLabel,
+    resolveOpenAiBaseUrl,
+    supportsOpenAiChatCompletionsReasoningEffort,
+)
+from .shared import (
+    OPENAI_REQUEST_START_TIMEOUT_MS,
+    OPENAI_STREAM_IDLE_TIMEOUT_MS,
+    providerRetryDelayMs,
+)
+from .transport import (
+    _acquire_openai_client,
+    _emit,
+    _race_openai_activity,
+    _raise_openai_cancelled,
+)
+from typing import Any
 
 _OPENAI_DEFAULT_MAX_ATTEMPTS = 6
 

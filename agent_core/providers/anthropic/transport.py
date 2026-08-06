@@ -7,7 +7,11 @@ from ..anthropic_http_transport import (
     cancelAnthropicTransportFuture as _cancel_anthropic_transport_future,
 )
 
-from .shared import *
+import asyncio
+import contextlib
+from ..errors import createProviderFailureRecord, createProviderRequestError
+from .shared import ANTHROPIC_ABORT_POLL_INTERVAL_MS
+from typing import Any
 
 async def _race_anthropic_activity(
     awaitable: Any,

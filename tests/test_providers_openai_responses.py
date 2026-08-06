@@ -110,8 +110,8 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertNotIn("max_output_tokens", codex_captured["params"])
         self.assertEqual(codex_captured["params"]["tools"][0]["parameters"]["properties"]["path"], {"type": "string"})
 
-        original_delay = openai_module.providerRetryDelayMs
-        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        original_delay = openai_module.shared.providerRetryDelayMs
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             compatible_attempts = {"count": 0}
             compatible_captured = {}
@@ -151,11 +151,11 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.retrying" and data["category"] == "transport" and data["providerLabel"] == "OpenAI Chat Completions" for event, data in events))
             self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in events))
         finally:
-            openai_module.providerRetryDelayMs = original_delay
+            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
 
     def test_openai_responses_error_event_retry_and_protocol_edges(self):
-        original_delay = openai_module.providerRetryDelayMs
-        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        original_delay = openai_module.shared.providerRetryDelayMs
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             attempts = {"count": 0}
             events = []
@@ -183,7 +183,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.retrying" and data["category"] == "rate_limit" and data["streamEventType"] == "error" for event, data in events))
             self.assertTrue(any(event == "provider.recovered" and data["category"] == "rate_limit" for event, data in events))
         finally:
-            openai_module.providerRetryDelayMs = original_delay
+            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
 
         incomplete_calls = {"count": 0}
 
@@ -423,8 +423,8 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(ctx.exception.record["streamEventType"], "response.failed")
 
     def test_openai_retry_events_for_responses_and_chat(self):
-        original_delay = openai_module.providerRetryDelayMs
-        openai_module.providerRetryDelayMs = lambda _attempt: 0
+        original_delay = openai_module.shared.providerRetryDelayMs
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             response_attempts = {"count": 0}
             response_events = []
@@ -479,4 +479,4 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in chat_events))
             self.assertTrue(any(event == "provider.stream_event" and data["stream_event"] == "chat.completion.chunk" for event, data in chat_events))
         finally:
-            openai_module.providerRetryDelayMs = original_delay
+            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
