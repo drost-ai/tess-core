@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..runtime.events.emit import safeEmit
+
 import hashlib
 import json
 from typing import Any
@@ -44,11 +46,11 @@ async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) ->
             }
         )
         if result["status"] == "unavailable":
-            _emit(runtime, {
+            safeEmit(runtime, "provider.prompt_cache", {
                 "session_id": session.get("id"), "phase": "state_error", "state_status": "unavailable"
             })
         elif result["status"] == "recorded":
-            _emit(runtime, {
+            safeEmit(runtime, "provider.prompt_cache", {
                 "session_id": session.get("id"),
                 "phase": "eviction_intent",
                 "mode": policy.get("mode"),
@@ -58,7 +60,7 @@ async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) ->
                 "intent_status": "recorded",
             })
     except Exception:
-        _emit(runtime, {
+        safeEmit(runtime, "provider.prompt_cache", {
             "session_id": session.get("id"), "phase": "state_error", "state_status": "unavailable"
         })
 
@@ -75,12 +77,5 @@ def _finalization_key(session: dict[str, Any], stop_reason: str) -> str:
         sort_keys=True,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
-
-
-def _emit(runtime: dict[str, Any], payload: dict[str, Any]) -> None:
-    try:
-        runtime.get("emitEvent", lambda *_: None)("provider.prompt_cache", payload)
-    except Exception:
-        pass
 
 

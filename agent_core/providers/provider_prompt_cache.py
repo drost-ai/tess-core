@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..runtime.events.emit import safeEmit as _emit
+
 import copy
 from typing import Any
 
@@ -138,12 +140,5 @@ async def commitProviderPromptCacheObservation(
     if result["status"] == "committed":
         event["local_reason"] = result.get("state", {}).get("diagnosis", {}).get("localReason")
     _emit(runtime, "provider.prompt_cache", event)
-
-
-def _emit(runtime: dict[str, Any] | None, event: str, data: dict[str, Any]) -> None:
-    try:
-        (runtime or {}).get("emitEvent", lambda *_: None)(event, data)
-    except Exception:
-        pass
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..runtime.events.emit import safeEmit as _safe_emit
+
 from dataclasses import dataclass as _dataclass
 
 import copy
@@ -63,11 +65,6 @@ def _materialize_rollback_snapshot(record: _SessionRollbackRecord) -> dict[str, 
     )
     return snapshot
 
-def _safe_emit(runtime: dict[str, Any], event: str, data: dict[str, Any]) -> None:
-    try:
-        runtime.get("emitEvent", lambda *_: None)(event, data)
-    except Exception:
-        pass
 
 def _is_turn_cancelled(runtime: dict[str, Any]) -> bool:
     return _signal_aborted(runtime.get("abortSignal"))

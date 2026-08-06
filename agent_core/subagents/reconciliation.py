@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..runtime.events.emit import safeEmit as _emit
+
 import json
 import os
 import uuid
@@ -473,16 +475,5 @@ def _string(value: Any) -> str:
 
 def _without_none(value: dict[str, Any]) -> dict[str, Any]:
     return {key: item for key, item in value.items() if item is not None and item != ""}
-
-
-def _emit(runtime: dict[str, Any] | None, event: str, payload: dict[str, Any]) -> None:
-    if not isinstance(runtime, dict):
-        return
-    emit = runtime.get("emitEvent")
-    if callable(emit):
-        try:
-            emit(event, payload)
-        except Exception:
-            pass
 
 

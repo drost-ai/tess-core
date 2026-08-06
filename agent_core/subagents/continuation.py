@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..runtime.events.emit import safeEmit as _emit
+
 import uuid
 from typing import Any
 
@@ -202,16 +204,5 @@ def _record_belongs_to_group(record: dict[str, Any], group: dict[str, Any]) -> b
 
 def _string(value: Any) -> str:
     return value.strip() if isinstance(value, str) and value.strip() else ""
-
-
-def _emit(runtime: dict[str, Any] | None, event: str, payload: dict[str, Any]) -> None:
-    if not isinstance(runtime, dict):
-        return
-    emit = runtime.get("emitEvent")
-    if callable(emit):
-        try:
-            emit(event, payload)
-        except Exception:
-            pass
 
 
