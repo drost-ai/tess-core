@@ -10,16 +10,70 @@ from ..authority.permission_rules import loadPermissionRules
 from ..authority.hooks import loadHooks
 from ..sandbox import normalizeSandboxConfig
 
-from .shared import *
+import os
+from typing import Any
+
+from .._utils import clone
+from ..storage import (
+    configureRuntimeHome,
+    ensureBaseLayout,
+    getContextRuntimeHome,
+    getPlansDir,
+    loadAuth,
+    loadCodexAuthToken,
+    resolveMaybeRelative,
+    resolveRuntimeHome,
+)
+from .defaults import (
+    getDefaultEffortForProvider,
+    getDefaultModelForProvider,
+    normalizeEffortLevel,
+    normalizeOpenAiApiModeSetting,
+    normalizeProviderName,
+    normalizeProviderProfileName,
+    normalizeTuiScreenMode,
+)
+from .parsing import (
+    _dedupe,
+    _load_mcp_config,
+    _load_merged_settings,
+    _parse_custom_headers,
+    _parse_inline_agents,
+    _parse_json_schema,
+    _parse_setting_sources,
+    _parse_tool_list,
+    _resolve_api_key_from_helper,
+)
+from .prompts import buildDefaultSystemPrompt, defaultToolList
+from .credentials import (
+    _get_stored_anthropic_api_key,
+    _get_stored_anthropic_auth_token,
+    _resolve_anthropic_credentials,
+    _resolve_openai_credential,
+)
+from .providers import (
+    normalizeModelName,
+    resolveCompactionProviderProfileBinding,
+    resolveProviderForModelSelection,
+    resolveProviderProfile,
+    resolveProviderProfiles,
+    resolveSelectedProviderProfileName,
+)
+from .shared import (
+    BUILTIN_AGENTS,
+    BUILTIN_PROVIDER_PROFILES,
+    DEFAULT_ASSISTANT_DESCRIPTION,
+    DEFAULT_ASSISTANT_NAME,
+    DEFAULT_OPENAI_API_MODE,
+    DEFAULT_OPENAI_CODEX_AUTH_PATH,
+    DEFAULT_PROVIDER_PROFILE_NAME,
+    DEFAULT_TUI_SCREEN_MODE,
+)
 
 def _opt(options: dict[str, Any] | None, key: str, default: Any = None) -> Any:
     if options is None:
         return default
     return options.get(key, default)
-
-def _looks_like_claude_ai_token(value: Any) -> bool:
-    return bool(isinstance(value, str) and re.match(r"^sk-ant-o", value, re.I))
-
 
 def _omit_provider_credential_environment(
     settings_env: dict[str, str],
@@ -401,4 +455,3 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "name": options.get("name"),
     }
 
-resolve_config = resolveConfig

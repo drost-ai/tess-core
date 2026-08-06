@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from .shared import *
+import re
+from typing import Any
+
+from .providers import normalizeModelName, resolveProviderForModelSelection
+from .shared import DEFAULT_ASSISTANT_DESCRIPTION, DEFAULT_ASSISTANT_NAME
 
 def resolveAgentDefinition(config: dict[str, Any], agentName: str | None) -> dict[str, Any] | None:
     return None if not agentName else config.get("agents", {}).get(agentName)
@@ -24,6 +28,9 @@ def buildDefaultSystemPrompt(args: dict[str, Any] | None = None, **kwargs: Any) 
             "Use SetStatus to keep the live UI updated when you change phases or begin a meaningful chunk of work. Keep statuses brief and concrete, for example: 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",
         ]
     )
+
+def getDefaultSystemPrompt() -> str:
+    return buildDefaultSystemPrompt()
 
 def buildSystemPromptForAgent(config: dict[str, Any], agentName: str | None, fallbackSystemPrompt: str | None = None) -> str:
     fallback = fallbackSystemPrompt or buildEffectiveSystemPrompt(config)

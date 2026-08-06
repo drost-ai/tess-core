@@ -1,9 +1,19 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any
 
-def getDefaultSystemPrompt() -> str:
-    return buildDefaultSystemPrompt()
+from .shared import (
+    BUILTIN_PROVIDER_PROFILES,
+    DEFAULT_ASSISTANT_DESCRIPTION,
+    DEFAULT_ASSISTANT_NAME,
+    DEFAULT_EFFORT,
+    DEFAULT_MODEL,
+    DEFAULT_PROVIDER,
+    PROVIDER_DEFAULT_EFFORT,
+    PROVIDER_DEFAULT_MODEL,
+    PROVIDER_MODELS,
+    VALID_EFFORT_LEVELS,
+)
 
 def getDefaultAssistantName() -> str:
     return DEFAULT_ASSISTANT_NAME
