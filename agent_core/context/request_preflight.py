@@ -10,9 +10,6 @@ from ..session.message_origin import (
     isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
     messageForStableFingerprint as _message_for_stable_fingerprint,
 )
-from .request_preflight_relief import (
-    interactiveReliefProjection as _interactive_relief_projection,
-)
 SCHEMA_VERSION = 1
 RECEIPT_MAX_BYTES = 16 * 1024
 _CATEGORY_NAMES = (
@@ -161,10 +158,6 @@ def buildRequestPreflight(
             "reliefMode": relief.get("selectedMode") or "none",
             "reliefApplied": bool(relief.get("applied")),
         },
-        "interactiveRelief": _interactive_relief_projection(
-            continuation,
-            measured_input,
-        ),
         "categories": categories,
         "provenance": {
             "selectedSkills": skill_provenance,
@@ -187,7 +180,6 @@ def preflightEventPayload(session_id: str, receipt: dict[str, Any]) -> dict[str,
         "measurement": copy.deepcopy(receipt.get("measurement")),
         "admission": copy.deepcopy(receipt.get("admission")),
         "compaction": copy.deepcopy(receipt.get("compaction")),
-        "interactive_relief": copy.deepcopy(receipt.get("interactiveRelief")),
         "categories": copy.deepcopy(receipt.get("categories")),
         "provenance": copy.deepcopy(receipt.get("provenance")),
         "request_fingerprint": receipt.get("requestFingerprint"),

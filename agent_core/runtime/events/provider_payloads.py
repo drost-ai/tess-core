@@ -178,9 +178,6 @@ def providerTypedPayload(
             "admission": _field(data, "admission"),
             "categories": _field(data, "categories"),
             "compaction": _field(data, "compaction"),
-            "interactiveRelief": _field(
-                data, "interactive_relief", "interactiveRelief"
-            ),
             "provenance": _field(data, "provenance"),
         }
     if event == "provider.response_completed":

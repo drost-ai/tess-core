@@ -15,7 +15,7 @@ from ..providers.token_budget import computeProviderTokenBudget, resolveCompacti
 from ..session.persistence import persistSession
 from .cancellation import _now, _safe_emit
 from .shared import modelSupportsImageInputs, requestHasImageInputs
-from .usage import _apply_plan_mode_overlay
+from .plan_policy import _apply_plan_mode_overlay
 from typing import Any
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
 from .context_budget import (
@@ -35,9 +35,6 @@ from .request_integrity import normalizeProviderRequestMessages as _normalize_pr
 from .dynamic_context import (
     dynamicContextBelongsInMessages as _dynamic_context_belongs_in_messages,
     injectSystemContextIntoMessages as _inject_system_context_into_messages,
-)
-from .interactive_context import (
-    retiredInteractiveReliefReceipt as _retired_interactive_relief_receipt,
 )
 from ..payloads.image_budget import assertImageContextCapacity as _assert_image_context_capacity
 from ..payloads.attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
@@ -120,10 +117,6 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         if compacted and compacted.get("status") == "completed":
             durable_compaction_applied = True
             continue
-        request_context["interactiveRelief"] = _retired_interactive_relief_receipt(
-            config=config,
-            measuredInputTokens=int(measurement["inputTokens"]),
-        )
         budget = computeProviderTokenBudget({"profile": config.get("providerProfile") or {}, "estimatedInputTokens": measurement["inputTokens"]})
         _assert_image_context_capacity(measurement, budget)
         compaction_policy = resolveCompactionPolicy(config.get("providerProfile") or {})
@@ -194,7 +187,6 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "min_useful_output_tokens": budget.get("minUsefulOutputTokens"),
                 "continuity_pressure": request_context.get("pressure"),
                 "continuity_relief": request_context.get("relief"),
-                "interactive_relief": request_context.get("interactiveRelief"),
                 "retrieved_memory_count": len((request_context.get("retrievedMemory") or {}).get("records", [])),
                 "retrieved_memory_tokens": (request_context.get("retrievedMemory") or {}).get("tokenEstimate"),
             },

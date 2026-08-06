@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+
 from typing import Any, Callable
 
 from .._utils import now_iso
@@ -124,16 +124,6 @@ def _collaboration_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
         "labels": snapshot.get("labels", []),
     }
 
-async def _wait_for_subscription_close(reader: asyncio.StreamReader, shutdown: asyncio.Event) -> None:
-    read_task = asyncio.create_task(reader.read())
-    shutdown_task = asyncio.create_task(shutdown.wait())
-    try:
-        await asyncio.wait({read_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED)
-    finally:
-        for task in (read_task, shutdown_task):
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(read_task, shutdown_task, return_exceptions=True)
 
 def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> bool:
     if not session_id:
@@ -141,9 +131,6 @@ def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> b
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     return payload.get("sessionId") == session_id or data.get("sessionId") == session_id or data.get("session_id") == session_id
 
-def _last_daemon_event_cursor(events: list[dict[str, Any]]) -> int:
-    cursors = [event.get("cursor") for event in events if isinstance(event.get("cursor"), int)]
-    return max(cursors, default=0)
 
 async def _record_daemon_lifecycle_event(event: str, data: dict[str, Any], next_cursor: Callable[[], int]) -> None:
     await appendDaemonEvent({"cursor": next_cursor(), "createdAt": now_iso(), "event": event, "data": data})

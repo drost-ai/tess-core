@@ -106,14 +106,6 @@ def toTaskStopResult(
     return result
 
 
-def taskEventNameForStatus(status: str) -> str:
-    if status == "completed":
-        return "task.completed"
-    if status == "failed":
-        return "task.failed"
-    if status == "stopped":
-        return "task.stopped"
-    return "task.updated"
 
 
 def _terminal_noop(current: str) -> dict[str, Any]:

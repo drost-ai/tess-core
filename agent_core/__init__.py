@@ -20,7 +20,7 @@ from .agent import (
     noProgressTurnResult, normalizeProviderRequestMessages, normalize_agent_prompt, plan_mode_denial,
     prepareProviderRequest, recordContinuationRelief, recordEmptyResponseUsage, requestHasImageInputs,
     requestProviderResponse, resolve_effective_provider_turn_binding, resolve_plan_mode_mcp_verdict,
-    resolve_tool_concurrency, retiredInteractiveReliefReceipt, runAgentPrompt, run_in_provider_turn_session,
+    resolve_tool_concurrency, runAgentPrompt, run_in_provider_turn_session,
     run_post_tool_hook, run_pre_tool_hook, run_stable_boundary_hook, run_tool_dispatch_batch,
     run_with_transient_execution_session, unsupportedImageInputResponse,
 )
@@ -680,7 +680,7 @@ __all__ = [
     "resolveTmuxLaunchContextFromEnv", "resolve_compaction_profile", "resolve_effective_provider_turn_binding",
     "resolve_negotiated_protocol", "resolve_plan_mode_mcp_verdict", "resolve_subagent_concurrency_policy",
     "resolve_subagent_runtime_limits", "resolve_terminal_projection", "resolve_tool_concurrency",
-    "response_terminal_failure", "responses_activity_kind", "retiredInteractiveReliefReceipt",
+    "response_terminal_failure", "responses_activity_kind",
     "retrieveRelevantDurableMemory", "revokeRepositoryApproval", "rotateDaemonEventsIfOversized", "runAgentPrompt",
     "runChromeCompanionMcpServer", "runChromeNativeHost", "runCompaction", "runCompactionCheckpointVerification",
     "runCompactionCheckpointVerificationWithFallback", "runForegroundSubagent", "runModelBackedCompactionSynthesis",

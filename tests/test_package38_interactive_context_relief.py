@@ -194,12 +194,7 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
                 for event, data in events
                 if event == "provider.request_preflight"
             )
-            relief = preflight["interactive_relief"]
-            self.assertFalse(relief["applied"])
-            self.assertIsNone(relief["originalInputTokens"])
-            self.assertIsNone(relief["thresholdTokens"])
-            self.assertIsNone(relief["targetTokens"])
-            self.assertTrue(relief["targetMet"])
+            self.assertNotIn("interactive_relief", preflight)
             self.assertGreater(preflight["categories"]["systemIdentity"], 25_000)
             self.assertEqual(session["messages"][:20], original_messages)
             request_text = json.dumps(requests[0]["messages"])

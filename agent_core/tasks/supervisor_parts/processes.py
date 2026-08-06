@@ -5,7 +5,6 @@ import contextlib
 import os
 import signal
 import subprocess
-import sys
 import threading
 from ..._utils import maybe_await
 from ...storage import loadTaskRecord, readTaskMeta
@@ -74,121 +73,10 @@ def _spawn_owned_argv(
         handle.close()
 
 
-def _spawn_shell(
-    command: str,
-    cwd: str,
-    output_file: str,
-    *,
-    sandbox_config: dict[str, Any] | None = None,
-    runtime_home: str | None = None,
-    sandbox_events: list[dict[str, Any]] | None = None,
-) -> subprocess.Popen[Any]:
-    kwargs: dict[str, Any] = {}
-    if hasattr(os, "setsid"):
-        kwargs["preexec_fn"] = os.setsid
-    argv = _prepare_shell_argv(
-        command,
-        cwd,
-        sandbox_config=sandbox_config,
-        runtime_home=runtime_home,
-        output_file=output_file,
-        sandbox_events=sandbox_events,
-    )
-    handle = open(output_file, "ab")
-    try:
-        return subprocess.Popen(
-            argv,
-            cwd=cwd,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            **kwargs,
-        )
-    finally:
-        handle.close()
 
 
-def _spawn_main_session_worker(
-    task_id: str,
-    session_id: str,
-    prompt: str,
-    cwd: str,
-    output_file: str,
-    *,
-    runtime_home: str | None = None,
-) -> subprocess.Popen[Any]:
-    handle = open(output_file, "ab")
-    kwargs: dict[str, Any] = {}
-    if hasattr(os, "setsid"):
-        kwargs["preexec_fn"] = os.setsid
-    env = _worker_env({"AGENT_CORE_HOME": runtime_home} if runtime_home else None)
-    try:
-        return subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "agent_core.tasks.runners.main_session",
-                "--session-id",
-                session_id,
-                "--task-id",
-                task_id,
-                "--prompt",
-                prompt,
-            ],
-            cwd=cwd,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            env=env,
-            **kwargs,
-        )
-    finally:
-        handle.close()
 
 
-def _spawn_subagent_worker(
-    task_id: str,
-    session_id: str,
-    agent_id: str,
-    cwd: str,
-    output_file: str,
-    *,
-    runtime_home: str | None = None,
-) -> subprocess.Popen[Any]:
-    handle = open(output_file, "ab")
-    kwargs: dict[str, Any] = {}
-    if hasattr(os, "setsid"):
-        kwargs["preexec_fn"] = os.setsid
-    env = _worker_env(
-        {
-            "TESS_CHILD_AGENT_ID": agent_id,
-            "TESS_CHILD_TASK_ID": task_id,
-            "TESS_CHILD_SESSION_ID": session_id,
-            **({"AGENT_CORE_HOME": runtime_home} if runtime_home else {}),
-        }
-    )
-    try:
-        return subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "agent_core.tasks.runners.subagent",
-                "--session-id",
-                session_id,
-                "--agent-id",
-                agent_id,
-                "--task-id",
-                task_id,
-            ],
-            cwd=cwd,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            env=env,
-            **kwargs,
-        )
-    finally:
-        handle.close()
 
 
 def _worker_env(extra: dict[str, str] | None = None) -> dict[str, str]:

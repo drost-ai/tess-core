@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ..config import buildPlanModeSystemPrompt
 from .cancellation import _safe_emit
 from .shared import PLAN_SAFE_TOOL_NAMES
 
@@ -113,3 +114,14 @@ async def plan_mode_denial(
     if tool_use["name"] not in PLAN_SAFE_TOOL_NAMES:
         return f"{tool_use['name']} is not available while plan approval is still required."
     return None
+
+
+def _apply_plan_mode_overlay(base: str, session: dict[str, Any]) -> str:
+    if session.get("permissionMode") != "plan":
+        return base
+    state = session.get("metadata", {}).get("planMode", {})
+    return buildPlanModeSystemPrompt(base, {"currentState": state.get("state"), "priorPlan": state.get("plan")})
+
+
+def _requires_plan_approval(session: dict[str, Any]) -> bool:
+    return session.get("permissionMode") == "plan" and session.get("metadata", {}).get("planMode", {}).get("state") != "approved"

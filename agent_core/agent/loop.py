@@ -26,13 +26,13 @@ from .cancellation import (
     _throw_if_turn_cancelled,
 )
 from .shared import PLAN_SAFE_TOOL_NAMES
-from .usage import (
-    _ensure_usage_totals,
-    _estimate_usage_cost,
-    _merge_usage_into_session,
-    _requires_plan_approval,
-    _round_usd,
+from ..providers.usage_costs import (
+    ensureUsageTotals as _ensure_usage_totals,
+    estimateUsageCostUsd as _estimate_usage_cost,
+    mergeUsageIntoSession as _merge_usage_into_session,
+    roundUsd as _round_usd,
 )
+from .plan_policy import _requires_plan_approval
 from typing import Any
 from .plan_policy import plan_mode_denial as _plan_mode_denial
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit

@@ -202,15 +202,6 @@
             "reliefApplied": false,
             "reliefMode": "none"
           },
-          "interactiveRelief": {
-            "applied": false,
-            "originalInputTokens": null,
-            "projectedInputTokens": "<token-estimate>",
-            "source": "disabled",
-            "targetMet": true,
-            "targetTokens": null,
-            "thresholdTokens": null
-          },
           "measurement": {
             "baseInputTokens": "<token-estimate>",
             "componentEstimateTokens": "<token-estimate>",

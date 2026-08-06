@@ -320,14 +320,7 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
                 for event, data in events
                 if event == "provider.request_preflight"
             )
-            relief = preflight["interactive_relief"]
-            self.assertFalse(relief["applied"])
-            self.assertIsNone(relief["originalInputTokens"])
-            self.assertIsNone(relief["thresholdTokens"])
-            self.assertIsNone(relief["targetTokens"])
-            self.assertTrue(relief["targetMet"])
-            self.assertNotIn("attemptCount", relief)
-            self.assertNotIn("checkpointProjection", relief)
+            self.assertNotIn("interactive_relief", preflight)
             request_text = json.dumps(requests[0], ensure_ascii=False)
             self.assertIn("What time was the latest restart?", request_text)
             self.assertIn("Keep owner conversation responsive.", request_text)
