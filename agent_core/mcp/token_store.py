@@ -17,7 +17,6 @@ def mcpTokenStoreKey(config: dict[str, Any]) -> str:
     return f"{config.get('name', '')}\0{_canonical_url(str(config.get('commandOrUrl') or ''))}"
 
 
-mcp_token_store_key = mcpTokenStoreKey
 
 
 class FileMcpTokenStore:
@@ -82,7 +81,6 @@ def createFileMcpTokenStore(root: str | os.PathLike[str] | None = None) -> FileM
     return FileMcpTokenStore(root)
 
 
-create_file_mcp_token_store = createFileMcpTokenStore
 
 
 async def token_store_get(store: Any, server_key: str) -> dict[str, Any] | None:

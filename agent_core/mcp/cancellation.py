@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any
 
 
 def _throw_if_runtime_tool_cancelled(context: dict[str, Any]) -> None:

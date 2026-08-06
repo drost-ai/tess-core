@@ -359,7 +359,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         client._handle_sse_event("endpoint", [json.dumps({"url": "/messages"})])
         self.assertEqual(client.post_url, "http://127.0.0.1:1/messages")
 
-        no_id = mcp_module._parse_sse_rpc_response('data: {"jsonrpc":"2.0","result":{"ok":true}}\n\n', None)
+        no_id = mcp_module.protocol._parse_sse_rpc_response('data: {"jsonrpc":"2.0","result":{"ok":true}}\n\n', None)
         self.assertEqual(no_id["result"], {"ok": True})
         for raw, request_id in [
             ('data: {"jsonrpc":"2.0","id":null,"result":{}}\n\n', None),
@@ -367,7 +367,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
             ('data: {"jsonrpc":"2.0","id":"1","result":{}}\n\n', 1),
         ]:
             with self.assertRaisesRegex(RuntimeError, "No matching SSE JSON-RPC response was received"):
-                mcp_module._parse_sse_rpc_response(raw, request_id)
+                mcp_module.protocol._parse_sse_rpc_response(raw, request_id)
 
     def test_mcp_discovery_only_swallows_method_not_found(self):
         root, home, workspace, previous = self.temp_context()

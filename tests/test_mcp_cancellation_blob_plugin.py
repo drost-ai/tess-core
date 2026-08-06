@@ -83,12 +83,12 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
             first = base64.b64encode(b"a" * 65536).decode("ascii")
             second = base64.b64encode(b"b" * 1024).decode("ascii")
             third = base64.b64encode(b"c" * 1024).decode("ascii")
-            first_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/large.bin", "mimeType": "application/octet-stream", "blob": first}]}))["contents"][0]["blobSavedTo"]
-            repeated_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/large.bin", "mimeType": "application/octet-stream", "data": first}]}))["contents"][0]["blobSavedTo"]
+            first_path = run(mcp_module.normalization._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/large.bin", "mimeType": "application/octet-stream", "blob": first}]}))["contents"][0]["blobSavedTo"]
+            repeated_path = run(mcp_module.normalization._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/large.bin", "mimeType": "application/octet-stream", "data": first}]}))["contents"][0]["blobSavedTo"]
             self.assertEqual(first_path, repeated_path)
             self.assertEqual(Path(first_path).read_bytes(), b"a" * 65536)
-            second_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/second.bin", "blob": second}]}))["contents"][0]["blobSavedTo"]
-            third_path = run(mcp_module._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/third.bin", "blob": third}]}))["contents"][0]["blobSavedTo"]
+            second_path = run(mcp_module.normalization._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/second.bin", "blob": second}]}))["contents"][0]["blobSavedTo"]
+            third_path = run(mcp_module.normalization._normalize_read_resource_output("blob", {"contents": [{"uri": "memory://bundle/third.bin", "blob": third}]}))["contents"][0]["blobSavedTo"]
             self.assertTrue(Path(second_path).exists())
             self.assertTrue(Path(third_path).exists())
             self.assertFalse(Path(first_path).exists())

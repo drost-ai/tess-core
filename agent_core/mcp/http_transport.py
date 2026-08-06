@@ -1,73 +1,33 @@
 from __future__ import annotations
 
 from .clients import JsonRpcClient, _McpHttpUnauthorized
-from .http_body import *
 from .http_body import _open_without_redirects, _validate_outgoing_headers
-from .shared import *
+from .http_exchange import _HttpExchange
+import asyncio
+import json
+import threading
+import time
+from typing import Any, Callable
+from urllib.error import HTTPError
+from urllib.request import Request
+
+from .http_body import (
+    _close_http_response,
+    _content_type,
+    _first_header,
+    _is_json_content_type,
+    iterateMcpBody,
+    readMcpBodyText,
+    validateMcpResponseHeaders,
+)
+from .transport_policy import (
+    MCP_FRAME_MAX_BYTES,
+    MCP_PENDING_REQUEST_MAX,
+    McpTransportError,
+    resolveMcpTransportPolicy,
+)
+from .transport_shared import BoundedNotificationQueue, _decode_json_rpc_payload
 from .sse_decoder import McpSseDecoder
-from .transport_policy import *
-from .transport_shared import *
-
-
-class _HttpExchange:
-    def __init__(self, owner: "HttpMcpClient") -> None:
-        self.owner = owner
-        self.lock = threading.Lock()
-        self.responses: set[Any] = set()
-        self.workers = 0
-        self.release_requested = False
-        self.finished = False
-        self.cancelled = False
-        self.cancel_error: BaseException | None = None
-
-    def start_worker(self) -> None:
-        with self.lock:
-            self.workers += 1
-
-    def finish_worker(self) -> None:
-        finish = False
-        with self.lock:
-            self.workers -= 1
-            finish = self.release_requested and self.workers == 0 and not self.finished
-            if finish:
-                self.finished = True
-        if finish:
-            self.owner._finish_exchange(self)
-
-    def bind(self, response: Any) -> None:
-        with self.lock:
-            if self.cancelled:
-                _close_http_response(response)
-                raise self.cancel_error or McpTransportError(
-                    "transport_closed",
-                    "MCP HTTP exchange was cancelled.",
-                )
-            self.responses.add(response)
-
-    def unbind(self, response: Any) -> None:
-        with self.lock:
-            self.responses.discard(response)
-
-    def cancel(self, error: BaseException | None = None) -> None:
-        with self.lock:
-            self.cancelled = True
-            self.cancel_error = error or self.cancel_error or McpTransportError(
-                "transport_closed",
-                "MCP HTTP exchange was cancelled.",
-            )
-            responses = list(self.responses)
-        for response in responses:
-            _close_http_response(response)
-
-    def release(self) -> None:
-        finish = False
-        with self.lock:
-            self.release_requested = True
-            finish = self.workers == 0 and not self.finished
-            if finish:
-                self.finished = True
-        if finish:
-            self.owner._finish_exchange(self)
 
 
 class HttpMcpClient(JsonRpcClient):

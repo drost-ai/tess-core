@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from .shared import *
+import threading
+from typing import Any, Callable
+
+from .negotiation import (
+    PREFERRED_PROTOCOL_VERSION,
+    bounded_capabilities,
+    resolve_negotiated_protocol,
+)
+from .protocol import _unwrap_json_rpc_response
 
 
 class JsonRpcClient:

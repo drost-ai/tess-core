@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from .shared import *
+import json
+import re
+from typing import Any
+
+from .transport_shared import _reject_json_constant
 from .sse_decoder import parseSseEvents
 
 

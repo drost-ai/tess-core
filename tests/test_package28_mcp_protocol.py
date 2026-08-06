@@ -57,7 +57,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
             "/tmp",
         )
         client.negotiated_protocol_version = "2025-06-18"
-        with mock.patch.object(mcp_module, "urlopen", fake_urlopen):
+        with mock.patch.object(mcp_module.http_body, "urlopen", fake_urlopen):
             run(client.request("tools/list"))
         request = captured[0][0]
         self.assertEqual(request.get_header("Mcp-protocol-version"), "2025-06-18")
@@ -65,7 +65,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
 
     def test_structured_content_is_preserved_bounded_and_model_visible(self):
         huge = {f"key-{index}": "x" * 4_000 for index in range(100)}
-        result = mcp_module._normalize_tool_call_result(
+        result = mcp_module.normalization._normalize_tool_call_result(
             "fake",
             "structured",
             {
@@ -132,7 +132,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
                     }
                 )
 
-            with mock.patch.object(mcp_module, "_connect_state", connect):
+            with mock.patch.object(mcp_module.runtime, "_connect_state", connect):
                 runtime = await core.createMcpRuntime(
                     cwd="/tmp",
                     servers=[{"name": "fake", "transport": "http", "commandOrUrl": "https://example.test/mcp"}],
@@ -143,7 +143,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
             client.next_tools = [
                 {"name": "new", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": False}}
             ]
-            mcp_module._emit_mcp_notification(
+            mcp_module.state._emit_mcp_notification(
                 captured_state["config"],
                 {"method": "notifications/tools/list_changed", "params": {"generation": 2}},
                 lambda event, data: events.append((event, data)),
@@ -159,7 +159,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
             self.assertEqual(runtime["createToolDefinitions"]()[0].concurrency, "exclusive")
 
             client.fail = True
-            mcp_module._emit_mcp_notification(
+            mcp_module.state._emit_mcp_notification(
                 captured_state["config"],
                 {"method": "notifications/tools/list_changed", "params": {}},
                 lambda event, data: events.append((event, data)),

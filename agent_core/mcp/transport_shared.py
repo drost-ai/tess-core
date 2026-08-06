@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from .shared import *
-from .transport_policy import *
+import json
+import threading
+from typing import Any, Callable
+
+from .transport_policy import MCP_NOTIFICATION_QUEUE_MAX, McpTransportError
 
 
 class BoundedNotificationQueue:

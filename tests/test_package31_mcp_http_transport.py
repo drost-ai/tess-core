@@ -249,7 +249,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
                 },
                 "/tmp",
             )
-            with mock.patch.object(mcp_module, "urlopen", fake_urlopen):
+            with mock.patch.object(mcp_module.http_body, "urlopen", fake_urlopen):
                 pending = asyncio.create_task(client.request("tools/list"))
                 await asyncio.to_thread(opened.wait, 1)
                 await client.close()
@@ -298,7 +298,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
                 },
                 "/tmp",
             )
-            with mock.patch.object(mcp_module, "urlopen", blocked_urlopen):
+            with mock.patch.object(mcp_module.http_body, "urlopen", blocked_urlopen):
                 with self.assertRaises(McpTransportError) as raised:
                     await client.request("tools/list")
                 self.assertEqual(raised.exception.code, "request_timeout")
@@ -364,7 +364,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
                 "/tmp",
             )
             with mock.patch.object(
-                mcp_module,
+                mcp_module.http_body,
                 "urlopen",
                 lambda *_args, **_kwargs: _Response(
                     [b"not json"], {"content-type": "text/plain"}

@@ -1,7 +1,20 @@
 from __future__ import annotations
 
-from .shared import *
-from .transport_policy import *
+import contextlib
+import re
+import socket
+import zlib
+from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
+from typing import Any
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+
+from .transport_policy import (
+    MCP_DECODED_BODY_MAX_BYTES,
+    MCP_FRAME_MAX_BYTES,
+    MCP_HEADER_MAX_BYTES,
+    McpTransportError,
+)
 
 
 def validateMcpResponseHeaders(response: Any) -> None:

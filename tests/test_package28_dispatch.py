@@ -275,7 +275,7 @@ class Package28DispatchTests(AgentCoreTestCase):
                     }
                 )
 
-            with mock.patch.object(mcp_module, "_connect_state", connect):
+            with mock.patch.object(mcp_module.runtime, "_connect_state", connect):
                 runtime = await core.createMcpRuntime(
                     cwd="/tmp",
                     servers=[{"name": "fake", "transport": "http", "commandOrUrl": "https://example.test/mcp"}],
@@ -305,7 +305,7 @@ class Package28DispatchTests(AgentCoreTestCase):
                     }
 
             state = {"config": {"name": "fake"}, "client": DiscoveryClient(), "tools": [], "resources": []}
-            discovered = await mcp_module._refresh_tools(state)
+            discovered = await mcp_module.state._refresh_tools(state)
             self.assertEqual(discovered[0]["annotations"], {"readOnlyHint": True, "destructiveHint": False})
 
         run(exercise())

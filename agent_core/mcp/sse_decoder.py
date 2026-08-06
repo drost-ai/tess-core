@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from .shared import *
-from .transport_policy import *
+from .transport_policy import MCP_SSE_EVENT_MAX_BYTES, McpTransportError
 
 
 class McpSseDecoder:

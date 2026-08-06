@@ -3,7 +3,14 @@ from __future__ import annotations
 from .clients import JsonRpcClient
 from .http_body import _close_http_response
 from .http_transport import HttpMcpClient
-from .shared import *
+import asyncio
+import contextlib
+import json
+import queue
+import threading
+import time
+from typing import Any, Callable
+from urllib.parse import urljoin, urlparse
 from .transport_policy import MCP_PENDING_REQUEST_MAX, McpTransportError
 from .transport_shared import _decode_json_rpc_payload
 

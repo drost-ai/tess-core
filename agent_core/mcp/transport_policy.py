@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from .shared import *
+import math
+from typing import Any
 
 
 MCP_HEADER_MAX_BYTES = 16 * 1024

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from .shared import *
-from .transport_policy import *
+import re
+
+from .transport_policy import MCP_FRAME_MAX_BYTES, MCP_HEADER_MAX_BYTES, McpTransportError
 
 
 _HEADER_DELIMITER = b"\r\n\r\n"

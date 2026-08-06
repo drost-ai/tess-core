@@ -1,47 +1,10 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any, Callable
 
+from .._utils import now_iso
+from .state import _safe_request
 
-def _emit_mcp_notification(config: dict[str, Any], payload: dict[str, Any], on_event: Callable[..., Any], state: dict[str, Any] | None = None) -> None:
-    method = payload.get("method")
-    params = payload.get("params")
-    normalized_params = params if isinstance(params, dict) else {"payload": params}
-    if state is not None:
-        state["lastNotificationAt"] = now_iso()
-    on_event(
-        "mcp.channel_notification",
-        {
-            "server": config.get("name"),
-            "method": method,
-            "params": normalized_params,
-        },
-    )
-    if method in {"notifications/tools/list_changed", "tools/list_changed"}:
-        if state is not None:
-            state["toolsStale"] = True
-            state["notificationGeneration"] = int(state.get("notificationGeneration") or 0) + 1
-        on_event("mcp.tools_changed", {"server": config.get("name"), "method": method, "params": normalized_params})
-    elif method in {"notifications/resources/list_changed", "resources/list_changed"}:
-        if state is not None:
-            state["resourcesStale"] = True
-            state["notificationGeneration"] = int(state.get("notificationGeneration") or 0) + 1
-        on_event("mcp.resources_changed", {"server": config.get("name"), "method": method, "params": normalized_params})
-    elif method in {"notifications/message", "notifications/logging/message", "logging/message"}:
-        level = normalized_params.get("level") or normalized_params.get("severity")
-        message = normalized_params.get("message") or normalized_params.get("text") or normalized_params.get("data") or normalized_params.get("payload")
-        on_event(
-            "mcp.log",
-            _without_none_values(
-                {
-                    "server": config.get("name"),
-                    "method": method,
-                    "level": level if isinstance(level, str) else None,
-                    "message": message if isinstance(message, str) else pretty_json(message) if message is not None else None,
-                    "params": normalized_params,
-                }
-            ),
-        )
 
 
 async def _register_requested_channels(states: list[dict[str, Any]], channels: list[str], session_id: str | None, on_event: Callable[..., Any]) -> None:
