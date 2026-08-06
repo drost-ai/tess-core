@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..provider_token_budget import resolve_interactive_context_policy
+from ..providers.token_budget import resolve_interactive_context_policy
 
 
 def retiredInteractiveReliefReceipt(

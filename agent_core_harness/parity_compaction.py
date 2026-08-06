@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.provider_errors import createProviderFailureRecord, createProviderRequestError
+from agent_core.providers.errors import createProviderFailureRecord, createProviderRequestError
 
 from .parity_compaction_fixtures import build_compaction_authority_states
 

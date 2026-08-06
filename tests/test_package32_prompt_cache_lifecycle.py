@@ -5,7 +5,7 @@ from pathlib import Path
 from tests.support.agent_core_case import *
 
 import agent_core.agent_loop.context as context_module
-from agent_core.prompt_cache_state import promptCacheStatePath, readPromptCacheState
+from agent_core.providers.prompt_cache_state import promptCacheStatePath, readPromptCacheState
 from agent_core.providers.anthropic_parts.payloads import buildAnthropicMessagesEnvelope
 from agent_core.providers.anthropic_parts.sse import normalizeAnthropicSseResponse
 from agent_core.providers.prompt_cache_finalization import (

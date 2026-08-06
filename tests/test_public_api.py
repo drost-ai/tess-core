@@ -13,7 +13,7 @@ class PublicApiTests(AgentCoreTestCase):
 
     def test_reference_module_surfaces(self):
         import agent_core.platform_support.common as platform_common
-        import agent_core.provider_watchdog as provider_watchdog
+        import agent_core.providers.watchdog as provider_watchdog
 
         self.assertTrue(callable(provider_watchdog.createProviderRequestWatchdog))
         self.assertEqual(platform_common.buildShellCommand("echo", ["hello world"], {"FOO": "bar baz"}), "FOO='bar baz' echo 'hello world'")

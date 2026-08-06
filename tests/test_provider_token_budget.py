@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.provider_token_budget import (
+from agent_core.providers.token_budget import (
     computeProviderTokenBudget,
     resolveCompactionPolicy,
     resolveCompactionRequestOutputTokens,

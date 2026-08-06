@@ -8,11 +8,11 @@ import uuid
 from typing import Any, Awaitable, Callable
 
 from agent_core._utils import now_iso
-from agent_core.provider_prompt_cache import (
+from agent_core.providers.provider_prompt_cache import (
     attachPromptCacheDispatchContext,
     commitProviderPromptCacheObservation,
 )
-from agent_core.prompt_cache_state import readPromptCacheState
+from agent_core.providers.prompt_cache_state import readPromptCacheState
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
 from agent_core.providers.anthropic_parts.payloads import (
     buildAnthropicHeaders,

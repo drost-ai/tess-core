@@ -14,8 +14,8 @@ from typing import Any
 
 import agent_core as core
 from agent_core.persistence_metrics import registerPersistenceObserver
-from agent_core.provider_turn_session import createProviderTurnSession
-from agent_core.provider_watchdog import AbortSignal
+from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.watchdog import AbortSignal
 from agent_core.agent_loop.cancellation import _capture_session_rollback
 
 from .fake_providers.server import FakeProviderHttpServer

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.provider_timeouts import resolveProviderTimeoutPolicy
+from agent_core.providers.timeouts import resolveProviderTimeoutPolicy
 import agent_core.agent_loop.providers as loop_providers
 
 

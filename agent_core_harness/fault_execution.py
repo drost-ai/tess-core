@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.provider_errors import (
+from agent_core.providers.errors import (
     canRetryProviderFailure,
     classifyProviderHttpFailure,
     createProviderRequestError,

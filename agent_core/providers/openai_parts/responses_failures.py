@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...provider_errors import (
+from ..errors import (
     ProviderRequestError,
     createProviderFailureRecord,
     createProviderRequestError,

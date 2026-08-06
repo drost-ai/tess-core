@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..provider_errors import createProviderFailureRecord, createProviderRequestError
+from ..providers.errors import createProviderFailureRecord, createProviderRequestError
 
 
 def assessContextHeadroom(

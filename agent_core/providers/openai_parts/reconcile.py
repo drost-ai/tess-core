@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...provider_errors import createProviderFailureRecord, createProviderRequestError
+from ..errors import createProviderFailureRecord, createProviderRequestError
 from .normalization import _parse_complete_json_object
 from .shared import get_value
 

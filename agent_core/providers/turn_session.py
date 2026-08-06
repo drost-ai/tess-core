@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from ._utils import maybe_await
+from .._utils import maybe_await
 
 
 class ProviderTurnSession:
@@ -148,11 +148,11 @@ def createProviderTurnSession(
         "runtime": runtime,
     }
     if values["provider"] == "openai":
-        from .providers.openai_turn_session import OpenAiProviderTurnSession
+        from .openai_turn_session import OpenAiProviderTurnSession
 
         return OpenAiProviderTurnSession(config=config, **values)
     if values["provider"] == "anthropic":
-        from .providers.anthropic_turn_session import AnthropicProviderTurnSession
+        from .anthropic_turn_session import AnthropicProviderTurnSession
 
         return AnthropicProviderTurnSession(config=config, **values)
     return StatelessProviderTurnSession(**values)

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ..provider_turn_session import ProviderTurnSession, _close_resource
+from .turn_session import ProviderTurnSession, _close_resource
 
 _INTERNAL_ITEM_KEYS = {"_agent_core", "provider_metadata"}
 _TURN_STATE_HEADER = "x-codex-turn-state"

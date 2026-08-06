@@ -4,8 +4,8 @@ import asyncio
 from typing import Any
 
 from ...partial_output import PartialOutputDelivery
-from ...provider_activity import emitProviderActivity
-from ...provider_errors import (
+from ..activity import emitProviderActivity
+from ..errors import (
     ProviderRequestError,
     normalizeUnknownProviderFailure,
 )

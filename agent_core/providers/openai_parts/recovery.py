@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from ...partial_output import PartialOutputDelivery, interruptedPreviewReceipt
-from ...provider_errors import (
+from ..errors import (
     ProviderRequestError,
     createProviderFailureRecord,
     createProviderRequestError,

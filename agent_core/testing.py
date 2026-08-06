@@ -7,7 +7,7 @@ from .executable_closure import (
     snapshotExecutableClosure,
 )
 from .collaboration.bridge.recovery import __setBridgeRecoveryTestHookForTests
-from .provider_errors import *
+from .providers.errors import *
 from .providers.anthropic import *
 from .providers.openai import *
 from .token_accounting import *

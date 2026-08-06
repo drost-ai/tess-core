@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..provider_token_budget import (
+from ..providers.token_budget import (
     normalizePositiveInteger,
     resolveCompactionPolicy,
     resolve_interactive_context_policy as _resolve_interactive_context_policy,

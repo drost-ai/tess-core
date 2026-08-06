@@ -4,7 +4,7 @@ import copy
 import time
 
 from ...contracts.providers import ProviderResponse
-from ...provider_activity import emitProviderActivity
+from ..activity import emitProviderActivity
 from ...runtime.secret_provider import resolveProviderConfigSecrets
 from ..anthropic_async_transport import (
     AnthropicAsyncHttpConnectionOwner as _AnthropicHttpConnectionOwner,

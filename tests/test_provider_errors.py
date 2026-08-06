@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 
 class ProviderErrorTests(AgentCoreTestCase):
     def test_provider_request_watchdog_parity_surface(self):
-        import agent_core.provider_watchdog as provider_watchdog
+        import agent_core.providers.watchdog as provider_watchdog
 
         watchdog = provider_watchdog.createProviderRequestWatchdog(
             {"initialTimeoutMs": 1, "buildTimeoutError": lambda: TimeoutError("timed out")}

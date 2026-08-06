@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from ._utils import now_iso
+from .._utils import now_iso
 
 
 PROVIDER_ACTIVITY_KINDS = frozenset(

@@ -3,8 +3,8 @@ from __future__ import annotations
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from agent_core.provider_turn_session import createProviderTurnSession
-from agent_core.provider_watchdog import AbortSignal
+from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.watchdog import AbortSignal
 from agent_core.providers.anthropic_http_transport import (
     activeAnthropicTransportThreadCount,
 )

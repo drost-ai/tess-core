@@ -5,9 +5,9 @@ import os
 from typing import Any
 
 from ..config import getDefaultEffortForProvider, getDefaultModelForProvider, normalizeEffortForModel, normalizeModelName
-from ..provider_errors import createProviderFailureRecord, createProviderRequestError
-from ..provider_timeouts import resolveProviderTimeoutPolicy
-from ..provider_token_budget import resolveCompactionPolicy
+from ..providers.errors import createProviderFailureRecord, createProviderRequestError
+from ..providers.timeouts import resolveProviderTimeoutPolicy
+from ..providers.token_budget import resolveCompactionPolicy
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import DEFAULT_CODEX_BASE_URL, getOpenAiProviderLabel, sendOpenAiRequest
 from ..runtime.secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets

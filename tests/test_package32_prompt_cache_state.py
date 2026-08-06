@@ -6,8 +6,8 @@ from pathlib import Path
 
 from tests.support.agent_core_case import *
 
-import agent_core.prompt_cache_state as prompt_cache_state_module
-from agent_core.prompt_cache_state import (
+import agent_core.providers.prompt_cache_state as prompt_cache_state_module
+from agent_core.providers.prompt_cache_state import (
     commitPromptCacheObservation,
     createPromptCacheDispatchOrder,
     markPromptCacheEvictionIntent,

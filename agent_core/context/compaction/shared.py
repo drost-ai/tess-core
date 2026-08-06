@@ -9,7 +9,7 @@ from typing import Any
 from ..._utils import now_iso
 from ..compaction_models import createDefaultCompactionModelClient, resolveCompactionModelCandidates
 from ..durable_memory import updateDurableMemoryFromWorkingContext
-from ...provider_errors import fallbackEligibleProviderFailure, isProviderRequestError
+from ...providers.errors import fallbackEligibleProviderFailure, isProviderRequestError
 from ...storage import (
     compactionCheckpointPath,
     compactionManifestPath,

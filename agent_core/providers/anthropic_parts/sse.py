@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...provider_activity import emitProviderActivity
+from ..activity import emitProviderActivity
 
 def parseAnthropicSseEvents(raw: str) -> list[dict[str, Any]]:
     normalized = raw.replace("\r\n", "\n")

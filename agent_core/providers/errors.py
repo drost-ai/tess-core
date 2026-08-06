@@ -9,8 +9,8 @@ from typing import Any
 
 import typing as _typing
 
-from ._utils import now_iso
-from .provider_error_diagnostics import (
+from .._utils import now_iso
+from .error_diagnostics import (
     boundDiagnosticCount as _bound_diagnostic_count,
     boundedInterruptedPreview as _bounded_interrupted_preview,
     boundDiagnosticText as _bound_diagnostic_text,
@@ -20,13 +20,13 @@ from .provider_error_diagnostics import (
     positiveOptionalInteger as _positive_optional_integer,
     validHttpStatus as _valid_http_status,
 )
-from .provider_error_sdk import (
+from .error_sdk import (
     classifyOpenAiSdkEvidence as _classify_openai_sdk_evidence,
     extractOpenAiSdkException as _extract_openai_sdk_exception,
 )
 
 if _typing.TYPE_CHECKING:
-    from .contracts.providers import ProviderFailureRecord
+    from ..contracts.providers import ProviderFailureRecord
 
 
 class ProviderRequestError(Exception):

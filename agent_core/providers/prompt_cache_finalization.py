@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from .prompt_cache import resolvePromptCachePolicy
-from ..prompt_cache_state import markPromptCacheEvictionIntent
+from .prompt_cache_state import markPromptCacheEvictionIntent
 from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths
 
 

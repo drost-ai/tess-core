@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.provider_turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import createProviderTurnSession
 
 from .fake_providers.server import FakeProviderHttpServer
 

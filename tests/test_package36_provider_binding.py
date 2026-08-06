@@ -5,7 +5,7 @@ from tests.support.agent_core_case import AgentCoreTestCase
 from agent_core.agent_loop.turn_session import (
     resolve_effective_provider_turn_binding,
 )
-from agent_core.provider_turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import createProviderTurnSession
 from agent_core.providers.openai_turn_session import OpenAiProviderTurnSession
 
 

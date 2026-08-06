@@ -19,8 +19,8 @@ from .plugin_contracts import *
 from .plugins import *
 from .permission_rules import *
 from .process_identity import *
-from .provider_errors import *
-from .provider_activity import *
+from .providers.errors import *
+from .providers.activity import *
 from .collaboration.remote import *
 from .repository_trust import *
 from .runtime.bootstrap import *
@@ -77,6 +77,10 @@ _LEGACY_MODULE_ALIASES = {
     "lifecycle_barrier": "agent_core.runtime.lifecycle_barrier",
     "persisted_record_scanner": "agent_core.session.persisted_record_scanner",
     "persisted_record_validation": "agent_core.session.persisted_record_validation",
+    "provider_errors": "agent_core.providers.errors",
+    "provider_timeouts": "agent_core.providers.timeouts",
+    "provider_token_budget": "agent_core.providers.token_budget",
+    "provider_watchdog": "agent_core.providers.watchdog",
     "remote": "agent_core.collaboration.remote",
     "runtime_bootstrap": "agent_core.runtime.bootstrap",
     "runtime_events": "agent_core.runtime.events",

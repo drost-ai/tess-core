@@ -5,7 +5,7 @@ import contextlib
 import threading
 from typing import Any
 
-from ..provider_turn_session import ProviderTurnSession
+from .turn_session import ProviderTurnSession
 from .anthropic_async_transport import AnthropicAsyncHttpConnectionOwner
 
 

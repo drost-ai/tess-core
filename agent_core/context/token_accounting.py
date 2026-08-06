@@ -9,13 +9,13 @@ from urllib.request import Request, urlopen
 from .._utils import get_value as _get_value, maybe_await as _maybe_await, now_iso
 from ..image_budget import measureAdmittedImageSet as _measure_admitted_image_set
 from .._image_redaction import redactImagePayloads as _redact_image_payloads
-from ..provider_errors import (
+from ..providers.errors import (
     createProviderFailureRecord as _create_provider_failure_record,
     createProviderRequestError as _create_provider_request_error,
     isProviderRequestError as _is_provider_request_error,
 )
-from ..provider_timeouts import DEFAULT_TOKEN_COUNT_TIMEOUT_MS as _DEFAULT_TOKEN_COUNT_TIMEOUT_MS
-from ..provider_watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
+from ..providers.timeouts import DEFAULT_TOKEN_COUNT_TIMEOUT_MS as _DEFAULT_TOKEN_COUNT_TIMEOUT_MS
+from ..providers.watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
 from ..runtime.secret_provider import resolveProviderConfigSecrets

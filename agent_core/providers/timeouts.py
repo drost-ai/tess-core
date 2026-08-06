@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any, Mapping
 
-from .provider_errors import createProviderFailureRecord, createProviderRequestError
-from .provider_watchdog import ProviderRequestWatchdog, createProviderRequestWatchdog
+from .errors import createProviderFailureRecord, createProviderRequestError
+from .watchdog import ProviderRequestWatchdog, createProviderRequestWatchdog
 
 
 DEFAULT_TOKEN_COUNT_TIMEOUT_MS = 15_000

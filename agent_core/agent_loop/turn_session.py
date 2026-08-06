@@ -13,7 +13,7 @@ from ..config import (
     ensureProviderForModelSelection,
     resolveFallbackProviderProfileName,
 )
-from ..provider_turn_session import createProviderTurnSession
+from ..providers.turn_session import createProviderTurnSession
 from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
 from .._transient_input import (
     createTransientExecutionSession,

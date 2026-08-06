@@ -8,7 +8,7 @@ from typing import Any
 import agent_core as core
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
-from agent_core.provider_token_budget import resolve_interactive_context_policy
+from agent_core.providers.token_budget import resolve_interactive_context_policy
 from agent_core.agent_loop.tool_result_budget import ToolResultBatchBudget
 from agent_core.tool_result_guard import guardToolCallResult, serializedContentBytes
 

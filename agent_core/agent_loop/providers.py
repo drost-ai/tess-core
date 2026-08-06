@@ -5,7 +5,7 @@ from ..partial_output_state import (
     createPartialOutputStateStore as _create_partial_output_state_store,
     finalizePartialOutputState as _finalize_partial_output_state,
 )
-from ..provider_timeouts import resolveProviderTimeoutPolicy
+from ..providers.timeouts import resolveProviderTimeoutPolicy
 from ..runtime.secret_provider import resolveProviderConfigSecrets
 
 

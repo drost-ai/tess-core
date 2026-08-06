@@ -12,7 +12,7 @@ from agent_core.message_origin import (
     syntheticUserMessage,
     userRequestMessage,
 )
-from agent_core.provider_token_budget import resolve_interactive_context_policy
+from agent_core.providers.token_budget import resolve_interactive_context_policy
 from tests.support.agent_core_case import AgentCoreTestCase
 
 

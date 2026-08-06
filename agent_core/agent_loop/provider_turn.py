@@ -6,13 +6,13 @@ from typing import Any
 
 from .._utils import maybe_await, merge_usage
 from ..message_origin import syntheticUserMessage as _synthetic_user_message
-from ..provider_prompt_cache import (
+from ..providers.provider_prompt_cache import (
     attachPreparedPromptCacheContext,
     commitProviderPromptCacheObservation,
     createPromptCacheTurnContext,
 )
-from ..provider_activity import ProviderActivityEmitter, emitProviderActivity
-from ..provider_timeouts import createTurnDeadlineContext
+from ..providers.activity import ProviderActivityEmitter, emitProviderActivity
+from ..providers.timeouts import createTurnDeadlineContext
 from ..session.persistence import persistSession
 from ..token_accounting import recordActualTokenUsage
 from ..usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd

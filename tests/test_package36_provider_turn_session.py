@@ -9,7 +9,7 @@ from agent_core.providers.openai_turn_session import (
     OpenAiProviderTurnSession,
     PreparedOpenAiRequest,
 )
-from agent_core.provider_turn_session import ProviderTurnSession
+from agent_core.providers.turn_session import ProviderTurnSession
 
 
 class _WebSocketFailure(RuntimeError):

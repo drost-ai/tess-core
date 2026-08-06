@@ -313,7 +313,7 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_provider_failure_record_validates_strict(self) -> None:
         from agent_core.contracts import ProviderFailureRecord
-        from agent_core.provider_errors import classifyProviderHttpFailure, createProviderFailureRecord
+        from agent_core.providers.errors import classifyProviderHttpFailure, createProviderFailureRecord
 
         record = createProviderFailureRecord(
             provider="anthropic",

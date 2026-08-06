@@ -18,8 +18,8 @@ from ..config import (
 from ..compaction import runCompaction, shouldAutoCompact
 from ..context_policy import decideDurableCheckpoint, estimateRawContextPressure
 from ..continuation import buildContinuationContext
-from ..provider_errors import createProviderFailureRecord, createProviderRequestError, fallbackEligibleProviderFailure, isProviderRequestError
-from ..provider_token_budget import (
+from ..providers.errors import createProviderFailureRecord, createProviderRequestError, fallbackEligibleProviderFailure, isProviderRequestError
+from ..providers.token_budget import (
     computeProviderTokenBudget,
     resolveCompactionPolicy,
 )

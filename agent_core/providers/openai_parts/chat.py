@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...provider_activity import emitProviderActivity
+from ..activity import emitProviderActivity
 from .recovery_attempt import openai_retry_delay_ms as _openai_retry_delay_ms
 from .shared import *
 

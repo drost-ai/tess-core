@@ -3,8 +3,8 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 from agent_core.agent_loop.context_budget import assessContextHeadroom
-from agent_core.provider_activity import ProviderActivityEmitter
-from agent_core.provider_token_budget import resolveCompactionPolicy
+from agent_core.providers.activity import ProviderActivityEmitter
+from agent_core.providers.token_budget import resolveCompactionPolicy
 
 
 def _working_context_fields() -> dict[str, Any]:
