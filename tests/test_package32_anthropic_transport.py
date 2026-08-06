@@ -63,7 +63,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         }
         captured = {}
 
-        async def fake_send(_config, payload, _timeout, _stream, header_features):
+        async def fake_send(_config, payload, _timeout, _stream, header_features, turn_session=None):
             captured["payload"] = payload
             captured["headerFeatures"] = header_features
             return (

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..anthropic_async_transport import (
-    AnthropicAsyncHttpConnectionOwner as _AnthropicHttpConnectionOwner,
+    AnthropicAsyncHttpConnectionOwner as _AnthropicAsyncTransport,
     AsyncAnthropicHttpResponse as _AsyncAnthropicHttpResponse,
 )
 from .payloads import buildAnthropicHeaders, resolveAnthropicMessagesUrl
@@ -18,7 +18,7 @@ async def sendAnthropicMessagesViaAsyncTransport(
     timeout_ms: int,
     stream: bool,
     header_features: dict[str, Any] | None,
-    transport: _AnthropicHttpConnectionOwner,
+    transport: _AnthropicAsyncTransport,
 ) -> tuple[str, str]:
     url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
     body = json.dumps(payload).encode("utf-8")
@@ -48,7 +48,7 @@ async def sendAnthropicMessagesStreamingViaAsyncTransport(
     attempt: int,
     header_features: dict[str, Any] | None,
     on_activity: Any | None,
-    transport: _AnthropicHttpConnectionOwner,
+    transport: _AnthropicAsyncTransport,
 ) -> dict[str, Any]:
     url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
     body = json.dumps(payload).encode("utf-8")

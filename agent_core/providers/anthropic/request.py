@@ -7,7 +7,7 @@ from ...contracts.providers import ProviderResponse
 from ..activity import emitProviderActivity
 from ...runtime.secret_provider import resolveProviderConfigSecrets
 from ..anthropic_async_transport import (
-    AnthropicAsyncHttpConnectionOwner as _AnthropicHttpConnectionOwner,
+    AnthropicAsyncHttpConnectionOwner as _AnthropicAsyncTransport,
 )
 from ..anthropic_http_transport import startAnthropicTransportWorker as _start_anthropic_transport_worker
 
@@ -99,18 +99,6 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                         stream_activity_state,
                         accumulator,
                     ),
-                ) if turn_session is None else _send_anthropic_messages_streaming_async(
-                    config,
-                    payload,
-                    timeout_ms,
-                    request,
-                    runtime,
-                    attempt,
-                    envelope.get("headerFeatures"),
-                    on_activity=lambda accumulator=None: _record_anthropic_turn_activity(
-                        stream_activity_state,
-                        accumulator,
-                    ),
                     turn_session=turn_session,
                 )
                 response = await _race_anthropic_activity(
@@ -126,14 +114,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 )
             else:
                 sender = _send_anthropic_messages_async(
-                    config, payload, timeout_ms, stream, envelope.get("headerFeatures")
-                ) if turn_session is None else _send_anthropic_messages_async(
-                    config,
-                    payload,
-                    timeout_ms,
-                    stream,
-                    envelope.get("headerFeatures"),
-                    turn_session=turn_session,
+                    config, payload, timeout_ms, stream, envelope.get("headerFeatures"), turn_session=turn_session
                 )
                 raw, content_type = await _race_anthropic_activity(
                     sender,
@@ -269,7 +250,6 @@ def _send_anthropic_messages_async(
             target=lambda: _send_anthropic_messages_sync(
                 config, payload, timeout_ms, stream, header_features, None
             ),
-            owner=None,
             turn_session=turn_session,
             name="agent-core-anthropic-request-test-double",
         )
@@ -315,7 +295,6 @@ def _send_anthropic_messages_streaming_async(
                 on_activity=on_activity,
                 transport=None,
             ),
-            owner=None,
             turn_session=turn_session,
             name="agent-core-anthropic-stream-test-double",
         )
@@ -387,11 +366,11 @@ def _send_anthropic_messages_streaming_sync(
         )
 
 
-def _acquire_anthropic_transport(turn_session: Any) -> _AnthropicHttpConnectionOwner:
+def _acquire_anthropic_transport(turn_session: Any) -> _AnthropicAsyncTransport:
     acquire = getattr(turn_session, "acquire_anthropic_transport", None)
     if callable(acquire):
         return acquire()
-    return _AnthropicHttpConnectionOwner()
+    return _AnthropicAsyncTransport()
 
 
 # Preserve the established test-double seam while production traffic uses the
