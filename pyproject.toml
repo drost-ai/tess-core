@@ -43,5 +43,10 @@ ignore_errors = true
 module = "agent_core.contracts.*"
 ignore_errors = false
 
+# Editor/Pylance lane: the runtime's merged-namespace idiom (vars(module).update
+# in package __init__s) is invisible to static analysis and produces thousands of
+# false positives, so type checking is off outside the mypy contracts lane above.
 [tool.pyright]
-typeCheckingMode = "standard"
+typeCheckingMode = "off"
+# Still surfaced as warnings in "off" mode; the merged namespace makes it pure noise.
+reportUndefinedVariable = "none"
