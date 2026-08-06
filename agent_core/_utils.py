@@ -4,6 +4,7 @@ import asyncio
 import copy
 import inspect
 import json
+import os
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable
@@ -123,3 +124,20 @@ def parse_iso_ms(value: Any) -> float | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000
     except Exception:
         return None
+
+
+def is_process_alive(pid: Any) -> bool:
+    """Signal-0 liveness probe with strict pid validation.
+
+    PermissionError means the pid exists but belongs to another user - that
+    is *alive*; reporting it dead lets reconciliation fail a running task.
+    """
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True

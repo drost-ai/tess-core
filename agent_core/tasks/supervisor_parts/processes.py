@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..._utils import is_process_alive as _is_process_alive
+
 import asyncio
 import contextlib
 import os
@@ -156,14 +158,6 @@ def _watch_process_thread(
         _WATCHERS.discard(threading.current_thread())
 
 
-def _is_process_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
 
 
 def _terminate_process(pid: int | None) -> bool:

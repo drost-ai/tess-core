@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import is_process_alive as _is_process_alive
+
 import asyncio
 import contextlib
 import hashlib
@@ -22,16 +24,6 @@ from ..storage import (
 )
 from .protocol import DAEMON_PROTOCOL_VERSION
 
-def _is_process_alive(pid: int) -> bool:
-    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
 
 
 PRIVATE_DIRECTORY_MODE = 0o700

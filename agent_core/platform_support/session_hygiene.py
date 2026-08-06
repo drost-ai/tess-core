@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import is_process_alive as _is_process_alive
+
 import asyncio
 import copy
 import datetime
@@ -386,15 +388,3 @@ def _sample(target: list[Any], value: Any, limit: int) -> None:
         target.append(value)
 
 
-def _is_process_alive(pid: int) -> bool:
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False

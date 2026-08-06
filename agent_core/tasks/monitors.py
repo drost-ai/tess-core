@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import is_process_alive as _is_process_alive
+
 from .._utils import parse_iso_ms
 
 import asyncio
@@ -285,12 +287,6 @@ async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
     return task
 
 
-def _is_process_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except Exception:
-        return False
 
 
 def _get_output_size(task_id: Any) -> int:
