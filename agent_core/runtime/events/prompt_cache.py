@@ -67,4 +67,4 @@ def _placements(value: Any) -> list[str] | None:
     return result
 
 
-prompt_cache_event_payload = promptCacheEventPayload
+

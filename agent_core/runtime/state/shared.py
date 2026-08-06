@@ -1,12 +1,27 @@
 from __future__ import annotations
 
 import copy
-from typing import Any, Callable
-
-from ..._utils import now_iso
+from typing import Any
 
 
 ACTIVE_TASK_STATUSES = {"queued", "running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
+
+def summarizeSessionRecord(session: dict[str, Any]) -> dict[str, Any]:
+    metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
+    return {
+        "id": _field(session, "id", "sessionId", "session_id"),
+        "cwd": _field(session, "cwd"),
+        "name": _field(session, "name"),
+        "provider": _field(session, "provider"),
+        "model": _field(session, "model"),
+        "permissionMode": _field(session, "permissionMode", "permission_mode"),
+        "updatedAt": _field(session, "updatedAt", "updated_at"),
+        "workspaceName": _field(session, "workspaceName", "workspace_name") or metadata.get("workspaceName"),
+        "gitRoot": _field(session, "gitRoot", "git_root") or metadata.get("gitRoot"),
+        "gitBranch": _field(session, "gitBranch", "git_branch") or metadata.get("gitBranch"),
+        "remoteSessionId": _field(session, "remoteSessionId", "remote_session_id") or metadata.get("remoteSessionId"),
+        "bridgeId": _field(session, "bridgeId", "bridge_id") or metadata.get("bridgeId"),
+    }
 
 def _field(data: dict[str, Any], *names: str, default: Any = None) -> Any:
     for name in names:

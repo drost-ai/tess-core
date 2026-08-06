@@ -4,6 +4,8 @@ import copy
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+from .shared import _field
+
 
 MCP_RUNTIME_STATE_EVENTS = {
     "plan.mcp_tool_allowed",
@@ -85,13 +87,6 @@ def reduce_mcp_runtime_state(
     mcp["servers"] = servers
     state["mcp"] = mcp
     return state
-
-
-def _field(data: dict[str, Any], *names: str) -> Any:
-    for name in names:
-        if name in data:
-            return data.get(name)
-    return None
 
 
 def _durable_authorization_url(value: Any) -> str | None:

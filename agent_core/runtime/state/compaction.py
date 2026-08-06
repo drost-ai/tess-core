@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from .shared import *
+from typing import Any
+
+from .shared import _field
 
 
 def reduceCompactionHeadroom(

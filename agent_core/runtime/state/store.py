@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from .shared import *
+import copy
+from typing import Any, Callable
+
+from .reducer import reduceRuntimeState
+from .shared import _extract_last_assistant_text, summarizeSessionRecord
 
 def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str, Any]:
     metadata = session.get("metadata", {}) if session else {}
@@ -62,23 +66,6 @@ def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[
         return lambda: subscribers.remove(fn) if fn in subscribers else None
 
     return {"getState": get_state, "setState": set_state, "dispatch": dispatch, "subscribe": subscribe, "applyEvent": dispatch}
-
-def summarizeSessionRecord(session: dict[str, Any]) -> dict[str, Any]:
-    metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
-    return {
-        "id": _field(session, "id", "sessionId", "session_id"),
-        "cwd": _field(session, "cwd"),
-        "name": _field(session, "name"),
-        "provider": _field(session, "provider"),
-        "model": _field(session, "model"),
-        "permissionMode": _field(session, "permissionMode", "permission_mode"),
-        "updatedAt": _field(session, "updatedAt", "updated_at"),
-        "workspaceName": _field(session, "workspaceName", "workspace_name") or metadata.get("workspaceName"),
-        "gitRoot": _field(session, "gitRoot", "git_root") or metadata.get("gitRoot"),
-        "gitBranch": _field(session, "gitBranch", "git_branch") or metadata.get("gitBranch"),
-        "remoteSessionId": _field(session, "remoteSessionId", "remote_session_id") or metadata.get("remoteSessionId"),
-        "bridgeId": _field(session, "bridgeId", "bridge_id") or metadata.get("bridgeId"),
-    }
 
 def deriveStoredTurnOutcome(session: dict[str, Any]) -> dict[str, Any] | None:
     text = _extract_last_assistant_text(session)
