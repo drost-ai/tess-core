@@ -374,6 +374,19 @@ def _revision(record: dict[str, Any]) -> int:
 
 
 def _has_delivered_reconciliation(session: dict[str, Any], record: dict[str, Any]) -> bool:
+    record_id = str(record.get("id") or "").strip()
+    state = session.get("metadata", {}).get("subagentReconciliation") or {}
+    delivered = state.get("deliveredRecordIds")
+    if record_id and isinstance(delivered, list):
+        # The structural ledger is authoritative once present. Deliveries that
+        # predate it are covered by lastInjectedRecordIds; the fragile text
+        # scan only remains for sessions that have never carried either.
+        legacy_injected = state.get("lastInjectedRecordIds") if isinstance(state.get("lastInjectedRecordIds"), list) else []
+        return record_id in delivered or record_id in legacy_injected
+    return _has_delivered_reconciliation_text(session, record)
+
+
+def _has_delivered_reconciliation_text(session: dict[str, Any], record: dict[str, Any]) -> bool:
     task_id = str(record.get("taskId") or "").strip()
     child_id = str(record.get("childAgentId") or "").strip()
     for message in session.get("messages") or []:

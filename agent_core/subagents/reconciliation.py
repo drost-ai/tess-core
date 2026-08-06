@@ -290,10 +290,14 @@ async def appendPendingSubagentReconciliationsToSession(
     text = renderSubagentReconciliationMessage(records)
     session["messages"].append(_synthetic_user_message(text, actor="subagent", kind="subagent_reconciliation", lineage={"logicalTurnId": str(parentTurnId or "")}))
     metadata = session.setdefault("metadata", {})
+    injected_ids = [record.get("id") for record in records if record.get("id")]
+    previous = metadata.get("subagentReconciliation") if isinstance(metadata.get("subagentReconciliation"), dict) else {}
+    prior_delivered = previous.get("deliveredRecordIds") if isinstance(previous.get("deliveredRecordIds"), list) else []
     metadata["subagentReconciliation"] = {
         "lastInjectedAt": now_iso(),
         "lastInjectedCount": len(records),
-        "lastInjectedRecordIds": [record.get("id") for record in records if record.get("id")],
+        "lastInjectedRecordIds": injected_ids,
+        "deliveredRecordIds": ([*prior_delivered, *injected_ids])[-200:],
         "pendingBeforeInjection": len(records),
     }
     _emit(runtime, "subagent.reconciliation.appended", {"session_id": session["id"], "count": len(records), "record_ids": metadata["subagentReconciliation"]["lastInjectedRecordIds"]})

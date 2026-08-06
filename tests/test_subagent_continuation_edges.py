@@ -75,3 +75,33 @@ class SubagentContinuationEdgeTests(AgentCoreTestCase):
             self.assertEqual(outcome["terminal"], 0)
         finally:
             self.restore_home(root, previous)
+
+    def test_structural_ledger_prevents_text_scan_false_positive_loss(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            parent = self._parent_session(home, workspace)
+            # A transcript that coincidentally contains the reconciliation
+            # banner and this task id - the text scan alone would treat the
+            # fresh record as already delivered and consume it unseen.
+            parent["messages"] = [
+                {"role": "user", "content": "[Background subagent updates]\n1. quoting Task: task-fp and Child: agent-fp\n[/Background subagent updates]"},
+            ]
+            parent["metadata"]["subagentReconciliation"] = {"deliveredRecordIds": []}
+            record = run(
+                core.createSubagentReconciliationForTerminalChild(
+                    childRecord={"agentId": "agent-fp", "sessionId": "child-fp", "parentSessionId": parent["id"], "name": "FP", "status": "completed"},
+                    taskMeta={"task_id": "task-fp", "status": "completed", "completedAt": "2026-07-05T00:00:00Z"},
+                    result={"text": "FP done.", "stopReason": "end_turn"},
+                    source="test",
+                )
+            )
+            appended = run(core.appendPendingSubagentReconciliationsToSession(parent, parentTurnId="turn-fp"))
+            self.assertEqual([r["id"] for r in appended["records"]], [record["id"]])
+            self.assertIn(record["id"], parent["metadata"]["subagentReconciliation"]["deliveredRecordIds"])
+            run(core.consumeAppendedSubagentReconciliations(parent, appended))
+
+            # Once structurally delivered, a later claim cycle re-filters it.
+            second = run(core.appendPendingSubagentReconciliationsToSession(parent, parentTurnId="turn-fp-2"))
+            self.assertEqual(second["records"], [])
+        finally:
+            self.restore_home(root, previous)
