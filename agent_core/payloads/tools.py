@@ -153,11 +153,6 @@ def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
     return selected
 
 
-def _fit_lines_within_bytes_with_progress(lines: list[str], max_bytes: int) -> list[str]:
-    selected = _fit_lines_within_bytes(lines, max_bytes)
-    if selected or not lines:
-        return selected
-    return [lines[0]]
 
 
 def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: int) -> dict[str, Any]:
@@ -323,148 +318,9 @@ async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any)
     })
 
 
-async def shapeReadPayload(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
-    policy = getToolPayloadPolicy(args["config"])
-    lines = args["lines"]
-    start = max(int(args.get("offset", 1)) - 1, 0)
-    requested = int(args.get("requestedLimit") or policy["readDefaultLines"])
-    selected = lines[start:start + requested]
-    full = "\n".join(selected)
-    excerpt_lines = _fit_lines_within_bytes(selected[: policy["readInlineLines"]], policy["readInlineBytes"])
-    excerpt = "\n".join(excerpt_lines)
-    truncated = excerpt != full or start + len(selected) < len(lines)
-    artifact = None
-    if _byte_len(full) > policy["artifactThresholdBytes"] or _count_lines(full) > policy["artifactThresholdLines"]:
-        artifact = await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Read", "family": "read", "content": full, "contentType": "text"})
-    next_offset = start + len(selected) + 1 if start + len(selected) < len(lines) else (start + len(excerpt_lines) + 1 if len(excerpt_lines) < len(selected) else None)
-    return _without_none_values({
-        "type": "text",
-        "file": {
-            "filePath": args["filePath"],
-            "content": excerpt,
-            "numLines": len(excerpt_lines),
-            "startLine": start + 1,
-            "totalLines": len(lines),
-            "selectedNumLines": len(selected),
-            "selectedBytes": _byte_len(full),
-            "truncated": truncated,
-            "requestedLimit": requested,
-            "nextOffset": next_offset,
-            "artifact": artifact,
-            "transcriptView": {
-                "strategy": "windowed_file_read" if truncated else "inline_full",
-                "truncated": truncated,
-                "originalBytes": _byte_len(full),
-                "originalLines": _count_lines(full),
-                "returnedBytes": _byte_len(excerpt),
-                "returnedLines": len(excerpt_lines),
-            },
-        },
-    })
 
 
-def _sample_paths_by_directory(matches: list[str], limit: int) -> list[str]:
-    if len(matches) <= limit:
-        return list(matches)
-    buckets: dict[str, list[str]] = {}
-    for match in matches:
-        directory = os.path.dirname(match) or "(root)"
-        buckets.setdefault(directory, []).append(match)
-    directories = sorted(buckets.keys(), key=lambda item: (-len(buckets[item]), item))
-    sample: list[str] = []
-    depth = 0
-    while len(sample) < limit:
-        added = False
-        for directory in directories:
-            bucket = buckets[directory]
-            if depth < len(bucket):
-                sample.append(bucket[depth])
-                added = True
-                if len(sample) >= limit:
-                    break
-        if not added:
-            break
-        depth += 1
-    return sample
 
 
-async def shapeGlobPayload(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
-    policy = getToolPayloadPolicy(args["config"])
-    matches = args.get("matches", [])
-    offset = max(int(args.get("offset") or 0), 0)
-    requested_limit = int(args.get("requestedLimit") or policy["globInlineItems"])
-    limit = min(max(requested_limit, 1), policy["globInlineItems"])
-    page = matches[offset:offset + limit]
-    sample = _fit_lines_within_bytes_with_progress(page, policy["globInlineBytes"])
-    full = "\n".join(matches)
-    artifact = (
-        await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Glob", "family": "glob", "content": full, "contentType": "paths", "itemCount": len(matches)})
-        if offset < len(matches) and (len(matches) > len(sample) or _byte_len(full) > policy["globInlineBytes"])
-        else None
-    )
-    counts: dict[str, int] = {}
-    for match in matches:
-        directory = os.path.dirname(match) or "(root)"
-        counts[directory] = counts.get(directory, 0) + 1
-    directory_counts = [{"directory": name, "count": count} for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:12]]
-    return _without_none_values({
-        "type": "glob",
-        "pattern": args["pattern"],
-        "path": args["searchPath"],
-        "matches": sample,
-        "totalMatches": len(matches),
-        "offset": offset,
-        "limit": limit,
-        "returnedMatches": len(sample),
-        "truncated": offset + len(sample) < len(matches),
-        "nextOffset": offset + len(sample) if offset + len(sample) < len(matches) else None,
-        "ignoredDefaultsApplied": args.get("ignoredDefaultsApplied", True),
-        "directoryCounts": directory_counts,
-        "artifact": artifact,
-        "transcriptView": {
-            "strategy": "count_and_sample" if offset + len(sample) < len(matches) else "inline_full",
-            "truncated": offset + len(sample) < len(matches),
-            "originalBytes": _byte_len(full),
-            "originalLines": len(matches),
-            "returnedBytes": _byte_len("\n".join(sample)),
-            "returnedLines": len(sample),
-        },
-    })
 
 
-async def shapeGrepPayload(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
-    policy = getToolPayloadPolicy(args["config"])
-    matches = args.get("matches", [])
-    offset = int(args.get("offset") or 0)
-    requested = len(matches) if args.get("requestedHeadLimit") == 0 else int(args.get("requestedHeadLimit") or policy["grepInlineMatches"])
-    limit = min(requested, policy["grepInlineMatches"])
-    sample = _fit_lines_within_bytes(matches[offset:offset + limit], policy["grepInlineBytes"])
-    full = "\n".join(matches)
-    artifact = None
-    if len(matches) > len(sample) or _byte_len(full) > policy["grepInlineBytes"]:
-        artifact = await _persist_artifact({"sessionId": args["sessionId"], "toolName": "Grep", "family": "grep", "content": full, "contentType": "text", "itemCount": len(matches)})
-    truncated = len(sample) < len(matches) - offset
-    return _without_none_values({
-        "type": "grep",
-        "pattern": args["pattern"],
-        "path": args["searchPath"],
-        "outputMode": args["outputMode"],
-        "matches": sample,
-        "totalMatches": len(matches),
-        "offset": offset,
-        "headLimit": limit,
-        "truncated": truncated,
-        "nextOffset": offset + len(sample) if offset + len(sample) < len(matches) else None,
-        "artifact": artifact,
-        "transcriptView": {
-            "strategy": "count_and_sample" if truncated else "inline_full",
-            "truncated": truncated,
-            "originalBytes": _byte_len(full),
-            "originalLines": len(matches),
-            "returnedBytes": _byte_len("\n".join(sample)),
-            "returnedLines": len(sample),
-        },
-    })

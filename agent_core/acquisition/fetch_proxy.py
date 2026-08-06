@@ -13,7 +13,3 @@ def resolveEnvironmentProxyForUrl(url: str, env: dict[str, str] | None = None) -
     return None
 
 
-def installEnvironmentProxyFetch() -> None:
-    # Python callers normally configure proxies through urllib/request or their
-    # HTTP client. This no-op keeps parity with the TypeScript public surface.
-    return None

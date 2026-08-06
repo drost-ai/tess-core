@@ -18,7 +18,7 @@ from ..payloads.attachments import (
     imageAttachmentEligibility,
     resolveRuntimeProviderCapabilities,
 )
-from ..payloads.tools import getToolPayloadPolicy, shapeReadPayload, splitToolTextLines
+from ..payloads.tools import getToolPayloadPolicy, splitToolTextLines
 from .definitions import ToolDefinition
 from .file_change_payloads import (
     build_edit_file_change_payload,

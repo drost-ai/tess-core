@@ -105,7 +105,7 @@ from .authority.executable_source_policy import (
     inspectMcpSourceTrust, inspectPluginSourceTrust, loadSelectedMcpServers, loadSelectedPluginRecords,
     parseSettingSources, selectMcpBootstrapServers,
 )
-from .acquisition.fetch_proxy import installEnvironmentProxyFetch, resolveEnvironmentProxyForUrl
+from .acquisition.fetch_proxy import resolveEnvironmentProxyForUrl
 from .authority.hooks import (
     DEFAULT_HOOK_TIMEOUT_SECONDS, HOOK_EVENTS, approveHooks, fireToolHooks, listUnapprovedHookScopes, loadHooks,
 )
@@ -312,10 +312,10 @@ from .tasks.supervisor import createTaskSupervisor
 from .payloads.tools import (
     DEFAULT_GLOB_EXCLUDES, DEFAULT_IGNORED_DIRECTORIES, TOOL_PAYLOAD_POLICIES, applyDefaultGlobExcludes,
     deriveToolPayloadClass, filterDefaultIgnoredGlobMatches, getDefaultGlobExcludes, getToolPayloadPolicy,
-    shapeGlobPayload, shapeGrepPayload, shapeReadPayload, shapeTextToolResult, splitToolTextLines,
+    shapeTextToolResult, splitToolTextLines,
 )
 from .tools import (
-    BUILTIN_TOOL_DESCRIPTIONS, BUILTIN_TOOL_INPUT_SCHEMAS, BUILTIN_TOOL_ORDER, FetchResponse, PERMISSION_MODES,
+    BUILTIN_TOOL_DESCRIPTIONS, BUILTIN_TOOL_INPUT_SCHEMAS, FetchResponse, PERMISSION_MODES,
     ToolDefinition, createBuiltinToolContractSnapshot, createBuiltinTools, decodeBingRedirectTarget, fetch,
     normalizeBingResultUrl, normalizeDuckDuckGoResultUrl, parseAllowedPrompts, parseBingResults,
     parseDuckDuckGoResults, searchBing, searchDuckDuckGo, searchWeb,
@@ -417,7 +417,7 @@ __all__ = [
     "ARTIFACT_ACQUISITION_FAILURE_LIMIT", "AVAILABLE_TUI_THEMES", "AgentAuthorityError", "AnthropicSseAccumulator",
     "AuthenticatedDaemonServer", "BACKGROUND_RUNTIME_STATE_EVENTS", "BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS",
     "BRIDGE_LEDGER_MAX_ENTRIES", "BRIDGE_LOG_MAX_ENTRIES", "BRIDGE_STORAGE_MAX_BYTES", "BUILTIN_AGENTS",
-    "BUILTIN_PROVIDER_PROFILES", "BUILTIN_TOOL_DESCRIPTIONS", "BUILTIN_TOOL_INPUT_SCHEMAS", "BUILTIN_TOOL_ORDER",
+    "BUILTIN_PROVIDER_PROFILES", "BUILTIN_TOOL_DESCRIPTIONS", "BUILTIN_TOOL_INPUT_SCHEMAS",
     "BoundedNotificationQueue", "BridgeRecoveryBlockedError", "BridgeStorageError", "BubblewrapSandboxBackend",
     "CODEX_SPARK_COMPACTION_MODEL", "COLLABORATION_TICK_MS", "COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT",
     "COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT", "COMPACTION_EVIDENCE_FALLBACK_BUDGETS",
@@ -593,7 +593,7 @@ __all__ = [
     "inferProviderForModel", "inferToolNameFromLabel", "inheritParentPermissionMode",
     "injectSystemContextIntoMessages", "inspectBridgeRecovery", "inspectChromeNativeHostManifest",
     "inspectExecutableClosure", "inspectInstallState", "inspectMcpSourceTrust", "inspectPluginSourceTrust",
-    "installChromeNativeHostManifest", "installEnvironmentProxyFetch", "invalid_tool_input_message", "isCodexBaseUrl",
+    "installChromeNativeHostManifest", "invalid_tool_input_message", "isCodexBaseUrl",
     "isCompactionContextSizeFailure", "isCompactionSynthesisJsonFailure", "isContextPressureRelieved",
     "isContextWindowFailure", "isDaemonAuthRequest", "isDaemonAuthResponse", "isDaemonEventMessage",
     "isDaemonResponse", "isDaemonSocketListenerActive", "isEmptyAssistantResponse", "isGlobPayload", "isGrepPayload",
@@ -697,8 +697,8 @@ __all__ = [
     "sendAnthropicMessagesStreamingViaAsyncTransport", "sendAnthropicMessagesViaAsyncTransport", "sendBridgeMessage",
     "sendOpenAiChatCompletionsRequest", "sendOpenAiRequest", "sendOpenAiResponsesRequest", "sendTaskMessage",
     "send_task_message", "serializeRemote", "sessionArchiveDir", "sessionLiveHeadFromV2", "sessionMessagesPath",
-    "sessionPath", "sessionTranscriptLogPath", "setSessionCwd", "shapeForegroundSubagentResult", "shapeGlobPayload",
-    "shapeGrepPayload", "shapeMcpResourceList", "shapeMcpResourceRead", "shapeReadPayload", "shapeTextToolResult",
+    "sessionPath", "sessionTranscriptLogPath", "setSessionCwd", "shapeForegroundSubagentResult",
+    "shapeMcpResourceList", "shapeMcpResourceRead", "shapeTextToolResult",
     "shape_mcp_resource_list", "shape_mcp_resource_read", "shouldAutoCompact", "shouldNarrateWorker",
     "shouldRetryCompactionAttempt", "shouldSkipCompactionSynthesisFailure", "signalOwnedProcess", "sink_failure",
     "skip_task_question", "snapshotExecutableClosure", "spawnDetached", "splitToolTextLines",

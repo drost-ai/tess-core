@@ -64,43 +64,27 @@ def _web_fetch_tool() -> ToolDefinition:
         url = _require_string(input.get("url"), "url")
         prompt = _require_string(input.get("prompt"), "prompt")
         _throw_if_tool_cancelled(context)
-        facade_fetch = _facade_fetch()
-        if facade_fetch is not fetch:
-            response = await facade_fetch(
-                url, headers={"user-agent": "tess/0.1"}, signal=context.get("abortSignal")
+        try:
+            fetched = await boundedWebFetch(
+                url=url,
+                abortSignal=context.get("abortSignal"),
+                authorizeHop=lambda hop: _authorize_web_fetch_hop(context, hop),
             )
-            if not response.ok:
-                return {"content": f"Fetch failed with status {response.status}", "isError": True}
-            raw_body = await response.text()
-            fetched = {
-                "outcome": "ok", "requestedUrl": url, "finalUrl": url,
-                "statusCode": response.status, "body": raw_body,
-                "compressedBytes": len(raw_body.encode("utf-8")),
-                "decodedBytes": len(raw_body.encode("utf-8")),
-                "redirects": [], "truncated": False,
+        except Exception as error:
+            if _signal_aborted(context.get("abortSignal")):
+                raise _create_tool_abort_error()
+            message = sliceUtf8Prefix(str(error) or "WebFetch failed", 1_000)
+            return {
+                "content": pretty_json(
+                    {
+                        "type": "web_fetch_error",
+                        "status": "failed",
+                        "reason": "policy" if isinstance(error, WebFetchPolicyError) else "request_failed",
+                        "message": message,
+                    }
+                ),
+                "isError": True,
             }
-        else:
-            try:
-                fetched = await boundedWebFetch(
-                    url=url,
-                    abortSignal=context.get("abortSignal"),
-                    authorizeHop=lambda hop: _authorize_web_fetch_hop(context, hop),
-                )
-            except Exception as error:
-                if _signal_aborted(context.get("abortSignal")):
-                    raise _create_tool_abort_error()
-                message = sliceUtf8Prefix(str(error) or "WebFetch failed", 1_000)
-                return {
-                    "content": pretty_json(
-                        {
-                            "type": "web_fetch_error",
-                            "status": "failed",
-                            "reason": "policy" if isinstance(error, WebFetchPolicyError) else "request_failed",
-                            "message": message,
-                        }
-                    ),
-                    "isError": True,
-                }
         if fetched["outcome"] in {"http_error", "refused", "timeout"}:
             return {
                 "content": pretty_json(

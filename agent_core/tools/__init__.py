@@ -10,7 +10,6 @@ from .agent import _agent_tool
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .code_search import _exec_ripgrep_allowing_no_matches, _glob_tool, _grep_tool, _packaged_ripgrep_path, _resolve_ripgrep_binary
 from .definitions import ToolDefinition
-from .diffs import _build_diff_context_indexes, _build_line_diff_operations, _build_unified_diff, _file_change_payload
 from .files import _edit_tool, _read_tool, _write_tool
 from .mcp import _list_mcp_resources_tool, _mcp_tool, _read_mcp_resource_tool
 from .notebook import _notebook_edit_tool
@@ -18,7 +17,7 @@ from .paths import _authorize_path, _display_path
 from .permissions import PERMISSION_MODES, _ensure_tool_permission, _get_effective_permission_mode, _is_safe_read_only_shell_command, _matches_command_policy, _parse_permission_mode_value, _resolve_tool_permission
 from .processes import _BACKGROUND_RUNNERS, _background_runner_env, _communicate_shell_process, _finish_terminated_process, _kill_asyncio_process, _resolve_shell, _spawn_background_task_runner, _terminate_asyncio_process, _track_background_runner, _wait_for_tracked_background_runner
 from .registry import createBuiltinToolContractSnapshot, createBuiltinTools
-from .schemas import BUILTIN_TOOL_DESCRIPTIONS, BUILTIN_TOOL_INPUT_SCHEMAS, BUILTIN_TOOL_ORDER, _tool_description, _tool_schema
+from .schemas import BUILTIN_TOOL_DESCRIPTIONS, BUILTIN_TOOL_INPUT_SCHEMAS, _tool_description, _tool_schema
 from .session_metadata import _append_unique_metadata_list, _apply_workspace_snapshot_metadata
 from .session_tools import _ask_user_question_tool, _config_tool, _derive_todo_active_form, _exit_plan_mode_tool, _extract_latest_assistant_text, _normalize_todo_item, _set_status_tool, _todo_tool, parseAllowedPrompts
 from .shell import _bash_tool, _normalize_bash_timeout
@@ -30,7 +29,6 @@ from .worktree import _controller_method, _create_git_worktree, _enter_worktree_
 __all__ = [
     "BUILTIN_TOOL_DESCRIPTIONS",
     "BUILTIN_TOOL_INPUT_SCHEMAS",
-    "BUILTIN_TOOL_ORDER",
     "FetchResponse",
     "PERMISSION_MODES",
     "ToolDefinition",

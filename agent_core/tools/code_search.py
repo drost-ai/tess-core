@@ -21,8 +21,6 @@ from ..payloads.tools import (
     applyDefaultGlobExcludes,
     filterDefaultIgnoredGlobMatches,
     getToolPayloadPolicy,
-    shapeGlobPayload,
-    shapeGrepPayload,
 )
 from .cancellation import _create_tool_abort_error
 from .definitions import ToolDefinition

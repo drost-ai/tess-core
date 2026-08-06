@@ -8,8 +8,7 @@ class ToolContractTests(AgentCoreTestCase):
         expected = load_builtin_tool_contract_fixture()
         snapshot = core.createBuiltinToolContractSnapshot()
         self.assertEqual(snapshot, expected)
-        self.assertEqual([item["name"] for item in snapshot], core.BUILTIN_TOOL_ORDER)
-        self.assertEqual([tool.name for tool in core.createBuiltinTools()], core.BUILTIN_TOOL_ORDER)
+        self.assertEqual([item["name"] for item in snapshot], [tool.name for tool in core.createBuiltinTools()])
 
     def test_builtin_tool_schemas_are_cloned_per_definition(self):
         first_read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")

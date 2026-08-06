@@ -4,36 +4,6 @@ import copy
 from typing import Any
 
 
-BUILTIN_TOOL_ORDER = [
-    "Read",
-    "Write",
-    "Edit",
-    "Glob",
-    "Grep",
-    "Bash",
-    "TodoWrite",
-    "WebFetch",
-    "WebSearch",
-    "SetStatus",
-    "Agent",
-    "AskUserQuestion",
-    "Config",
-    "ExitPlanMode",
-    "NotebookEdit",
-    "TaskOutput",
-    "TaskStop",
-    "TaskMonitorStart",
-    "TaskMonitorStop",
-    "TaskHealthCheckStart",
-    "TaskHealthCheckStop",
-    "Mcp",
-    "ListMcpResources",
-    "ReadMcpResource",
-    "EnterWorktree",
-    "ExitWorktree",
-    "ReadToolArtifact",
-]
-
 
 BUILTIN_TOOL_DESCRIPTIONS: dict[str, str] = {
     "Read": "Read files from disk, including partial line ranges for large text files.",

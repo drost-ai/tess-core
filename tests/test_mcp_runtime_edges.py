@@ -359,15 +359,13 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         client._handle_sse_event("endpoint", [json.dumps({"url": "/messages"})])
         self.assertEqual(client.post_url, "http://127.0.0.1:1/messages")
 
-        no_id = mcp_module.protocol._parse_sse_rpc_response('data: {"jsonrpc":"2.0","result":{"ok":true}}\n\n', None)
+        http_client = mcp_module.HttpMcpClient({"name": "edge", "transport": "http", "commandOrUrl": "http://127.0.0.1:1/mcp"}, "/tmp")
+        no_id = http_client._consume_rpc_sse_event({"data": '{"jsonrpc":"2.0","result":{"ok":true}}'}, None)
         self.assertEqual(no_id["result"], {"ok": True})
-        for raw, request_id in [
-            ('data: {"jsonrpc":"2.0","id":null,"result":{}}\n\n', None),
-            ('data: {"jsonrpc":"2.0","id":true,"result":{}}\n\n', 1),
-            ('data: {"jsonrpc":"2.0","id":"1","result":{}}\n\n', 1),
-        ]:
-            with self.assertRaisesRegex(RuntimeError, "No matching SSE JSON-RPC response was received"):
-                mcp_module.protocol._parse_sse_rpc_response(raw, request_id)
+        self.assertIsNone(http_client._consume_rpc_sse_event({"data": '{"jsonrpc":"2.0","id":2,"result":{}}'}, 1))
+        for malformed in ('{"jsonrpc":"2.0","id":"1","result":{}}', '{"jsonrpc":"2.0","id":true,"result":{}}'):
+            with self.assertRaises(mcp_module.McpTransportError):
+                http_client._consume_rpc_sse_event({"data": malformed}, 1)
 
     def test_mcp_discovery_only_swallows_method_not_found(self):
         root, home, workspace, previous = self.temp_context()
