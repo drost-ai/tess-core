@@ -80,3 +80,19 @@ def boundDiagnosticCount(value: Any) -> int:
     ):
         return 0
     return min(9_007_199_254_740_991, int(value))
+
+
+def looksLikeAuth(message: str) -> bool:
+    return bool(re.search(r"unauthorized|forbidden|invalid api key|authentication|auth token|insufficient permissions?|missing scopes?|insufficient_scope|permission denied", message))
+
+
+def looksLikeQuota(message: str) -> bool:
+    return bool(re.search(r"quota|credit|billing|insufficient funds|payment required|usage limit|out of extra usage", message))
+
+
+def looksLikeTimeout(message: str) -> bool:
+    return bool(re.search(r"timed out|timeout|etimedout|connect timeout|headers timeout|body timeout|deadline exceeded", message))
+
+
+def looksLikeTransport(message: str) -> bool:
+    return bool(re.search(r"terminated|socket hang up|econnreset|econnrefused|enotfound|network|fetch failed|connection closed|connection without response|connection error|apiconnectionerror|remote end closed|other side closed|premature close|broken pipe", message))

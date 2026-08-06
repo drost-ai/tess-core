@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .._utils import maybe_await, now_iso
-from .partial_output_recovery import (
+from .partial_output_state import (
     partialOutputRecoveryPolicy,
     recoverAbandonedPartialOutput,
 )

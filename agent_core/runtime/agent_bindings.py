@@ -9,7 +9,7 @@ from ..providers.partial_output import (
     assertPartialOutputSink as _assert_partial_output_sink,
     assertPartialOutputStateStore as _assert_partial_output_state_store,
 )
-from ..providers.partial_output_recovery import (
+from ..providers.partial_output_state import (
     assertPartialOutputRecoveryPolicy as _assert_partial_output_recovery_policy,
 )
 

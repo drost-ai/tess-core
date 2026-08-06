@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+from .error_diagnostics import (
+    boundDiagnosticText as _bound,
+    boundOptionalDiagnosticText as _bound_optional,
+    looksLikeAuth as _looks_like_auth,
+    looksLikeQuota as _looks_like_quota,
+    looksLikeTimeout as _looks_like_timeout,
+    looksLikeTransport as _looks_like_transport,
+    validHttpStatus as _valid_http_status,
+)
+
 import json
 import math
 import re
@@ -117,15 +127,8 @@ def _safe_sdk_value(value: Any, *, depth: int) -> Any:
     return "<unsupported>"
 
 
-def _bound(value: str, maximum: int) -> str:
-    normalized = re.sub(r"[\r\n\t]+", " ", value).strip()
-    return normalized if len(normalized) <= maximum else f"{normalized[: maximum - 1]}…"
 
 
-def _bound_optional(value: Any, maximum: int) -> str | None:
-    if value is None:
-        return None
-    return _bound(str(value), maximum) or None
 
 
 def _bound_redacted_optional(value: Any, maximum: int) -> str | None:
@@ -177,52 +180,3 @@ def _redact_sensitive_text(value: str) -> str:
     return re.sub(r"\bsk-[a-zA-Z0-9_-]{8,}\b", "sk-<redacted>", redacted)
 
 
-def _valid_http_status(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    try:
-        status = int(value)
-    except (TypeError, ValueError):
-        return None
-    return status if 100 <= status <= 599 else None
-
-
-def _looks_like_auth(message: str) -> bool:
-    return bool(
-        re.search(
-            r"unauthorized|forbidden|invalid api key|authentication|auth token|"
-            r"insufficient permissions?|missing scopes?|insufficient_scope|permission denied",
-            message,
-        )
-    )
-
-
-def _looks_like_quota(message: str) -> bool:
-    return bool(
-        re.search(
-            r"quota|credit|billing|insufficient funds|payment required|usage limit|"
-            r"out of extra usage",
-            message,
-        )
-    )
-
-
-def _looks_like_timeout(message: str) -> bool:
-    return bool(
-        re.search(
-            r"timed out|timeout|etimedout|connect timeout|headers timeout|"
-            r"body timeout|deadline exceeded",
-            message,
-        )
-    )
-
-
-def _looks_like_transport(message: str) -> bool:
-    return bool(
-        re.search(
-            r"terminated|socket hang up|econnreset|econnrefused|enotfound|network|"
-            r"fetch failed|connection closed|connection error|apiconnectionerror|"
-            r"other side closed|premature close|broken pipe",
-            message,
-        )
-    )

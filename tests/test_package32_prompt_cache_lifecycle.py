@@ -8,7 +8,7 @@ import agent_core.agent.context as context_module
 from agent_core.providers.prompt_cache_state import promptCacheStatePath, readPromptCacheState
 from agent_core.providers.anthropic.payloads import buildAnthropicMessagesEnvelope
 from agent_core.providers.anthropic.sse import normalizeAnthropicSseResponse
-from agent_core.providers.prompt_cache_finalization import (
+from agent_core.providers.prompt_cache_orchestration import (
     isPromptCacheEvictionTerminalSuccess,
     recordPromptCacheEvictionIntentAtFinalization,
 )

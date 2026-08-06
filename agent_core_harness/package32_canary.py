@@ -8,7 +8,7 @@ import uuid
 from typing import Any, Awaitable, Callable
 
 from agent_core._utils import now_iso
-from agent_core.providers.provider_prompt_cache import (
+from agent_core.providers.prompt_cache_orchestration import (
     attachPromptCacheDispatchContext,
     commitProviderPromptCacheObservation,
 )

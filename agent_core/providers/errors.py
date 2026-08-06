@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .error_diagnostics import (
+    looksLikeAuth as _looks_like_auth,
+    looksLikeQuota as _looks_like_quota,
+    looksLikeTimeout as _looks_like_timeout,
+    looksLikeTransport as _looks_like_transport,
+)
+
 import json
 import http.client as _http_client
 import random
@@ -342,20 +349,14 @@ def _build_raw_message(body: str | None = None, error_type: str | None = None, c
     return " ".join(parts) if parts else None
 
 
-def _looks_like_timeout(message: str) -> bool:
-    return bool(re.search(r"timed out|timeout|etimedout|connect timeout|headers timeout|body timeout|deadline exceeded", message))
 
 
-def _looks_like_transport(message: str) -> bool:
-    return bool(re.search(r"terminated|socket hang up|econnreset|econnrefused|enotfound|network|fetch failed|connection closed|connection without response|remote end closed|other side closed|premature close|broken pipe", message))
 
 
 def _looks_like_protocol(message: str) -> bool:
     return bool(re.search(r"failed to parse streamed provider event|unexpected end of json input|invalid json|malformed sse|response body was empty|unable to parse tool parameter json", message))
 
 
-def _looks_like_auth(message: str) -> bool:
-    return bool(re.search(r"unauthorized|forbidden|invalid api key|authentication|auth token|insufficient permissions?|missing scopes?|insufficient_scope|permission denied", message))
 
 
 def _extract_openai_sdk_stream_error(error: BaseException) -> dict[str, Any] | None:
@@ -428,8 +429,6 @@ def _classify_openai_sdk_stream_error(details: dict[str, Any]) -> str:
     return "server"
 
 
-def _looks_like_quota(message: str) -> bool:
-    return bool(re.search(r"quota|credit|billing|insufficient funds|payment required|usage limit|out of extra usage", message))
 
 
 def _classify_openai_sdk_exception(
