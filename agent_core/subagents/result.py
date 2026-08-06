@@ -5,7 +5,7 @@ import os
 import re
 from typing import Any, Mapping
 
-from .storage import taskDir, writeJsonFile
+from ..storage import taskDir, writeJsonFile
 
 _SUPPORTED_SCHEMA_KEYS = {"type", "enum", "required", "properties", "additionalProperties", "items"}
 _IGNORED_SCHEMA_ANNOTATION_KEYS = {"$schema", "$id", "title", "description", "default", "examples"}

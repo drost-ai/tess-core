@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .shared import *
-from ...subagent_result_payload import (
+from ...subagents.result_payload import (
     boundedSubagentError as _bounded_subagent_error,
     boundedSubagentEventSummary as _bounded_subagent_event_summary,
     boundedSubagentRuntimeContract as _bounded_subagent_runtime_contract,

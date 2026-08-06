@@ -5,9 +5,9 @@ import os
 import uuid
 from typing import Any
 
-from ._utils import now_iso
-from .message_origin import syntheticUserMessage as _synthetic_user_message
-from .storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
+from .._utils import now_iso
+from ..message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
 
 
 TERMINAL_RECONCILIATION_STATUSES = {"completed", "failed", "stopped", "timed_out"}
@@ -268,7 +268,7 @@ async def appendPendingSubagentReconciliationsToSession(
     runtime: dict[str, Any] | None = None,
     parentTurnId: str | None = None,
 ) -> dict[str, Any]:
-    from .subagent_coordination import (
+    from .coordination import (
         _has_delivered_reconciliation,
         claimUnconsumedSubagentReconciliations,
         completeSubagentReconciliationClaim,
@@ -310,7 +310,7 @@ async def consumeAppendedSubagentReconciliations(
     *,
     runtime: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    from .subagent_coordination import completeSubagentReconciliationClaim
+    from .coordination import completeSubagentReconciliationClaim
 
     claim_token = appended.get("claimToken") if isinstance(appended, dict) else None
     if isinstance(claim_token, str) and claim_token:

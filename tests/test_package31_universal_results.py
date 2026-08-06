@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 from agent_core.bash_lifecycle import _process_group_live, runInlineShellCommand
 from agent_core.bash_result_payload import buildBashResultPayload
 from agent_core.subprocess_output import createSubprocessOutputCollector
-from agent_core.subagent_result_payload import (
+from agent_core.subagents.result_payload import (
     boundedSubagentError,
     shapeForegroundSubagentResult,
 )

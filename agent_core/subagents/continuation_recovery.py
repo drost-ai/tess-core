@@ -4,9 +4,9 @@ import copy
 from datetime import datetime, timedelta
 from typing import Any
 
-from .process_identity import verifyProcessBirthMarker
-from .storage import listTaskRecords
-from .subagent_coordination import (
+from ..process_identity import verifyProcessBirthMarker
+from ..storage import listTaskRecords
+from .coordination import (
     _bound_reason,
     _format_time,
     _groups,
@@ -24,7 +24,7 @@ async def recoverSubagentLaunchGroupContinuations(
     parentSessionId: str,
     now: str | None = None,
 ) -> list[dict[str, Any]]:
-    from ._utils import now_iso
+    from .._utils import now_iso
 
     timestamp = now or now_iso()
     now_dt = _parse_time(timestamp)

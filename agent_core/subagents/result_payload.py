@@ -4,9 +4,9 @@ import json
 import re
 from typing import Any
 
-from .structured_value import summarizeStructuredValue
-from .tool_payloads import getToolPayloadPolicy
-from .utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
+from ..structured_value import summarizeStructuredValue
+from ..tool_payloads import getToolPayloadPolicy
+from ..utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
 
 
 def shapeForegroundSubagentResult(

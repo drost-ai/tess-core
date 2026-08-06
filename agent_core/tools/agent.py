@@ -10,7 +10,7 @@ from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission, _parse_permission_mode_value
 from .schemas import _tool_description, _tool_schema
 from .validation import _require_string
-from ..subagent_depth_policy import checkSubagentDepthAllowed
+from ..subagents.depth_policy import checkSubagentDepthAllowed
 
 
 def _agent_tool() -> ToolDefinition:

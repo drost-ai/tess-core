@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .subagent_reconciliation import (
+from .reconciliation import (
     appendPendingSubagentReconciliationsToSession,
     consumeAppendedSubagentReconciliations,
     renderSubagentReconciliationMessage,

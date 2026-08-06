@@ -46,7 +46,7 @@ from ...storage import (
     taskOutputPath,
     writeTaskMeta,
 )
-from ...subagent_reconciliation import createSubagentReconciliationForTerminalChild
+from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
 from ...task_communication import read_task_questions
 
 

@@ -3,15 +3,15 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from ._utils import now_iso
-from .contracts.records import launch_task_id as _launch_task_id
-from .storage import fileLock, loadSession, saveSession
-from .subagent_groups import (
+from .._utils import now_iso
+from ..contracts.records import launch_task_id as _launch_task_id
+from ..storage import fileLock, loadSession, saveSession
+from .groups import (
     _mark_subagent_launch_group_continuation_requested,
     _read_subagent_launch_groups,
     _record_subagent_launch_group_continuation_task,
 )
-from .subagent_reconciliation import (
+from .reconciliation import (
     TERMINAL_RECONCILIATION_STATUSES,
     _read_records,
     _sort_records,
@@ -105,7 +105,7 @@ async def runParentContinuationFromReconciliations(
     if not session:
         raise RuntimeError(f"Parent session not found: {parentSessionId}")
     _emit(runtime, "subagent.continuation.started", {"session_id": parentSessionId})
-    from .agent import runAgentPrompt
+    from ..agent import runAgentPrompt
 
     result = await runAgentPrompt(
         {
@@ -199,7 +199,7 @@ async def _maybe_start_group_continuation(
     if not task_starter:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "No task supervisor available."})
         return {"started": False, "reason": "supervisor_unavailable", "launchGroupId": group_id, "continuationRunId": run_id}
-    from .subagent_coordination import (
+    from .coordination import (
         claimSubagentLaunchGroupContinuation,
         markSubagentLaunchGroupContinuationRunning,
         markSubagentLaunchGroupContinuationStarting,
@@ -249,7 +249,7 @@ async def _maybe_start_group_continuation(
 
 async def _resolve_continuation_starter() -> Any:
     try:
-        from .daemon import connectTaskSupervisorDaemonClient
+        from ..daemon import connectTaskSupervisorDaemonClient
 
         client = await connectTaskSupervisorDaemonClient()
         if client and callable(client.get("startMainSessionTask")):

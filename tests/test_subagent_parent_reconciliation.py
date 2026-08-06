@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import uuid
 
-import agent_core.subagent_continuation as continuation_module
-import agent_core.subagent_groups as groups_module
+import agent_core.subagents.continuation as continuation_module
+import agent_core.subagents.groups as groups_module
 import agent_core.tasks.subagent_parts.finalizers as finalizers_module
 from tests.support.agent_core_case import *
 

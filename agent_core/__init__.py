@@ -36,18 +36,18 @@ from .session_runtime import *
 from .shell import *
 from .shell_command_policy import *
 from .storage import *
-from .subagent_capacity import *
-from .subagent_continuation import *
-from .subagent_coordination import *
-from .subagent_continuation_recovery import *
-from .subagent_contract import *
-from .subagent_depth_policy import *
-from .subagent_groups import *
-from .subagent_limits import *
-from .subagent_reconciliation import *
-from .subagent_reconciliation_renderer import *
-from .subagent_reconciliation_store import *
-from .subagent_result import *
+from .subagents.capacity import *
+from .subagents.continuation import *
+from .subagents.coordination import *
+from .subagents.continuation_recovery import *
+from .subagents.contract import *
+from .subagents.depth_policy import *
+from .subagents.groups import *
+from .subagents.limits import *
+from .subagents.reconciliation import *
+from .subagents.reconciliation_renderer import *
+from .subagents.reconciliation_store import *
+from .subagents.result import *
 from .subagents import *
 from .task_ownership import *
 from .task_process_launch import *
@@ -75,6 +75,18 @@ from .providers.openai import *
 _LEGACY_MODULE_ALIASES = {
     "collaboration_updates": "agent_core.collaboration.updates",
     "remote": "agent_core.collaboration.remote",
+    "subagent_capacity": "agent_core.subagents.capacity",
+    "subagent_continuation": "agent_core.subagents.continuation",
+    "subagent_continuation_recovery": "agent_core.subagents.continuation_recovery",
+    "subagent_contract": "agent_core.subagents.contract",
+    "subagent_coordination": "agent_core.subagents.coordination",
+    "subagent_depth_policy": "agent_core.subagents.depth_policy",
+    "subagent_groups": "agent_core.subagents.groups",
+    "subagent_limits": "agent_core.subagents.limits",
+    "subagent_reconciliation": "agent_core.subagents.reconciliation",
+    "subagent_reconciliation_renderer": "agent_core.subagents.reconciliation_renderer",
+    "subagent_reconciliation_store": "agent_core.subagents.reconciliation_store",
+    "subagent_result": "agent_core.subagents.result",
 }
 
 

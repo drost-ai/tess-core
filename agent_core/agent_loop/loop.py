@@ -35,8 +35,8 @@ from ..message_origin import userRequestMessage as _user_request_message
 from ..permission_rules import findDispatchDenyRule
 from ..providers.prompt_cache_finalization import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
 from ..runtime_paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
-from ..subagent_contract import filter_tools_for_subagent
-from ..subagent_limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
+from ..subagents.contract import filter_tools_for_subagent
+from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..task_communication import deliver_queued_task_messages_to_session
 from .._transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
 from ..tool_attachments import (

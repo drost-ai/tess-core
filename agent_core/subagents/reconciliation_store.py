@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from .subagent_reconciliation import (
+from .reconciliation import (
     listUnconsumedSubagentReconciliations,
     markSubagentReconciliationsConsumed,
     readSubagentReconciliations,
     subagentReconciliationLogPath,
     upsertSubagentReconciliation,
 )
-from .subagent_coordination import (
+from .coordination import (
     claimSubagentLaunchGroupContinuation,
     claimUnconsumedSubagentReconciliations,
     completeSubagentReconciliationClaim,
@@ -21,7 +21,7 @@ from .subagent_coordination import (
     upsertSubagentLaunchGroup,
     withSubagentCoordinationTransaction,
 )
-from .subagent_continuation_recovery import recoverSubagentLaunchGroupContinuations
+from .continuation_recovery import recoverSubagentLaunchGroupContinuations
 
 
 subagent_reconciliation_log_path = subagentReconciliationLogPath
