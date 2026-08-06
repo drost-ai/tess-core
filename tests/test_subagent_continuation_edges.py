@@ -105,3 +105,35 @@ class SubagentContinuationEdgeTests(AgentCoreTestCase):
             self.assertEqual(second["records"], [])
         finally:
             self.restore_home(root, previous)
+
+    def test_terminal_continuation_task_marks_group_completed_on_next_evaluation(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            parent = self._parent_session(home, workspace)
+            run(groups_module._upsert_subagent_launch_group(parent["id"], {
+                "id": "group-done",
+                "label": "Batch",
+                "childAgentIds": ["agent-d"],
+                "taskIds": ["task-d"],
+                "continuation": {
+                    "schemaVersion": 1,
+                    "phase": "running",
+                    "attempt": 1,
+                    "revision": 3,
+                    "childTaskId": "task-cont-d",
+                },
+            }))
+            run(core.saveTaskRecord({
+                "id": "task-cont-d", "sessionId": parent["id"], "kind": "main_session",
+                "status": "completed", "title": "Continuation run",
+                "completedAt": "2026-08-06T00:00:00Z", "updatedAt": "2026-08-06T00:00:00Z",
+            }))
+            run(continuation_module._maybe_start_ready_parent_continuations(
+                parent["id"], policy={"enabled": True, "waitFor": "all"}, starter=None,
+            ))
+            groups = run(core.listSubagentLaunchGroups(parent["id"]))
+            state = next(g for g in groups if g["id"] == "group-done")["continuation"]
+            self.assertEqual(state["phase"], "completed")
+            self.assertEqual(state["childTaskId"], "task-cont-d")
+        finally:
+            self.restore_home(root, previous)

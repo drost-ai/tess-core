@@ -75,6 +75,21 @@ async def _maybe_start_ready_parent_continuations(
     policy = policy if isinstance(policy, dict) else {}
     if not policy.get("enabled"):
         return []
+    # Settle lingering continuation state first: relink durable children,
+    # expire stale claims, and mark groups whose continuation task already
+    # reached a terminal status as completed. Without this sweep a finished
+    # continuation stayed "running" forever and blocked the group from ever
+    # continuing again (readiness reports already_requested).
+    from .continuation_recovery import recoverSubagentLaunchGroupContinuations
+
+    try:
+        await recoverSubagentLaunchGroupContinuations(parentSessionId)
+    except Exception as exc:
+        _emit(runtime, "subagent.continuation.failed", {
+            "session_id": parentSessionId,
+            "phase": "recovery_sweep",
+            "error": str(exc)[:512],
+        })
     groups = await _read_subagent_launch_groups(parentSessionId)
     if launchGroupId:
         groups = [group for group in groups if group.get("id") == launchGroupId]
