@@ -8,7 +8,7 @@ from typing import Any
 
 from .._utils import maybe_await
 from . import updates as _collaboration_updates
-from .updates import *
+from .updates import appendAssistantCollaborationMessage
 from ..session.persistence import persistSession
 from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding

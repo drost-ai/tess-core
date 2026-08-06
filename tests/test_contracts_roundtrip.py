@@ -104,7 +104,7 @@ def _dual_spelling_task_meta() -> dict:
         "session_id": "child-session-1",
         "parent_session_id": "parent-session-1",
         "parent_task_id": None,
-        "command": "python -m agent_core.process.background_subagent_runner",
+        "command": "python -m agent_core.tasks.runners.subagent",
         "cwd": "/tmp/workspace",
         "pid": 4242,
         "startedAt": "2026-06-10T00:00:00.000Z",

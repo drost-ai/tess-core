@@ -67,13 +67,13 @@ def _create_subagent_task_starter(
             kind="subagent",
         )
         command = (
-            f"{sys.executable} -m agent_core.process.background_subagent_runner "
+            f"{sys.executable} -m agent_core.tasks.runners.subagent "
             f"--session-id {session_id} --agent-id {agent_id} --task-id {task_id}"
         )
         child_argv = [
             sys.executable,
             "-m",
-            "agent_core.process.background_subagent_runner",
+            "agent_core.tasks.runners.subagent",
             "--session-id",
             session_id,
             "--agent-id",

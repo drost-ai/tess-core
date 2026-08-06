@@ -178,7 +178,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         child_argv = [
             sys.executable,
             "-m",
-            "agent_core.process.background_main_session_runner",
+            "agent_core.tasks.runners.main_session",
             "--session-id",
             session_id,
             "--task-id",

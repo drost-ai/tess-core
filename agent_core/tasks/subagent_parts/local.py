@@ -205,7 +205,7 @@ def _local_subagent_worker_argv(task_id: str, session_id: str, agent_id: str) ->
     return [
         sys.executable,
         "-m",
-        "agent_core.process.background_subagent_runner",
+        "agent_core.tasks.runners.subagent",
         "--session-id",
         session_id,
         "--agent-id",

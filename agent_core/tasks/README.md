@@ -10,6 +10,5 @@ This package owns long-running work:
 - `runners/`: subprocess entrypoints for detached main-session and background
   subagent workers.
 
-Top-level modules such as `agent_core.task_supervisor` remain compatibility
-shims. New code should import from `agent_core.tasks.*` when it is not relying
-on the legacy public module path.
+Import from `agent_core.tasks.*`; the legacy flat module paths were retired
+in the v1 refactor.

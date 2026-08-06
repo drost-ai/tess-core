@@ -43,10 +43,9 @@ ignore_errors = true
 module = "agent_core.contracts.*"
 ignore_errors = false
 
-# Editor/Pylance lane: the runtime's merged-namespace idiom (vars(module).update
-# in package __init__s) is invisible to static analysis and produces thousands of
-# false positives, so type checking is off outside the mypy contracts lane above.
+# Editor/Pylance lane: the merged-namespace idiom was retired in the v1
+# refactor, so static analysis works again. The runtime stays Any-shaped
+# (TypeScript-port idiom); strict typing is enforced only on the contracts
+# lane above.
 [tool.pyright]
-typeCheckingMode = "off"
-# Still surfaced as warnings in "off" mode; the merged namespace makes it pure noise.
-reportUndefinedVariable = "none"
+typeCheckingMode = "basic"

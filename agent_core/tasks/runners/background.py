@@ -229,3 +229,7 @@ def _resolve_shell() -> str:
     if shell:
         return shell
     return "/bin/bash" if Path("/bin/bash").exists() else "/bin/sh"
+
+
+if __name__ == "__main__":
+    main()
