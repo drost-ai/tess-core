@@ -206,7 +206,6 @@ async def markSubagentLaunchGroupContinuationRunning(
             "leaseExpiresAt": None,
         },
         timestamp,
-        childTaskId,
     )
 
 
@@ -289,7 +288,6 @@ async def _transition_claim(
     claim_token: str,
     transition: Callable[[dict[str, Any]], dict[str, Any]],
     now: str,
-    continuation_run_id: str | None = None,
 ) -> dict[str, Any] | None:
     selected: dict[str, Any] | None = None
     async with withSubagentCoordinationTransaction(parent_id):
@@ -311,10 +309,6 @@ async def _transition_claim(
                 "continuation": {key: value for key, value in continuation.items() if value is not None},
                 "updatedAt": now,
             }
-            if continuation_run_id:
-                selected["continuationRequestedAt"] = group.get("continuationRequestedAt") or now
-                selected["continuationRunId"] = continuation_run_id
-                selected["continuationTaskId"] = continuation_run_id
             next_records.append(selected)
         if selected:
             await _groups._write_subagent_launch_groups(

@@ -32,7 +32,7 @@ def evaluateParentContinuationReadiness(records: list[dict[str, Any]], policy: d
     if wait_for not in {"manual", "any", "all", "quorum"}:
         wait_for = "manual"
     group = policy.get("group") if isinstance(policy.get("group"), dict) else None
-    if group and group.get("continuationTaskId"):
+    if group and _linked_continuation_task_id(group):
         return {"ready": False, "reason": "already_requested", "total": len(group.get("childAgentIds") or []), "terminal": 0}
     if group:
         child_ids = [child_id for child_id in (group.get("childAgentIds") or []) if isinstance(child_id, str) and child_id]
@@ -58,6 +58,15 @@ def evaluateParentContinuationReadiness(records: list[dict[str, Any]], policy: d
     return {"ready": terminal >= quorum, "reason": "quorum", "total": total, "terminal": terminal, "quorum": quorum}
 
 
+
+
+def _linked_continuation_task_id(group: dict[str, Any]) -> str:
+    state = group.get("continuation") if isinstance(group.get("continuation"), dict) else {}
+    return (
+        _string(state.get("childTaskId"))
+        or _string(group.get("continuationTaskId"))
+        or _string(group.get("continuationRunId"))
+    )
 
 
 def defaultParentContinuationPrompt() -> str:
@@ -125,11 +134,19 @@ async def _maybe_start_group_continuation(
     if not group_id:
         return None
     unconsumed_for_group = [record for record in unconsumed_records if _record_belongs_to_group(record, group)]
-    if group.get("continuationTaskId"):
-        return {"started": False, "reason": "already_requested", "launchGroupId": group_id, "continuationTaskId": group.get("continuationTaskId")}
-    if group.get("continuationRequestedAt") and not unconsumed_for_group:
+    # The structured continuation state machine is authoritative; the flat
+    # continuation* group fields are read-only legacy fallbacks for records
+    # written before it existed.
+    state = group.get("continuation") if isinstance(group.get("continuation"), dict) else {}
+    phase = _string(state.get("phase"))
+    linked_task_id = _linked_continuation_task_id(group)
+    if phase in {"claimed", "starting", "running", "completed"} or linked_task_id:
+        return {"started": False, "reason": "already_requested", "launchGroupId": group_id, "continuationTaskId": linked_task_id or None}
+    attempts = int(state.get("attempt") or group.get("continuationAttemptCount") or 0)
+    requested = attempts > 0 or phase == "retryable" or bool(group.get("continuationRequestedAt"))
+    if requested and not unconsumed_for_group:
         return {"started": False, "reason": "satisfied_intent", "launchGroupId": group_id}
-    if group.get("continuationRequestedAt") and int(group.get("continuationAttemptCount") or 0) >= int(policy.get("maxRecoveryAttempts") or 3):
+    if requested and attempts >= int(policy.get("maxRecoveryAttempts") or 3):
         return {"started": False, "reason": "recovery_exhausted", "launchGroupId": group_id}
     ready = evaluateParentContinuationReadiness(
         records,
@@ -144,7 +161,7 @@ async def _maybe_start_group_continuation(
     if not unconsumed_for_group:
         return {"started": False, "launchGroupId": group_id, **ready, "reason": "satisfied_intent"}
     prompt = _string(policy.get("prompt")) or defaultParentContinuationPrompt()
-    run_id = _string(group.get("continuationRunId")) or f"continuation-{uuid.uuid4()}"
+    run_id = f"continuation-{uuid.uuid4()}"
     parent = await loadSession(parent_session_id)
     if not parent:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "Parent session not found."})

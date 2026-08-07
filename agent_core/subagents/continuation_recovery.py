@@ -77,7 +77,7 @@ def _recover_group(
         }, now)
     if len(candidates) == 1:
         return _recover_durable_child(group, candidates[0], now)
-    if running or group.get("continuationRunId") or group.get("continuationTaskId"):
+    if running or (state or {}).get("childTaskId") or group.get("continuationRunId") or group.get("continuationTaskId"):
         return _update(group, {
             "schemaVersion": 1,
             "phase": "recovery_blocked",
@@ -114,7 +114,7 @@ def _recover_durable_child(group: dict[str, Any], task: dict[str, Any], now: str
             "childTaskId": task["id"],
             "recoveryReason": "durable_child_relinked",
         }
-    return _update(group, continuation, now, str(task["id"]))
+    return _update(group, continuation, now)
 
 
 def _recover_legacy_claim_without_child(
@@ -164,17 +164,8 @@ def _retryable(group: dict[str, Any], now: str, reason: str) -> dict[str, Any]:
     }, now)
 
 
-def _update(
-    group: dict[str, Any],
-    continuation: dict[str, Any],
-    now: str,
-    child_task_id: str | None = None,
-) -> dict[str, Any]:
-    updated = {**group, "continuation": continuation, "updatedAt": now}
-    if child_task_id:
-        updated["continuationRunId"] = child_task_id
-        updated["continuationTaskId"] = child_task_id
-    return updated
+def _update(group: dict[str, Any], continuation: dict[str, Any], now: str) -> dict[str, Any]:
+    return {**group, "continuation": continuation, "updatedAt": now}
 
 
 def _find_candidate_tasks(group: dict[str, Any], tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:

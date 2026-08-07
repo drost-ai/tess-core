@@ -97,9 +97,6 @@ def _merge_group_record(current: dict[str, Any], group: dict[str, Any], parent_s
         "createdAt": current.get("createdAt") or group.get("createdAt") or now,
         "updatedAt": now,
     }
-    for key in ("continuationRequestedAt", "continuationRunId", "continuationTaskId", "continuationPrompt"):
-        if current.get(key) is not None and group.get(key) is None:
-            merged[key] = current[key]
     return {key: value for key, value in merged.items() if value is not None}
 
 
