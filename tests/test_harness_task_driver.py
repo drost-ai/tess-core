@@ -17,7 +17,7 @@ class HarnessTaskDriverTests(AgentCoreTestCase):
             self.assertIn("task.completed", event_names)
             self.assertIn("health_check.recovered", event_names)
             self.assertGreaterEqual(observations["daemon_bootstrap"][0]["monitorSnapshot"]["total"], 1)
-            self.assertTrue(any(record["status"] == "degraded" and record["detailStatus"] == "recovered_after_daemon_restart" for record in observations["task_records"]))
+            self.assertTrue(any(record["status"] == "stopped" and record["detailStatus"] == "daemon_lost" for record in observations["task_records"]))
             self.assertTrue(any("health-attempt-3" in item["result"]["output"] for item in observations["task_outputs"]))
             self.assertEqual(observations["worker_results"][0]["returnCode"], 0)
             self.assertEqual(observations["worker_results"][0]["output"], "worker-entrypoint-ok")

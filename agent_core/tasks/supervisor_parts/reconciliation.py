@@ -33,6 +33,7 @@ from .launch_reconciliation import (
     _has_interrupted_launch,
     _reconcile_interrupted_launch,
 )
+from ...process._termination import drain_owned_process
 
 
 async def _reconcile_persisted_tasks(
@@ -68,8 +69,11 @@ async def _reconcile_persisted_tasks(
             process_state = await _classify_persisted_process(task_id, record, meta)
             if process_state["state"] in {"completed", "failed"}:
                 await _mark_terminal_process_from_meta(task_id, record, meta, supervisor_id, emit, process_state)
-            elif process_state["state"] in {"running", "orphaned"} and isinstance(process_state.get("identity"), dict):
-                await _mark_recovered_process(task_id, process_state["identity"], record, meta, supervisor_id, emit, process_state)
+            elif process_state["state"] == "running":
+                # Still tracked by this supervisor's own registry: not an orphan.
+                continue
+            elif process_state["state"] == "orphaned" and isinstance(process_state.get("identity"), dict):
+                await _kill_orphaned_process(task_id, process_state["identity"], record, meta, supervisor_id, emit, process_state)
             else:
                 await _mark_lost_process(task_id, record, meta, supervisor_id, emit, process_state)
         except Exception as exc:
@@ -83,7 +87,7 @@ async def _reconcile_persisted_tasks(
             )
 
 
-async def _mark_recovered_process(
+async def _kill_orphaned_process(
     task_id: str,
     identity: dict[str, Any],
     record: dict[str, Any],
@@ -92,52 +96,25 @@ async def _mark_recovered_process(
     emit: Callable[[str, dict[str, Any], str | None], Any],
     process_state: dict[str, Any] | None = None,
 ) -> None:
-    now = now_iso()
-    metadata = dict(record.get("metadata") or {})
-    metadata["recovery_state"] = "recovered_after_daemon_restart"
-    metadata.update(_process_state_metadata(process_state))
-    meta_metadata = dict(meta.get("metadata") or {})
-    meta_metadata["recovery_state"] = "recovered_after_daemon_restart"
-    meta_metadata.update(_process_state_metadata(process_state))
-    next_meta = {
-        **meta,
-        "status": "reconciling",
-        "updatedAt": now,
-        "owner": "daemon",
-        "supervisorId": supervisor_id,
-        "metadata": meta_metadata,
-        "processState": (process_state or {}).get("state"),
-        "processReconciledAt": now,
-    }
-    summary = (
-        "Recovered after daemon restart. The worker is still alive, but supervisor tracking is degraded until it exits."
-        if record.get("kind") == "subagent"
-        else "Recovered after daemon restart. The process is still alive, but lifecycle tracking is degraded until it exits."
+    """Containment pivot: a live worker from a dead daemon epoch is killed.
+
+    No re-adoption, no auto-respawn — the identity-verified TERM->KILL
+    ladder takes the orphan down (never a raw pid kill), the record is
+    finalized with the distinct daemon_lost reason, and the parent learns
+    exactly what was lost through the terminal event. In-flight work is the
+    accepted cost of a daemon crash; results are whatever was flushed.
+    """
+    outcome = await drain_owned_process(identity)
+    enriched = {**(process_state or {}), "kill_outcome": outcome or "killed"}
+    await _mark_lost_process(
+        task_id,
+        record,
+        meta,
+        supervisor_id,
+        emit,
+        enriched,
+        cause="daemon_lost",
     )
-    next_record = {
-        **_build_task_record(next_meta, summary),
-        **record,
-        "status": "degraded",
-        "summary": summary,
-        "updatedAt": now,
-        "detailStatus": "recovered_after_daemon_restart",
-        "owner": "daemon",
-        "supervisorId": supervisor_id,
-        "metadata": metadata,
-    }
-    await writeTaskMeta(task_id, next_meta)
-    await saveTaskRecord(next_record)
-    if record.get("kind") == "subagent":
-        agent_id = meta.get("agent_id") or metadata.get("agent_id") or record.get("sourceId")
-        if isinstance(agent_id, str) and agent_id:
-            await mutateChildAgent(
-                agent_id,
-                lambda current: {**current, "recoveryState": "recovered_after_daemon_restart", "lastUpdatedAt": now} if current else None,
-            )
-    await maybe_await(emit("task.updated", _task_record_event_payload(next_record), record.get("sessionId")))
-    watcher = asyncio.create_task(_watch_recovered_process(task_id, identity, record.get("sessionId"), emit))
-    _TASK_WATCHERS.add(watcher)
-    watcher.add_done_callback(_TASK_WATCHERS.discard)
 
 
 async def _mark_lost_process(
@@ -147,12 +124,18 @@ async def _mark_lost_process(
     supervisor_id: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
     process_state: dict[str, Any] | None = None,
+    *,
+    cause: str = "worker_lost",
 ) -> None:
     if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
         return
     now = now_iso()
     is_subagent = record.get("kind") == "subagent"
-    if is_subagent:
+    if cause == "daemon_lost":
+        summary = (
+            "The owning daemon was lost while this worker was active; the orphaned worker was terminated at daemon boot."
+        )
+    elif is_subagent:
         summary = "Daemon restarted while this worker was active and the worker process is no longer running."
     else:
         summary = _DEAD_WORKER_SUMMARY
@@ -177,7 +160,7 @@ async def _mark_lost_process(
     if is_subagent:
         next_meta["error"] = meta.get("error") or summary
         next_meta["summary"] = meta.get("summary") or summary
-        next_meta["completionReason"] = meta.get("completionReason") or "worker_lost"
+        next_meta["completionReason"] = meta.get("completionReason") or cause
         next_meta["completedAt"] = meta.get("completedAt") or now
     else:
         next_meta.pop("error", None)
@@ -189,6 +172,7 @@ async def _mark_lost_process(
         "summary": summary,
         "updatedAt": now,
         "completedAt": now,
+        **({"detailStatus": "daemon_lost"} if cause == "daemon_lost" else {}),
         "owner": "daemon",
         "supervisorId": supervisor_id,
         "metadata": record_metadata,
@@ -204,7 +188,7 @@ async def _mark_lost_process(
                     **current,
                     "status": "failed",
                     "error": current.get("error") or summary,
-                    "completionReason": current.get("completionReason") or "worker_lost",
+                    "completionReason": current.get("completionReason") or cause,
                     "completedAt": current.get("completedAt") or now,
                     "lastUpdatedAt": now,
                 }
@@ -258,36 +242,6 @@ async def _mark_terminal_process_from_meta(
     await writeTaskMeta(task_id, next_meta)
     await saveTaskRecord(next_record)
     await maybe_await(emit(_event_name_for_task_status(status), _task_record_event_payload(next_record), record.get("sessionId")))
-
-
-async def _watch_recovered_process(
-    task_id: str,
-    identity: dict[str, Any],
-    session_id: str | None,
-    emit: Callable[[str, dict[str, Any], str | None], Any],
-) -> None:
-    while True:
-        try:
-            await verifyOwnedProcessIdentity(identity)
-        except ProcessIdentityError:
-            break
-        await asyncio.sleep(1)
-    existing = await loadTaskRecord(task_id)
-    if existing and existing.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, existing, emit, session_id):
-        return
-    now = now_iso()
-    summary = "Recovered daemon-owned task exited after restart. Final completion details were unavailable."
-    next_record = {
-        **(existing or {"id": task_id, "sessionId": session_id, "kind": "background_command"}),
-        "status": "stopped",
-        "summary": summary,
-        "updatedAt": now,
-        "completedAt": now,
-    }
-    await saveTaskRecord(next_record)
-    meta = await readTaskMeta(task_id) or {}
-    await writeTaskMeta(task_id, {**meta, "status": "terminated", "updatedAt": now, "finishedAt": now})
-    await maybe_await(emit("task.updated", _task_record_event_payload(next_record), session_id))
 
 
 async def _recover_completed_subagent_task(
@@ -463,4 +417,6 @@ def _process_state_metadata(process_state: dict[str, Any] | None) -> dict[str, A
         result["process_meta_status"] = process_state.get("status")
     if process_state.get("identity_error") is not None:
         result["process_identity_error"] = process_state.get("identity_error")
+    if process_state.get("kill_outcome") is not None:
+        result["process_kill_outcome"] = process_state.get("kill_outcome")
     return result

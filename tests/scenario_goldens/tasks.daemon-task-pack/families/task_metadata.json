@@ -93,13 +93,14 @@
     "command": "sleep",
     "cwd": "<workspace>",
     "detailStatus": "running",
+    "finishedAt": "<timestamp>",
     "id": "recovery",
     "metadata": {
+      "process_kill_outcome": "process.identity_unavailable",
       "process_meta_status": "running",
       "process_pid": "<pid:4>",
       "process_state": "orphaned",
-      "process_state_source": "process_identity",
-      "recovery_state": "recovered_after_daemon_restart"
+      "process_state_source": "process_identity"
     },
     "outputFile": "<runtime-home>/tasks/recovery/output.log",
     "owner": "daemon",
@@ -118,7 +119,8 @@
     "processState": "orphaned",
     "sessionId": "<uuid:1>",
     "startedAt": "<timestamp>",
-    "status": "reconciling",
+    "status": "terminated",
+    "summary": "The owning daemon was lost while this worker was active; the orphaned worker was terminated at daemon boot.",
     "supervisorId": "<uuid:4>",
     "taskId": "recovery",
     "type": "background_command",

@@ -2,7 +2,9 @@
   "id": "tasks.daemon-task-pack",
   "title": "Daemon Task Worker Pack",
   "area": "tasks",
-  "mode": ["python"],
+  "mode": [
+    "python"
+  ],
   "setup": {
     "workspace": {
       "files": {
@@ -22,9 +24,7 @@
       "save_session": {}
     },
     {
-      "ensure_daemon": {
-        "inProcess": true
-      }
+      "ensure_daemon": {}
     },
     {
       "daemon_subscribe": {
@@ -59,7 +59,10 @@
     },
     {
       "assert_daemon_event": {
-        "eventsInclude": ["task.updated", "task.completed"]
+        "eventsInclude": [
+          "task.updated",
+          "task.completed"
+        ]
       }
     },
     {
@@ -93,23 +96,26 @@
       }
     },
     {
-      "restart_daemon": {
-        "inProcess": true
-      }
+      "restart_daemon": {}
     },
     {
       "wait_task_status": {
         "alias": "recovery",
-        "status": "reconciling",
-        "timeoutSeconds": 5
+        "statusIn": [
+          "terminated",
+          "stopped"
+        ],
+        "timeoutSeconds": 10
       }
     },
     {
       "assert_task_record": {
         "alias": "recovery",
-        "status": "degraded",
-        "detailStatus": "recovered_after_daemon_restart",
-        "metadataIncludes": ["recovery_state"]
+        "status": "stopped",
+        "detailStatus": "daemon_lost",
+        "metadataIncludes": [
+          "process_kill_outcome"
+        ]
       }
     },
     {
@@ -139,7 +145,10 @@
     {
       "wait_task_status": {
         "alias": "stoppable",
-        "statusIn": ["terminated", "stopped"],
+        "statusIn": [
+          "terminated",
+          "stopped"
+        ],
         "timeoutSeconds": 5
       }
     },

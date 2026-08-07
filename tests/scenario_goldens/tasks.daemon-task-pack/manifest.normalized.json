@@ -40,9 +40,7 @@
       "save_session": {}
     },
     {
-      "ensure_daemon": {
-        "inProcess": true
-      }
+      "ensure_daemon": {}
     },
     {
       "daemon_subscribe": {
@@ -114,25 +112,26 @@
       }
     },
     {
-      "restart_daemon": {
-        "inProcess": true
-      }
+      "restart_daemon": {}
     },
     {
       "wait_task_status": {
         "alias": "recovery",
-        "status": "reconciling",
-        "timeoutSeconds": 5
+        "statusIn": [
+          "terminated",
+          "stopped"
+        ],
+        "timeoutSeconds": 10
       }
     },
     {
       "assert_task_record": {
         "alias": "recovery",
-        "detailStatus": "recovered_after_daemon_restart",
+        "detailStatus": "daemon_lost",
         "metadataIncludes": [
-          "recovery_state"
+          "process_kill_outcome"
         ],
-        "status": "degraded"
+        "status": "stopped"
       }
     },
     {

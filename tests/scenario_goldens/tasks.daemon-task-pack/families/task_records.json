@@ -81,9 +81,10 @@
   },
   {
     "command": "sleep",
+    "completedAt": "<timestamp>",
     "createdAt": "<timestamp>",
     "cwd": "<workspace>",
-    "detailStatus": "recovered_after_daemon_restart",
+    "detailStatus": "daemon_lost",
     "foregroundMode": "background",
     "foregroundable": true,
     "id": "recovery",
@@ -100,11 +101,11 @@
         "spawnedAt": "<timestamp>",
         "startToken": "<process-start-token>"
       },
+      "process_kill_outcome": "process.identity_unavailable",
       "process_meta_status": "running",
       "process_pid": "<pid:4>",
       "process_state": "orphaned",
-      "process_state_source": "process_identity",
-      "recovery_state": "recovered_after_daemon_restart"
+      "process_state_source": "process_identity"
     },
     "outputCursor": 30,
     "outputFile": "<runtime-home>/tasks/recovery/output.log",
@@ -127,8 +128,8 @@
     "sessionId": "<uuid:1>",
     "sourceId": "recovery",
     "startedAt": "<timestamp>",
-    "status": "degraded",
-    "summary": "Recovered after daemon restart. The process is still alive, but lifecycle tracking is degraded until it exits.",
+    "status": "stopped",
+    "summary": "The owning daemon was lost while this worker was active; the orphaned worker was terminated at daemon boot.",
     "supervisorId": "<uuid:4>",
     "taskFamily": "shell",
     "title": "restart recovery",

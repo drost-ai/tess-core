@@ -316,6 +316,9 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                     }
                 )
             )
+            from agent_core.tasks.supervisor_parts.shared import _PROCESS_REGISTRY
+
+            _PROCESS_REGISTRY[task_id] = proc
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             stopped = run(supervisor["stopTask"](task_id))
             self.assertEqual((stopped["status"], stopped["changed"]), ("stopped", True))

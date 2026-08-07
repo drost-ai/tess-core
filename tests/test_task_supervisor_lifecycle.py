@@ -206,7 +206,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_daemon_reconciles_persisted_running_task_after_restart(self):
+    def test_boot_sweep_kills_dead_epoch_orphan_and_finalizes_daemon_lost(self):
         root, home, workspace, previous = self.temp_context()
         proc = None
         try:
@@ -276,18 +276,21 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             )
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-life-instance", "cwd": str(workspace)}))
             record = None
-            for _ in range(40):
+            for _ in range(100):
                 record = run(client["inspectTask"](task_id))
-                if record and record.get("detailStatus") == "recovered_after_daemon_restart":
+                if record and record.get("detailStatus") == "daemon_lost":
                     break
                 time.sleep(0.05)
             self.assertIsNotNone(record)
-            self.assertEqual(record["status"], "degraded")
-            self.assertEqual(record["detailStatus"], "recovered_after_daemon_restart")
-            self.assertEqual(record["metadata"]["recovery_state"], "recovered_after_daemon_restart")
+            self.assertEqual(record["status"], "stopped")
+            self.assertEqual(record["detailStatus"], "daemon_lost")
+            self.assertIn("process_kill_outcome", record["metadata"])
             next_meta = run(core.readTaskMeta(task_id))
-            self.assertEqual(next_meta["status"], "reconciling")
-            self.assertEqual(next_meta["detailStatus"], "running")
+            self.assertEqual(next_meta["status"], "terminated")
+            deadline = time.monotonic() + 5
+            while proc.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertIsNotNone(proc.poll(), "orphaned worker must be killed by the boot sweep")
         finally:
             if proc and proc.poll() is None:
                 proc.terminate()

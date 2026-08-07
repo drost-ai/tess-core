@@ -322,9 +322,9 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
             _wait_task_terminal(supervisor, attached_id)
             active_id = task_ids["after_activation"]
             active_record = run(supervisor["inspectTask"](active_id))
-            self.assertEqual(active_record["status"], "degraded")
-            stopped = run(supervisor["stopTask"](active_id))
-            self.assertEqual(stopped["status"], "stopped")
+            self.assertEqual(active_record["status"], "stopped")
+            self.assertEqual(active_record["detailStatus"], "daemon_lost")
+            self.assertIn("process_kill_outcome", active_record["metadata"])
 
             stale_record = run(supervisor["inspectTask"](sentinel_task))
             self.assertEqual(stale_record["status"], "failed")
