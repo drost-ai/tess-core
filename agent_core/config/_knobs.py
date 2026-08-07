@@ -82,6 +82,22 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=3_600_000,
     ),
     Knob(
+        "comms.reply_timeout_ms",
+        300_000,
+        "int",
+        "Default milliseconds a SendMessage(expects_reply=true) call waits for the counterpart's reply before returning a visible non-answer.",
+        minimum=1_000,
+        maximum=3_600_000,
+    ),
+    Knob(
+        "comms.reply_poll_ms",
+        500,
+        "int",
+        "Milliseconds between reply-mailbox polls while a SendMessage call is blocked waiting for a reply.",
+        minimum=50,
+        maximum=10_000,
+    ),
+    Knob(
         "daemon.owner_poll_ms",
         2_000,
         "int",

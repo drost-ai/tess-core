@@ -122,6 +122,7 @@ def defaultToolList() -> list[str]:
         "WebSearch",
         "SetStatus",
         "Agent",
+        "SendMessage",
         "AskUserQuestion",
         "Config",
         "ExitPlanMode",

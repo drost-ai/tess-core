@@ -1,8 +1,8 @@
 {
+  "name": "ExitWorktree",
   "description": "Return to the original workspace and optionally leave the worktree intact.",
   "inputSchema": {
-    "additionalProperties": false,
-    "type": "object"
-  },
-  "name": "ExitWorktree"
+    "type": "object",
+    "additionalProperties": false
+  }
 }

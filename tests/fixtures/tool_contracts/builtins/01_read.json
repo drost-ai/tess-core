@@ -1,19 +1,20 @@
 {
+  "name": "Read",
   "description": "Read files from disk, including partial line ranges for large text files.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
-      "cursor": {
-        "description": "Opaque continuation cursor returned by a previous Read page. Do not combine with offset.",
-        "type": "string"
-      },
       "file_path": {
         "type": "string"
       },
-      "limit": {
+      "offset": {
         "type": "number"
       },
-      "offset": {
+      "cursor": {
+        "type": "string",
+        "description": "Opaque continuation cursor returned by a previous Read page. Do not combine with offset."
+      },
+      "limit": {
         "type": "number"
       },
       "pages": {
@@ -23,7 +24,6 @@
     "required": [
       "file_path"
     ],
-    "type": "object"
-  },
-  "name": "Read"
+    "additionalProperties": false
+  }
 }

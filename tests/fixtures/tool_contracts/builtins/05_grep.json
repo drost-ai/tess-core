@@ -1,8 +1,30 @@
 {
+  "name": "Grep",
   "description": "Search file contents with ripgrep.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
+      "pattern": {
+        "type": "string",
+        "description": "The regular expression to search for."
+      },
+      "path": {
+        "type": "string",
+        "description": "File or directory to search. Defaults to the current working directory."
+      },
+      "glob": {
+        "type": "string",
+        "description": "Optional glob filter, such as '*.py' or 'src/**/*.ts'."
+      },
+      "output_mode": {
+        "type": "string",
+        "enum": [
+          "files_with_matches",
+          "content",
+          "count"
+        ],
+        "description": "Use files_with_matches for filenames, content for matching lines with line numbers, or count for match counts per file."
+      },
       "-A": {
         "type": "number"
       },
@@ -12,74 +34,52 @@
       "-C": {
         "type": "number"
       },
-      "-i": {
-        "type": "boolean"
+      "context": {
+        "type": "number",
+        "description": "Number of context lines to include before and after each match."
+      },
+      "before_context": {
+        "type": "number",
+        "description": "Number of lines to include before each match."
+      },
+      "after_context": {
+        "type": "number",
+        "description": "Number of lines to include after each match."
       },
       "-n": {
         "type": "boolean"
       },
-      "after_context": {
-        "description": "Number of lines to include after each match.",
-        "type": "number"
-      },
-      "before_context": {
-        "description": "Number of lines to include before each match.",
-        "type": "number"
-      },
-      "context": {
-        "description": "Number of context lines to include before and after each match.",
-        "type": "number"
-      },
-      "cursor": {
-        "description": "Opaque continuation cursor returned by a previous Grep page. Do not combine with offset.",
-        "type": "string"
-      },
-      "glob": {
-        "description": "Optional glob filter, such as '*.py' or 'src/**/*.ts'.",
-        "type": "string"
-      },
-      "head_limit": {
-        "description": "Maximum number of returned matches. Use 0 only when full output is required.",
-        "type": "number"
+      "-i": {
+        "type": "boolean"
       },
       "ignore_case": {
-        "description": "Whether the search should be case-insensitive.",
-        "type": "boolean"
-      },
-      "multiline": {
-        "description": "Enable multiline regular-expression search.",
-        "type": "boolean"
-      },
-      "offset": {
-        "description": "Match offset for paginating large result sets.",
-        "type": "number"
-      },
-      "output_mode": {
-        "description": "Use files_with_matches for filenames, content for matching lines with line numbers, or count for match counts per file.",
-        "enum": [
-          "files_with_matches",
-          "content",
-          "count"
-        ],
-        "type": "string"
-      },
-      "path": {
-        "description": "File or directory to search. Defaults to the current working directory.",
-        "type": "string"
-      },
-      "pattern": {
-        "description": "The regular expression to search for.",
-        "type": "string"
+        "type": "boolean",
+        "description": "Whether the search should be case-insensitive."
       },
       "type": {
-        "description": "Optional ripgrep file type, such as 'py', 'ts', 'js', or 'md'.",
-        "type": "string"
+        "type": "string",
+        "description": "Optional ripgrep file type, such as 'py', 'ts', 'js', or 'md'."
+      },
+      "head_limit": {
+        "type": "number",
+        "description": "Maximum number of returned matches. Use 0 only when full output is required."
+      },
+      "offset": {
+        "type": "number",
+        "description": "Match offset for paginating large result sets."
+      },
+      "cursor": {
+        "type": "string",
+        "description": "Opaque continuation cursor returned by a previous Grep page. Do not combine with offset."
+      },
+      "multiline": {
+        "type": "boolean",
+        "description": "Enable multiline regular-expression search."
       }
     },
     "required": [
       "pattern"
     ],
-    "type": "object"
-  },
-  "name": "Grep"
+    "additionalProperties": false
+  }
 }

@@ -1,13 +1,13 @@
 {
+  "name": "ExitPlanMode",
   "description": "Request approval to exit plan mode and continue with implementation.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
       "allowedPrompts": {
         "type": "array"
       }
     },
-    "type": "object"
-  },
-  "name": "ExitPlanMode"
+    "additionalProperties": false
+  }
 }

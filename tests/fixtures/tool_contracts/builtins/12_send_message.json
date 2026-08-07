@@ -1,0 +1,31 @@
+{
+  "name": "SendMessage",
+  "description": "Send a message to a related agent: \"parent\" from a subagent, or a child agent id from the parent session. Set expects_reply to block until the recipient answers (reply_to correlates an answer to an earlier message).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "to": {
+        "type": "string",
+        "description": "\"parent\" or a child agent id."
+      },
+      "message": {
+        "type": "string"
+      },
+      "expects_reply": {
+        "type": "boolean"
+      },
+      "reply_to": {
+        "type": "string",
+        "description": "Correlation id of the message being answered."
+      },
+      "timeout_ms": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "to",
+      "message"
+    ],
+    "additionalProperties": false
+  }
+}

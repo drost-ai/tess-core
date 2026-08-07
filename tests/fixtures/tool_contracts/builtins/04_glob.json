@@ -1,29 +1,29 @@
 {
+  "name": "Glob",
   "description": "List files that match a glob pattern.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
-      "cursor": {
-        "description": "Opaque continuation cursor returned by a previous Glob page. Do not combine with offset.",
+      "pattern": {
         "type": "string"
-      },
-      "limit": {
-        "type": "number"
-      },
-      "offset": {
-        "type": "number"
       },
       "path": {
         "type": "string"
       },
-      "pattern": {
-        "type": "string"
+      "offset": {
+        "type": "number"
+      },
+      "cursor": {
+        "type": "string",
+        "description": "Opaque continuation cursor returned by a previous Glob page. Do not combine with offset."
+      },
+      "limit": {
+        "type": "number"
       }
     },
     "required": [
       "pattern"
     ],
-    "type": "object"
-  },
-  "name": "Glob"
+    "additionalProperties": false
+  }
 }

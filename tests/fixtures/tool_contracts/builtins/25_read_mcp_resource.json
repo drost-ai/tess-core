@@ -1,0 +1,30 @@
+{
+  "name": "ReadMcpResource",
+  "description": "Read a resource published by a connected MCP server.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string"
+      },
+      "uri": {
+        "type": "string"
+      },
+      "offset": {
+        "type": "number"
+      },
+      "cursor": {
+        "type": "string",
+        "description": "Opaque continuation cursor returned by a previous resource page. Do not combine with offset."
+      },
+      "limit": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "server",
+      "uri"
+    ],
+    "additionalProperties": false
+  }
+}

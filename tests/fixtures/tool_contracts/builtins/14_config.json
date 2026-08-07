@@ -1,8 +1,8 @@
 {
+  "name": "Config",
   "description": "Return the active runtime configuration snapshot.",
   "inputSchema": {
-    "additionalProperties": false,
-    "type": "object"
-  },
-  "name": "Config"
+    "type": "object",
+    "additionalProperties": false
+  }
 }

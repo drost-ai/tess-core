@@ -1,12 +1,13 @@
 {
+  "name": "WebFetch",
   "description": "Fetch a URL and return a text snapshot of its contents.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
-      "prompt": {
+      "url": {
         "type": "string"
       },
-      "url": {
+      "prompt": {
         "type": "string"
       }
     },
@@ -14,7 +15,6 @@
       "url",
       "prompt"
     ],
-    "type": "object"
-  },
-  "name": "WebFetch"
+    "additionalProperties": false
+  }
 }

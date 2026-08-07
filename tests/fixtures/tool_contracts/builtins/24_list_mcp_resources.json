@@ -1,0 +1,23 @@
+{
+  "name": "ListMcpResources",
+  "description": "List resources published by connected MCP servers.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "server": {
+        "type": "string"
+      },
+      "offset": {
+        "type": "number"
+      },
+      "cursor": {
+        "type": "string",
+        "description": "Opaque continuation cursor returned by a previous resource-list page. Do not combine with offset."
+      },
+      "limit": {
+        "type": "number"
+      }
+    },
+    "additionalProperties": false
+  }
+}

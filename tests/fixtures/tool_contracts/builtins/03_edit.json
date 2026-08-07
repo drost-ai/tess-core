@@ -1,15 +1,16 @@
 {
+  "name": "Edit",
   "description": "Apply exact string replacements inside a file.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
       "file_path": {
         "type": "string"
       },
-      "new_string": {
+      "old_string": {
         "type": "string"
       },
-      "old_string": {
+      "new_string": {
         "type": "string"
       },
       "replace_all": {
@@ -21,7 +22,6 @@
       "old_string",
       "new_string"
     ],
-    "type": "object"
-  },
-  "name": "Edit"
+    "additionalProperties": false
+  }
 }

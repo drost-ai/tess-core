@@ -1,0 +1,67 @@
+{
+  "name": "TaskHealthCheckStart",
+  "description": "Start a daemon-backed periodic health check for a URL or shell command.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "title": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "http",
+          "command"
+        ]
+      },
+      "url": {
+        "type": "string"
+      },
+      "command": {
+        "type": "string"
+      },
+      "interval_ms": {
+        "type": "number"
+      },
+      "timeout_ms": {
+        "type": "number"
+      },
+      "failure_threshold": {
+        "type": "number"
+      },
+      "backoff_multiplier": {
+        "type": "number"
+      },
+      "max_interval_ms": {
+        "type": "number"
+      },
+      "expected_status_codes": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "expected_body_policy": {
+        "type": "string",
+        "enum": [
+          "ignore",
+          "contains"
+        ]
+      },
+      "expected_body_substring": {
+        "type": "string"
+      },
+      "output_limit_bytes": {
+        "type": "number"
+      },
+      "body_limit_bytes": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "title",
+      "mode"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -5,6 +5,11 @@
 # e.g. AGENT_CORE_SUBAGENTS_MAX_LIVE=4.
 
 knobs:
+  comms:
+    # Milliseconds between reply-mailbox polls while a SendMessage call is blocked waiting for a reply. [50..10000]
+    reply_poll_ms: 500
+    # Default milliseconds a SendMessage(expects_reply=true) call waits for the counterpart's reply before returning a visible non-answer. [1000..3600000]
+    reply_timeout_ms: 300000
   daemon:
     # Milliseconds between the runtime's liveness checks of its containment daemon; a dead daemon is replaced by exactly one fresh instance. [50..60000]
     heartbeat_ms: 3000

@@ -1,19 +1,19 @@
 {
+  "name": "SetStatus",
   "description": "Update the assistant's live status line with a short progress message. Use this when changing phases or starting meaningful work. Keep messages brief and concrete, such as 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
-      "detail": {
+      "message": {
         "type": "string"
       },
-      "message": {
+      "detail": {
         "type": "string"
       }
     },
     "required": [
       "message"
     ],
-    "type": "object"
-  },
-  "name": "SetStatus"
+    "additionalProperties": false
+  }
 }

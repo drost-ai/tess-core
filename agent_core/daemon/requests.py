@@ -44,6 +44,14 @@ async def _handle_daemon_request(
         result = await supervisor["startSubagentTask"](params)
     elif method == "startHealthCheck":
         result = await supervisor["startHealthCheck"](params)
+    elif method == "sendTaskMessage":
+        result = await supervisor["sendTaskMessage"](params)
+    elif method == "answerTaskQuestion":
+        result = await supervisor["answerTaskQuestion"](params)
+    elif method == "skipTaskQuestion":
+        result = await supervisor["skipTaskQuestion"](params)
+    elif method == "readTaskQuestions":
+        result = await supervisor["readTaskQuestions"](params.get("taskId"))
     elif method == "shutdown":
         return {
             "result": {"status": "shutting_down"},

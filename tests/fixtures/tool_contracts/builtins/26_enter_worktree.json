@@ -1,13 +1,13 @@
 {
+  "name": "EnterWorktree",
   "description": "Create and enter a git worktree for isolated work.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
       "name": {
         "type": "string"
       }
     },
-    "type": "object"
-  },
-  "name": "EnterWorktree"
+    "additionalProperties": false
+  }
 }

@@ -8,6 +8,7 @@ from .code_search import _glob_tool, _grep_tool
 from .definitions import ToolConcurrency, ToolDefinition
 from .files import _edit_tool, _read_tool, _write_tool
 from .mcp import _list_mcp_resources_tool, _mcp_tool, _read_mcp_resource_tool
+from .messaging import _send_message_tool
 from .notebook import _notebook_edit_tool
 from .session_tools import _ask_user_question_tool, _config_tool, _exit_plan_mode_tool, _set_status_tool, _todo_tool
 from .shell import _bash_tool
@@ -39,6 +40,7 @@ def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefini
         _web_search_tool(),
         _set_status_tool(),
         _agent_tool(),
+        _send_message_tool(),
         _ask_user_question_tool(),
         _config_tool(),
         _exit_plan_mode_tool(),

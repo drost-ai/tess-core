@@ -1,20 +1,32 @@
 {
+  "name": "Agent",
   "description": "Spawn a delegated subagent to work on a focused task.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
       "description": {
         "type": "string"
       },
-      "isolation": {
-        "enum": [
-          "shared",
-          "worktree",
-          "none"
-        ],
+      "prompt": {
+        "type": "string"
+      },
+      "subagent_type": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "run_in_background": {
+        "type": "boolean"
+      },
+      "name": {
+        "type": "string"
+      },
+      "team_name": {
         "type": "string"
       },
       "mode": {
+        "type": "string",
         "enum": [
           "default",
           "acceptEdits",
@@ -22,33 +34,21 @@
           "dontAsk",
           "auto",
           "plan"
-        ],
-        "type": "string"
+        ]
       },
-      "model": {
-        "type": "string"
-      },
-      "name": {
-        "type": "string"
-      },
-      "prompt": {
-        "type": "string"
-      },
-      "run_in_background": {
-        "type": "boolean"
-      },
-      "subagent_type": {
-        "type": "string"
-      },
-      "team_name": {
-        "type": "string"
+      "isolation": {
+        "type": "string",
+        "enum": [
+          "shared",
+          "worktree",
+          "none"
+        ]
       }
     },
     "required": [
       "description",
       "prompt"
     ],
-    "type": "object"
-  },
-  "name": "Agent"
+    "additionalProperties": false
+  }
 }

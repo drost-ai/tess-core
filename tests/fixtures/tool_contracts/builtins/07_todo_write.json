@@ -1,27 +1,30 @@
 {
+  "name": "TodoWrite",
   "description": "Update the session todo list.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
       "todos": {
+        "type": "array",
+        "description": "At most 100 items. This limit is enforced at runtime.",
         "items": {
-          "additionalProperties": false,
+          "type": "object",
           "properties": {
-            "activeForm": {
-              "description": "Present-progress label of at most 1000 UTF-8 bytes. This limit is enforced at runtime.",
-              "type": "string"
-            },
             "content": {
-              "description": "Non-empty todo text of at most 2000 UTF-8 bytes. This limit is enforced at runtime.",
-              "type": "string"
+              "type": "string",
+              "description": "Non-empty todo text of at most 2000 UTF-8 bytes. This limit is enforced at runtime."
             },
             "status": {
+              "type": "string",
               "enum": [
                 "pending",
                 "in_progress",
                 "completed"
-              ],
-              "type": "string"
+              ]
+            },
+            "activeForm": {
+              "type": "string",
+              "description": "Present-progress label of at most 1000 UTF-8 bytes. This limit is enforced at runtime."
             }
           },
           "required": [
@@ -29,16 +32,13 @@
             "status",
             "activeForm"
           ],
-          "type": "object"
-        },
-        "description": "At most 100 items. This limit is enforced at runtime.",
-        "type": "array"
+          "additionalProperties": false
+        }
       }
     },
     "required": [
       "todos"
     ],
-    "type": "object"
-  },
-  "name": "TodoWrite"
+    "additionalProperties": false
+  }
 }

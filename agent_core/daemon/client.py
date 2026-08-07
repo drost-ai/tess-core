@@ -238,6 +238,10 @@ def _create_daemon_client(
         "startMainSessionTask": start_main_session_task,
         "startSubagentTask": start_subagent_task,
         "startHealthCheck": start_health_check,
+        "sendTaskMessage": lambda task_args=None, **task_kwargs: request("sendTaskMessage", {**(task_args or {}), **task_kwargs}),
+        "answerTaskQuestion": lambda task_args=None, **task_kwargs: request("answerTaskQuestion", {**(task_args or {}), **task_kwargs}),
+        "skipTaskQuestion": lambda task_args=None, **task_kwargs: request("skipTaskQuestion", {**(task_args or {}), **task_kwargs}),
+        "readTaskQuestions": lambda task_id: request("readTaskQuestions", {"taskId": task_id}),
         "subscribe": subscribe,
         "getState": lambda: {"remote": True, "socketPath": socket_path},
     }

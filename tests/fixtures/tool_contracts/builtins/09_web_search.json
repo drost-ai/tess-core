@@ -1,55 +1,55 @@
 {
+  "name": "WebSearch",
   "description": "Perform a lightweight web search and return ranked results.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
-      "allowed_domains": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "blocked_domains": {
-        "items": {
-          "type": "string"
-        },
-        "type": "array"
-      },
-      "category": {
-        "description": "Optional provider category, such as news, pdf, github, or research paper.",
+      "query": {
         "type": "string"
       },
       "count": {
-        "description": "Number of results to return, from 1 to 10.",
-        "type": "number"
-      },
-      "country": {
-        "description": "Two-letter country code for providers that support it.",
-        "type": "string"
-      },
-      "freshness": {
-        "description": "Optional freshness filter such as pd, pw, pm, or py.",
-        "type": "string"
+        "type": "number",
+        "description": "Number of results to return, from 1 to 10."
       },
       "max_results": {
-        "description": "Alias for count.",
-        "type": "number"
+        "type": "number",
+        "description": "Alias for count."
+      },
+      "country": {
+        "type": "string",
+        "description": "Two-letter country code for providers that support it."
+      },
+      "freshness": {
+        "type": "string",
+        "description": "Optional freshness filter such as pd, pw, pm, or py."
+      },
+      "category": {
+        "type": "string",
+        "description": "Optional provider category, such as news, pdf, github, or research paper."
       },
       "provider": {
+        "type": "string",
         "enum": [
           "exa",
           "scraper"
-        ],
-        "type": "string"
+        ]
       },
-      "query": {
-        "type": "string"
+      "allowed_domains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "blocked_domains": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
       }
     },
     "required": [
       "query"
     ],
-    "type": "object"
-  },
-  "name": "WebSearch"
+    "additionalProperties": false
+  }
 }

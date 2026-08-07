@@ -21,7 +21,7 @@ class Package28DispatchTests(AgentCoreTestCase):
                 "TodoWrite",
                 "WebFetch",
                 "WebSearch",
-                "SetStatus",
+                "SetStatus", "SendMessage",
                 "Config",
                 "TaskOutput",
                 "TaskMonitorStart",

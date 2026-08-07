@@ -64,6 +64,7 @@
       "WebSearch",
       "SetStatus",
       "Agent",
+      "SendMessage",
       "AskUserQuestion",
       "Config",
       "ExitPlanMode",

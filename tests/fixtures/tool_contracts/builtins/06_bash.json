@@ -1,13 +1,14 @@
 {
+  "name": "Bash",
   "description": "Run shell commands in the current workspace. When you launch a long-running background task and promise to keep watching it, call TaskMonitorStart immediately afterward.",
   "inputSchema": {
-    "additionalProperties": false,
+    "type": "object",
     "properties": {
       "command": {
         "type": "string"
       },
-      "dangerouslyDisableSandbox": {
-        "type": "boolean"
+      "timeout": {
+        "type": "number"
       },
       "description": {
         "type": "string"
@@ -15,14 +16,13 @@
       "run_in_background": {
         "type": "boolean"
       },
-      "timeout": {
-        "type": "number"
+      "dangerouslyDisableSandbox": {
+        "type": "boolean"
       }
     },
     "required": [
       "command"
     ],
-    "type": "object"
-  },
-  "name": "Bash"
+    "additionalProperties": false
+  }
 }
