@@ -16,10 +16,15 @@ from .._utils import maybe_await, pretty_json
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 from ..storage import loadChildAgent
+from ..storage import mutateTaskMeta
 from ..tasks.communication import (
+    answer_task_question,
+    create_task_question,
     mark_task_message_delivered,
     read_task_mailbox_messages,
+    read_task_questions,
     send_task_message,
+    skip_task_question,
 )
 from .definitions import ToolDefinition
 from .schemas import builtin_tool
@@ -57,7 +62,22 @@ def _send_message_tool() -> ToolDefinition:
             )
             if not expects_reply:
                 return _queued(record)
+            # A blocking child question: tracked as an open-question record so
+            # the task flips to awaiting_input and the parent-side reply
+            # invariant machinery sees it.
+            await create_task_question(
+                own_task_id,
+                {
+                    "questionId": record["messageId"],
+                    "childSessionId": session.get("id"),
+                    "question": message,
+                    "metadata": {"messageId": record["messageId"]},
+                },
+            )
             reply = await _await_reply(own_task_id, "to_child", record["messageId"], timeout_ms, context)
+            if reply is None:
+                await skip_task_question(own_task_id, record["messageId"], "unanswered:child_timeout")
+            await _restore_running_status(own_task_id)
             return _reply_result(record, reply, timeout_ms)
 
         if is_child:
@@ -66,6 +86,15 @@ def _send_message_tool() -> ToolDefinition:
         task_id = (child or {}).get("taskId")
         if not isinstance(task_id, str) or not task_id:
             return _error(f"Unknown agent id: {to}. Use the agent_id returned by the Agent tool.")
+        if reply_to:
+            # Answering resolves the open-question record (which queues the
+            # to_child answer itself) so the runtime backstop never
+            # double-answers; a reply_to with no pending question falls back
+            # to a plain correlated message.
+            pending = [q for q in await read_task_questions(task_id) if q.get("questionId") == reply_to and q.get("status") == "pending"]
+            if pending:
+                await answer_task_question(task_id, reply_to, message)
+                return _queued({"messageId": reply_to, "taskId": task_id})
         payload = {
             "taskId": task_id,
             "direction": "to_child",
@@ -107,7 +136,7 @@ async def _await_reply(
             if record_direction != direction:
                 continue
             record_metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
-            if record_metadata.get("replyTo") != correlation_id:
+            if correlation_id not in (record_metadata.get("replyTo"), record_metadata.get("questionId")):
                 continue
             if record.get("status") == "queued":
                 # Claim it here so the boundary drain does not re-inject the
@@ -116,6 +145,15 @@ async def _await_reply(
             return record
         await asyncio.sleep(poll_seconds)
     return None
+
+
+async def _restore_running_status(task_id: str) -> None:
+    def _restore(meta: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not meta or meta.get("status") != "awaiting_input":
+            return meta
+        return {**meta, "status": "running", "waitingReason": None}
+
+    await mutateTaskMeta(task_id, _restore)
 
 
 def _queued(record: dict[str, Any]) -> ToolResult:

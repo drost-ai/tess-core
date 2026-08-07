@@ -67,6 +67,7 @@ from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithR
 from ..subagents.contract import filter_tools_for_subagent
 from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..tasks.communication import deliver_queued_task_messages_to_session
+from ._question_gate import MAX_QUESTION_NUDGES as _MAX_QUESTION_NUDGES, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
 from ..runtime.transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
 from ..payloads.attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
@@ -172,6 +173,8 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         _safe_emit(runtime, "message.user", {"text": prompt_text, "session_id": session["id"]})
 
     usage_totals["turns"] += 1
+    question_nudges = 0
+    reminded_question_ids: set[str] = set()
 
     async def drain_mailboxes() -> list[dict[str, Any]]:
         delivered_messages = await deliver_queued_task_messages_to_session(session, config)
@@ -195,6 +198,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         if exceeded and exceeded.get("reason") != "max_tool_calls":
             return await finish_subagent_limit(exceeded)
         await drain_mailboxes()
+        await _inject_open_question_reminders(session, reminded_question_ids)
         try:
             provider_result = await _request_provider_response(
                 {
@@ -273,6 +277,20 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
         await _persist_partial_output_commit(session, config, runtime, response)
         if not tool_uses:
+            open_questions = await _read_open_child_questions(session)
+            if open_questions and question_nudges < _MAX_QUESTION_NUDGES:
+                # The reply invariant: a parent turn may not simply end while
+                # children are blocked on questions. Nudge a continuation.
+                question_nudges += 1
+                session.setdefault("messages", []).append(_user_request_message(
+                    f"[REPLY REQUIRED] {len(open_questions)} child question(s) are still unanswered (nudge {question_nudges}/{_MAX_QUESTION_NUDGES}).\n" + await _build_question_reminder(open_questions),
+                    lineage={"logicalTurnId": parent_turn_id, "kind": "question_nudge"},
+                ))
+                await persistSession(session, config)
+                continue
+            if open_questions:
+                backstopped = await _resolve_open_questions_with_backstop(session)
+                _safe_emit(runtime, "subagent.question.unanswered", {"session_id": session["id"], "question_ids": [q.get("questionId") for q in backstopped], "count": len(backstopped)})
             progress_ledger.complete(provider_call_index=state.provider_call_index)
             await persistSession(session, config)
             # Final drain before the turn returns: anything a child sent while
