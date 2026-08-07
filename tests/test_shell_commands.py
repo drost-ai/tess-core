@@ -4,6 +4,18 @@ from tests.support.agent_core_case import *
 
 
 class ShellCommandTests(AgentCoreTestCase):
+    def test_dispatcher_covers_exactly_the_registered_builtins(self):
+        from agent_core.shell_surface.dispatcher import _HANDLERS
+        from agent_core.shell_surface.registry import listSlashCommands
+
+        listed = {
+            command["name"]
+            for command in listSlashCommands(
+                {"includeStatusline": True, "includeTheme": True, "includeMouse": True, "includeScreen": True}
+            )
+        }
+        self.assertEqual(listed, set(_HANDLERS))
+
     def test_slash_command_registry_and_core_handlers(self):
         root, home, workspace, previous = self.temp_context()
         try:

@@ -42,7 +42,58 @@ from .status import (
     formatUsageBreakdown,
 )
 from .tasks import _handle_plans, _handle_tasks
-from typing import Any
+from typing import Any, Callable
+
+
+def _clear(ctx: dict[str, Any]) -> dict[str, Any]:
+    _call(ctx["hooks"], "clear")
+    return _handled("cleared")
+
+
+async def _monitors(ctx: dict[str, Any]) -> dict[str, Any]:
+    return _info(ctx["hooks"], "Monitors", await buildMonitorsReport(ctx["session"]))
+
+
+# One handler per builtin command listed in registry._COMMANDS (a test keeps
+# the two tables in lockstep). Each handler takes the dispatch context and
+# returns a result dict or an awaitable of one; builtins shadow runtime
+# commands of the same name.
+_HANDLERS: dict[str, Callable[[dict[str, Any]], Any]] = {
+    "help": lambda c: _info(c["hooks"], "Commands", buildSlashHelp({"hooks": c["hooks"], "runtimeCommands": c["runtimeCommands"]})),
+    "exit": lambda c: {"outcome": "exit"},
+    "quit": lambda c: {"outcome": "exit"},
+    "clear": _clear,
+    "status": lambda c: _info(c["hooks"], "Status", buildStatusReport(c["session"], c["config"])),
+    "providers": lambda c: _info(c["hooks"], "Providers", buildProviderProfilesReport(c["session"], c["config"])),
+    "provider": lambda c: _handle_provider(c["argText"], c["session"], c["config"], c["hooks"]),
+    "model": lambda c: _handle_model(c["argText"], c["session"], c["config"], c["hooks"]),
+    "effort": lambda c: _handle_effort(c["argText"], c["session"], c["config"], c["hooks"]),
+    "permissions": lambda c: _handle_permissions(c["argText"], c["session"], c["config"], c["hooks"]),
+    "todos": lambda c: _info(c["hooks"], "Todos", buildTodosReport(c["session"])),
+    "memory": lambda c: _handle_memory(c["argText"], c["session"], c["hooks"]),
+    "extensions": lambda c: _handle_extensions(c["hooks"]),
+    "cost": lambda c: _info(c["hooks"], "Usage", formatUsageBreakdown(c["session"].get("metadata", {}).get("usage"))),
+    "plans": lambda c: _handle_plans(c["argText"], c["session"], c["hooks"]),
+    "tasks": lambda c: _handle_tasks(c["argText"], c["session"], c["hooks"], c["request"]),
+    "agents": lambda c: _handle_agents(c["argText"], c["session"], c["config"], c["hooks"], c["request"]),
+    "background": lambda c: _handle_background(c["argText"], c["session"], c["hooks"]),
+    "daemon": lambda c: _handle_daemon(c["argText"], c["session"], c["config"], c["hooks"], c["request"]),
+    "remote": lambda c: _handle_remote(c["argText"], c["session"], c["hooks"]),
+    "monitors": _monitors,
+    "monitor": lambda c: _handle_monitor(c["argText"], c["session"], c["hooks"]),
+    "resume": lambda c: _handle_resume(c["argText"], c["session"], c["hooks"]),
+    "compact": lambda c: _handle_compact(c["argText"], c["session"], c["config"], c["hooks"], c["request"]),
+    "transcript": lambda c: _handle_transcript(c["argText"], c["session"], c["hooks"]),
+    "debug": lambda c: _handle_debug(c["argText"], c["session"], c["config"], c["hooks"]),
+    "diagnostics": lambda c: _handle_diagnostics(c["argText"], c["session"], c["config"], c["hooks"]),
+    "collaboration": lambda c: _handle_collaboration(c["argText"], c["session"], c["hooks"]),
+    "review": lambda c: _handle_review(c["argText"], c["hooks"]),
+    "statusline": lambda c: _handle_statusline(c["argText"], c["hooks"]),
+    "theme": lambda c: _handle_theme(c["argText"], c["hooks"]),
+    "mouse": lambda c: _handle_mouse(c["argText"], c["hooks"]),
+    "screen": lambda c: _handle_screen(c["argText"], c["hooks"]),
+    "bug": lambda c: _info(c["hooks"], "Feedback", "Report issues at https://github.com/drost-ai/tess-core/issues"),
+}
 
 
 async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -63,73 +114,21 @@ async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs:
 
     runtime_command = _find_runtime_command(command, runtime_commands)
     _sync_effective_provider(session, config)
-    if command == "help":
-        return _info(hooks, "Commands", buildSlashHelp({"hooks": hooks, "runtimeCommands": runtime_commands}))
-    if command in {"exit", "quit"}:
-        return {"outcome": "exit"}
-    if command == "clear":
-        _call(hooks, "clear")
-        return _handled("cleared")
-    if command == "status":
-        return _info(hooks, "Status", buildStatusReport(session, config))
-    if command == "providers":
-        return _info(hooks, "Providers", buildProviderProfilesReport(session, config))
-    if command == "provider":
-        return await _handle_provider(arg_text, session, config, hooks)
-    if command == "model":
-        return await _handle_model(arg_text, session, config, hooks)
-    if command == "effort":
-        return await _handle_effort(arg_text, session, config, hooks)
-    if command == "permissions":
-        return await _handle_permissions(arg_text, session, config, hooks)
-    if command == "todos":
-        return _info(hooks, "Todos", buildTodosReport(session))
-    if command == "memory":
-        return await _handle_memory(arg_text, session, hooks)
-    if command == "extensions":
-        return _handle_extensions(hooks)
-    if command == "cost":
-        return _info(hooks, "Usage", formatUsageBreakdown(session.get("metadata", {}).get("usage")))
-    if command == "plans":
-        return await _handle_plans(arg_text, session, hooks)
-    if command == "tasks":
-        return await _handle_tasks(arg_text, session, hooks, args)
-    if command == "agents":
-        return await _handle_agents(arg_text, session, config, hooks, args)
-    if command == "background":
-        return await _handle_background(arg_text, session, hooks)
-    if command == "daemon":
-        return await _handle_daemon(arg_text, session, config, hooks, args)
-    if command == "remote":
-        return await _handle_remote(arg_text, session, hooks)
-    if command == "monitors":
-        return _info(hooks, "Monitors", await buildMonitorsReport(session))
-    if command == "monitor":
-        return await _handle_monitor(arg_text, session, hooks)
-    if command == "resume":
-        return await _handle_resume(arg_text, session, hooks)
-    if command == "compact":
-        return await _handle_compact(arg_text, session, config, hooks, args)
-    if command == "transcript":
-        return await _handle_transcript(arg_text, session, hooks)
-    if command == "debug":
-        return await _handle_debug(arg_text, session, config, hooks)
-    if command == "diagnostics":
-        return await _handle_diagnostics(arg_text, session, config, hooks)
-    if command == "collaboration":
-        return await _handle_collaboration(arg_text, session, hooks)
-    if command == "review":
-        return await _handle_review(arg_text, hooks)
-    if command == "statusline":
-        return _handle_statusline(arg_text, hooks)
-    if command == "theme":
-        return _handle_theme(arg_text, hooks)
-    if command == "mouse":
-        return _handle_mouse(arg_text, hooks)
-    if command == "screen":
-        return _handle_screen(arg_text, hooks)
-    if command == "bug":
-        return _info(hooks, "Feedback", "Report issues at https://github.com/drost-ai/tess-core/issues")
+    handler = _HANDLERS.get(command)
+    if handler:
+        result = handler(
+            {
+                "argText": arg_text,
+                "session": session,
+                "config": config,
+                "hooks": hooks,
+                "runtimeCommands": runtime_commands,
+                "request": args,
+            }
+        )
+        if hasattr(result, "__await__"):
+            result = await result
+        return result
     if runtime_command:
         result = runtime_command["handler"]({"argText": arg_text, "args": arg_text, "session": session, "config": config, "hooks": hooks})
         if hasattr(result, "__await__"):
