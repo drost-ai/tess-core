@@ -273,7 +273,7 @@ def _project_session(session: dict[str, Any]) -> dict[str, Any]:
 
 
 def _project_runtime_event(event: dict[str, Any]) -> dict[str, Any]:
-    return _clean({"kind": event.get("kind"), "sessionId": event.get("sessionId"), "payload": event.get("payload"), "legacyEvent": event.get("legacyEvent")})
+    return _clean({"kind": event.get("kind"), "sessionId": event.get("sessionId"), "payload": event.get("payload"), "legacyEvent": event.get("event")})
 
 
 def _project_runtime_state(state: dict[str, Any]) -> dict[str, Any]:

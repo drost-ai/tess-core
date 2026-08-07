@@ -17,13 +17,9 @@ def createRuntimeEvent(args: dict[str, Any] | None = None, **kwargs: Any) -> Run
     kind, payload = _typed_payload(str(legacy_event or ""), data)
     return {
         "event": legacy_event,
-        "type": legacy_event,
         "kind": kind,
         "data": data,
         "payload": payload,
         "createdAt": timestamp,
-        "timestamp": timestamp,
         "sessionId": session_id,
-        "legacyEvent": legacy_event,
-        "legacyData": data,
     }

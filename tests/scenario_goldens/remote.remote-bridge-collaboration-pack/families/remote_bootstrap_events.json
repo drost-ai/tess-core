@@ -31,20 +31,6 @@
       },
       "event": "session.activated",
       "kind": "session.activated",
-      "legacyData": {
-        "bridge_id": "<uuid:2>",
-        "cwd": "<workspace>",
-        "git_branch": "<git-branch>",
-        "git_root": "<git-root>",
-        "model": "gpt-5.4",
-        "permission_mode": "bypassPermissions",
-        "provider": "openai",
-        "remote_session_id": "remote-main",
-        "session_id": "<uuid:1>",
-        "updated_at": "<timestamp>",
-        "workspace_name": "<workspace-name>"
-      },
-      "legacyEvent": "session.activated",
       "payload": {
         "bridgeId": "<uuid:2>",
         "cwd": "<workspace>",
@@ -57,9 +43,7 @@
         "updatedAt": "<timestamp>",
         "workspaceName": "<workspace-name>"
       },
-      "sessionId": "<uuid:1>",
-      "timestamp": "<timestamp>",
-      "type": "session.activated"
+      "sessionId": "<uuid:1>"
     }
   }
 ]

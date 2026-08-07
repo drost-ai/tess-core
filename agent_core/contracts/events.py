@@ -155,15 +155,11 @@ class RuntimeEventEnvelope(TypedDict):
     """The exact shape emitted by createRuntimeEvent — every key always present."""
 
     event: str | None       # canonical raw event name
-    type: str | None        # duplicate of event (legacy)
     kind: str                # typed payload kind ("" when the event is unknown)
     data: dict[str, Any]     # raw event body as supplied by the emitter
     payload: dict[str, Any]  # typed camelCase projection of data
     createdAt: str           # canonical timestamp (ISO 8601)
-    timestamp: str           # duplicate of createdAt (legacy)
     sessionId: str | None
-    legacyEvent: str | None  # duplicate of event (legacy)
-    legacyData: dict[str, Any]  # duplicate of data (legacy)
 
 
 class RuntimeSubscriberEnvelope(TypedDict):
@@ -202,7 +198,7 @@ def event_kind(event: Mapping[str, Any]) -> str:
 
     Mirrors the reducer's historical read order (kind, type, event) exactly.
     """
-    value = event.get("kind") or event.get("type") or event.get("event")
+    value = event.get("kind") or event.get("event")
     return value if isinstance(value, str) else ""
 
 
@@ -211,7 +207,7 @@ def event_name(event: Mapping[str, Any]) -> str:
 
     Mirrors createRuntimeEvent's input coalescing (event, type, kind) exactly.
     """
-    value = event.get("event") or event.get("type") or event.get("kind")
+    value = event.get("event") or event.get("kind")
     return value if isinstance(value, str) else ""
 
 
@@ -234,8 +230,8 @@ def event_body(event: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def event_time(event: Mapping[str, Any]) -> str:
-    """Event timestamp (timestamp, then createdAt); empty string when absent."""
-    value = event.get("timestamp") or event.get("createdAt")
+    """Event timestamp (createdAt); empty string when absent."""
+    value = event.get("createdAt")
     return value if isinstance(value, str) else ""
 
 

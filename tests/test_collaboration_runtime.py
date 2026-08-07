@@ -84,7 +84,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
 
             state = core.createInitialRuntimeState(session)
             for event, data in events:
-                state = core.reduceRuntimeState(state, {"type": event, "createdAt": "2026-01-01T00:00:02Z", "data": data})
+                state = core.reduceRuntimeState(state, {"event": event, "createdAt": "2026-01-01T00:00:02Z", "data": data})
             self.assertEqual(state["collaboration"]["backgroundCount"], 2)
             self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
             self.assertNotIn("recentEvents", state["collaboration"])
