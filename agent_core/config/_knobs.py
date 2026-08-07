@@ -98,6 +98,14 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=3_600_000,
     ),
     Knob(
+        "comms.inline_result_bytes",
+        48_000,
+        "int",
+        "Inline byte allowance for inter-agent payloads (SendMessage/Agent tool results and drained child messages) before artifact spill or truncation; they are conversation, not raw command output.",
+        minimum=4_096,
+        maximum=512_000,
+    ),
+    Knob(
         "comms.reply_timeout_ms",
         300_000,
         "int",

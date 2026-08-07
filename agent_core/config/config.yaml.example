@@ -6,6 +6,8 @@
 
 knobs:
   comms:
+    # Inline byte allowance for inter-agent payloads (SendMessage/Agent tool results and drained child messages) before artifact spill or truncation; they are conversation, not raw command output. [4096..512000]
+    inline_result_bytes: 48000
     # Milliseconds between reply-mailbox polls while a SendMessage call is blocked waiting for a reply. [50..10000]
     reply_poll_ms: 500
     # Default milliseconds a SendMessage(expects_reply=true) call waits for the counterpart's reply before returning a visible non-answer. [1000..3600000]

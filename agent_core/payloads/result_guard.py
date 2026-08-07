@@ -23,6 +23,7 @@ MAX_ARTIFACT_PATH_BYTES = 1_024
 MAX_ERROR_MESSAGE_BYTES = 2_000
 MIN_EFFECTIVE_TOOL_RESULT_BYTES = 512
 NON_ARTIFACT_TOOL_RESULT_MAX_BYTES = 32_000
+ABSOLUTE_TOOL_RESULT_CEILING_BYTES = 512_000
 
 
 async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -39,6 +40,13 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
             if never_artifact:
                 limit_bytes = min(
                     NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
+                    max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
+                )
+            elif values.get("allowRaise"):
+                # Inter-agent payloads may exceed the per-class default; the
+                # absolute ceiling still bounds a runaway result.
+                limit_bytes = min(
+                    ABSOLUTE_TOOL_RESULT_CEILING_BYTES,
                     max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
                 )
             else:

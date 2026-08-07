@@ -12,6 +12,20 @@ from .attachments import (
 from .utf8_bounds import sliceUtf8Prefix
 
 
+COMMS_INLINE_TOOLS = {"SendMessage", "Agent"}
+
+
+def _comms_inline_budget(tool_name: str, requested: Any) -> dict[str, Any]:
+    """Inter-agent results are conversation: give them the comms inline
+    allowance instead of the raw-output class default."""
+    if requested is not None or tool_name not in COMMS_INLINE_TOOLS:
+        return {"maxBytes": requested} if requested is not None else {}
+    # Call-time import: the config package imports payloads at module load.
+    from ..config._knobs import knobValue
+
+    return {"maxBytes": int(knobValue("comms.inline_result_bytes")), "allowRaise": True}
+
+
 async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
     tool_use = values["toolUse"]
@@ -22,7 +36,7 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
         toolName=tool_name,
         outcome=values["outcome"],
         sideEffectsMayHaveOccurred=values.get("sideEffectsMayHaveOccurred"),
-        **({"maxBytes": values["maxBytes"]} if values.get("maxBytes") is not None else {}),
+        **_comms_inline_budget(tool_name, values.get("maxBytes")),
         requireArtifact=bool(values.get("requireArtifact")),
         neverArtifact=bool(values.get("neverArtifact")),
         **({"artifactWriter": values["artifactWriter"]} if values.get("artifactWriter") else {}),

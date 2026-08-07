@@ -141,3 +141,62 @@ class SendMessageToolTests(AgentCoreTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CommsInlineBudgetTests(AgentCoreTestCase):
+    def test_large_sendmessage_result_returns_inline_not_artifact(self):
+        from agent_core.payloads.agent_results import finalizeToolDispatchResult
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            big_reply = json.dumps({"status": "reply_received", "reply": "x" * 20_000})
+            completed = run(finalizeToolDispatchResult(
+                config={"providerProfile": {}},
+                sessionId="comms-budget-session",
+                toolUse={"id": "tool-1", "name": "SendMessage", "input": {}},
+                outcome={"kind": "returned", "result": {"content": big_reply}},
+            ))
+            content = completed["result"]["content"]
+            self.assertNotIn("tool_result_truncated", content)
+            self.assertIn("x" * 1000, content)
+
+            huge_reply = json.dumps({"status": "reply_received", "reply": "y" * 100_000})
+            spilled = run(finalizeToolDispatchResult(
+                config={"providerProfile": {}},
+                sessionId="comms-budget-session",
+                toolUse={"id": "tool-2", "name": "SendMessage", "input": {}},
+                outcome={"kind": "returned", "result": {"content": huge_reply}},
+            ))
+            self.assertIn("tool_result_truncated", spilled["result"]["content"])
+
+            plain_big = run(finalizeToolDispatchResult(
+                config={"providerProfile": {}},
+                sessionId="comms-budget-session",
+                toolUse={"id": "tool-3", "name": "Bash", "input": {}},
+                outcome={"kind": "returned", "result": {"content": "z" * 30_000}},
+            ))
+            self.assertIn("truncated", plain_big["result"]["content"])  # non-comms keeps the class budget (24KB large cap)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_drain_injection_clamps_oversized_message(self):
+        from agent_core.tasks.communication import _message_envelope
+
+        os.environ["AGENT_CORE_COMMS_INLINE_RESULT_BYTES"] = "4096"
+        try:
+            envelope = _message_envelope({
+                "sender": "child", "kind": "result", "messageId": "m-1",
+                "direction": "to_parent", "taskId": "t-1",
+                "content": "a" * 10_000,
+            })
+            self.assertLess(len(envelope.encode("utf-8")), 5_000)
+            self.assertIn("message truncated: 10,000 bytes total", envelope)
+            small = _message_envelope({
+                "sender": "child", "kind": "result", "messageId": "m-2",
+                "direction": "to_parent", "taskId": "t-1",
+                "content": "short and sweet",
+            })
+            self.assertIn("short and sweet", small)
+            self.assertNotIn("truncated", small)
+        finally:
+            os.environ.pop("AGENT_CORE_COMMS_INLINE_RESULT_BYTES", None)

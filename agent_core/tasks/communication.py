@@ -252,7 +252,23 @@ def _message_envelope(message: Mapping[str, Any]) -> str:
     sender = "SUPERVISOR" if raw_sender == "supervisor" else "CHILD" if raw_sender == "child" else "PARENT"
     kind = message.get("kind") or "guidance"
     origin = f"\ntask_id: {message.get('taskId')}" if message.get("direction") == "to_parent" else ""
-    return f"[{sender} MESSAGE]\nkind: {kind}\nmessage_id: {message.get('messageId')}{origin}\n\n{message.get('content')}\n[/{sender} MESSAGE]"
+    content = _bounded_message_content(str(message.get("content") or ""))
+    return f"[{sender} MESSAGE]\nkind: {kind}\nmessage_id: {message.get('messageId')}{origin}\n\n{content}\n[/{sender} MESSAGE]"
+
+
+def _bounded_message_content(content: str) -> str:
+    """Clamp a drain-injected message to the comms inline allowance so one
+    oversized child report cannot blow the recipient's context; the full
+    text stays in the mailbox record on disk."""
+    # Call-time import: the config package imports tasks at module load.
+    from ..config._knobs import knobValue
+
+    limit = int(knobValue("comms.inline_result_bytes"))
+    encoded = content.encode("utf-8")
+    if len(encoded) <= limit:
+        return content
+    clipped = encoded[:limit].decode("utf-8", errors="ignore")
+    return f"{clipped}\n… [message truncated: {len(encoded):,} bytes total; full text in the task mailbox]"
 
 
 async def deliver_queued_task_messages_to_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
