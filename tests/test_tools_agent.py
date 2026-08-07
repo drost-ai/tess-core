@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-import agent_core.tasks.subagent_parts.local as subagent_local_module
 
 class ToolAgentTests(AgentCoreTestCase):
     def test_agent_tool_foreground_prepares_child_session_and_record(self):
@@ -177,78 +176,22 @@ class ToolAgentTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_agent_tool_background_without_supervisor_uses_local_worker_contract(self):
+    def test_agent_tool_background_without_supervisor_fails_loudly(self):
         root, home, workspace, previous = self.temp_context()
-        original_spawn = subagent_local_module._spawn_local_subagent_worker
         try:
-            class FakeProc:
-                pid = 4321
-                def __init__(self):
-                    self.stdin = io.BytesIO()
-
-                def poll(self):
-                    return None
-
-                def terminate(self):
-                    return None
-
-            spawn_calls = []
-
-            def fake_spawn(task_id, session_id, agent_id, cwd, output_file, **_kwargs):
-                spawn_calls.append({"task_id": task_id, "session_id": session_id, "agent_id": agent_id, "cwd": cwd, "output_file": output_file})
-                return FakeProc()
-
-            async def fake_capture_identity(args):
-                digest = core.digestExpectedCommand(args["expectedArgv"])
-                return {
-                    "schemaVersion": 1,
-                    "pid": 4321,
-                    "processGroupId": 4321,
-                    "spawnedAt": args["spawnedAt"],
-                    "startToken": "fixture-start-token",
-                    "observedCommandDigest": digest,
-                    "expectedCommandDigest": digest,
-                    "platform": "test",
-                }
-
-            subagent_local_module._spawn_local_subagent_worker = fake_spawn
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.saveSession(parent))
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
-            events = []
-            with mock.patch("agent_core.process.task_launch.captureOwnedProcessIdentity", fake_capture_identity):
-                result = run(
+            with self.assertRaises(RuntimeError) as raised:
+                run(
                     agent.handler(
-                        {"description": "Local async", "prompt": "Run locally", "run_in_background": True},
-                        {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None},
+                        {"description": "No daemon", "prompt": "Run without a supervisor", "run_in_background": True},
+                        {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None},
                     )
                 )
-            payload = json.loads(result["content"])
-            self.assertEqual(payload["status"], "running")
-            self.assertEqual(payload["run_in_background"], True)
-            self.assertNotIn("worktree_path", payload)
-            self.assertEqual(spawn_calls[0]["task_id"], payload["task_id"])
-            self.assertEqual(spawn_calls[0]["session_id"], payload["session_id"])
-            self.assertEqual(spawn_calls[0]["agent_id"], payload["agent_id"])
-            child_record = run(core.loadChildAgent(payload["agent_id"]))
-            self.assertEqual(child_record["owner"], "client")
-            self.assertEqual(child_record["pid"], 4321)
-            self.assertEqual(child_record["status"], "backgrounded")
-            meta = run(core.readTaskMeta(payload["task_id"]))
-            self.assertEqual(meta["type"], "subagent")
-            self.assertEqual(meta["task_id"], payload["task_id"])
-            self.assertEqual(meta["agent_id"], payload["agent_id"])
-            self.assertEqual(meta["session_id"], payload["session_id"])
-            self.assertEqual(meta["pid"], 4321)
-            self.assertEqual(meta["owner"], "client")
-            self.assertEqual(meta["parent_session_id"], parent["id"])
-            launch_group_id = f"subagent-group-{parent['id']}-0-default"
-            self.assertEqual(meta["launch_group_id"], launch_group_id)
-            self.assertEqual(parent["metadata"]["subagentLaunchGroupRecords"][launch_group_id]["taskIds"], [payload["task_id"]])
-            self.assertTrue(any(event == "subagent.backgrounded" and data["pid"] == 4321 for event, data in events))
+            self.assertIn("task supervisor daemon", str(raised.exception))
         finally:
-            subagent_local_module._spawn_local_subagent_worker = original_spawn
             self.restore_home(root, previous)
 
     def test_background_subagent_finalize_env_fallback_records_match_reference(self):

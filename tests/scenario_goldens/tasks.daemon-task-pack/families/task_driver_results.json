@@ -2,10 +2,8 @@
   {
     "driver": "ensure_daemon",
     "state": {
-      "activeTasks": 0,
-      "attachedClients": 0,
-      "supervisorId": "<uuid:9>",
-      "watchedSessions": 0
+      "remote": true,
+      "socketPath": "<tmp>/agent-core-<socket-scope>.sock"
     },
     "status": "passed"
   },
@@ -18,30 +16,30 @@
     "command": "<python> -c 'from pathlib import Path\nPath('\"'\"'background.txt'\"'\"').write_text('\"'\"'background artifact\\n'\"'\"', encoding='\"'\"'utf-8'\"'\"')\nprint('\"'\"'background task ok'\"'\"')'",
     "driver": "start_background_task",
     "result": {
-      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
-      "output_file": "<runtime-home>/tasks/<uuid:4>/output.log",
-      "taskId": "<uuid:4>",
-      "task_id": "<uuid:4>"
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
+      "task_id": "<uuid:5>"
     },
     "status": "passed",
-    "taskId": "<uuid:4>"
+    "taskId": "<uuid:5>"
   },
   {
     "driver": "read_task_output",
     "result": {
       "output": "background task ok\n",
-      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
-      "taskId": "<uuid:4>",
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
       "truncated": false
     },
     "status": "passed",
-    "taskId": "<uuid:4>"
+    "taskId": "<uuid:5>"
   },
   {
     "driver": "create_monitor",
     "monitorId": "<uuid:2>",
     "status": "passed",
-    "taskId": "<uuid:4>"
+    "taskId": "<uuid:5>"
   },
   {
     "driver": "get_daemon_bootstrap",
@@ -65,7 +63,7 @@
       "summary": "Task completed successfully.",
       "taskId": "worker-entrypoint",
       "terminalEventOwner": "task_runtime",
-      "terminalTransitionId": "<uuid:13>",
+      "terminalTransitionId": "<uuid:15>",
       "updatedAt": "<timestamp>"
     },
     "output": "worker-entrypoint-ok",
@@ -85,10 +83,8 @@
   {
     "driver": "ensure_daemon",
     "state": {
-      "activeTasks": 0,
-      "attachedClients": 0,
-      "supervisorId": "<uuid:3>",
-      "watchedSessions": 0
+      "remote": true,
+      "socketPath": "<tmp>/agent-core-<socket-scope>.sock"
     },
     "status": "passed"
   },
@@ -101,13 +97,13 @@
     "command": "<python> -c 'import time\nprint('\"'\"'stoppable task started'\"'\"', flush=True)\ntime.sleep(30)'",
     "driver": "start_background_task",
     "result": {
-      "outputFile": "<runtime-home>/tasks/<uuid:6>/output.log",
-      "output_file": "<runtime-home>/tasks/<uuid:6>/output.log",
-      "taskId": "<uuid:6>",
-      "task_id": "<uuid:6>"
+      "outputFile": "<runtime-home>/tasks/<uuid:7>/output.log",
+      "output_file": "<runtime-home>/tasks/<uuid:7>/output.log",
+      "taskId": "<uuid:7>",
+      "task_id": "<uuid:7>"
     },
     "status": "passed",
-    "taskId": "<uuid:6>"
+    "taskId": "<uuid:7>"
   },
   {
     "driver": "stop_task",
@@ -117,29 +113,29 @@
       "note": "Task stopped by deliberate request.",
       "previousStatus": "running",
       "status": "stopped",
-      "taskId": "<uuid:6>",
-      "transitionId": "<uuid:7>"
+      "taskId": "<uuid:7>",
+      "transitionId": "<uuid:8>"
     },
-    "taskId": "<uuid:6>"
+    "taskId": "<uuid:7>"
   },
   {
     "driver": "start_health_check",
     "result": {
-      "taskId": "<uuid:8>",
-      "task_id": "<uuid:8>"
+      "taskId": "<uuid:9>",
+      "task_id": "<uuid:9>"
     },
     "status": "passed",
-    "taskId": "<uuid:8>"
+    "taskId": "<uuid:9>"
   },
   {
     "driver": "read_task_output",
     "result": {
       "output": "[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-1\n[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-2\n[<timestamp>] status=ok measured_bytes=17 truncated=false\nhealth-attempt-3\n",
-      "outputFile": "<runtime-home>/tasks/<uuid:8>/output.log",
-      "taskId": "<uuid:8>",
+      "outputFile": "<runtime-home>/tasks/<uuid:9>/output.log",
+      "taskId": "<uuid:9>",
       "truncated": false
     },
     "status": "passed",
-    "taskId": "<uuid:8>"
+    "taskId": "<uuid:9>"
   }
 ]

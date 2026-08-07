@@ -48,12 +48,12 @@
     "lastMeasuredBytes": 17,
     "lastOutputArtifacts": [
       {
-        "artifactId": "<uuid:12>",
+        "artifactId": "<uuid:14>",
         "bytes": 17,
         "contentType": "text",
         "createdAt": "<timestamp>",
         "family": "bash",
-        "filePath": "<runtime-home>/tool-artifacts/<uuid:1>/<uuid:12>.stdout.txt",
+        "filePath": "<runtime-home>/tool-artifacts/<uuid:1>/<uuid:14>.stdout.txt",
         "lines": 1,
         "sessionId": "<uuid:1>",
         "sourceBytes": 17,
@@ -80,7 +80,7 @@
     "lastTimedOut": false,
     "maxIntervalMs": 1000,
     "mode": "command",
-    "outputFile": "<runtime-home>/tasks/<uuid:8>/output.log",
+    "outputFile": "<runtime-home>/tasks/<uuid:9>/output.log",
     "outputLimitBytes": 131072,
     "revision": 10,
     "schemaVersion": 2,
@@ -88,7 +88,7 @@
     "specDigest": "<health-spec-digest:1>",
     "startedAt": "<timestamp>",
     "status": "active",
-    "taskId": "<uuid:8>",
+    "taskId": "<uuid:9>",
     "timeoutMs": 1000,
     "title": "scenario health",
     "updatedAt": "<timestamp>"

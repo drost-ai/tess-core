@@ -209,6 +209,9 @@ class NormalizationContext:
                 normalized,
                 "progress-fingerprint",
             )
+        normalized = re.sub(r"\bagent-core-[0-9a-f]{12}\.sock\b", "agent-core-<socket-scope>.sock", normalized)
+        if canonical_key == "authtokenid" and _SHA256_PATTERN.fullmatch(normalized):
+            return "<auth-token-id>"
         if _SHA256_PATTERN.fullmatch(normalized):
             if canonical_key == "specdigest":
                 return self._placeholder(

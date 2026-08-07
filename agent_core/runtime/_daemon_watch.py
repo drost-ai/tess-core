@@ -39,13 +39,7 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
     from ..daemon import ensureTaskSupervisorDaemon
 
     try:
-        client = await ensureTaskSupervisorDaemon(
-            {
-                "instanceId": instance_id,
-                "cwd": context.get("cwd"),
-                "allowInProcessFallback": False,
-            }
-        )
+        client = await ensureTaskSupervisorDaemon({"instanceId": instance_id, "cwd": context.get("cwd")})
     except Exception as error:
         emit("daemon.restart_failed", {"instance_id": instance_id, "reason": str(error)[:2_048]})
         return "restart_failed"

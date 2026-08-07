@@ -73,7 +73,6 @@ def _ensure_daemon_worker(
                 {
                     "instanceId": P02_INSTANCE,
                     "cwd": workspace,
-                    "allowInProcessFallback": False,
                     "startupTimeoutSeconds": 15,
                 }
             )
@@ -114,7 +113,6 @@ def _reattach_daemon_worker(
             {
                 "instanceId": P02_INSTANCE,
                 "cwd": workspace,
-                "allowInProcessFallback": False,
                 "startupTimeoutSeconds": 15,
             }
         )
@@ -136,7 +134,6 @@ def _reattach_daemon_worker(
             {
                 "instanceId": P02_INSTANCE,
                 "cwd": workspace,
-                "allowInProcessFallback": False,
                 "startupTimeoutSeconds": 15,
             }
         )

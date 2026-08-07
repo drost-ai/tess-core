@@ -12,7 +12,6 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import (
-    appendDaemonEvent,
     clearDaemonState,
     daemonLogsDir,
     daemonSocketPath,
@@ -22,10 +21,8 @@ from ..storage import (
     getStateRoot,
     loadDaemonState,
     parseDaemonInstanceId,
-    saveDaemonState,
     withRecordTransaction,
 )
-from ..tasks.supervisor import createTaskSupervisor
 from .client import _create_daemon_client
 from .protocol import DaemonProtocolError
 from .security import (
@@ -38,7 +35,6 @@ from .security import (
     removeOwnedDaemonAuthMaterial,
     verifyPrivateDaemonRuntime,
 )
-from .in_process import _install_in_process_subscription_parity
 from ._instance_gc import (
     _reap_daemon_tmp_artifacts,
     _reap_dead_daemon_instance_dirs,
@@ -65,7 +61,7 @@ async def connectTaskSupervisorDaemonClient(
     instance_id = _required_instance_id(values)
     state = await loadDaemonState(instance_id)
     if not state:
-        return _local_supervisor_fallback(instance_id)
+        return None
     pid = state.get("pid")
     if not isinstance(pid, int) or not _is_process_alive(pid):
         await _cleanup_stale_daemon_artifacts(instance_id)
@@ -100,8 +96,6 @@ async def ensureTaskSupervisorDaemon(
     instance_id = _required_instance_id(values)
     cwd = values.get("cwd") or os.getcwd()
     owner_pid = values.get("ownerPid") if isinstance(values.get("ownerPid"), int) else os.getpid()
-    if values.get("inProcess"):
-        return await _ensure_in_process_supervisor(instance_id, cwd)
     await prepareDaemonRuntimeSecurity({"instanceId": instance_id, "requireStoppedForMigration": True})
     await ensureBaseLayout(cwd)
     await _reap_dead_daemon_instance_dirs()
@@ -163,14 +157,12 @@ async def _ensure_daemon_under_lock(
             break
         if attempt == 1:
             await _cleanup_stale_daemon_artifacts(instance_id)
-    message = (
+    # No degraded modes: daemon spawn failure is a loud hard error and the
+    # remedy is a daemon restart, never unsupervised in-process execution.
+    raise RuntimeError(
         f"Unable to start task supervisor daemon: {last_error}; "
         f"see {os.path.join(daemonLogsDir(instance_id), 'bootstrap.log')}"
     )
-    if args.get("allowInProcessFallback", True):
-        await _record_daemon_unavailable(instance_id, "spawn_failed", message)
-        return await _ensure_in_process_supervisor(instance_id, cwd)
-    raise RuntimeError(message)
 
 
 async def stopTaskSupervisorDaemon(
@@ -222,10 +214,6 @@ async def getTaskSupervisorDaemonState(
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
     state = await loadDaemonState(instance_id)
-    local = _local_supervisor_fallback(instance_id)
-    if local is not None:
-        local_state = local["getState"]()
-        return {**(state or {}), **local_state, "supervisor": local_state}
     client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
     if state and client:
         with contextlib.suppress(Exception):
@@ -233,54 +221,6 @@ async def getTaskSupervisorDaemonState(
         if client.get("_daemonClient"):
             await client["close"]()
     return state
-
-
-async def _ensure_in_process_supervisor(instance_id: str, cwd: str) -> dict[str, Any]:
-    existing = _SUPERVISORS.get(instance_id)
-    if existing is not None and not existing.get("_daemonClient"):
-        return existing
-
-    async def on_event(event: dict[str, Any]) -> None:
-        data = event.get("data") if isinstance(event.get("data"), dict) else {}
-        await appendDaemonEvent(
-            instance_id,
-            {
-                "createdAt": now_iso(),
-                "taskId": data.get("task_id") if isinstance(data.get("task_id"), str) else None,
-                **event,
-            },
-        )
-
-    supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
-    _SUPERVISORS[instance_id] = supervisor
-    _install_in_process_subscription_parity(instance_id, supervisor)
-    await saveDaemonState(
-        instance_id,
-        {
-            "instanceId": instance_id,
-            "pid": os.getpid(),
-            "cwd": cwd,
-            "startedAt": now_iso(),
-            "mode": "in_process_fallback",
-            "status": "degraded",
-            "daemonUnavailable": {
-                "mode": "in_process_fallback",
-                "reason": "detached_daemon_unavailable",
-            },
-        },
-    )
-    await appendDaemonEvent(
-        instance_id,
-        {
-            "createdAt": now_iso(),
-            "event": "daemon.unavailable",
-            "data": {
-                "mode": "in_process_fallback",
-                "reason": "detached_daemon_unavailable",
-            },
-        },
-    )
-    return supervisor
 
 
 async def _spawn_detached_daemon(instance_id: str, cwd: str, owner_pid: int) -> subprocess.Popen[Any]:
@@ -417,17 +357,6 @@ async def _is_daemon_run_process(pid: int, instance_id: str) -> bool:
     )
 
 
-async def _record_daemon_unavailable(instance_id: str, reason: str, detail: str) -> None:
-    await appendDaemonEvent(
-        instance_id,
-        {
-            "createdAt": now_iso(),
-            "event": "daemon.unavailable",
-            "data": {"mode": "in_process_fallback", "reason": reason, "detail": detail},
-        },
-    )
-
-
 async def _wait_for_process_exit(pid: int, timeout_seconds: float) -> None:
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     while asyncio.get_running_loop().time() < deadline:
@@ -450,11 +379,6 @@ def _append_spawn_ledger(instance_id: str, pid: int) -> None:
             raw = raw[written:]
     finally:
         os.close(fd)
-
-
-def _local_supervisor_fallback(instance_id: str) -> dict[str, Any] | None:
-    supervisor = _SUPERVISORS.get(instance_id)
-    return supervisor if supervisor and not supervisor.get("_daemonClient") else None
 
 
 def _daemon_instance_wait_ms() -> int:

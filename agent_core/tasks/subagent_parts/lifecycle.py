@@ -25,7 +25,6 @@ from ...subagents.groups import (
     appendLaunchGroupMetadata,
     resolveSubagentLaunchGroupId,
 )
-from .local import _start_local_background_subagent
 from .permissions import inheritParentPermissionMode, sanitizePermissionMode
 from .utils import (
     _create_subagent_worktree,
@@ -55,8 +54,11 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
     child_record = prepared["childRecord"]
     agent_id = prepared["agentId"]
     supervisor = context.get("daemon") or context.get("taskSupervisor")
-    if supervisor:
-        launched = await supervisor["startSubagentTask"](
+    if not supervisor:
+        raise RuntimeError(
+            "Subagent launch requires the task supervisor daemon; unsupervised local spawning has been removed."
+        )
+    launched = await supervisor["startSubagentTask"](
             {
                 "parentSessionId": context["session"]["id"],
                 "sessionId": child_session["id"],
@@ -70,8 +72,6 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
                 "runtimeContract": prepared.get("runtimeContract"),
             }
         )
-    else:
-        launched = await _start_local_background_subagent(prepared)
     task_id = launch_task_id(launched)
     output_file = launch_output_file(launched) or (taskOutputPath(task_id) if task_id else None)
     started_at = now_iso()
@@ -93,7 +93,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             "pid": launched.get("pid"),
             "processIdentity": launched.get("processIdentity"),
             "status": "backgrounded",
-            "owner": "daemon" if context.get("daemon") else "client",
+            "owner": "daemon",
             "attachableSessionId": child_session["id"],
             "stoppable": True,
             "retryable": False,

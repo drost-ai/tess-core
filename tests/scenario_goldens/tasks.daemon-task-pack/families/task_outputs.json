@@ -3,22 +3,22 @@
     "driver": "read_task_output",
     "result": {
       "output": "background task ok\n",
-      "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
-      "taskId": "<uuid:4>",
+      "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
+      "taskId": "<uuid:5>",
       "truncated": false
     },
     "status": "passed",
-    "taskId": "<uuid:4>"
+    "taskId": "<uuid:5>"
   },
   {
     "driver": "read_task_output",
     "result": {
       "output": "[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-1\n[<timestamp>] status=failed measured_bytes=17 truncated=false\nhealth-attempt-2\n[<timestamp>] status=ok measured_bytes=17 truncated=false\nhealth-attempt-3\n",
-      "outputFile": "<runtime-home>/tasks/<uuid:8>/output.log",
-      "taskId": "<uuid:8>",
+      "outputFile": "<runtime-home>/tasks/<uuid:9>/output.log",
+      "taskId": "<uuid:9>",
       "truncated": false
     },
     "status": "passed",
-    "taskId": "<uuid:8>"
+    "taskId": "<uuid:9>"
   }
 ]

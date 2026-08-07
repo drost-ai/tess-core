@@ -6,7 +6,7 @@
     "detailStatus": "active",
     "foregroundMode": "background",
     "foregroundable": false,
-    "id": "<uuid:8>",
+    "id": "<uuid:9>",
     "kind": "health_check",
     "metadata": {
       "generation": 1,
@@ -14,12 +14,12 @@
       "revision": 10,
       "spec_digest": "<health-spec-digest:1>"
     },
-    "outputFile": "<runtime-home>/tasks/<uuid:8>/output.log",
+    "outputFile": "<runtime-home>/tasks/<uuid:9>/output.log",
     "owner": "daemon",
     "restorable": true,
     "retrieveOnly": true,
     "sessionId": "<uuid:1>",
-    "sourceId": "<uuid:8>",
+    "sourceId": "<uuid:9>",
     "startedAt": "<timestamp>",
     "status": "running",
     "summary": "Health check is running.",
@@ -35,25 +35,25 @@
     "detailStatus": "stopped_by_request",
     "foregroundMode": "background",
     "foregroundable": true,
-    "id": "<uuid:6>",
+    "id": "<uuid:7>",
     "kind": "background_command",
     "launchReservation": {
       "attachedAt": "<timestamp>",
       "createdAt": "<timestamp>",
       "kind": "background_command",
-      "reservationId": "<uuid:11>",
+      "reservationId": "<uuid:13>",
       "schemaVersion": 1,
       "sessionId": "<uuid:1>",
       "state": "attached",
-      "taskId": "<uuid:6>"
+      "taskId": "<uuid:7>"
     },
     "metadata": {
       "detached_type": "background_command",
       "terminal_event_owner": "supervisor",
-      "terminal_transition_id": "<uuid:7>"
+      "terminal_transition_id": "<uuid:8>"
     },
     "outputCursor": 0,
-    "outputFile": "<runtime-home>/tasks/<uuid:6>/output.log",
+    "outputFile": "<runtime-home>/tasks/<uuid:7>/output.log",
     "owner": "daemon",
     "processIdentity": {
       "expectedCommandDigest": "<expected-command-digest>",
@@ -70,11 +70,11 @@
     "restorable": true,
     "retrieveOnly": true,
     "sessionId": "<uuid:1>",
-    "sourceId": "<uuid:6>",
+    "sourceId": "<uuid:7>",
     "startedAt": "<timestamp>",
     "status": "stopped",
     "summary": "Task stopped by deliberate request.",
-    "supervisorId": "<uuid:3>",
+    "supervisorId": "<uuid:4>",
     "taskFamily": "shell",
     "title": "scenario stoppable",
     "updatedAt": "<timestamp>"
@@ -129,7 +129,7 @@
     "startedAt": "<timestamp>",
     "status": "degraded",
     "summary": "Recovered after daemon restart. The process is still alive, but lifecycle tracking is degraded until it exits.",
-    "supervisorId": "<uuid:3>",
+    "supervisorId": "<uuid:4>",
     "taskFamily": "shell",
     "title": "restart recovery",
     "updatedAt": "<timestamp>"
@@ -142,25 +142,25 @@
     "detailStatus": "result_ready",
     "foregroundMode": "background",
     "foregroundable": true,
-    "id": "<uuid:4>",
+    "id": "<uuid:5>",
     "kind": "background_command",
     "launchReservation": {
       "attachedAt": "<timestamp>",
       "createdAt": "<timestamp>",
       "kind": "background_command",
-      "reservationId": "<uuid:10>",
+      "reservationId": "<uuid:12>",
       "schemaVersion": 1,
       "sessionId": "<uuid:1>",
       "state": "attached",
-      "taskId": "<uuid:4>"
+      "taskId": "<uuid:5>"
     },
     "metadata": {
       "detached_type": "background_command",
       "terminal_event_owner": "supervisor",
-      "terminal_transition_id": "<uuid:5>"
+      "terminal_transition_id": "<uuid:6>"
     },
     "outputCursor": 0,
-    "outputFile": "<runtime-home>/tasks/<uuid:4>/output.log",
+    "outputFile": "<runtime-home>/tasks/<uuid:5>/output.log",
     "owner": "daemon",
     "processIdentity": {
       "expectedCommandDigest": "<expected-command-digest>",
@@ -177,11 +177,11 @@
     "restorable": true,
     "retrieveOnly": true,
     "sessionId": "<uuid:1>",
-    "sourceId": "<uuid:4>",
+    "sourceId": "<uuid:5>",
     "startedAt": "<timestamp>",
     "status": "completed",
     "summary": "Task completed successfully.",
-    "supervisorId": "<uuid:9>",
+    "supervisorId": "<uuid:11>",
     "taskFamily": "shell",
     "title": "scenario background",
     "updatedAt": "<timestamp>"

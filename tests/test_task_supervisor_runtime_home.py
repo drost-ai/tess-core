@@ -164,35 +164,3 @@ class SpawnEnvRuntimeHomeTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_local_subagent_spawn_env_stamps_active_runtime_home(self):
-        from agent_core.tasks.subagent_parts import local as subagent_local
-
-        root, home, workspace, previous = self.temp_context()
-        scoped = Path(root.name) / "scoped-home"
-        scoped.mkdir()
-        output_file = Path(root.name) / "out.log"
-        captured = {}
-
-        class _FakeProcess:
-            pid = 4242
-
-        def fake_popen(argv, **kwargs):
-            captured["env"] = kwargs.get("env")
-            return _FakeProcess()
-
-        original_popen = subagent_local.subprocess.Popen
-        subagent_local.subprocess.Popen = fake_popen
-        try:
-            async def _spawn():
-                async with core.scopedRuntimeHome(str(scoped)):
-                    return subagent_local._spawn_local_subagent_worker(
-                        "task-env-test", "session-env-test", "agent-env-test",
-                        str(workspace), str(output_file),
-                    )
-
-            run(_spawn())
-            self.assertEqual(captured["env"]["AGENT_CORE_HOME"], str(scoped))
-            self.assertEqual(captured["env"]["TESS_CHILD_SESSION_ID"], "session-env-test")
-        finally:
-            subagent_local.subprocess.Popen = original_popen
-            self.restore_home(root, previous)

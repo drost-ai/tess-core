@@ -392,7 +392,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             run(core.saveSession(session))
             owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
             os.environ["AGENT_CORE_DAEMON_OWNER_POLL_MS"] = "200"
-            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid, "allowInProcessFallback": False}))
+            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid}))
             daemon_pid = run(core.loadDaemonState("owner-watch-instance"))["pid"]
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(120)')}"
             started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "contained worker"}))

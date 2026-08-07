@@ -27,7 +27,7 @@ HARNESS_DAEMON_INSTANCE = "harness-daemon-instance"
 
 async def ensure_daemon(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     await ensure_session_config(data, sandbox, state)
-    client = await core.ensureTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE, "cwd": str(sandbox.workspace), "inProcess": data.get("inProcess", True)})
+    client = await core.ensureTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE, "cwd": str(sandbox.workspace)})
     state["daemon_client"] = client
     state.setdefault("task_driver_results", []).append({"driver": "ensure_daemon", "status": "passed", "state": _json_safe(client.get("getState", lambda: {})())})
     await refresh_task_state(sandbox, state)

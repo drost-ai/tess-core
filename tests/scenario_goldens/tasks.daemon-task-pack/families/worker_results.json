@@ -16,7 +16,7 @@
       "summary": "Task completed successfully.",
       "taskId": "worker-entrypoint",
       "terminalEventOwner": "task_runtime",
-      "terminalTransitionId": "<uuid:13>",
+      "terminalTransitionId": "<uuid:15>",
       "updatedAt": "<timestamp>"
     },
     "output": "worker-entrypoint-ok",
