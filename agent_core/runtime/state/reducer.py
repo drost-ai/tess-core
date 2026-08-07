@@ -26,7 +26,11 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
     typ = event_kind(event)
     if typ == "provider.prompt_cache":
         return state
-    next_state = copy.deepcopy(state)
+    # Copy-on-write: every branch REPLACES whole top-level slices and never
+    # mutates nested structures shared with the previous state. Unchanged
+    # slices are carried by reference; the store's getState() deepcopy is
+    # what isolates external consumers.
+    next_state = dict(state)
     data = event_payload(event)
     timestamp = event_time(event) or now_iso()
 

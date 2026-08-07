@@ -105,8 +105,8 @@ def _task_patch_from_event(data: dict[str, Any], status: str | None, timestamp: 
     }
 
 def _upsert_runtime_task(state: dict[str, Any], task: dict[str, Any]) -> dict[str, Any]:
-    task_slice = copy.deepcopy(state.get("tasks") or {})
-    tasks = [copy.deepcopy(existing) for existing in task_slice.get("tasks", [])]
+    task_slice = dict(state.get("tasks") or {})
+    tasks = list(task_slice.get("tasks", []))
     index = next((idx for idx, existing in enumerate(tasks) if existing.get("id") == task.get("id")), -1)
     if index >= 0:
         tasks[index] = {**tasks[index], **{key: value for key, value in task.items() if value is not None}}
@@ -126,8 +126,7 @@ def _update_runtime_task(state: dict[str, Any], task_id: str | None, patch: dict
     return _upsert_runtime_task(state, merged)
 
 def _summarize_tasks(task_slice: dict[str, Any]) -> dict[str, Any]:
-    tasks = [copy.deepcopy(task) for task in task_slice.get("tasks", [])]
-    tasks.sort(key=lambda task: str(task.get("updatedAt") or ""), reverse=True)
+    tasks = sorted(task_slice.get("tasks", []), key=lambda task: str(task.get("updatedAt") or ""), reverse=True)
     tasks = tasks[:24]
     active = [task for task in tasks if task.get("status") in ACTIVE_TASK_STATUSES]
     labels = [task.get("title") for task in active[:6] if task.get("title")]
