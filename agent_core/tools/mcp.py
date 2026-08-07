@@ -11,7 +11,7 @@ from ..mcp.payloads import shapeMcpResourceList, shapeMcpResourceRead
 from ..payloads.tools import shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .validation import _require_string
 from .web import _header_value
 
@@ -49,7 +49,7 @@ def _mcp_tool(runtime: Any) -> ToolDefinition:
         _throw_if_tool_cancelled(context)
         return {"content": pretty_json({"diagnostics": diagnostics, "servers": runtime["listServerStatus"](), "tools": tools})}
 
-    return ToolDefinition("Mcp", _tool_description("Mcp"), _tool_schema("Mcp"), handler)
+    return builtin_tool("Mcp", handler)
 
 
 def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
@@ -77,7 +77,7 @@ def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
         )
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("ListMcpResources", _tool_description("ListMcpResources"), _tool_schema("ListMcpResources"), handler)
+    return builtin_tool("ListMcpResources", handler)
 
 
 def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
@@ -119,7 +119,7 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             return {"content": pretty_json(payload)}
         return {"content": f"MCP server not found: {server}", "isError": True}
 
-    return ToolDefinition("ReadMcpResource", _tool_description("ReadMcpResource"), _tool_schema("ReadMcpResource"), handler)
+    return builtin_tool("ReadMcpResource", handler)
 
 
 def _pagination_args(input: dict[str, Any]) -> dict[str, Any]:

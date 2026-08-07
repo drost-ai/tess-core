@@ -26,7 +26,7 @@ from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_t
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
 from .processes import _background_task_runner_argv, _prepare_sandboxed_argv, _resolve_shell, _spawn_background_task_runner, _track_background_runner
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .session_metadata import _append_unique_metadata_list
 from .validation import _require_string
 
@@ -325,7 +325,7 @@ def _bash_tool() -> ToolDefinition:
             "meta": {"execution": execution},
         }
 
-    return ToolDefinition("Bash", _tool_description("Bash"), _tool_schema("Bash"), handler)
+    return builtin_tool("Bash", handler)
 
 
 def _normalize_bash_timeout(command: str, value: Any) -> int:

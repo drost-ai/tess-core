@@ -17,7 +17,7 @@ from ..payloads.tools import shapeTextToolResult
 from ..payloads.utf8_bounds import sliceUtf8Prefix
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .definitions import ToolDefinition
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .validation import _require_string
 from .web_search_api import (
     coerceResultCount,
@@ -129,7 +129,7 @@ def _web_fetch_tool() -> ToolDefinition:
             )
         }
 
-    return ToolDefinition("WebFetch", _tool_description("WebFetch"), _tool_schema("WebFetch"), handler)
+    return builtin_tool("WebFetch", handler)
 
 
 async def _authorize_web_fetch_hop(context: ToolContext, url: str) -> None:
@@ -209,7 +209,7 @@ def _web_search_tool() -> ToolDefinition:
             )
         }
 
-    return ToolDefinition("WebSearch", _tool_description("WebSearch"), _tool_schema("WebSearch"), handler)
+    return builtin_tool("WebSearch", handler)
 
 
 async def searchWeb(query: str, abortSignal: Any = None) -> list[dict[str, str]]:

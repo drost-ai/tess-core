@@ -25,7 +25,7 @@ from ..payloads.tools import (
 from .cancellation import _create_tool_abort_error
 from .definitions import ToolDefinition
 from .paths import _authorize_path
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .validation import _require_optional_number, _require_string
 
 
@@ -87,7 +87,7 @@ def _glob_tool() -> ToolDefinition:
         )
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Glob", _tool_description("Glob"), _tool_schema("Glob"), handler)
+    return builtin_tool("Glob", handler)
 
 
 def _grep_tool() -> ToolDefinition:
@@ -178,7 +178,7 @@ def _grep_tool() -> ToolDefinition:
         )
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Grep", _tool_description("Grep"), _tool_schema("Grep"), handler)
+    return builtin_tool("Grep", handler)
 
 
 async def _resolve_ripgrep_binary() -> str | None:

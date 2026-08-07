@@ -14,7 +14,7 @@ from ..payloads.result_guard import (
     serializedContentBytes,
 )
 from .definitions import ToolDefinition
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 
 
 DEFAULT_ARTIFACT_PAGE_BYTES = 16_384
@@ -156,12 +156,7 @@ def _read_tool_artifact() -> ToolDefinition:
             },
         }
 
-    return ToolDefinition(
-        "ReadToolArtifact",
-        _tool_description("ReadToolArtifact"),
-        _tool_schema("ReadToolArtifact"),
-        handler,
-    )
+    return builtin_tool("ReadToolArtifact", handler)
 
 
 def _read_registered_artifact_metadata(file_path: str) -> dict[str, Any]:

@@ -9,7 +9,7 @@ from .._utils import maybe_await, pretty_json
 from ..payloads.execution_descriptors import createWorkspaceExecutionDescriptor
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .session_metadata import _apply_workspace_snapshot_metadata
 from .validation import _without_none_values
 
@@ -44,7 +44,7 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
             result["meta"] = {"execution": execution}
         return result
 
-    return ToolDefinition("EnterWorktree", _tool_description("EnterWorktree"), _tool_schema("EnterWorktree"), handler)
+    return builtin_tool("EnterWorktree", handler)
 
 
 def _exit_worktree_tool(controller: Any) -> ToolDefinition:
@@ -65,7 +65,7 @@ def _exit_worktree_tool(controller: Any) -> ToolDefinition:
             result["meta"] = {"execution": execution}
         return result
 
-    return ToolDefinition("ExitWorktree", _tool_description("ExitWorktree"), _tool_schema("ExitWorktree"), handler)
+    return builtin_tool("ExitWorktree", handler)
 
 
 def _controller_method(controller: Any, name: str) -> Any:

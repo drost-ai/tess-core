@@ -12,7 +12,7 @@ from ..tasks.communication import create_task_question, read_task_questions
 from ..payloads.todo_policy import requireTodoItems, serializeTodoStateSummary, updateActiveTaskFromTodos
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .validation import _require_string
 
 
@@ -24,7 +24,7 @@ def _todo_tool() -> ToolDefinition:
         await maybe_await(context.get("persistSession", lambda: None)())
         return {"content": serializeTodoStateSummary(todos)}
 
-    return ToolDefinition("TodoWrite", _tool_description("TodoWrite"), _tool_schema("TodoWrite"), handler)
+    return builtin_tool("TodoWrite", handler)
 
 
 def _set_status_tool() -> ToolDefinition:
@@ -34,7 +34,7 @@ def _set_status_tool() -> ToolDefinition:
         context.get("outputJson", lambda *_: None)("status.updated", {"message": message, "detail": detail, "session_id": context["session"]["id"]})
         return {"content": pretty_json({"ok": True, "message": message, "detail": detail})}
 
-    return ToolDefinition("SetStatus", _tool_description("SetStatus"), _tool_schema("SetStatus"), handler)
+    return builtin_tool("SetStatus", handler)
 
 
 def _ask_user_question_tool() -> ToolDefinition:
@@ -108,7 +108,7 @@ def _ask_user_question_tool() -> ToolDefinition:
             answers.append({"question": question, "answer": answer})
         return {"content": pretty_json({"answers": answers})}
 
-    return ToolDefinition("AskUserQuestion", _tool_description("AskUserQuestion"), _tool_schema("AskUserQuestion"), handler)
+    return builtin_tool("AskUserQuestion", handler)
 
 
 def _config_tool() -> ToolDefinition:
@@ -128,7 +128,7 @@ def _config_tool() -> ToolDefinition:
         }
         return {"content": pretty_json(public)}
 
-    return ToolDefinition("Config", _tool_description("Config"), _tool_schema("Config"), handler)
+    return builtin_tool("Config", handler)
 
 
 def _exit_plan_mode_tool() -> ToolDefinition:
@@ -205,7 +205,7 @@ def _exit_plan_mode_tool() -> ToolDefinition:
         context.get("outputJson", lambda *_: None)("plan.rejected", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "file_path": file_path})
         return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": False, "reason": "Plan rejected by user"})}
 
-    return ToolDefinition("ExitPlanMode", _tool_description("ExitPlanMode"), _tool_schema("ExitPlanMode"), handler)
+    return builtin_tool("ExitPlanMode", handler)
 
 
 def parseAllowedPrompts(value: Any) -> list[dict[str, str]]:

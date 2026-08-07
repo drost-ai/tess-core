@@ -26,7 +26,7 @@ from .file_change_payloads import (
 )
 from .paths import _authorize_path, _display_path
 from .permissions import _ensure_tool_permission
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .validation import _require_string
 
 
@@ -289,7 +289,7 @@ def _read_tool() -> ToolDefinition:
         }
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Read", _tool_description("Read"), _tool_schema("Read"), handler)
+    return builtin_tool("Read", handler)
 
 
 def _inspect_regular_file(file_path: str) -> os.stat_result:
@@ -350,7 +350,7 @@ def _write_tool() -> ToolDefinition:
         )
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Write", _tool_description("Write"), _tool_schema("Write"), handler)
+    return builtin_tool("Write", handler)
 
 
 def _edit_tool() -> ToolDefinition:
@@ -380,4 +380,4 @@ def _edit_tool() -> ToolDefinition:
         )
         return {"content": pretty_json(payload)}
 
-    return ToolDefinition("Edit", _tool_description("Edit"), _tool_schema("Edit"), handler)
+    return builtin_tool("Edit", handler)

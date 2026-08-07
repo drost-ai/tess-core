@@ -34,7 +34,7 @@ from ..payloads.tools import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .session_metadata import _append_unique_metadata_list
 from .validation import _require_string, _without_none_values
 
@@ -130,7 +130,7 @@ def _task_output_tool() -> ToolDefinition:
             "meta": {"execution": execution},
         }
 
-    return ToolDefinition("TaskOutput", _tool_description("TaskOutput"), _tool_schema("TaskOutput"), handler)
+    return builtin_tool("TaskOutput", handler)
 
 
 async def _read_daemon_task_output(reader: Any, task_id: str, max_bytes: int) -> Any:
@@ -226,7 +226,7 @@ def _task_stop_tool() -> ToolDefinition:
             "meta": {"execution": execution},
         }
 
-    return ToolDefinition("TaskStop", _tool_description("TaskStop"), _tool_schema("TaskStop"), handler)
+    return builtin_tool("TaskStop", handler)
 
 
 def _task_monitor_start_tool() -> ToolDefinition:
@@ -300,7 +300,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
             )
         }
 
-    return ToolDefinition("TaskMonitorStart", _tool_description("TaskMonitorStart"), _tool_schema("TaskMonitorStart"), handler)
+    return builtin_tool("TaskMonitorStart", handler)
 
 
 def _task_monitor_stop_tool() -> ToolDefinition:
@@ -349,7 +349,7 @@ def _task_monitor_stop_tool() -> ToolDefinition:
             )
         }
 
-    return ToolDefinition("TaskMonitorStop", _tool_description("TaskMonitorStop"), _tool_schema("TaskMonitorStop"), handler)
+    return builtin_tool("TaskMonitorStop", handler)
 
 
 def _monitor_stop_mutation(latest: dict[str, Any]) -> dict[str, Any]:
@@ -405,7 +405,7 @@ def _task_health_check_start_tool() -> ToolDefinition:
         context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": spec["title"], "owner": "daemon"})
         return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": spec["title"]})}
 
-    return ToolDefinition("TaskHealthCheckStart", _tool_description("TaskHealthCheckStart"), _tool_schema("TaskHealthCheckStart"), handler)
+    return builtin_tool("TaskHealthCheckStart", handler)
 
 
 def _task_health_check_stop_tool() -> ToolDefinition:
@@ -427,7 +427,7 @@ def _task_health_check_stop_tool() -> ToolDefinition:
             }
         return {"content": pretty_json(_task_stop_content(task_id, stopped))}
 
-    return ToolDefinition("TaskHealthCheckStop", _tool_description("TaskHealthCheckStop"), _tool_schema("TaskHealthCheckStop"), handler)
+    return builtin_tool("TaskHealthCheckStop", handler)
 
 
 def _task_stop_content(task_id: str, result: dict[str, Any]) -> dict[str, Any]:

@@ -11,7 +11,7 @@ from typing import Any
 from .definitions import ToolDefinition
 from .paths import _authorize_path, _display_path
 from .permissions import _ensure_tool_permission
-from .schemas import _tool_description, _tool_schema
+from .schemas import builtin_tool
 from .validation import _require_string
 
 
@@ -44,4 +44,4 @@ def _notebook_edit_tool() -> ToolDefinition:
         Path(notebook_path).write_text(f"{json.dumps(notebook, indent=2, ensure_ascii=False)}\n", encoding="utf-8")
         return {"content": f"Updated notebook {notebook_path}"}
 
-    return ToolDefinition("NotebookEdit", _tool_description("NotebookEdit"), _tool_schema("NotebookEdit"), handler)
+    return builtin_tool("NotebookEdit", handler)
