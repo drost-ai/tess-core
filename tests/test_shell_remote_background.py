@@ -16,7 +16,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             session["metadata"]["childAgentIds"] = ["agent-daemon-fallback"]
             calls = []
 
-            async def fake_connect():
+            async def fake_connect(*_args, **_kwargs):
                 return {
                     "_daemonClient": True,
                     "readTaskOutput": lambda task_id, tail: calls.append(("read", task_id, tail)) or {"output": f"daemon output {task_id}", "truncated": True},
@@ -26,9 +26,9 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 }
 
             with mock.patch.object(shell_surface_tasks_module, "connectTaskSupervisorDaemonClient", fake_connect):
-                log = run(core.handleSlashCommand({"command": "/tasks log fallback", "session": session, "config": config, "hooks": {}}))
-                stop = run(core.handleSlashCommand({"command": "/tasks stop fallback", "session": session, "config": config, "hooks": {}}))
-                retry = run(core.handleSlashCommand({"command": "/agents retry daemon", "session": session, "config": config, "hooks": {}}))
+                log = run(core.handleSlashCommand({"command": "/tasks log fallback", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
+                stop = run(core.handleSlashCommand({"command": "/tasks stop fallback", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
+                retry = run(core.handleSlashCommand({"command": "/agents retry daemon", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
             self.assertIn("daemon output task-daemon-fallback", log["message"])
             self.assertIn("[truncated to recent output]", log["message"])
             self.assertIn("Stopped task-daemon-fallback", stop["message"])

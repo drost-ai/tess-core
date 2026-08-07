@@ -83,7 +83,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(events[-1][0], "task.registered")
             self.assertEqual(events[-1][1]["owner"], "client")
             self.assertEqual(events[-1][1]["task_id"], task_id)
-            self.assertIsNone(run(core.getTaskSupervisorDaemonState()))
+            self.assertIsNone(run(core.getTaskSupervisorDaemonState({"instanceId": "sup-core-instance"})))
             for _ in range(80):
                 meta = run(core.readTaskMeta(task_id))
                 if meta and meta.get("status") == "completed":
@@ -128,7 +128,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
                 run(task_output.handler({"task_id": daemon_task_id, "block": True, "timeout": 1000}, {**base_context, "abortSignal": {"aborted": True}}))
             self.assertEqual(getattr(output_abort_ctx.exception, "name", None), "AbortError")
         finally:
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-core-instance"}))
             self.restore_home(root, previous)
 
     def test_daemon_live_subscription_receives_task_events(self):
@@ -138,7 +138,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.saveSession(session))
-            client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
+            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-core-instance", "cwd": str(workspace)}))
             events = []
             unsubscribe = client["subscribe"](lambda event: events.append(event), session["id"])
             script = 'import time; print("subscription event"); time.sleep(0.2)'
@@ -162,7 +162,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         finally:
             if unsubscribe:
                 unsubscribe()
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-core-instance"}))
             self.restore_home(root, previous)
 
     def test_daemon_bootstrap_snapshots_attachment_counts_and_event_replay(self):
@@ -172,7 +172,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.saveSession(session))
-            client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
+            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-core-instance", "cwd": str(workspace)}))
             script = 'print("bootstrap replay")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "bootstrap replay"}))
@@ -193,7 +193,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(bootstrap["collaborationSnapshot"]["workers"][0]["kind"], "monitor")
             self.assertEqual(bootstrap["collaborationSnapshot"]["workers"][0]["monitorId"], monitor["id"])
 
-            persisted_events = run(core.loadDaemonEvents())
+            persisted_events = run(core.loadDaemonEvents("sup-core-instance"))
             self.assertTrue(all(isinstance(event.get("cursor"), int) for event in persisted_events))
             self.assertEqual([event["cursor"] for event in persisted_events], sorted(event["cursor"] for event in persisted_events))
 
@@ -207,23 +207,23 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertTrue(any(event.get("event") == "monitor.snapshot" for event in events))
             self.assertTrue(any(event.get("event") == "task.completed" and event.get("taskId") == task_id for event in events))
             for _ in range(40):
-                state = run(core.getTaskSupervisorDaemonState())
+                state = run(core.getTaskSupervisorDaemonState({"instanceId": "sup-core-instance"}))
                 if state and state.get("attachedClients") == 1:
                     break
                 time.sleep(0.05)
-            self.assertEqual(run(core.getTaskSupervisorDaemonState())["attachedClients"], 1)
+            self.assertEqual(run(core.getTaskSupervisorDaemonState({"instanceId": "sup-core-instance"}))["attachedClients"], 1)
             unsubscribe()
             unsubscribe = None
             for _ in range(40):
-                state = run(core.getTaskSupervisorDaemonState())
+                state = run(core.getTaskSupervisorDaemonState({"instanceId": "sup-core-instance"}))
                 if state and state.get("attachedClients") == 0:
                     break
                 time.sleep(0.05)
-            self.assertEqual(run(core.getTaskSupervisorDaemonState())["attachedClients"], 0)
+            self.assertEqual(run(core.getTaskSupervisorDaemonState({"instanceId": "sup-core-instance"}))["attachedClients"], 0)
         finally:
             if unsubscribe:
                 unsubscribe()
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-core-instance"}))
             self.restore_home(root, previous)
 
     def test_task_supervisor_bootstrap_projects_long_lived_task_families(self):

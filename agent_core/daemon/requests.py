@@ -7,6 +7,7 @@ from ..storage import loadDaemonState
 
 
 async def _handle_daemon_request(
+    instance_id: str,
     supervisor: dict[str, Any],
     shutdown: asyncio.Event,
     request: dict[str, Any],
@@ -19,7 +20,7 @@ async def _handle_daemon_request(
     if method == "getState":
         result = supervisor["getState"]()
     elif method == "getStatus":
-        result = await loadDaemonState()
+        result = await loadDaemonState(instance_id)
     elif method == "getBootstrap":
         result = await supervisor["getBootstrap"](params.get("sessionId"))
     elif method == "listTasks":

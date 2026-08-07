@@ -22,10 +22,12 @@ from .model import ScenarioAssertionError
 from .runtime_driver import ensure_session_config
 from .sandbox import ScenarioSandbox
 
+HARNESS_DAEMON_INSTANCE = "harness-daemon-instance"
+
 
 async def ensure_daemon(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     await ensure_session_config(data, sandbox, state)
-    client = await core.ensureTaskSupervisorDaemon({"cwd": str(sandbox.workspace), "inProcess": data.get("inProcess", True)})
+    client = await core.ensureTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE, "cwd": str(sandbox.workspace), "inProcess": data.get("inProcess", True)})
     state["daemon_client"] = client
     state.setdefault("task_driver_results", []).append({"driver": "ensure_daemon", "status": "passed", "state": _json_safe(client.get("getState", lambda: {})())})
     await refresh_task_state(sandbox, state)
@@ -171,7 +173,7 @@ async def seed_recovery_task(data: dict[str, Any], sandbox: ScenarioSandbox, sta
 
 async def restart_daemon(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     await _unsubscribe_all(state)
-    await core.stopTaskSupervisorDaemon()
+    await core.stopTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE})
     state.pop("daemon_client", None)
     return await ensure_daemon(data, sandbox, state)
 
@@ -280,8 +282,8 @@ def assert_bootstrap(state: dict[str, Any], data: dict[str, Any]) -> None:
 
 
 async def refresh_task_state(sandbox: ScenarioSandbox, state: dict[str, Any]) -> None:
-    state["daemon_state"] = _json_safe(await core.getTaskSupervisorDaemonState())
-    state["persisted_daemon_events"] = _json_safe(await core.loadDaemonEvents())
+    state["daemon_state"] = _json_safe(await core.getTaskSupervisorDaemonState({"instanceId": HARNESS_DAEMON_INSTANCE}))
+    state["persisted_daemon_events"] = _json_safe(await core.loadDaemonEvents(HARNESS_DAEMON_INSTANCE))
     state["task_records"] = _json_safe(await core.listTaskRecords())
     state["health_checks"] = _json_safe(await core.listHealthCheckTasks())
     session = state.get("session")
@@ -294,7 +296,7 @@ async def refresh_task_state(sandbox: ScenarioSandbox, state: dict[str, Any]) ->
 
 async def close_task_driver(state: dict[str, Any]) -> None:
     await _unsubscribe_all(state)
-    await core.stopTaskSupervisorDaemon()
+    await core.stopTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE})
     for proc in list(state.get("owned_processes") or []):
         if proc.poll() is None:
             proc.terminate()

@@ -84,7 +84,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "launch-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_interrupted_subagent_repairs_parent_and_child_session_links(self):
@@ -162,5 +162,5 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "launch-recon-instance"}))
             self.restore_home(root, previous)

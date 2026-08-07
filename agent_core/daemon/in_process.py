@@ -19,7 +19,7 @@ from .events import (
     _task_snapshot_payload,
 )
 
-def _install_in_process_subscription_parity(supervisor: dict[str, Any]) -> None:
+def _install_in_process_subscription_parity(instance_id: str, supervisor: dict[str, Any]) -> None:
     live_subscribe = supervisor["subscribe"]
 
     def subscribe(*args: Any, **kwargs: Any):
@@ -29,7 +29,7 @@ def _install_in_process_subscription_parity(supervisor: dict[str, Any]) -> None:
         replay_task: asyncio.Task[Any] | None = None
 
         async def replay() -> None:
-            records = await loadDaemonEvents()
+            records = await loadDaemonEvents(instance_id)
             for record in records:
                 cursor = record.get("cursor")
                 if isinstance(cursor, int) and cursor <= (after_cursor or 0):

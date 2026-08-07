@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 from ..runtime.workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
-from ..storage import getProjectRoot, getStateRoot, loadAuth, loadDaemonState, loadMcpServers, loadPlugins
+from ..storage import getProjectRoot, getStateRoot, listLiveDaemonStates, loadAuth, loadMcpServers, loadPlugins
 from .chrome import detectChromeCompanionStatus
 from .ide import detectIdeTargets
 from .install import inspectInstallState
@@ -20,7 +20,8 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
     tmux = await detectTmuxAvailability(args)
     ide_targets = await detectIdeTargets(args)
     chrome = await detectChromeCompanionStatus({**args, "includeNativeHostManifest": True})
-    daemon = await loadDaemonState()
+    live_daemons = await listLiveDaemonStates()
+    daemon = live_daemons[0] if live_daemons else None
     workspace = await captureWorkspaceSnapshot(cwd)
     capabilities = summarizeWorkspaceCapabilities(workspace)
     session_hygiene = await buildSessionHygieneReport()

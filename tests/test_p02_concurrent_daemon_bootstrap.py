@@ -20,6 +20,8 @@ from agent_core.daemon.security import (
 )
 
 
+P02_INSTANCE = "p02-test-instance"
+
 _FAULT_STAGES = {
     "pre_bind": {
         "socketExists": False,
@@ -69,6 +71,7 @@ def _ensure_daemon_worker(
         async def ensure() -> dict[str, Any]:
             client = await core.ensureTaskSupervisorDaemon(
                 {
+                    "instanceId": P02_INSTANCE,
                     "cwd": workspace,
                     "allowInProcessFallback": False,
                     "startupTimeoutSeconds": 15,
@@ -109,6 +112,7 @@ def _reattach_daemon_worker(
         start_barrier.wait(timeout=20)
         first = await core.ensureTaskSupervisorDaemon(
             {
+                "instanceId": P02_INSTANCE,
                 "cwd": workspace,
                 "allowInProcessFallback": False,
                 "startupTimeoutSeconds": 15,
@@ -130,6 +134,7 @@ def _reattach_daemon_worker(
         recovery_barrier.wait(timeout=20)
         second = await core.ensureTaskSupervisorDaemon(
             {
+                "instanceId": P02_INSTANCE,
                 "cwd": workspace,
                 "allowInProcessFallback": False,
                 "startupTimeoutSeconds": 15,
@@ -248,7 +253,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
                     )
                 finally:
                     self._stop_workers(workers)
-                    run(core.stopTaskSupervisorDaemon())
+                    run(core.stopTaskSupervisorDaemon({"instanceId": P02_INSTANCE}))
                     self.restore_home(root, previous)
 
     def test_ready_leader_crash_reauthenticates_both_attached_followers(self):
@@ -302,7 +307,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
             self.assertNotEqual(
                 new_states[0]["authTokenId"], old_states[0]["authTokenId"]
             )
-            events = run(core.loadDaemonEvents())
+            events = run(core.loadDaemonEvents(P02_INSTANCE))
             self.assertTrue(
                 any(
                     event.get("event") == "daemon.recovered"
@@ -313,7 +318,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
         finally:
             crash_released.set()
             self._stop_workers(workers)
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": P02_INSTANCE}))
             self.restore_home(root, previous)
 
     def _assert_single_authenticated_winner(
@@ -334,16 +339,16 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
         state = states[0]
         self.assertEqual(state["phase"], "running")
         self.assertTrue(_is_alive(state["pid"]))
-        run(verifyPrivateDaemonRuntime())
+        run(verifyPrivateDaemonRuntime(P02_INSTANCE))
         socket_identity = verifyOwnedDaemonSocket(state["socketPath"])
         self.assertIsNotNone(socket_identity)
-        auth = run(readDaemonAuthMaterial(state))
+        auth = run(readDaemonAuthMaterial(P02_INSTANCE, state))
         self.assertEqual(daemonTokenId(auth["token"]), state["authTokenId"])
-        ledger = Path(home, "daemon", "spawn-ledger.jsonl")
+        ledger = Path(home, "daemon", "instances", P02_INSTANCE, "spawn-ledger.jsonl")
         spawned = [json.loads(line)["pid"] for line in ledger.read_text().splitlines()]
         live_spawned = {pid for pid in spawned if _is_alive(pid)}
         self.assertEqual(live_spawned, {state["pid"]})
-        client = run(core.connectTaskSupervisorDaemonClient())
+        client = run(core.connectTaskSupervisorDaemonClient({"instanceId": P02_INSTANCE}))
         self.assertIsNotNone(client)
         try:
             connected = run(client["getStatus"]())

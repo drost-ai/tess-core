@@ -166,7 +166,7 @@ async def _maybe_start_group_continuation(
     if not parent:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "Parent session not found."})
         return {"started": False, "reason": "parent_session_not_found", "launchGroupId": group_id, "continuationRunId": run_id}
-    task_starter = starter or await _resolve_continuation_starter()
+    task_starter = starter or await _resolve_continuation_starter(runtime)
     if not task_starter:
         _emit(runtime, "subagent.continuation.failed", {"session_id": parent_session_id, "launch_group_id": group_id, "continuation_run_id": run_id, "error": "No task supervisor available."})
         return {"started": False, "reason": "supervisor_unavailable", "launchGroupId": group_id, "continuationRunId": run_id}
@@ -218,11 +218,14 @@ async def _maybe_start_group_continuation(
         return {"started": False, "reason": "start_failed", "launchGroupId": group_id, "continuationRunId": run_id, "error": str(exc)}
 
 
-async def _resolve_continuation_starter() -> Any:
+async def _resolve_continuation_starter(runtime: dict[str, Any] | None) -> Any:
+    instance_id = (runtime or {}).get("runtimeInstanceId")
+    if not isinstance(instance_id, str) or not instance_id:
+        return None
     try:
         from ..daemon import connectTaskSupervisorDaemonClient
 
-        client = await connectTaskSupervisorDaemonClient()
+        client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
         if client and callable(client.get("startMainSessionTask")):
             return client["startMainSessionTask"]
     except Exception:

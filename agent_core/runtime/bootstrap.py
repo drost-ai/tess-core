@@ -159,7 +159,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             dispatch_bound(active_binding, event, data)
 
         if daemon is None and args.get("daemonEnabled"):
-            daemon = await ensureTaskSupervisorDaemon({"cwd": args.get("cwd") or config.get("cwd") or component_session.get("cwd")})
+            daemon = await ensureTaskSupervisorDaemon({"instanceId": runtime_instance_id, "cwd": args.get("cwd") or config.get("cwd") or component_session.get("cwd")})
         if session and not daemon:
             if monitor_runtime is None:
                 monitor_runtime = await createMonitorRuntime({"session": session, "config": config, "emit": dispatch, "runtimeBinding": active_binding, "runtimePaths": paths})

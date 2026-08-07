@@ -6,6 +6,7 @@
     "mode": "in_process_fallback",
     "reason": "detached_daemon_unavailable"
   },
+  "instanceId": "harness-daemon-instance",
   "mode": "in_process_fallback",
   "pid": "<pid:1>",
   "startedAt": "<timestamp>",

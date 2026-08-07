@@ -106,26 +106,44 @@ def getPlansDir() -> str:
 def getDaemonDir() -> str:
     return os.path.join(getStateRoot(), "daemon")
 
+def getDaemonInstancesDir() -> str:
+    return os.path.join(getDaemonDir(), "instances")
+
+_DAEMON_INSTANCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$")
+
+def parseDaemonInstanceId(instanceId: str) -> str:
+    if not isinstance(instanceId, str) or not _DAEMON_INSTANCE_ID_PATTERN.fullmatch(instanceId):
+        raise ValueError(f"Invalid daemon instance id: {instanceId!r}")
+    return instanceId
+
+def daemonInstanceDir(instanceId: str) -> str:
+    return os.path.join(getDaemonInstancesDir(), parseDaemonInstanceId(instanceId))
+
 MAX_DAEMON_SOCKET_PATH_BYTES = 100
 
-def daemonSocketPath() -> str:
-    preferred = os.path.join(getDaemonDir(), "socket.sock")
+def daemonSocketPath(instanceId: str) -> str:
+    preferred = os.path.join(daemonInstanceDir(instanceId), "daemon.sock")
     if len(preferred.encode("utf-8")) <= MAX_DAEMON_SOCKET_PATH_BYTES:
         return preferred
-    home_hash = hashlib.sha256(getStateRoot().encode("utf-8")).hexdigest()[:12]
-    return os.path.join(tempfile.gettempdir(), f"agent-core-{home_hash}.sock")
+    scope_hash = hashlib.sha256(
+        f"{getStateRoot()}\n{parseDaemonInstanceId(instanceId)}".encode("utf-8")
+    ).hexdigest()[:12]
+    return os.path.join(tempfile.gettempdir(), f"agent-core-{scope_hash}.sock")
 
-def daemonPidPath() -> str:
-    return os.path.join(getDaemonDir(), "pid")
+def daemonPidPath(instanceId: str) -> str:
+    return os.path.join(daemonInstanceDir(instanceId), "pid")
 
-def daemonStatePath() -> str:
-    return os.path.join(getDaemonDir(), "state.json")
+def daemonStatePath(instanceId: str) -> str:
+    return os.path.join(daemonInstanceDir(instanceId), "state.json")
 
-def daemonEventsPath() -> str:
-    return os.path.join(getDaemonDir(), "events.jsonl")
+def daemonEventsPath(instanceId: str) -> str:
+    return os.path.join(daemonInstanceDir(instanceId), "events.jsonl")
 
-def daemonLogsDir() -> str:
-    return os.path.join(getDaemonDir(), "logs")
+def daemonSpawnLedgerPath(instanceId: str) -> str:
+    return os.path.join(daemonInstanceDir(instanceId), "spawn-ledger.jsonl")
+
+def daemonLogsDir(instanceId: str) -> str:
+    return os.path.join(daemonInstanceDir(instanceId), "logs")
 
 def getCompactionsDir() -> str:
     return os.path.join(getStateRoot(), "compactions")

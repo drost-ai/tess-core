@@ -176,7 +176,7 @@ class PlatformSurfaceTests(AgentCoreTestCase):
             self.assertEqual(next(check for check in report["checks"] if check["id"] == "tmux")["status"], "pass")
             self.assertEqual(next(check for check in report["checks"] if check["id"] == "global_link")["status"], "warn")
             self.assertEqual(next(check for check in report["checks"] if check["id"] == "daemon")["status"], "warn")
-            run(core.saveDaemonState({"phase": "running", "pid": os.getpid(), "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.saveDaemonState("doctor-instance", {"phase": "running", "pid": os.getpid(), "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
             daemon_report = run(core.collectDoctorReport(str(workspace), {"runner": runner, "platform": "linux"}))
             self.assertEqual(next(check for check in daemon_report["checks"] if check["id"] == "daemon")["status"], "pass")
         finally:

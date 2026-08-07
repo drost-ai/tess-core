@@ -15,7 +15,7 @@ from ..storage import (
     MAX_SHALLOW_SESSION_BYTES,
     fileLock,
     getStateRoot,
-    loadDaemonState,
+    listLiveDaemonStates,
     loadSessionRecordShallow,
     readJsonFile,
     sessionPath,
@@ -157,8 +157,8 @@ async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwarg
     options = {**(options or {}), **kwargs}
     apply = options.get("apply") is True
     if apply and options.get("allowWithDaemonRunning") is not True:
-        daemon = await loadDaemonState()
-        if isinstance((daemon or {}).get("pid"), int) and _is_process_alive(daemon["pid"]):
+        live_daemons = await listLiveDaemonStates()
+        if live_daemons:
             return {
                 "planned": [],
                 "applied": False,

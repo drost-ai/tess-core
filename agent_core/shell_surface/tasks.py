@@ -334,9 +334,18 @@ async def _resolve_task_supervisor(args: dict[str, Any] | None = None) -> tuple[
     supervisor = args.get("daemon") or args.get("taskSupervisor")
     if supervisor:
         return supervisor, False
-    supervisor = await connectTaskSupervisorDaemonClient()
+    instance_id = _request_runtime_instance_id(args)
+    if not instance_id:
+        return None, False
+    supervisor = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
     should_close = bool(isinstance(supervisor, dict) and supervisor.get("_daemonClient"))
     return supervisor, should_close
+
+
+def _request_runtime_instance_id(args: dict[str, Any]) -> str | None:
+    runtime = args.get("runtime") if isinstance(args.get("runtime"), dict) else {}
+    instance_id = args.get("runtimeInstanceId") or runtime.get("runtimeInstanceId")
+    return instance_id if isinstance(instance_id, str) and instance_id else None
 
 
 async def _close_task_supervisor_if_needed(supervisor: dict[str, Any] | None, should_close: bool) -> None:

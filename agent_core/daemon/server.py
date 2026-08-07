@@ -53,27 +53,27 @@ from .transport import (
 )
 
 
-async def runTaskSupervisorDaemon(cwd: str) -> None:
-    await prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True})
+async def runTaskSupervisorDaemon(cwd: str, instanceId: str) -> None:
+    await prepareDaemonRuntimeSecurity({"instanceId": instanceId, "requireStoppedForMigration": True})
     wait_ms = _daemon_instance_wait_ms()
     async with withRecordTransaction(
-        "daemon-instance",
+        f"daemon-instance-{instanceId}",
         getStateRoot(),
         timeoutMs=wait_ms,
     ):
-        await _run_task_supervisor_daemon_scoped(cwd)
+        await _run_task_supervisor_daemon_scoped(cwd, instanceId)
 
 
-async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
+async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str) -> None:
     await ensureBaseLayout(cwd)
-    socket_path = daemonSocketPath()
-    existing = await loadDaemonState()
+    socket_path = daemonSocketPath(instance_id)
+    existing = await loadDaemonState(instance_id)
     existing_pid = (existing or {}).get("pid")
     if isinstance(existing_pid, int) and _is_process_alive(existing_pid):
         raise RuntimeError(f"Daemon already running with pid {existing_pid}")
-    await _cleanup_stale_daemon_artifacts()
-    await rotateDaemonEventsIfOversized()
-    cursor = max(await readLastDaemonEventCursor(), int((existing or {}).get("cursor") or 0))
+    await _cleanup_stale_daemon_artifacts(instance_id)
+    await rotateDaemonEventsIfOversized(instance_id)
+    cursor = max(await readLastDaemonEventCursor(instance_id), int((existing or {}).get("cursor") or 0))
     daemon_epoch = str(uuid.uuid4())
     daemon_started_at = now_iso()
     daemon_phase = "starting"
@@ -97,8 +97,9 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
         async with state_lock:
             supervisor_state = supervisor["getState"]() if supervisor else {}
             await saveDaemonState(
+                instance_id,
                 {
-                    "instanceId": "local-daemon",
+                    "instanceId": instance_id,
                     "protocolVersion": DAEMON_PROTOCOL_VERSION,
                     "authTokenId": auth["tokenId"],
                     "phase": daemon_phase,
@@ -126,7 +127,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
             "taskId": data.get("task_id") if isinstance(data.get("task_id"), str) else None,
             **event,
         }
-        await appendDaemonEvent(payload)
+        await appendDaemonEvent(instance_id, payload)
         await _publish_daemon_event(subscribers, payload)
         await write_daemon_state()
 
@@ -147,7 +148,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
         signal: DaemonAbortSignal,
     ) -> dict[str, Any]:
         if _normalise_daemon_method(request.get("method")) != "subscribe":
-            return await _handle_daemon_request(supervisor or {}, shutdown, request, signal)
+            return await _handle_daemon_request(instance_id, supervisor or {}, shutdown, request, signal)
         params = request.get("params") or {}
         session_id = params.get("sessionId") or params.get("session_id")
         previous = subscribers.pop(peer.id, None)
@@ -164,7 +165,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
         await write_daemon_state()
 
         async def after_write() -> None:
-            await _replay_daemon_events(peer, session_id, after_cursor)
+            await _replay_daemon_events(instance_id, peer, session_id, after_cursor)
             if supervisor:
                 await _send_bootstrap_snapshots(
                     peer,
@@ -190,25 +191,27 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
             onDisconnect=on_disconnect,
             accepting=False,
         )
-        _inject_daemon_boot_fault("pre_bind")
+        _inject_daemon_boot_fault("pre_bind", instance_id)
         await transport.listen(socket_path)
         os.chmod(socket_path, 0o600)
         verifyOwnedDaemonSocket(socket_path)
-        _inject_daemon_boot_fault("post_bind")
-        await publishDaemonAuthMaterial(auth)
+        _inject_daemon_boot_fault("post_bind", instance_id)
+        await publishDaemonAuthMaterial(instance_id, auth)
         await write_daemon_state("starting")
-        _inject_daemon_boot_fault("post_publish")
+        _inject_daemon_boot_fault("post_publish", instance_id)
         await _record_daemon_lifecycle_event(
+            instance_id,
             "daemon.recovering",
             {"phase": "recovering", "epoch": daemon_epoch},
             next_event_cursor,
         )
         await write_daemon_state("recovering")
         supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
-        rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(shutdown))
-        _inject_daemon_boot_fault("during_recovery")
+        rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(instance_id, shutdown))
+        _inject_daemon_boot_fault("during_recovery", instance_id)
         await write_daemon_state("running")
         await _record_daemon_lifecycle_event(
+            instance_id,
             "daemon.recovered",
             {"phase": "running", "epoch": daemon_epoch},
             next_event_cursor,
@@ -232,6 +235,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
         if supervisor:
             await supervisor["close"]()
         await _clear_owned_daemon_instance(
+            instance_id,
             daemon_epoch,
             os.getpid(),
             auth["tokenId"],
@@ -243,19 +247,20 @@ async def _run_task_supervisor_daemon_scoped(cwd: str) -> None:
 
 
 async def _clear_owned_daemon_instance(
+    instance_id: str,
     epoch: str,
     pid: int,
     token_id: str,
     socket_path: str,
 ) -> None:
-    state = await loadDaemonState()
+    state = await loadDaemonState(instance_id)
     if state and (state.get("epoch") != epoch or state.get("pid") != pid):
         return
     socket_info = verifyOwnedDaemonSocket(socket_path)
-    for target in (daemonPidPath(), daemonStatePath()):
+    for target in (daemonPidPath(instance_id), daemonStatePath(instance_id)):
         with contextlib.suppress(FileNotFoundError):
             os.unlink(target)
-    await removeDaemonAuthMaterialIfOwned(token_id)
+    await removeDaemonAuthMaterialIfOwned(instance_id, token_id)
     if socket_info:
         current = verifyOwnedDaemonSocket(socket_path)
         if current and (
@@ -270,15 +275,15 @@ async def _clear_owned_daemon_instance(
             os.unlink(socket_path)
 
 
-async def _rotate_daemon_events_periodically(shutdown: asyncio.Event) -> None:
+async def _rotate_daemon_events_periodically(instance_id: str, shutdown: asyncio.Event) -> None:
     while not shutdown.is_set():
         try:
             await asyncio.wait_for(shutdown.wait(), timeout=5 * 60)
         except asyncio.TimeoutError:
-            await rotateDaemonEventsIfOversized()
+            await rotateDaemonEventsIfOversized(instance_id)
 
 
-def _inject_daemon_boot_fault(stage: str) -> None:
+def _inject_daemon_boot_fault(stage: str, instance_id: str) -> None:
     if os.environ.get("AGENT_CORE_TEST_DAEMON_BOOT_FAULT_STAGE") != stage:
         return
     marker = os.environ.get("P02_FAULT_MARKER")
@@ -286,13 +291,13 @@ def _inject_daemon_boot_fault(stage: str) -> None:
         try:
             fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
-                state = _read_fault_state()
+                state = _read_fault_state(instance_id)
                 payload = json.dumps(
                     {
                         "stage": stage,
-                        "socketExists": os.path.lexists(daemonSocketPath()),
-                        "tokenExists": os.path.lexists(daemonAuthTokenPath()),
-                        "stateExists": os.path.lexists(daemonStatePath()),
+                        "socketExists": os.path.lexists(daemonSocketPath(instance_id)),
+                        "tokenExists": os.path.lexists(daemonAuthTokenPath(instance_id)),
+                        "stateExists": os.path.lexists(daemonStatePath(instance_id)),
                         "statePhase": state.get("phase") if state else None,
                     },
                     separators=(",", ":"),
@@ -311,9 +316,9 @@ def _inject_daemon_boot_fault(stage: str) -> None:
     os._exit(86)
 
 
-def _read_fault_state() -> dict[str, Any] | None:
+def _read_fault_state(instance_id: str) -> dict[str, Any] | None:
     try:
-        with open(daemonStatePath(), "rb") as handle:
+        with open(daemonStatePath(instance_id), "rb") as handle:
             payload = handle.read(4_097)
         if len(payload) > 4_096:
             return None

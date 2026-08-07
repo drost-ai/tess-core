@@ -68,7 +68,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_reconcile_recovers_completed_subagent_metadata_after_restart(self):
@@ -176,7 +176,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_task_supervisor_reconciles_terminal_unknown_and_failed_subagent_states(self):
@@ -376,7 +376,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             self.assertEqual(events[-1][0], "task.stopped")
             self.assertEqual(events[-1][1]["summary"], "Task stopped by deliberate request.")
         finally:
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_task_stop_daemon_result_shape_matches_reference(self):

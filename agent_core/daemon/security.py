@@ -16,11 +16,14 @@ from pathlib import Path
 from typing import Any
 
 from ..storage import (
+    daemonInstanceDir,
     daemonLogsDir,
     daemonSocketPath,
     daemonStatePath,
     getDaemonDir,
+    getDaemonInstancesDir,
     getStateRoot,
+    parseDaemonInstanceId,
 )
 from .protocol import DAEMON_PROTOCOL_VERSION
 
@@ -43,8 +46,8 @@ class DaemonSecurityError(RuntimeError):
         self.targetPath = targetPath
 
 
-def daemonAuthTokenPath() -> str:
-    return os.path.join(getDaemonDir(), "instance-token")
+def daemonAuthTokenPath(instanceId: str) -> str:
+    return os.path.join(daemonInstanceDir(instanceId), "instance-token")
 
 
 async def prepareDaemonRuntimeSecurity(
@@ -52,36 +55,40 @@ async def prepareDaemonRuntimeSecurity(
     **kwargs: Any,
 ) -> None:
     settings = {**(options or {}), **kwargs}
+    instance_id = parseDaemonInstanceId(settings["instanceId"])
     home = getStateRoot()
     await _verify_canonical_ancestors(home)
     _ensure_owned_directory(home)
     _ensure_owned_directory(os.path.join(home, "locks"))
     from ..storage import withRecordTransaction
 
-    async with withRecordTransaction("daemon-security", home, timeoutMs=5_000):
-        await _prepare_under_lock(settings)
+    async with withRecordTransaction(f"daemon-security-{instance_id}", home, timeoutMs=5_000):
+        await _prepare_under_lock({**settings, "instanceId": instance_id})
 
 
 async def _prepare_under_lock(settings: dict[str, Any]) -> None:
-    daemon_dir = getDaemonDir()
-    _ensure_owned_directory(daemon_dir)
-    _ensure_owned_directory(daemonLogsDir())
-    changes = _inspect_daemon_tree(daemon_dir)
-    external_socket = daemonSocketPath()
-    if not _is_within(external_socket, daemon_dir):
+    instance_id = settings["instanceId"]
+    instance_dir = daemonInstanceDir(instance_id)
+    _ensure_owned_directory(getDaemonDir())
+    _ensure_owned_directory(getDaemonInstancesDir())
+    _ensure_owned_directory(instance_dir)
+    _ensure_owned_directory(daemonLogsDir(instance_id))
+    changes = _inspect_daemon_tree(instance_dir, instance_id)
+    external_socket = daemonSocketPath(instance_id)
+    if not _is_within(external_socket, instance_dir):
         socket_change = _inspect_optional_socket(external_socket)
         if socket_change:
             changes.append(socket_change)
     if not changes:
         return
     if settings.get("requireStoppedForMigration"):
-        state = _read_legacy_state_for_security()
+        state = _read_legacy_state_for_security(instance_id)
         pid = (state or {}).get("pid")
         if isinstance(pid, int) and _is_process_alive(pid):
             raise DaemonSecurityError(
                 "daemon.security_live_migration",
                 f"Refusing to migrate daemon permissions while pid {pid} is live. Stop the old daemon first.",
-                daemon_dir,
+                instance_dir,
             )
         if await isDaemonSocketListenerActive(external_socket):
             raise DaemonSecurityError(
@@ -89,18 +96,24 @@ async def _prepare_under_lock(settings: dict[str, Any]) -> None:
                 "Refusing to migrate daemon permissions while the existing socket still accepts connections.",
                 external_socket,
             )
-    await _apply_mode_changes(changes, settings.get("chmod"))
-    _verify_private_tree(daemon_dir, external_socket)
+    await _apply_mode_changes(changes, settings.get("chmod"), instance_id)
+    _verify_private_tree(instance_dir, external_socket, instance_id)
 
 
-async def verifyPrivateDaemonRuntime() -> None:
+async def verifyPrivateDaemonRuntime(instanceId: str) -> None:
+    instance_id = parseDaemonInstanceId(instanceId)
     home = getStateRoot()
     await _verify_canonical_ancestors(home)
     home_stat = os.lstat(home)
     _assert_owned_directory(home_stat, home)
     if stat.S_IMODE(home_stat.st_mode) & 0o022:
         raise _unsafe("Runtime home is writable by another user.", home)
-    _verify_private_tree(getDaemonDir(), daemonSocketPath())
+    for ancestor in (getDaemonDir(), getDaemonInstancesDir()):
+        info = os.lstat(ancestor)
+        _assert_owned_directory(info, ancestor)
+        if stat.S_IMODE(info.st_mode) & 0o022:
+            raise _unsafe("Daemon directory is writable by another user.", ancestor)
+    _verify_private_tree(daemonInstanceDir(instance_id), daemonSocketPath(instance_id), instance_id)
 
 
 def generateDaemonAuthMaterial() -> dict[str, str]:
@@ -108,7 +121,7 @@ def generateDaemonAuthMaterial() -> dict[str, str]:
     return {"token": token, "tokenId": daemonTokenId(token)}
 
 
-async def publishDaemonAuthMaterial(auth: dict[str, str]) -> None:
+async def publishDaemonAuthMaterial(instanceId: str, auth: dict[str, str]) -> None:
     token = auth.get("token")
     token_id = auth.get("tokenId")
     if (
@@ -120,9 +133,9 @@ async def publishDaemonAuthMaterial(auth: dict[str, str]) -> None:
         raise DaemonSecurityError(
             "daemon.auth_material_invalid",
             "Refusing to publish malformed daemon auth material.",
-            daemonAuthTokenPath(),
+            daemonAuthTokenPath(instanceId),
         )
-    target = daemonAuthTokenPath()
+    target = daemonAuthTokenPath(instanceId)
     temp = f"{target}.{os.getpid()}.{uuid.uuid4()}.tmp"
     published = False
     try:
@@ -142,24 +155,24 @@ async def publishDaemonAuthMaterial(auth: dict[str, str]) -> None:
             os.unlink(temp)
         if published:
             with contextlib.suppress(Exception):
-                await removeDaemonAuthMaterialIfOwned(token_id)
+                await removeDaemonAuthMaterialIfOwned(instanceId, token_id)
         raise
 
 
-async def createDaemonAuthMaterial() -> dict[str, str]:
+async def createDaemonAuthMaterial(instanceId: str) -> dict[str, str]:
     auth = generateDaemonAuthMaterial()
-    await publishDaemonAuthMaterial(auth)
+    await publishDaemonAuthMaterial(instanceId, auth)
     return auth
 
 
-async def readDaemonAuthMaterial(state: dict[str, Any]) -> dict[str, str]:
+async def readDaemonAuthMaterial(instanceId: str, state: dict[str, Any]) -> dict[str, str]:
     if state.get("protocolVersion") != DAEMON_PROTOCOL_VERSION or not isinstance(state.get("authTokenId"), str):
         raise DaemonSecurityError(
             "daemon.auth_material_invalid",
             "The daemon state uses an unauthenticated or unsupported protocol version.",
-            daemonStatePath(),
+            daemonStatePath(instanceId),
         )
-    target = daemonAuthTokenPath()
+    target = daemonAuthTokenPath(instanceId)
     info = _verify_owned_regular_file(target, require_private=True)
     if info.st_size > MAX_DAEMON_TOKEN_BYTES:
         raise DaemonSecurityError(
@@ -235,8 +248,8 @@ async def removeInactiveOwnedDaemonSocket(socketPath: str) -> None:
     os.unlink(socketPath)
 
 
-async def removeDaemonAuthMaterialIfOwned(tokenId: str) -> None:
-    target = daemonAuthTokenPath()
+async def removeDaemonAuthMaterialIfOwned(instanceId: str, tokenId: str) -> None:
+    target = daemonAuthTokenPath(instanceId)
     try:
         info = _verify_owned_regular_file(target, require_private=True)
     except FileNotFoundError:
@@ -249,8 +262,8 @@ async def removeDaemonAuthMaterialIfOwned(tokenId: str) -> None:
         os.unlink(target)
 
 
-async def removeOwnedDaemonAuthMaterial() -> None:
-    target = daemonAuthTokenPath()
+async def removeOwnedDaemonAuthMaterial(instanceId: str) -> None:
+    target = daemonAuthTokenPath(instanceId)
     try:
         before = _verify_owned_regular_file(target, require_private=True)
     except FileNotFoundError:
@@ -265,7 +278,7 @@ def daemonTokenId(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-async def _apply_mode_changes(changes: list[dict[str, Any]], chmod: Any) -> None:
+async def _apply_mode_changes(changes: list[dict[str, Any]], chmod: Any, instance_id: str) -> None:
     applied: list[dict[str, Any]] = []
     try:
         for change in changes:
@@ -285,11 +298,11 @@ async def _apply_mode_changes(changes: list[dict[str, Any]], chmod: Any) -> None
         raise DaemonSecurityError(
             "daemon.security_migration_failed",
             f"Daemon permission migration failed: {error}",
-            getDaemonDir(),
+            daemonInstanceDir(instance_id),
         ) from error
 
 
-def _inspect_daemon_tree(root: str) -> list[dict[str, Any]]:
+def _inspect_daemon_tree(root: str, instance_id: str) -> list[dict[str, Any]]:
     changes: list[dict[str, Any]] = []
     queue: list[tuple[str, int]] = [(root, 0)]
     visited = 0
@@ -316,7 +329,7 @@ def _inspect_daemon_tree(root: str) -> list[dict[str, Any]]:
                 queue.extend((entry.path, depth + 1) for entry in entries)
         elif stat.S_ISREG(info.st_mode):
             next_mode, kind = PRIVATE_FILE_MODE, "file"
-        elif stat.S_ISSOCK(info.st_mode) and target == daemonSocketPath():
+        elif stat.S_ISSOCK(info.st_mode) and target == daemonSocketPath(instance_id):
             next_mode, kind = PRIVATE_FILE_MODE, "socket"
         else:
             raise _unsafe("Daemon state contains an unexpected filesystem object.", target)
@@ -337,8 +350,8 @@ def _inspect_optional_socket(target: str) -> dict[str, Any] | None:
     return None if mode == PRIVATE_FILE_MODE else _mode_change(target, info, mode, PRIVATE_FILE_MODE, "socket")
 
 
-def _verify_private_tree(root: str, external_socket: str) -> None:
-    if _inspect_daemon_tree(root):
+def _verify_private_tree(root: str, external_socket: str, instance_id: str) -> None:
+    if _inspect_daemon_tree(root, instance_id):
         raise _unsafe("Daemon state permissions are not private.", root)
     if not _is_within(external_socket, root) and _inspect_optional_socket(external_socket):
         raise _unsafe("External daemon socket permissions are not private.", external_socket)
@@ -359,8 +372,8 @@ def _ensure_owned_directory(target: str) -> None:
         os.chmod(target, PRIVATE_DIRECTORY_MODE)
 
 
-def _read_legacy_state_for_security() -> dict[str, Any] | None:
-    target = daemonStatePath()
+def _read_legacy_state_for_security(instance_id: str) -> dict[str, Any] | None:
+    target = daemonStatePath(instance_id)
     try:
         info = os.lstat(target)
     except FileNotFoundError:

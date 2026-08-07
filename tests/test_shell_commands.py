@@ -163,8 +163,8 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertIn("kind         background_command", inspected["message"])
             self.assertIn("surface      inspectable", inspected["message"])
 
-            run(core.saveDaemonState({"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
-            daemon = run(core.handleSlashCommand({"command": "/daemon", "session": session, "config": config, "hooks": hooks}))
+            run(core.saveDaemonState("shell-instance", {"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
+            daemon = run(core.handleSlashCommand({"command": "/daemon", "session": session, "config": config, "hooks": hooks, "runtimeInstanceId": "shell-instance"}))
             self.assertIn("running", daemon["message"])
 
             exit_result = run(core.handleSlashCommand({"command": "/quit", "session": session, "config": config, "hooks": hooks}))
@@ -307,8 +307,8 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertEqual(resumed, [target["id"]])
             self.assertEqual(counters["persist"], 1)
 
-            stopped_daemon = run(core.handleSlashCommand({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
-            restarted_daemon = run(core.handleSlashCommand({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller}))
+            stopped_daemon = run(core.handleSlashCommand({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller, "runtimeInstanceId": "shell-instance"}))
+            restarted_daemon = run(core.handleSlashCommand({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller, "runtimeInstanceId": "shell-instance"}))
             self.assertEqual(stopped_daemon["message"], "Daemon not running.")
             self.assertEqual(restarted_daemon["message"], "Daemon not running.")
             self.assertEqual(daemon_actions, ["restart"])

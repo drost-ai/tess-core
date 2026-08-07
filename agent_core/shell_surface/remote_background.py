@@ -21,6 +21,7 @@ from ..storage import (
     loadSession,
 )
 from .agents import _is_active_child_agent, _is_related_child_agent, formatChildAgentRecord
+from .tasks import _request_runtime_instance_id
 from .common import (
     _call,
     _call_value,
@@ -41,24 +42,29 @@ from typing import Any
 from ..collaboration.bridge.runtime import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
 
 
-async def buildDaemonReport() -> str:
-    daemon = await loadDaemonState()
+async def buildDaemonReport(instanceId: str | None) -> str:
+    if not instanceId:
+        return "Daemon not running (no runtime instance)."
+    daemon = await loadDaemonState(instanceId)
     if not daemon:
         return "Daemon not running."
-    return "\n".join(f"{key:<13} {daemon.get(key)}" for key in ("phase", "pid", "socketPath", "supervisorId", "epoch", "attachedClients", "watchedSessions", "activeTasks", "updatedAt"))
+    return "\n".join(f"{key:<13} {daemon.get(key)}" for key in ("instanceId", "phase", "pid", "socketPath", "supervisorId", "epoch", "attachedClients", "watchedSessions", "activeTasks", "updatedAt"))
 
 
 async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     command = arg_text.strip().lower()
     controller = args.get("daemonController") or {}
+    instance_id = _request_runtime_instance_id(args)
     if command == "restart":
         restart_fn = controller.get("restart") if isinstance(controller, dict) else None
         if callable(restart_fn):
             await _maybe_await(restart_fn())
+        elif instance_id:
+            await stopTaskSupervisorDaemon({"instanceId": instance_id})
+            await ensureTaskSupervisorDaemon({"instanceId": instance_id, "cwd": session.get("cwd") or config.get("cwd") or os.getcwd()})
         else:
-            await stopTaskSupervisorDaemon()
-            await ensureTaskSupervisorDaemon({"cwd": session.get("cwd") or config.get("cwd") or os.getcwd()})
-    return _info(hooks, "Daemon", await buildDaemonReport())
+            return _error(hooks, "Daemon restart requires a bound runtime instance.")
+    return _info(hooks, "Daemon", await buildDaemonReport(instance_id))
 
 
 async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:

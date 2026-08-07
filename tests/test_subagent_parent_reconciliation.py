@@ -389,7 +389,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                 )
             )
 
-            async def no_starter():
+            async def no_starter(_runtime=None):
                 return None
 
             with mock.patch.object(continuation_module, "_resolve_continuation_starter", no_starter):

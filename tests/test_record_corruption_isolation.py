@@ -27,7 +27,8 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
         try:
             core.configureRuntimeHome(str(home))
             run(core.ensureBaseLayout(str(home)))
-            state_path = Path(core.daemonStatePath())
+            state_path = Path(core.daemonStatePath("rc-instance"))
+            state_path.parent.mkdir(parents=True, exist_ok=True)
             state_path.write_text(json.dumps({"pid": 101, "phase": "starting"}), encoding="utf-8")
             replacements = []
             for pid in (202, 303, 404):
@@ -44,7 +45,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 replacement_count += 1
 
             setPersistedRecordBeforeOpenObserverForTesting(replace_before_open)
-            state = run(core.loadDaemonState())
+            state = run(core.loadDaemonState("rc-instance"))
             self.assertEqual(replacement_count, 3)
             self.assertEqual(state["pid"], 404)
             self.assertIsNone(getPersistedRecordIssue(str(state_path)))
@@ -125,7 +126,8 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             Path(core.healthCheckMetaPath("health-malformed")).parent.mkdir(parents=True, exist_ok=True)
             Path(core.healthCheckMetaPath("health-malformed")).write_text("{", encoding="utf-8")
             _make_sparse(Path(core.healthCheckMetaPath("health-oversized")), 2 * 1024 * 1024)
-            Path(core.daemonStatePath()).write_text("{", encoding="utf-8")
+            Path(core.daemonStatePath("rc-instance")).parent.mkdir(parents=True, exist_ok=True)
+            Path(core.daemonStatePath("rc-instance")).write_text("{", encoding="utf-8")
 
             oversized_paths = [
                 Path(core.taskMetaPath("task-oversized")),
@@ -142,7 +144,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             self.assertEqual(sorted(record["agentId"] for record in agents), ["agent-future", "agent-valid"])
             self.assertEqual([record["id"] for record in monitors], ["monitor-valid"])
             self.assertEqual([record["taskId"] for record in health_checks], ["health-valid"])
-            self.assertIsNone(run(core.loadDaemonState()))
+            self.assertIsNone(run(core.loadDaemonState("rc-instance")))
             for path in oversized_paths:
                 self.assertFalse(any(file_path == str(path) for file_path, _requested, _actual in reads))
 

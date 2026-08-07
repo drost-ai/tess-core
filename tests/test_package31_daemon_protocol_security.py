@@ -30,6 +30,8 @@ from agent_core.daemon.security import (
 )
 import agent_core.daemon.server as daemon_server_module
 
+TEST_INSTANCE = "sec-test-instance"
+
 
 class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
     def test_daemon_publishes_after_bind_and_constructs_only_while_recovering(self):
@@ -72,20 +74,20 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         async def nothing(*_args, **_kwargs):
             return None
 
-        async def zero():
+        async def zero(*_args):
             return 0
 
-        async def publish(_auth):
+        async def publish(*_args):
             nonlocal auth_published
             auth_published = True
             trace.append("publish_auth")
 
-        async def save(next_state):
+        async def save(_instance, next_state):
             state.clear()
             state.update(next_state)
             trace.append(f"state:{next_state['phase']}")
 
-        async def lifecycle(event, _data, _cursor):
+        async def lifecycle(_instance, event, _data, _cursor):
             trace.append(event)
 
         async def create_supervisor(args):
@@ -99,12 +101,12 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
 
             return {"getState": lambda: {}, "close": close}
 
-        def fault(stage):
+        def fault(stage, _instance):
             trace.append(f"fault:{stage}")
 
         replacements = {
             "ensureBaseLayout": nothing,
-            "loadDaemonState": lambda: nothing(),
+            "loadDaemonState": lambda *_a: nothing(),
             "_cleanup_stale_daemon_artifacts": nothing,
             "rotateDaemonEventsIfOversized": nothing,
             "readLastDaemonEventCursor": zero,
@@ -121,10 +123,10 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             "_clear_owned_daemon_instance": nothing,
         }
         with tempfile.NamedTemporaryFile() as socket_file:
-            replacements["daemonSocketPath"] = lambda: socket_file.name
+            replacements["daemonSocketPath"] = lambda *_a: socket_file.name
             with mock.patch.multiple(daemon_server_module, **replacements):
                 with self.assertRaises(ReadyBoundary):
-                    run(daemon_server_module._run_task_supervisor_daemon_scoped("/tmp"))
+                    run(daemon_server_module._run_task_supervisor_daemon_scoped("/tmp", TEST_INSTANCE))
         self.assertLess(trace.index("bind"), trace.index("publish_auth"))
         self.assertLess(trace.index("state:recovering"), trace.index("construct"))
         self.assertEqual(
@@ -236,20 +238,20 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
-            run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+            run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             auth = generateDaemonAuthMaterial()
-            token_path = Path(daemonAuthTokenPath())
+            token_path = Path(daemonAuthTokenPath(TEST_INSTANCE))
             self.assertFalse(token_path.exists())
-            run(publishDaemonAuthMaterial(auth))
+            run(publishDaemonAuthMaterial(TEST_INSTANCE, auth))
             state = {
                 "protocolVersion": DAEMON_PROTOCOL_VERSION,
                 "authTokenId": auth["tokenId"],
             }
-            self.assertEqual(run(readDaemonAuthMaterial(state)), auth)
+            self.assertEqual(run(readDaemonAuthMaterial(TEST_INSTANCE, state)), auth)
             self.assertEqual(stat.S_IMODE(token_path.stat().st_mode), 0o600)
             self.assertNotIn(auth["token"], json.dumps(state))
             with self.assertRaises(DaemonSecurityError) as raised:
-                run(readDaemonAuthMaterial({**state, "authTokenId": "0" * 64}))
+                run(readDaemonAuthMaterial(TEST_INSTANCE, {**state, "authTokenId": "0" * 64}))
             self.assertEqual(raised.exception.code, "daemon.auth_material_invalid")
         finally:
             self.restore_home(root, previous)
@@ -257,7 +259,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
     def test_owner_valid_legacy_tree_tightens_without_changing_bytes(self):
         root, home, _workspace, previous = self.temp_context()
         try:
-            daemon_dir = Path(home, "daemon")
+            daemon_dir = Path(home, "daemon", "instances", TEST_INSTANCE)
             logs_dir = daemon_dir / "logs"
             logs_dir.mkdir(parents=True, mode=0o755)
             daemon_dir.chmod(0o755)
@@ -269,29 +271,29 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             event_path.write_bytes(b"legacy-event\n")
             state_path.chmod(0o644)
             event_path.chmod(0o644)
-            run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+            run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             self.assertEqual(state_path.read_bytes(), state_bytes)
             self.assertEqual(stat.S_IMODE(daemon_dir.stat().st_mode), 0o700)
             self.assertEqual(stat.S_IMODE(logs_dir.stat().st_mode), 0o700)
             self.assertEqual(stat.S_IMODE(state_path.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(event_path.stat().st_mode), 0o600)
             before = state_path.stat().st_ctime_ns
-            run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+            run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             self.assertEqual(state_path.stat().st_ctime_ns, before)
-            run(verifyPrivateDaemonRuntime())
+            run(verifyPrivateDaemonRuntime(TEST_INSTANCE))
         finally:
             self.restore_home(root, previous)
 
     def test_unsafe_file_and_symlink_fail_closed_without_modification(self):
         root, home, _workspace, previous = self.temp_context()
         try:
-            daemon_dir = Path(home, "daemon")
+            daemon_dir = Path(home, "daemon", "instances", TEST_INSTANCE)
             (daemon_dir / "logs").mkdir(parents=True, mode=0o700)
             unsafe = daemon_dir / "state.json"
             unsafe.write_bytes(b"unsafe-bytes\n")
             unsafe.chmod(0o666)
             with self.assertRaises(DaemonSecurityError) as raised:
-                run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+                run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             self.assertEqual(raised.exception.code, "daemon.security_unsafe")
             self.assertEqual(unsafe.read_bytes(), b"unsafe-bytes\n")
             self.assertEqual(stat.S_IMODE(unsafe.stat().st_mode), 0o666)
@@ -306,7 +308,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             (foreign / "marker").write_text("preserve")
             daemon_dir.symlink_to(foreign, target_is_directory=True)
             with self.assertRaises(DaemonSecurityError) as raised:
-                run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+                run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             self.assertEqual(raised.exception.code, "daemon.security_unsafe")
             self.assertTrue(daemon_dir.is_symlink())
             self.assertEqual((foreign / "marker").read_text(), "preserve")
@@ -316,7 +318,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
     def test_permission_migration_rolls_back_prior_changes(self):
         root, home, _workspace, previous = self.temp_context()
         try:
-            daemon_dir = Path(home, "daemon")
+            daemon_dir = Path(home, "daemon", "instances", TEST_INSTANCE)
             logs_dir = daemon_dir / "logs"
             logs_dir.mkdir(parents=True, mode=0o755)
             state_path = daemon_dir / "state.json"
@@ -342,6 +344,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
                 run(
                     prepareDaemonRuntimeSecurity(
                         {
+                            "instanceId": TEST_INSTANCE,
                             "requireStoppedForMigration": True,
                             "chmod": injected_chmod,
                         }
@@ -358,7 +361,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
     def test_live_legacy_daemon_blocks_permission_migration_byte_stably(self):
         root, home, _workspace, previous = self.temp_context()
         try:
-            daemon_dir = Path(home, "daemon")
+            daemon_dir = Path(home, "daemon", "instances", TEST_INSTANCE)
             logs_dir = daemon_dir / "logs"
             logs_dir.mkdir(parents=True, mode=0o755)
             daemon_dir.chmod(0o755)
@@ -368,7 +371,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             state_path.write_bytes(state_bytes)
             state_path.chmod(0o644)
             with self.assertRaises(DaemonSecurityError) as raised:
-                run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+                run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             self.assertEqual(raised.exception.code, "daemon.security_live_migration")
             self.assertEqual(state_path.read_bytes(), state_bytes)
             self.assertEqual(stat.S_IMODE(daemon_dir.stat().st_mode), 0o755)
@@ -381,7 +384,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
-            run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
+            run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
             now = now_iso()
             state = {
                 "instanceId": "security-churn",
@@ -390,7 +393,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
                 "phase": "starting",
                 "epoch": "security-churn-epoch",
                 "pid": 99_999_999,
-                "socketPath": core.daemonSocketPath(),
+                "socketPath": core.daemonSocketPath(TEST_INSTANCE),
                 "startedAt": now,
                 "updatedAt": now,
             }
@@ -399,12 +402,12 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
                 async def write(writer):
                     for index in range(40):
                         await core.saveDaemonState(
-                            {**state, "updatedAt": f"{now}:{writer}:{index}"}
+                            TEST_INSTANCE, {**state, "updatedAt": f"{now}:{writer}:{index}"}
                         )
 
                 async def verify():
                     for _index in range(80):
-                        await verifyPrivateDaemonRuntime()
+                        await verifyPrivateDaemonRuntime(TEST_INSTANCE)
 
                 await asyncio.gather(
                     *(write(writer) for writer in range(3)),
@@ -412,7 +415,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
                 )
 
             run(scenario())
-            run(verifyPrivateDaemonRuntime())
+            run(verifyPrivateDaemonRuntime(TEST_INSTANCE))
         finally:
             self.restore_home(root, previous)
 
@@ -420,24 +423,25 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
-            run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
-            auth = run(createDaemonAuthMaterial())
+            run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
+            auth = run(createDaemonAuthMaterial(TEST_INSTANCE))
             now = now_iso()
             run(
                 core.saveDaemonState(
+                    TEST_INSTANCE,
                     {
                         "pid": os.getpid(),
                         "phase": "recovering",
                         "protocolVersion": DAEMON_PROTOCOL_VERSION,
                         "authTokenId": auth["tokenId"],
                         "epoch": "pre-ready",
-                        "socketPath": core.daemonSocketPath(),
+                        "socketPath": core.daemonSocketPath(TEST_INSTANCE),
                         "startedAt": now,
                         "updatedAt": now,
                     }
                 )
             )
-            self.assertIsNone(run(core.connectTaskSupervisorDaemonClient()))
+            self.assertIsNone(run(core.connectTaskSupervisorDaemonClient({"instanceId": TEST_INSTANCE})))
         finally:
             self.restore_home(root, previous)
 
@@ -445,17 +449,18 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
-            run(prepareDaemonRuntimeSecurity({"requireStoppedForMigration": True}))
-            auth = run(createDaemonAuthMaterial())
+            run(prepareDaemonRuntimeSecurity({"instanceId": TEST_INSTANCE, "requireStoppedForMigration": True}))
+            auth = run(createDaemonAuthMaterial(TEST_INSTANCE))
             now = now_iso()
             epoch = "cleanup-purpose-confusion"
-            socket_path = core.daemonSocketPath()
+            socket_path = core.daemonSocketPath(TEST_INSTANCE)
             Path(socket_path).write_bytes(b"operator-owned-evidence")
             Path(socket_path).chmod(0o600)
             run(
                 core.saveDaemonState(
+                    TEST_INSTANCE,
                     {
-                        "instanceId": "local-daemon",
+                        "instanceId": TEST_INSTANCE,
                         "protocolVersion": DAEMON_PROTOCOL_VERSION,
                         "authTokenId": auth["tokenId"],
                         "phase": "running",
@@ -473,6 +478,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             with self.assertRaises(DaemonSecurityError) as raised:
                 run(
                     daemon_server_module._clear_owned_daemon_instance(
+                        TEST_INSTANCE,
                         epoch,
                         os.getpid(),
                         auth["tokenId"],
@@ -481,8 +487,8 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
                 )
             self.assertEqual(raised.exception.code, "daemon.security_unsafe")
             self.assertEqual(Path(socket_path).read_bytes(), b"operator-owned-evidence")
-            self.assertTrue(Path(core.daemonStatePath()).exists())
-            self.assertTrue(Path(daemonAuthTokenPath()).exists())
+            self.assertTrue(Path(core.daemonStatePath(TEST_INSTANCE)).exists())
+            self.assertTrue(Path(daemonAuthTokenPath(TEST_INSTANCE)).exists())
         finally:
             self.restore_home(root, previous)
 

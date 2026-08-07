@@ -161,13 +161,13 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
             damaged = self._record(workspace, "77777777-7777-4777-8777-777777777777", updated_at=_BAD)
             self._write_stamped(damaged, _BAD)
             target = Path(core.sessionPath(damaged["id"]))
-            run(core.saveDaemonState({"pid": os.getpid(), "phase": "running", "startedAt": now_iso()}))
+            run(core.saveDaemonState("hygiene-instance", {"pid": os.getpid(), "phase": "running", "startedAt": now_iso()}))
             refused = run(core.repairSessionTimestamps({"apply": True}))
             self.assertTrue(refused["refusedDaemonRunning"])
             self.assertFalse(refused["applied"])
             self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["updatedAt"], _BAD)
             self.assertEqual(len(run(core.repairSessionTimestamps())["planned"]), 1)
-            run(core.clearDaemonState())
+            run(core.clearDaemonState("hygiene-instance"))
 
             changed = False
 

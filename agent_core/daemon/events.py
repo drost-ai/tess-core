@@ -39,8 +39,8 @@ async def _write_daemon_event(target: Any, record: dict[str, Any]) -> None:
     target.write(encodeDaemonFrame(payload, DAEMON_MAX_RESPONSE_FRAME_BYTES))
     await target.drain()
 
-async def _replay_daemon_events(target: Any, session_id: str | None, after_cursor: int) -> None:
-    for record in await loadDaemonEvents():
+async def _replay_daemon_events(instance_id: str, target: Any, session_id: str | None, after_cursor: int) -> None:
+    for record in await loadDaemonEvents(instance_id):
         cursor = record.get("cursor")
         if not isinstance(cursor, int) or cursor <= after_cursor:
             continue
@@ -132,5 +132,5 @@ def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> b
     return payload.get("sessionId") == session_id or data.get("sessionId") == session_id or data.get("session_id") == session_id
 
 
-async def _record_daemon_lifecycle_event(event: str, data: dict[str, Any], next_cursor: Callable[[], int]) -> None:
-    await appendDaemonEvent({"cursor": next_cursor(), "createdAt": now_iso(), "event": event, "data": data})
+async def _record_daemon_lifecycle_event(instance_id: str, event: str, data: dict[str, Any], next_cursor: Callable[[], int]) -> None:
+    await appendDaemonEvent(instance_id, {"cursor": next_cursor(), "createdAt": now_iso(), "event": event, "data": data})

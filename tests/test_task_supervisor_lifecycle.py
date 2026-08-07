@@ -103,7 +103,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
             self.restore_home(root, previous)
 
     def test_task_supervisor_stop_process_finalizes_through_exit_watcher(self):
@@ -139,7 +139,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
             self.restore_home(root, previous)
 
     def test_daemon_socket_path_falls_back_for_deep_runtime_home(self):
@@ -148,9 +148,10 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             deep_home = home / ("nested-" + "x" * 80) / ("more-" + "y" * 80)
             deep_home.mkdir(parents=True)
             core.configureRuntimeHome(str(deep_home))
-            socket_path = core.daemonSocketPath()
+            socket_path = core.daemonSocketPath("deep-instance")
             self.assertLessEqual(len(socket_path.encode("utf-8")), 100)
-            self.assertEqual(socket_path, core.daemonSocketPath())
+            self.assertEqual(socket_path, core.daemonSocketPath("deep-instance"))
+            self.assertNotEqual(socket_path, core.daemonSocketPath("other-instance"))
             self.assertFalse(socket_path.startswith(str(deep_home)))
             self.assertEqual(Path(socket_path).parent, Path(tempfile.gettempdir()))
         finally:
@@ -160,19 +161,20 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
-            events_path = Path(core.daemonEventsPath())
+            events_path = Path(core.daemonEventsPath("sup-life-instance"))
+            events_path.parent.mkdir(parents=True, exist_ok=True)
             records = [{"cursor": index, "event": "daemon.test"} for index in range(1, 40)]
             events_path.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
-            self.assertEqual(run(core.readLastDaemonEventCursor()), 39)
+            self.assertEqual(run(core.readLastDaemonEventCursor("sup-life-instance")), 39)
 
             with events_path.open("a", encoding="utf-8") as handle:
                 handle.write('{"cursor": 999')
-            self.assertEqual(run(core.readLastDaemonEventCursor()), 39)
+            self.assertEqual(run(core.readLastDaemonEventCursor("sup-life-instance")), 39)
 
-            self.assertTrue(run(core.rotateDaemonEventsIfOversized(capBytes=1)))
+            self.assertTrue(run(core.rotateDaemonEventsIfOversized("sup-life-instance", capBytes=1)))
             self.assertFalse(events_path.exists())
             self.assertTrue(Path(f"{events_path}.1").exists())
-            self.assertEqual(run(core.readLastDaemonEventCursor()), 39)
+            self.assertEqual(run(core.readLastDaemonEventCursor("sup-life-instance")), 39)
         finally:
             self.restore_home(root, previous)
 
@@ -180,15 +182,15 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             run(core.ensureBaseLayout(str(workspace)))
-            socket_path = core.daemonSocketPath()
+            socket_path = core.daemonSocketPath("sup-life-instance")
             Path(socket_path).parent.mkdir(parents=True, exist_ok=True)
             Path(socket_path).write_text("stale", encoding="utf-8")
-            run(core.saveDaemonState({"pid": 999999999, "socketPath": socket_path, "status": "running"}))
+            run(core.saveDaemonState("sup-life-instance", {"pid": 999999999, "socketPath": socket_path, "status": "running"}))
             with self.assertRaises(DaemonSecurityError) as raised:
-                run(core.connectTaskSupervisorDaemonClient())
+                run(core.connectTaskSupervisorDaemonClient({"instanceId": "sup-life-instance"}))
             self.assertEqual(raised.exception.code, "daemon.security_unsafe")
             self.assertEqual(Path(socket_path).read_text(encoding="utf-8"), "stale")
-            self.assertIsNotNone(run(core.loadDaemonState()))
+            self.assertIsNotNone(run(core.loadDaemonState("sup-life-instance")))
         finally:
             self.restore_home(root, previous)
 
@@ -260,7 +262,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                     }
                 )
             )
-            client = run(core.ensureTaskSupervisorDaemon({"cwd": str(workspace)}))
+            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-life-instance", "cwd": str(workspace)}))
             record = None
             for _ in range(40):
                 record = run(client["inspectTask"](task_id))
@@ -281,5 +283,32 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                     proc.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            run(core.stopTaskSupervisorDaemon())
+            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
+            self.restore_home(root, previous)
+
+    def test_two_runtime_instances_coexist_with_disjoint_daemons(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            first = run(core.ensureTaskSupervisorDaemon({"instanceId": "coexist-a", "cwd": str(workspace)}))
+            second = run(core.ensureTaskSupervisorDaemon({"instanceId": "coexist-b", "cwd": str(workspace)}))
+            state_a = run(core.loadDaemonState("coexist-a"))
+            state_b = run(core.loadDaemonState("coexist-b"))
+            self.assertEqual(state_a["instanceId"], "coexist-a")
+            self.assertEqual(state_b["instanceId"], "coexist-b")
+            self.assertNotEqual(state_a["pid"], state_b["pid"])
+            self.assertNotEqual(state_a["socketPath"], state_b["socketPath"])
+            run(first["close"]())
+            run(second["close"]())
+
+            run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-a"}))
+            self.assertIsNone(run(core.loadDaemonState("coexist-a")))
+            surviving = run(core.loadDaemonState("coexist-b"))
+            self.assertIsNotNone(surviving)
+            self.assertEqual(surviving["pid"], state_b["pid"])
+            client_b = run(core.connectTaskSupervisorDaemonClient({"instanceId": "coexist-b"}))
+            self.assertIsNotNone(client_b)
+            run(client_b["close"]())
+        finally:
+            run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-a"}))
+            run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-b"}))
             self.restore_home(root, previous)
