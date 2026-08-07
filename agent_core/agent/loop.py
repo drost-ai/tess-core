@@ -1,5 +1,4 @@
 from __future__ import annotations
-import time as _time
 import typing as _typing
 if _typing.TYPE_CHECKING:
     from ..contracts.context import ToolContext
@@ -26,6 +25,7 @@ from .cancellation import (
     _throw_if_turn_cancelled,
 )
 from .shared import PLAN_SAFE_TOOL_NAMES
+from ._turn_state import TurnState
 from ..providers.usage_costs import (
     ensureUsageTotals as _ensure_usage_totals,
     estimateUsageCostUsd as _estimate_usage_cost,
@@ -73,17 +73,6 @@ from ..payloads.attachments import (
     resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
     stripInMemoryImageData as _strip_in_memory_image_data,
 )
-def _turn_result(text_parts: list[str], tool_count: int, usage: dict[str, Any], model: str, cost: float, stop_reason: Any) -> dict[str, Any]:
-    return {
-        "text": "\n\n".join(text_parts).strip(),
-        "toolCount": tool_count,
-        "usage": usage,
-        "model": model,
-        "estimatedCostUsd": _round_usd(cost),
-        "stopReason": stop_reason,
-    }
-
-
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
 
@@ -125,28 +114,16 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     )
     tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
     base_system_prompt = args.get("systemPromptOverride") or session["systemPrompt"]
-    text_parts: list[str] = []
-    total_usage: dict[str, Any] = {}
     usage_totals = _ensure_usage_totals(session)
-    active_model = args.get("modelOverride") or session["model"]
-    cost = 0.0
-    tool_count = 0
-    provider_call_index = 0
     tool_result_budget = _ToolResultBatchBudget(config.get("providerProfile") or {})
     parent_turn_id = args["logicalTurnId"]
     progress_ledger = _LogicalTurnProgressLedger(session, parent_turn_id)
     runtime["turnAuthorityId"] = parent_turn_id
-    turn_started_ms = int(_time.monotonic() * 1000)
     subagent_limits = resolve_subagent_runtime_limits(session, config)
-    last_stable_snapshot = _capture_session_rollback(session)
-
-    def subagent_limit_state(tool_calls: int | None = None) -> dict[str, Any]:
-        return {
-            "providerCalls": provider_call_index,
-            "toolCalls": tool_count if tool_calls is None else tool_calls,
-            "costUsd": cost,
-            "elapsedMs": int(_time.monotonic() * 1000) - turn_started_ms,
-        }
+    state = TurnState(
+        active_model=args.get("modelOverride") or session["model"],
+        rollback_snapshot=_capture_session_rollback(session),
+    )
 
     async def finish_subagent_limit(exceeded: dict[str, Any]) -> dict[str, Any]:
         _safe_emit(
@@ -155,10 +132,10 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")},
         )
         await persistSession(session, config)
-        return _turn_result(text_parts, tool_count, total_usage, active_model, cost, exceeded.get("reason") or "subagent_limit")
+        return state.result(exceeded.get("reason") or "subagent_limit")
 
     async def cancel_turn() -> dict[str, Any]:
-        _restore_session_state(session, last_stable_snapshot)
+        _restore_session_state(session, state.rollback_snapshot)
         # The prompt may already have been committed. A first-turn rollback
         # legitimately restores an empty transcript, so bypass the normal
         # "do not create empty sessions" optimization for this write-back.
@@ -167,8 +144,8 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             config,
             {"force": True, "truncateTranscript": True},
         )
-        _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": active_model, "partial_text": "\n\n".join(text_parts).strip()})
-        return _turn_result(text_parts, tool_count, total_usage, active_model, cost, "cancelled")
+        _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": state.active_model, "partial_text": state.text()})
+        return state.result("cancelled")
 
     if _is_turn_cancelled(runtime):
         return await cancel_turn()
@@ -177,7 +154,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     if prior_no_progress is not None:
         event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=prior_no_progress, recovered=True)
         _safe_emit(runtime, "agent.no_progress", event)
-        return _no_progress_turn_result(receipt=prior_no_progress, text="", tool_count=0, usage=total_usage, model=active_model, estimated_cost_usd=0.0)
+        return _no_progress_turn_result(receipt=prior_no_progress, text="", tool_count=0, usage=state.total_usage, model=state.active_model, estimated_cost_usd=0.0)
 
     appended_reconciliations = await appendPendingSubagentReconciliationsToSession(
         session,
@@ -199,7 +176,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     while True:
         if _is_turn_cancelled(runtime):
             return await cancel_turn()
-        exceeded = check_subagent_runtime_limits(subagent_limits, subagent_limit_state())
+        exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
         if exceeded and exceeded.get("reason") != "max_tool_calls":
             return await finish_subagent_limit(exceeded)
         delivered_messages = await deliver_queued_task_messages_to_session(session, config)
@@ -223,16 +200,16 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     "providerRequestOptions": args.get("providerRequestOptions") or {},
                     "requestPreflightHints": args.get("requestPreflightHints") or {},
                     "baseSystemPrompt": base_system_prompt, "toolRegistry": tool_registry,
-                    "activeModel": active_model, "prompt": prompt_text, "repair": repair,
-                    "totalUsage": total_usage,
+                    "activeModel": state.active_model, "prompt": prompt_text, "repair": repair,
+                    "totalUsage": state.total_usage,
                     "logicalTurnId": parent_turn_id,
-                    "logicalCallIndex": provider_call_index + 1,
+                    "logicalCallIndex": state.provider_call_index + 1,
                 }
             )
             prepared_request, response = provider_result["preparedRequest"], provider_result["response"]
-            cost += float(provider_result.get("emptyResponseCostUsd") or 0)
+            state.cost += float(provider_result.get("emptyResponseCostUsd") or 0)
         except _ImageBudgetError as error:
-            _restore_session_state(session, last_stable_snapshot)
+            _restore_session_state(session, state.rollback_snapshot)
             await persistSession(session, config)
             _safe_emit(
                 runtime,
@@ -260,39 +237,39 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         empty_result = await _complete_empty_provider_response(
             {
                 "response": response, "session": session, "config": config, "runtime": runtime,
-                "totalUsage": total_usage, "estimatedCostUsd": cost,
+                "totalUsage": state.total_usage, "estimatedCostUsd": state.cost,
                 "emptyResponseAttempts": provider_result.get("emptyResponseAttempts"),
-                "textParts": text_parts, "toolCount": tool_count,
+                "textParts": state.text_parts, "toolCount": state.tool_count,
             }
         )
         if empty_result is not None:
             return empty_result
-        active_model = response["model"]
-        provider_call_index += 1
+        state.active_model = response["model"]
+        state.provider_call_index += 1
         _emit_provider_response_completed(
             runtime=runtime,
             session=session,
             config=config,
             response=response,
             prepared_request=prepared_request,
-            call_index=provider_call_index,
+            call_index=state.provider_call_index,
         )
         _replace_session_messages_with_persisted_canonical(session, _strip_in_memory_image_data(session["messages"]))
         session["messages"].append({"role": "assistant", "content": response["content"]})
-        merge_usage(total_usage, response.get("usage") or {})
+        merge_usage(state.total_usage, response.get("usage") or {})
         _merge_usage_into_session(session, response.get("usage") or {})
         recordActualTokenUsage(session, response.get("usage") or {})
-        cost += _estimate_usage_cost(response.get("usage") or {}, response["model"])
+        state.cost += _estimate_usage_cost(response.get("usage") or {}, response["model"])
 
         text = "".join(block.get("text", "") for block in response["content"] if block.get("type") == "text")
         if text:
-            text_parts.append(text)
+            state.text_parts.append(text)
             _safe_emit(runtime, "message.assistant", {"text": text, "model": response["model"], "session_id": session["id"]})
 
         tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
         await _persist_partial_output_commit(session, config, runtime, response)
         if not tool_uses:
-            progress_ledger.complete(provider_call_index=provider_call_index)
+            progress_ledger.complete(provider_call_index=state.provider_call_index)
             await persistSession(session, config)
             await _record_prompt_cache_eviction_intent_at_finalization(
                 {
@@ -302,7 +279,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     "stopReason": response.get("stopReason"),
                 }
             )
-            return _turn_result(text_parts, tool_count, total_usage, active_model, cost, response.get("stopReason"))
+            return state.result(response.get("stopReason"))
 
         tool_results: list[dict[str, Any] | None] = [None] * len(tool_uses)
         paused_for_approval = False
@@ -335,7 +312,6 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             emit=lambda event, data: _safe_emit(runtime, event, data),
         )
         async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
-            nonlocal tool_count
             _throw_if_turn_cancelled(runtime)
             tool = tools_by_name.get(tool_use["name"])
             dispatch_deny = await findDispatchDenyRule(
@@ -369,7 +345,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     )
             invalid_tool_input = _invalid_tool_input_message(tool_use)
             if invalid_tool_input:
-                tool_count += 1
+                state.tool_count += 1
                 usage_totals["toolCalls"] += 1
                 return await finish_tool_result(
                     tool_use,
@@ -380,7 +356,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     tool_use,
                     {"kind": "synthesized", "content": f"Tool not available: {tool_use['name']}", "isError": True},
                 )
-            exceeded = check_subagent_runtime_limits(subagent_limits, subagent_limit_state())
+            exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
             if exceeded and exceeded.get("reason") == "max_tool_calls":
                 result = build_subagent_tool_limit_result(tool_use, exceeded)
                 _safe_emit(runtime, "subagent.limit_exceeded", {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")})
@@ -389,7 +365,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     {"kind": "synthesized", "content": result["content"], "isError": True},
                     tool_name=tool.name,
                 )
-            tool_count += 1
+            state.tool_count += 1
             usage_totals["toolCalls"] += 1
             hook_fire = _build_tool_hook_context(session, config, authority)
             pre_hook = await _run_pre_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
@@ -479,18 +455,18 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             logical_turn_id=parent_turn_id,
             tool_uses=tool_uses,
             tool_results=tool_results,
-            provider_call_index=provider_call_index,
+            provider_call_index=state.provider_call_index,
         )
         await persistSession(session, config)
-        last_stable_snapshot = _capture_session_rollback(session, last_stable_snapshot)
+        state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
         if paused_for_approval:
             if paused_message:
-                text_parts.append(paused_message)
-            return _turn_result(text_parts, tool_count, total_usage, active_model, cost, "approval_required")
+                state.text_parts.append(paused_message)
+            return state.result("approval_required")
         if no_progress is not None:
             event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=no_progress)
             _safe_emit(runtime, "agent.no_progress", event)
-            return _no_progress_turn_result(receipt=no_progress, text="\n\n".join(text_parts).strip(), tool_count=tool_count, usage=total_usage, model=active_model, estimated_cost_usd=_round_usd(cost))
-        stable_boundary = await _finish_stable_boundary(hook=runtime.get("shouldStopAfterStableBoundary"), text_parts=text_parts, tool_count=tool_count, usage=total_usage, model=active_model, estimated_cost_usd=_round_usd(cost), session_id=session["id"], emit=lambda event, data: _safe_emit(runtime, event, data))
+            return _no_progress_turn_result(receipt=no_progress, text=state.text(), tool_count=state.tool_count, usage=state.total_usage, model=state.active_model, estimated_cost_usd=_round_usd(state.cost))
+        stable_boundary = await _finish_stable_boundary(hook=runtime.get("shouldStopAfterStableBoundary"), text_parts=state.text_parts, tool_count=state.tool_count, usage=state.total_usage, model=state.active_model, estimated_cost_usd=_round_usd(state.cost), session_id=session["id"], emit=lambda event, data: _safe_emit(runtime, event, data))
         if stable_boundary is not None:
             return stable_boundary

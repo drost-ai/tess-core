@@ -171,7 +171,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
 
             clock = iter(index * 3_600 for index in range(20_000))
             with patch(
-                "agent_core.agent.loop._time",
+                "agent_core.agent._turn_state.time",
                 SimpleNamespace(monotonic=lambda: next(clock)),
             ):
                 result = run(
