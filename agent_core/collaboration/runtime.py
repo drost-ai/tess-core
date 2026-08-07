@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import threading
@@ -12,7 +13,7 @@ from .updates import appendAssistantCollaborationMessage
 from ..session.persistence import persistSession
 from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
-from ..runtime.paths import runWithRuntimePaths
+from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 
 MIN_ASSISTANT_UPDATE_SPACING_MS = 20_000
 COLLABORATION_TICK_MS = 1_500
@@ -179,23 +180,16 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
 
     def _run_refresh_once() -> None:
         try:
-            import asyncio
-
-            work = (lambda: refresh())
-            asyncio.run(runWithRuntimePaths(runtime_paths, work) if runtime_paths else work())
+            run_scoped_async(runtime_paths, lambda: refresh())
         except Exception:
             pass
-
-    def _tick_loop() -> None:
-        while not stop_event.wait(tick_interval):
-            _run_refresh_once()
 
     def set_foreground_busy(busy: bool) -> None:
         with state_lock:
             state["foregroundBusy"] = bool(busy)
             should_refresh = not busy and not state["closed"]
         if should_refresh:
-            threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
+            start_oneshot("agent-core-collaboration-refresh", _run_refresh_once)
 
     def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
         with state_lock:
@@ -210,7 +204,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
         with state_lock:
             should_refresh = not state["closed"]
         if should_refresh:
-            threading.Thread(target=_run_refresh_once, name="agent-core-collaboration-refresh", daemon=True).start()
+            start_oneshot("agent-core-collaboration-refresh", _run_refresh_once)
 
     async def activate_session(
         session: dict[str, Any], config: dict[str, Any], binding: Any
@@ -238,14 +232,18 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
         stop_event.set()
         if tick_thread and tick_thread.is_alive() and threading.current_thread() is not tick_thread:
             tick_thread.join(timeout=2)
-        acquired = await __import__("asyncio").to_thread(refresh_lock.acquire, True, 2)
+        acquired = await asyncio.to_thread(refresh_lock.acquire, True, 2)
         if acquired:
             refresh_lock.release()
 
     await refresh()
     if args.get("startTicker", True):
-        tick_thread = threading.Thread(target=_tick_loop, name=f"agent-core-collaboration-{session_ref.get('id', '')[:8]}", daemon=True)
-        tick_thread.start()
+        tick_thread = start_ticker(
+            name=f"agent-core-collaboration-{session_ref.get('id', '')[:8]}",
+            stop=stop_event,
+            interval=tick_interval,
+            run_once=_run_refresh_once,
+        )
     return {"workers": state["snapshot"]["workers"], "snapshot": get_snapshot, "getSnapshot": get_snapshot, "refresh": refresh, "setForegroundBusy": set_foreground_busy, "setSession": set_session, "activateSession": activate_session, "close": close}
 
 

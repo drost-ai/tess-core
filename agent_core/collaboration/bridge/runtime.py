@@ -13,7 +13,8 @@ from ..._utils import now_iso
 from .admission import admitBridgeMessage
 from .generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
 from .recovery import activateBridgeGeneration
-from ...runtime.paths import getActiveRuntimePaths, runWithRuntimePaths
+from ...runtime.paths import getActiveRuntimePaths
+from ...runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ...storage import (
     loadSessionRecordShallow,
     saveSession,
@@ -80,11 +81,13 @@ class BridgeRuntimeController:
             if not await isCurrentBridgeGeneration(self.bridge):
                 raise RuntimeError("Bridge generation was superseded during construction.")
             if self._args.get("startPolling", True):
-                self._poll_thread = threading.Thread(
-                    target=self._poll_loop,
-                    name=f"agent-core-bridge-{self.bridge['id'][:8]}", daemon=True,
+                self._poll_thread = start_ticker(
+                    name=f"agent-core-bridge-{self.bridge['id'][:8]}",
+                    stop=self._stop,
+                    interval=self._poll_interval(),
+                    run_once=self._poll_once,
+                    halted=lambda: self._poll_halted,
                 )
-                self._poll_thread.start()
             return self.surface()
         except Exception:
             self._closed = True
@@ -307,15 +310,13 @@ class BridgeRuntimeController:
                 if inspect.isawaitable(result):
                     await result
             try:
-                async def scoped():
-                    return await runWithRuntimePaths(self._paths, invoke) if self._paths else await invoke()
-                asyncio.run(scoped())
+                run_scoped_async(self._paths, invoke)
             except BaseException as exc:
                 state["error"] = exc
             finally:
                 state["done"].set()
 
-        threading.Thread(target=worker, name=f"bridge-emit-{self.bridge['id'][:8]}", daemon=True).start()
+        start_oneshot(f"bridge-emit-{self.bridge['id'][:8]}", worker)
         settled = await asyncio.to_thread(state["done"].wait, self._deadline())
         if not settled:
             state["abort"].set()
@@ -337,16 +338,16 @@ class BridgeRuntimeController:
         with self._poll_condition:
             self._poll_condition.wait_for(lambda: not self._poll_active, timeout=seconds)
 
-    def _poll_loop(self):
-        interval = float(self._args.get("pollIntervalSeconds", self._args.get("pollIntervalMs", BRIDGE_POLL_SECONDS * 1000) / 1000))
-        while not self._stop.wait(interval) and not self._poll_halted:
-            try:
-                async def scoped():
-                    return await runWithRuntimePaths(self._paths, self.poll) if self._paths else await self.poll()
-                asyncio.run(scoped())
-            except Exception:
-                if self._stop.wait(interval):
-                    return
+    def _poll_once(self):
+        try:
+            run_scoped_async(self._paths, self.poll)
+        except Exception:
+            # Back off one extra interval after a failed poll; the ticker's
+            # own wait handles prompt exit when stop is set meanwhile.
+            self._stop.wait(self._poll_interval())
+
+    def _poll_interval(self):
+        return float(self._args.get("pollIntervalSeconds", self._args.get("pollIntervalMs", BRIDGE_POLL_SECONDS * 1000) / 1000))
 
     def _deadline(self):
         if "pollDeadlineSeconds" in self._args:

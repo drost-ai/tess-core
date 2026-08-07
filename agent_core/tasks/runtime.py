@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import asyncio
 import threading
 from typing import Any, Callable
 
 from .supervisor_parts.mappers import _task_record_event_payload
 from .supervisor_parts.projection import _is_active_task_status, _project_session_task_records
 from ..runtime.identifiers import tryParseTaskId
-from ..runtime.paths import runWithRuntimePaths
+from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ..storage import saveTaskRecord  # retained as a compatibility export
 from .terminal_store import saveProjectedTaskRecord as _save_projected_task_record
 
@@ -148,23 +147,22 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
 
     def _schedule_tick() -> None:
         if not closed:
-            threading.Thread(target=_run_tick_once, name="agent-core-task-runtime-refresh", daemon=True).start()
+            start_oneshot("agent-core-task-runtime-refresh", _run_tick_once)
 
     def _run_tick_once() -> None:
         try:
-            work = lambda: tick()
-            asyncio.run(runWithRuntimePaths(runtime_paths, work) if runtime_paths else work())
+            run_scoped_async(runtime_paths, lambda: tick())
         except Exception as exc:
             emit("task.tick_failed", {"session_id": session_ref.get("id"), "error": str(exc)})
 
-    def _run_loop() -> None:
-        while not stop_event.wait(tick_interval):
-            _run_tick_once()
-
     await tick()
     if args.get("startTicker", True):
-        tick_thread = threading.Thread(target=_run_loop, name=f"agent-core-task-runtime-{str(session_ref.get('id') or '')[:8]}", daemon=True)
-        tick_thread.start()
+        tick_thread = start_ticker(
+            name=f"agent-core-task-runtime-{str(session_ref.get('id') or '')[:8]}",
+            stop=stop_event,
+            interval=tick_interval,
+            run_once=_run_tick_once,
+        )
     return {
         "close": close,
         "setSession": set_session,
