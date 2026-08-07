@@ -5,7 +5,6 @@ from .subagent_parts.finalizers import (
     finalizeBackgroundSubagentFailureFromEnv,
     finalizeBackgroundSubagentSuccessFromEnv,
 )
-from .subagent_parts.foreground import runForegroundSubagent
 from .subagent_parts.lifecycle import prepareSubagent, startBackgroundSubagent
 from .subagent_parts.permissions import (
     inheritParentPermissionMode,
@@ -25,7 +24,6 @@ __all__ = [
     "mapStopReasonToWaitingReason",
     "parseAllowedPrompts",
     "prepareSubagent",
-    "runForegroundSubagent",
     "sanitizePermissionMode",
     "startBackgroundSubagent",
 ]

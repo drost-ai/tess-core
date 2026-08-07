@@ -43,6 +43,8 @@ knobs:
     # Milliseconds of stream silence tolerated before a provider attempt is failed as idle. [1000..3600000]
     stream_idle_timeout_ms: 60000
   subagents:
+    # Milliseconds the Agent tool blocks waiting for a spawned child's initial result before returning with the child still working. [100..3600000]
+    initial_result_timeout_ms: 600000
     # Maximum live subagent processes per runtime instance; at capacity the Agent tool returns the live-children roster instead of spawning. [1..64]
     max_live: 8
     # Milliseconds between a resident subagent's mailbox polls while idle between turns. [100..60000]

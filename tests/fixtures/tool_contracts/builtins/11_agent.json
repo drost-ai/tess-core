@@ -1,6 +1,6 @@
 {
   "name": "Agent",
-  "description": "Spawn a delegated subagent to work on a focused task.",
+  "description": "Spawn a delegated resident subagent to work on a focused task. The call returns the child's initial result; the child stays alive for SendMessage follow-ups.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -15,9 +15,6 @@
       },
       "model": {
         "type": "string"
-      },
-      "run_in_background": {
-        "type": "boolean"
       },
       "name": {
         "type": "string"

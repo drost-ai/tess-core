@@ -205,30 +205,32 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             root_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent["metadata"]["depth"] = 1
-            captured = {}
+            os.environ["AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS"] = "200"
 
-            async def run_subagent(args, _context):
-                captured.update(args)
-                return {"text": "ok", "usage": {}, "toolCount": 0, "stopReason": "end_turn"}
+            async def fake_start(task_args):
+                return {"taskId": f"maxdepth-task-{task_args['agentId'][:8]}", "outputFile": str(workspace / "out.log")}
 
+            supervisor = {"startSubagentTask": fake_start}
             allowed = json.loads(
                 run(
                     agent.handler(
                         {"description": "allowed", "prompt": "go"},
-                        {"session": root_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "runSubagent": run_subagent},
+                        {"session": root_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
                     )
                 )["content"]
             )
-            self.assertEqual(allowed["status"], "completed")
-            self.assertEqual(captured["childSession"]["metadata"]["depth"], 1)
+            self.assertIsNone(allowed["result"])
+            allowed_child = run(core.loadSession(allowed["session_id"]))
+            self.assertEqual(allowed_child["metadata"]["depth"], 1)
 
             blocked_events = []
             blocked = run(
                 agent.handler(
                     {"description": "blocked", "prompt": "go"},
-                    {"session": child_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: blocked_events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "runSubagent": run_subagent},
+                    {"session": child_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: blocked_events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
                 )
             )
+            os.environ.pop("AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS", None)
             self.assertTrue(blocked["isError"])
             self.assertIn("child depth 2 exceeds max 1", blocked["content"])
             self.assertEqual(blocked_events[0][0], "subagent.depth_blocked")

@@ -50,6 +50,14 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=64,
     ),
     Knob(
+        "subagents.initial_result_timeout_ms",
+        600_000,
+        "int",
+        "Milliseconds the Agent tool blocks waiting for a spawned child's initial result before returning with the child still working.",
+        minimum=100,
+        maximum=3_600_000,
+    ),
+    Knob(
         "subagents.resident_poll_ms",
         1_000,
         "int",

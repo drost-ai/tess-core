@@ -25,37 +25,45 @@ class SubagentV2Tests(AgentCoreTestCase):
                 }
             }
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
-            captured = {}
+            from agent_core.tasks.subagents import prepareSubagent
 
-            async def run_subagent(args, _context):
-                captured.update(args)
-                return {"text": '{"summary":"done"}', "toolCount": 0, "usage": {}, "stopReason": "end_turn"}
-
-            result = run(
-                agent.handler(
-                    {"description": "Investigate", "prompt": "Find it", "subagent_type": "researcher"},
-                    {
-                        "session": parent,
-                        "config": config,
-                        "interactive": False,
-                        "askQuestion": lambda *_: "",
-                        "outputJson": lambda *_: None,
-                        "cwd": str(workspace),
-                        "persistSession": lambda: None,
-                        "runSubagent": run_subagent,
-                    },
-                )
-            )
-            payload = json.loads(result["content"])
-            contract = captured["childSession"]["metadata"]["subagentRuntimeContract"]
+            context = {
+                "session": parent,
+                "config": config,
+                "interactive": False,
+                "askQuestion": lambda *_: "",
+                "outputJson": lambda *_: None,
+                "cwd": str(workspace),
+                "persistSession": lambda: None,
+            }
+            prepared = run(prepareSubagent({
+                "context": context,
+                "description": "Investigate",
+                "prompt": "Find it",
+                "agentType": "researcher",
+                "runInBackground": True,
+            }))
+            contract = prepared["childSession"]["metadata"]["subagentRuntimeContract"]
             self.assertEqual(contract["tools"], ["Read", "Grep"])
             self.assertEqual(contract["maxToolCalls"], 3)
             self.assertEqual(contract["communication"]["maxPendingQuestions"], 2)
             self.assertEqual(contract["concurrencyGroup"], "research")
-            self.assertEqual(payload["runtime_contract"]["tools"], ["Read", "Grep"])
-            child_record = run(core.loadChildAgent(payload["agent_id"]))
+            self.assertEqual(prepared["runtimeContractSummary"]["tools"], ["Read", "Grep"])
+            child_record = run(core.loadChildAgent(prepared["agentId"]))
             self.assertEqual(child_record["runtimeContract"]["tools"], ["Read", "Grep"])
+
+            # Structured validation now runs in the background finalizer.
+            os.environ["TESS_CHILD_AGENT_ID"] = prepared["agentId"]
+            os.environ["TESS_CHILD_TASK_ID"] = "structured-task"
+            try:
+                run(core.finalizeBackgroundSubagentSuccessFromEnv(
+                    prepared["childSession"],
+                    {"text": '{"summary":"done"}', "toolCount": 0, "usage": {}, "stopReason": "end_turn"},
+                ))
+            finally:
+                os.environ.pop("TESS_CHILD_AGENT_ID", None)
+                os.environ.pop("TESS_CHILD_TASK_ID", None)
+            child_record = run(core.loadChildAgent(prepared["agentId"]))
             self.assertEqual(child_record["structuredResultStatus"], "valid")
             self.assertEqual(child_record["structuredResult"], {"summary": "done"})
         finally:

@@ -154,89 +154,43 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_agent_nested_depth_boundary_and_cancellation_propagation(self):
         root, home, workspace, previous = self.temp_context()
         try:
+            os.environ["AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS"] = "200"
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
 
+            async def fake_start(task_args):
+                return {"taskId": f"depth-task-{task_args['agentId'][:8]}", "outputFile": str(workspace / "out.log")}
+
+            supervisor = {"startSubagentTask": fake_start}
             depth_one_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             depth_one_parent["metadata"]["depth"] = 1
-            captured = {}
-
-            async def run_subagent(args, _context):
-                captured.update(args)
-                return {"text": "depth ok", "usage": {}, "toolCount": 0, "stopReason": "end_turn"}
-
-            depth_one_result = json.loads(
+            result = json.loads(
                 run(
                     agent.handler(
                         {"description": "Depth one", "prompt": "go"},
-                        {
-                            "session": depth_one_parent,
-                            "config": config,
-                            "interactive": False,
-                            "askQuestion": lambda *_: "",
-                            "outputJson": lambda *_: None,
-                            "cwd": str(workspace),
-                            "persistSession": lambda: None,
-                            "runSubagent": run_subagent,
-                        },
+                        {"session": depth_one_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
                     )
                 )["content"]
             )
-            self.assertEqual(depth_one_result["status"], "completed")
-            self.assertEqual(captured["childSession"]["metadata"]["depth"], 2)
+            self.assertIsNone(result["result"])  # no worker ran; spawn still registered
+            child_session = run(core.loadSession(result["session_id"]))
+            self.assertEqual(child_session["metadata"]["depth"], 2)
 
             depth_two_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             depth_two_parent["metadata"]["depth"] = 2
-            blocked = run(agent.handler({"description": "Blocked", "prompt": "no"}, {"session": depth_two_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "runSubagent": run_subagent}))
+            blocked = run(agent.handler({"description": "Blocked", "prompt": "no"}, {"session": depth_two_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor}))
             self.assertTrue(blocked["isError"])
             self.assertEqual(depth_two_parent["metadata"].get("childAgentIds"), [])
             self.assertEqual(depth_two_parent["metadata"].get("childSessionIds"), [])
 
-            signal = {"aborted": False, "reason": "parent cancelled"}
-            cancelled_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            events = []
-
-            async def cancel_subagent(_args, _context):
-                self.assertIs(_context["abortSignal"], signal)
-                signal["aborted"] = True
-                error = RuntimeError("parent cancelled")
-                error.name = "AbortError"
-                raise error
-
-            cancelled = run(
-                agent.handler(
-                    {"description": "Cancelled child", "prompt": "stop"},
-                    {
-                        "session": cancelled_parent,
-                        "config": config,
-                        "interactive": False,
-                        "askQuestion": lambda *_: "",
-                        "outputJson": lambda event, data: events.append((event, data)),
-                        "cwd": str(workspace),
-                        "persistSession": lambda: None,
-                        "runSubagent": cancel_subagent,
-                        "abortSignal": signal,
-                    },
-                )
-            )
-            cancelled_payload = json.loads(cancelled["content"])
-            self.assertTrue(cancelled["isError"])
-            self.assertEqual(cancelled_payload["status"], "cancelled")
-            self.assertEqual(cancelled_payload["stop_reason"], "cancelled")
-            self.assertEqual([event for event, _ in events], ["subagent.started", "subagent.failed"])
-            self.assertEqual(events[1][1]["status"], "cancelled")
-            self.assertEqual(events[1][1]["stop_reason"], "cancelled")
-            cancelled_record = run(core.loadChildAgent(cancelled_payload["agent_id"]))
-            self.assertEqual(cancelled_record["status"], "cancelled")
-            self.assertEqual(cancelled_record["stopReason"], "cancelled")
-
             already_cancelled_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             with self.assertRaises(RuntimeError) as abort_ctx:
-                run(agent.handler({"description": "Already cancelled", "prompt": "no"}, {"session": already_cancelled_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "runSubagent": run_subagent, "abortSignal": {"aborted": True}}))
+                run(agent.handler({"description": "Already cancelled", "prompt": "no"}, {"session": already_cancelled_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor, "abortSignal": {"aborted": True}}))
             self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")
             self.assertEqual(already_cancelled_parent["metadata"]["childAgentIds"], [])
             self.assertEqual(already_cancelled_parent["metadata"]["childSessionIds"], [])
         finally:
+            os.environ.pop("AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS", None)
             self.restore_home(root, previous)
 
     def test_agent_permission_and_stop_reason_helpers_match_reference_edges(self):

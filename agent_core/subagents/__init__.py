@@ -72,7 +72,6 @@ from ..tasks.subagents import (
     mapStopReasonToWaitingReason,
     parseAllowedPrompts,
     prepareSubagent,
-    runForegroundSubagent,
     sanitizePermissionMode,
     startBackgroundSubagent,
 )
@@ -130,7 +129,6 @@ __all__ = [
     "resolveSubagentMaxDepth",
     "resolve_subagent_concurrency_policy",
     "resolve_subagent_runtime_limits",
-    "runForegroundSubagent",
     "runtime_contract_for_agent",
     "sanitizePermissionMode",
     "shapeForegroundSubagentResult",
