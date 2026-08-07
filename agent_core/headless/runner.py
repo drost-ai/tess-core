@@ -69,8 +69,6 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
             "refreshMcpToolRegistry": runtime["refreshMcpToolRegistry"],
             "sessionBinding": runtime["getActiveBinding"](),
             "questionPolicy": {"interactive": False, "askQuestion": lambda *_args, **_kwargs: ""},
-            "print_mode": True,
-            "printMode": True,
         }
     )
     result: dict[str, Any]

@@ -39,6 +39,39 @@ class RuntimeBindingsCompatibilityError(RuntimeError):
         self.code = code
 
 
+
+_CONTRACT_FIELDS = frozenset({
+    "schemaVersion",
+    "tools",
+    "emitEvent",
+    "daemon",
+    "refreshMcpToolRegistry",
+    "sessionBinding",
+    "questionPolicy",
+    "streamProviderMessages",
+    "includePartialMessages",
+    "abortSignal",
+    "shouldStopAfterStableBoundary",
+    "partialOutputSink",
+    "partialOutputStateStore",
+    "partialOutputAckTimeoutMs",
+})
+
+# Optional extension keys the execution runtime carries beyond the contract.
+# Anything else in the bindings is a caller error: the versioned contract is
+# only meaningful if unknown keys fail loudly instead of passing through.
+_EXTENSION_FIELDS = frozenset({
+    "openaiClientFactory",
+    "partialOutputRecoveryPolicy",
+    "repositoryIdentity",
+    "resolveMcpOperatorPolicy",
+    "resolve_mcp_operator_policy",
+})
+
+# Public union for adapters that filter a wider component surface down to
+# legal binding fields (the harness does this).
+AGENT_RUNTIME_BINDING_FIELDS = frozenset(_CONTRACT_FIELDS | _EXTENSION_FIELDS)
+
 def createAgentRuntimeBindings(
     args: Mapping[str, Any] | None = None, **kwargs: Any
 ) -> Mapping[str, Any]:
@@ -54,6 +87,12 @@ def createAgentRuntimeBindings(
         "questionPolicy": MappingProxyType(dict(question_policy or {})),
         "daemon": _freeze_daemon_binding(daemon),
     }
+    unknown = sorted(set(frozen) - _CONTRACT_FIELDS - _EXTENSION_FIELDS)
+    if unknown:
+        raise _error(
+            "runtime_bindings_unknown_field",
+            f"Agent runtime bindings contain unknown fields: {', '.join(unknown)}.",
+        )
     bindings = MappingProxyType(frozen)
     assertAgentRuntimeBindings(bindings)
     return bindings
@@ -138,23 +177,9 @@ def materializeAgentExecutionRuntime(bindings: Mapping[str, Any]) -> dict[str, A
     ):
         if name in bindings:
             runtime[name] = bindings[name]
-    contract_fields = {
-        "schemaVersion",
-        "tools",
-        "emitEvent",
-        "daemon",
-        "refreshMcpToolRegistry",
-        "sessionBinding",
-        "questionPolicy",
-        "streamProviderMessages",
-        "includePartialMessages",
-        "abortSignal",
-        "shouldStopAfterStableBoundary",
-        "partialOutputSink",
-        "partialOutputStateStore",
-        "partialOutputAckTimeoutMs",
-    }
-    runtime.update({key: value for key, value in bindings.items() if key not in contract_fields})
+    for name in sorted(_EXTENSION_FIELDS):
+        if name in bindings:
+            runtime[name] = bindings[name]
     return runtime
 
 

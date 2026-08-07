@@ -92,10 +92,11 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     paths = getActiveRuntimePaths()
     prompt_content, prompt_text = _normalize_agent_prompt(args["prompt"])
     runtime_bindings = args.get("runtime")
-    assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
-    runtime = _runtime_with_sanitized_events(
-        materializeAgentExecutionRuntime(runtime_bindings)
-    )
+    materialized = args.get("materializedRuntime")
+    if materialized is None:
+        assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
+        materialized = materializeAgentExecutionRuntime(runtime_bindings)
+    runtime = _runtime_with_sanitized_events(materialized)
     provider_override = args.get("providerOverride")
     authority = await enforceSessionAgentAuthority(session=session, config=config)
     repair = repairSessionTranscript(session)

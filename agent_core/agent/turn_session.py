@@ -126,8 +126,8 @@ async def run_in_provider_turn_session(
     session = args["session"]
     config = args["config"]
     runtime_bindings = args.get("runtime")
-    assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
     runtime = materializeAgentExecutionRuntime(runtime_bindings)
+    args = {**args, "materializedRuntime": runtime}
     logical_turn_id = _resolve_logical_turn_id(args.get("logicalTurnId"))
     provider_turn_session = createProviderTurnSession(
         logical_turn_id=logical_turn_id,

@@ -39,9 +39,14 @@ def bind_agent_runtime(
         refresh = lambda: None
     interactive = bool(values.get("interactive", False))
     ask_question = values.get("askQuestion") if callable(values.get("askQuestion")) else lambda *_args: ""
+    filtered = {
+        key: value
+        for key, value in values.items()
+        if key in core.AGENT_RUNTIME_BINDING_FIELDS
+    }
     return core.createAgentRuntimeBindings(
         {
-            **values,
+            **filtered,
             "tools": values.get("tools") or [],
             "emitEvent": emit,
             "daemon": daemon,

@@ -25,6 +25,7 @@ from .agent import (
     run_with_transient_execution_session, unsupportedImageInputResponse,
 )
 from .runtime.agent_bindings import (
+    AGENT_RUNTIME_BINDING_FIELDS,
     AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION, RuntimeBindingsCompatibilityError, assertAgentRuntimeBindings,
     createAgentRuntimeBindings, isTaskSupervisorGateway, materializeAgentExecutionRuntime, unavailableDaemonBinding,
 )
@@ -412,6 +413,7 @@ from .providers.openai import (
 )
 
 __all__ = [
+    "AGENT_RUNTIME_BINDING_FIELDS",
     "OPENAI_RETRY_DELAYS_MS",
     "ACTIVE_TASK_STATUSES", "AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION", "ANTHROPIC_ABORT_POLL_INTERVAL_MS",
     "ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS", "ANTHROPIC_REQUEST_START_TIMEOUT_MS", "ANTHROPIC_STREAM_IDLE_TIMEOUT_MS",
