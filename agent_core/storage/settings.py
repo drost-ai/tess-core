@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from .._utils import clone
+from ._settings_folder import loadSettingsFolder, mergeSettingsRecords
 from .json_io import mutateJsonFile, readJsonFile
 from .paths import (
     Scope,
@@ -35,7 +36,17 @@ def _settings_path(source: Scope, cwd: str, filename: str = "settings.json") -> 
     return os.path.join(getProjectStateDir(cwd) if source == "project" else getLocalStateDir(cwd), filename)
 
 async def loadSettings(source: Scope, cwd: str) -> SettingsRecord:
-    return await readJsonFile(_settings_path(source, cwd), {})
+    record = await readJsonFile(_settings_path(source, cwd), {})
+    if source == "user":
+        # The settings/ folder (.env + providers.yaml + config.yaml) is the
+        # successor of user-scope settings.json; it augments and overrides
+        # the legacy record per key. Single integration point: config
+        # resolution AND authority (permission rules, hooks) both read
+        # through here and must see the same view.
+        folder = loadSettingsFolder()
+        if folder:
+            record = mergeSettingsRecords(record, folder)
+    return record
 
 async def saveSettings(source: Scope, cwd: str, settings: SettingsRecord) -> None:
     await mutateJsonFile(_settings_path(source, cwd), lambda _current: settings, {})
