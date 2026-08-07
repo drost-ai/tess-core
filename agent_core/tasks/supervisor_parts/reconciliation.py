@@ -41,7 +41,7 @@ async def _reconcile_persisted_tasks(
     emit: Callable[[str, dict[str, Any], str | None], Any],
 ) -> None:
     records = await listTaskRecords()
-    active_statuses = {"backgrounded", "running", "reconciling", "degraded"}
+    active_statuses = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
     recoverable_kinds = {"background_command", "main_session", "subagent"}
     for record in records:
         try:

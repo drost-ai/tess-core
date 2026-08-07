@@ -11,7 +11,7 @@ from ...agent import runAgentPrompt
 from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
 from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
-from ...storage import configureRuntimeHome, loadChildAgent, loadSession, mutateChildAgent, mutateTaskMeta, saveSession
+from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord
 from ..communication import read_undelivered_task_messages, send_task_message
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...tools import createBuiltinTools
@@ -145,6 +145,22 @@ async def _mark_resident_status(task_id: str, agent_id: str, status: str, waitin
         return next_meta
 
     await mutateTaskMeta(task_id, _mark)
+    record = await loadTaskRecord(task_id)
+    if record and record.get("status") not in {"completed", "failed", "stopped"}:
+        # Keep the shared record store aligned so capacity governance and
+        # the boot sweep see the resident's real state; terminal records are
+        # first-terminal-wins and never regress here.
+        next_record = {
+            **record,
+            "status": status,
+            "detailStatus": waiting_reason or status,
+            "updatedAt": now,
+        }
+        if summary is not None:
+            next_record["summary"] = summary
+            next_record["resultSummary"] = summary
+        next_record.pop("completedAt", None)
+        await saveTaskRecord(next_record)
 
 
 def main() -> None:

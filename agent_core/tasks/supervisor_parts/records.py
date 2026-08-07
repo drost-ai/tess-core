@@ -79,6 +79,13 @@ TASK_KINDS: dict[str, dict[str, Any]] = {
         "detailStatus": lambda meta, status, ctx: _describe_detached_main_session_detail_status(status, ctx["latestAssistant"]),
         "resultSummary": lambda meta, status, ctx: _build_detached_main_session_result_summary(status, ctx["latestAssistant"], ctx["latestUser"]),
     },
+    # Resident-subagent lifecycle: turn-complete is NOT terminal. Idle
+    # residents sit at awaiting_input (waitingReason resident_idle), turns
+    # run at running, and terminal states come only from stop/kill/crash
+    # (stopped/failed/daemon_lost). "completed" for a subagent means it was
+    # terminated after finishing — a parent-initiated end, never something
+    # a resident reaches by itself; only the resident:false one-shot
+    # contract finalizes completed from its own stop reason.
     "subagent": {
         "family": "subagent",
         "foregroundable": True,

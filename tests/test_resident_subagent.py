@@ -84,6 +84,9 @@ class ResidentSubagentTests(AgentCoreTestCase):
             self.assertEqual(child_record["status"], "awaiting_input")
             self.assertTrue(child_record["stoppable"])
             self.assertIsNone(child_record.get("completedAt"))
+            task_record = run(core.loadTaskRecord(task_id))
+            self.assertEqual(task_record["status"], "awaiting_input")
+            self.assertEqual(task_record["detailStatus"], "resident_idle")
 
             results = [m for m in run(read_task_mailbox_messages(task_id)) if m.get("kind") == "result" and m.get("direction") == "to_parent"]
             self.assertEqual(len(results), 1)
