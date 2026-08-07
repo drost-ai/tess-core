@@ -6,8 +6,6 @@ from ..runtime.secret_provider import (
     normalizeProviderHeaders,
     normalizeRuntimeSecretValue,
 )
-from ..authority.permission_rules import loadPermissionRules
-from ..authority.hooks import loadHooks
 from ..sandbox import normalizeSandboxConfig
 
 import os
@@ -91,24 +89,27 @@ def _omit_provider_credential_environment(
             secret_keys.add(env_var)
     return {key: value for key, value in settings_env.items() if key not in secret_keys}
 
-async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
-    options = options or {}
-    requested_runtime_home = options.get("runtimeHome")
-    context_runtime_home = getContextRuntimeHome()
-    runtime_home = resolveRuntimeHome(cwd, requested_runtime_home) if requested_runtime_home else context_runtime_home or resolveRuntimeHome(cwd)
-    if context_runtime_home and requested_runtime_home and runtime_home != context_runtime_home:
+def _resolve_runtime_home(options: dict[str, Any], cwd: str) -> str:
+    requested = options.get("runtimeHome")
+    context = getContextRuntimeHome()
+    runtime_home = resolveRuntimeHome(cwd, requested) if requested else context or resolveRuntimeHome(cwd)
+    if context and requested and runtime_home != context:
         raise ValueError("runtimeHome conflicts with active scoped runtime home")
-    if not context_runtime_home:
+    if not context:
         configureRuntimeHome(runtime_home)
-    await ensureBaseLayout(cwd)
+    return runtime_home
 
-    sources = _parse_setting_sources(options.get("settingSources"))
-    merged_settings = await _load_merged_settings(sources, cwd, options.get("settings"))
-    auth = await loadAuth()
-    settings_env = merged_settings.get("env") or {}
-    helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
-    provider_profiles = resolveProviderProfiles(merged_settings.get("providerProfiles"))
+def _resolve_requested_model(
+    options: dict[str, Any],
+    merged_settings: dict[str, Any],
+    provider_profiles: dict[str, dict[str, Any]],
+) -> tuple[Any, Any]:
+    """Pick the provider/model request pair from options, env, and settings.
 
+    A provider override that names a different profile than the settings file
+    intentionally discards the settings model (and env model shortcuts): the
+    override selects the profile's own default model instead.
+    """
     provider_override_name = options.get("provider") or os.environ.get("TESS_PROVIDER")
     requested_provider_name = provider_override_name or merged_settings.get("provider")
     override_profile_name = normalizeProviderProfileName(provider_override_name)
@@ -131,7 +132,77 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
             if explicit_provider_kind == "anthropic"
             else os.environ.get("ANTHROPIC_MODEL") or os.environ.get("OPENAI_MODEL")
         )
-    requested_model_input = direct_model_input or provider_env_model
+    return requested_provider_name, direct_model_input or provider_env_model
+
+def _resolve_compaction_selection(
+    options: dict[str, Any],
+    settings_env: dict[str, str],
+    merged_settings: dict[str, Any],
+    kind: str,
+) -> dict[str, Any]:
+    """Resolve the compaction (or compaction-verification) model binding.
+
+    Both bindings layer identically — option, process env, settings env,
+    settings file — and differ only in their key prefixes.
+    """
+    option_prefix = "compaction" if kind == "compaction" else "compactionVerification"
+    env_prefix = "TESS_COMPACTION" if kind == "compaction" else "TESS_COMPACTION_VERIFICATION"
+
+    def setting(suffix: str, env_suffix: str) -> Any:
+        option_key = f"{option_prefix}{suffix}"
+        env_key = f"{env_prefix}_{env_suffix}"
+        return (
+            options.get(option_key)
+            or os.environ.get(env_key)
+            or settings_env.get(env_key)
+            or merged_settings.get(option_key)
+        )
+
+    requested_provider = normalizeProviderName(setting("Provider", "PROVIDER"))
+    requested_model = setting("Model", "MODEL")
+    provider = (
+        resolveProviderForModelSelection(requested_provider, requested_model)
+        if requested_model
+        else requested_provider
+    )
+    return {
+        "provider": provider,
+        "model": normalizeModelName(requested_model, provider) if requested_model and provider else requested_model,
+        "effort": normalizeEffortLevel(setting("Effort", "EFFORT")),
+        "profileName": setting("ProviderProfile", "PROVIDER_PROFILE"),
+    }
+
+def _resolve_screen_mode(
+    options: dict[str, Any],
+    settings_env: dict[str, str],
+    merged_settings: dict[str, Any],
+) -> str:
+    if options.get("noAltScreen") or options.get("altScreen") is False:
+        return "inline"
+    return (
+        normalizeTuiScreenMode(
+            options.get("screenMode")
+            or os.environ.get("TESS_SCREEN_MODE")
+            or os.environ.get("TESS_ALTERNATE_SCREEN")
+            or settings_env.get("TESS_SCREEN_MODE")
+            or settings_env.get("TESS_ALTERNATE_SCREEN")
+            or merged_settings.get("screenMode")
+        )
+        or DEFAULT_TUI_SCREEN_MODE
+    )
+
+async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
+    options = options or {}
+    runtime_home = _resolve_runtime_home(options, cwd)
+    await ensureBaseLayout(cwd)
+
+    sources = _parse_setting_sources(options.get("settingSources"))
+    merged_settings = await _load_merged_settings(sources, cwd, options.get("settings"))
+    auth = await loadAuth()
+    settings_env = merged_settings.get("env") or {}
+    helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
+    provider_profiles = resolveProviderProfiles(merged_settings.get("providerProfiles"))
+    requested_provider_name, requested_model_input = _resolve_requested_model(options, merged_settings, provider_profiles)
 
     stored_anthropic_auth_token = _get_stored_anthropic_auth_token(auth)
     stored_anthropic_api_key = _get_stored_anthropic_api_key(auth)
@@ -191,63 +262,8 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     )
     openai_api_mode = selected_profile.get("apiMode") if resolved_provider == "openai" else DEFAULT_OPENAI_API_MODE
 
-    requested_compaction_provider = normalizeProviderName(
-        options.get("compactionProvider")
-        or os.environ.get("TESS_COMPACTION_PROVIDER")
-        or settings_env.get("TESS_COMPACTION_PROVIDER")
-        or merged_settings.get("compactionProvider")
-    )
-    requested_compaction_model = (
-        options.get("compactionModel")
-        or os.environ.get("TESS_COMPACTION_MODEL")
-        or settings_env.get("TESS_COMPACTION_MODEL")
-        or merged_settings.get("compactionModel")
-    )
-    requested_compaction_effort = normalizeEffortLevel(
-        options.get("compactionEffort")
-        or os.environ.get("TESS_COMPACTION_EFFORT")
-        or settings_env.get("TESS_COMPACTION_EFFORT")
-        or merged_settings.get("compactionEffort")
-    )
-    resolved_compaction_provider = (
-        resolveProviderForModelSelection(requested_compaction_provider, requested_compaction_model)
-        if requested_compaction_model
-        else requested_compaction_provider
-    )
-    resolved_compaction_model = (
-        normalizeModelName(requested_compaction_model, resolved_compaction_provider)
-        if requested_compaction_model and resolved_compaction_provider
-        else requested_compaction_model
-    )
-
-    requested_verification_provider = normalizeProviderName(
-        options.get("compactionVerificationProvider")
-        or os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER")
-        or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER")
-        or merged_settings.get("compactionVerificationProvider")
-    )
-    requested_verification_model = (
-        options.get("compactionVerificationModel")
-        or os.environ.get("TESS_COMPACTION_VERIFICATION_MODEL")
-        or settings_env.get("TESS_COMPACTION_VERIFICATION_MODEL")
-        or merged_settings.get("compactionVerificationModel")
-    )
-    requested_verification_effort = normalizeEffortLevel(
-        options.get("compactionVerificationEffort")
-        or os.environ.get("TESS_COMPACTION_VERIFICATION_EFFORT")
-        or settings_env.get("TESS_COMPACTION_VERIFICATION_EFFORT")
-        or merged_settings.get("compactionVerificationEffort")
-    )
-    resolved_verification_provider = (
-        resolveProviderForModelSelection(requested_verification_provider, requested_verification_model)
-        if requested_verification_model
-        else requested_verification_provider
-    )
-    resolved_verification_model = (
-        normalizeModelName(requested_verification_model, resolved_verification_provider)
-        if requested_verification_model and resolved_verification_provider
-        else requested_verification_model
-    )
+    compaction = _resolve_compaction_selection(options, settings_env, merged_settings, "compaction")
+    verification = _resolve_compaction_selection(options, settings_env, merged_settings, "verification")
 
     anthropic_headers = {
         **((auth or {}).get("customHeaders") or {}),
@@ -258,45 +274,27 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         **selected_profile.get("headers", {}),
         **(anthropic_headers if resolved_provider == "anthropic" else {}),
     }
+    profile_binding_inputs = {
+        "providerProfiles": provider_profiles,
+        "settingsEnv": settings_env,
+        "openaiStoredToken": openai_stored_token,
+        "openaiEnvToken": openai_env_token,
+        "openaiCodexToken": openai_codex_token,
+        "explicitApiKey": explicit_api_key,
+        "explicitAuthToken": explicit_auth_token,
+        "storedAnthropicApiKey": stored_anthropic_api_key,
+        "storedAnthropicAuthToken": stored_anthropic_auth_token,
+        "anthropicHeaders": anthropic_headers,
+    }
     compaction_provider_profile = await normalizeCompactionProviderSecrets(
         resolveCompactionProviderProfileBinding(
-            {
-                "requestedProfileName": options.get("compactionProviderProfile")
-                or os.environ.get("TESS_COMPACTION_PROVIDER_PROFILE")
-                or settings_env.get("TESS_COMPACTION_PROVIDER_PROFILE")
-                or merged_settings.get("compactionProviderProfile"),
-                "providerProfiles": provider_profiles,
-                "settingsEnv": settings_env,
-                "openaiStoredToken": openai_stored_token,
-                "openaiEnvToken": openai_env_token,
-                "openaiCodexToken": openai_codex_token,
-                "explicitApiKey": explicit_api_key,
-                "explicitAuthToken": explicit_auth_token,
-                "storedAnthropicApiKey": stored_anthropic_api_key,
-                "storedAnthropicAuthToken": stored_anthropic_auth_token,
-                "anthropicHeaders": anthropic_headers,
-            }
+            {"requestedProfileName": compaction["profileName"], **profile_binding_inputs}
         ),
         f"config:{selected_name}:compaction",
     )
     compaction_verification_provider_profile = await normalizeCompactionProviderSecrets(
         resolveCompactionProviderProfileBinding(
-            {
-                "requestedProfileName": options.get("compactionVerificationProviderProfile")
-                or os.environ.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
-                or settings_env.get("TESS_COMPACTION_VERIFICATION_PROVIDER_PROFILE")
-                or merged_settings.get("compactionVerificationProviderProfile"),
-                "providerProfiles": provider_profiles,
-                "settingsEnv": settings_env,
-                "openaiStoredToken": openai_stored_token,
-                "openaiEnvToken": openai_env_token,
-                "openaiCodexToken": openai_codex_token,
-                "explicitApiKey": explicit_api_key,
-                "explicitAuthToken": explicit_auth_token,
-                "storedAnthropicApiKey": stored_anthropic_api_key,
-                "storedAnthropicAuthToken": stored_anthropic_auth_token,
-                "anthropicHeaders": anthropic_headers,
-            }
+            {"requestedProfileName": verification["profileName"], **profile_binding_inputs}
         ),
         f"config:{selected_name}:compaction-verification",
     )
@@ -385,8 +383,8 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "providerProfile": selected_profile,
         "providerCapabilities": clone(selected_profile.get("capabilities") or {}),
         "providerProfiles": {name: resolveProviderProfile(name, record) for name, record in provider_profiles.items()},
-        "compactionProvider": resolved_compaction_provider,
-        "compactionEffort": requested_compaction_effort,
+        "compactionProvider": compaction["provider"],
+        "compactionEffort": compaction["effort"],
         "compactionProviderProfile": compaction_provider_profile,
         "apiKey": normalized_api_key,
         "authToken": normalized_auth_token,
@@ -397,10 +395,10 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "openaiBaseUrl": selected_profile.get("baseUrl") if resolved_provider == "openai" else None,
         "openaiCodexAuthPath": openai_codex_auth_path,
         "model": resolved_model,
-        "compactionModel": resolved_compaction_model,
-        "compactionVerificationProvider": resolved_verification_provider,
-        "compactionVerificationModel": resolved_verification_model,
-        "compactionVerificationEffort": requested_verification_effort,
+        "compactionModel": compaction["model"],
+        "compactionVerificationProvider": verification["provider"],
+        "compactionVerificationModel": verification["model"],
+        "compactionVerificationEffort": verification["effort"],
         "compactionVerificationProviderProfile": compaction_verification_provider_profile,
         "effort": normalizeEffortLevel(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or getDefaultEffortForProvider(resolved_provider),
         "assistantName": assistant_name,
@@ -417,19 +415,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "inputFormat": options.get("inputFormat") or "text",
         "outputFormat": options.get("outputFormat") or "text",
         "permissionMode": options.get("permissionMode") or merged_settings.get("permissionMode") or "default",
-        "screenMode": "inline"
-        if options.get("noAltScreen") or options.get("altScreen") is False
-        else (
-            normalizeTuiScreenMode(
-                options.get("screenMode")
-                or os.environ.get("TESS_SCREEN_MODE")
-                or os.environ.get("TESS_ALTERNATE_SCREEN")
-                or settings_env.get("TESS_SCREEN_MODE")
-                or settings_env.get("TESS_ALTERNATE_SCREEN")
-                or merged_settings.get("screenMode")
-            )
-            or DEFAULT_TUI_SCREEN_MODE
-        ),
+        "screenMode": _resolve_screen_mode(options, settings_env, merged_settings),
         "sessionPersistence": options.get("sessionPersistence", True),
         "jsonSchema": _parse_json_schema(options.get("jsonSchema")),
         "maxBudgetUsd": float(options["maxBudgetUsd"]) if options.get("maxBudgetUsd") else None,
@@ -440,12 +426,6 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "bare": bool(options.get("bare")),
         "settingsSources": sources,
         "inlineSettings": options.get("settings"),
-        "permissionRules": await loadPermissionRules(
-            cwd=cwd,
-            sources=sources,
-            inlineSettings=options.get("settings"),
-        ),
-        "hooks": await loadHooks(cwd=cwd, sources=sources),
         "mcpConfig": await _load_mcp_config(cwd, options.get("mcpConfig"), sources, strict_mcp),
         "mcpConfigPolicy": {"mode": "explicit_only" if strict_mcp else "merged"},
         "channels": _dedupe(options.get("channels") or []),

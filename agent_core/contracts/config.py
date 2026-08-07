@@ -212,8 +212,6 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     bare: bool
     settingsSources: list[str]
     inlineSettings: str | None
-    permissionRules: list[dict[str, Any]]
-    hooks: list[dict[str, Any]]
     mcpConfig: list[dict[str, Any]]
     mcpConfigPolicy: dict[str, str]
     channels: list[str]
