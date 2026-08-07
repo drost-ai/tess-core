@@ -27,10 +27,6 @@ from ..prompt_cache import openAiPromptCacheRequestOptions
 from .chat import sendOpenAiChatCompletionsRequest
 from .normalization import _append_text_block, _parse_complete_json_object
 from .params import buildResponsesCreateParams, getOpenAiProviderLabel, resolveOpenAiBaseUrl
-from .shared import (
-    OPENAI_REQUEST_START_TIMEOUT_MS,
-    OPENAI_STREAM_IDLE_TIMEOUT_MS,
-)
 from .transport import (
     _acquire_openai_client,
     _emit,
@@ -49,6 +45,9 @@ async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -
         return await sendOpenAiChatCompletionsRequest(args)
     return await sendOpenAiResponsesRequest(args)
 async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    # Call-time import: the config package imports providers at module load.
+    from ...config._knobs import knobValue
+
     args = {**(args or {}), **kwargs}
     mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
     base_url = resolveOpenAiBaseUrl(mode, args.get("baseUrl"))
@@ -78,8 +77,8 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         # failed stream survives into the retry.
         state = ResponsesAttemptState()
         generation_lineage = {"logicalCallId": logical_call_id, "generation": attempt, "partialOutputMode": delivery.mode if delivery else None} if mode == "codex" else {}
-        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
-        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
+        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms"))
+        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms"))
         def incomplete_response(reason: str) -> Any:
             return createProviderIncompleteResponseError(
                 provider="openai",

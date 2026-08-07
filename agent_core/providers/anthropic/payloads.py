@@ -13,6 +13,7 @@ from ..anthropic_cache import (
 )
 from ..prompt_cache import isKimiAnthropicCodingBackend, resolvePromptCachePolicy
 from .shared import MESSAGES_API_URL, MESSAGES_COUNT_TOKENS_API_URL
+from ..token_budget import resolve_request_max_output_tokens as _resolve_max_output_tokens
 from typing import Any
 from ..prompt_cache_diagnostics import (
     buildPromptCacheRequestSnapshot,
@@ -333,17 +334,6 @@ def _mark_last_text_block_for_cache(blocks: list[dict[str, Any]], cache_control:
             blocks[index] = {**block, "cache_control": dict(cache_control)}
             return
     blocks.append({"type": "text", "text": "", "cache_control": dict(cache_control)})
-
-def _resolve_max_output_tokens(request: dict[str, Any]) -> int:
-    for key in ("maxOutputTokens", "max_output_tokens", "maxTokens", "max_tokens"):
-        value = request.get(key)
-        try:
-            parsed = int(float(str(value).strip())) if str(value).strip() else 0
-        except Exception:
-            continue
-        if parsed > 0:
-            return parsed
-    return 16384
 
 def _normalize_anthropic_tool_definition(tool: Any) -> dict[str, Any]:
     if not isinstance(tool, dict):

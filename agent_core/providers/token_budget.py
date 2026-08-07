@@ -6,7 +6,6 @@ from typing import Any, Callable
 
 
 DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH = 200_000
-DEFAULT_PROVIDER_MAX_OUTPUT_TOKENS = 16_384
 DEFAULT_COMPACTION_THRESHOLD_TOKENS = 200_000
 DEFAULT_COMPACTION_PRESERVATION_RATIO = 0.1
 DEFAULT_COMPACTION_HEADROOM_RATIO = 0.25
@@ -32,8 +31,28 @@ def resolve_provider_token_limits(input: dict[str, Any] | None = None) -> dict[s
     inferred = _infer_model_token_limits(profile) or {}
     return {
         "maxContextLength": explicit_context or inferred.get("maxContextLength") or DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH,
-        "maxOutputTokens": explicit_output or inferred.get("maxOutputTokens") or DEFAULT_PROVIDER_MAX_OUTPUT_TOKENS,
+        "maxOutputTokens": explicit_output or inferred.get("maxOutputTokens") or _fallback_max_output_tokens(),
     }
+
+
+def resolve_request_max_output_tokens(request: dict[str, Any]) -> int:
+    """Max output tokens a provider request should carry on the wire."""
+    for key in ("maxOutputTokens", "max_output_tokens", "maxTokens", "max_tokens"):
+        value = request.get(key)
+        try:
+            parsed = int(float(str(value).strip())) if str(value).strip() else 0
+        except Exception:
+            continue
+        if parsed > 0:
+            return parsed
+    return _fallback_max_output_tokens()
+
+
+def _fallback_max_output_tokens() -> int:
+    # Call-time import: the config package imports this module at load.
+    from ..config._knobs import knobValue
+
+    return int(knobValue("provider.max_output_tokens"))
 
 
 def resolve_compaction_policy(input: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -121,7 +140,7 @@ def resolve_compaction_threshold_tokens(input: dict[str, Any] | None = None) -> 
 
 
 def resolve_compaction_output_tokens(input: dict[str, Any] | None = None) -> int:
-    return int(resolve_compaction_policy(input).get("compactionOutputTokens") or DEFAULT_PROVIDER_MAX_OUTPUT_TOKENS)
+    return int(resolve_compaction_policy(input).get("compactionOutputTokens") or _fallback_max_output_tokens())
 
 
 def resolve_compaction_request_output_tokens(args: dict[str, Any] | None = None, **kwargs: Any) -> int:
@@ -237,6 +256,7 @@ _MODEL_LIMIT_RULES = [
 
 normalizePositiveInteger = normalize_positive_integer
 resolveProviderTokenLimits = resolve_provider_token_limits
+resolveRequestMaxOutputTokens = resolve_request_max_output_tokens
 resolveCompactionPolicy = resolve_compaction_policy
 resolveCompactionRequestOutputTokens = resolve_compaction_request_output_tokens
 resolveProviderProfileTokenLimits = resolve_provider_profile_token_limits

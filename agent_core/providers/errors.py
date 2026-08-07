@@ -311,7 +311,11 @@ def fallbackEligibleProviderFailure(error: Any) -> bool:
 
 
 def providerRetryDelayMs(attempt: int) -> int:
-    return (350 if attempt <= 1 else 700) + random.randint(0, 119)
+    # Call-time import: the config package imports providers at module load.
+    from ..config._knobs import knobValue
+
+    ladder = tuple(knobValue("provider.anthropic_retry_delays_ms"))
+    return retryDelayFromLadder(ladder, attempt) + random.randint(0, 119)
 
 
 def retryDelayFromLadder(ladder: tuple[int, ...], attempt: int) -> int:

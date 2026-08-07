@@ -72,6 +72,9 @@ def create_turn_deadline_context(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> TurnDeadlineContext:
+    # Call-time import: the config package imports providers at module load.
+    from ..config._knobs import knobValue
+
     args = {**(args or {}), **kwargs}
     config = args["config"]
     profile = config.get("providerProfile") or {}
@@ -99,9 +102,9 @@ def create_turn_deadline_context(
         or DEFAULT_TOTAL_REQUEST_TIMEOUT_MS
     )
     request_start_timeout_ms = (
-        transport.get("requestStartTimeoutMs") or 120_000
+        transport.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms")
     )
-    stream_idle_timeout_ms = transport.get("streamIdleTimeoutMs") or 60_000
+    stream_idle_timeout_ms = transport.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms")
     total_deadline_at = time.monotonic() + (total_request_timeout_ms / 1000)
     watchdog = createProviderRequestWatchdog(
         parentSignal=args.get("parentSignal"),

@@ -45,3 +45,55 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
         self.assertEqual(testing.buildResponsesCreateParams({"request": request})["max_output_tokens"], 4_321)
         self.assertEqual(testing.buildChatCompletionsCreateParams(request)["max_tokens"], 4_321)
         self.assertEqual(testing.buildAnthropicMessagesPayload({**request, "model": "claude-opus-4-8"})["max_tokens"], 4_321)
+
+    def test_unmatched_profile_output_limit_falls_back_to_knob(self):
+        from agent_core.config._knobs import configureKnobs, resetConfiguredKnobs
+
+        try:
+            limits = resolveProviderTokenLimits({"profileName": "custom", "kind": "openai", "model": "mystery-model"})
+            self.assertEqual(limits["maxOutputTokens"], 16_384)
+            configureKnobs({"provider": {"max_output_tokens": 32_768}})
+            limits = resolveProviderTokenLimits({"profileName": "custom", "kind": "openai", "model": "mystery-model"})
+            self.assertEqual(limits["maxOutputTokens"], 32_768)
+        finally:
+            resetConfiguredKnobs()
+
+    def test_profile_max_output_tokens_threads_from_settings_to_wire_payloads(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            settings_dir = home / "settings"
+            settings_dir.mkdir()
+            (settings_dir / "providers.yaml").write_text(
+                "provider: big-output\n"
+                "providerProfiles:\n"
+                "  big-output:\n"
+                "    kind: openai\n"
+                "    defaultModel: big-model\n"
+                "    baseUrl: https://example.invalid/v1\n"
+                "    maxContextLength: 1000000\n"
+                "    maxOutputTokens: 128000\n"
+                "    auth:\n"
+                "      kind: openai_api_key\n"
+                "      envVar: BIG_OUTPUT_TEST_KEY\n",
+                encoding="utf-8",
+            )
+            (settings_dir / ".env").write_text("BIG_OUTPUT_TEST_KEY=sk-test\n", encoding="utf-8")
+            config = run(core.resolveConfig({}, str(workspace)))
+            profile = config["providerProfile"]
+            self.assertEqual(profile["maxOutputTokens"], 128_000)
+
+            budget = computeProviderTokenBudget({"profile": profile, "estimatedInputTokens": 50_000})
+            self.assertEqual(budget["effectiveMaxOutputTokens"], 128_000)
+
+            request = core.applyProviderTokenBudget(
+                {"model": "big-model", "system": "s", "messages": [{"role": "user", "content": "hi"}], "tools": []},
+                budget,
+                config,
+            )
+            self.assertEqual(request["maxOutputTokens"], 128_000)
+
+            self.assertEqual(testing.buildResponsesCreateParams({"request": request})["max_output_tokens"], 128_000)
+            self.assertEqual(testing.buildChatCompletionsCreateParams(request)["max_tokens"], 128_000)
+            self.assertEqual(testing.buildAnthropicMessagesPayload(request)["max_tokens"], 128_000)
+        finally:
+            self.restore_home(root, previous)

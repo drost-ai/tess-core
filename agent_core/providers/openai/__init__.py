@@ -62,21 +62,15 @@ from .responses_session import (
 )
 from .responses_terminal import handle_response_completed
 from .shared import (
-    OPENAI_RETRY_DELAYS_MS,
     DEFAULT_CODEX_BASE_URL,
     DEFAULT_CODEX_INSTRUCTIONS,
     OPENAI_ABORT_POLL_INTERVAL_MS,
-    OPENAI_REQUEST_START_TIMEOUT_MS,
-    OPENAI_STREAM_IDLE_TIMEOUT_MS,
 )
 
 __all__ = [
-    "OPENAI_RETRY_DELAYS_MS",
     "DEFAULT_CODEX_BASE_URL",
     "DEFAULT_CODEX_INSTRUCTIONS",
     "OPENAI_ABORT_POLL_INTERVAL_MS",
-    "OPENAI_REQUEST_START_TIMEOUT_MS",
-    "OPENAI_STREAM_IDLE_TIMEOUT_MS",
     "OpenAiEmptyCompletedResponse",
     "OpenAiReconciliationConflict",
     "TERMINAL_RECONCILIATION_SCHEMA_VERSION",

@@ -12,6 +12,7 @@ from .normalization import (
     _resolve_instructions,
 )
 from .shared import DEFAULT_CODEX_BASE_URL
+from ..token_budget import resolve_request_max_output_tokens as _resolve_max_output_tokens
 from typing import Any
 from urllib.parse import urlparse
 
@@ -170,17 +171,6 @@ def _remove_codex_native_resume_options(params: dict[str, Any]) -> None:
         extra_body.pop(key, None)
     if not extra_body:
         params.pop("extra_body", None)
-
-def _resolve_max_output_tokens(request: dict[str, Any]) -> int:
-    for key in ("maxOutputTokens", "max_output_tokens", "maxTokens", "max_tokens"):
-        value = request.get(key)
-        try:
-            parsed = int(float(str(value).strip())) if str(value).strip() else 0
-        except Exception:
-            continue
-        if parsed > 0:
-            return parsed
-    return 16384
 
 def resolveOpenAiBaseUrl(mode: str, baseUrl: str | None) -> str | None:
     trimmed = baseUrl.strip() if isinstance(baseUrl, str) else ""

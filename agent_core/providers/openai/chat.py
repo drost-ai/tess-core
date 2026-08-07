@@ -23,10 +23,6 @@ from .params import (
     resolveOpenAiBaseUrl,
     supportsOpenAiChatCompletionsReasoningEffort,
 )
-from .shared import (
-    OPENAI_REQUEST_START_TIMEOUT_MS,
-    OPENAI_STREAM_IDLE_TIMEOUT_MS,
-)
 from .transport import (
     _acquire_openai_client,
     _emit,
@@ -39,6 +35,9 @@ _OPENAI_DEFAULT_MAX_ATTEMPTS = 6
 
 
 async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    # Call-time import: the config package imports providers at module load.
+    from ...config._knobs import knobValue
+
     args = {**(args or {}), **kwargs}
     base_url = resolveOpenAiBaseUrl("chat_completions", args.get("baseUrl"))
     provider_label = getOpenAiProviderLabel("chat_completions", base_url)
@@ -63,8 +62,8 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         reasoning_content = ""
         active_stream: Any = None
         runtime = args.get("runtime") or {}
-        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or OPENAI_REQUEST_START_TIMEOUT_MS)
-        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or OPENAI_STREAM_IDLE_TIMEOUT_MS)
+        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms"))
+        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms"))
 
         def incomplete_response(reason: str) -> Any:
             return createProviderIncompleteResponseError(

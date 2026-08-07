@@ -6,12 +6,25 @@
 
 knobs:
   provider:
+    # Quick-retry delay ladder in milliseconds for Anthropic messages requests; a small random jitter is added on top. [0..600000]
+    anthropic_retry_delays_ms:
+      - 350
+      - 700
+    # Milliseconds to wait for a complete non-streaming provider JSON response. [1000..3600000]
+    json_response_timeout_ms: 120000
     # Fallback max output tokens per provider request when neither the request nor the provider profile specifies one. [256..1000000]
     max_output_tokens: 16384
+    # Escalating retry backoff ladder in milliseconds for OpenAI-kind provider requests; attempts beyond the ladder reuse its last entry. [0..600000]
+    openai_retry_delays_ms:
+      - 1000
+      - 3000
+      - 5000
+      - 10000
+      - 30000
     # Milliseconds to wait for a provider request to start streaming before the attempt is failed as timed out. [1000..3600000]
-    request_start_timeout_ms: 60000
+    request_start_timeout_ms: 120000
     # Milliseconds of stream silence tolerated before a provider attempt is failed as idle. [1000..3600000]
-    stream_idle_timeout_ms: 120000
+    stream_idle_timeout_ms: 60000
   subagents:
     # Maximum live subagent processes per runtime instance; at capacity the Agent tool returns the live-children roster instead of spawning. [1..64]
     max_live: 8

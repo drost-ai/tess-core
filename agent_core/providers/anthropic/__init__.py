@@ -26,9 +26,6 @@ from .payloads import (
 from .request import sendAnthropicMessagesRequest
 from .shared import (
     ANTHROPIC_ABORT_POLL_INTERVAL_MS,
-    ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS,
-    ANTHROPIC_REQUEST_START_TIMEOUT_MS,
-    ANTHROPIC_STREAM_IDLE_TIMEOUT_MS,
     MESSAGES_API_URL,
     MESSAGES_COUNT_TOKENS_API_URL,
 )
@@ -42,9 +39,6 @@ from .transport import applyAnthropicUsageSnapshot
 
 __all__ = [
     "ANTHROPIC_ABORT_POLL_INTERVAL_MS",
-    "ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS",
-    "ANTHROPIC_REQUEST_START_TIMEOUT_MS",
-    "ANTHROPIC_STREAM_IDLE_TIMEOUT_MS",
     "AnthropicSseAccumulator",
     "DEFAULT_API_KEY_BETAS",
     "DEFAULT_OAUTH_BETAS",

@@ -25,9 +25,9 @@ _ENV_PREFIX = "AGENT_CORE_"
 class Knob:
     name: str
     default: Any
-    kind: str  # "int" | "float" | "bool" | "str"
+    kind: str  # "int" | "float" | "bool" | "str" | "int_list"
     description: str
-    minimum: float | None = None
+    minimum: float | None = None  # for int_list: applies to every element
     maximum: float | None = None
 
 
@@ -59,7 +59,7 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
     ),
     Knob(
         "provider.request_start_timeout_ms",
-        60_000,
+        120_000,
         "int",
         "Milliseconds to wait for a provider request to start streaming before the attempt is failed as timed out.",
         minimum=1_000,
@@ -67,11 +67,35 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
     ),
     Knob(
         "provider.stream_idle_timeout_ms",
-        120_000,
+        60_000,
         "int",
         "Milliseconds of stream silence tolerated before a provider attempt is failed as idle.",
         minimum=1_000,
         maximum=3_600_000,
+    ),
+    Knob(
+        "provider.json_response_timeout_ms",
+        120_000,
+        "int",
+        "Milliseconds to wait for a complete non-streaming provider JSON response.",
+        minimum=1_000,
+        maximum=3_600_000,
+    ),
+    Knob(
+        "provider.openai_retry_delays_ms",
+        (1_000, 3_000, 5_000, 10_000, 30_000),
+        "int_list",
+        "Escalating retry backoff ladder in milliseconds for OpenAI-kind provider requests; attempts beyond the ladder reuse its last entry.",
+        minimum=0,
+        maximum=600_000,
+    ),
+    Knob(
+        "provider.anthropic_retry_delays_ms",
+        (350, 700),
+        "int_list",
+        "Quick-retry delay ladder in milliseconds for Anthropic messages requests; a small random jitter is added on top.",
+        minimum=0,
+        maximum=600_000,
     ),
 )
 
@@ -137,7 +161,11 @@ def renderKnobsExample() -> str:
             if knob.minimum is not None or knob.maximum is not None:
                 bounds = f" [{_format_number(knob.minimum)}..{_format_number(knob.maximum)}]"
             lines.append(f"    # {knob.description}{bounds}")
-            lines.append(f"    {leaf}: {_render_value(knob.default)}")
+            if knob.kind == "int_list":
+                lines.append(f"    {leaf}:")
+                lines.extend(f"      - {item}" for item in knob.default)
+            else:
+                lines.append(f"    {leaf}: {_render_value(knob.default)}")
     return "\n".join(lines) + "\n"
 
 
@@ -158,6 +186,8 @@ def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
 
 def _coerce(knob: Knob, raw: Any, *, source: str) -> Any:
     value: Any = raw
+    if knob.kind == "int_list":
+        return _coerce_int_list(knob, raw, source=source)
     if knob.kind == "bool":
         if isinstance(raw, bool):
             value = raw
@@ -190,6 +220,31 @@ def _coerce(knob: Knob, raw: Any, *, source: str) -> Any:
     if knob.maximum is not None and value > knob.maximum:
         raise ValueError(f"Knob {knob.name} from {source} must be <= {_format_number(knob.maximum)}, got {value}.")
     return value
+
+
+def _coerce_int_list(knob: Knob, raw: Any, *, source: str) -> tuple[int, ...]:
+    items: Any = raw
+    if isinstance(items, str):
+        items = [part.strip() for part in items.split(",")]
+    if not isinstance(items, (list, tuple)) or not items:
+        raise ValueError(
+            f"Knob {knob.name} from {source} must be a non-empty list of integers "
+            f"(or a comma-separated string), got {raw!r}."
+        )
+    values: list[int] = []
+    for item in items:
+        if isinstance(item, bool) or not isinstance(item, (int, str)):
+            raise ValueError(f"Knob {knob.name} from {source} must contain only integers, got {item!r}.")
+        try:
+            value = int(str(item).strip())
+        except ValueError:
+            raise ValueError(f"Knob {knob.name} from {source} must contain only integers, got {item!r}.") from None
+        if knob.minimum is not None and value < knob.minimum:
+            raise ValueError(f"Knob {knob.name} from {source} entries must be >= {_format_number(knob.minimum)}, got {value}.")
+        if knob.maximum is not None and value > knob.maximum:
+            raise ValueError(f"Knob {knob.name} from {source} entries must be <= {_format_number(knob.maximum)}, got {value}.")
+        values.append(value)
+    return tuple(values)
 
 
 def _env_name(name: str) -> str:

@@ -4,11 +4,11 @@ from ..errors import retryDelayFromLadder
 
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 DEFAULT_CODEX_INSTRUCTIONS = "You are a helpful and reliable assistant."
-OPENAI_REQUEST_START_TIMEOUT_MS = 120_000
-OPENAI_STREAM_IDLE_TIMEOUT_MS = 60_000
 OPENAI_ABORT_POLL_INTERVAL_MS = 50
-OPENAI_RETRY_DELAYS_MS = (1_000, 3_000, 5_000, 10_000, 30_000)
 
 
 def providerRetryDelayMs(attempt: int) -> int:
-    return retryDelayFromLadder(OPENAI_RETRY_DELAYS_MS, attempt)
+    # Call-time import: the config package imports providers at module load.
+    from ...config._knobs import knobValue
+
+    return retryDelayFromLadder(tuple(knobValue("provider.openai_retry_delays_ms")), attempt)

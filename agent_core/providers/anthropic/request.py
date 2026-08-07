@@ -30,7 +30,6 @@ from .payloads import (
     buildAnthropicMessagesEnvelope,
     resolveAnthropicMessagesUrl,
 )
-from .shared import ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS, ANTHROPIC_STREAM_IDLE_TIMEOUT_MS
 from .stream_consume import (
     _consume_anthropic_stream_response,
     _normalize_anthropic_json_response,
@@ -49,6 +48,9 @@ from .async_request import (
 _DEFAULT_URLOPEN = urlopen
 
 async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
+    # Call-time import: the config package imports providers at module load.
+    from ...config._knobs import knobValue
+
     args = {**(args or {}), **kwargs}
     config = await resolveProviderConfigSecrets(args["config"])
     request = args["request"]
@@ -58,7 +60,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
     timeout_ms = int(
         args.get("streamIdleTimeoutMs" if stream else "jsonResponseTimeoutMs")
         or args.get("requestStartTimeoutMs")
-        or (ANTHROPIC_STREAM_IDLE_TIMEOUT_MS if stream else ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS)
+        or knobValue("provider.stream_idle_timeout_ms" if stream else "provider.json_response_timeout_ms")
     )
     envelope = buildAnthropicMessagesEnvelope(request, config, {"stream": stream})
     last_failure = None

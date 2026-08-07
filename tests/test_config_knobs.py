@@ -21,6 +21,22 @@ class KnobRegistryTests(unittest.TestCase):
     def test_defaults_resolve_without_configuration(self):
         self.assertEqual(knobValue("subagents.max_live"), 8)
         self.assertEqual(knobValue("provider.max_output_tokens"), 16384)
+        self.assertEqual(knobValue("provider.request_start_timeout_ms"), 120_000)
+        self.assertEqual(knobValue("provider.stream_idle_timeout_ms"), 60_000)
+        self.assertEqual(knobValue("provider.json_response_timeout_ms"), 120_000)
+        self.assertEqual(knobValue("provider.openai_retry_delays_ms"), (1_000, 3_000, 5_000, 10_000, 30_000))
+        self.assertEqual(knobValue("provider.anthropic_retry_delays_ms"), (350, 700))
+
+    def test_int_list_coercion_and_bounds(self):
+        configureKnobs({"provider": {"openai_retry_delays_ms": [1, 2, 3]}})
+        self.assertEqual(knobValue("provider.openai_retry_delays_ms"), (1, 2, 3))
+        for bad in ([], ["fast"], [True], [-1], [700_000], 1000):
+            with self.assertRaises(ValueError):
+                configureKnobs({"provider": {"openai_retry_delays_ms": bad}})
+
+    def test_int_list_environment_override_comma_separated(self):
+        os.environ["AGENT_CORE_PROVIDER_OPENAI_RETRY_DELAYS_MS"] = "10, 20,30"
+        self.assertEqual(knobValue("provider.openai_retry_delays_ms"), (10, 20, 30))
 
     def test_configure_from_nested_mapping_and_reset(self):
         configureKnobs({"subagents": {"max_live": 4}})
@@ -67,7 +83,70 @@ class KnobRegistryTests(unittest.TestCase):
         flattened_sections = parsed["knobs"]
         for name, knob in KNOB_REGISTRY.items():
             section, leaf = name.split(".", 1)
-            self.assertEqual(flattened_sections[section][leaf], knob.default)
+            expected = list(knob.default) if isinstance(knob.default, tuple) else knob.default
+            self.assertEqual(flattened_sections[section][leaf], expected)
+
+
+class KnobWiringTests(unittest.TestCase):
+    """The provider-facing knobs actually drive the provider machinery."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+        for name in list(os.environ):
+            if name.startswith("AGENT_CORE_PROVIDER_"):
+                del os.environ[name]
+
+    def test_openai_retry_ladder_reads_knob(self):
+        delay = openai_module.shared.providerRetryDelayMs
+        self.assertEqual(delay(1), 1_000)
+        self.assertEqual(delay(5), 30_000)
+        self.assertEqual(delay(9), 30_000)
+        configureKnobs({"provider": {"openai_retry_delays_ms": [5, 7]}})
+        self.assertEqual(delay(1), 5)
+        self.assertEqual(delay(3), 7)
+
+    def test_anthropic_quick_retry_reads_knob_with_jitter(self):
+        from agent_core.providers.errors import providerRetryDelayMs
+
+        first, second = providerRetryDelayMs(1), providerRetryDelayMs(2)
+        self.assertTrue(350 <= first <= 469, first)
+        self.assertTrue(700 <= second <= 819, second)
+        configureKnobs({"provider": {"anthropic_retry_delays_ms": [0]}})
+        self.assertTrue(0 <= providerRetryDelayMs(3) <= 119)
+
+    def test_turn_deadline_context_timeout_fallbacks_read_knobs(self):
+        from agent_core.providers.timeouts import createTurnDeadlineContext
+
+        context = createTurnDeadlineContext(config={})
+        try:
+            self.assertEqual(context.requestStartTimeoutMs, 120_000)
+            self.assertEqual(context.streamIdleTimeoutMs, 60_000)
+        finally:
+            context.dispose()
+        configureKnobs({"provider": {"request_start_timeout_ms": 11_000, "stream_idle_timeout_ms": 12_000}})
+        context = createTurnDeadlineContext(config={})
+        try:
+            self.assertEqual(context.requestStartTimeoutMs, 11_000)
+            self.assertEqual(context.streamIdleTimeoutMs, 12_000)
+        finally:
+            context.dispose()
+        context = createTurnDeadlineContext(
+            config={"providerProfile": {"requestStartTimeoutMs": 9_000}}
+        )
+        try:
+            self.assertEqual(context.requestStartTimeoutMs, 9_000)
+        finally:
+            context.dispose()
+
+    def test_request_max_output_tokens_fallback_reads_knob(self):
+        from agent_core.providers.token_budget import resolve_request_max_output_tokens
+
+        self.assertEqual(resolve_request_max_output_tokens({"maxOutputTokens": 128_000}), 128_000)
+        self.assertEqual(resolve_request_max_output_tokens({"max_tokens": "2048"}), 2_048)
+        self.assertEqual(resolve_request_max_output_tokens({}), 16_384)
+        configureKnobs({"provider": {"max_output_tokens": 9_999}})
+        self.assertEqual(resolve_request_max_output_tokens({}), 9_999)
+        self.assertEqual(resolve_request_max_output_tokens({"maxOutputTokens": 1_000}), 1_000)
 
 
 class KnobResolutionIntegrationTests(AgentCoreTestCase):

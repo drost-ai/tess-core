@@ -384,8 +384,7 @@ from .context.token_accounting import (
     recordPreflightTokenMeasurement,
 )
 from .providers.anthropic import (
-    ANTHROPIC_ABORT_POLL_INTERVAL_MS, ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS, ANTHROPIC_REQUEST_START_TIMEOUT_MS,
-    ANTHROPIC_STREAM_IDLE_TIMEOUT_MS, AnthropicSseAccumulator, DEFAULT_API_KEY_BETAS, DEFAULT_OAUTH_BETAS,
+    ANTHROPIC_ABORT_POLL_INTERVAL_MS, AnthropicSseAccumulator, DEFAULT_API_KEY_BETAS, DEFAULT_OAUTH_BETAS,
     MESSAGES_API_URL, MESSAGES_COUNT_TOKENS_API_URL, anthropicCacheBreakpointMessageIndices,
     applyAnthropicUsageSnapshot, buildAnthropicBetaHeader, buildAnthropicCountTokensPayload, buildAnthropicHeaders,
     buildAnthropicMessagesEnvelope, buildAnthropicMessagesPayload, normalizeAnthropicContentBlocks,
@@ -395,9 +394,8 @@ from .providers.anthropic import (
     sendAnthropicMessagesViaAsyncTransport,
 )
 from .providers.openai import (
-    OPENAI_RETRY_DELAYS_MS,
     DEFAULT_CODEX_BASE_URL, DEFAULT_CODEX_INSTRUCTIONS, OPENAI_ABORT_POLL_INTERVAL_MS,
-    OPENAI_REQUEST_START_TIMEOUT_MS, OPENAI_STREAM_IDLE_TIMEOUT_MS, OpenAiEmptyCompletedResponse,
+    OpenAiEmptyCompletedResponse,
     OpenAiReconciliationConflict, TERMINAL_RECONCILIATION_SCHEMA_VERSION, append_openai_partial,
     attach_interrupted_preview, attach_openai_failure_lineage, attach_recovery_failure, authoritative_openai_response,
     buildChatCompletionsCreateParams, buildResponsesCreateParams, can_retry_openai_generation,
@@ -414,9 +412,7 @@ from .providers.openai import (
 
 __all__ = [
     "AGENT_RUNTIME_BINDING_FIELDS",
-    "OPENAI_RETRY_DELAYS_MS",
     "ACTIVE_TASK_STATUSES", "AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION", "ANTHROPIC_ABORT_POLL_INTERVAL_MS",
-    "ANTHROPIC_JSON_RESPONSE_TIMEOUT_MS", "ANTHROPIC_REQUEST_START_TIMEOUT_MS", "ANTHROPIC_STREAM_IDLE_TIMEOUT_MS",
     "ARTIFACT_ACQUISITION_FAILURE_LIMIT", "AVAILABLE_TUI_THEMES", "AgentAuthorityError", "AnthropicSseAccumulator",
     "AuthenticatedDaemonServer", "BACKGROUND_RUNTIME_STATE_EVENTS", "BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS",
     "BRIDGE_LEDGER_MAX_ENTRIES", "BRIDGE_LOG_MAX_ENTRIES", "BRIDGE_STORAGE_MAX_BYTES", "BUILTIN_AGENTS",
@@ -465,8 +461,8 @@ __all__ = [
     "MESSAGES_API_URL", "MESSAGES_COUNT_TOKENS_API_URL", "MIN_ASSISTANT_UPDATE_SPACING_MS",
     "MIN_NARRATION_SPACING_MS", "MIN_PRESERVED_TOOL_EXCHANGE_PAIRS", "MIN_RECENT_MESSAGE_COUNT",
     "MONITOR_TICK_MS", "McpAuthorizationRequiredError", "McpOAuthRuntime", "McpSseDecoder", "McpStdioFrameDecoder",
-    "McpTransportError", "OPENAI_ABORT_POLL_INTERVAL_MS", "OPENAI_REQUEST_START_TIMEOUT_MS",
-    "OPENAI_STREAM_IDLE_TIMEOUT_MS", "ObservedProcessIdentity", "OpenAiEmptyCompletedResponse",
+    "McpTransportError", "OPENAI_ABORT_POLL_INTERVAL_MS",
+    "ObservedProcessIdentity", "OpenAiEmptyCompletedResponse",
     "OpenAiReconciliationConflict", "OperatorPolicyDecision", "PERMISSION_MODES", "PERMISSION_MODE_ORDER",
     "PLAN_ADJECTIVES", "PLAN_NOUNS", "PLAN_SAFE_TOOL_NAMES", "PREFERRED_PROTOCOL_VERSION", "PRIVATE_DIRECTORY_MODE",
     "PRIVATE_FILE_MODE", "PROCESS_IDENTITY_RETRY_DELAYS_SECONDS", "PROGRESS_LEDGER_SCHEMA_VERSION",
