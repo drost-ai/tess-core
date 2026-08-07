@@ -331,6 +331,13 @@ class _Parser:
             return self._parse_double_quoted(token, number)
         if token.startswith("'"):
             return self._parse_single_quoted(token, number)
+        # The only flow-style forms admitted: atomic empty collections.
+        # Without them, an explicit empty list/map (e.g. imageMimeTypes: [])
+        # would be unrepresentable, and dropping such keys changes meaning.
+        if token == "[]":
+            return []
+        if token == "{}":
+            return {}
         lead = token[0] if token else ""
         if lead in _REJECTED_LEADS:
             self._fail(_REJECTED_LEADS[lead], number)

@@ -31,6 +31,9 @@ contract; keep parser and document in lockstep.
 - **Block scalars**: literal `|` and folded `>`, each with optional strip
   chomping (`|-`, `>-`). Folded scalars join lines with spaces; blank lines
   become newlines. Only as mapping values, not as bare sequence items.
+- **Empty collections**: the atomic tokens `[]` and `{}` as values — the
+  only admitted flow-style forms, since explicit-empty is semantically
+  distinct from absent and otherwise unrepresentable in block style.
 - **Comments**: full-line `# ...` and trailing ` # ...` (a `#` preceded by
   whitespace, outside a quoted scalar).
 

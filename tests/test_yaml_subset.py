@@ -52,6 +52,16 @@ class YamlSubsetAcceptTests(unittest.TestCase):
         result = self.parse("a: yes\nb: no\nc: on\nd: off\n")
         self.assertEqual(result, {"a": "yes", "b": "no", "c": "on", "d": "off"})
 
+    def test_atomic_empty_collections(self):
+        result = self.parse("empty_list: []\nempty_map: {}\nitems:\n  - []\n")
+        self.assertEqual(result, {"empty_list": [], "empty_map": {}, "items": [[]]})
+
+    def test_non_empty_flow_still_rejected(self):
+        with self.assertRaises(YamlSubsetError):
+            self.parse("a: [1]\n")
+        with self.assertRaises(YamlSubsetError):
+            self.parse("a: { }\n")
+
     def test_nested_mappings(self):
         result = self.parse(
             "providers:\n"
