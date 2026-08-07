@@ -31,14 +31,14 @@ from .processes import _is_process_alive
 _DEAD_WORK_GRACE_MS = 15 * 60 * 1000
 _LIVE_WORK_CACHE_TTL_MS = 30_000
 _MAX_VERDICT_DETAILS = 128
-# NOTE: these per-kind sets differ from reconciliation.py's _ACTIVE_STATUSES
-# (which also treats backgrounded/degraded background commands as live). The
-# asymmetry predates the v1 refactor and its intent is unconfirmed — do not
-# unify without deciding which semantics daemon-restart reconciliation wants.
+# One liveness definition across both reconciliation layers: anything that
+# may still own a pid (backgrounded and degraded included) is live until the
+# pid is verified dead. Subagents add pre-spawn "queued". Daemon-restart
+# reconciliation uses the same flat set.
 _ACTIVE_PROCESS_STATUSES = {
-    "background_command": {"running", "reconciling"},
-    "main_session": {"running", "reconciling"},
-    "subagent": {"running", "queued", "backgrounded"},
+    "background_command": {"backgrounded", "running", "reconciling", "degraded"},
+    "main_session": {"backgrounded", "running", "reconciling", "degraded"},
+    "subagent": {"queued", "backgrounded", "running", "reconciling", "degraded"},
 }
 _TERMINAL_REMOTE_STATUSES = {"completed", "failed", "closed", "stopped", "terminated", "cancelled"}
 

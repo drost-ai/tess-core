@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 from agent_core._utils import now_iso
+from unittest import mock
 
 
 live_work = importlib.import_module("agent_core.tasks.supervisor_parts.live_work")
@@ -224,3 +225,21 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)
+
+
+class BackgroundedDeadPidReconciliationTests(AgentCoreTestCase):
+    def test_backgrounded_task_with_dead_pid_is_reconciled_lazily(self):
+        import agent_core.tasks.supervisor_parts.live_work as live_work
+
+        meta = {
+            "type": "background_command",
+            "status": "backgrounded",
+            "pid": 999_999_961,
+            "startedAt": "2020-01-01T00:00:00Z",
+            "task_id": "task-bg-dead",
+            "id": "task-bg-dead",
+        }
+        with mock.patch.object(live_work, "_is_process_alive", return_value=False):
+            next_meta, changed = run(live_work._reconcile_dead_task_meta("task-bg-dead", meta, "background_command", apply=False))
+        self.assertTrue(changed)
+        self.assertEqual(next_meta["status"], "terminated")
