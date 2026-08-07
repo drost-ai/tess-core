@@ -9,7 +9,7 @@ import signal
 import subprocess
 import threading
 from ..._utils import maybe_await
-from ...storage import loadTaskRecord, readTaskMeta
+from ...storage import getStateRoot, loadTaskRecord, readTaskMeta
 from .mappers import (
     _event_name_for_task_status,
     _is_terminal_worker_status,
@@ -82,7 +82,11 @@ def _spawn_owned_argv(
 
 
 def _worker_env(extra: dict[str, str] | None = None) -> dict[str, str]:
-    env = {**os.environ, **(extra or {})}
+    # Workers resolve their runtime home from AGENT_CORE_HOME. Stamp the
+    # active home so a client that configured it in-process (config option
+    # or scoped home) still spawns workers against the same store; explicit
+    # per-task overrides in ``extra`` win.
+    env = {**os.environ, "AGENT_CORE_HOME": getStateRoot(), **(extra or {})}
     package_root = str(Path(__file__).resolve().parents[3])
     env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
     return env

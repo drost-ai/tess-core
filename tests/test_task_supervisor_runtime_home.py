@@ -135,3 +135,64 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             if supervisor:
                 run(supervisor["close"]())
             self.restore_home(root, previous)
+
+
+class SpawnEnvRuntimeHomeTests(AgentCoreTestCase):
+    """Every worker spawn env must carry the ACTIVE runtime home.
+
+    Workers resolve their store from AGENT_CORE_HOME; a client that
+    configured its home in-process (config option or scoped home) must not
+    spawn workers that silently read the default store.
+    """
+
+    def test_spawn_envs_stamp_active_runtime_home(self):
+        from agent_core.tasks.supervisor_parts.processes import _worker_env
+        from agent_core.tools.processes import _background_runner_env
+
+        root, home, workspace, previous = self.temp_context()
+        scoped = Path(root.name) / "scoped-home"
+        scoped.mkdir()
+        try:
+            async def _capture():
+                async with core.scopedRuntimeHome(str(scoped)):
+                    return _worker_env(), _worker_env({"AGENT_CORE_HOME": "explicit"}), _background_runner_env()
+
+            worker, worker_explicit, background = run(_capture())
+            self.assertEqual(worker["AGENT_CORE_HOME"], str(scoped))
+            self.assertEqual(worker_explicit["AGENT_CORE_HOME"], "explicit")
+            self.assertEqual(background["AGENT_CORE_HOME"], str(scoped))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_local_subagent_spawn_env_stamps_active_runtime_home(self):
+        from agent_core.tasks.subagent_parts import local as subagent_local
+
+        root, home, workspace, previous = self.temp_context()
+        scoped = Path(root.name) / "scoped-home"
+        scoped.mkdir()
+        output_file = Path(root.name) / "out.log"
+        captured = {}
+
+        class _FakeProcess:
+            pid = 4242
+
+        def fake_popen(argv, **kwargs):
+            captured["env"] = kwargs.get("env")
+            return _FakeProcess()
+
+        original_popen = subagent_local.subprocess.Popen
+        subagent_local.subprocess.Popen = fake_popen
+        try:
+            async def _spawn():
+                async with core.scopedRuntimeHome(str(scoped)):
+                    return subagent_local._spawn_local_subagent_worker(
+                        "task-env-test", "session-env-test", "agent-env-test",
+                        str(workspace), str(output_file),
+                    )
+
+            run(_spawn())
+            self.assertEqual(captured["env"]["AGENT_CORE_HOME"], str(scoped))
+            self.assertEqual(captured["env"]["TESS_CHILD_SESSION_ID"], "session-env-test")
+        finally:
+            subagent_local.subprocess.Popen = original_popen
+            self.restore_home(root, previous)

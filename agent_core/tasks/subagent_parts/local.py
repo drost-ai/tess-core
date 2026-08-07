@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 import uuid
-from ...storage import mutateChildAgent, taskOutputPath, writeTaskMeta
+from ...storage import getStateRoot, mutateChildAgent, taskOutputPath, writeTaskMeta
 from typing import Any
 from ...process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ...storage import mutateSessionRecord, saveTaskRecord
@@ -231,6 +231,10 @@ def _spawn_local_subagent_worker(
         kwargs["preexec_fn"] = os.setsid
     env = {
         **os.environ,
+        # The worker (runners/subagent.py) resolves its runtime home from
+        # AGENT_CORE_HOME; without the active home it would read the default
+        # store and fail to find the child session.
+        "AGENT_CORE_HOME": getStateRoot(),
         "TESS_CHILD_AGENT_ID": agent_id,
         "TESS_CHILD_TASK_ID": task_id,
         "TESS_CHILD_SESSION_ID": session_id,

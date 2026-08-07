@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..sandbox import prepareSandboxedArgv
+from ..storage import getStateRoot
 from .cancellation import _create_tool_abort_error, _signal_aborted
 
 
@@ -88,6 +89,9 @@ def _prepare_sandboxed_argv(
 
 def _background_runner_env() -> dict[str, str]:
     env = os.environ.copy()
+    # The runner resolves its runtime home from AGENT_CORE_HOME; stamp the
+    # active home so config-scoped homes survive into the child process.
+    env["AGENT_CORE_HOME"] = getStateRoot()
     package_root = str(Path(__file__).resolve().parents[2])
     env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
     return env
