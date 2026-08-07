@@ -90,11 +90,9 @@ async def persistSession(
             committed,
             message_source=snapshot.get("messages"),
         )
-        result = (
-            _sanitize_media_for_persistence(committed["session"])
-            if committed.get("fastPath")
-            else copy.deepcopy(committed["session"])
-        )
+        # sanitizeMediaForPersistence returns a content-free copy, so both
+        # paths decouple the returned record without a second full deepcopy.
+        result = _sanitize_media_for_persistence(committed["session"])
         _finish_persistence_call(measurement, "persisted", revision=committed["revision"])
         return result
     except BaseException:

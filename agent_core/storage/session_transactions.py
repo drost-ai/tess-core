@@ -37,7 +37,9 @@ async def updateSessionRecord(
     async def require_latest(latest: dict[str, Any] | None) -> dict[str, Any]:
         if latest is None:
             raise SessionRecordNotFoundError(f"Session not found: {parseSessionId(sessionId)}")
-        return await _await_mutation(mutation(copy.deepcopy(latest)))
+        # The engine already hands the mutation a private deepcopy of the
+        # persisted record; copying it again here was pure waste.
+        return await _await_mutation(mutation(latest))
 
     return await mutateSessionRecordTransaction(sessionId, require_latest, options, **kwargs)
 
@@ -96,6 +98,9 @@ async def mutateSessionRecordTransaction(
                 "session": latest,
                 "bodyCommitId": raw.get("bodyRef", {}).get("commitId"),
             }
+        # This copy is load-bearing: persistence's save path deliberately
+        # shares the live session's message list by reference, so the commit
+        # must decouple before stamping the revision and sanitizing.
         committed = copy.deepcopy(next_session)
         committed["revision"] = current_revision + 1
         safe = _sanitize_media_for_persistence(committed)
