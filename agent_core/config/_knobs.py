@@ -82,6 +82,22 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=3_600_000,
     ),
     Knob(
+        "daemon.owner_poll_ms",
+        2_000,
+        "int",
+        "Milliseconds between the containment daemon's liveness checks of its owner runtime process; owner death kills all owned workers and exits the daemon.",
+        minimum=50,
+        maximum=60_000,
+    ),
+    Knob(
+        "daemon.heartbeat_ms",
+        3_000,
+        "int",
+        "Milliseconds between the runtime's liveness checks of its containment daemon; a dead daemon is replaced by exactly one fresh instance.",
+        minimum=50,
+        maximum=60_000,
+    ),
+    Knob(
         "process.term_grace_ms",
         3_000,
         "int",

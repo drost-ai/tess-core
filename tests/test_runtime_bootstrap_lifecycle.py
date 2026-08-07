@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
+import agent_core.collaboration.remote as collaboration_remote_module
+
 
 class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
     def test_bootstrap_runtime_closes_owned_local_runtimes_in_reference_order(self):
@@ -49,8 +51,8 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
             async def fake_collaboration(_args):
                 return {"close": close_for("collaboration"), "setForegroundBusy": lambda _busy: None, "setSession": lambda *_args: None}
 
-            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp), mock.patch.object(
-                runtime_module,
+            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+                collaboration_remote_module,
                 "createBridgeRuntime",
                 fake_bridge,
             ), mock.patch.object(runtime_module, "createMonitorRuntime", fake_monitors), mock.patch.object(
@@ -115,8 +117,8 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 "close": close_for("daemon"),
             }
 
-            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp), mock.patch.object(
-                runtime_module,
+            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+                collaboration_remote_module,
                 "createBridgeRuntime",
                 fake_bridge,
             ):

@@ -147,3 +147,25 @@ def firstPresent(data: Mapping[str, Any], *keys: str) -> Any:
         if key in data:
             return data.get(key)
     return None
+
+
+def defaultRuntimeComponentFactories() -> dict[str, Any]:
+    # Call-time imports: these factories pull in the full component graph,
+    # which must not load when only the light support helpers are needed.
+    from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
+    from ..authority.plugins import loadPluginRuntime
+    from ..collaboration.remote import createBridgeRuntime
+    from ..mcp import createMcpRuntime
+    from ..tools import createBuiltinTools
+    from .workspace import createWorkspaceController
+
+    return {
+        "enforceAuthority": enforceSessionAgentAuthority,
+        "filterAuthorityTools": filterToolsForAgentAuthority,
+        "createWorkspace": createWorkspaceController,
+        "loadPlugins": loadPluginRuntime,
+        "createMcp": createMcpRuntime,
+        "createBridge": createBridgeRuntime,
+        "createBuiltinTools": createBuiltinTools,
+        "augmentConfigTools": augmentConfigTools,
+    }

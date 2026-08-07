@@ -53,7 +53,7 @@ from .transport import (
 )
 
 
-async def runTaskSupervisorDaemon(cwd: str, instanceId: str) -> None:
+async def runTaskSupervisorDaemon(cwd: str, instanceId: str, ownerPid: int | None = None) -> None:
     await prepareDaemonRuntimeSecurity({"instanceId": instanceId, "requireStoppedForMigration": True})
     wait_ms = _daemon_instance_wait_ms()
     async with withRecordTransaction(
@@ -61,10 +61,10 @@ async def runTaskSupervisorDaemon(cwd: str, instanceId: str) -> None:
         getStateRoot(),
         timeoutMs=wait_ms,
     ):
-        await _run_task_supervisor_daemon_scoped(cwd, instanceId)
+        await _run_task_supervisor_daemon_scoped(cwd, instanceId, ownerPid)
 
 
-async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str) -> None:
+async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_pid: int | None = None) -> None:
     await ensureBaseLayout(cwd)
     socket_path = daemonSocketPath(instance_id)
     existing = await loadDaemonState(instance_id)
@@ -83,6 +83,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str) -> None
     supervisor: dict[str, Any] | None = None
     transport: AuthenticatedDaemonServer | None = None
     rotation_task: asyncio.Task[Any] | None = None
+    owner_watch_task: asyncio.Task[Any] | None = None
     state_lock = asyncio.Lock()
 
     def next_event_cursor() -> int:
@@ -208,6 +209,10 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str) -> None
         await write_daemon_state("recovering")
         supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
         rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(instance_id, shutdown))
+        if isinstance(owner_pid, int) and owner_pid > 0:
+            owner_watch_task = asyncio.create_task(
+                _watch_owner_runtime(instance_id, owner_pid, daemon_epoch, shutdown, next_event_cursor)
+            )
         _inject_daemon_boot_fault("during_recovery", instance_id)
         await write_daemon_state("running")
         await _record_daemon_lifecycle_event(
@@ -220,9 +225,10 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str) -> None
         await shutdown.wait()
     finally:
         daemon_phase = "shutting_down"
-        if rotation_task:
-            rotation_task.cancel()
-            await asyncio.gather(rotation_task, return_exceptions=True)
+        for watch_task in (rotation_task, owner_watch_task):
+            if watch_task:
+                watch_task.cancel()
+                await asyncio.gather(watch_task, return_exceptions=True)
         if transport:
             with contextlib.suppress(Exception):
                 await write_daemon_state("shutting_down")
@@ -273,6 +279,47 @@ async def _clear_owned_daemon_instance(
             )
         if current:
             os.unlink(socket_path)
+
+
+async def _watch_owner_runtime(
+    instance_id: str,
+    owner_pid: int,
+    epoch: str,
+    shutdown: asyncio.Event,
+    next_cursor: Any,
+) -> None:
+    """Direction-1 dead-man switch: the daemon dies with its owner runtime.
+
+    The owner's observed identity is captured at boot so a recycled pid can
+    never masquerade as a live owner. Owner death triggers the normal
+    shutdown path, whose supervisor close escalates every owned worker
+    through the shared TERM->KILL ladder."""
+    from ..config._knobs import knobValue
+    from ..process.identity import _inspect_process_identity
+
+    baseline = None
+    with contextlib.suppress(Exception):
+        baseline = await _inspect_process_identity(owner_pid)
+    while not shutdown.is_set():
+        await asyncio.sleep(int(knobValue("daemon.owner_poll_ms")) / 1000)
+        owner_alive = _is_process_alive(owner_pid)
+        if owner_alive and baseline is not None:
+            try:
+                current = await _inspect_process_identity(owner_pid)
+                owner_alive = current["startToken"] == baseline["startToken"]
+            except Exception:
+                owner_alive = _is_process_alive(owner_pid)
+        if owner_alive:
+            continue
+        with contextlib.suppress(Exception):
+            await _record_daemon_lifecycle_event(
+                instance_id,
+                "daemon.owner_lost",
+                {"ownerPid": owner_pid, "epoch": epoch},
+                next_cursor,
+            )
+        shutdown.set()
+        return
 
 
 async def _rotate_daemon_events_periodically(instance_id: str, shutdown: asyncio.Event) -> None:

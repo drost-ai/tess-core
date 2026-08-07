@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
+import agent_core.collaboration.remote as collaboration_remote_module
+
 
 class RuntimeBootstrapPluginTests(AgentCoreTestCase):
     def test_bootstrap_runtime_exposes_typed_event_and_turn_lifecycle_surface(self):
@@ -339,7 +341,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 captured.update(args)
                 return {"createToolDefinitions": lambda: [SimpleNamespace(name="McpFromPlugin")], "close": lambda: None}
 
-            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp):
+            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp):
                 boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
                 tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
                 command_names = [command["name"] for command in boot["slashCommands"]]
@@ -444,8 +446,8 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 "close": lambda: close_order.append("daemon"),
             }
 
-            with mock.patch.object(runtime_module, "createMcpRuntime", fake_mcp), mock.patch.object(
-                runtime_module,
+            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+                collaboration_remote_module,
                 "createBridgeRuntime",
                 fake_bridge,
             ):

@@ -4,28 +4,23 @@ import asyncio, threading, uuid
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
-from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..collaboration import createCollaborationRuntime
 from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
+from ._daemon_watch import start_daemon_watchdog as _start_daemon_watchdog
 from .exception_groups import RuntimeExceptionGroup as _RuntimeExceptionGroup
 from .lifecycle_barrier import createLifecycleBarrier
-from ..mcp import createMcpRuntime
 from ..tasks.monitors import createMonitorRuntime
-from ..authority.plugins import loadPluginRuntime
-from ..collaboration.remote import createBridgeRuntime
 from .events import createRuntimeEvent
 from .generation import RuntimeActivationSupersededError, createRuntimeActivationContext, createRuntimeSessionBinding, sameRuntimeBinding
 from .paths import RuntimePaths, getActiveRuntimePaths, runWithRuntimePaths
 from .session_components import prepareRuntimeSessionComponents
-from .support import StagedRuntimeSource as _StagedRuntimeSource, acquireCommit as _acquire_commit, augmentConfigTools as _augment_config_tools
+from .support import StagedRuntimeSource as _StagedRuntimeSource, acquireCommit as _acquire_commit, defaultRuntimeComponentFactories as _default_factories
 from .support import callMethod as _call_method, closeMany as _close_many, daemonSnapshotPayload as _daemon_snapshot_payload, getMethod as _get_method, hasMethod as _has_method
 from .support import installComponentSurface as _install_component_surface, maybeCall as _maybe_call, runtimePathGraphId as _path_graph_id, taskSnapshotFromState as _task_snapshot_from_state
 from .state import createInitialRuntimeState, createRuntimeStateStore
 from ..session.runtime import createSessionRuntimeController
 from ..storage import configureRuntimeHome, registerStorageLockObserver
 from ..tasks.runtime import createTaskRuntime
-from ..tools import createBuiltinTools
-from .workspace import createWorkspaceController
 
 
 MAX_STALE_DIAGNOSTICS = 128
@@ -64,7 +59,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     session_runtime: dict[str, Any] | None = None
     active_components: dict[str, Any] | None = None
     daemon = args.get("daemon") or args.get("daemonClient")
-    owned_daemon = False
+    owned_daemon, daemon_watch_stop = False, None
     daemon_unsubscribe: Any = None
     monitor_runtime: dict[str, Any] | None = args.get("monitorRuntime") or args.get("monitors")
     task_runtime: dict[str, Any] | None = args.get("taskRuntime") or args.get("tasks")
@@ -132,16 +127,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
 
     storage_lock_unsubscribe = registerStorageLockObserver(lambda payload: dispatch("storage.lock_timeout", dict(payload)))
 
-    factories = {
-        "enforceAuthority": enforceSessionAgentAuthority,
-        "filterAuthorityTools": filterToolsForAgentAuthority,
-        "createWorkspace": createWorkspaceController,
-        "loadPlugins": loadPluginRuntime,
-        "createMcp": createMcpRuntime,
-        "createBridge": createBridgeRuntime,
-        "createBuiltinTools": createBuiltinTools,
-        "augmentConfigTools": _augment_config_tools,
-    }
+    factories = _default_factories()
 
     async def prepare_components(next_session: dict[str, Any], next_config: dict[str, Any], binding: Mapping[str, Any], source: _StagedRuntimeSource, *, has_session: bool = True) -> dict[str, Any]:
         return await prepareRuntimeSessionComponents(
@@ -175,6 +161,18 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                 daemon_status = await _call_method(daemon, "getStatus")
                 if daemon_status:
                     dispatch_bound(initial_binding, "daemon.snapshot", _daemon_snapshot_payload(daemon_status))
+        if owned_daemon:
+            async def _swap_daemon(client: dict[str, Any]) -> None:
+                nonlocal daemon, daemon_unsubscribe
+                with state_lock:
+                    daemon = client
+                    runtime_api["daemon"] = client
+                previous_unsubscribe, daemon_unsubscribe = daemon_unsubscribe, None
+                await _maybe_call(previous_unsubscribe)
+                binding = active_binding
+                if _has_method(client, "subscribe"):
+                    daemon_unsubscribe = await _call_method(client, "subscribe", binding.get("sessionId"), lambda record: dispatch_bound(binding, record.get("event"), record.get("data") or {}))
+            daemon_watch_stop = _start_daemon_watchdog({"instanceId": runtime_instance_id, "cwd": args.get("cwd") or config.get("cwd") or component_session.get("cwd"), "runtimePaths": paths, "emit": dispatch, "setDaemon": _swap_daemon})
     except BaseException:
         storage_lock_unsubscribe()
         initial_source.discard()
@@ -429,6 +427,8 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
 
         async def cleanup() -> None:
             nonlocal daemon_unsubscribe
+            if daemon_watch_stop:
+                daemon_watch_stop()
             storage_lock_unsubscribe()
             await _maybe_call(daemon_unsubscribe)
             daemon_unsubscribe = None

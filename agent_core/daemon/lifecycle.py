@@ -99,6 +99,7 @@ async def ensureTaskSupervisorDaemon(
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
     cwd = values.get("cwd") or os.getcwd()
+    owner_pid = values.get("ownerPid") if isinstance(values.get("ownerPid"), int) else os.getpid()
     if values.get("inProcess"):
         return await _ensure_in_process_supervisor(instance_id, cwd)
     await prepareDaemonRuntimeSecurity({"instanceId": instance_id, "requireStoppedForMigration": True})
@@ -110,7 +111,7 @@ async def ensureTaskSupervisorDaemon(
         getStateRoot(),
         timeoutMs=int((budget + 5) * 1000),
     ):
-        client = await _ensure_daemon_under_lock(instance_id, cwd, values, budget)
+        client = await _ensure_daemon_under_lock(instance_id, cwd, values, budget, owner_pid)
     _SUPERVISORS[instance_id] = client
     return client
 
@@ -120,6 +121,7 @@ async def _ensure_daemon_under_lock(
     cwd: str,
     args: dict[str, Any],
     budget: float,
+    owner_pid: int,
 ) -> dict[str, Any]:
     existing_client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
     if existing_client is not None:
@@ -144,7 +146,7 @@ async def _ensure_daemon_under_lock(
     await _cleanup_stale_daemon_artifacts(instance_id)
     last_error: BaseException | None = None
     for attempt in (1, 2):
-        process = await _spawn_detached_daemon(instance_id, cwd)
+        process = await _spawn_detached_daemon(instance_id, cwd, owner_pid)
         deadline = asyncio.get_running_loop().time() + budget
         while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.05)
@@ -281,7 +283,7 @@ async def _ensure_in_process_supervisor(instance_id: str, cwd: str) -> dict[str,
     return supervisor
 
 
-async def _spawn_detached_daemon(instance_id: str, cwd: str) -> subprocess.Popen[Any]:
+async def _spawn_detached_daemon(instance_id: str, cwd: str, owner_pid: int) -> subprocess.Popen[Any]:
     await ensureBaseLayout(cwd)
     os.makedirs(daemonLogsDir(instance_id), mode=0o700, exist_ok=True)
     os.chmod(daemonLogsDir(instance_id), 0o700)
@@ -302,6 +304,8 @@ async def _spawn_detached_daemon(instance_id: str, cwd: str) -> subprocess.Popen
                 cwd,
                 "--instance-id",
                 instance_id,
+                "--owner-pid",
+                str(owner_pid),
             ],
             cwd=cwd,
             env=env,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import signal
+
 from tests.support.agent_core_case import *
 from agent_core.daemon.security import DaemonSecurityError
 
@@ -379,6 +381,90 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 time.sleep(0.05)
             self.assertFalse(_pid_alive(daemon_pid))
         finally:
+            self.restore_home(root, previous)
+
+    def test_daemon_dies_with_owner_and_kills_owned_workers(self):
+        root, home, workspace, previous = self.temp_context()
+        owner = None
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
+            os.environ["AGENT_CORE_DAEMON_OWNER_POLL_MS"] = "200"
+            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid, "allowInProcessFallback": False}))
+            daemon_pid = run(core.loadDaemonState("owner-watch-instance"))["pid"]
+            command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(120)')}"
+            started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "contained worker"}))
+            task_id = started["taskId"]
+            worker_pid = None
+            for _ in range(100):
+                meta = run(core.readTaskMeta(task_id))
+                if meta and isinstance(meta.get("pid"), int):
+                    worker_pid = meta["pid"]
+                    break
+                time.sleep(0.05)
+            self.assertIsNotNone(worker_pid)
+            run(client["close"]())
+
+            owner.kill()
+            owner.wait(timeout=5)
+            from agent_core.daemon.lifecycle import _DAEMON_PROCESSES
+
+            spawned = _DAEMON_PROCESSES.get("owner-watch-instance")
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline:
+                daemon_gone = spawned.poll() is not None if spawned is not None else not _pid_alive(daemon_pid)
+                if daemon_gone and not _pid_alive(worker_pid):
+                    break
+                time.sleep(0.1)
+            self.assertTrue(spawned.poll() is not None if spawned is not None else not _pid_alive(daemon_pid), "daemon must die with its owner")
+            self.assertFalse(_pid_alive(worker_pid), "owned workers must die with the daemon")
+            events = run(core.loadDaemonEvents("owner-watch-instance"))
+            self.assertTrue(any(event.get("event") == "daemon.owner_lost" for event in events))
+            self.assertIsNone(run(core.loadDaemonState("owner-watch-instance")))
+        finally:
+            os.environ.pop("AGENT_CORE_DAEMON_OWNER_POLL_MS", None)
+            if owner and owner.poll() is None:
+                owner.kill()
+            run(core.stopTaskSupervisorDaemon({"instanceId": "owner-watch-instance"}))
+            self.restore_home(root, previous)
+
+    def test_runtime_watchdog_replaces_killed_daemon_with_one_fresh_instance(self):
+        from agent_core.runtime._daemon_watch import check_daemon_once
+
+        root, home, workspace, previous = self.temp_context()
+        try:
+            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "watchdog-instance", "cwd": str(workspace)}))
+            old_state = run(core.loadDaemonState("watchdog-instance"))
+            run(client["close"]())
+            emitted = []
+            swapped = []
+            context = {
+                "instanceId": "watchdog-instance",
+                "cwd": str(workspace),
+                "emit": lambda event, data: emitted.append((event, data)),
+                "setDaemon": lambda fresh: swapped.append(fresh),
+            }
+            self.assertEqual(run(check_daemon_once(context)), "healthy")
+            self.assertEqual(emitted, [])
+
+            os.kill(old_state["pid"], signal.SIGKILL)
+            from agent_core.daemon.lifecycle import _DAEMON_PROCESSES
+
+            spawned = _DAEMON_PROCESSES.get("watchdog-instance")
+            deadline = time.monotonic() + 5
+            while spawned is not None and spawned.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertEqual(run(check_daemon_once(context)), "restarted")
+            new_state = run(core.loadDaemonState("watchdog-instance"))
+            self.assertNotEqual(new_state["pid"], old_state["pid"])
+            self.assertNotEqual(new_state["epoch"], old_state["epoch"])
+            self.assertEqual([event for event, _data in emitted], ["daemon.lost", "daemon.restarted"])
+            self.assertEqual(len(swapped), 1)
+            run(swapped[0]["close"]())
+        finally:
+            run(core.stopTaskSupervisorDaemon({"instanceId": "watchdog-instance"}))
             self.restore_home(root, previous)
 
     def test_two_runtime_instances_coexist_with_disjoint_daemons(self):

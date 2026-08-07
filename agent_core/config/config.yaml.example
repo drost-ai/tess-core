@@ -5,6 +5,11 @@
 # e.g. AGENT_CORE_SUBAGENTS_MAX_LIVE=4.
 
 knobs:
+  daemon:
+    # Milliseconds between the runtime's liveness checks of its containment daemon; a dead daemon is replaced by exactly one fresh instance. [50..60000]
+    heartbeat_ms: 3000
+    # Milliseconds between the containment daemon's liveness checks of its owner runtime process; owner death kills all owned workers and exits the daemon. [50..60000]
+    owner_poll_ms: 2000
   process:
     # Milliseconds an owned worker process gets to disappear after SIGKILL before termination is reported as failed. [100..60000]
     kill_grace_ms: 1000
