@@ -5,6 +5,11 @@
 # e.g. AGENT_CORE_SUBAGENTS_MAX_LIVE=4.
 
 knobs:
+  process:
+    # Milliseconds an owned worker process gets to disappear after SIGKILL before termination is reported as failed. [100..60000]
+    kill_grace_ms: 1000
+    # Milliseconds an owned worker process gets to exit after SIGTERM before the runtime escalates to SIGKILL. [100..60000]
+    term_grace_ms: 3000
   provider:
     # Quick-retry delay ladder in milliseconds for Anthropic messages requests; a small random jitter is added on top. [0..600000]
     anthropic_retry_delays_ms:

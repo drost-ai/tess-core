@@ -4,6 +4,16 @@ from tests.support.agent_core_case import *
 from agent_core.daemon.security import DaemonSecurityError
 
 
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
 class TaskSupervisorLifecycleTests(AgentCoreTestCase):
     def test_background_runner_accepts_reference_positional_contract(self):
         root, home, workspace, previous = self.temp_context()
@@ -284,6 +294,91 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 except subprocess.TimeoutExpired:
                     proc.kill()
             run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
+            self.restore_home(root, previous)
+
+    def test_termination_ladder_escalates_to_kill_for_term_immune_children(self):
+        from agent_core.process._termination import terminate_popen_group
+
+        polite = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            start_new_session=True,
+        )
+        self.assertEqual(run(terminate_popen_group(polite, term_grace_ms=2_000, kill_grace_ms=1_000)), "terminated")
+        self.assertIsNotNone(polite.poll())
+
+        stubborn = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nprint('armed', flush=True)\ntime.sleep(60)",
+            ],
+            start_new_session=True,
+            stdout=subprocess.PIPE,
+        )
+        self.assertEqual(stubborn.stdout.readline().strip(), b"armed")
+        self.assertEqual(run(terminate_popen_group(stubborn, term_grace_ms=400, kill_grace_ms=2_000)), "killed")
+        self.assertIsNotNone(stubborn.poll())
+
+    def test_supervisor_close_reports_then_kills_wedged_worker(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            events = []
+
+            async def on_event(event):
+                events.append(event)
+
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": on_event}))
+            script = "import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nprint('armed', flush=True)\ntime.sleep(120)"
+            command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
+            started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "wedged worker"}))
+            task_id = started["taskId"]
+            output_file = core.taskOutputPath(task_id)
+            for _ in range(100):
+                if Path(output_file).exists() and "armed" in Path(output_file).read_text(encoding="utf-8"):
+                    break
+                time.sleep(0.05)
+            from agent_core.tasks.supervisor_parts.shared import _PROCESS_REGISTRY
+
+            proc = _PROCESS_REGISTRY.get(task_id)
+            self.assertIsNotNone(proc)
+            os.environ["AGENT_CORE_PROCESS_TERM_GRACE_MS"] = "400"
+            try:
+                run(supervisor["close"]())
+            finally:
+                del os.environ["AGENT_CORE_PROCESS_TERM_GRACE_MS"]
+            self.assertIsNotNone(proc.poll())
+            stopping = [event for event in events if event.get("event") == "supervisor.stopping_workers"]
+            self.assertEqual(len(stopping), 1)
+            self.assertEqual(stopping[0]["data"]["count"], 1)
+            self.assertIn(task_id, stopping[0]["data"]["task_ids"])
+        finally:
+            self.restore_home(root, previous)
+
+    def test_bootstrap_starts_daemon_default_on_and_close_stops_it(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(session))
+            boot = run(core.bootstrapRuntime({"session": session, "config": config, "cwd": str(workspace)}))
+            instance_id = boot["runtimeInstanceId"]
+            try:
+                self.assertIsNotNone(boot.get("daemon"))
+                state = run(core.loadDaemonState(instance_id))
+                self.assertIsNotNone(state)
+                daemon_pid = state["pid"]
+                self.assertTrue(_pid_alive(daemon_pid))
+            finally:
+                run(boot["close"]())
+            self.assertIsNone(run(core.loadDaemonState(instance_id)))
+            deadline = time.monotonic() + 5
+            while _pid_alive(daemon_pid) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertFalse(_pid_alive(daemon_pid))
+        finally:
             self.restore_home(root, previous)
 
     def test_two_runtime_instances_coexist_with_disjoint_daemons(self):

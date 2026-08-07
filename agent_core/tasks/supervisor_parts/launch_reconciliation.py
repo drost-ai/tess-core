@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-import signal
 from ..._utils import maybe_await
 from ...process.identity import (
     ProcessIdentityError,
     processIdentityFromRecord,
-    signalOwnedProcess,
-    verifyOwnedProcessIdentity,
 )
 from ...storage import (
     mutateChildAgent,
@@ -18,6 +14,7 @@ from ...storage import (
 from typing import Any, Callable
 from .mappers import _task_record_event_payload
 from ...process.task_launch import failTaskLaunchReservation
+from ...process._termination import drain_owned_process
 
 
 _ACTIVE_CHILD_STATUSES = {"starting", "backgrounded", "running", "awaiting_input"}
@@ -50,7 +47,7 @@ async def _reconcile_interrupted_launch(
         identity = None
         identity_error = exc.code
     if identity is not None:
-        identity_error = await _drain_interrupted_launch(identity)
+        identity_error = await drain_owned_process(identity)
 
     reason = "Task launch was interrupted before durable attachment; retry is safe."
     failed = failTaskLaunchReservation(reservation, reason)
@@ -112,34 +109,6 @@ async def _reconcile_interrupted_launch(
     await maybe_await(
         emit("task.failed", _task_record_event_payload(next_record), session_id)
     )
-
-
-async def _drain_interrupted_launch(identity: dict[str, Any]) -> str | None:
-    try:
-        await signalOwnedProcess(identity, signal.SIGTERM)
-    except ProcessIdentityError as exc:
-        return exc.code
-    except OSError:
-        return "process.not_found"
-    for _ in range(150):
-        await asyncio.sleep(0.02)
-        try:
-            await verifyOwnedProcessIdentity(identity)
-        except ProcessIdentityError as exc:
-            return exc.code
-    try:
-        await signalOwnedProcess(identity, signal.SIGKILL)
-    except ProcessIdentityError as exc:
-        return exc.code
-    except OSError:
-        return "process.not_found"
-    for _ in range(50):
-        await asyncio.sleep(0.02)
-        try:
-            await verifyOwnedProcessIdentity(identity)
-        except ProcessIdentityError as exc:
-            return exc.code
-    return "process.drain_timeout"
 
 
 async def _repair_interrupted_launch_links(

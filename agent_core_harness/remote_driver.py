@@ -156,6 +156,7 @@ async def bootstrap_remote_runtime(data: dict[str, Any], sandbox: ScenarioSandbo
             "session": session,
             "config": config,
             "cwd": str(sandbox.workspace),
+            "daemonEnabled": False,
             "enableBridge": True,
             "bridgeName": data.get("bridgeName") or "qa",
             "bridgeStartPolling": False,

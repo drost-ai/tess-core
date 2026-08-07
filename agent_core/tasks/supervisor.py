@@ -8,6 +8,7 @@ import threading
 import uuid
 from .._utils import maybe_await
 from ..process.task_launch import createTaskLaunchReservation
+from ..process._termination import terminate_popen_group
 from ..storage.paths import ensureBaseLayout
 from ..storage.records import (
     listChildAgents,
@@ -395,10 +396,17 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return release
 
     async def close() -> None:
-        for task_id, proc in list(_PROCESS_REGISTRY.items()):
-            if proc.poll() is None:
-                with contextlib.suppress(Exception):
-                    await stop_task(task_id)
+        live = [(task_id, proc) for task_id, proc in list(_PROCESS_REGISTRY.items()) if proc.poll() is None]
+        if live:
+            # Report-then-kill, no prompt: the parent learns what is being
+            # stopped, then every owned worker is escalated to guaranteed death.
+            await maybe_await(emit("supervisor.stopping_workers", {"count": len(live), "task_ids": [task_id for task_id, _proc in live]}))
+        for task_id, proc in live:
+            with contextlib.suppress(Exception):
+                await stop_task(task_id)
+            outcome = await terminate_popen_group(proc)
+            if outcome == "survived":
+                await maybe_await(emit("supervisor.reconcile_failed", {"reason": f"worker for {task_id} survived SIGKILL", "family": "shutdown"}))
         await health_check_controller["close"]()
         for thread in list(_THREAD_WATCHERS):
             if thread is not threading.current_thread() and thread.is_alive():

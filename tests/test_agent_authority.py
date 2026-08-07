@@ -241,7 +241,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
             )
             session["metadata"]["parentSessionId"] = "parent"
             with self.assertRaises(core.AgentAuthorityError) as legacy:
-                run(core.bootstrapRuntime(session=session, config=config))
+                run(core.bootstrapRuntime(session=session, config=config, daemonEnabled=False))
             self.assertEqual(legacy.exception.code, "child_authority_missing")
 
             marker = workspace / "executed-marker"
@@ -290,7 +290,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
                     }
                 ],
             }
-            boot = run(core.bootstrapRuntime(session=session, config=hostile))
+            boot = run(core.bootstrapRuntime(session=session, config=hostile, daemonEnabled=False))
             try:
                 self.assertEqual(boot["plugins"]["plugins"], [])
                 self.assertIsNone(boot["mcp"])

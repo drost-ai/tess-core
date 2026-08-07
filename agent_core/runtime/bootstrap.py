@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import asyncio
-import threading
-import uuid
+import asyncio, threading, uuid
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
 from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
 from ..collaboration import createCollaborationRuntime
-from ..daemon import ensureTaskSupervisorDaemon
+from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from .exception_groups import RuntimeExceptionGroup as _RuntimeExceptionGroup
 from .lifecycle_barrier import createLifecycleBarrier
 from ..mcp import createMcpRuntime
@@ -66,6 +64,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     session_runtime: dict[str, Any] | None = None
     active_components: dict[str, Any] | None = None
     daemon = args.get("daemon") or args.get("daemonClient")
+    owned_daemon = False
     daemon_unsubscribe: Any = None
     monitor_runtime: dict[str, Any] | None = args.get("monitorRuntime") or args.get("monitors")
     task_runtime: dict[str, Any] | None = args.get("taskRuntime") or args.get("tasks")
@@ -158,8 +157,9 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
         for event, data in initial_source.activate():
             dispatch_bound(active_binding, event, data)
 
-        if daemon is None and args.get("daemonEnabled"):
+        if daemon is None and args.get("daemonEnabled", True) is not False:
             daemon = await ensureTaskSupervisorDaemon({"instanceId": runtime_instance_id, "cwd": args.get("cwd") or config.get("cwd") or component_session.get("cwd")})
+            owned_daemon = True
         if session and not daemon:
             if monitor_runtime is None:
                 monitor_runtime = await createMonitorRuntime({"session": session, "config": config, "emit": dispatch, "runtimeBinding": active_binding, "runtimePaths": paths})
@@ -434,7 +434,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             daemon_unsubscribe = None
             failures = await _close_many(
                 [
-                    _get_method(daemon, "close"),
+                    (lambda: stopTaskSupervisorDaemon({"instanceId": runtime_instance_id})) if owned_daemon else _get_method(daemon, "close"),
                     collaboration_runtime.get("close") if owned_collaboration and collaboration_runtime else None,
                     task_runtime.get("close") if owned_task and task_runtime else None,
                     monitor_runtime.get("close") if owned_monitor and monitor_runtime else None,

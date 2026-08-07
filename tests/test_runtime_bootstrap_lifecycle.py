@@ -58,7 +58,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 "createTaskRuntime",
                 fake_tasks,
             ), mock.patch.object(runtime_module, "createCollaborationRuntime", fake_collaboration):
-                boot = run(core.bootstrapRuntime({"session": session, "config": config, "enableBridge": True}))
+                boot = run(core.bootstrapRuntime({"session": session, "config": config, "enableBridge": True, "daemonEnabled": False}))
                 run(boot["close"]())
 
             self.assertEqual(close_order, ["collaboration", "tasks", "monitors", "bridge", "mcp"])
@@ -169,6 +169,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                     {
                         "session": session,
                         "config": config,
+                        "daemonEnabled": False,
                         "workspaceController": FakeWorkspace(order),
                         "monitorRuntime": runtime_for("monitors"),
                         "taskRuntime": runtime_for("tasks"),

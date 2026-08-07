@@ -17,7 +17,7 @@ from .sandbox import ScenarioSandbox
 async def bootstrap_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, config = await ensure_session_config(data, sandbox, state)
     events = state.setdefault("runtime_events", [])
-    runtime = await core.bootstrapRuntime({"session": session, "config": config, "cwd": str(sandbox.workspace)})
+    runtime = await core.bootstrapRuntime({"session": session, "config": config, "cwd": str(sandbox.workspace), "daemonEnabled": False})
     runtime["subscribeEvents"](lambda envelope: events.append(_json_safe(_validated_envelope(envelope))))
     runtime["emitEvent"]("session.activated", core.activeSessionPayload(session, config))
     state["runtime"] = runtime

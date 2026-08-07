@@ -82,6 +82,22 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=3_600_000,
     ),
     Knob(
+        "process.term_grace_ms",
+        3_000,
+        "int",
+        "Milliseconds an owned worker process gets to exit after SIGTERM before the runtime escalates to SIGKILL.",
+        minimum=100,
+        maximum=60_000,
+    ),
+    Knob(
+        "process.kill_grace_ms",
+        1_000,
+        "int",
+        "Milliseconds an owned worker process gets to disappear after SIGKILL before termination is reported as failed.",
+        minimum=100,
+        maximum=60_000,
+    ),
+    Knob(
         "provider.openai_retry_delays_ms",
         (1_000, 3_000, 5_000, 10_000, 30_000),
         "int_list",

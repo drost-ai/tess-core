@@ -90,7 +90,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             self.assertNotIn("recentEvents", state["collaboration"])
             self.assertNotIn("lastStatus", state["collaboration"])
 
-            boot = run(core.bootstrapRuntime({"session": session, "config": config}))
+            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
             self.assertTrue(boot["collaborationRuntime"])
             self.assertTrue(any(tool.name == "Agent" for tool in boot["tools"]))
             self.assertGreaterEqual(boot["stateStore"]["getState"]()["collaboration"]["activeCount"], 2)

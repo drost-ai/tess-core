@@ -116,6 +116,7 @@ KNOWN_RUNTIME_EVENTS = {
     "provider.transport_fallback",
     "storage.record_unavailable",
     "supervisor.reconcile_failed",
+    "supervisor.stopping_workers",
     "task.projection_skipped",
     "task.reconcile_skipped",
     "task.stopped",
