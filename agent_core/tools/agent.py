@@ -65,6 +65,21 @@ def _agent_tool() -> ToolDefinition:
         task_id = payload.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             return launched
+        if not input.get("wait"):
+            # Default: don't hold the turn hostage to the child's first turn.
+            # The result arrives as a child message and wakes an idle parent.
+            return {
+                "content": pretty_json(
+                    {
+                        **payload,
+                        "result": None,
+                        "note": (
+                            "Spawned; not waiting. The child's result will arrive as a child message. "
+                            "SendMessage(to=<agent_id>) reaches it; TaskOutput/TaskStop manage it."
+                        ),
+                    }
+                )
+            }
         # Call-time import: config package imports tools at module load.
         from ..config._knobs import knobValue
 

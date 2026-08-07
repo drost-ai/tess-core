@@ -1,6 +1,6 @@
 {
   "name": "SendMessage",
-  "description": "Send a message to a related agent: \"parent\" from a subagent, or a child agent id from the parent session. Set expects_reply to block until the recipient answers (reply_to correlates an answer to an earlier message).",
+  "description": "Send a message to a related agent: \"parent\" from a subagent, or a child agent id from the parent session. expects_reply blocks your turn until the answer — use it for quick questions only; for long-running work send without it and the reply will arrive as a message that wakes you. reply_to correlates an answer to an earlier message.",
   "inputSchema": {
     "type": "object",
     "properties": {

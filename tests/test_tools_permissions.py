@@ -154,7 +154,6 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_agent_nested_depth_boundary_and_cancellation_propagation(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            os.environ["AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS"] = "200"
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
 
@@ -172,7 +171,7 @@ class ToolPermissionTests(AgentCoreTestCase):
                     )
                 )["content"]
             )
-            self.assertIsNone(result["result"])  # no worker ran; spawn still registered
+            self.assertIsNone(result["result"])  # non-blocking default: spawn registered, no wait
             child_session = run(core.loadSession(result["session_id"]))
             self.assertEqual(child_session["metadata"]["depth"], 2)
 
@@ -190,7 +189,6 @@ class ToolPermissionTests(AgentCoreTestCase):
             self.assertEqual(already_cancelled_parent["metadata"]["childAgentIds"], [])
             self.assertEqual(already_cancelled_parent["metadata"]["childSessionIds"], [])
         finally:
-            os.environ.pop("AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS", None)
             self.restore_home(root, previous)
 
     def test_agent_permission_and_stop_reason_helpers_match_reference_edges(self):

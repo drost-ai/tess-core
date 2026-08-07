@@ -144,7 +144,7 @@ class ToolAgentTests(AgentCoreTestCase):
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             result = run(
                 agent.handler(
-                    {"description": "Run async", "prompt": "Work in the background", "name": "Async worker"},
+                    {"description": "Run async", "prompt": "Work in the background", "name": "Async worker", "wait": True},
                     {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
                 )
             )
@@ -339,4 +339,31 @@ class ToolAgentTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
+            self.restore_home(root, previous)
+
+
+class NonBlockingSpawnTests(AgentCoreTestCase):
+    def test_default_spawn_returns_immediately_without_waiting(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(parent))
+
+            async def fake_start(task_args):
+                return {"taskId": "nb-task", "outputFile": str(workspace / "out.log")}
+
+            started_at = time.monotonic()
+            result = run(
+                next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
+                    {"description": "No wait", "prompt": "go"},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
+                )
+            )
+            self.assertLess(time.monotonic() - started_at, 2.0, "default spawn must not block on the child")
+            payload = json.loads(result["content"])
+            self.assertEqual(payload["task_id"], "nb-task")
+            self.assertIsNone(payload["result"])
+            self.assertIn("not waiting", payload["note"])
+        finally:
             self.restore_home(root, previous)

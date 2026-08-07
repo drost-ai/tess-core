@@ -205,7 +205,6 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             root_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent["metadata"]["depth"] = 1
-            os.environ["AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS"] = "200"
 
             async def fake_start(task_args):
                 return {"taskId": f"maxdepth-task-{task_args['agentId'][:8]}", "outputFile": str(workspace / "out.log")}
@@ -230,7 +229,6 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                     {"session": child_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: blocked_events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
                 )
             )
-            os.environ.pop("AGENT_CORE_SUBAGENTS_INITIAL_RESULT_TIMEOUT_MS", None)
             self.assertTrue(blocked["isError"])
             self.assertIn("child depth 2 exceeds max 1", blocked["content"])
             self.assertEqual(blocked_events[0][0], "subagent.depth_blocked")
