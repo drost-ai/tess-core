@@ -52,6 +52,8 @@ async def _handle_daemon_request(
         result = await supervisor["skipTaskQuestion"](params)
     elif method == "readTaskQuestions":
         result = await supervisor["readTaskQuestions"](params.get("taskId"))
+    elif method == "readTaskEvents":
+        result = await supervisor["readTaskEvents"](params.get("taskId"))
     elif method == "shutdown":
         return {
             "result": {"status": "shutting_down"},

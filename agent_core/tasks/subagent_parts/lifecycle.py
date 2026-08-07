@@ -47,17 +47,18 @@ from ...contracts.records import launch_output_file, launch_task_id
 async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     context = args["context"]
+    supervisor = context.get("daemon") or context.get("taskSupervisor")
+    if not supervisor:
+        # Checked before prepareSubagent so a refused launch persists nothing.
+        raise RuntimeError(
+            "Subagent launch requires the task supervisor daemon; unsupervised local spawning has been removed."
+        )
     _throw_if_subagent_cancelled(context)
     prepared = await prepareSubagent(args)
     _throw_if_subagent_cancelled(context)
     child_session = prepared["childSession"]
     child_record = prepared["childRecord"]
     agent_id = prepared["agentId"]
-    supervisor = context.get("daemon") or context.get("taskSupervisor")
-    if not supervisor:
-        raise RuntimeError(
-            "Subagent launch requires the task supervisor daemon; unsupervised local spawning has been removed."
-        )
     launched = await supervisor["startSubagentTask"](
             {
                 "parentSessionId": context["session"]["id"],

@@ -242,6 +242,7 @@ def _create_daemon_client(
         "answerTaskQuestion": lambda task_args=None, **task_kwargs: request("answerTaskQuestion", {**(task_args or {}), **task_kwargs}),
         "skipTaskQuestion": lambda task_args=None, **task_kwargs: request("skipTaskQuestion", {**(task_args or {}), **task_kwargs}),
         "readTaskQuestions": lambda task_id: request("readTaskQuestions", {"taskId": task_id}),
+        "readTaskEvents": lambda task_id: request("readTaskEvents", {"taskId": task_id}),
         "subscribe": subscribe,
         "getState": lambda: {"remote": True, "socketPath": socket_path},
     }

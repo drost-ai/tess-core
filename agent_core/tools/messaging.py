@@ -55,7 +55,7 @@ def _send_message_tool() -> ToolDefinition:
                 {
                     "direction": "to_parent",
                     "sender": "child",
-                    "kind": "reply" if reply_to else "status",
+                    "kind": "reply" if reply_to else ("question" if expects_reply else "status"),
                     "content": message,
                     "metadata": {"replyTo": reply_to} if reply_to else {},
                 },
