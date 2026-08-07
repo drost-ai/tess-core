@@ -126,6 +126,7 @@ RuntimeEventName = Literal[
     "runtime.stale_work_discarded",
     "subagent.limit_exceeded",
     "subagent.mailbox.delivered",
+    "subagent.message",
     "turn.stable_boundary_stopped",
     "health_check.stale_result_dropped",
     "hook.completed",

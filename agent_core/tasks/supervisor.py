@@ -24,6 +24,7 @@ from ..storage.session_archive import loadSession
 from .supervisor_parts.communication import createTaskCommunicationApi, readTaskOutput
 from .supervisor_parts.health import _inspect_latest_task_record
 from .supervisor_parts.launch import _create_process_task_launcher
+from .supervisor_parts.mailbox_watch import create_mailbox_watch_loop
 from .supervisor_parts.live_work import _create_live_work_verdict_cache, _invalidate_live_work_cache
 from .supervisor_parts.processes import _prepare_shell_argv, _worker_env
 from .supervisor_parts.projection import (
@@ -452,6 +453,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     health_reconcile = asyncio.create_task(health_reconcile_loop())
     _TASK_WATCHERS.add(health_reconcile)
     health_reconcile.add_done_callback(_TASK_WATCHERS.discard)
+    mailbox_watch = asyncio.create_task(create_mailbox_watch_loop(emit)())
+    _TASK_WATCHERS.add(mailbox_watch)
+    mailbox_watch.add_done_callback(_TASK_WATCHERS.discard)
 
     return {
         "close": close,

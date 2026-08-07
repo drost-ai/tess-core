@@ -25,6 +25,7 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
     active_session = args.get("session") or {}
     active_config = args.get("config") or {}
     active_binding = args.get("binding")
+    turn_in_flight = False
     emit: Callable[[str, dict[str, Any]], Any] = args.get("emitRuntimeEvent") or args.get("emit") or (lambda *_: None)
 
     def get_active_session() -> dict[str, Any]:
@@ -56,7 +57,9 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
         emit("session.activated", payload)
 
     def start_turn(turn: dict[str, Any] | None = None, **turn_kwargs: Any) -> None:
+        nonlocal turn_in_flight
         turn = {**(turn or {}), **turn_kwargs}
+        turn_in_flight = True
         emit(
             "turn.started",
             {
@@ -71,7 +74,9 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
         emit("turn.cancelling", {"session_id": active_session.get("id")})
 
     def finish_turn(turn: dict[str, Any] | None = None, **turn_kwargs: Any) -> None:
+        nonlocal turn_in_flight
         turn = {**(turn or {}), **turn_kwargs}
+        turn_in_flight = False
         kind = turn.get("kind") or "completed"
         emit(
             "turn.cancelled" if kind == "cancelled" else "turn.completed",
@@ -84,6 +89,8 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
         )
 
     def fail_turn(error: BaseException | str) -> None:
+        nonlocal turn_in_flight
+        turn_in_flight = False
         emit("turn.failed", {"session_id": active_session.get("id"), "message": str(error)})
 
     controller = {
@@ -97,6 +104,7 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
         "setTurnCancelling": set_turn_cancelling,
         "finishTurn": finish_turn,
         "failTurn": fail_turn,
+        "isTurnInFlight": lambda: turn_in_flight,
         "close": lambda: None,
     }
     if active_session:

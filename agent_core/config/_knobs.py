@@ -98,6 +98,14 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=10_000,
     ),
     Knob(
+        "daemon.mailbox_watch_ms",
+        1_500,
+        "int",
+        "Milliseconds between the containment daemon's sweeps of live children's mailboxes for unannounced to_parent messages (the parent-wake signal).",
+        minimum=100,
+        maximum=60_000,
+    ),
+    Knob(
         "daemon.owner_poll_ms",
         2_000,
         "int",

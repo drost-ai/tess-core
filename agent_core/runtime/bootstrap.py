@@ -486,10 +486,10 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                 "collaboration"
             ),
             "setActiveSession": set_active_session,
-            "startTurn": session_runtime["startTurn"] if session_runtime else lambda *_a, **_k: None,
-            "setTurnCancelling": session_runtime["setTurnCancelling"] if session_runtime else lambda: None,
+            "startTurn": session_runtime["startTurn"] if session_runtime else lambda *_a, **_k: None, "setTurnCancelling": session_runtime["setTurnCancelling"] if session_runtime else lambda: None,
             "finishTurn": session_runtime["finishTurn"] if session_runtime else lambda *_a, **_k: None,
             "failTurn": session_runtime["failTurn"] if session_runtime else lambda _error: None,
+            "isTurnInFlight": session_runtime["isTurnInFlight"] if session_runtime else lambda: False,
             "close": close,
             "runtimePaths": paths,
             "runtimeInstanceId": runtime_instance_id,

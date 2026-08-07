@@ -24,6 +24,7 @@ from .dynamic_context import (
     dynamicContextBelongsInMessages,
     injectSystemContextIntoMessages,
 )
+from .continuity import runParentContinuityTurn
 from .loop import runAgentPrompt
 from .plan_policy import (
     OperatorPolicyDecision,
@@ -149,6 +150,7 @@ __all__ = [
     "resolve_plan_mode_mcp_verdict",
     "resolve_tool_concurrency",
     "runAgentPrompt",
+    "runParentContinuityTurn",
     "run_in_provider_turn_session",
     "run_post_tool_hook",
     "run_pre_tool_hook",
