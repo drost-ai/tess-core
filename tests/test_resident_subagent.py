@@ -116,3 +116,58 @@ class ResidentSubagentTests(AgentCoreTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SubagentCapacityGovernanceTests(AgentCoreTestCase):
+    def test_capacity_roster_then_stop_frees_a_slot(self):
+        root, home, workspace, previous = self.temp_context()
+        supervisor = None
+        try:
+            os.environ["AGENT_CORE_SUBAGENTS_MAX_LIVE"] = "1"
+            os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "200"
+            seeder = ResidentSubagentTests()
+            config, parent, child = seeder._seed_family(home, workspace)
+            events = []
+            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            started = run(supervisor["startSubagentTask"]({
+                "parentSessionId": parent["id"], "sessionId": child["id"],
+                "agentId": "resident-agent", "cwd": str(workspace), "label": "Resident",
+            }))
+            task_id = started["taskId"]
+            seeder._wait_for(
+                lambda: (run(core.readTaskMeta(task_id)) or {}).get("status") == "awaiting_input",
+                label="first child resident idle",
+            )
+
+            second_child = core.createEmptySession(
+                cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"],
+                model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"],
+                permissionMode="bypassPermissions",
+            )
+            second_child["metadata"]["parentSessionId"] = parent["id"]
+            run(core.saveSession(second_child))
+            refused = run(supervisor["startSubagentTask"]({
+                "parentSessionId": parent["id"], "sessionId": second_child["id"],
+                "agentId": "resident-agent-2", "cwd": str(workspace), "label": "Second",
+            }))
+            self.assertTrue(refused["atCapacity"])
+            self.assertEqual(refused["limit"], 1)
+            self.assertEqual(len(refused["children"]), 1)
+            self.assertEqual(refused["children"][0]["agentId"], "resident-agent")
+            self.assertEqual(refused["children"][0]["status"], "awaiting_input")
+            self.assertTrue(any(event.get("event") == "subagent.capacity" for event in events))
+
+            stopped = run(supervisor["stopTask"](task_id))
+            self.assertEqual(stopped["status"], "stopped")
+            second_started = run(supervisor["startSubagentTask"]({
+                "parentSessionId": parent["id"], "sessionId": second_child["id"],
+                "agentId": "resident-agent-2", "cwd": str(workspace), "label": "Second",
+            }))
+            self.assertIn("taskId", second_started)
+            run(supervisor["stopTask"](second_started["taskId"]))
+        finally:
+            os.environ.pop("AGENT_CORE_SUBAGENTS_MAX_LIVE", None)
+            os.environ.pop("AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS", None)
+            if supervisor:
+                run(supervisor["close"]())
+            self.restore_home(root, previous)

@@ -12,6 +12,7 @@ from ...storage import (
     taskOutputPath,
 )
 from .utils import _require_string
+from ..._utils import maybe_await
 from typing import Any, Callable
 from .processes import _worker_env
 from .records import _build_task_record
@@ -25,6 +26,7 @@ def _create_subagent_task_starter(
     cwd: str,
     supervisor_id: str,
     launch_process_task: Callable[..., Any],
+    emit: Callable[..., Any] | None = None,
 ) -> Callable[..., Any]:
     async def start_subagent_task(
         task_args: dict[str, Any] | None = None,
@@ -48,16 +50,31 @@ def _create_subagent_task_starter(
             or task_args.get("runtime_contract")
             or child_metadata.get("subagentRuntimeContract")
         )
+        records = await listTaskRecords()
         capacity = check_subagent_capacity(
             resolve_subagent_concurrency_policy(),
-            await listTaskRecords(),
+            records,
             runtime_contract if isinstance(runtime_contract, dict) else None,
         )
         if capacity:
-            raise RuntimeError(
-                f"Subagent capacity exceeded: {capacity.get('reason')} "
-                f"({capacity.get('active')}/{capacity.get('limit')})"
-            )
+            # Structured refusal, not an exception: the parent model decides —
+            # SendMessage into an existing child's context or stop one first.
+            roster = await _live_children_roster(records)
+            result = {
+                "atCapacity": True,
+                "reason": capacity.get("reason"),
+                "limit": capacity.get("limit"),
+                "active": capacity.get("active"),
+                **({"group": capacity.get("group")} if capacity.get("group") else {}),
+                "children": roster,
+            }
+            if emit is not None:
+                await maybe_await(emit(
+                    "subagent.capacity",
+                    {"limit": capacity.get("limit"), "active": capacity.get("active"), "reason": capacity.get("reason"), "children": [child.get("agentId") for child in roster]},
+                    parent_session_id,
+                ))
+            return result
         task_id = str(uuid.uuid4())
         output_file = taskOutputPath(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
@@ -189,3 +206,21 @@ def _create_subagent_task_starter(
         return result
 
     return start_subagent_task
+
+
+async def _live_children_roster(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from ...subagents.capacity import _active_subagent_records
+
+    roster: list[dict[str, Any]] = []
+    for record in _active_subagent_records(records):
+        agent_id = record.get("sourceId")
+        child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+        roster.append({
+            "agentId": agent_id,
+            "name": (child or {}).get("name") or record.get("title"),
+            "status": (child or {}).get("status") or record.get("status"),
+            "lastActivityAt": (child or {}).get("lastUpdatedAt") or record.get("updatedAt"),
+            "lastResultSummary": (child or {}).get("resultSummary") or record.get("resultSummary"),
+            "taskId": record.get("id") or record.get("taskId"),
+        })
+    return roster

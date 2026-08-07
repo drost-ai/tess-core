@@ -111,6 +111,7 @@ KNOWN_RUNTIME_EVENTS = {
     "subagent.limit_exceeded",
     "subagent.mailbox.delivered",
     "subagent.message",
+    "subagent.capacity",
     "subagent.question.unanswered",
     "turn.stable_boundary_stopped",
     "health_check.stale_result_dropped",

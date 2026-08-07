@@ -60,6 +60,8 @@ def _agent_tool() -> ToolDefinition:
             payload = json.loads(launched.get("content") or "{}")
         except (TypeError, ValueError):
             return launched
+        if payload.get("at_capacity"):
+            return launched
         task_id = payload.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             return launched

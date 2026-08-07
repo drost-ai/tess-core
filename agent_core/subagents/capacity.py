@@ -21,6 +21,11 @@ def resolve_subagent_concurrency_policy(env: Mapping[str, str] | None = None) ->
     default_limit = _positive_int(source.get("TESS_SUBAGENT_MAX_CONCURRENCY")) or _positive_int(
         source.get("AGENT_CORE_SUBAGENT_MAX_CONCURRENCY")
     )
+    if default_limit is None:
+        # Call-time import: the config package imports subagents at module load.
+        from ..config._knobs import knobValue
+
+        default_limit = _positive_int(knobValue("subagents.max_live"))
     groups: dict[str, int] = {}
     raw_groups = source.get("TESS_SUBAGENT_CONCURRENCY_GROUP_LIMITS") or source.get(
         "AGENT_CORE_SUBAGENT_CONCURRENCY_GROUP_LIMITS"

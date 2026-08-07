@@ -229,7 +229,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             reserve_session_updates=[(session_id, _append_main_session_task)],
         )
 
-    start_subagent_task = _create_subagent_task_starter(cwd, supervisor_id, _launch_process_task)
+    start_subagent_task = _create_subagent_task_starter(cwd, supervisor_id, _launch_process_task, emit)
     stop_task = _create_task_stopper(
         task_stop_coordinator,
         live_work_cache,
