@@ -173,12 +173,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
 
     usage_totals["turns"] += 1
 
-    while True:
-        if _is_turn_cancelled(runtime):
-            return await cancel_turn()
-        exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
-        if exceeded and exceeded.get("reason") != "max_tool_calls":
-            return await finish_subagent_limit(exceeded)
+    async def drain_mailboxes() -> list[dict[str, Any]]:
         delivered_messages = await deliver_queued_task_messages_to_session(session, config)
         if delivered_messages:
             _safe_emit(
@@ -186,11 +181,20 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                 "subagent.mailbox.delivered",
                 {
                     "session_id": session["id"],
-                    "task_id": metadata.get("subagentTaskId") if isinstance(metadata, dict) else None,
+                    "task_ids": sorted({str(message.get("taskId")) for message in delivered_messages}),
                     "message_ids": [message.get("messageId") for message in delivered_messages],
                     "count": len(delivered_messages),
                 },
             )
+        return delivered_messages
+
+    while True:
+        if _is_turn_cancelled(runtime):
+            return await cancel_turn()
+        exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
+        if exceeded and exceeded.get("reason") != "max_tool_calls":
+            return await finish_subagent_limit(exceeded)
+        await drain_mailboxes()
         try:
             provider_result = await _request_provider_response(
                 {
@@ -271,6 +275,10 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         if not tool_uses:
             progress_ledger.complete(provider_call_index=state.provider_call_index)
             await persistSession(session, config)
+            # Final drain before the turn returns: anything a child sent while
+            # the last provider call ran lands in the transcript now, so the
+            # wake controller's idle check is the single remaining race point.
+            await drain_mailboxes()
             await _record_prompt_cache_eviction_intent_at_finalization(
                 {
                     "session": session,

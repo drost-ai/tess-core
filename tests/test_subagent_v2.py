@@ -245,6 +245,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 {
                     "messageId": "msg-contract-pin",
                     "taskId": "task-contract-pin",
+                    "direction": "to_child",
                     "childSessionId": session["id"],
                     "sender": "supervisor",
                     "kind": "answer",

@@ -96,3 +96,98 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
             self.assertEqual([item["messageId"] for item in delivered], ["retry-delivery"])
         finally:
             self.restore_home(root, previous)
+
+
+class MailboxDirectionTests(AgentCoreTestCase):
+    def test_to_parent_messages_deliver_to_parent_not_child(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                parent = core.createEmptySession(
+                    cwd=str(workspace), provider="openai", model="gpt-5.4",
+                    systemPrompt="parent", permissionMode="default", sessionId="dir-parent",
+                )
+                parent["metadata"]["taskIds"] = ["dir-task"]
+                child = core.createEmptySession(
+                    cwd=str(workspace), provider="openai", model="gpt-5.4",
+                    systemPrompt="child", permissionMode="default", sessionId="dir-child",
+                )
+                child["metadata"]["subagentTaskId"] = "dir-task"
+                await core.writeTaskMeta("dir-task", {
+                    "type": "subagent", "taskId": "dir-task", "id": "dir-task",
+                    "sessionId": child["id"], "session_id": child["id"],
+                    "parent_session_id": parent["id"], "status": "running",
+                    "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                })
+                up = await core.sendTaskMessage("dir-task", {
+                    "direction": "to_parent", "content": "progress: half done", "kind": "status",
+                })
+                self.assertEqual(up["direction"], "to_parent")
+                self.assertEqual(up["sender"], "child")
+                self.assertEqual(up["parentSessionId"], parent["id"])
+
+                child_drained = await core.deliverQueuedTaskMessagesToSession(child, {"sessionPersistence": True})
+                self.assertEqual(child_drained, [])
+                self.assertEqual(len(child["messages"]), 0)
+
+                parent_drained = await core.deliverQueuedTaskMessagesToSession(parent, {"sessionPersistence": True})
+                self.assertEqual([m["messageId"] for m in parent_drained], [up["messageId"]])
+                self.assertEqual(len(parent["messages"]), 1)
+                body = parent["messages"][0]["content"]
+                text = body if isinstance(body, str) else body[0]["text"]
+                self.assertIn("[CHILD MESSAGE]", text)
+                self.assertIn("task_id: dir-task", text)
+                self.assertIn("progress: half done", text)
+
+                again = await core.deliverQueuedTaskMessagesToSession(parent, {"sessionPersistence": True})
+                self.assertEqual(again, [])
+                self.assertEqual(len(parent["messages"]), 1)
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_legacy_records_without_direction_still_deliver_to_child(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                child = core.createEmptySession(
+                    cwd=str(workspace), provider="openai", model="gpt-5.4",
+                    systemPrompt="child", permissionMode="default", sessionId="legacy-child",
+                )
+                child["metadata"]["subagentTaskId"] = "legacy-task"
+                from agent_core.tasks.communication import task_mailbox_path
+
+                await core.appendJsonLine(
+                    task_mailbox_path("legacy-task"),
+                    {
+                        "messageId": "legacy-1", "taskId": "legacy-task",
+                        "childSessionId": child["id"], "sender": "parent",
+                        "kind": "guidance", "content": "old-style record",
+                        "status": "queued", "createdAt": "2026-01-01T00:00:00Z",
+                        "deliveredAt": None, "metadata": {},
+                    },
+                )
+                drained = await core.deliverQueuedTaskMessagesToSession(child, {"sessionPersistence": True})
+                self.assertEqual([m["messageId"] for m in drained], ["legacy-1"])
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_direction_validation_is_loud(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await core.writeTaskMeta("val-task", {
+                    "type": "subagent", "taskId": "val-task", "id": "val-task",
+                    "sessionId": "val-child", "session_id": "val-child",
+                    "status": "running", "cwd": str(workspace),
+                    "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+                })
+                with self.assertRaises(ValueError):
+                    await core.sendTaskMessage("val-task", {"direction": "sideways", "content": "x"})
+                with self.assertRaises(ValueError):
+                    await core.sendTaskMessage("val-task", {"direction": "to_parent", "content": "x"})
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)

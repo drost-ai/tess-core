@@ -53,9 +53,15 @@ async def read_task_events(task_id: str) -> list[dict[str, Any]]:
 
 async def send_task_message(task_id: str, message: Mapping[str, Any]) -> dict[str, Any]:
     meta = await readTaskMeta(task_id)
+    direction = message.get("direction") or "to_child"
+    if direction not in {"to_child", "to_parent"}:
+        raise ValueError(f"Unknown task message direction: {direction!r}")
     child_session_id = message.get("childSessionId") or message.get("child_session_id") or (meta or {}).get("session_id") or (meta or {}).get("sessionId")
     if not isinstance(child_session_id, str) or not child_session_id:
         raise ValueError("Task message requires a child session id.")
+    parent_session_id = message.get("parentSessionId") or message.get("parent_session_id") or (meta or {}).get("parent_session_id") or (meta or {}).get("parentSessionId")
+    if direction == "to_parent" and (not isinstance(parent_session_id, str) or not parent_session_id):
+        raise ValueError("A to_parent task message requires a parent session id.")
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
         raise ValueError("Task message requires non-empty content.")
@@ -63,8 +69,10 @@ async def send_task_message(task_id: str, message: Mapping[str, Any]) -> dict[st
     record = {
         "messageId": message.get("messageId") or message.get("message_id") or f"msg-{uuid.uuid4()}",
         "taskId": task_id,
+        "direction": direction,
         "childSessionId": child_session_id,
-        "sender": message.get("sender") or "parent",
+        **({"parentSessionId": parent_session_id} if isinstance(parent_session_id, str) and parent_session_id else {}),
+        "sender": message.get("sender") or ("child" if direction == "to_parent" else "parent"),
         "kind": message.get("kind") or "guidance",
         "content": content.strip(),
         "status": "queued",
@@ -78,6 +86,7 @@ async def send_task_message(task_id: str, message: Mapping[str, Any]) -> dict[st
         {
             "type": "message.queued",
             "messageId": record["messageId"],
+            "direction": direction,
             "sender": record["sender"],
             "kind": record["kind"],
             "childSessionId": child_session_id,
@@ -169,10 +178,22 @@ def _session_task_message_ids(session: Mapping[str, Any]) -> set[str]:
     return found
 
 
+def _message_matches_direction(message: Mapping[str, Any], session_id: str | None, direction: str) -> bool:
+    if direction == "to_parent":
+        if message.get("direction") != "to_parent":
+            return False
+        recipient = message.get("parentSessionId")
+        return not session_id or not isinstance(recipient, str) or recipient == session_id
+    if message.get("direction") not in (None, "to_child"):
+        return False
+    return not session_id or message.get("childSessionId") == session_id
+
+
 async def _deliver_mailbox_transaction(
     task_id: str,
     session: dict[str, Any],
     config: dict[str, Any] | None,
+    direction: str = "to_child",
 ) -> list[dict[str, Any]]:
     """Commit mailbox delivery and its session projection under one record lock.
 
@@ -190,8 +211,7 @@ async def _deliver_mailbox_transaction(
         claimed: list[dict[str, Any]] = []
         appended = 0
         for index, message in enumerate(messages):
-            matches_session = not child_session_id or message.get("childSessionId") == child_session_id
-            if message.get("status") != "queued" or not matches_session:
+            if message.get("status") != "queued" or not _message_matches_direction(message, child_session_id, direction):
                 continue
             message_id = message.get("messageId")
             updated = {**message, "status": "delivered", "deliveredAt": delivered_at}
@@ -228,29 +248,41 @@ async def _deliver_mailbox_transaction(
 
 
 def _message_envelope(message: Mapping[str, Any]) -> str:
-    sender = "SUPERVISOR" if message.get("sender") == "supervisor" else "PARENT"
+    raw_sender = message.get("sender")
+    sender = "SUPERVISOR" if raw_sender == "supervisor" else "CHILD" if raw_sender == "child" else "PARENT"
     kind = message.get("kind") or "guidance"
-    return f"[{sender} MESSAGE]\nkind: {kind}\nmessage_id: {message.get('messageId')}\n\n{message.get('content')}\n[/{sender} MESSAGE]"
+    origin = f"\ntask_id: {message.get('taskId')}" if message.get("direction") == "to_parent" else ""
+    return f"[{sender} MESSAGE]\nkind: {kind}\nmessage_id: {message.get('messageId')}{origin}\n\n{message.get('content')}\n[/{sender} MESSAGE]"
 
 
 async def deliver_queued_task_messages_to_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Drain every queued mailbox message addressed to this session.
+
+    A child session (metadata.subagentTaskId) receives to_child messages of
+    its own task; a parent session (metadata.taskIds) receives to_parent
+    messages across its children's tasks. A mid-tree session can be both.
+    """
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
-    task_id = metadata.get("subagentTaskId")
-    if not isinstance(task_id, str) or not task_id:
-        return []
-    messages = await _deliver_mailbox_transaction(task_id, session, config)
-    if not messages:
-        return []
-    for message in messages:
+    delivered: list[dict[str, Any]] = []
+    own_task_id = metadata.get("subagentTaskId")
+    if isinstance(own_task_id, str) and own_task_id:
+        delivered.extend(await _deliver_mailbox_transaction(own_task_id, session, config, "to_child"))
+    for child_task_id in metadata.get("taskIds") or []:
+        if not isinstance(child_task_id, str) or not child_task_id or child_task_id == own_task_id:
+            continue
+        if not os.path.exists(task_mailbox_path(child_task_id)):
+            continue
+        delivered.extend(await _deliver_mailbox_transaction(child_task_id, session, config, "to_parent"))
+    for message in delivered:
         await append_task_event(
-            task_id,
+            str(message.get("taskId")),
             {
                 "type": "message.delivered",
                 "messageId": message["messageId"],
                 "deliveredAt": message.get("deliveredAt"),
             },
         )
-    return messages
+    return delivered
 
 
 async def create_task_question(task_id: str, question: Mapping[str, Any]) -> dict[str, Any]:
