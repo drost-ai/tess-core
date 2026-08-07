@@ -342,61 +342,22 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     continue
                 if typ == "response.output_item.done":
                     if _close_openai_output_item(
-                        {
-                            "event": event,
-                            "incomplete_response": incomplete_response,
-                            "open_output_items": state.open_output_items,
-                            "completed_output_items": state.completed_output_items,
-                            "pending_by_item_id": state.pending_by_item_id,
-                            "item_to_call_id": state.item_to_call_id,
-                            "item_to_name": state.item_to_name,
-                            "tool_argument_bytes_by_item": state.tool_argument_bytes_by_item,
-                            "emitted_tool_ids": state.emitted_tool_ids,
-                            "item_text": state.item_text,
-                            "completed_item_records": state.completed_item_records,
-                            "completed_item_order": state.completed_item_order,
-                            "blocks": state.blocks,
-                        }
+                        state, event=event, incomplete_response=incomplete_response
                     ):
                         state.had_tool_use = True
                     continue
                 if typ == "response.completed":
                     state.phase = "response_complete"
-                    terminal = await _handle_response_completed(
-                        {
-                            "event": event,
-                            "incomplete_response": incomplete_response,
-                            "open_output_items": state.open_output_items,
-                            "pending_by_item_id": state.pending_by_item_id,
-                            "completed_item_order": state.completed_item_order,
-                            "completed_item_records": state.completed_item_records,
-                            "provider_label": provider_label,
-                            "phase": state.phase,
-                            "attempt": attempt,
-                            "had_output": state.had_output,
-                            "had_tool_use": state.had_tool_use,
-                            "logical_call_id": logical_call_id,
-                            "response_id": state.response_id,
-                            "reasoning_text": state.reasoning_text,
-                            "completed_turn_state": state.completed_turn_state,
-                            "usage": state.usage,
-                            "delivery": delivery,
-                            "runtime": runtime,
-                        }
+                    await _handle_response_completed(
+                        state,
+                        event=event,
+                        incomplete_response=incomplete_response,
+                        provider_label=provider_label,
+                        attempt=attempt,
+                        logical_call_id=logical_call_id,
+                        delivery=delivery,
+                        runtime=runtime,
                     )
-                    state.blocks = terminal["blocks"]
-                    state.emitted_text = terminal["authoritative_text"]
-                    state.had_output = terminal["had_output"]
-                    state.had_tool_use = terminal["had_tool_use"]
-                    state.stop_reason = terminal["stop_reason"]
-                    state.response_id = terminal["response_id"]
-                    state.completed_response_output = terminal["completed_response_output"]
-                    state.completed_response_id = terminal["completed_response_id"]
-                    state.completed_turn_state = terminal["completed_turn_state"]
-                    state.reconciliation = terminal["reconciliation"]
-                    state.partial_output_commit = terminal["partial_output_commit"]
-                    state.response_committed = True
-                    state.saw_completed = True
                     continue
                 terminal_failure = response_terminal_failure(
                     typ, event, provider_label=provider_label, phase=state.phase,

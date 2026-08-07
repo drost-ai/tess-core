@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from ..errors import createProviderFailureRecord, createProviderRequestError
+from ._attempt_state import ResponsesAttemptState
 from .normalization import _parse_complete_json_object
 from ..._utils import get_value
 
@@ -37,31 +39,31 @@ def message_projection_record(item_id: str, text: str) -> dict[str, Any]:
     return {"identity": item_id or None, "kind": "message", "text": text}
 
 
-def close_openai_output_item(context: dict[str, Any]) -> bool:
+def close_openai_output_item(
+    state: ResponsesAttemptState,
+    *,
+    event: Any,
+    incomplete_response: Callable[[str], Any],
+) -> bool:
     """Close one streamed output item and record its projection identity.
 
-    Returns True when the item completed a function call. Mutates the loop
-    state dictionaries supplied in ``context``; raises via the provided
-    ``incomplete_response`` factory on any structural violation.
+    Returns True when the item completed a function call. Mutates the attempt
+    ``state`` in place; raises via the provided ``incomplete_response``
+    factory on any structural violation.
     """
-    event = context["event"]
-    incomplete_response = context["incomplete_response"]
     item = get_value(event, "item", {})
     item_id = str(get_value(item, "id", None) or get_value(event, "item_id", "") or "")
-    open_output_items = context["open_output_items"]
-    if not item_id or item_id not in open_output_items:
+    if not item_id or item_id not in state.open_output_items:
         raise incomplete_response(
             "an output item completed without a matching start event"
         )
-    pending_by_item_id = context["pending_by_item_id"]
-    tool_argument_bytes_by_item = context["tool_argument_bytes_by_item"]
     completed_tool = False
     item_type = str(get_value(item, "type", "") or "")
     if item_type == "function_call":
-        pending = pending_by_item_id.get(item_id)
+        pending = state.pending_by_item_id.get(item_id)
         call_id = str(
             get_value(item, "call_id", "")
-            or context["item_to_call_id"].get(item_id, "")
+            or state.item_to_call_id.get(item_id, "")
             or ""
         )
         name = str(get_value(item, "name", "") or (pending or {}).get("name") or "")
@@ -71,18 +73,18 @@ def close_openai_output_item(context: dict[str, Any]) -> bool:
             raise incomplete_response(
                 f"function-call output item {item_id} completed without a call id and name"
             )
-        if call_id in context["emitted_tool_ids"]:
+        if call_id in state.emitted_tool_ids:
             raise incomplete_response(f"function call {call_id} completed more than once")
         input_value = (pending or {}).get("input")
         if not isinstance(input_value, dict) or raw != (pending or {}).get("raw"):
             try:
                 input_value = _parse_complete_json_object(raw)
             except Exception as exc:
-                tool_argument_bytes_by_item[item_id] = len(raw.encode("utf-8"))
+                state.tool_argument_bytes_by_item[item_id] = len(raw.encode("utf-8"))
                 raise incomplete_response(str(exc) or "tool arguments were malformed") from exc
-        tool_argument_bytes_by_item[item_id] = len(raw.encode("utf-8"))
-        context["emitted_tool_ids"].add(call_id)
-        context["blocks"].append(
+        state.tool_argument_bytes_by_item[item_id] = len(raw.encode("utf-8"))
+        state.emitted_tool_ids.add(call_id)
+        state.blocks.append(
             {
                 "type": "tool_use",
                 "id": call_id,
@@ -90,10 +92,10 @@ def close_openai_output_item(context: dict[str, Any]) -> bool:
                 "input": input_value,
             }
         )
-        context["completed_item_records"][item_id] = function_call_projection_record(
+        state.completed_item_records[item_id] = function_call_projection_record(
             item_id, call_id=call_id, name=name, input_value=input_value,
         )
-        context["completed_item_order"].append(item_id)
+        state.completed_item_order.append(item_id)
         completed_tool = True
     elif item_type == "message":
         parts = []
@@ -101,13 +103,13 @@ def close_openai_output_item(context: dict[str, Any]) -> bool:
             text_value = get_value(content, "text")
             if get_value(content, "type") == "output_text" and isinstance(text_value, str):
                 parts.append(text_value)
-        context["completed_item_records"][item_id] = message_projection_record(
-            item_id, "".join(parts) or context["item_text"].get(item_id, "")
+        state.completed_item_records[item_id] = message_projection_record(
+            item_id, "".join(parts) or state.item_text.get(item_id, "")
         )
-        context["completed_item_order"].append(item_id)
-    del open_output_items[item_id]
-    context["completed_output_items"].add(item_id)
-    pending_by_item_id.pop(item_id, None)
+        state.completed_item_order.append(item_id)
+    del state.open_output_items[item_id]
+    state.completed_output_items.add(item_id)
+    state.pending_by_item_id.pop(item_id, None)
     return completed_tool
 
 
