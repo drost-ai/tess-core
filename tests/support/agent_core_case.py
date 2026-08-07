@@ -112,7 +112,10 @@ class AgentCoreTestCase(unittest.TestCase):
         return root, home, workspace, previous
 
     def restore_home(self, root, previous):
+        from agent_core.config._knobs import resetConfiguredKnobs
+
         core.resetConfiguredRuntimeHome()
+        resetConfiguredKnobs()
         if previous is None:
             os.environ.pop("AGENT_CORE_HOME", None)
         else:

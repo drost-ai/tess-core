@@ -31,6 +31,7 @@ from .defaults import (
     normalizeProviderProfileName,
     normalizeTuiScreenMode,
 )
+from ._knobs import configureKnobs
 from .parsing import (
     _dedupe,
     _load_mcp_config,
@@ -198,6 +199,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
 
     sources = _parse_setting_sources(options.get("settingSources"))
     merged_settings = await _load_merged_settings(sources, cwd, options.get("settings"))
+    configureKnobs(merged_settings.get("knobs"))
     auth = await loadAuth()
     settings_env = merged_settings.get("env") or {}
     helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
