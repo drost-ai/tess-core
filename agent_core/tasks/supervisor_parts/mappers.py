@@ -70,7 +70,9 @@ def _map_remote_status(status: Any) -> str:
 
 
 def _is_active_child_agent_status(status: Any) -> bool:
-    return status in {"queued", "running", "backgrounded"}
+    # awaiting_input covers both a child blocked on a question and a
+    # resident child idling between turns — live either way.
+    return status in {"queued", "running", "backgrounded", "awaiting_input"}
 
 
 def _map_child_agent_status_to_task_status(status: Any) -> str:

@@ -136,7 +136,8 @@ async def _await_reply(
             if record_direction != direction:
                 continue
             record_metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
-            if correlation_id not in (record_metadata.get("replyTo"), record_metadata.get("questionId")):
+            replies_to = record_metadata.get("repliesTo") if isinstance(record_metadata.get("repliesTo"), list) else []
+            if correlation_id not in (record_metadata.get("replyTo"), record_metadata.get("questionId")) and correlation_id not in replies_to:
                 continue
             if record.get("status") == "queued":
                 # Claim it here so the boundary drain does not re-inject the

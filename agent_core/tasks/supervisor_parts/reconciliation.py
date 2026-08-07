@@ -363,7 +363,9 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
 
 async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
     status = meta.get("status")
-    if _is_terminal_worker_status(status):
+    if _is_terminal_worker_status(status) and not (status == "awaiting_input" and await _identity_verifies_alive(record, meta)):
+        # awaiting_input is terminal only for an exited one-shot worker; a
+        # verifiably live process with that status is a resident idling.
         mapped = _map_status(status)
         return {
             "state": "completed" if mapped == "completed" else "failed",
@@ -392,6 +394,15 @@ async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta
         "source": source,
         "status": status,
     }
+
+
+async def _identity_verifies_alive(record: dict[str, Any], meta: dict[str, Any]) -> bool:
+    try:
+        identity = processIdentityFromRecord(record, meta)
+        await verifyOwnedProcessIdentity(identity)
+        return True
+    except ProcessIdentityError:
+        return False
 
 
 def _extract_pid(record: dict[str, Any], meta: dict[str, Any]) -> int | None:

@@ -76,7 +76,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     task_id, agent_id = args["taskId"], args["agentId"]
     result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
     await saveSession(session)
-    await _publish_resident_turn_result(task_id, agent_id, session, result)
+    await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=[])
     turn_index = 1
     print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "session_id": session["id"], "agent_id": agent_id, "task_id": task_id, "result": {"text": result.get("text"), "stopReason": result.get("stopReason")}}), flush=True)
     while True:
@@ -88,26 +88,35 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
         ]
         if not queued:
             continue
+        trigger_ids = [str(message.get("messageId")) for message in queued if message.get("messageId")]
         await _mark_resident_status(task_id, agent_id, "running", None)
         try:
             # The turn's boundary drain claims and injects the queued
             # messages; an empty prompt makes them the turn's substance.
             result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
         except Exception as exc:  # stay resident: the parent decides what happens next
-            await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": f"[turn failed] {exc}"})
+            await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": f"[turn failed] {exc}", "metadata": _reply_metadata(trigger_ids)})
             await _mark_resident_status(task_id, agent_id, "awaiting_input", "resident_idle")
             continue
         await saveSession(session)
-        await _publish_resident_turn_result(task_id, agent_id, session, result)
+        await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=trigger_ids)
         turn_index += 1
         print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "result": {"text": (result.get("text") or "")[:400], "stopReason": result.get("stopReason")}}), flush=True)
 
 
-async def _publish_resident_turn_result(task_id: str, agent_id: str, session: dict[str, Any], result: dict[str, Any]) -> None:
+def _reply_metadata(trigger_ids: list[str]) -> dict[str, Any]:
+    """Correlate a turn's result with the messages that triggered it, so a
+    parent blocked in SendMessage(expects_reply) is released by it."""
+    if not trigger_ids:
+        return {}
+    return {"replyTo": trigger_ids[-1], "repliesTo": trigger_ids}
+
+
+async def _publish_resident_turn_result(task_id: str, agent_id: str, session: dict[str, Any], result: dict[str, Any], *, trigger_ids: list[str]) -> None:
     text = (result.get("text") or "").strip() or "(no text)"
     summary = text[:280]
     now = now_iso()
-    await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": text})
+    await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": text, "metadata": _reply_metadata(trigger_ids)})
 
     def _idle_child(current: dict[str, Any] | None) -> dict[str, Any] | None:
         if not current:
