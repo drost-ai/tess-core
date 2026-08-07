@@ -60,6 +60,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             )
             child["messages"].append({"role": "user", "content": "finish without tools"})
             child["metadata"]["parentSessionId"] = parent["id"]
+            child["metadata"]["subagentRuntimeContract"] = {"resident": False}
             child["metadata"]["agentId"] = "agent-runtime-home"
             child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
             child_authority = run(

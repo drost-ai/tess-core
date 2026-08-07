@@ -50,6 +50,14 @@ KNOB_REGISTRY: dict[str, Knob] = _declare(
         maximum=64,
     ),
     Knob(
+        "subagents.resident_poll_ms",
+        1_000,
+        "int",
+        "Milliseconds between a resident subagent's mailbox polls while idle between turns.",
+        minimum=100,
+        maximum=60_000,
+    ),
+    Knob(
         "provider.max_output_tokens",
         16384,
         "int",

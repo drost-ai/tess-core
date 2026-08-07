@@ -288,6 +288,7 @@ class ToolAgentTests(AgentCoreTestCase):
             child["metadata"]["parentSessionId"] = parent["id"]
             child["metadata"]["agentId"] = "agent-worker"
             child["metadata"]["agentName"] = "Worker"
+            child["metadata"]["subagentRuntimeContract"] = {"resident": False}
             child_authority = run(
                 core.captureAgentAuthority(
                     config=config,

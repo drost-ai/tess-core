@@ -97,6 +97,8 @@ def normalize_subagent_runtime_contract(definition: Mapping[str, Any] | None) ->
     concurrency_group = _first_present(definition, *_ALIASES["concurrencyGroup"])
     if isinstance(concurrency_group, str) and concurrency_group.strip():
         contract["concurrencyGroup"] = concurrency_group.strip()
+    if isinstance(definition.get("resident"), bool):
+        contract["resident"] = definition["resident"]
     return contract or None
 
 
