@@ -27,7 +27,7 @@ from .mappers import (
 )
 from .processes import _process_exit_summary
 from .records import _build_recovered_subagent_task_record, _build_task_record
-from .shared import _PROCESS_REGISTRY, _WATCHERS
+from .shared import _DEAD_WORKER_SUMMARY, _PROCESS_REGISTRY, _TASK_WATCHERS
 from typing import Any, Callable
 from .launch_reconciliation import (
     _has_interrupted_launch,
@@ -136,8 +136,8 @@ async def _mark_recovered_process(
             )
     await maybe_await(emit("task.updated", _task_record_event_payload(next_record), record.get("sessionId")))
     watcher = asyncio.create_task(_watch_recovered_process(task_id, identity, record.get("sessionId"), emit))
-    _WATCHERS.add(watcher)
-    watcher.add_done_callback(_WATCHERS.discard)
+    _TASK_WATCHERS.add(watcher)
+    watcher.add_done_callback(_TASK_WATCHERS.discard)
 
 
 async def _mark_lost_process(
@@ -155,7 +155,7 @@ async def _mark_lost_process(
     if is_subagent:
         summary = "Daemon restarted while this worker was active and the worker process is no longer running."
     else:
-        summary = "Worker process is no longer running; reconciled during projection. Final completion details were unavailable."
+        summary = _DEAD_WORKER_SUMMARY
     state = (process_state or {}).get("state") or "failed"
     meta_metadata = dict(meta.get("metadata") or {})
     meta_metadata.update(_process_state_metadata(process_state))

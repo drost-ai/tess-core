@@ -16,7 +16,7 @@ from .mappers import (
     _task_record_event_payload,
 )
 from .records import _build_task_record
-from .shared import _PROCESS_REGISTRY, _WATCHERS
+from .shared import _PROCESS_REGISTRY, _THREAD_WATCHERS
 from pathlib import Path
 from typing import Any, Callable
 from ..terminal_store import commitTaskProcessCompletion, saveProjectedTaskRecord
@@ -155,7 +155,7 @@ def _watch_process_thread(
 
         asyncio.run(finalize())
     finally:
-        _WATCHERS.discard(threading.current_thread())
+        _THREAD_WATCHERS.discard(threading.current_thread())
 
 
 

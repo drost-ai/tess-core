@@ -5,7 +5,6 @@ from .._utils import is_process_alive as _is_process_alive
 from .._utils import parse_iso_ms
 
 import asyncio
-import json
 import math
 import os
 import uuid
@@ -13,8 +12,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .._utils import now_iso
-from ..config import ensureProviderForModelSelection, normalizeEffortForModel
 from .monitor_bootstrap import _MonitorBootstrapBaseline
+from .monitor_narration import _author_monitor_update
 from .monitor_observation import (
     buildMonitorNarrationMutation as _build_monitor_narration_mutation,
     buildMonitorObservationMutation as _build_monitor_observation_mutation,
@@ -23,12 +22,8 @@ from .monitor_transactions import (
     commitMonitorMutation as _commit_monitor_mutation,
     monitorTransitionEventFields as _monitor_transition_event_fields,
 )
-from ..providers.anthropic import sendAnthropicMessagesRequest
-from ..providers.openai import sendOpenAiRequest
-from ..runtime.secret_provider import resolveProviderConfigSecrets
 from ..session.persistence import persistSession
 from ..storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
-from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 MONITOR_TICK_MS = 1500
 DEFAULT_CHECK_INTERVAL_MS = 5000
@@ -310,99 +305,6 @@ def _read_output_excerpt(task_id: Any, from_byte: int, to_byte: int, max_chars: 
     return {"text": trimmed.strip(), "omittedBytes": len(sliced) - len(trimmed)}
 
 
-async def _author_monitor_update(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
-    try:
-        return await _author_monitor_update_with_provider(config, session, monitor, task, reason, output_excerpt, omitted_bytes)
-    except Exception:
-        return _build_deterministic_monitor_update(monitor, task, reason, output_excerpt, omitted_bytes)
-
-
-async def _author_monitor_update_with_provider(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
-    provider = ensureProviderForModelSelection(session.get("provider") or config.get("provider"), session.get("model") or config.get("model"), config.get("provider", "openai"))
-    model = session.get("model") or config.get("model")
-    request = {
-        "model": model,
-        "effort": normalizeEffortForModel(provider, model, session.get("effort") or config.get("effort")) if model else None,
-        "system": "\n".join(
-            [
-                "You are continuing an existing agent session.",
-                "Write a concise proactive update for the user about a monitored background task.",
-                "Default to 1-3 short sentences.",
-                "Be concrete, state what changed, and mention completion or failure clearly.",
-                "Do not mention tokens, prompts, or that you are summarizing structured data.",
-                "Do not ask the user to poll again. You are the one proactively updating them.",
-            ]
-        ),
-        "messages": [
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {
-                        "reason": reason,
-                        "goal": monitor.get("goal"),
-                        "summary_style": monitor.get("summaryStyle"),
-                        "task": {
-                            "status": (task or {}).get("status") or "unknown",
-                            "exit_code": (task or {}).get("exitCode"),
-                            "command": (task or {}).get("command"),
-                            "cwd": (task or {}).get("cwd"),
-                            "finished_at": (task or {}).get("finishedAt"),
-                            "error": (task or {}).get("error"),
-                        },
-                        "monitor": {
-                            "status": monitor.get("status"),
-                            "created_at": monitor.get("createdAt"),
-                            "last_assistant_update_at": monitor.get("lastAssistantUpdateAt"),
-                            "last_assistant_update_summary": monitor.get("lastAssistantUpdateSummary"),
-                            "omitted_output_bytes": omitted_bytes,
-                        },
-                        "new_output_excerpt": output_excerpt or "",
-                    },
-                    indent=2,
-                ),
-            }
-        ],
-        "tools": [],
-    }
-    resolved_config = await resolveProviderConfigSecrets(config)
-    if provider == "openai":
-        token = resolved_config.get("openaiToken")
-        if not token:
-            raise RuntimeError("No OpenAI token available for monitor updates.")
-        response = await sendOpenAiRequest({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
-    else:
-        response = await sendAnthropicMessagesRequest({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
-    text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
-    if not text:
-        raise RuntimeError("Provider returned an empty monitor update.")
-    _merge_usage(session, response.get("usage") or {})
-    return text
-
-
-def _build_deterministic_monitor_update(monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
-    label = monitor.get("goal") or f"task {str(monitor.get('taskId') or '')[:8]}"
-    if reason == "start":
-        return f"I started monitoring {label}. I will keep watching the background task and update you when something meaningful changes."
-    if reason == "completed":
-        suffix = f" with exit code {task.get('exitCode')}" if task and isinstance(task.get("exitCode"), int) else ""
-        return f"The background task for {label} completed{suffix}."
-    if reason == "failed":
-        suffix = f" with exit code {task.get('exitCode')}" if task and isinstance(task.get("exitCode"), int) else ""
-        error = f": {task.get('error')}" if task and task.get("error") else "."
-        return f"The background task for {label} failed{suffix}{error}"
-    if reason == "stopped":
-        return f"The background task for {label} stopped before completion."
-    if reason == "heartbeat":
-        return f"I am still monitoring {label}. There has not been a major new change since my last update."
-    excerpt = f" Latest output:\n{_render_excerpt(output_excerpt, omitted_bytes)}" if output_excerpt else ""
-    return f"There is new background activity for {label}.{excerpt}"
-
-
-def _render_excerpt(text: str, omitted_bytes: int) -> str:
-    prefix = f"[omitted {omitted_bytes} earlier chars]\n" if omitted_bytes > 0 else ""
-    return f"{prefix}{text}".strip()
-
-
 def _append_assistant_monitor_message(session: dict[str, Any], text: str) -> None:
     trimmed = text.strip()
     if not trimmed:
@@ -414,8 +316,6 @@ def _append_assistant_monitor_message(session: dict[str, Any], text: str) -> Non
     messages.append({"role": "assistant", "content": trimmed})
 
 
-def _merge_usage(session: dict[str, Any], usage: dict[str, Any]) -> None:
-    _merge_usage_into_session(session, usage)
 
 
 def _sync_session_monitor_metadata(session: dict[str, Any], monitors: list[dict[str, Any]]) -> None:

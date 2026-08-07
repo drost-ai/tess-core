@@ -36,6 +36,76 @@ from typing import Any
 from ...contracts.records import task_meta_id
 
 
+def _health_check_status(meta: dict[str, Any]) -> str:
+    status = meta.get("status")
+    if status == "active":
+        return "running"
+    if status == "unhealthy":
+        return "degraded"
+    if status == "stopped":
+        return "stopped"
+    return "failed"
+
+
+def _process_task_status(meta: dict[str, Any]) -> str:
+    status = _map_status(meta.get("status"))
+    if status == "running" and not meta.get("finishedAt") and not meta.get("stoppedAt"):
+        return "backgrounded"
+    return status
+
+
+# Descriptor table for the task kinds the supervisor projects. Each daemon
+# task-meta kind carries its record family, capability flags, and the four
+# kind-dependent projections (status/summary/detailStatus/resultSummary,
+# each called with (meta, status, ctx)). The monitor/remote entries describe
+# projection-only pseudo-records: their ids carry a "monitor:"/"remote:"
+# prefix and never correspond to a daemon task meta.
+TASK_KINDS: dict[str, dict[str, Any]] = {
+    "background_command": {
+        "family": "shell",
+        "foregroundable": True,
+        "retrieveOnly": True,
+        "status": _process_task_status,
+        "summary": lambda meta, status, ctx: meta.get("error") or _summarize_background_command_task(meta, status, ctx["outputCursor"], ctx["outputPreview"]),
+        "detailStatus": lambda meta, status, ctx: _describe_background_command_detail_status(meta, status, ctx["outputPreview"]),
+        "resultSummary": lambda meta, status, ctx: _build_background_command_result_summary(meta, ctx["outputPreview"]),
+    },
+    "main_session": {
+        "family": "detached_session",
+        "foregroundable": True,
+        "retrieveOnly": False,
+        "status": _process_task_status,
+        "summary": lambda meta, status, ctx: _summarize_detached_main_session_task(status, ctx["latestAssistant"], ctx["latestUser"], ctx["outputPreview"]),
+        "detailStatus": lambda meta, status, ctx: _describe_detached_main_session_detail_status(status, ctx["latestAssistant"]),
+        "resultSummary": lambda meta, status, ctx: _build_detached_main_session_result_summary(status, ctx["latestAssistant"], ctx["latestUser"]),
+    },
+    "subagent": {
+        "family": "subagent",
+        "foregroundable": True,
+        "retrieveOnly": False,
+        "status": _process_task_status,
+        "summary": lambda meta, status, ctx: meta.get("summary") or meta.get("error") or meta.get("detailStatus") or status,
+        "detailStatus": lambda meta, status, ctx: str(meta.get("detailStatus") or meta.get("completionReason") or meta.get("waitingReason") or status),
+        "resultSummary": lambda meta, status, ctx: _first_text(meta.get("resultSummary"), meta.get("summary"), meta.get("error"), meta.get("waitingReason"), meta.get("stopReason")),
+    },
+    "health_check": {
+        "family": "health_check",
+        "foregroundable": False,
+        "retrieveOnly": True,
+        "status": _health_check_status,
+        "summary": lambda meta, status, ctx: _summarize_health_check_task(meta),
+        "detailStatus": lambda meta, status, ctx: "unhealthy" if meta.get("status") == "unhealthy" else str(meta.get("status") or status),
+        "resultSummary": lambda meta, status, ctx: _first_text(meta.get("lastError"), meta.get("lastResponseSnippet")),
+    },
+    "monitor": {"family": "monitor", "foregroundable": False, "retrieveOnly": True, "projection": True},
+    "remote": {"family": "remote", "foregroundable": True, "retrieveOnly": False, "projection": True},
+}
+
+# The kinds a daemon task meta may declare (everything except the
+# projection-only pseudo-kinds).
+DAEMON_TASK_KINDS = frozenset(name for name, spec in TASK_KINDS.items() if not spec.get("projection"))
+
+
 def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     status = _map_child_agent_status_to_task_status(child.get("status"))
     updated_at = child.get("lastUpdatedAt") or child.get("latestResultAt") or child.get("completedAt") or now_iso()
@@ -87,13 +157,13 @@ def _build_monitor_task_record(session: dict[str, Any], monitor: dict[str, Any])
         "updatedAt": monitor.get("updatedAt") or monitor.get("createdAt"),
         "startedAt": monitor.get("createdAt"),
         "completedAt": monitor.get("completedAt") or monitor.get("stoppedAt"),
-        "foregroundable": False,
+        "foregroundable": TASK_KINDS["monitor"]["foregroundable"],
         "restorable": True,
         "outputCursor": output_cursor,
         "relatedMonitorIds": [monitor.get("id")] if monitor.get("id") else [],
-        "taskFamily": "monitor",
+        "taskFamily": TASK_KINDS["monitor"]["family"],
         "detailStatus": monitor.get("status"),
-        "retrieveOnly": True,
+        "retrieveOnly": TASK_KINDS["monitor"]["retrieveOnly"],
         "resultSummary": monitor.get("lastAssistantUpdateSummary"),
         "metadata": {
             "task_id": monitor.get("taskId"),
@@ -180,13 +250,13 @@ def _build_remote_task_record(session: dict[str, Any], remote: dict[str, Any], b
         "updatedAt": remote.get("updatedAt"),
         "startedAt": remote.get("createdAt"),
         "completedAt": remote.get("updatedAt") if remote.get("status") in {"completed", "failed", "closed"} else None,
-        "foregroundable": True,
+        "foregroundable": TASK_KINDS["remote"]["foregroundable"],
         "restorable": True,
         "foregroundMode": "foreground" if remote.get("status") == "active" else "background",
-        "taskFamily": "remote",
+        "taskFamily": TASK_KINDS["remote"]["family"],
         "detailStatus": remote.get("status"),
         "attachableSessionId": remote.get("foregroundSessionId") or remote.get("sessionId"),
-        "retrieveOnly": False,
+        "retrieveOnly": TASK_KINDS["remote"]["retrieveOnly"],
         "resultSummary": remote.get("lastEventSummary"),
         "metadata": {
             "remote_session_id": remote.get("id"),
@@ -204,15 +274,23 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
     output_preview = _read_output_preview(output_file)
     task_type = meta.get("type") or "background_command"
-    status = _status_for_task_meta(meta)
-    is_subagent = meta.get("type") == "subagent"
-    is_main_session = meta.get("type") == "main_session"
-    is_health_check = meta.get("type") == "health_check"
+    kind = task_type if task_type in TASK_KINDS and not TASK_KINDS[task_type].get("projection") else "background_command"
+    spec = TASK_KINDS[kind]
+    status = spec["status"](meta)
+    is_subagent = kind == "subagent"
+    is_main_session = kind == "main_session"
+    is_health_check = kind == "health_check"
     session_data = session or {}
     latest_assistant = _summarize_latest_message(session_data, "assistant") if is_main_session else None
     latest_user = _summarize_latest_message(session_data, "user") if is_main_session else None
+    ctx = {
+        "outputCursor": output_cursor,
+        "outputPreview": output_preview,
+        "latestAssistant": latest_assistant,
+        "latestUser": latest_user,
+    }
     if summary is None:
-        summary = _summary_for_task_meta(meta, status, output_cursor, output_preview, latest_assistant, latest_user)
+        summary = spec["summary"](meta, status, ctx)
     metadata = dict(meta.get("metadata") or {})
     metadata.update(
         {
@@ -280,8 +358,6 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
                 "structured_result_errors": meta.get("structuredResultErrors"),
             }
         )
-    task_family = "health_check" if is_health_check else "subagent" if is_subagent else "detached_session" if is_main_session else "shell"
-    kind = "health_check" if is_health_check else "subagent" if is_subagent else "main_session" if is_main_session else "background_command"
     session_id = meta.get("parent_session_id") if is_subagent else meta.get("sessionId") or session_data.get("id")
     updated_at = meta.get("updatedAt") or meta.get("finishedAt") or meta.get("startedAt") or now
     if is_main_session:
@@ -298,7 +374,7 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
         "updatedAt": updated_at,
         "startedAt": meta.get("startedAt") or meta.get("createdAt"),
         "completedAt": meta.get("updatedAt") if is_health_check and meta.get("status") == "stopped" else meta.get("finishedAt") or meta.get("stoppedAt"),
-        "foregroundable": False if is_health_check else True,
+        "foregroundable": spec["foregroundable"],
         "restorable": True,
         "cwd": meta.get("cwd"),
         "command": meta.get("command") or meta.get("url") if is_health_check else meta.get("command"),
@@ -306,9 +382,9 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
         "outputCursor": output_cursor,
         "relatedMonitorIds": meta.get("relatedMonitorIds") or [],
         "foregroundMode": "background",
-        "taskFamily": task_family,
-        "detailStatus": _detail_status_for_task_meta(meta, status, output_preview, latest_assistant),
-        "retrieveOnly": False if is_subagent or is_main_session else True,
+        "taskFamily": spec["family"],
+        "detailStatus": spec["detailStatus"](meta, status, ctx),
+        "retrieveOnly": spec["retrieveOnly"],
         "attachableSessionId": (meta.get("attachableSessionId") or session_data.get("id")) if is_main_session else meta.get("attachableSessionId") if is_subagent else None,
         "parentTaskId": meta.get("parent_task_id") if is_subagent else None,
         "relatedChildSessionIds": [meta.get("session_id") or meta.get("sessionId")] if is_subagent and (meta.get("session_id") or meta.get("sessionId")) else [],
@@ -316,72 +392,9 @@ def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[
         "supervisorId": meta.get("supervisorId"),
         "processIdentity": meta.get("processIdentity"),
         "launchReservation": meta.get("launchReservation"),
-        "resultSummary": _result_summary_for_task_meta(meta, status, output_preview, latest_assistant, latest_user),
+        "resultSummary": spec["resultSummary"](meta, status, ctx),
         "metadata": metadata,
     }
-
-
-def _status_for_task_meta(meta: dict[str, Any]) -> str:
-    task_type = meta.get("type")
-    if task_type == "health_check":
-        status = meta.get("status")
-        if status == "active":
-            return "running"
-        if status == "unhealthy":
-            return "degraded"
-        if status == "stopped":
-            return "stopped"
-        return "failed"
-    status = _map_status(meta.get("status"))
-    if task_type in {"background_command", "main_session", "subagent"} and status == "running" and not meta.get("finishedAt") and not meta.get("stoppedAt"):
-        return "backgrounded"
-    return status
-
-
-def _summary_for_task_meta(
-    meta: dict[str, Any],
-    status: str,
-    output_cursor: int,
-    output_preview: str | None,
-    latest_assistant: str | None,
-    latest_user: str | None,
-) -> str | None:
-    task_type = meta.get("type")
-    if task_type == "health_check":
-        return _summarize_health_check_task(meta)
-    if task_type == "main_session":
-        return _summarize_detached_main_session_task(status, latest_assistant, latest_user, output_preview)
-    if task_type == "subagent":
-        return meta.get("summary") or meta.get("error") or meta.get("detailStatus") or status
-    return meta.get("error") or _summarize_background_command_task(meta, status, output_cursor, output_preview)
-
-
-def _detail_status_for_task_meta(meta: dict[str, Any], status: str, output_preview: str | None, latest_assistant: str | None) -> str:
-    task_type = meta.get("type")
-    if task_type == "health_check":
-        return "unhealthy" if meta.get("status") == "unhealthy" else str(meta.get("status") or status)
-    if task_type == "main_session":
-        return _describe_detached_main_session_detail_status(status, latest_assistant)
-    if task_type == "subagent":
-        return str(meta.get("detailStatus") or meta.get("completionReason") or meta.get("waitingReason") or status)
-    return _describe_background_command_detail_status(meta, status, output_preview)
-
-
-def _result_summary_for_task_meta(
-    meta: dict[str, Any],
-    status: str,
-    output_preview: str | None,
-    latest_assistant: str | None,
-    latest_user: str | None,
-) -> str | None:
-    task_type = meta.get("type")
-    if task_type == "health_check":
-        return _first_text(meta.get("lastError"), meta.get("lastResponseSnippet"))
-    if task_type == "main_session":
-        return _build_detached_main_session_result_summary(status, latest_assistant, latest_user)
-    if task_type == "subagent":
-        return _first_text(meta.get("resultSummary"), meta.get("summary"), meta.get("error"), meta.get("waitingReason"), meta.get("stopReason"))
-    return _build_background_command_result_summary(meta, output_preview)
 
 
 def _task_event_payload(meta: dict[str, Any]) -> dict[str, Any]:

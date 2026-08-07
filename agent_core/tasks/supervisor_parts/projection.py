@@ -26,6 +26,7 @@ from ...storage import (
 from .live_work import _resolve_session_live_work
 from .mappers import _is_related_child_agent
 from .records import (
+    DAEMON_TASK_KINDS,
     _build_child_agent_task_record,
     _build_monitor_task_record,
     _build_remote_task_record,
@@ -82,7 +83,7 @@ async def _project_session_task_records(
                     )
                 continue
             task_type = meta.get("type") or ""
-            if task_type not in {"", "background_command", "main_session", "subagent", "health_check"}:
+            if task_type not in {"", *DAEMON_TASK_KINDS}:
                 if on_issue:
                     on_issue({"taskId": task_id, "reason": f'unknown task meta type "{task_type}"'})
                 continue

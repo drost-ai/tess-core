@@ -26,6 +26,7 @@ from ...storage import (
 )
 from .mappers import _is_active_child_agent_status, _is_related_child_agent
 from .processes import _is_process_alive
+from .shared import _DEAD_WORKER_SUMMARY
 
 
 _DEAD_WORK_GRACE_MS = 15 * 60 * 1000
@@ -280,8 +281,7 @@ async def _reconcile_dead_task_meta(
         next_meta = {
             **meta,
             "status": "terminated",
-            "summary": meta.get("summary")
-            or "Worker process is no longer running; reconciled during projection. Final completion details were unavailable.",
+            "summary": meta.get("summary") or _DEAD_WORKER_SUMMARY,
             "updatedAt": now,
             "finishedAt": meta.get("finishedAt") or now,
         }

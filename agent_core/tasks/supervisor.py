@@ -37,7 +37,7 @@ from .supervisor_parts.projection import (
 from .supervisor_parts.reconciliation import _reconcile_persisted_tasks
 from .supervisor_parts.record_issues import _report_persisted_record_issues
 from .supervisor_parts.records import _build_task_record
-from .supervisor_parts.shared import _PROCESS_REGISTRY, _WATCHERS
+from .supervisor_parts.shared import _PROCESS_REGISTRY, _TASK_WATCHERS, _THREAD_WATCHERS
 from .supervisor_parts.stop import _create_task_stopper
 from .supervisor_parts.subagent_launch import _create_subagent_task_starter
 from .supervisor_parts.utils import _dedupe, _require_string
@@ -59,7 +59,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     attached_all_count = 0
     attached_sessions: dict[str, int] = {}
     reported_record_issues: set[str] = set()
-    construction_watchers = set(_WATCHERS)
+    construction_task_watchers = set(_TASK_WATCHERS)
+    construction_thread_watchers = set(_THREAD_WATCHERS)
 
     async def emit(event: str, data: dict[str, Any], session_id: str | None = None) -> None:
         payload = {"event": event, "data": data, "sessionId": session_id}
@@ -75,8 +76,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     )
 
     def _track_health_task(task: asyncio.Task[Any]) -> None:
-        _WATCHERS.add(task)
-        task.add_done_callback(_WATCHERS.discard)
+        _TASK_WATCHERS.add(task)
+        task.add_done_callback(_TASK_WATCHERS.discard)
 
     health_check_controller = createHealthCheckController(
         emit=emit,
@@ -245,6 +246,92 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             records = [record for record in records if record.get("sessionId") == session_id]
         return records
 
+    async def _retry_background_command(task_id: str, source: dict[str, Any], meta: dict[str, Any] | None) -> dict[str, Any]:
+        command = source.get("command")
+        if not command:
+            raise RuntimeError("Background command task is missing retry metadata.")
+        return await start_background_command(
+            {
+                "sessionId": source.get("sessionId"),
+                "command": command,
+                "cwd": source.get("cwd") or cwd,
+                "title": source.get("title"),
+            }
+        )
+
+    async def _retry_main_session(task_id: str, source: dict[str, Any], meta: dict[str, Any] | None) -> dict[str, Any]:
+        prompt = source.get("command")
+        if not prompt:
+            raise RuntimeError("Main-session task is missing retry metadata.")
+        return await start_main_session_task(
+            {
+                "sessionId": source.get("sessionId"),
+                "prompt": prompt,
+                "cwd": source.get("cwd") or cwd,
+                "title": source.get("title"),
+            }
+        )
+
+    async def _retry_health_check(task_id: str, source: dict[str, Any], meta: dict[str, Any] | None) -> dict[str, Any]:
+        health = await loadHealthCheckTask(task_id)
+        if not health:
+            raise RuntimeError(f"Health check metadata not found: {task_id}")
+        # Hand-written trust seam: retrying a health check re-runs an
+        # arbitrary probe, so the persisted record must prove it was
+        # authorized under the current schema before it may restart.
+        if (
+            health.get("schemaVersion") != 2
+            or not isinstance(health.get("executionPolicy"), dict)
+            or not isinstance(health.get("specDigest"), str)
+            or int(health.get("generation") or 0) < 1
+            or health.get("status") not in {"stopped", "failed"}
+        ):
+            raise RuntimeError(
+                "Health check requires explicit revalidation before retry."
+            )
+        return await health_check_controller["start"](
+            {
+                "sessionId": health["sessionId"],
+                "spec": recordToSpec(health),
+                "specDigest": health["specDigest"],
+                "executionPolicy": health["executionPolicy"],
+                "lineageId": health.get("lineageId") or health["taskId"],
+                "supersedes": health["taskId"],
+                "generation": 1,
+            }
+        )
+
+    async def _retry_subagent(task_id: str, source: dict[str, Any], meta: dict[str, Any] | None) -> dict[str, Any]:
+        metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+        agent_id = metadata.get("agent_id") or source.get("sourceId") or (meta or {}).get("agent_id")
+        child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+        if not child:
+            raise RuntimeError(f"Subagent metadata not found for task: {task_id}")
+        child_session = await loadSession(child["sessionId"])
+        if not child_session:
+            raise RuntimeError(f"Subagent session not found: {child['sessionId']}")
+        return await start_subagent_task(
+            {
+                "parentSessionId": child.get("parentSessionId"),
+                "sessionId": child.get("sessionId"),
+                "agentId": child.get("agentId"),
+                "cwd": child_session.get("cwd") or cwd,
+                "label": child.get("name") or child.get("agentType") or child.get("agentId"),
+                "parentTaskId": child.get("parentTaskId"),
+                "parentToolUseId": child.get("parentToolUseId"),
+                "parentTurnId": child.get("parentTurnId"),
+                "launchGroupId": child.get("launchGroupId"),
+                "runtimeContract": child.get("runtimeContract") or (child_session.get("metadata") or {}).get("subagentRuntimeContract"),
+            }
+        )
+
+    retriers: dict[str, Callable[..., Any]] = {
+        "background_command": _retry_background_command,
+        "main_session": _retry_main_session,
+        "health_check": _retry_health_check,
+        "subagent": _retry_subagent,
+    }
+
     async def retry_task(task_id: str) -> dict[str, Any]:
         record = await loadTaskRecord(task_id)
         meta = await readTaskMeta(task_id)
@@ -252,87 +339,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             raise RuntimeError(f"Task is not retryable: {task_id}")
         kind = (record or {}).get("kind") or (meta or {}).get("type")
         source = record or meta or {}
-        if kind == "background_command":
-            command = source.get("command")
-            if not command:
-                raise RuntimeError("Background command task is missing retry metadata.")
-            retried = await start_background_command(
-                {
-                    "sessionId": source.get("sessionId"),
-                    "command": command,
-                    "cwd": source.get("cwd") or cwd,
-                    "title": source.get("title"),
-                }
-            )
-            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
-            return retried
-        if kind == "main_session":
-            prompt = source.get("command")
-            if not prompt:
-                raise RuntimeError("Main-session task is missing retry metadata.")
-            retried = await start_main_session_task(
-                {
-                    "sessionId": source.get("sessionId"),
-                    "prompt": prompt,
-                    "cwd": source.get("cwd") or cwd,
-                    "title": source.get("title"),
-                }
-            )
-            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
-            return retried
-        if kind == "health_check":
-            health = await loadHealthCheckTask(task_id)
-            if not health:
-                raise RuntimeError(f"Health check metadata not found: {task_id}")
-            if (
-                health.get("schemaVersion") != 2
-                or not isinstance(health.get("executionPolicy"), dict)
-                or not isinstance(health.get("specDigest"), str)
-                or int(health.get("generation") or 0) < 1
-                or health.get("status") not in {"stopped", "failed"}
-            ):
-                raise RuntimeError(
-                    "Health check requires explicit revalidation before retry."
-                )
-            retried = await health_check_controller["start"](
-                {
-                    "sessionId": health["sessionId"],
-                    "spec": recordToSpec(health),
-                    "specDigest": health["specDigest"],
-                    "executionPolicy": health["executionPolicy"],
-                    "lineageId": health.get("lineageId") or health["taskId"],
-                    "supersedes": health["taskId"],
-                    "generation": 1,
-                }
-            )
-            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
-            return retried
-        if kind == "subagent":
-            metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
-            agent_id = metadata.get("agent_id") or source.get("sourceId") or (meta or {}).get("agent_id")
-            child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
-            if not child:
-                raise RuntimeError(f"Subagent metadata not found for task: {task_id}")
-            child_session = await loadSession(child["sessionId"])
-            if not child_session:
-                raise RuntimeError(f"Subagent session not found: {child['sessionId']}")
-            retried = await start_subagent_task(
-                {
-                    "parentSessionId": child.get("parentSessionId"),
-                    "sessionId": child.get("sessionId"),
-                    "agentId": child.get("agentId"),
-                    "cwd": child_session.get("cwd") or cwd,
-                    "label": child.get("name") or child.get("agentType") or child.get("agentId"),
-                    "parentTaskId": child.get("parentTaskId"),
-                    "parentToolUseId": child.get("parentToolUseId"),
-                    "parentTurnId": child.get("parentTurnId"),
-                    "launchGroupId": child.get("launchGroupId"),
-                    "runtimeContract": child.get("runtimeContract") or (child_session.get("metadata") or {}).get("subagentRuntimeContract"),
-                }
-            )
-            await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
-            return retried
-        raise RuntimeError(f"Retry is not supported for task kind: {kind}")
+        retrier = retriers.get(kind or "")
+        if retrier is None:
+            raise RuntimeError(f"Retry is not supported for task kind: {kind}")
+        retried = await retrier(task_id, source, meta)
+        await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
+        return retried
 
     async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
         task_args = {**(task_args or {}), **task_kwargs}
@@ -388,12 +400,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                 with contextlib.suppress(Exception):
                     await stop_task(task_id)
         await health_check_controller["close"]()
-        for watcher in list(_WATCHERS):
-            if isinstance(watcher, threading.Thread) and watcher is not threading.current_thread() and watcher.is_alive():
-                watcher.join(timeout=2)
-            elif isinstance(watcher, asyncio.Task):
-                watcher.cancel()
-        await asyncio.gather(*(watcher for watcher in list(_WATCHERS) if isinstance(watcher, asyncio.Task)), return_exceptions=True)
+        for thread in list(_THREAD_WATCHERS):
+            if thread is not threading.current_thread() and thread.is_alive():
+                thread.join(timeout=2)
+        for task in list(_TASK_WATCHERS):
+            task.cancel()
+        await asyncio.gather(*list(_TASK_WATCHERS), return_exceptions=True)
         _PROCESS_REGISTRY.clear()
 
     def get_state() -> dict[str, Any]:
@@ -421,21 +433,17 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         await health_check_controller["tick"]()
         await _report_persisted_record_issues(emit, reported_record_issues)
     except Exception:
-        created_watchers = set(_WATCHERS) - construction_watchers
-        for watcher in created_watchers:
-            if isinstance(watcher, asyncio.Task):
-                watcher.cancel()
-        await asyncio.gather(
-            *(watcher for watcher in created_watchers if isinstance(watcher, asyncio.Task)),
-            return_exceptions=True,
-        )
-        for watcher in created_watchers:
-            _WATCHERS.discard(watcher)
+        created_tasks = set(_TASK_WATCHERS) - construction_task_watchers
+        for task in created_tasks:
+            task.cancel()
+        await asyncio.gather(*created_tasks, return_exceptions=True)
+        _TASK_WATCHERS.difference_update(created_tasks)
+        _THREAD_WATCHERS.difference_update(set(_THREAD_WATCHERS) - construction_thread_watchers)
         raise
 
     health_reconcile = asyncio.create_task(health_reconcile_loop())
-    _WATCHERS.add(health_reconcile)
-    health_reconcile.add_done_callback(_WATCHERS.discard)
+    _TASK_WATCHERS.add(health_reconcile)
+    health_reconcile.add_done_callback(_TASK_WATCHERS.discard)
 
     return {
         "close": close,

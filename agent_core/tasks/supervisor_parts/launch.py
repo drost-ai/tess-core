@@ -9,7 +9,7 @@ from ...storage import (
     saveTaskRecord,
     writeTaskMeta,
 )
-from .shared import _PROCESS_REGISTRY, _WATCHERS
+from .shared import _PROCESS_REGISTRY, _THREAD_WATCHERS
 from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
@@ -134,7 +134,7 @@ def _create_process_task_launcher(
             args=(task_id, command, task_cwd, output_file, emit, wait_for_stop_commit),
             daemon=True,
         )
-        _WATCHERS.add(watcher)
+        _THREAD_WATCHERS.add(watcher)
         watcher.start()
         return {
             "taskId": task_id,

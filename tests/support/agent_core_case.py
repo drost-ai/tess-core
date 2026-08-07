@@ -27,7 +27,7 @@ import agent_core as core
 from agent_core import testing
 import agent_core.agent as agent_module
 import agent_core.mcp as mcp_module
-import agent_core.tasks.monitors as monitors_module
+import agent_core.tasks.monitor_narration as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
 import agent_core.runtime.bootstrap as runtime_module

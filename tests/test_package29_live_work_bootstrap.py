@@ -14,7 +14,7 @@ from unittest import mock
 live_work = importlib.import_module("agent_core.tasks.supervisor_parts.live_work")
 collaboration_module = importlib.import_module("agent_core.collaboration")
 collaboration_runtime_module = importlib.import_module("agent_core.collaboration.runtime")
-monitors_module = importlib.import_module("agent_core.tasks.monitors")
+monitors_module = importlib.import_module("agent_core.tasks.monitor_narration")
 
 _OLD = "2026-01-01T00:00:00Z"
 _DEAD_PID = 99_999_999
