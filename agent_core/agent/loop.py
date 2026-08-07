@@ -73,19 +73,28 @@ from ..payloads.attachments import (
     resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
     stripInMemoryImageData as _strip_in_memory_image_data,
 )
+def _turn_result(text_parts: list[str], tool_count: int, usage: dict[str, Any], model: str, cost: float, stop_reason: Any) -> dict[str, Any]:
+    return {
+        "text": "\n\n".join(text_parts).strip(),
+        "toolCount": tool_count,
+        "usage": usage,
+        "model": model,
+        "estimatedCostUsd": _round_usd(cost),
+        "stopReason": stop_reason,
+    }
+
+
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
-    return await _run_with_transient_execution_session(
-        values,
-        _runAgentPromptInScope,
-    )
-async def _runAgentPromptInScope(args: dict[str, Any]) -> dict[str, Any]:
-    effective_args = _resolve_effective_provider_turn_binding(args)
-    return await _run_in_provider_turn_session(
-        effective_args,
-        _runAgentPromptWithProviderSession,
-        is_cancelled=_is_turn_cancelled,
-    )
+
+    async def run_in_scope(scoped_args: dict[str, Any]) -> dict[str, Any]:
+        return await _run_in_provider_turn_session(
+            _resolve_effective_provider_turn_binding(scoped_args),
+            _runAgentPromptWithProviderSession,
+            is_cancelled=_is_turn_cancelled,
+        )
+
+    return await _run_with_transient_execution_session(values, run_in_scope)
 async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
@@ -140,21 +149,13 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         }
 
     async def finish_subagent_limit(exceeded: dict[str, Any]) -> dict[str, Any]:
-        text = "\n\n".join(text_parts).strip()
         _safe_emit(
             runtime,
             "subagent.limit_exceeded",
             {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")},
         )
         await persistSession(session, config)
-        return {
-            "text": text,
-            "toolCount": tool_count,
-            "usage": total_usage,
-            "model": active_model,
-            "estimatedCostUsd": _round_usd(cost),
-            "stopReason": exceeded.get("reason") or "subagent_limit",
-        }
+        return _turn_result(text_parts, tool_count, total_usage, active_model, cost, exceeded.get("reason") or "subagent_limit")
 
     async def cancel_turn() -> dict[str, Any]:
         _restore_session_state(session, last_stable_snapshot)
@@ -167,7 +168,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             {"force": True, "truncateTranscript": True},
         )
         _safe_emit(runtime, "turn.cancelled", {"session_id": session["id"], "model": active_model, "partial_text": "\n\n".join(text_parts).strip()})
-        return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "cancelled"}
+        return _turn_result(text_parts, tool_count, total_usage, active_model, cost, "cancelled")
 
     if _is_turn_cancelled(runtime):
         return await cancel_turn()
@@ -301,7 +302,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     "stopReason": response.get("stopReason"),
                 }
             )
-            return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": response.get("stopReason")}
+            return _turn_result(text_parts, tool_count, total_usage, active_model, cost, response.get("stopReason"))
 
         tool_results: list[dict[str, Any] | None] = [None] * len(tool_uses)
         paused_for_approval = False
@@ -485,7 +486,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         if paused_for_approval:
             if paused_message:
                 text_parts.append(paused_message)
-            return {"text": "\n\n".join(text_parts).strip(), "toolCount": tool_count, "usage": total_usage, "model": active_model, "estimatedCostUsd": _round_usd(cost), "stopReason": "approval_required"}
+            return _turn_result(text_parts, tool_count, total_usage, active_model, cost, "approval_required")
         if no_progress is not None:
             event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=no_progress)
             _safe_emit(runtime, "agent.no_progress", event)
