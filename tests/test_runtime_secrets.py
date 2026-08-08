@@ -169,7 +169,10 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         second = await core.resolveConfig({"settingSources": "user"}, str(self.project))
         self.assertEqual(second["mcpConfig"], first["mcpConfig"])
         self.assertEqual(sorted(path.name for path in files), sorted(path.name for path in (self.home / "private-secrets" / "records").iterdir()))
-        self.assertNotIn(literal, (self.home / "mcp.json").read_text())
+        fragments = sorted((self.home / "settings" / "mcp").glob("*.json"))
+        self.assertEqual([path.name for path in fragments], ["legacy-http.json", "legacy-stdio.json"])
+        for path in fragments:
+            self.assertNotIn(literal, path.read_text())
 
         await core.saveMcpServers("project", str(self.project), records[:1])
         with self.assertRaisesRegex(RuntimeSecretError, "requires a runtime secret reference"):

@@ -6,6 +6,11 @@ import os
 from typing import Any
 
 from .._utils import clone
+from ._mcp_fragments import (
+    loadUserMcpFragments,
+    mutateUserMcpFragments,
+    saveUserMcpFragments,
+)
 from ._settings_folder import loadSettingsFolder, mergeSettingsRecords
 from .json_io import mutateJsonFile, readJsonFile
 from .paths import (
@@ -69,13 +74,23 @@ async def saveProjectMemoryRecords(cwd: str, records: list[dict[str, Any]]) -> N
 async def mutateProjectMemoryRecords(cwd: str, mutate) -> list[dict[str, Any]]:
     return await mutateJsonFile(getProjectMemoryRecordsPath(cwd), mutate, [])
 
+# User-scope MCP registration lives in the settings/mcp/ fragment directory
+# (one file per server); project/local scopes keep mcp.json in their state
+# dirs. See storage/_mcp_fragments.py for the fragment contract.
 async def loadMcpServers(scope: Scope, cwd: str) -> list[dict[str, Any]]:
+    if scope == "user":
+        return await loadUserMcpFragments()
     return await readJsonFile(_settings_path(scope, cwd, "mcp.json"), [])
 
 async def saveMcpServers(scope: Scope, cwd: str, servers: list[dict[str, Any]]) -> None:
+    if scope == "user":
+        await saveUserMcpFragments(servers)
+        return
     await mutateJsonFile(_settings_path(scope, cwd, "mcp.json"), lambda _current: servers, [])
 
 async def mutateMcpServers(scope: Scope, cwd: str, mutate) -> list[dict[str, Any]]:
+    if scope == "user":
+        return await mutateUserMcpFragments(mutate)
     return await mutateJsonFile(_settings_path(scope, cwd, "mcp.json"), mutate, [])
 
 async def loadPlugins(scope: Scope, cwd: str) -> list[dict[str, Any]]:
