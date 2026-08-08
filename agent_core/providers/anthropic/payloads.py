@@ -338,11 +338,15 @@ def _mark_last_text_block_for_cache(blocks: list[dict[str, Any]], cache_control:
 def _normalize_anthropic_tool_definition(tool: Any) -> dict[str, Any]:
     if not isinstance(tool, dict):
         return {"name": "", "description": "", "input_schema": {"type": "object", "properties": {}}}
-    return {
-        "name": tool.get("name"),
-        "description": tool.get("description"),
-        "input_schema": _normalize_anthropic_tool_schema(tool.get("input_schema") or {}),
-    }
+    if isinstance(tool.get("type"), str) and tool.get("type") and "input_schema" not in tool:
+        # Server tool (web_search_*, computer-use, code execution, …): the
+        # definition is the provider's contract — pass it through untouched.
+        return {key: value for key, value in tool.items() if not str(key).startswith("_")}
+    normalized = {key: value for key, value in tool.items() if not str(key).startswith("_")}
+    normalized["name"] = tool.get("name")
+    normalized["description"] = tool.get("description")
+    normalized["input_schema"] = _normalize_anthropic_tool_schema(tool.get("input_schema") or {})
+    return normalized
 
 def _normalize_anthropic_tool_schema(schema: Any) -> Any:
     if isinstance(schema, list):
@@ -390,6 +394,17 @@ def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
                 if isinstance(block.get("is_error"), bool):
                     tool_result["is_error"] = block["is_error"]
                 out.append(tool_result)
+            elif block.get("type") == "thinking":
+                thinking_block: dict[str, Any] = {"type": "thinking", "thinking": str(block.get("thinking", ""))}
+                if isinstance(block.get("signature"), str) and block["signature"]:
+                    thinking_block["signature"] = block["signature"]
+                out.append(thinking_block)
+            elif block.get("type") == "redacted_thinking":
+                out.append({"type": "redacted_thinking", "data": str(block.get("data", ""))})
+            elif isinstance(block.get("type"), str) and block.get("type"):
+                # Server-tool and future block types round-trip verbatim;
+                # internal accumulator keys never reach the wire.
+                out.append({key: value for key, value in block.items() if not str(key).startswith("_")})
         return out
     return []
 

@@ -227,6 +227,14 @@ class AnthropicAsyncHttpConnectionOwner:
                     self._emit("transport_failed", reused=reused)
                 self._close_stream()
                 raise
+            except BaseException:
+                # A typed consumer failure (SSE error event, protocol violation)
+                # that leaves body bytes unread poisons the connection for
+                # keep-alive reuse. A failure after a fully drained body leaves
+                # the connection clean, so it stays reusable.
+                if not response.complete:
+                    self._close_stream()
+                raise
 
     def cancel(self) -> None:
         self._emit("cancel_closed")

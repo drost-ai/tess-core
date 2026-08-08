@@ -20,6 +20,7 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+from .._core import retry_after_ms_from_headers as _retry_after_ms_from_headers
 from ..errors import (
     canRetryProviderFailure,
     classifyProviderHttpFailure,
@@ -172,6 +173,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                     "hadToolUse": _activity_state_bool(stream_activity_state, "had_tool_use", had_tool_use),
                     "body": body,
                     "errorType": error_type,
+                    "retryAfterMs": _retry_after_ms_from_headers(exc.headers),
                 }
             )
         except Exception as exc:

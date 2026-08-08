@@ -261,16 +261,9 @@ def _error_body_fields(body_text: str) -> tuple[str | None, str | None, str | No
 
 
 def _retry_after_ms(response: _AsyncHttpResponse) -> int | None:
-    raw = _first_header(response, "retry-after")
-    if raw is None:
-        return None
-    try:
-        seconds = float(raw)
-    except ValueError:
-        return None
-    if seconds < 0:
-        return None
-    return int(seconds * 1000)
+    from .._core import retry_after_ms_from_headers
+
+    return retry_after_ms_from_headers(response.headers)
 
 
 def _first_header(response: _AsyncHttpResponse, name: str) -> str | None:

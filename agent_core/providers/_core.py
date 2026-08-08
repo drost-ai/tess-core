@@ -299,6 +299,24 @@ async def race_provider_activity(
             turn_session.clear_activity_task(task)
 
 
+def retry_after_ms_from_headers(headers: Any) -> int | None:
+    """Parse a Retry-After header (numeric-seconds form) into milliseconds."""
+    getter = getattr(headers, "get", None)
+    if not callable(getter):
+        return None
+    raw = getter("retry-after") or getter("Retry-After")
+    if raw is None:
+        return None
+    token = str(raw).split(",")[0].strip()
+    try:
+        seconds = float(token)
+    except ValueError:
+        return None
+    if seconds < 0:
+        return None
+    return int(seconds * 1000)
+
+
 def provider_retry_delay_ms(
     attempt: int, *, ladder: tuple[int, ...], failure: Any = None
 ) -> int:

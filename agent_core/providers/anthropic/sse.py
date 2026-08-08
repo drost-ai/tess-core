@@ -191,7 +191,7 @@ class AnthropicSseAccumulator:
                 signature_delta = delta.get("signature") if isinstance(delta.get("signature"), str) else ""
                 if signature_delta:
                     block["signature"] = f"{block.get('signature') or ''}{signature_delta}"
-            elif block["type"] == "tool_use" and delta.get("type") == "input_json_delta":
+            elif block["type"] in ("tool_use", "server_tool_use") and delta.get("type") == "input_json_delta":
                 partial_json = (
                     delta.get("partial_json")
                     if isinstance(delta.get("partial_json"), str)
@@ -230,7 +230,7 @@ class AnthropicSseAccumulator:
         content = [
             _strip_internal_block(block)
             for block in self.blocks
-            if block and block.get("type") in ("text", "thinking", "tool_use")
+            if block and isinstance(block.get("type"), str) and block.get("type") != "ignored"
         ]
         return {
             "content": content,
@@ -278,6 +278,12 @@ def normalizeProviderBlocks(blocks: Any) -> list[dict[str, Any]]:
             continue
         if block.get("type") == "tool_result" and isinstance(block.get("tool_use_id"), str):
             normalized.append({"type": "tool_result", "tool_use_id": block["tool_use_id"], "content": block.get("content") if isinstance(block.get("content"), str) else "", "is_error": bool(block.get("is_error"))})
+            continue
+        if block.get("type") == "redacted_thinking":
+            normalized.append({"type": "redacted_thinking", "data": block.get("data") if isinstance(block.get("data"), str) else ""})
+            continue
+        if block.get("type"):
+            normalized.append({key: value for key, value in block.items() if not str(key).startswith("_")})
     return normalized
 
 def _safe_json_parse(value: str) -> Any:
@@ -288,11 +294,11 @@ def _safe_json_parse(value: str) -> Any:
 
 def _internal_block_from_anthropic(block: dict[str, Any]) -> dict[str, Any]:
     if (
-        block.get("type") == "tool_use"
+        block.get("type") in ("tool_use", "server_tool_use")
         and isinstance(block.get("id"), str)
         and isinstance(block.get("name"), str)
     ):
-        return {"type": "tool_use", "id": block.get("id"), "name": block.get("name"), "input": block.get("input") or {}, "_input_buffer": ""}
+        return {"type": block["type"], "id": block.get("id"), "name": block.get("name"), "input": block.get("input") or {}, "_input_buffer": ""}
     if block.get("type") == "text":
         return {
             "type": "text",
@@ -304,12 +310,18 @@ def _internal_block_from_anthropic(block: dict[str, Any]) -> dict[str, Any]:
             "thinking": block.get("thinking") if isinstance(block.get("thinking"), str) else "",
             "signature": block.get("signature") if isinstance(block.get("signature"), str) else None,
         }
+    if block.get("type") == "redacted_thinking":
+        return {"type": "redacted_thinking", "data": block.get("data") if isinstance(block.get("data"), str) else ""}
+    if isinstance(block.get("type"), str) and block.get("type"):
+        # Server-tool results and future block types are conversation content;
+        # preserve them verbatim so the next request can round-trip them.
+        return dict(block)
     return {"type": "ignored"}
 
 def _finalize_tool_block(
     block: dict[str, Any] | None,
 ) -> None:
-    if not block or block.get("type") != "tool_use" or not str(block.get("_input_buffer") or "").strip():
+    if not block or block.get("type") not in ("tool_use", "server_tool_use") or not str(block.get("_input_buffer") or "").strip():
         return
     raw = str(block["_input_buffer"])
     try:
