@@ -44,42 +44,6 @@ def resolveModelForAgent(config: dict[str, Any], agentName: str | None, fallback
     model = (definition or {}).get("model") or fallbackModel or config["model"]
     return normalizeModelName(model, resolveProviderForModelSelection(config.get("provider"), model))
 
-def buildPlanModeSystemPrompt(basePrompt: str, args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    args = {**(args or {}), **kwargs}
-    state = args.get("currentState") or "inactive"
-    prior_plan = (args.get("priorPlan") or "").strip()
-    overlay = ["# Plan Mode", "You are in plan mode.", "Do not implement the change yet."]
-    if state == "chatting":
-        overlay.extend(
-            [
-                "There is an existing draft plan under discussion.",
-                "Answer the user's follow-up questions directly and conversationally while staying in plan mode.",
-                "Do not start implementation while plan mode is still active.",
-                "Do not use implementation tools, create implementation todos, or describe implementation as already underway until plan mode has been exited.",
-                "If the user asks you to proceed, go ahead, use a specific document as the implementation reference, or otherwise indicates the planning discussion is complete, treat that as a request to update/finalize the plan and then call ExitPlanMode.",
-                "If the user explicitly asks for a plan revision, update the plan in structured markdown and then call ExitPlanMode.",
-            ]
-        )
-    else:
-        overlay.extend(
-            [
-                "Investigate the user's request and produce a concrete implementation plan before any implementation work begins.",
-                "Use read-only investigation and subagents as needed to understand the codebase and scope of work.",
-                "Respond with a structured markdown plan that includes:",
-                "1. Objective",
-                "2. Findings",
-                "3. Proposed changes",
-                "4. Ordered implementation steps",
-                "5. Validation strategy",
-                "6. Risks or open questions",
-                "When the plan is ready, call ExitPlanMode with allowedPrompts describing the categories of Bash actions expected during implementation.",
-                "Do not ask for plan approval in plain text; use ExitPlanMode.",
-            ]
-        )
-    if state in ("chatting", "rejected") and prior_plan:
-        overlay.extend(["", "The previous plan was rejected. Revise it and submit an improved plan." if state == "rejected" else "This is the current draft plan being discussed.", "", "## Current Draft Plan", prior_plan])
-    return f"{basePrompt}\n\n" + "\n".join(overlay)
-
 def isPlanRevisionPrompt(prompt: str) -> bool:
     normalized = prompt.strip().lower()
     if not normalized:

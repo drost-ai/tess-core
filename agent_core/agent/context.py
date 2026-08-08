@@ -17,7 +17,6 @@ from ..providers.token_budget import computeProviderTokenBudget, resolveCompacti
 from ..session.persistence import persistSession
 from .cancellation import _now, _safe_emit
 from .shared import modelSupportsImageInputs, requestHasImageInputs
-from .plan_policy import _apply_plan_mode_overlay
 from typing import Any
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
 from .context_budget import (
@@ -67,7 +66,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         )
         emitContinuationRelief(runtime, session, request_context)
         recordContinuationRelief(session, request_context)
-        system = _apply_plan_mode_overlay(base_system_prompt, session)
+        system = base_system_prompt
         system_context = request_context.get("systemContext")
         if system_context and not _dynamic_context_belongs_in_messages(config):
             system = f"{system}\n\n{request_context['systemContext']}"

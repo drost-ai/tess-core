@@ -26,7 +26,6 @@ from .defaults import (
 from .prompts import (
     buildDefaultSystemPrompt,
     buildEffectiveSystemPrompt,
-    buildPlanModeSystemPrompt,
     buildSystemPromptForAgent,
     defaultToolList,
     filterToolsByPolicy,
@@ -99,7 +98,6 @@ __all__ = [
     "VALID_EFFORT_LEVELS",
     "buildDefaultSystemPrompt",
     "buildEffectiveSystemPrompt",
-    "buildPlanModeSystemPrompt",
     "buildSystemPromptForAgent",
     "defaultToolList",
     "ensureProviderForModelSelection",
