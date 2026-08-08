@@ -27,6 +27,10 @@ from .error_diagnostics import (
     positiveOptionalInteger as _positive_optional_integer,
     validHttpStatus as _valid_http_status,
 )
+from .error_evidence import (
+    ProviderWireError,
+    extractProviderWireEvidence as _extract_provider_wire_evidence,
+)
 from .error_sdk import (
     classifyOpenAiSdkEvidence as _classify_openai_sdk_evidence,
     extractOpenAiSdkException as _extract_openai_sdk_exception,
@@ -48,39 +52,6 @@ class ProviderIncompleteResponseError(ProviderRequestError):
         super().__init__(record)
         self.name = "ProviderIncompleteResponseError"
         self.details = details
-
-
-class ProviderWireError(Exception):
-    """Transport-neutral provider failure with classification evidence.
-
-    Any transport can raise this (or expose a ``provider_error_evidence``
-    mapping on its own exception type) to make HTTP-status and error-body
-    classification reachable without the classifier depending on the
-    exception's module or class.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        status: int | None = None,
-        body: str | None = None,
-        code: str | None = None,
-        errorType: str | None = None,
-        requestId: str | None = None,
-        retryAfterMs: int | None = None,
-        streamEventType: str | None = None,
-    ) -> None:
-        super().__init__(message)
-        self.provider_error_evidence: dict[str, Any] = {
-            "status": status,
-            "body": body,
-            "code": code,
-            "errorType": errorType,
-            "requestId": requestId,
-            "retryAfterMs": retryAfterMs,
-            "streamEventType": streamEventType,
-        }
 
 
 def isProviderRequestError(error: BaseException | Any) -> bool:
@@ -231,9 +202,14 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
         return createProviderRequestError(record)
     raw = str(error)
     lower = raw.lower()
-    wire_evidence = _provider_wire_evidence(error)
+    wire_evidence = _extract_provider_wire_evidence(error)
     if wire_evidence is not None:
-        return _classify_wire_evidence(args, wire_evidence, raw)
+        # Statusless wire evidence classifies from code/type/body text, so the
+        # body doubles as the classifier's message field.
+        return _classify_openai_sdk_exception(
+            args,
+            {**wire_evidence, "message": wire_evidence.get("body"), "rawMessage": raw},
+        )
     sdk_evidence = _extract_openai_sdk_exception(error, args.get("provider"))
     if sdk_evidence is not None:
         return _classify_openai_sdk_exception(args, sdk_evidence)
@@ -395,73 +371,8 @@ def _build_raw_message(body: str | None = None, error_type: str | None = None, c
     return " ".join(parts) if parts else None
 
 
-def _provider_wire_evidence(error: BaseException) -> dict[str, Any] | None:
-    raw_evidence = getattr(error, "provider_error_evidence", None)
-    if not isinstance(raw_evidence, _Mapping):
-        return None
-    return {
-        "status": _valid_http_status(raw_evidence.get("status")),
-        "body": _bound_optional_diagnostic_text(raw_evidence.get("body"), 8_192),
-        "code": _bound_optional_diagnostic_text(raw_evidence.get("code"), 256),
-        "errorType": _bound_optional_diagnostic_text(raw_evidence.get("errorType"), 256),
-        "requestId": _bound_optional_diagnostic_text(raw_evidence.get("requestId"), 256),
-        "retryAfterMs": _nonnegative_optional_integer(raw_evidence.get("retryAfterMs")),
-        "streamEventType": _bound_optional_diagnostic_text(
-            raw_evidence.get("streamEventType"), 256
-        ),
-    }
-
-
-def _classify_wire_evidence(
-    args: dict[str, Any], evidence: dict[str, Any], raw: str
-) -> ProviderRequestError:
-    common = {
-        "provider": args["provider"],
-        "providerLabel": args["providerLabel"],
-        "phase": args["phase"],
-        "attempt": args["attempt"],
-        "hadAssistantOutput": args["hadAssistantOutput"],
-        "hadToolUse": args["hadToolUse"],
-        "status": evidence.get("status"),
-        "body": evidence.get("body"),
-        "errorType": evidence.get("errorType"),
-        "code": evidence.get("code"),
-        "requestId": evidence.get("requestId"),
-        "retryAfterMs": evidence.get("retryAfterMs"),
-        "rawMessage": raw,
-        "streamEventType": args.get("streamEventType") or evidence.get("streamEventType"),
-    }
-    if evidence.get("status") is not None:
-        return classifyProviderHttpFailure(common)
-    category, retryable = _classify_openai_sdk_evidence(
-        {
-            "errorType": evidence.get("errorType"),
-            "code": evidence.get("code"),
-            "message": evidence.get("body"),
-            "rawMessage": raw,
-            "className": "",
-        }
-    )
-    return createProviderRequestError(
-        createProviderFailureRecord(
-            {
-                **common,
-                "category": category,
-                "retryable": retryable,
-                "rawBody": evidence.get("body"),
-            }
-        )
-    )
-
-
-
-
-
-
 def _looks_like_protocol(message: str) -> bool:
     return bool(re.search(r"failed to parse streamed provider event|unexpected end of json input|invalid json|malformed sse|response body was empty|unable to parse tool parameter json", message))
-
-
 
 
 def _extract_openai_sdk_stream_error(error: BaseException) -> dict[str, Any] | None:
@@ -534,8 +445,6 @@ def _classify_openai_sdk_stream_error(details: dict[str, Any]) -> str:
     return "server"
 
 
-
-
 def _classify_openai_sdk_exception(
     args: dict[str, Any], evidence: dict[str, Any]
 ) -> ProviderRequestError:
@@ -551,6 +460,7 @@ def _classify_openai_sdk_exception(
         "errorType": evidence.get("errorType"),
         "code": evidence.get("code"),
         "requestId": evidence.get("requestId"),
+        "retryAfterMs": evidence.get("retryAfterMs"),
         "rawMessage": evidence.get("rawMessage"),
         "streamEventType": (
             args.get("streamEventType") or evidence.get("streamEventType")
