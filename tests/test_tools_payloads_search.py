@@ -94,8 +94,12 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
             task_result = run(task_output.handler({"task_id": task_id, "block": False, "timeout": 1000}, context))
             task_payload = json.loads(task_result["content"])
-            self.assertEqual(task_payload["output_manifest"]["strategy"], "inline_head_tail")
-            self.assertTrue(task_payload["output_manifest"]["truncated"])
+            # The bounded file tail already fits the inline byte budget, so
+            # shaping must NOT re-truncate it (that double cut is the disease
+            # the calibrated line caps removed); sourceTruncated still says
+            # the file holds more.
+            self.assertEqual(task_payload["output_manifest"]["strategy"], "inline_full")
+            self.assertFalse(task_payload["output_manifest"]["truncated"])
             self.assertTrue(task_payload["output_truncated"])
             self.assertTrue(task_payload["output_manifest"]["sourceTruncated"])
             self.assertEqual(task_payload["output_manifest"]["originalBytes"], len(long_output.encode()))

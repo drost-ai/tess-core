@@ -15,6 +15,35 @@ from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized
 from agent_core.payloads.utf8_bounds import sliceUtf8Window, utf8ByteLength
 
 
+class TextInlineBudgetCalibrationTests(AgentCoreTestCase):
+    def test_short_lined_text_within_byte_budget_returns_inline_full(self):
+        # Field case: a stripped web page of ~7KB across ~300 short lines
+        # (small class, 8KB budget) must NOT be excerpted — the old 140-line
+        # cap cut it at ~3.2KB and cost artifact round trips for content
+        # that fit inline.
+        from agent_core.payloads.tools import TOOL_PAYLOAD_POLICIES, shapeTextToolResult
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            small_config = {"providerKind": "openai", "openaiBaseUrl": "https://api.example.test", "model": "deepseek-v4-flash"}
+            text = "\n".join(f"nav item {index} · short line" for index in range(300))
+            self.assertLess(len(text.encode("utf-8")), TOOL_PAYLOAD_POLICIES["small"]["textInlineBytes"])
+            shaped = run(shapeTextToolResult(
+                config=small_config, sessionId="calibration-session",
+                toolName="WebFetch", family="web", text=text, strategy="head",
+            ))
+            self.assertEqual(shaped["view"]["strategy"], "inline_full")
+            self.assertFalse(shaped["view"]["truncated"])
+            self.assertEqual(shaped["text"], text)
+
+            for policy in TOOL_PAYLOAD_POLICIES.values():
+                # Byte budgets stay the binding constraint for short lines.
+                self.assertGreaterEqual(policy["textInlineLines"] * 20, policy["textInlineBytes"])
+                self.assertGreaterEqual((policy["textHeadLines"] + policy["textTailLines"]) * 20, policy["textInlineBytes"] // 2)
+        finally:
+            self.restore_home(root, previous)
+
+
 class Package31PayloadPaginationTests(AgentCoreTestCase):
     def test_payload_cursor_and_utf8_windows_are_bound_and_progressive(self):
         fingerprint = fingerprintPayloadSource(["fixture", "漢🙂", "3"])

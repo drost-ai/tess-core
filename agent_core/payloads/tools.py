@@ -16,6 +16,11 @@ if _typing.TYPE_CHECKING:
     from ..contracts.tools import ToolArtifactRef
 
 
+# text* line caps are backstops against pathological many-tiny-line output;
+# the byte budget is the intended binding constraint. Keep each line cap at
+# roughly textInlineBytes / 20 (short-lined text like stripped HTML averages
+# ~20 bytes/line), or short results get excerpted with budget left over and
+# the model pays artifact round trips for content that fit inline.
 TOOL_PAYLOAD_POLICIES = {
     "small": {
         "readDefaultLines": 140,
@@ -25,10 +30,10 @@ TOOL_PAYLOAD_POLICIES = {
         "globInlineBytes": 6000,
         "grepInlineMatches": 60,
         "grepInlineBytes": 8000,
-        "textInlineLines": 140,
+        "textInlineLines": 400,
         "textInlineBytes": 8000,
-        "textHeadLines": 30,
-        "textTailLines": 60,
+        "textHeadLines": 100,
+        "textTailLines": 200,
         "artifactThresholdBytes": 6000,
         "artifactThresholdLines": 180,
     },
@@ -40,10 +45,10 @@ TOOL_PAYLOAD_POLICIES = {
         "globInlineBytes": 8000,
         "grepInlineMatches": 100,
         "grepInlineBytes": 12000,
-        "textInlineLines": 220,
+        "textInlineLines": 600,
         "textInlineBytes": 12000,
-        "textHeadLines": 40,
-        "textTailLines": 90,
+        "textHeadLines": 150,
+        "textTailLines": 300,
         "artifactThresholdBytes": 10000,
         "artifactThresholdLines": 260,
     },
@@ -55,10 +60,10 @@ TOOL_PAYLOAD_POLICIES = {
         "globInlineBytes": 10000,
         "grepInlineMatches": 160,
         "grepInlineBytes": 18000,
-        "textInlineLines": 320,
+        "textInlineLines": 900,
         "textInlineBytes": 18000,
-        "textHeadLines": 60,
-        "textTailLines": 120,
+        "textHeadLines": 200,
+        "textTailLines": 400,
         "artifactThresholdBytes": 14000,
         "artifactThresholdLines": 420,
     },
@@ -157,8 +162,15 @@ def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
 
 def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: int) -> dict[str, Any]:
     lines = splitToolTextLines(text)
-    head = _fit_lines_within_bytes(lines[:head_lines], max_bytes)
-    tail = _fit_lines_within_bytes(lines[max(len(lines) - tail_lines, 0):], max_bytes)
+    # Budget the halves jointly (head up to a third, tail the rest) so the
+    # combined excerpt fits max_bytes at any line cap; a lone half keeps the
+    # whole budget. The tail window starts after the head so overlapping
+    # windows never duplicate lines.
+    head_budget = max_bytes // 3 if head_lines and tail_lines else max_bytes
+    head = _fit_lines_within_bytes(lines[:head_lines], head_budget)
+    tail_budget = max(max_bytes - _byte_len("\n".join(head)) - (64 if head else 0), 0)
+    tail_start = max(len(lines) - tail_lines, len(head))
+    tail = _fit_lines_within_bytes(lines[tail_start:], tail_budget)
     excerpt = "\n".join(head)
     omitted = max(len(lines) - len(head) - len(tail), 0)
     if tail and len(lines) > len(head):
