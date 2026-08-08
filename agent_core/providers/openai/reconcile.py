@@ -35,8 +35,10 @@ class OpenAiEmptyCompletedResponse(Exception):
         self.diagnostics = diagnostics
 
 
-def message_projection_record(item_id: str, text: str) -> dict[str, Any]:
-    return {"identity": item_id or None, "kind": "message", "text": text}
+def message_projection_record(
+    item_id: str, text: str, refusal: str = ""
+) -> dict[str, Any]:
+    return {"identity": item_id or None, "kind": "message", "text": text, "refusal": refusal}
 
 
 def close_openai_output_item(
@@ -98,13 +100,11 @@ def close_openai_output_item(
         state.completed_item_order.append(item_id)
         completed_tool = True
     elif item_type == "message":
-        parts = []
-        for content in get_value(item, "content", []) or []:
-            text_value = get_value(content, "text")
-            if get_value(content, "type") == "output_text" and isinstance(text_value, str):
-                parts.append(text_value)
+        parts, refusal_parts = _collect_message_parts(item)
         state.completed_item_records[item_id] = message_projection_record(
-            item_id, "".join(parts) or state.item_text.get(item_id, "")
+            item_id,
+            "".join(parts) or state.item_text.get(item_id, ""),
+            "".join(refusal_parts),
         )
         state.completed_item_order.append(item_id)
     del state.open_output_items[item_id]
@@ -139,12 +139,12 @@ def normalize_terminal_projection(output: Any) -> dict[str, Any]:
         item_type = get_value(item, "type")
         if item_type == "message":
             item_id = str(get_value(item, "id", "") or "")
-            parts = []
-            for content in get_value(item, "content", []) or []:
-                text = get_value(content, "text")
-                if get_value(content, "type") == "output_text" and isinstance(text, str):
-                    parts.append(text)
-            records.append(message_projection_record(item_id, "".join(parts)))
+            parts, refusal_parts = _collect_message_parts(item)
+            records.append(
+                message_projection_record(
+                    item_id, "".join(parts), "".join(refusal_parts)
+                )
+            )
             continue
         if item_type == "function_call":
             item_id = str(get_value(item, "id", "") or "")
@@ -281,12 +281,20 @@ def _selection(
         block["text"] for block in blocks if block["type"] == "text"
     )
     had_tool_use = any(block["type"] == "tool_use" for block in blocks)
+    message_records = [record for record in records if record.get("kind") == "message"]
+    refusal_only = (
+        not had_tool_use
+        and any(record.get("refusal") for record in message_records)
+        and not any(record.get("text") for record in message_records)
+    )
     return {
         "records": records,
         "blocks": blocks,
         "text": text,
         "had_tool_use": had_tool_use,
-        "stop_reason": "tool_calls" if had_tool_use else "stop",
+        "stop_reason": (
+            "tool_calls" if had_tool_use else "refusal" if refusal_only else "stop"
+        ),
         "diagnostics": _diagnostics(
             a_records,
             t_records,
@@ -297,12 +305,29 @@ def _selection(
     }
 
 
+def _collect_message_parts(item: Any) -> tuple[list[str], list[str]]:
+    parts: list[str] = []
+    refusal_parts: list[str] = []
+    for content in get_value(item, "content", []) or []:
+        content_type = get_value(content, "type")
+        text_value = get_value(content, "text")
+        if content_type == "output_text" and isinstance(text_value, str):
+            parts.append(text_value)
+            continue
+        refusal_value = get_value(content, "refusal")
+        if content_type == "refusal" and isinstance(refusal_value, str):
+            refusal_parts.append(refusal_value)
+    return parts, refusal_parts
+
+
 def projection_blocks(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     for record in records:
         if record["kind"] == "message":
             if record["text"]:
                 blocks.append({"type": "text", "text": record["text"]})
+            if record.get("refusal"):
+                blocks.append({"type": "text", "text": record["refusal"]})
             continue
         blocks.append(
             {

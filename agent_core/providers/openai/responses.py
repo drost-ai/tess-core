@@ -12,7 +12,10 @@ from .recovery import (
     sink_failure,
 )
 from .recovery_attempt import recover_openai_attempt
-from .responses_terminal import handle_response_completed as _handle_response_completed
+from .responses_terminal import (
+    handle_response_completed as _handle_response_completed,
+    handle_response_incomplete as _handle_response_incomplete,
+)
 from .responses_session import (
     extract_turn_state as _extract_turn_state,
     finalize_responses_success as _finalize_responses_success,
@@ -210,9 +213,13 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": typ, "model": args["request"]["model"], "payload": event})
                 if state.saw_completed:
-                    raise incomplete_response(
-                        f"event {typ or '<unknown>'} arrived after response.completed"
-                    )
+                    if typ in {"response.completed", "response.incomplete"}:
+                        raise incomplete_response(
+                            f"terminal event {typ} arrived after response.completed"
+                        )
+                    # The turn is committed; stray trailing events (proxies
+                    # send pings, duplicated deltas) must not fail it.
+                    continue
                 if typ == "response.created":
                     created = get_value(event, "response", {}) or {}
                     candidate_id = str(get_value(created, "id", "") or "")
@@ -359,6 +366,18 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                         delivery=delivery,
                         runtime=runtime,
                     )
+                    continue
+                if typ == "response.incomplete" and await _handle_response_incomplete(
+                    state,
+                    event=event,
+                    incomplete_response=incomplete_response,
+                    provider_label=provider_label,
+                    attempt=attempt,
+                    logical_call_id=logical_call_id,
+                    delivery=delivery,
+                    runtime=runtime,
+                ):
+                    state.phase = "response_complete"
                     continue
                 terminal_failure = response_terminal_failure(
                     typ, event, provider_label=provider_label, phase=state.phase,

@@ -372,22 +372,20 @@ class Package36ProviderTurnSessionTests(AgentCoreTestCase):
                 async def create_websocket(
                     self, _params: dict[str, object]
                 ) -> AsyncChunks:
-                    return AsyncChunks(
+                    event = _response_event(
+                        "must-not-advance",
                         [
-                            _response_event(
-                                "must-not-advance",
-                                [
-                                    {
-                                        "type": "message",
-                                        "content": [
-                                            {"type": "output_text", "text": "partial"}
-                                        ],
-                                    }
+                            {
+                                "type": "message",
+                                "content": [
+                                    {"type": "output_text", "text": "partial"}
                                 ],
-                            ),
-                            {"type": "response.output_text.delta", "delta": "late"},
-                        ]
+                            }
+                        ],
                     )
+                    # A duplicate terminal is stream corruption; the committed
+                    # chain state must not advance from it.
+                    return AsyncChunks([event, event])
 
             turn = OpenAiProviderTurnSession(
                 config={

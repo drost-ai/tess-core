@@ -7,6 +7,7 @@ from .recovery_attempt import openai_retry_delay_ms as _openai_retry_delay_ms
 import asyncio
 import json
 from ..._utils import get_value, maybe_await, to_async_iter
+from ..error_evidence import ProviderWireError
 from ..errors import (
     canRetryProviderFailure,
     createProviderIncompleteResponseError,
@@ -56,6 +57,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         usage: dict[str, Any] = {}
         stop_reason = "stop"
         emitted_text = ""
+        refusal_text = ""
         emitted_tool_ids: set[str] = set()
         pending_tool_calls: dict[int, dict[str, str]] = {}
         observed_choice_indexes: set[int] = set()
@@ -176,6 +178,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     turn_session.mark_provider_activity("stream_frame")
                 if runtime.get("streamProviderMessages"):
                     _emit(runtime, "provider.stream_event", {"stream_event": "chat.completion.chunk", "model": args["request"]["model"], "payload": chunk})
+                error_payload = get_value(chunk, "error")
+                if error_payload:
+                    raise _chat_in_band_stream_error(error_payload)
                 _apply_chat_completion_usage(usage, get_value(chunk, "usage"))
                 raw_choices = get_value(chunk, "choices", [])
                 choices = raw_choices if isinstance(raw_choices, list) else []
@@ -198,6 +203,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                         if runtime.get("includePartialMessages"):
                             _emit(runtime, "message.assistant.partial", {"session_id": None, "model": args["request"]["model"], "text_delta": content_delta, "text": emitted_text})
                         _append_text_block(blocks, content_delta)
+                    refusal_delta = get_value(delta, "refusal", "")
+                    if isinstance(refusal_delta, str) and refusal_delta:
+                        refusal_text += refusal_delta
                     reasoning_delta = get_value(delta, "reasoning_content", "")
                     if isinstance(reasoning_delta, str) and reasoning_delta:
                         emitProviderActivity(runtime, "reasoning", attempt=attempt)
@@ -263,6 +271,9 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 )
             if pending_tool_calls:
                 raise incomplete_response("the stream ended with unfinished tool-call fragments")
+            if not blocks and refusal_text:
+                _append_text_block(blocks, refusal_text)
+                stop_reason = "refusal"
             phase = "response_complete"
             if turn_session is not None:
                 await turn_session.release_stream(active_stream)
@@ -299,3 +310,34 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 continue
             raise failure
     raise last_failure or RuntimeError("OpenAI Chat Completions request failed unexpectedly.")
+
+
+def _chat_in_band_stream_error(error_payload: Any) -> ProviderWireError:
+    """In-band {'error': …} chunks (Azure/LiteLLM/vLLM/OpenRouter) → evidence."""
+    message = (
+        str(get_value(error_payload, "message", "") or "")
+        or "OpenAI chat stream reported an in-band error."
+    )
+    code_value = get_value(error_payload, "code")
+    status = None
+    for candidate in (get_value(error_payload, "status"), code_value):
+        if (
+            isinstance(candidate, int)
+            and not isinstance(candidate, bool)
+            and 100 <= candidate <= 599
+        ):
+            status = candidate
+            break
+    try:
+        body = json.dumps(error_payload, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        body = str(error_payload)
+    error_type = get_value(error_payload, "type")
+    return ProviderWireError(
+        message,
+        status=status,
+        body=body,
+        code=str(code_value) if code_value is not None else None,
+        errorType=str(error_type) if error_type is not None else None,
+        streamEventType="error",
+    )

@@ -186,7 +186,10 @@ def getOpenAiProviderLabel(mode: str, _baseUrl: str | None = None) -> str:
     return "OpenAI Responses"
 
 def isCodexBaseUrl(baseUrl: str | None) -> bool:
-    return (baseUrl.strip() if isinstance(baseUrl, str) and baseUrl.strip() else DEFAULT_CODEX_BASE_URL).rstrip("/") == DEFAULT_CODEX_BASE_URL
+    # No base URL is NOT codex: the stock default is api.openai.com responses
+    # mode; the codex backend is reachable only by explicit URL or mode.
+    trimmed = baseUrl.strip() if isinstance(baseUrl, str) else ""
+    return bool(trimmed) and trimmed.rstrip("/") == DEFAULT_CODEX_BASE_URL
 
 def supportsOpenAiChatCompletionsReasoningEffort(baseUrl: str | None) -> bool:
     if not baseUrl or not baseUrl.strip():
