@@ -182,8 +182,10 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
             runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "generated", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
             generated_tool = runtime["createToolDefinitions"]()[0]
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            # bypassPermissions: this test exercises abort semantics, not the
+            # mcp__* permission gate (covered in test_mcp_permission_gate.py).
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
 
             with self.assertRaises(RuntimeError) as pre_ctx:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from typing import Any
 
@@ -22,6 +23,31 @@ from .state import (
 )
 from .token_store import createFileMcpTokenStore
 from ..runtime.secrets import resolveMcpServerConfigSecrets
+
+
+async def _ensure_mcp_tool_permission(context: Any, tool: dict[str, Any], tool_args: dict[str, Any] | None) -> None:
+    from ..tools.permissions import _ensure_tool_permission
+
+    if (
+        not isinstance(context, dict)
+        or not isinstance(context.get("session"), dict)
+        or not isinstance(context.get("config"), dict)
+    ):
+        raise PermissionError(
+            f"MCP tool {tool.get('runtimeName')} requires a session-bound tool context to evaluate permissions."
+        )
+    try:
+        preview = json.dumps(tool_args or {}, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        preview = str(tool_args)
+    if len(preview) > 400:
+        preview = preview[:400] + "…"
+    await _ensure_tool_permission(
+        context,
+        tool["runtimeName"],
+        "mcp",
+        f"Call MCP tool {tool['name']} on server {tool['server']}\n{preview}",
+    )
 
 
 async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -92,9 +118,12 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 async def handler(input: dict[str, Any], _context: dict[str, Any], _tool=tool) -> dict[str, Any]:
                     try:
                         _throw_if_runtime_tool_cancelled(_context)
+                        await _ensure_mcp_tool_permission(_context, _tool, input)
                         result = await call_tool(_tool["server"], _tool["name"], input)
                         _throw_if_runtime_tool_cancelled(_context)
                         return result
+                    except PermissionError:
+                        raise
                     except Exception as exc:
                         if _is_runtime_tool_abort_error(exc, _context.get("abortSignal") if isinstance(_context, dict) else None):
                             raise

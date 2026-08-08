@@ -192,6 +192,10 @@ async def _resolve_tool_permission(
         if mode in ("auto", "dontAsk"):
             return {"decision": "deny", "source": "mode", "reason": "Long-lived network checks are blocked in non-interactive permission modes."}
         return {"decision": "ask", "source": "mode", "switchMode": "bypassPermissions", "reason": "This tool schedules recurring network requests."}
+    if category == "mcp":
+        if mode in ("auto", "dontAsk"):
+            return {"decision": "deny", "source": "mode", "reason": "MCP tools require an explicit allow permission rule in non-interactive permission modes."}
+        return {"decision": "ask", "source": "mode", "switchMode": "bypassPermissions", "reason": "This MCP server tool runs outside the built-in toolset."}
 
     command = command or ""
     if not always_ask and _is_safe_read_only_shell_command(command):
