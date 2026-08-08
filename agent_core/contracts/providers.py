@@ -116,3 +116,4 @@ class ProviderFailureRecord(_ProviderFailureRequired, total=False):
     sequenceNumber: int | None
     recoveryFailure: str | None
     interruptedPreview: dict[str, Any] | None
+    retryAfterMs: int | None

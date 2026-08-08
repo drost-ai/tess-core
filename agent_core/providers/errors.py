@@ -50,6 +50,39 @@ class ProviderIncompleteResponseError(ProviderRequestError):
         self.details = details
 
 
+class ProviderWireError(Exception):
+    """Transport-neutral provider failure with classification evidence.
+
+    Any transport can raise this (or expose a ``provider_error_evidence``
+    mapping on its own exception type) to make HTTP-status and error-body
+    classification reachable without the classifier depending on the
+    exception's module or class.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        body: str | None = None,
+        code: str | None = None,
+        errorType: str | None = None,
+        requestId: str | None = None,
+        retryAfterMs: int | None = None,
+        streamEventType: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.provider_error_evidence: dict[str, Any] = {
+            "status": status,
+            "body": body,
+            "code": code,
+            "errorType": errorType,
+            "requestId": requestId,
+            "retryAfterMs": retryAfterMs,
+            "streamEventType": streamEventType,
+        }
+
+
 def isProviderRequestError(error: BaseException | Any) -> bool:
     return isinstance(error, ProviderRequestError)
 
@@ -85,6 +118,7 @@ def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: An
         "interruptedPreview": _bounded_interrupted_preview(args.get("interruptedPreview")),
         "component": _bound_optional_diagnostic_text(args.get("component"), 64),
         "operation": _bound_optional_diagnostic_text(args.get("operation"), 32),
+        "retryAfterMs": _nonnegative_optional_integer(args.get("retryAfterMs")),
     }
     record.update({key: value for key, value in optional.items() if value is not None})
     return record
@@ -197,6 +231,9 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
         return createProviderRequestError(record)
     raw = str(error)
     lower = raw.lower()
+    wire_evidence = _provider_wire_evidence(error)
+    if wire_evidence is not None:
+        return _classify_wire_evidence(args, wire_evidence, raw)
     sdk_evidence = _extract_openai_sdk_exception(error, args.get("provider"))
     if sdk_evidence is not None:
         return _classify_openai_sdk_exception(args, sdk_evidence)
@@ -356,6 +393,65 @@ def _format_provider_failure_message(args: dict[str, Any]) -> str:
 def _build_raw_message(body: str | None = None, error_type: str | None = None, code: str | None = None) -> str | None:
     parts = [part for part in (code, error_type, body) if isinstance(part, str) and part.strip()]
     return " ".join(parts) if parts else None
+
+
+def _provider_wire_evidence(error: BaseException) -> dict[str, Any] | None:
+    raw_evidence = getattr(error, "provider_error_evidence", None)
+    if not isinstance(raw_evidence, _Mapping):
+        return None
+    return {
+        "status": _valid_http_status(raw_evidence.get("status")),
+        "body": _bound_optional_diagnostic_text(raw_evidence.get("body"), 8_192),
+        "code": _bound_optional_diagnostic_text(raw_evidence.get("code"), 256),
+        "errorType": _bound_optional_diagnostic_text(raw_evidence.get("errorType"), 256),
+        "requestId": _bound_optional_diagnostic_text(raw_evidence.get("requestId"), 256),
+        "retryAfterMs": _nonnegative_optional_integer(raw_evidence.get("retryAfterMs")),
+        "streamEventType": _bound_optional_diagnostic_text(
+            raw_evidence.get("streamEventType"), 256
+        ),
+    }
+
+
+def _classify_wire_evidence(
+    args: dict[str, Any], evidence: dict[str, Any], raw: str
+) -> ProviderRequestError:
+    common = {
+        "provider": args["provider"],
+        "providerLabel": args["providerLabel"],
+        "phase": args["phase"],
+        "attempt": args["attempt"],
+        "hadAssistantOutput": args["hadAssistantOutput"],
+        "hadToolUse": args["hadToolUse"],
+        "status": evidence.get("status"),
+        "body": evidence.get("body"),
+        "errorType": evidence.get("errorType"),
+        "code": evidence.get("code"),
+        "requestId": evidence.get("requestId"),
+        "retryAfterMs": evidence.get("retryAfterMs"),
+        "rawMessage": raw,
+        "streamEventType": args.get("streamEventType") or evidence.get("streamEventType"),
+    }
+    if evidence.get("status") is not None:
+        return classifyProviderHttpFailure(common)
+    category, retryable = _classify_openai_sdk_evidence(
+        {
+            "errorType": evidence.get("errorType"),
+            "code": evidence.get("code"),
+            "message": evidence.get("body"),
+            "rawMessage": raw,
+            "className": "",
+        }
+    )
+    return createProviderRequestError(
+        createProviderFailureRecord(
+            {
+                **common,
+                "category": category,
+                "retryable": retryable,
+                "rawBody": evidence.get("body"),
+            }
+        )
+    )
 
 
 
