@@ -179,24 +179,56 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_drain_injection_clamps_oversized_message(self):
-        from agent_core.tasks.communication import _message_envelope
+    def test_drain_injection_clamps_oversized_message_with_readable_artifact(self):
+        import re
 
+        from agent_core.tasks.communication import _render_injected_message
+
+        root, _home, workspace, previous = self.temp_context()
         os.environ["AGENT_CORE_COMMS_INLINE_RESULT_BYTES"] = "4096"
         try:
-            envelope = _message_envelope({
+            session = {"id": "clamp-session"}
+            envelope = run(_render_injected_message({
                 "sender": "child", "kind": "result", "messageId": "m-1",
                 "direction": "to_parent", "taskId": "t-1",
                 "content": "a" * 10_000,
-            })
+            }, session))
             self.assertLess(len(envelope.encode("utf-8")), 5_000)
             self.assertIn("message truncated: 10,000 bytes total", envelope)
-            small = _message_envelope({
+            match = re.search(r"ReadToolArtifact artifact_id=([0-9a-f-]+) offset_bytes=(\d+)", envelope)
+            self.assertIsNotNone(match, envelope)
+            artifact_path = core.toolArtifactDataPath("clamp-session", match.group(1), ".txt")
+            self.assertEqual(Path(artifact_path).read_text(encoding="utf-8"), "a" * 10_000)
+
+            small = run(_render_injected_message({
                 "sender": "child", "kind": "result", "messageId": "m-2",
                 "direction": "to_parent", "taskId": "t-1",
                 "content": "short and sweet",
-            })
+            }, session))
             self.assertIn("short and sweet", small)
             self.assertNotIn("truncated", small)
         finally:
             os.environ.pop("AGENT_CORE_COMMS_INLINE_RESULT_BYTES", None)
+            self.restore_home(root, previous)
+
+    def test_comms_results_skip_the_structured_summarizer(self):
+        from agent_core.payloads.agent_results import finalizeToolDispatchResult
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            reply_json = json.dumps({
+                "status": "reply_received", "message_id": "m-1",
+                "reply_message_id": "m-2", "reply": "section one\n" * 800,
+            })
+            completed = run(finalizeToolDispatchResult(
+                config={"providerProfile": {}},
+                sessionId="comms-shape-session",
+                toolUse={"id": "tool-1", "name": "SendMessage", "input": {}},
+                outcome={"kind": "returned", "result": {"content": reply_json}},
+            ))
+            content = completed["result"]["content"]
+            self.assertNotIn("structured_result_summary", content)
+            self.assertIn("section one", content)
+            self.assertEqual(content, reply_json)
+        finally:
+            self.restore_home(root, previous)

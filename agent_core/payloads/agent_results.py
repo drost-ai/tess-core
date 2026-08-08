@@ -23,7 +23,10 @@ def _comms_inline_budget(tool_name: str, requested: Any) -> dict[str, Any]:
     # Call-time import: the config package imports payloads at module load.
     from ..config._knobs import knobValue
 
-    return {"maxBytes": int(knobValue("comms.inline_result_bytes")), "allowRaise": True}
+    # skipStructuredShaping: inter-agent replies are JSON envelopes around
+    # conversational text — the item summarizer must not re-truncate them
+    # under the byte allowance.
+    return {"maxBytes": int(knobValue("comms.inline_result_bytes")), "allowRaise": True, "skipStructuredShaping": True}
 
 
 async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

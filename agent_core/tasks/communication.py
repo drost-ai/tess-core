@@ -220,7 +220,7 @@ async def _deliver_mailbox_transaction(
             if message_id not in existing:
                 session.setdefault("messages", []).append(
                     _synthetic_user_message(
-                        _message_envelope(message),
+                        await _render_injected_message(message, session),
                         actor="task",
                         kind="task_notification",
                         lineage={
@@ -247,19 +247,26 @@ async def _deliver_mailbox_transaction(
     return await mutateJsonLines(task_mailbox_path(task_id), _commit)
 
 
-def _message_envelope(message: Mapping[str, Any]) -> str:
+async def _render_injected_message(message: Mapping[str, Any], session: Mapping[str, Any]) -> str:
+    return _message_envelope(message, await _bounded_message_content(str(message.get("content") or ""), session))
+
+
+def _message_envelope(message: Mapping[str, Any], content: str | None = None) -> str:
     raw_sender = message.get("sender")
     sender = "SUPERVISOR" if raw_sender == "supervisor" else "CHILD" if raw_sender == "child" else "PARENT"
     kind = message.get("kind") or "guidance"
     origin = f"\ntask_id: {message.get('taskId')}" if message.get("direction") == "to_parent" else ""
-    content = _bounded_message_content(str(message.get("content") or ""))
-    return f"[{sender} MESSAGE]\nkind: {kind}\nmessage_id: {message.get('messageId')}{origin}\n\n{content}\n[/{sender} MESSAGE]"
+    body = content if content is not None else str(message.get("content") or "")
+    return f"[{sender} MESSAGE]\nkind: {kind}\nmessage_id: {message.get('messageId')}{origin}\n\n{body}\n[/{sender} MESSAGE]"
 
 
-def _bounded_message_content(content: str) -> str:
-    """Clamp a drain-injected message to the comms inline allowance so one
-    oversized child report cannot blow the recipient's context; the full
-    text stays in the mailbox record on disk."""
+async def _bounded_message_content(content: str, session: Mapping[str, Any]) -> str:
+    """Clamp a drain-injected message to the comms inline allowance.
+
+    The remainder must stay reachable WITHOUT re-asking the sender: the
+    full text is persisted as a tool artifact and the truncation note
+    carries the artifact id, so the recipient pages it with
+    ReadToolArtifact."""
     # Call-time import: the config package imports tasks at module load.
     from ..config._knobs import knobValue
 
@@ -268,7 +275,26 @@ def _bounded_message_content(content: str) -> str:
     if len(encoded) <= limit:
         return content
     clipped = encoded[:limit].decode("utf-8", errors="ignore")
-    return f"{clipped}\n… [message truncated: {len(encoded):,} bytes total; full text in the task mailbox]"
+    try:
+        from ..payloads.tools import _persist_artifact
+
+        artifact = await _persist_artifact(
+            {
+                "sessionId": session.get("id"),
+                "toolName": "ChildMessage",
+                "family": "comms",
+                "content": content,
+                "contentType": "text",
+                "truncated": False,
+            }
+        )
+        note = (
+            f"… [message truncated: {len(encoded):,} bytes total; read the rest with "
+            f"ReadToolArtifact artifact_id={artifact['artifactId']} offset_bytes={len(clipped.encode('utf-8'))}]"
+        )
+    except Exception:
+        note = f"… [message truncated: {len(encoded):,} bytes total; full text in the task mailbox record]"
+    return f"{clipped}\n{note}"
 
 
 async def deliver_queued_task_messages_to_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> list[dict[str, Any]]:

@@ -61,7 +61,7 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
     diagnostics = list(normalized["diagnostics"])
     structured = (
         analyzeStructuredResult(normalized["content"])
-        if original_bytes <= limit_bytes and not never_artifact
+        if original_bytes <= limit_bytes and not never_artifact and not values.get("skipStructuredShaping")
         else None
     )
     if original_bytes <= limit_bytes:
