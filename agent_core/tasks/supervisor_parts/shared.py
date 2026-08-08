@@ -18,3 +18,10 @@ _DEAD_WORKER_SUMMARY = (
     "Worker process is no longer running; reconciled during projection. "
     "Final completion details were unavailable."
 )
+
+
+def _knob_ms(name: str) -> int:
+    """Integer knob read; call-time import because config imports tasks."""
+    from ...config._knobs import knobValue
+
+    return int(knobValue(name))

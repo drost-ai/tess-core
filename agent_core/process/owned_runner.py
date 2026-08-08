@@ -12,7 +12,6 @@ from typing import Any
 
 MAX_ARGV_ITEMS = 4096
 MAX_ARGV_BYTES = 512 * 1024
-ACTIVATION_TIMEOUT_SECONDS = 30
 FORWARDED_SIGNALS = (signal.SIGTERM, signal.SIGINT, signal.SIGQUIT)
 
 
@@ -77,7 +76,9 @@ def _parse_launch(raw: str | None) -> dict[str, Any]:
 
 
 def _wait_for_activation(expected_token: str) -> None:
-    ready, _, _ = select.select([sys.stdin.buffer], [], [], ACTIVATION_TIMEOUT_SECONDS)
+    from ..config._knobs import knobValue
+
+    ready, _, _ = select.select([sys.stdin.buffer], [], [], int(knobValue("process.activation_timeout_ms")) / 1000)
     if not ready:
         raise TimeoutError("Owned process runner activation timed out.")
     raw = sys.stdin.buffer.readline(256)

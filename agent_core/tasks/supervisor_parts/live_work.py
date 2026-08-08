@@ -26,11 +26,9 @@ from ...storage import (
 )
 from .mappers import _is_active_child_agent_status, _is_related_child_agent
 from .processes import _is_process_alive
-from .shared import _DEAD_WORKER_SUMMARY
+from .shared import _DEAD_WORKER_SUMMARY, _knob_ms
 
 
-_DEAD_WORK_GRACE_MS = 15 * 60 * 1000
-_LIVE_WORK_CACHE_TTL_MS = 30_000
 _MAX_VERDICT_DETAILS = 128
 # One liveness definition across both reconciliation layers: anything that
 # may still own a pid (backgrounded and degraded included) is live until the
@@ -215,8 +213,9 @@ async def _resolve_session_live_work(
     }
 
 
-def _create_live_work_verdict_cache(ttl_ms: int = _LIVE_WORK_CACHE_TTL_MS) -> dict[str, _Any]:
-    ttl_ms = max(0, min(int(ttl_ms), _LIVE_WORK_CACHE_TTL_MS))
+def _create_live_work_verdict_cache(ttl_ms: int | None = None) -> dict[str, _Any]:
+    cap = _knob_ms("daemon.live_work_cache_ttl_ms")
+    ttl_ms = max(0, min(int(cap if ttl_ms is None else ttl_ms), cap))
     entries: dict[str, dict[str, _Any]] = {}
     stats = {"hits": 0, "misses": 0, "invalidations": 0}
 
@@ -400,7 +399,7 @@ def _past_dead_work_grace(value: _Any) -> bool:
         if started.tzinfo is None:
             started = started.replace(tzinfo=_datetime.timezone.utc)
         age_ms = (_datetime.datetime.now(_datetime.timezone.utc) - started).total_seconds() * 1000
-        return age_ms >= _DEAD_WORK_GRACE_MS
+        return age_ms >= _knob_ms("daemon.dead_work_grace_ms")
     except (TypeError, ValueError, OverflowError):
         return False
 

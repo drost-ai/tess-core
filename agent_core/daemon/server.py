@@ -325,7 +325,9 @@ async def _watch_owner_runtime(
 async def _rotate_daemon_events_periodically(instance_id: str, shutdown: asyncio.Event) -> None:
     while not shutdown.is_set():
         try:
-            await asyncio.wait_for(shutdown.wait(), timeout=5 * 60)
+            from ..config._knobs import knobValue
+
+            await asyncio.wait_for(shutdown.wait(), timeout=int(knobValue("daemon.events_rotate_check_ms")) / 1000)
         except asyncio.TimeoutError:
             await rotateDaemonEventsIfOversized(instance_id)
 

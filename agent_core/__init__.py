@@ -67,9 +67,9 @@ from .config import (
     resolveProviderProfile, resolveProviderProfiles, resolveSelectedProviderProfileName,
 )
 from .daemon import (
-    AuthenticatedDaemonServer, DAEMON_AUTH_TIMEOUT_MS, DAEMON_MAX_PENDING_GLOBAL, DAEMON_MAX_PENDING_PER_CLIENT,
+    AuthenticatedDaemonServer, DAEMON_MAX_PENDING_GLOBAL, DAEMON_MAX_PENDING_PER_CLIENT,
     DAEMON_MAX_REQUEST_FRAME_BYTES, DAEMON_MAX_REQUEST_IDS_PER_CONNECTION, DAEMON_MAX_REQUEST_ID_BYTES,
-    DAEMON_MAX_RESPONSE_FRAME_BYTES, DAEMON_PROTOCOL_VERSION, DAEMON_RPC_TIMEOUT_MS, DaemonAbortSignal,
+    DAEMON_MAX_RESPONSE_FRAME_BYTES, DAEMON_PROTOCOL_VERSION, DaemonAbortSignal,
     DaemonLineDecoder, DaemonProtocolError, DaemonSecurityError, DaemonServerPeer, MAX_DAEMON_STATE_BYTES,
     MAX_DAEMON_TOKEN_BYTES, MAX_DAEMON_TREE_DEPTH, MAX_DAEMON_TREE_ENTRIES, PRIVATE_DIRECTORY_MODE, PRIVATE_FILE_MODE,
     boundedProtocolDiagnostic, connectTaskSupervisorDaemonClient, createAuthenticatedDaemonServer,
@@ -168,7 +168,7 @@ from .authority.repository_trust import (
     REPOSITORY_TRUST_VERSION, approveRepositoryContent, checkRepositoryApproval, getRepositoryTrustStatus,
     repositoryTrustRecordPath, resolveRepositoryIdentity, revokeRepositoryApproval,
 )
-from .runtime.bootstrap import BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS, MAX_STALE_DIAGNOSTICS, bootstrapRuntime
+from .runtime.bootstrap import MAX_STALE_DIAGNOSTICS, bootstrapRuntime
 from .runtime.wake import createMailboxWakeController
 from .runtime.generation import (
     RetiredRuntimeGeneration, RuntimeActivationContext, RuntimeActivationSupersededError, RuntimeSessionBinding,
@@ -232,10 +232,10 @@ from .authority.shell_command_policy import (
 )
 from .storage import (
     BRIDGE_LEDGER_MAX_ENTRIES, BRIDGE_LOG_MAX_ENTRIES, BRIDGE_STORAGE_MAX_BYTES, BridgeStorageError,
-    DAEMON_EVENTS_ROTATE_BYTES, DAEMON_EVENTS_TAIL_BYTES, DEFAULT_AUTO_MODE, DEFAULT_RUNTIME_HOME,
+    DEFAULT_AUTO_MODE, DEFAULT_RUNTIME_HOME,
     MAX_DAEMON_SOCKET_PATH_BYTES, MAX_SHALLOW_SESSION_BYTES, PLAN_ADJECTIVES, PLAN_NOUNS, PersistenceCallMeasurement,
     PersistenceObserver, RuntimeHomeScope, SESSION_BODY_FORMAT, SESSION_SCHEMA_V2, STORAGE_IO_MAX_WORKERS,
-    STORAGE_LOCK_TIMEOUT_MS, Scope, SessionRecordNotFoundError, SessionSchemaVersionError, StorageTransactionError,
+    Scope, SessionRecordNotFoundError, SessionSchemaVersionError, StorageTransactionError,
     appendBridgeEvent, appendBridgeInboxMessage, appendDaemonEvent, appendJsonLine, appendSessionTranscriptLogEntries,
     assertSessionSchemaSupported, beginPersistenceCall, bridgeEventsPath, bridgeInboxPath, bridgeLedgerPath,
     bridgePath, bridgeRecoveryPath, childAgentPath, clearAuth, clearDaemonState, commitSessionV2,
@@ -415,7 +415,7 @@ __all__ = [
     "AGENT_RUNTIME_BINDING_FIELDS",
     "ACTIVE_TASK_STATUSES", "AGENT_RUNTIME_BINDINGS_SCHEMA_VERSION", "ANTHROPIC_ABORT_POLL_INTERVAL_MS",
     "ARTIFACT_ACQUISITION_FAILURE_LIMIT", "AVAILABLE_TUI_THEMES", "AgentAuthorityError", "AnthropicSseAccumulator",
-    "AuthenticatedDaemonServer", "BACKGROUND_RUNTIME_STATE_EVENTS", "BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS",
+    "AuthenticatedDaemonServer", "BACKGROUND_RUNTIME_STATE_EVENTS",
     "BRIDGE_LEDGER_MAX_ENTRIES", "BRIDGE_LOG_MAX_ENTRIES", "BRIDGE_STORAGE_MAX_BYTES", "BUILTIN_AGENTS",
     "BUILTIN_PROVIDER_PROFILES", "BUILTIN_TOOL_DESCRIPTIONS", "BUILTIN_TOOL_INPUT_SCHEMAS",
     "BoundedNotificationQueue", "BridgeRecoveryBlockedError", "BridgeStorageError", "BubblewrapSandboxBackend",
@@ -425,10 +425,9 @@ __all__ = [
     "COMPACTION_MESSAGE_TEXT_CHAR_LIMIT", "COMPACTION_STRATEGY", "COMPACTION_SYNTHESIS_MAX_RETRIES",
     "COMPACTION_SYSTEM_PROMPT", "COMPACTION_TOOL_INPUT_CHAR_LIMIT", "COMPACTION_TOOL_RESULT_CHAR_LIMIT",
     "COMPACTION_VERIFICATION_MAX_RETRIES", "COMPACTION_VERIFICATION_SYSTEM_PROMPT", "CONTINUATION_BRIDGE_MESSAGE",
-    "CompactionModelClient", "ConstructionCleanup", "DAEMON_AUTH_TIMEOUT_MS", "DAEMON_EVENTS_ROTATE_BYTES",
-    "DAEMON_EVENTS_TAIL_BYTES", "DAEMON_MAX_PENDING_GLOBAL", "DAEMON_MAX_PENDING_PER_CLIENT",
+    "CompactionModelClient", "ConstructionCleanup", "DAEMON_MAX_PENDING_GLOBAL", "DAEMON_MAX_PENDING_PER_CLIENT",
     "DAEMON_MAX_REQUEST_FRAME_BYTES", "DAEMON_MAX_REQUEST_IDS_PER_CONNECTION", "DAEMON_MAX_REQUEST_ID_BYTES",
-    "DAEMON_MAX_RESPONSE_FRAME_BYTES", "DAEMON_PROTOCOL_VERSION", "DAEMON_RPC_TIMEOUT_MS", "DEFAULT_API_KEY_BETAS",
+    "DAEMON_MAX_RESPONSE_FRAME_BYTES", "DAEMON_PROTOCOL_VERSION", "DEFAULT_API_KEY_BETAS",
     "DEFAULT_ASSISTANT_DESCRIPTION", "DEFAULT_ASSISTANT_NAME", "DEFAULT_AUTO_MODE", "DEFAULT_CHECK_INTERVAL_MS",
     "DEFAULT_CHROME_EXTENSION_ORIGIN", "DEFAULT_CHROME_NATIVE_HOST_NAME", "DEFAULT_CODEX_BASE_URL",
     "DEFAULT_CODEX_INSTRUCTIONS", "DEFAULT_COMPACTION_SYNTHESIS_TIMEOUT_MS",
@@ -478,7 +477,7 @@ __all__ = [
     "RuntimeBindingsCompatibilityError", "RuntimeHomeScope", "RuntimeIdentifierError", "RuntimePaths",
     "RuntimePathsScope", "RuntimeSecretError", "RuntimeSessionBinding", "SECRET_READ_DEADLINE_SECONDS",
     "SECRET_STORE_VERSION", "SESSION_BODY_FORMAT", "SESSION_SCHEMA_V2", "SETTING_SOURCES",
-    "SHELL_COMMAND_CLASSIFIER_REVISION", "STORAGE_IO_MAX_WORKERS", "STORAGE_LOCK_TIMEOUT_MS",
+    "SHELL_COMMAND_CLASSIFIER_REVISION", "STORAGE_IO_MAX_WORKERS",
     "STRICT_TOOL_PROTOCOL_PROVIDERS", "SUPPORTED_PROTOCOL_VERSIONS", "SandboxBackend", "SandboxPolicy",
     "SandboxUnavailableError", "Scope", "SeatbeltSandboxBackend", "SecretWriteAuthorization", "SerialQueue",
     "SessionRecordNotFoundError", "SessionSchemaVersionError", "SseMcpClient", "StdioMcpClient",

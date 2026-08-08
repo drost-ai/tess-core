@@ -13,13 +13,43 @@ knobs:
     # Default milliseconds a SendMessage(expects_reply=true) call waits for the counterpart's reply before returning a visible non-answer. [1000..3600000]
     reply_timeout_ms: 300000
   daemon:
+    # Milliseconds a connecting client gets to complete the daemon auth handshake. [25..30000]
+    auth_timeout_ms: 2000
+    # Milliseconds a booting daemon's not-yet-running state file is honored before the boot is treated as wedged and the instance replaced. [1000..3600000]
+    boot_grace_ms: 300000
+    # Milliseconds the daemon transport waits for a client connection to close cleanly during shutdown. [25..30000]
+    close_grace_ms: 250
+    # Milliseconds a task record whose process has died keeps its last status before the boot sweep finalizes it as lost. [1000..86400000]
+    dead_work_grace_ms: 900000
+    # Milliseconds in-flight daemon RPC dispatches get to finish before shutdown cancels them. [100..300000]
+    dispatch_drain_ms: 5000
+    # Byte size at which a daemon instance's events log is rotated. [65536..1073741824]
+    events_rotate_bytes: 33554432
+    # Milliseconds between the daemon's checks of its events log for size-based rotation. [1000..3600000]
+    events_rotate_check_ms: 300000
+    # Bytes read from the tail of a daemon events log when loading recent events. [4096..16777216]
+    events_tail_bytes: 65536
+    # Milliseconds between the task supervisor's health reconcile sweeps. [100..300000]
+    health_tick_ms: 2000
     # Milliseconds between the runtime's liveness checks of its containment daemon; a dead daemon is replaced by exactly one fresh instance. [50..60000]
     heartbeat_ms: 3000
+    # Milliseconds to wait for the per-instance daemon-ensure lock before giving up on daemon startup coordination. [100..30000]
+    instance_lock_timeout_ms: 5000
+    # Milliseconds a dead daemon instance's on-disk directory is kept for diagnosis before the garbage collector removes it. [60000..86400000]
+    instance_reap_ms: 3600000
+    # Milliseconds the supervisor's live-work verdict cache stays fresh before process liveness is re-verified. [0..600000]
+    live_work_cache_ttl_ms: 30000
     # Milliseconds between the containment daemon's sweeps of live children's mailboxes for unannounced to_parent messages (the parent-wake signal). [100..60000]
     mailbox_watch_ms: 1500
     # Milliseconds between the containment daemon's liveness checks of its owner runtime process; owner death kills all owned workers and exits the daemon. [50..60000]
     owner_poll_ms: 2000
+    # Default milliseconds a daemon RPC may run before the client fails the call; explicit per-call overrides win. [25..300000]
+    rpc_timeout_ms: 30000
+    # Milliseconds to wait for a starting containment daemon to accept connections before startup is failed. [25..600000]
+    start_timeout_ms: 30000
   process:
+    # Milliseconds an owned worker process waits for its activation payload on stdin before exiting. [1000..600000]
+    activation_timeout_ms: 30000
     # Milliseconds an owned worker process gets to disappear after SIGKILL before termination is reported as failed. [100..60000]
     kill_grace_ms: 1000
     # Milliseconds an owned worker process gets to exit after SIGTERM before the runtime escalates to SIGKILL. [100..60000]
@@ -44,6 +74,12 @@ knobs:
     request_start_timeout_ms: 120000
     # Milliseconds of stream silence tolerated before a provider attempt is failed as idle. [1000..3600000]
     stream_idle_timeout_ms: 60000
+  runtime:
+    # Milliseconds runtime close waits for component cleanup before reporting the close as failed. [500..600000]
+    close_failure_ms: 10000
+  storage:
+    # Default milliseconds to wait for a storage file lock before the operation fails; explicit per-call timeouts win. [500..60000]
+    lock_timeout_ms: 5000
   subagents:
     # Milliseconds the Agent tool blocks waiting for a spawned child's initial result before returning with the child still working. [100..3600000]
     initial_result_timeout_ms: 600000

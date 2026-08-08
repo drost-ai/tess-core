@@ -5,8 +5,6 @@ The facade re-exports exactly the public names its submodules define.
 from __future__ import annotations
 
 from .daemon import (
-    DAEMON_EVENTS_ROTATE_BYTES,
-    DAEMON_EVENTS_TAIL_BYTES,
     appendDaemonEvent,
     clearDaemonState,
     loadDaemonEvents,
@@ -24,7 +22,6 @@ from .io_executor import (
     storageExecutorSnapshot,
 )
 from .json_io import (
-    STORAGE_LOCK_TIMEOUT_MS,
     StorageTransactionError,
     appendJsonLine,
     clearAuth,
@@ -230,8 +227,6 @@ __all__ = [
     "BRIDGE_LOG_MAX_ENTRIES",
     "BRIDGE_STORAGE_MAX_BYTES",
     "BridgeStorageError",
-    "DAEMON_EVENTS_ROTATE_BYTES",
-    "DAEMON_EVENTS_TAIL_BYTES",
     "DEFAULT_AUTO_MODE",
     "DEFAULT_RUNTIME_HOME",
     "MAX_DAEMON_SOCKET_PATH_BYTES",
@@ -244,7 +239,6 @@ __all__ = [
     "SESSION_BODY_FORMAT",
     "SESSION_SCHEMA_V2",
     "STORAGE_IO_MAX_WORKERS",
-    "STORAGE_LOCK_TIMEOUT_MS",
     "Scope",
     "SessionRecordNotFoundError",
     "SessionSchemaVersionError",

@@ -24,7 +24,6 @@ from ..tasks.runtime import createTaskRuntime
 
 
 MAX_STALE_DIAGNOSTICS = 128
-BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS = 10_000
 
 
 async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -450,11 +449,11 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                     failures,
                 )
 
+        from ..config._knobs import knobValue
+
         await runWithRuntimePaths(
             paths,
-            lambda: lifecycle.close(
-                {"cleanup": cleanup, "failAfterMs": BOOTSTRAPPED_RUNTIME_CLOSE_FAILURE_MS}
-            ),
+            lambda: lifecycle.close({"cleanup": cleanup, "failAfterMs": int(knobValue("runtime.close_failure_ms"))}),
         )
     runtime_api.update(
         {

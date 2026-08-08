@@ -11,7 +11,6 @@ from .lifecycle import (
     stopTaskSupervisorDaemon,
 )
 from .protocol import (
-    DAEMON_AUTH_TIMEOUT_MS,
     DAEMON_MAX_PENDING_GLOBAL,
     DAEMON_MAX_PENDING_PER_CLIENT,
     DAEMON_MAX_REQUEST_FRAME_BYTES,
@@ -19,7 +18,6 @@ from .protocol import (
     DAEMON_MAX_REQUEST_ID_BYTES,
     DAEMON_MAX_RESPONSE_FRAME_BYTES,
     DAEMON_PROTOCOL_VERSION,
-    DAEMON_RPC_TIMEOUT_MS,
     DaemonLineDecoder,
     DaemonProtocolError,
     boundedProtocolDiagnostic,
@@ -68,7 +66,6 @@ from .transport import (
 
 __all__ = [
     "AuthenticatedDaemonServer",
-    "DAEMON_AUTH_TIMEOUT_MS",
     "DAEMON_MAX_PENDING_GLOBAL",
     "DAEMON_MAX_PENDING_PER_CLIENT",
     "DAEMON_MAX_REQUEST_FRAME_BYTES",
@@ -76,7 +73,6 @@ __all__ = [
     "DAEMON_MAX_REQUEST_ID_BYTES",
     "DAEMON_MAX_RESPONSE_FRAME_BYTES",
     "DAEMON_PROTOCOL_VERSION",
-    "DAEMON_RPC_TIMEOUT_MS",
     "DaemonAbortSignal",
     "DaemonLineDecoder",
     "DaemonProtocolError",

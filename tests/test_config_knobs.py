@@ -149,6 +149,69 @@ class KnobWiringTests(unittest.TestCase):
         self.assertEqual(resolve_request_max_output_tokens({"maxOutputTokens": 1_000}), 1_000)
 
 
+class DaemonKnobWiringTests(unittest.TestCase):
+    """The E2 daemon/runtime/storage timing knobs drive their machinery."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+        for name in list(os.environ):
+            if name.startswith(("AGENT_CORE_DAEMON_", "AGENT_CORE_STORAGE_", "AGENT_CORE_RUNTIME_")):
+                del os.environ[name]
+
+    def test_daemon_rpc_and_auth_timeouts_read_knobs_and_legacy_env(self):
+        from agent_core.daemon.protocol import resolveDaemonAuthTimeoutMs, resolveDaemonRpcTimeoutMs
+
+        self.assertEqual(resolveDaemonRpcTimeoutMs(), 30_000)
+        self.assertEqual(resolveDaemonAuthTimeoutMs(), 2_000)
+        configureKnobs({"daemon": {"rpc_timeout_ms": 12_000, "auth_timeout_ms": 900}})
+        self.assertEqual(resolveDaemonRpcTimeoutMs(), 12_000)
+        self.assertEqual(resolveDaemonAuthTimeoutMs(), 900)
+        self.assertEqual(resolveDaemonRpcTimeoutMs(7_000), 7_000)  # per-call override still wins
+        resetConfiguredKnobs()
+        # The legacy env names ARE the canonical knob env overrides and
+        # apply even without configureKnobs (bare library use).
+        os.environ["AGENT_CORE_DAEMON_RPC_TIMEOUT_MS"] = "5000"
+        self.assertEqual(resolveDaemonRpcTimeoutMs(), 5_000)
+
+    def test_daemon_startup_and_instance_lock_timeouts_read_knobs(self):
+        from agent_core.daemon.lifecycle import _daemon_instance_wait_ms, _resolve_startup_timeout_seconds
+
+        self.assertEqual(_resolve_startup_timeout_seconds({}), 30.0)
+        self.assertEqual(_resolve_startup_timeout_seconds({"startTimeoutMs": 1_500}), 1.5)
+        self.assertEqual(_daemon_instance_wait_ms(), 5_000)
+        configureKnobs({"daemon": {"start_timeout_ms": 8_000, "instance_lock_timeout_ms": 750}})
+        self.assertEqual(_resolve_startup_timeout_seconds({}), 8.0)
+        self.assertEqual(_daemon_instance_wait_ms(), 750)
+        os.environ["AGENT_CORE_DAEMON_START_TIMEOUT_MS"] = "2000"
+        configureKnobs({})
+        # Legacy env keeps beating per-call args, as it always has.
+        self.assertEqual(_resolve_startup_timeout_seconds({"startTimeoutMs": 9_000}), 2.0)
+
+    def test_boot_grace_dead_work_and_cache_ttl_read_knobs(self):
+        from agent_core.daemon.lifecycle import _daemon_state_is_still_booting
+        from agent_core.tasks.supervisor_parts.live_work import _create_live_work_verdict_cache
+
+        import datetime
+
+        ten_minutes_ago = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+        ).isoformat().replace("+00:00", "Z")
+        booting = {"phase": "starting", "startedAt": ten_minutes_ago}
+        self.assertFalse(_daemon_state_is_still_booting(booting))  # past the default 5min grace
+        configureKnobs({"daemon": {"boot_grace_ms": 3_600_000, "live_work_cache_ttl_ms": 100}})
+        self.assertTrue(_daemon_state_is_still_booting(booting))  # within the widened grace
+        cache = _create_live_work_verdict_cache()
+        self.assertEqual(cache["getStats"]()["ttlMs"], 100)
+        self.assertEqual(_create_live_work_verdict_cache(5_000)["getStats"]()["ttlMs"], 100)  # knob caps explicit ttl
+
+    def test_storage_lock_timeout_reads_knob(self):
+        from agent_core.storage.json_io import _storage_lock_timeout_ms
+
+        self.assertEqual(_storage_lock_timeout_ms(), 5_000)
+        configureKnobs({"storage": {"lock_timeout_ms": 1_500}})
+        self.assertEqual(_storage_lock_timeout_ms(), 1_500)
+
+
 class KnobResolutionIntegrationTests(AgentCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()

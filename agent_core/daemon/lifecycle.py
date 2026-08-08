@@ -43,7 +43,6 @@ from ._instance_gc import (
 
 _SUPERVISORS: dict[str, dict[str, Any]] = {}
 _DAEMON_PROCESSES: dict[str, subprocess.Popen[Any]] = {}
-_DAEMON_BOOT_GRACE_SECONDS = 5 * 60
 
 
 def _required_instance_id(values: dict[str, Any]) -> str:
@@ -298,31 +297,33 @@ async def _wait_for_running_daemon(instance_id: str, pid: int, timeout: float) -
 
 
 def _resolve_startup_timeout_seconds(args: dict[str, Any]) -> float:
-    env_value = os.environ.get("AGENT_CORE_DAEMON_START_TIMEOUT_MS")
-    try:
-        env_ms = float(env_value) if env_value else 0
-    except ValueError:
-        env_ms = 0
-    if env_ms > 0:
-        return env_ms / 1000
+    from ..config._knobs import knobValue
+
+    if os.environ.get("AGENT_CORE_DAEMON_START_TIMEOUT_MS"):
+        # The legacy env name IS the knob's canonical env override; when
+        # set it keeps beating per-call arguments, as it always has.
+        return max(0.025, int(knobValue("daemon.start_timeout_ms")) / 1000)
     if args.get("startupTimeoutSeconds") is not None:
         return max(0.025, float(args.get("startupTimeoutSeconds") or 0))
     if args.get("startTimeoutMs") is not None:
         return max(0.025, float(args.get("startTimeoutMs") or 0) / 1000)
-    return 30.0
+    return max(0.025, int(knobValue("daemon.start_timeout_ms")) / 1000)
 
 
 def _daemon_state_is_still_booting(state: dict[str, Any] | None) -> bool:
     if not state or state.get("phase") == "running":
         return False
+    from ..config._knobs import knobValue
+
+    boot_grace_seconds = int(knobValue("daemon.boot_grace_ms")) / 1000
     try:
         import datetime
 
         started = datetime.datetime.fromisoformat(str(state.get("startedAt")).replace("Z", "+00:00"))
         age = (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds()
     except Exception:
-        age = _DAEMON_BOOT_GRACE_SECONDS + 1
-    return age < _DAEMON_BOOT_GRACE_SECONDS
+        age = boot_grace_seconds + 1
+    return age < boot_grace_seconds
 
 
 async def _terminate_wedged_daemon(instance_id: str, pid: int) -> bool:
@@ -382,8 +383,6 @@ def _append_spawn_ledger(instance_id: str, pid: int) -> None:
 
 
 def _daemon_instance_wait_ms() -> int:
-    try:
-        value = int(os.environ.get("AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS") or 5_000)
-    except ValueError:
-        value = 5_000
-    return min(30_000, max(100, value))
+    from ..config._knobs import knobValue
+
+    return int(knobValue("daemon.instance_lock_timeout_ms"))

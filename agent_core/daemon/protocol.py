@@ -11,8 +11,6 @@ DAEMON_MAX_REQUEST_FRAME_BYTES = 1024 * 1024
 DAEMON_MAX_RESPONSE_FRAME_BYTES = 2 * 1024 * 1024
 DAEMON_MAX_PENDING_PER_CLIENT = 128
 DAEMON_MAX_PENDING_GLOBAL = 1_024
-DAEMON_AUTH_TIMEOUT_MS = 2_000
-DAEMON_RPC_TIMEOUT_MS = 30_000
 DAEMON_MAX_REQUEST_IDS_PER_CONNECTION = 65_536
 DAEMON_MAX_REQUEST_ID_BYTES = 128
 _MAX_PROTOCOL_DIAGNOSTIC_BYTES = 512
@@ -170,23 +168,15 @@ def daemonTokensEqual(actual: str, expected: str) -> bool:
 
 
 def resolveDaemonRpcTimeoutMs(override: int | None = None) -> int:
-    return _resolve_timeout(
-        override,
-        os.environ.get("AGENT_CORE_DAEMON_RPC_TIMEOUT_MS"),
-        DAEMON_RPC_TIMEOUT_MS,
-        25,
-        300_000,
-    )
+    from ..config._knobs import knobValue
+
+    return _resolve_timeout(override, None, int(knobValue("daemon.rpc_timeout_ms")), 25, 300_000)
 
 
 def resolveDaemonAuthTimeoutMs(override: int | None = None) -> int:
-    return _resolve_timeout(
-        override,
-        os.environ.get("AGENT_CORE_DAEMON_AUTH_TIMEOUT_MS"),
-        DAEMON_AUTH_TIMEOUT_MS,
-        25,
-        30_000,
-    )
+    from ..config._knobs import knobValue
+
+    return _resolve_timeout(override, None, int(knobValue("daemon.auth_timeout_ms")), 25, 30_000)
 
 
 def boundedProtocolDiagnostic(value: str) -> str:

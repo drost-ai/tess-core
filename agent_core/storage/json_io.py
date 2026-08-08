@@ -45,7 +45,11 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
 #
 # Default bound for acquiring a record lock. A timeout fails closed: a
 # successful mutation must never have raced through an unlocked fallback.
-STORAGE_LOCK_TIMEOUT_MS = 5000
+def _storage_lock_timeout_ms() -> int:
+    # Call-time import: config resolution imports storage at load.
+    from ..config._knobs import knobValue
+
+    return int(knobValue("storage.lock_timeout_ms"))
 
 _LOCK_OBSERVERS: list[Callable[[dict[str, Any]], Any]] = []
 
@@ -126,7 +130,7 @@ def _release_lock_handle(handle: Any) -> None:
 
 
 @_contextlib.asynccontextmanager
-async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
+async def fileLock(filePath: str, *, timeoutMs: int | None = None):
     """Advisory lock for read-modify-write sequences on a JSON record file.
 
     Two layers: a per-path asyncio.Lock serializes coroutines in this process,
@@ -138,6 +142,8 @@ async def fileLock(filePath: str, *, timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS):
     never blocked, and it releases automatically on process death.
     """
     path = os.path.abspath(filePath)
+    if timeoutMs is None:
+        timeoutMs = _storage_lock_timeout_ms()
     deadline = _time.monotonic() + max(0, int(timeoutMs)) / 1000.0
     in_process = _in_process_lock(path)
     in_process_acquired = False
@@ -231,7 +237,7 @@ async def withRecordTransaction(
     namespace: str,
     key: str,
     *,
-    timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS,
+    timeoutMs: int | None = None,
 ):
     lock_path = transactionLockPath(namespace, key)
     held = _HELD_TRANSACTION_LOCKS.get()
@@ -253,7 +259,7 @@ async def mutateJsonRecord(
     filePath: str,
     fallback: Any,
     mutate: Callable[[Any], Any],
-    timeoutMs: int = STORAGE_LOCK_TIMEOUT_MS,
+    timeoutMs: int | None = None,
 ) -> dict[str, Any]:
     lock_path = transactionLockPath(namespace, key)
     async with withRecordTransaction(namespace, key, timeoutMs=timeoutMs):

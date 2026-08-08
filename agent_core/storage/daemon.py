@@ -23,8 +23,6 @@ from .paths import (
 from ..session.persisted_record_scanner import readPersistedJsonRecord
 from ..session.persisted_record_validation import isDaemonStateRecord
 
-DAEMON_EVENTS_TAIL_BYTES = 64 * 1024
-DAEMON_EVENTS_ROTATE_BYTES = 32 * 1024 * 1024
 
 async def saveDaemonState(instanceId: str, record: dict[str, Any]) -> None:
     await asyncio.to_thread(_write_private_json, daemonStatePath(instanceId), record)
@@ -93,7 +91,12 @@ async def readLastDaemonEventCursor(instanceId: str) -> int:
         return live
     return await _read_last_daemon_cursor_from_tail(f"{daemonEventsPath(instanceId)}.1")
 
-async def rotateDaemonEventsIfOversized(instanceId: str, capBytes: int = DAEMON_EVENTS_ROTATE_BYTES) -> bool:
+async def rotateDaemonEventsIfOversized(instanceId: str, capBytes: int | None = None) -> bool:
+    if capBytes is None:
+        # Call-time import: config resolution imports storage at load.
+        from ..config._knobs import knobValue
+
+        capBytes = int(knobValue("daemon.events_rotate_bytes"))
     file_path = daemonEventsPath(instanceId)
     try:
         size = os.path.getsize(file_path)
@@ -114,7 +117,9 @@ async def _read_last_daemon_cursor_from_tail(file_path: str) -> int:
         size = os.path.getsize(file_path)
         if size <= 0:
             return 0
-        read_bytes = min(size, DAEMON_EVENTS_TAIL_BYTES)
+        from ..config._knobs import knobValue
+
+        read_bytes = min(size, int(knobValue("daemon.events_tail_bytes")))
         with open(file_path, "rb") as handle:
             handle.seek(size - read_bytes)
             raw = handle.read(read_bytes).decode("utf-8", errors="replace")

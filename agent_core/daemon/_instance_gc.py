@@ -22,7 +22,6 @@ from ..storage import (
     withRecordTransaction,
 )
 
-_DEAD_INSTANCE_DIR_REAP_SECONDS = 60 * 60
 
 
 async def _reap_daemon_tmp_artifacts(instance_id: str) -> None:
@@ -45,7 +44,9 @@ async def _reap_dead_daemon_instance_dirs() -> None:
         names = os.listdir(getDaemonInstancesDir())
     except FileNotFoundError:
         return
-    cutoff = time.time() - _DEAD_INSTANCE_DIR_REAP_SECONDS
+    from ..config._knobs import knobValue
+
+    cutoff = time.time() - int(knobValue("daemon.instance_reap_ms")) / 1000
     for name in names:
         try:
             candidate = parseDaemonInstanceId(name)

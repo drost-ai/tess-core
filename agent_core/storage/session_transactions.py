@@ -9,7 +9,7 @@ from ..session.message_history import (
     SessionMessageList,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
-from .json_io import STORAGE_LOCK_TIMEOUT_MS, readJsonFile, withRecordTransaction
+from .json_io import _storage_lock_timeout_ms, readJsonFile, withRecordTransaction
 from .paths import sessionPath
 from .session_schema_v2 import (
     commitSessionV2,
@@ -52,7 +52,7 @@ async def mutateSessionRecordTransaction(
 ) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
     settings = {**(options or {}), **kwargs}
-    timeout_ms = int(settings.get("timeoutMs", STORAGE_LOCK_TIMEOUT_MS))
+    timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
 
     async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
         raw = await readJsonFile(sessionPath(session_id), None)
@@ -141,7 +141,7 @@ async def mutateSessionHeadDeltaTransaction(
         return None
     session_id = parseSessionId(sessionId)
     settings = {**(options or {}), **kwargs}
-    timeout_ms = int(settings.get("timeoutMs", STORAGE_LOCK_TIMEOUT_MS))
+    timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
     async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
         raw = await readJsonFile(sessionPath(session_id), None)
         if not isSessionHeadV2(raw):

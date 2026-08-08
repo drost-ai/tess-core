@@ -26,8 +26,16 @@ from .protocol import (
 )
 
 
-_DAEMON_CLOSE_GRACE_SECONDS = 0.25
-_DAEMON_DISPATCH_DRAIN_SECONDS = 5.0
+def _close_grace_seconds() -> float:
+    from ..config._knobs import knobValue
+
+    return int(knobValue("daemon.close_grace_ms")) / 1000
+
+
+def _dispatch_drain_seconds() -> float:
+    from ..config._knobs import knobValue
+
+    return int(knobValue("daemon.dispatch_drain_ms")) / 1000
 
 
 class DaemonAbortSignal:
@@ -210,7 +218,7 @@ class DaemonServerPeer:
                 response = {"id": request_id, "ok": True, "result": result}
         except asyncio.CancelledError:
             signal.abort(RuntimeError("Daemon peer closed."))
-            await _drain_or_cancel(operation, _DAEMON_DISPATCH_DRAIN_SECONDS)
+            await _drain_or_cancel(operation, _dispatch_drain_seconds())
             raise
         except Exception as error:
             response = {
@@ -287,7 +295,7 @@ class DaemonServerPeer:
         with contextlib.suppress(Exception):
             await asyncio.wait_for(
                 self.writer.wait_closed(),
-                timeout=_DAEMON_CLOSE_GRACE_SECONDS,
+                timeout=_close_grace_seconds(),
             )
         self.owner.peers.discard(self)
         if not self._disconnect_called and callable(self.owner.on_disconnect):
@@ -351,7 +359,7 @@ class AuthenticatedDaemonServer:
             self.server.close()
             await self.server.wait_closed()
         await asyncio.gather(*(peer.close() for peer in list(self.peers)), return_exceptions=True)
-        await _drain_task_set(self.dispatch_work | self.cleanup_work, _DAEMON_DISPATCH_DRAIN_SECONDS)
+        await _drain_task_set(self.dispatch_work | self.cleanup_work, _dispatch_drain_seconds())
 
     def _discard_dispatch_task(self, task: asyncio.Task[Any]) -> None:
         self.dispatch_work.discard(task)
