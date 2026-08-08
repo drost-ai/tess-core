@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from typing import Any
 
 from .cursor import encodePayloadCursor
@@ -8,9 +14,6 @@ from .tools import _persist_artifact, getToolPayloadPolicy
 from .utf8_bounds import sliceUtf8Prefix, utf8ByteLength
 
 
-MAX_NOTEBOOK_CELLS_PER_PAGE = 20
-MAX_CELL_SOURCE_BYTES = 2_000
-MAX_OUTPUT_SAMPLE_BYTES = 600
 MAX_OUTPUTS_PER_CELL = 12
 
 
@@ -20,8 +23,8 @@ async def shapeNotebookPayload(**args: Any) -> dict[str, Any]:
         raise ValueError("Notebook JSON must contain a cells array.")
     policy = getToolPayloadPolicy(args["config"])
     offset = _offset(args.get("offset"))
-    requested_limit = _limit(args.get("requestedLimit"), MAX_NOTEBOOK_CELLS_PER_PAGE)
-    limit = min(requested_limit, MAX_NOTEBOOK_CELLS_PER_PAGE)
+    requested_limit = _limit(args.get("requestedLimit"), int(_knob("payloads.notebook_cells_per_page")))
+    limit = min(requested_limit, int(_knob("payloads.notebook_cells_per_page")))
     cells = notebook["cells"][offset : offset + limit]
     recovery_text: list[str] = []
     remaining = max(1_000, policy["readInlineBytes"] - 3_000)
@@ -29,7 +32,7 @@ async def shapeNotebookPayload(**args: Any) -> dict[str, Any]:
     for relative_index, raw_cell in enumerate(cells):
         cell = raw_cell if isinstance(raw_cell, dict) else {}
         source = _summarize_text_sequence(
-            cell.get("source"), min(MAX_CELL_SOURCE_BYTES, remaining)
+            cell.get("source"), min(int(_knob("payloads.notebook_cell_source_bytes")), remaining)
         )
         remaining = max(0, remaining - source["returnedBytes"])
         raw_outputs = cell.get("outputs") if isinstance(cell.get("outputs"), list) else []
@@ -147,7 +150,7 @@ def _summarize_output(
 ) -> dict[str, Any]:
     output = value if isinstance(value, dict) else {}
     output_type = output.get("output_type") if isinstance(output.get("output_type"), str) else "unknown"
-    text = _summarize_text_sequence(output.get("text"), MAX_OUTPUT_SAMPLE_BYTES)
+    text = _summarize_text_sequence(output.get("text"), int(_knob("payloads.notebook_output_sample_bytes")))
     if text["originalBytes"]:
         recovery_text.append(
             f"Cell {cell_index}, output {output_index} ({output_type})\n{text['fullText']}"
@@ -165,7 +168,7 @@ def _summarize_output(
                 }
             )
             continue
-        summary = _summarize_text_sequence(payload, MAX_OUTPUT_SAMPLE_BYTES)
+        summary = _summarize_text_sequence(payload, int(_knob("payloads.notebook_output_sample_bytes")))
         if summary["originalBytes"]:
             recovery_text.append(
                 f"Cell {cell_index}, output {output_index} ({mime_type})\n{summary['fullText']}"
@@ -180,7 +183,7 @@ def _summarize_output(
                 }
             )
         )
-    traceback = _summarize_text_sequence(output.get("traceback"), MAX_OUTPUT_SAMPLE_BYTES)
+    traceback = _summarize_text_sequence(output.get("traceback"), int(_knob("payloads.notebook_output_sample_bytes")))
     if traceback["originalBytes"]:
         recovery_text.append(
             f"Cell {cell_index}, output {output_index} (traceback)\n{traceback['fullText']}"

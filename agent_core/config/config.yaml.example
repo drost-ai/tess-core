@@ -101,6 +101,15 @@ knobs:
     rpc_timeout_ms: 30000
     # Milliseconds to wait for a starting containment daemon to accept connections before startup is failed. [25..600000]
     start_timeout_ms: 30000
+  images:
+    # Default byte cap for all input images together when the provider profile is silent. [65536..41943040]
+    max_aggregate_bytes: 20971520
+    # Default byte cap per input image when the provider profile is silent. [65536..20971520]
+    max_bytes: 5242880
+    # Default images accepted per request when the provider profile is silent; bounded by the hardcoded provider ceilings. [1..32]
+    max_count: 8
+    # Default byte cap for the encoded request carrying image inputs when the provider profile is silent. [65536..58720256]
+    max_encoded_request_bytes: 25165824
   memory:
     # Maximum durable memory records persisted per project. [1..10000]
     max_records: 48
@@ -110,6 +119,21 @@ knobs:
     retrieved_records: 8
     # Token budget for retrieved durable memory in a session's context. [100..1000000]
     retrieved_token_budget: 1600
+  payloads:
+    # Line cap for the inline diff in a file-change tool result. [10..100000]
+    file_change_diff_max_lines: 120
+    # Byte target the file-change diff is trimmed toward when the payload is over budget. [500..10000000]
+    file_change_diff_target_bytes: 8000
+    # Byte cap for a file-change tool result payload before its diff is trimmed. [1000..10000000]
+    file_change_result_max_bytes: 12000
+    # Byte ceiling for tool results of families that never spill to artifacts. [4096..512000]
+    non_artifact_tool_result_max_bytes: 32000
+    # Byte cap per notebook cell source in a NotebookRead page. [100..10000000]
+    notebook_cell_source_bytes: 2000
+    # Notebook cells per NotebookRead page. [1..1000]
+    notebook_cells_per_page: 20
+    # Byte cap per sampled notebook cell output. [50..10000000]
+    notebook_output_sample_bytes: 600
   process:
     # Milliseconds an owned worker process waits for its activation payload on stdin before exiting. [1000..600000]
     activation_timeout_ms: 30000
@@ -172,3 +196,21 @@ knobs:
     max_live: 8
     # Milliseconds between a resident subagent's mailbox polls while idle between turns. [100..60000]
     resident_poll_ms: 1000
+  tools:
+    # Default bytes per ReadToolArtifact page when the call does not specify max_bytes. [256..24000]
+    artifact_page_bytes: 16384
+    # Unchanged context lines around each hunk in file-change diffs. [0..100]
+    diff_context_lines: 3
+    # Default milliseconds a streaming code search may run; per-call timeouts win. [1000..3600000]
+    search_timeout_ms: 120000
+  web:
+    # Milliseconds of WebFetch body silence tolerated before the fetch fails; per-call overrides win. [500..600000]
+    fetch_body_idle_timeout_ms: 10000
+    # Milliseconds to establish a WebFetch connection; per-call overrides win. [500..600000]
+    fetch_connect_timeout_ms: 10000
+    # Milliseconds to receive WebFetch response headers; per-call overrides win. [500..600000]
+    fetch_headers_timeout_ms: 10000
+    # Maximum redirects followed per WebFetch acquisition. [0..20]
+    fetch_max_redirects: 5
+    # Total milliseconds for one WebFetch acquisition; per-call overrides win. [1000..3600000]
+    fetch_total_timeout_ms: 30000

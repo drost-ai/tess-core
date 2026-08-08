@@ -21,10 +21,10 @@ from .defaults import (
 from .shared import (
     BUILTIN_PROVIDER_PROFILES,
     DEFAULT_IMAGE_INPUT_MIME_TYPES,
-    DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
-    DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
-    DEFAULT_MAX_IMAGE_INPUT_BYTES,
-    DEFAULT_MAX_IMAGE_INPUT_COUNT,
+    default_max_aggregate_image_input_bytes,
+    default_max_encoded_image_request_bytes,
+    default_max_image_input_bytes,
+    default_max_image_input_count,
     DEFAULT_OPENAI_API_MODE,
     DEFAULT_PROVIDER,
     DEFAULT_PROVIDER_PROFILE_NAME,
@@ -332,13 +332,13 @@ def _resolve_provider_capabilities(record: dict[str, Any]) -> dict[str, Any]:
         **explicit,
         "imageInput": explicit.get("imageInput", _default_image_input_capability(record)),
         "imageMimeTypes": explicit.get("imageMimeTypes", clone(DEFAULT_IMAGE_INPUT_MIME_TYPES)),
-        "maxImageCount": explicit.get("maxImageCount", DEFAULT_MAX_IMAGE_INPUT_COUNT),
-        "maxImageBytes": explicit.get("maxImageBytes", DEFAULT_MAX_IMAGE_INPUT_BYTES),
+        "maxImageCount": explicit.get("maxImageCount", default_max_image_input_count()),
+        "maxImageBytes": explicit.get("maxImageBytes", default_max_image_input_bytes()),
         "maxAggregateImageBytes": explicit.get(
-            "maxAggregateImageBytes", DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES
+            "maxAggregateImageBytes", default_max_aggregate_image_input_bytes()
         ),
         "maxEncodedImageRequestBytes": explicit.get(
-            "maxEncodedImageRequestBytes", DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES
+            "maxEncodedImageRequestBytes", default_max_encoded_image_request_bytes()
         ),
     }
 

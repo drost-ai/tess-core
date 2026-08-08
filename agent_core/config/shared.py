@@ -16,10 +16,28 @@ DEFAULT_PROVIDER_PROFILE_NAME = "openai"
 DEFAULT_TUI_SCREEN_MODE = "auto"
 
 DEFAULT_IMAGE_INPUT_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"]
-DEFAULT_MAX_IMAGE_INPUT_COUNT = 8
-DEFAULT_MAX_IMAGE_INPUT_BYTES = 5 * 1024 * 1024
-DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES = 20 * 1024 * 1024
-DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES = 24 * 1024 * 1024
+def default_max_image_input_count() -> int:
+    from ._knobs import knobValue
+
+    return int(knobValue("images.max_count"))
+
+
+def default_max_image_input_bytes() -> int:
+    from ._knobs import knobValue
+
+    return int(knobValue("images.max_bytes"))
+
+
+def default_max_aggregate_image_input_bytes() -> int:
+    from ._knobs import knobValue
+
+    return int(knobValue("images.max_aggregate_bytes"))
+
+
+def default_max_encoded_image_request_bytes() -> int:
+    from ._knobs import knobValue
+
+    return int(knobValue("images.max_encoded_request_bytes"))
 MAX_PROVIDER_IMAGE_INPUT_COUNT = 32
 MAX_PROVIDER_IMAGE_INPUT_BYTES = 20 * 1024 * 1024
 MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES = 40 * 1024 * 1024
@@ -44,10 +62,10 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "capabilities": {
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": DEFAULT_MAX_IMAGE_INPUT_COUNT,
-            "maxImageBytes": DEFAULT_MAX_IMAGE_INPUT_BYTES,
-            "maxAggregateImageBytes": DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
-            "maxEncodedImageRequestBytes": DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
+            "maxImageCount": default_max_image_input_count(),
+            "maxImageBytes": default_max_image_input_bytes(),
+            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
+            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
     "codex": {
@@ -62,10 +80,10 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
             "openaiTurnState": True,
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": DEFAULT_MAX_IMAGE_INPUT_COUNT,
-            "maxImageBytes": DEFAULT_MAX_IMAGE_INPUT_BYTES,
-            "maxAggregateImageBytes": DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
-            "maxEncodedImageRequestBytes": DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
+            "maxImageCount": default_max_image_input_count(),
+            "maxImageBytes": default_max_image_input_bytes(),
+            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
+            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
     "anthropic-console": {
@@ -76,10 +94,10 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "capabilities": {
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": DEFAULT_MAX_IMAGE_INPUT_COUNT,
-            "maxImageBytes": DEFAULT_MAX_IMAGE_INPUT_BYTES,
-            "maxAggregateImageBytes": DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
-            "maxEncodedImageRequestBytes": DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
+            "maxImageCount": default_max_image_input_count(),
+            "maxImageBytes": default_max_image_input_bytes(),
+            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
+            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
     "anthropic-claude-code": {
@@ -90,10 +108,10 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "capabilities": {
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": DEFAULT_MAX_IMAGE_INPUT_COUNT,
-            "maxImageBytes": DEFAULT_MAX_IMAGE_INPUT_BYTES,
-            "maxAggregateImageBytes": DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
-            "maxEncodedImageRequestBytes": DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
+            "maxImageCount": default_max_image_input_count(),
+            "maxImageBytes": default_max_image_input_bytes(),
+            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
+            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
 }

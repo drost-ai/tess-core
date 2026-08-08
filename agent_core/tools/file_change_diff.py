@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from typing import Any
 
 
 LINE_DIFF_PRODUCT_LIMIT = 1_000_000
-DIFF_CONTEXT_LINES = 3
 
 
 def normalize_diff_lines(value: str) -> list[str]:
@@ -101,15 +106,15 @@ def build_edit_diff_document(args: dict[str, Any]) -> dict[str, Any]:
     windows = _merge_diff_windows(
         [
             {
-                "beforeStart": max(0, match["beforeStartLine"] - DIFF_CONTEXT_LINES),
+                "beforeStart": max(0, match["beforeStartLine"] - int(_knob("tools.diff_context_lines"))),
                 "beforeEnd": min(
                     len(before_lines) - 1,
-                    match["beforeEndLine"] + DIFF_CONTEXT_LINES,
+                    match["beforeEndLine"] + int(_knob("tools.diff_context_lines")),
                 ),
-                "afterStart": max(0, match["afterStartLine"] - DIFF_CONTEXT_LINES),
+                "afterStart": max(0, match["afterStartLine"] - int(_knob("tools.diff_context_lines"))),
                 "afterEnd": min(
                     len(after_lines) - 1,
-                    match["afterEndLine"] + DIFF_CONTEXT_LINES,
+                    match["afterEndLine"] + int(_knob("tools.diff_context_lines")),
                 ),
             }
             for match in matches
@@ -229,7 +234,7 @@ def _build_lcs_operations(
 def _render_operations_with_context(
     operations: list[dict[str, str]], before_count: int, after_count: int
 ) -> str:
-    keep = build_diff_context_indexes(operations, DIFF_CONTEXT_LINES)
+    keep = build_diff_context_indexes(operations, int(_knob("tools.diff_context_lines")))
     if not keep:
         return "(no changes)"
     width = max(3, len(str(max(before_count, after_count))))

@@ -285,6 +285,32 @@ class ProviderKnobWiringTests(unittest.TestCase):
         self.assertAlmostEqual(provider_knob("provider.compaction_headroom_ratio"), 0.5)  # float env coercion
 
 
+class PayloadKnobWiringTests(unittest.TestCase):
+    """The E5 payload/web/image knobs drive their machinery."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+
+    def test_payload_web_and_image_defaults_read_knobs(self):
+        from agent_core.acquisition.bounded_web_fetch import _knob as web_knob
+        from agent_core.config.shared import default_max_image_input_bytes, default_max_image_input_count
+        from agent_core.payloads.result_guard import non_artifact_tool_result_max_bytes
+
+        self.assertEqual(non_artifact_tool_result_max_bytes(), 32_000)
+        self.assertEqual(int(web_knob("web.fetch_total_timeout_ms")), 30_000)
+        self.assertEqual(default_max_image_input_count(), 8)
+        self.assertEqual(default_max_image_input_bytes(), 5 * 1024 * 1024)
+        configureKnobs({
+            "payloads": {"non_artifact_tool_result_max_bytes": 20_000},
+            "web": {"fetch_total_timeout_ms": 12_000},
+            "images": {"max_count": 2, "max_bytes": 1_000_000},
+        })
+        self.assertEqual(non_artifact_tool_result_max_bytes(), 20_000)
+        self.assertEqual(int(web_knob("web.fetch_total_timeout_ms")), 12_000)
+        self.assertEqual(default_max_image_input_count(), 2)
+        self.assertEqual(default_max_image_input_bytes(), 1_000_000)
+
+
 class KnobResolutionIntegrationTests(AgentCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()

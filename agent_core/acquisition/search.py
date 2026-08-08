@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import hashlib
 import os
@@ -15,7 +21,6 @@ from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8Byt
 
 
 SEARCH_RECORD_MAX_BYTES = 1024 * 1024
-SEARCH_TIMEOUT_MS = 120_000
 SEARCH_READ_CHUNK_BYTES = 64 * 1024
 
 
@@ -181,7 +186,7 @@ async def runStreamingSearch(**kwargs: Any) -> dict[str, Any]:
         _read_stream(process.stderr, "stderr", collector, None)
     )
     abort_task = _create_abort_task(kwargs.get("abortSignal"))
-    timeout_seconds = _positive(kwargs.get("timeoutMs"), SEARCH_TIMEOUT_MS) / 1000
+    timeout_seconds = _positive(kwargs.get("timeoutMs"), int(_knob("tools.search_timeout_ms"))) / 1000
     wait_task = asyncio.create_task(process.wait())
     pending: set[asyncio.Task[Any]] = {wait_task}
     if abort_task:

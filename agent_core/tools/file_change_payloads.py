@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import inspect
 from typing import Any, Callable
 
@@ -12,9 +18,6 @@ from .file_change_diff import (
 )
 
 
-FILE_CHANGE_RESULT_MAX_BYTES = 12_000
-FILE_CHANGE_DIFF_MAX_LINES = 120
-FILE_CHANGE_DIFF_TARGET_BYTES = 8_000
 
 
 async def build_write_file_change_payload(
@@ -59,9 +62,9 @@ async def _shape_file_change_payload(args: dict[str, Any]) -> dict[str, Any]:
     document = args["document"]
     original_bytes = _byte_len(document["diff"])
     original_lines = _count_lines(document["diff"])
-    target_bytes = FILE_CHANGE_DIFF_TARGET_BYTES
+    target_bytes = int(_knob("payloads.file_change_diff_target_bytes"))
     excerpt = _build_diff_excerpt(
-        document["diff"], target_bytes, FILE_CHANGE_DIFF_MAX_LINES
+        document["diff"], target_bytes, int(_knob("payloads.file_change_diff_max_lines"))
     )
     artifact = None
     artifact_unavailable = False
@@ -97,14 +100,14 @@ async def _shape_file_change_payload(args: dict[str, Any]) -> dict[str, Any]:
         original_bytes,
         original_lines,
     )
-    while _byte_len(pretty_json(payload)) > FILE_CHANGE_RESULT_MAX_BYTES:
+    while _byte_len(pretty_json(payload)) > int(_knob("payloads.file_change_result_max_bytes")):
         await ensure_artifact()
         target_bytes = int(target_bytes * 0.65)
         excerpt = (
             {"text": "(diff omitted; see artifact)", "truncated": True}
             if target_bytes < 256
             else _build_diff_excerpt(
-                document["diff"], target_bytes, FILE_CHANGE_DIFF_MAX_LINES
+                document["diff"], target_bytes, int(_knob("payloads.file_change_diff_max_lines"))
             )
         )
         payload = _assemble_payload(
@@ -118,7 +121,7 @@ async def _shape_file_change_payload(args: dict[str, Any]) -> dict[str, Any]:
         if target_bytes < 256:
             break
 
-    if _byte_len(pretty_json(payload)) > FILE_CHANGE_RESULT_MAX_BYTES:
+    if _byte_len(pretty_json(payload)) > int(_knob("payloads.file_change_result_max_bytes")):
         raise RuntimeError(
             "Unable to fit file-change result within the serialized payload limit."
         )

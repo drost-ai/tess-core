@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import http.client
 import inspect
@@ -13,11 +19,6 @@ from urllib.parse import urljoin, urlparse
 
 WEB_FETCH_COMPRESSED_MAX_BYTES = 8 * 1024 * 1024
 WEB_FETCH_DECODED_MAX_BYTES = 16 * 1024 * 1024
-WEB_FETCH_CONNECT_TIMEOUT_MS = 10_000
-WEB_FETCH_HEADERS_TIMEOUT_MS = 10_000
-WEB_FETCH_BODY_IDLE_TIMEOUT_MS = 10_000
-WEB_FETCH_TOTAL_TIMEOUT_MS = 30_000
-WEB_FETCH_MAX_REDIRECTS = 5
 WEB_FETCH_MAX_HEADER_BYTES = 64 * 1024
 _READ_CHUNK_BYTES = 64 * 1024
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
@@ -34,11 +35,11 @@ async def boundedWebFetch(
     requested_url = _validate_http_url(values["url"])
     compressed_limit = _positive(values.get("compressedMaxBytes"), WEB_FETCH_COMPRESSED_MAX_BYTES)
     decoded_limit = _positive(values.get("decodedMaxBytes"), WEB_FETCH_DECODED_MAX_BYTES)
-    connect_timeout = _positive(values.get("connectTimeoutMs"), WEB_FETCH_CONNECT_TIMEOUT_MS)
-    headers_timeout = _positive(values.get("headersTimeoutMs"), WEB_FETCH_HEADERS_TIMEOUT_MS)
-    body_idle_timeout = _positive(values.get("bodyIdleTimeoutMs"), WEB_FETCH_BODY_IDLE_TIMEOUT_MS)
-    total_timeout = _positive(values.get("totalTimeoutMs"), WEB_FETCH_TOTAL_TIMEOUT_MS)
-    max_redirects = _nonnegative(values.get("maxRedirects"), WEB_FETCH_MAX_REDIRECTS)
+    connect_timeout = _positive(values.get("connectTimeoutMs"), int(_knob("web.fetch_connect_timeout_ms")))
+    headers_timeout = _positive(values.get("headersTimeoutMs"), int(_knob("web.fetch_headers_timeout_ms")))
+    body_idle_timeout = _positive(values.get("bodyIdleTimeoutMs"), int(_knob("web.fetch_body_idle_timeout_ms")))
+    total_timeout = _positive(values.get("totalTimeoutMs"), int(_knob("web.fetch_total_timeout_ms")))
+    max_redirects = _nonnegative(values.get("maxRedirects"), int(_knob("web.fetch_max_redirects")))
     max_headers = _positive(values.get("maxHeaderBytes"), WEB_FETCH_MAX_HEADER_BYTES)
     accepted = values.get("acceptedStatusCodes")
     accepted_statuses = set(accepted) if isinstance(accepted, (list, tuple, set)) else None

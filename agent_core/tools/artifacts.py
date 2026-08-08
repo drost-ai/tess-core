@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import json
 import os
 import stat
@@ -10,14 +16,13 @@ from ..contracts.tools import ToolResult
 from ..runtime.identifiers import parseArtifactId
 from ..storage import toolArtifactDataPath, toolArtifactMetaPath
 from ..payloads.result_guard import (
-    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
+    non_artifact_tool_result_max_bytes,
     serializedContentBytes,
 )
 from .definitions import ToolDefinition
 from .schemas import builtin_tool
 
 
-DEFAULT_ARTIFACT_PAGE_BYTES = 16_384
 MAX_ARTIFACT_PAGE_BYTES = 24_000
 MIN_ARTIFACT_PAGE_BYTES = 256
 
@@ -118,7 +123,7 @@ def _read_tool_artifact() -> ToolDefinition:
         )
         while (
             serializedContentBytes(json.dumps(payload, ensure_ascii=False))
-            > NON_ARTIFACT_TOOL_RESULT_MAX_BYTES
+            > non_artifact_tool_result_max_bytes()
             and page["returnedBytes"] > MIN_ARTIFACT_PAGE_BYTES
         ):
             requested = max(
@@ -138,7 +143,7 @@ def _read_tool_artifact() -> ToolDefinition:
                 page=page,
             )
         serialized = json.dumps(payload, indent=2, ensure_ascii=False)
-        if serializedContentBytes(serialized) > NON_ARTIFACT_TOOL_RESULT_MAX_BYTES:
+        if serializedContentBytes(serialized) > non_artifact_tool_result_max_bytes():
             return _error_result(
                 "artifact_page_encoding_too_large",
                 "The requested artifact page could not be represented safely.",
@@ -302,7 +307,7 @@ def _bounded_nonnegative_integer(
 def _bounded_page_size(value: Any) -> int:
     parsed = _bounded_nonnegative_integer(
         value,
-        default=DEFAULT_ARTIFACT_PAGE_BYTES,
+        default=int(_knob("tools.artifact_page_bytes")),
         name="max_bytes",
     )
     if parsed <= 0:

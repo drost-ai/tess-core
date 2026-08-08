@@ -22,8 +22,13 @@ MAX_TOOL_IDENTITY_BYTES = 256
 MAX_ARTIFACT_PATH_BYTES = 1_024
 MAX_ERROR_MESSAGE_BYTES = 2_000
 MIN_EFFECTIVE_TOOL_RESULT_BYTES = 512
-NON_ARTIFACT_TOOL_RESULT_MAX_BYTES = 32_000
 ABSOLUTE_TOOL_RESULT_CEILING_BYTES = 512_000
+
+
+def non_artifact_tool_result_max_bytes() -> int:
+    from ..config._knobs import knobValue
+
+    return int(knobValue("payloads.non_artifact_tool_result_max_bytes"))
 
 
 async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -39,7 +44,7 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
                 raise ValueError
             if never_artifact:
                 limit_bytes = min(
-                    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
+                    non_artifact_tool_result_max_bytes(),
                     max(MIN_EFFECTIVE_TOOL_RESULT_BYTES, parsed_limit_bytes),
                 )
             elif values.get("allowRaise"):

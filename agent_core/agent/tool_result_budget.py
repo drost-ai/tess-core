@@ -6,7 +6,7 @@ from ..payloads.agent_results import createToolResultFinalizer
 from ..providers.token_budget import resolve_interactive_context_policy
 from ..payloads.result_guard import (
     MIN_EFFECTIVE_TOOL_RESULT_BYTES,
-    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES,
+    non_artifact_tool_result_max_bytes,
     serializedContentBytes,
 )
 
@@ -52,7 +52,7 @@ class ToolResultBatchBudget:
                 tool_use,
                 outcome,
                 max_bytes=(
-                    NON_ARTIFACT_TOOL_RESULT_MAX_BYTES
+                    non_artifact_tool_result_max_bytes()
                     if artifact_page
                     else effective_limit
                 ),

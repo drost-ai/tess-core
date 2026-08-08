@@ -9,10 +9,10 @@ from typing import Any
 from .media_persistence import sanitizeMediaForPersistence
 from ..config.shared import (
     DEFAULT_IMAGE_INPUT_MIME_TYPES,
-    DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
-    DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
-    DEFAULT_MAX_IMAGE_INPUT_BYTES,
-    DEFAULT_MAX_IMAGE_INPUT_COUNT,
+    default_max_aggregate_image_input_bytes,
+    default_max_encoded_image_request_bytes,
+    default_max_image_input_bytes,
+    default_max_image_input_count,
     MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES,
     MAX_PROVIDER_ENCODED_IMAGE_REQUEST_BYTES,
     MAX_PROVIDER_IMAGE_INPUT_BYTES,
@@ -51,19 +51,19 @@ def resolveRuntimeProviderCapabilities(config: dict[str, Any]) -> dict[str, Any]
         "imageInput": explicit_image_input is True,
         "imageMimeTypes": image_mimes,
         "maxImageCount": _bounded_runtime_limit(
-            configured.get("maxImageCount"), DEFAULT_MAX_IMAGE_INPUT_COUNT, MAX_PROVIDER_IMAGE_INPUT_COUNT
+            configured.get("maxImageCount"), default_max_image_input_count(), MAX_PROVIDER_IMAGE_INPUT_COUNT
         ),
         "maxImageBytes": _bounded_runtime_limit(
-            configured.get("maxImageBytes"), DEFAULT_MAX_IMAGE_INPUT_BYTES, MAX_PROVIDER_IMAGE_INPUT_BYTES
+            configured.get("maxImageBytes"), default_max_image_input_bytes(), MAX_PROVIDER_IMAGE_INPUT_BYTES
         ),
         "maxAggregateImageBytes": _bounded_runtime_limit(
             configured.get("maxAggregateImageBytes"),
-            DEFAULT_MAX_AGGREGATE_IMAGE_INPUT_BYTES,
+            default_max_aggregate_image_input_bytes(),
             MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES,
         ),
         "maxEncodedImageRequestBytes": _bounded_runtime_limit(
             configured.get("maxEncodedImageRequestBytes"),
-            DEFAULT_MAX_ENCODED_IMAGE_REQUEST_BYTES,
+            default_max_encoded_image_request_bytes(),
             MAX_PROVIDER_ENCODED_IMAGE_REQUEST_BYTES,
         ),
     }
