@@ -18,21 +18,15 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
                     calls = 0
 
                     def read_message():
-                        header = b""
-                        while not header.endswith(b"\r\n\r\n"):
-                            chunk = sys.stdin.buffer.read(1)
-                            if not chunk:
+                        while True:
+                            line = sys.stdin.buffer.readline()
+                            if not line:
                                 return None
-                            header += chunk
-                        length = 0
-                        for line in header.decode().splitlines():
-                            if line.lower().startswith("content-length:"):
-                                length = int(line.split(":", 1)[1].strip())
-                        return json.loads(sys.stdin.buffer.read(length).decode())
+                            if line.strip():
+                                return json.loads(line.decode())
 
                     def send(message):
-                        payload = json.dumps(message).encode()
-                        sys.stdout.buffer.write(f"Content-Length: {len(payload)}\r\n\r\n".encode() + payload)
+                        sys.stdout.buffer.write(json.dumps(message).encode() + b"\n")
                         sys.stdout.buffer.flush()
 
                     while True:

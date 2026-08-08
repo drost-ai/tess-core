@@ -7,7 +7,6 @@ from agent_core.mcp.stdio_decoder import McpStdioFrameDecoder
 from agent_core.mcp.stdio_transport import StdioMcpClient
 from agent_core.mcp.transport_policy import (
     MCP_FRAME_MAX_BYTES,
-    MCP_HEADER_MAX_BYTES,
     MCP_PENDING_REQUEST_MAX,
     MCP_SSE_EVENT_MAX_BYTES,
     McpTransportError,
@@ -49,23 +48,15 @@ def _write_stdio_fixture(workspace: Path) -> Path:
                 signal.signal(signal.SIGTERM, lambda *_args: None)
 
             def read_message():
-                header = bytearray()
-                while not header.endswith(b"\r\n\r\n"):
-                    chunk = sys.stdin.buffer.read(1)
-                    if not chunk:
+                while True:
+                    line = sys.stdin.buffer.readline()
+                    if not line:
                         return None
-                    header.extend(chunk)
-                length = None
-                for line in bytes(header).decode("ascii").split("\r\n"):
-                    if line.lower().startswith("content-length:"):
-                        length = int(line.split(":", 1)[1].strip())
-                if length is None:
-                    return None
-                return json.loads(sys.stdin.buffer.read(length).decode("utf-8"))
+                    if line.strip():
+                        return json.loads(line.decode("utf-8"))
 
             def frame(message):
-                payload = json.dumps(message, separators=(",", ":")).encode("utf-8")
-                return f"Content-Length: {len(payload)}\r\n\r\n".encode("ascii") + payload
+                return json.dumps(message, separators=(",", ":")).encode("utf-8") + b"\n"
 
             def send(message):
                 value = frame(message)
@@ -87,28 +78,19 @@ def _write_stdio_fixture(workspace: Path) -> Path:
                 if mode == "silent":
                     continue
                 if method == "initialize":
-                    if mode == "oversize_header":
-                        sys.stdout.buffer.write(b"X" * (16 * 1024 + 1))
-                        sys.stdout.buffer.flush()
-                        continue
-                    if mode == "oversize_length":
-                        sys.stdout.buffer.write(b"Content-Length: 8388609\r\n\r\n")
-                        sys.stdout.buffer.flush()
-                        continue
-                    if mode == "duplicate_length":
-                        sys.stdout.buffer.write(b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}")
+                    if mode == "oversize_line":
+                        sys.stdout.buffer.write(b"x" * (8 * 1024 * 1024 + 1))
                         sys.stdout.buffer.flush()
                         continue
                     if mode == "invalid_utf8":
-                        sys.stdout.buffer.write(b"Content-Length: 2\r\n\r\n\xc3(")
+                        sys.stdout.buffer.write(b"\xc3(\n")
                         sys.stdout.buffer.flush()
                         continue
                     if mode == "string_id":
                         send({"jsonrpc": "2.0", "id": str(request_id), "result": {}})
                         continue
                     if mode == "invalid_json":
-                        raw = b"{not-json"
-                        sys.stdout.buffer.write(f"Content-Length: {len(raw)}\r\n\r\n".encode() + raw)
+                        sys.stdout.buffer.write(b"{not-json\n")
                         sys.stdout.buffer.flush()
                         continue
                     send({
@@ -219,17 +201,22 @@ class Package31McpTransportTests(AgentCoreTestCase):
     def test_stdio_decoder_exact_limits_fragmentation_and_invalid_frames(self):
         payload = b" " * MCP_FRAME_MAX_BYTES
         decoder = McpStdioFrameDecoder()
-        frame = f"Content-Length: {len(payload)}\r\n\r\n".encode() + payload
+        frame = payload + b"\n"
         output = []
         for offset in range(0, len(frame), 65_537):
             output.extend(decoder.push(frame[offset : offset + 65_537]))
         self.assertEqual(len(output), 1)
         self.assertEqual(len(output[0].encode()), MCP_FRAME_MAX_BYTES)
+
+        decoder = McpStdioFrameDecoder()
+        frames = decoder.push(b'{"a":1}\r\n\n{"b":2}\npartial')
+        self.assertEqual(frames, ['{"a":1}', '{"b":2}'])
+        self.assertEqual(decoder.bufferedBytes, len(b"partial"))
+        self.assertEqual(decoder.push(b"\n"), ["partial"])
+
         invalid = (
-            (f"Content-Length: {MCP_FRAME_MAX_BYTES + 1}\r\n\r\n".encode(), "frame_limit"),
-            (b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}", "invalid_framing"),
-            (b"X" * (MCP_HEADER_MAX_BYTES + 1), "header_limit"),
-            (b"Content-Length: 2\r\n\r\n\xc3(", "invalid_encoding"),
+            (b"x" * (MCP_FRAME_MAX_BYTES + 1), "frame_limit"),
+            (b"\xc3(\n", "invalid_encoding"),
         )
         for raw, code in invalid:
             with self.subTest(code=code):
@@ -325,9 +312,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
         try:
             server = _write_stdio_fixture(workspace)
             for mode, code in (
-                ("oversize_header", "header_limit"),
-                ("oversize_length", "frame_limit"),
-                ("duplicate_length", "invalid_framing"),
+                ("oversize_line", "frame_limit"),
                 ("invalid_utf8", "invalid_encoding"),
                 ("string_id", "invalid_framing"),
                 ("invalid_json", "invalid_framing"),

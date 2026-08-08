@@ -166,7 +166,7 @@ class StdioMcpClient(JsonRpcClient):
                 "frame_limit",
                 f"MCP stdio request body exceeds {MCP_FRAME_MAX_BYTES} bytes.",
             )
-        frame = f"Content-Length: {len(payload)}\r\n\r\n".encode("ascii") + payload
+        frame = payload + b"\n"
         with self.write_lock:
             self._assert_open(str(request.get("method") or "request"))
             try:

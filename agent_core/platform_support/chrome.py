@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import stat
 import sys
 from pathlib import Path
@@ -236,22 +235,16 @@ def _read_exact_stream(stream: Any, size: int) -> bytes | None:
     return buffer
 
 def _try_read_rpc_message(buffer: bytes) -> tuple[str, bytes] | None:
-    header_index = buffer.find(b"\r\n\r\n")
-    if header_index == -1:
+    newline = buffer.find(b"\n")
+    if newline == -1:
         return None
-    header = buffer[:header_index].decode("utf-8", errors="replace")
-    match = re.search(r"Content-Length:\s*(\d+)", header, re.IGNORECASE)
-    if not match:
-        return "", buffer[header_index + 4 :]
-    length = int(match.group(1))
-    start = header_index + 4
-    if len(buffer) < start + length:
-        return None
-    return buffer[start : start + length].decode("utf-8"), buffer[start + length :]
+    line = buffer[:newline]
+    if line.endswith(b"\r"):
+        line = line[:-1]
+    return line.decode("utf-8"), buffer[newline + 1 :]
 
 def _write_rpc_message(stream: Any, value: dict[str, Any]) -> None:
-    payload = json.dumps(value).encode("utf-8")
-    stream.write(f"Content-Length: {len(payload)}\r\n\r\n".encode("utf-8") + payload)
+    stream.write(json.dumps(value).encode("utf-8") + b"\n")
     flush = getattr(stream, "flush", None)
     if callable(flush):
         flush()

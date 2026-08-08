@@ -100,7 +100,7 @@ class PlatformSurfaceTests(AgentCoreTestCase):
             self.assertEqual(rpc_status["id"], 7)
             self.assertEqual(rpc_status["result"]["content"][0]["type"], "text")
             initialize_payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize"}).encode()
-            framed = b"Content-Length: " + str(len(initialize_payload)).encode() + b"\r\n\r\n" + initialize_payload
+            framed = initialize_payload + b"\n"
             mcp_out = io.BytesIO()
             run(core.runChromeCompanionMcpServer(io.BytesIO(framed), mcp_out))
             self.assertIn(b"tess-chrome-companion", mcp_out.getvalue())
