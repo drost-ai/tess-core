@@ -123,6 +123,10 @@ class FakeProviderHttpServer:
         handler.send_response(status)
         handler.send_header("content-type", content_type)
         handler.send_header("content-length", str(len(body)))
+        extra_headers = response.get("headers")
+        if isinstance(extra_headers, dict):
+            for key, value in extra_headers.items():
+                handler.send_header(str(key), str(value))
         handler.end_headers()
         body_delay_ms = int(response.get("bodyDelayMs") or 0)
         if body_delay_ms > 0 and _wait_for_body_delay_or_disconnect(
@@ -170,11 +174,17 @@ def _normalize_script(script: dict[str, Any] | None) -> dict[str, Any]:
         return {
             "messages": script["attempts"],
             "count_tokens": script["attempts"],
+            "responses": script["attempts"],
+            "chat_completions": script["attempts"],
             "connectionSetupDelayMs": script.get("connectionSetupDelayMs", 0),
         }
     return {
         "messages": script.get("messages") or [_default_messages_response()],
         "count_tokens": script.get("countTokens") or script.get("count_tokens") or [_default_count_tokens_response()],
+        "responses": script.get("responses") or [_default_openai_responses_response()],
+        "chat_completions": script.get("chatCompletions")
+        or script.get("chat_completions")
+        or [_default_openai_chat_response()],
         "connectionSetupDelayMs": script.get("connectionSetupDelayMs", 0),
     }
 
@@ -185,6 +195,10 @@ def _api_from_path(path: str) -> str:
         return "count_tokens"
     if parsed.path.endswith("/messages"):
         return "messages"
+    if parsed.path.endswith("/chat/completions"):
+        return "chat_completions"
+    if parsed.path.endswith("/responses"):
+        return "responses"
     return parsed.path.rsplit("/", 1)[-1] or "unknown"
 
 
@@ -241,6 +255,75 @@ def _wait_for_body_delay_or_disconnect(connection: socket.socket, delay_ms: int)
             return connection.recv(1, socket.MSG_PEEK) == b""
         except (BlockingIOError, OSError):
             return True
+
+
+def openaiResponsesSseBody(events: list[dict[str, Any]]) -> str:
+    """Render Responses-API stream events as SSE frames (event name from type)."""
+    return "".join(
+        f"event: {str(event.get('type') or 'message')}\ndata: {json.dumps(event)}\n\n"
+        for event in events
+    )
+
+
+def openaiChatSseBody(chunks: list[dict[str, Any]], *, done: bool = True) -> str:
+    """Render Chat Completions stream chunks as SSE data frames plus [DONE]."""
+    frames = [f"data: {json.dumps(chunk)}\n\n" for chunk in chunks]
+    if done:
+        frames.append("data: [DONE]\n\n")
+    return "".join(frames)
+
+
+def _default_openai_responses_response() -> dict[str, Any]:
+    message_item = {
+        "id": "item_fake_1",
+        "type": "message",
+        "content": [{"type": "output_text", "text": "ok"}],
+    }
+    return {
+        "contentType": "text/event-stream",
+        "rawBody": openaiResponsesSseBody(
+            [
+                {"type": "response.created", "response": {"id": "resp_fake_1"}},
+                {
+                    "type": "response.output_item.added",
+                    "item": {"id": "item_fake_1", "type": "message"},
+                },
+                {
+                    "type": "response.output_text.delta",
+                    "item_id": "item_fake_1",
+                    "delta": "ok",
+                },
+                {"type": "response.output_item.done", "item": message_item},
+                {
+                    "type": "response.completed",
+                    "response": {
+                        "id": "resp_fake_1",
+                        "output": [message_item],
+                        "usage": {"input_tokens": 1, "output_tokens": 1},
+                    },
+                },
+            ]
+        ),
+    }
+
+
+def _default_openai_chat_response() -> dict[str, Any]:
+    return {
+        "contentType": "text/event-stream",
+        "rawBody": openaiChatSseBody(
+            [
+                {
+                    "choices": [
+                        {"index": 0, "delta": {"content": "ok"}, "finish_reason": None}
+                    ]
+                },
+                {
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+                },
+            ]
+        ),
+    }
 
 
 def _default_messages_response() -> dict[str, Any]:
