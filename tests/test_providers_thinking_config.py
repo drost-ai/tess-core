@@ -66,3 +66,29 @@ class ThinkingDisplayTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ReasoningEffortFallbackTests(unittest.TestCase):
+    def test_reasoning_effort_feeds_profile_effort_level(self):
+        from agent_core.config.providers import resolveProviderProfile
+
+        profile = resolveProviderProfile(
+            "p", {"kind": "anthropic", "reasoningEffort": "xhigh"}
+        )
+        self.assertEqual(profile["effortLevel"], "xhigh")
+
+    def test_explicit_effort_level_wins_over_reasoning_effort(self):
+        from agent_core.config.providers import resolveProviderProfile
+
+        profile = resolveProviderProfile(
+            "p",
+            {"kind": "anthropic", "effortLevel": "medium", "reasoningEffort": "xhigh"},
+        )
+        self.assertEqual(profile["effortLevel"], "medium")
+
+    def test_openai_xhigh_covers_gpt_5_4_and_later_minors(self):
+        from agent_core.config.providers import normalizeEffortForModel
+
+        self.assertEqual(normalizeEffortForModel("openai", "gpt-5.6-sol", "xhigh"), "xhigh")
+        self.assertEqual(normalizeEffortForModel("openai", "gpt-5.4", "xhigh"), "xhigh")
+        self.assertEqual(normalizeEffortForModel("openai", "gpt-5.6-sol", "max"), "xhigh")
+        self.assertEqual(normalizeEffortForModel("openai", "gpt-5", "xhigh"), "high")

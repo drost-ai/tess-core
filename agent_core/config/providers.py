@@ -117,7 +117,9 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "headers": clone(record.get("headers") or {}),
         "supportsVision": record.get("supportsVision"),
         "capabilities": _resolve_provider_capabilities(record),
-        "effortLevel": record.get("effortLevel") or record.get("effort"),
+        # reasoningEffort is the fallback request effort for main turns
+        # (Migel, 2026-08-08); explicit effortLevel/effort keys win.
+        "effortLevel": record.get("effortLevel") or record.get("effort") or record.get("reasoningEffort"),
         "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
         "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
         "openAiChatReasoning": clone(record.get("openAiChatReasoning") or {}),
@@ -216,7 +218,9 @@ def modelSupportsXhighEffort(provider: str, model: str) -> bool:
             or "opus-4-7" in normalized
             or "opus-4-8" in normalized
         )
-    return normalized.startswith("gpt-5.4")
+    # xhigh arrived with gpt-5.4; later minors (5.5, 5.6, …) keep it.
+    match = re.match(r"gpt-5\.(\d+)", normalized)
+    return bool(match and int(match.group(1)) >= 4)
 
 def normalizeEffortForModel(provider: str, model: str, effort: str | None) -> str | None:
     if not effort or not modelSupportsEffort(provider, model):
@@ -264,7 +268,7 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         "headers": clone(record.get("headers") or {}),
         "supportsVision": record.get("supportsVision"),
         "capabilities": _normalize_provider_capabilities(record.get("capabilities")),
-        "effortLevel": (record.get("effortLevel") or record.get("effort") or "").strip().lower() or None,
+        "effortLevel": (record.get("effortLevel") or record.get("effort") or record.get("reasoningEffort") or "").strip().lower() or None,
         "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
         "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
         "openAiChatReasoning": _normalize_object_record(record.get("openAiChatReasoning")),
