@@ -11,7 +11,8 @@
         "type": "string"
       },
       "subagent_type": {
-        "type": "string"
+        "type": "string",
+        "description": "Named agent profile from this runtime's configured agents. OMIT unless the runtime has agent profiles configured — most have none, and any value then fails the spawn."
       },
       "model": {
         "type": "string"

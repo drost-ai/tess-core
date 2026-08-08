@@ -58,7 +58,20 @@ class ToolAgentTests(AgentCoreTestCase):
 
             unknown = run(agent.handler({"description": "Nope", "prompt": "x", "subagent_type": "missing"}, dict(context)))
             self.assertTrue(unknown["isError"])
-            self.assertIn("Unknown subagent type", unknown["content"])
+            self.assertIn("Unknown subagent type: missing", unknown["content"])
+            self.assertIn("Configured types: researcher", unknown["content"])
+
+            no_profiles = run(agent.handler(
+                {"description": "Nope", "prompt": "x", "subagent_type": "general-purpose"},
+                {**context, "config": {**config, "agents": {}}},
+            ))
+            self.assertTrue(no_profiles["isError"])
+            self.assertIn("no agent profiles configured", no_profiles["content"])
+            self.assertIn("retry without subagent_type", no_profiles["content"])
+            self.assertIn(
+                "OMIT unless the runtime has agent profiles configured",
+                agent.inputSchema["properties"]["subagent_type"]["description"],
+            )
 
             auto_config = {**config, "permissionMode": "auto"}
             auto_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")

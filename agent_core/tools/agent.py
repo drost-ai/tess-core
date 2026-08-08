@@ -30,7 +30,13 @@ def _agent_tool() -> ToolDefinition:
         prompt = _require_string(input.get("prompt"), "prompt")
         agent_type = input.get("subagent_type").strip() if isinstance(input.get("subagent_type"), str) else None
         if agent_type and agent_type not in context["config"].get("agents", {}):
-            return {"content": f"Unknown subagent type: {agent_type}", "isError": True}
+            configured = sorted(key for key in (context["config"].get("agents") or {}) if isinstance(key, str))
+            detail = (
+                "Configured types: " + ", ".join(configured)
+                if configured
+                else "This runtime has no agent profiles configured — retry without subagent_type."
+            )
+            return {"content": f"Unknown subagent type: {agent_type}. {detail}", "isError": True}
         if input.get("isolation") == "worktree":
             await _ensure_tool_permission(context, "Agent", "worktree", f"Spawn subagent with isolated worktree\n{description}")
         _throw_if_tool_cancelled(context)

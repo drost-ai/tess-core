@@ -183,7 +183,10 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
         "schema": {'type': 'object',
          'properties': {'description': {'type': 'string'},
                         'prompt': {'type': 'string'},
-                        'subagent_type': {'type': 'string'},
+                        'subagent_type': {'type': 'string',
+                                          'description': 'Named agent profile from this runtime\'s configured agents. '
+                                                         'OMIT unless the runtime has agent profiles configured — most have '
+                                                         'none, and any value then fails the spawn.'},
                         'model': {'type': 'string'},
                         'wait': {'type': 'boolean',
                                  'description': 'Block until the child\'s initial result (default false: return at spawn, result arrives as a child message).'},
