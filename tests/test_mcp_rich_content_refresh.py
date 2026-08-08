@@ -69,6 +69,41 @@ class McpRichContentTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
 
+class BootstrapRefreshContractTests(AgentCoreTestCase):
+    def test_bootstrap_refresh_returns_live_registry_even_when_unchanged(self):
+        # Regression: the hook must hand back the LIVE tool list on every
+        # call. Returning None on "no new change" made each later turn revert
+        # to the startup snapshot captured in the agent bindings, so a catalog
+        # change survived for exactly one turn.
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            boot = run(core.bootstrapRuntime(session=session, config=config, daemonEnabled=False))
+            try:
+                first = run(boot["refreshMcpToolRegistry"]())
+                second = run(boot["refreshMcpToolRegistry"]())
+                for refreshed in (first, second):
+                    self.assertIsInstance(refreshed, list)
+                    self.assertTrue(refreshed)
+                self.assertEqual(
+                    [tool.name for tool in second],
+                    [tool.name for tool in boot["tools"]],
+                )
+            finally:
+                run(boot["close"]())
+        finally:
+            self.restore_home(root, previous)
+
+
 class McpRefreshLastHopTests(AgentCoreTestCase):
     def _config(self, cwd: str) -> dict:
         return {

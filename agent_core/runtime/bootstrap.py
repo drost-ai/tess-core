@@ -388,9 +388,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     async def apply_pending_mcp_catalog_changes() -> dict[str, Any]:
         captured_components = active_components
         captured_binding = active_binding
-        result = await runWithRuntimePaths(
-            paths, captured_components["refreshMcpTools"]
-        )
+        result = await runWithRuntimePaths(paths, captured_components["refreshMcpTools"])
         if not sameRuntimeBinding(captured_binding, active_binding):
             report_stale(captured_binding, "mcp.tool_registry_refreshed")
             return {"changed": False, "servers": [], "generation": 0}
@@ -399,9 +397,11 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
         return {key: value for key, value in result.items() if key != "tools"}
 
     async def refresh_mcp_tool_registry() -> list[Any] | None:
-        captured_components = active_components
-        result = await apply_pending_mcp_catalog_changes()
-        return list(captured_components["tools"]) if result.get("changed") else None
+        # The LIVE tool list on every call — a None on "unchanged" would send
+        # later turns back to the startup snapshot captured in the bindings.
+        captured = active_components
+        await apply_pending_mcp_catalog_changes()
+        return list(captured["tools"]) if captured is active_components else None
 
     def subscribe(listener: Callable[[str, dict[str, Any]], Any]) -> Callable[[], None]:
         lifecycle.assertOpen("subscribe to runtime events")
