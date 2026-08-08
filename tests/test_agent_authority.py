@@ -226,6 +226,32 @@ class AgentAuthorityTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_sandbox_off_records_network_available(self):
+        # No sandbox means nothing restricts the network: the authority must
+        # say so, or WebFetch bans itself while Bash curls freely.
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider=config["provider"],
+                providerProfileName=config["providerProfileName"],
+                model=config["model"],
+                effort=config["effort"],
+                systemPrompt=config["systemPrompt"],
+                permissionMode="default",
+            )
+            authority = run(core.captureAgentAuthority(config=config, session=session, tools=[]))
+            self.assertEqual(authority["sandbox"]["mode"], "off")
+            self.assertTrue(authority["sandbox"]["network"])
+
+            sandboxed = {**config, "sandbox": {"mode": "os-required", "allowNetwork": False}}
+            restricted = run(core.captureAgentAuthority(config=sandboxed, session=session, tools=[]))
+            self.assertEqual(restricted["sandbox"]["mode"], "os-required")
+            self.assertFalse(restricted["sandbox"]["network"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_legacy_child_and_changed_execution_sources_fail_before_execution(self):
         root, home, workspace, previous = self.temp_context()
         try:

@@ -7,7 +7,7 @@ from .._utils import maybe_await
 from ..collaboration import createCollaborationRuntime
 from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ._daemon_watch import start_daemon_watchdog as _start_daemon_watchdog
-from .exception_groups import RuntimeExceptionGroup as _RuntimeExceptionGroup
+from .exception_groups import aggregateRuntimeFailures as _aggregate_runtime_failures
 from .lifecycle_barrier import createLifecycleBarrier
 from ..tasks.monitors import createMonitorRuntime
 from .events import createRuntimeEvent
@@ -290,7 +290,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                 await discard_prepared(prepared)
                 if superseded:
                     raise RuntimeActivationSupersededError(prepared["session"]["id"])
-                raise _RuntimeExceptionGroup("Runtime session activation failed.", failures)
+                raise _aggregate_runtime_failures("Runtime session activation failed.", failures)
 
             with state_lock:
                 active_binding = prepared["binding"]
@@ -445,7 +445,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             legacy_subscribers.clear()
             event_subscribers.clear()
             if failures:
-                raise _RuntimeExceptionGroup(
+                raise _aggregate_runtime_failures(
                     "One or more runtime components failed to close.",
                     failures,
                 )

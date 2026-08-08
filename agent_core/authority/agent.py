@@ -155,7 +155,10 @@ def _sandbox_authority(config: dict[str, Any], session: dict[str, Any], mode: st
     authority = {
         "required": policy.get("mode") == "os-required",
         "filesystem": filesystem,
-        "network": bool(policy.get("allowNetwork")),
+        # Sandbox mode "off" means no sandbox exists, so nothing restricts
+        # the network; the authority must record what the agent can actually
+        # do, or network-gated tools ban themselves while Bash roams free.
+        "network": (policy.get("mode") or "off") == "off" or bool(policy.get("allowNetwork")),
         "mode": policy.get("mode") or "off",
         "allowSubprocess": bool(policy.get("allowSubprocess", True)),
     }

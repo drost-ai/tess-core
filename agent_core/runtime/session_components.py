@@ -4,7 +4,7 @@ import copy
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
-from .exception_groups import RuntimeExceptionGroup
+from .exception_groups import aggregateRuntimeFailures
 from ..authority.executable_source_policy import selectMcpBootstrapServers
 
 
@@ -151,7 +151,7 @@ async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, 
                 except BaseException as exc:
                     failures.append(exc)
             if failures:
-                raise RuntimeExceptionGroup(
+                raise aggregateRuntimeFailures(
                     "One or more session runtime components failed to close.", failures
                 )
 

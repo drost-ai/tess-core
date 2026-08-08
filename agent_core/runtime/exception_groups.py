@@ -17,4 +17,16 @@ else:
             super().__init__(message)
 
 
-__all__ = ["RuntimeExceptionGroup"]
+def aggregateRuntimeFailures(message: str, failures: Sequence[BaseException]) -> BaseException:
+    """Build the aggregate for a batch of close/activation failures.
+
+    ExceptionGroup refuses BaseExceptions such as KeyboardInterrupt, and a
+    teardown interrupted mid-close must surface the interrupt itself — not a
+    TypeError thrown by the aggregation.
+    """
+    if sys.version_info >= (3, 11) and any(not isinstance(failure, Exception) for failure in failures):
+        return BaseExceptionGroup(message, list(failures))
+    return RuntimeExceptionGroup(message, list(failures))
+
+
+__all__ = ["RuntimeExceptionGroup", "aggregateRuntimeFailures"]
