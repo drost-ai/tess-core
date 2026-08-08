@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from tests.support.agent_core_case import *
+
+from tests.test_providers_anthropic_contract import _config, _request, _server
+
+
+class EffortModelSupportTests(unittest.TestCase):
+    def test_five_family_models_keep_their_effort(self):
+        from agent_core.config.providers import normalizeEffortForModel
+
+        for model in ("claude-fable-5", "claude-mythos-5", "claude-opus-5", "claude-sonnet-5"):
+            self.assertEqual(normalizeEffortForModel("anthropic", model, "xhigh"), "xhigh", model)
+            self.assertEqual(normalizeEffortForModel("anthropic", model, "max"), "max", model)
+            self.assertEqual(normalizeEffortForModel("anthropic", model, "high"), "high", model)
+
+    def test_pre_xhigh_models_downgrade_xhigh_only(self):
+        from agent_core.config.providers import normalizeEffortForModel
+
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-sonnet-4-6", "xhigh"), "high")
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-sonnet-4-6", "max"), "max")
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-opus-4-8", "xhigh"), "xhigh")
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-opus-4-6", "xhigh"), "high")
+        self.assertIsNone(normalizeEffortForModel("anthropic", "claude-haiku-4-5", "high"))
+
+
+class ThinkingDisplayTests(unittest.TestCase):
+    def test_profile_thinking_display_reaches_the_wire(self):
+        server, requests = _server()
+        try:
+            run(
+                core.sendAnthropicMessagesRequest(
+                    config=_config(
+                        server,
+                        providerProfile={"anthropicThinkingDisplay": "summarized"},
+                    ),
+                    request=_request(effort="high"),
+                    runtime={},
+                    maxAttempts=1,
+                )
+            )
+        finally:
+            server.close()
+        body = requests[0]["body"]
+        self.assertEqual(
+            body["thinking"], {"type": "adaptive", "display": "summarized"}
+        )
+        self.assertEqual(body["output_config"], {"effort": "high"})
+
+    def test_no_display_key_without_profile_option(self):
+        server, requests = _server()
+        try:
+            run(
+                core.sendAnthropicMessagesRequest(
+                    config=_config(server),
+                    request=_request(effort="high"),
+                    runtime={},
+                    maxAttempts=1,
+                )
+            )
+        finally:
+            server.close()
+        self.assertEqual(requests[0]["body"]["thinking"], {"type": "adaptive"})
+
+
+
+if __name__ == "__main__":
+    unittest.main()
