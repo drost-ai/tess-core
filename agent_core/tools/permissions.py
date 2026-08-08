@@ -15,6 +15,16 @@ from ..storage import getProjectRoot, loadAutoMode
 PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
 
 
+def _pinned_child_authority(session: dict[str, Any]) -> dict[str, Any] | None:
+    """Authority pins CHILD sessions only. Spawning stamps the same record on
+    the parent as derivation bookkeeping, but the interactive root keeps its
+    mode freedom — the human at the prompt IS the authority there."""
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    if not metadata.get("parentSessionId"):
+        return None
+    return metadata.get("effectiveAgentAuthority")
+
+
 async def _ensure_tool_permission(
     context: ToolContext,
     tool_name: str,
@@ -36,7 +46,7 @@ async def _ensure_tool_permission(
         path,
         url,
     )
-    authority = (context.get("session", {}).get("metadata") or {}).get("effectiveAgentAuthority")
+    authority = _pinned_child_authority(context.get("session", {}))
     if authority and resolution["decision"] == "ask":
         resolution.pop("switchMode", None)
     output_json = context.get("outputJson", lambda *_: None)
@@ -99,7 +109,7 @@ async def _ensure_tool_permission(
 async def _get_effective_permission_mode(context: ToolContext) -> str:
     mode = context["session"].get("permissionMode") or context["config"].get("permissionMode", "default")
     metadata = context["session"].get("metadata", {})
-    authority = metadata.get("effectiveAgentAuthority")
+    authority = _pinned_child_authority(context["session"])
     if authority:
         assertValidAgentAuthority(authority)
         if mode != authority["mode"]:
@@ -126,7 +136,7 @@ async def _resolve_tool_permission(
     path: str | None = None,
     url: str | None = None,
 ) -> dict[str, Any]:
-    authority = (context.get("session", {}).get("metadata") or {}).get("effectiveAgentAuthority")
+    authority = _pinned_child_authority(context.get("session", {}))
     rules = (authority or {}).get("permissionRules")
     if rules is None:
         rules = await loadPermissionRulesCached(

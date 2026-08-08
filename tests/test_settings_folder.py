@@ -137,6 +137,19 @@ class SettingsFolderTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_resolve_config_reads_permission_mode_from_settings_folder(self):
+        # Headless embedders grant full permissions durably via
+        # settings/config.yaml; an explicit option still wins.
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "config.yaml", "permissionMode: bypassPermissions\n")
+            config = run(core.resolveConfig({"provider": "openai"}, str(workspace)))
+            self.assertEqual(config["permissionMode"], "bypassPermissions")
+            overridden = run(core.resolveConfig({"provider": "openai", "permissionMode": "default"}, str(workspace)))
+            self.assertEqual(overridden["permissionMode"], "default")
+        finally:
+            self.restore_home(root, previous)
+
 
 if __name__ == "__main__":
     unittest.main()

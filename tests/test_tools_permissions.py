@@ -64,6 +64,61 @@ class ToolPermissionTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_spawn_stamped_root_keeps_switch_option_while_child_stays_pinned(self):
+        # Spawning stamps effectiveAgentAuthority on the PARENT session as
+        # derivation bookkeeping; that must not strip the root's
+        # "Switch to bypassPermissions" option or pin its mode — only real
+        # child sessions (parentSessionId) are authority-pinned.
+        from agent_core.tools.permissions import _ensure_tool_permission
+
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            authority = run(core.captureAgentAuthority(config=config, session=session, tools=core.createBuiltinTools()))
+            session["metadata"]["effectiveAgentAuthority"] = authority
+
+            seen_options: list[list[str]] = []
+
+            def ask(_prompt, options=None, _detail=None):
+                seen_options.append(list(options or []))
+                return "Switch to bypassPermissions"
+
+            context = {
+                "session": session, "config": config, "interactive": True,
+                "askQuestion": ask, "outputJson": lambda *_: None,
+                "cwd": str(workspace), "persistSession": lambda: None,
+            }
+            run(_ensure_tool_permission(context, "Bash", "shell", "Run shell command", False, "python3 -c 'print(1)'"))
+            self.assertIn("Switch to bypassPermissions", seen_options[0])
+            self.assertEqual(session["permissionMode"], "bypassPermissions")
+            self.assertEqual(config["permissionMode"], "bypassPermissions")
+
+            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            child["metadata"]["parentSessionId"] = session["id"]
+            child["metadata"]["effectiveAgentAuthority"] = authority
+            child_config = {**config, "permissionMode": "default"}
+            child_options: list[list[str]] = []
+
+            def child_ask(_prompt, options=None, _detail=None):
+                child_options.append(list(options or []))
+                return "Approve once"
+
+            child_context = {
+                "session": child, "config": child_config, "interactive": True,
+                "askQuestion": child_ask, "outputJson": lambda *_: None,
+                "cwd": str(workspace), "persistSession": lambda: None,
+            }
+            run(_ensure_tool_permission(child_context, "Bash", "shell", "Run shell command", False, "python3 -c 'print(1)'"))
+            self.assertEqual(child_options[0], ["Approve once", "Deny"])  # no mode escalation offered
+
+            detached_context = {**child_context, "interactive": False, "askQuestion": lambda *_: ""}
+            with self.assertRaises(PermissionError) as detached:
+                run(_ensure_tool_permission(detached_context, "Bash", "shell", "Run shell command", False, "python3 -c 'print(1)'"))
+            self.assertIn("detached child", str(detached.exception))
+        finally:
+            self.restore_home(root, previous)
+
     def test_permission_resolution_matrix_matches_reference_edges(self):
         root, home, workspace, previous = self.temp_context()
         try:
