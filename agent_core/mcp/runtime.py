@@ -92,11 +92,25 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     async def list_resources(server: str | None = None) -> list[dict[str, Any]]:
         assert_open()
         selected = _select_states(states, server)
-        out: list[dict[str, Any]] = []
-        for state in selected:
+
+        async def refresh(state: dict[str, Any]) -> list[dict[str, Any]]:
             await _ensure_connected(state, cwd, on_event)
             state["resources"] = await _refresh_resources(state)
-            out.extend(state["resources"])
+            return state["resources"]
+
+        # Servers list concurrently; in the all-servers sweep a dead server
+        # is skipped (its failure lives in server status) instead of failing
+        # the whole listing or serializing N startup timeouts.
+        results = await asyncio.gather(
+            *(refresh(state) for state in selected), return_exceptions=True
+        )
+        out: list[dict[str, Any]] = []
+        for result in results:
+            if isinstance(result, BaseException):
+                if isinstance(result, asyncio.CancelledError) or server:
+                    raise result
+                continue
+            out.extend(result)
         return out
 
     async def read_resource(server: str, uri: str) -> dict[str, Any]:

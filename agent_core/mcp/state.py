@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+import time
+import weakref
 from typing import Any, Callable
 
 from .._utils import now_iso, pretty_json
@@ -48,6 +50,8 @@ def _create_state(
         "notificationGeneration": 0,
         "catalogGeneration": 0,
         "connectionGeneration": 0,
+        "reconnectFailures": 0,
+        "reconnectBackoffUntil": 0.0,
     }
     if config.get("transport") != "stdio" and token_store is not None:
         state["oauth"] = createMcpOAuthRuntime(
@@ -94,6 +98,8 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
                 "client": client,
                 "connected": True,
                 "state": "connected",
+                "reconnectFailures": 0,
+                "reconnectBackoffUntil": 0.0,
                 "lastConnectedAt": now_iso(),
                 "serverCapabilities": client.server_capabilities,
                 "serverInfo": client.server_info,
@@ -125,6 +131,10 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
             if state.get("client") is client:
                 state["client"] = None
         _mark_state_failure(state, exc)
+        if not isinstance(exc, McpAuthorizationRequiredError):
+            # Authorization-pending is not a server fault; its retries are
+            # already gated on a usable token rather than a timer.
+            _arm_reconnect_backoff(state)
         on_event("mcp.server_connection_failed", {"server": state["config"].get("name"), "transport": state["config"].get("transport"), "reason": "authorization_required" if isinstance(exc, McpAuthorizationRequiredError) else state.get("error")})
 
 
@@ -139,19 +149,64 @@ def _create_client(config: dict[str, Any], cwd: str, on_event: Callable[..., Any
     return HttpMcpClient(config, cwd, notification, state.get("oauth") if state else None)
 
 
+MCP_RECONNECT_BACKOFF_BASE_MS = 1000
+MCP_RECONNECT_BACKOFF_MAX_MS = 60_000
+
+# Connect locks are scoped per running event loop (tests and embedders run
+# many short-lived loops; an asyncio.Lock cannot cross loops) and keyed by
+# state identity, which lives as long as the runtime.
+_CONNECT_LOCKS: "weakref.WeakKeyDictionary[Any, dict[int, asyncio.Lock]]" = weakref.WeakKeyDictionary()
+
+
+def _state_connect_lock(state: dict[str, Any]) -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    locks = _CONNECT_LOCKS.get(loop)
+    if locks is None:
+        locks = {}
+        _CONNECT_LOCKS[loop] = locks
+    lock = locks.get(id(state))
+    if lock is None:
+        lock = asyncio.Lock()
+        locks[id(state)] = lock
+    return lock
+
+
+def _arm_reconnect_backoff(state: dict[str, Any]) -> None:
+    failures = int(state.get("reconnectFailures") or 0) + 1
+    delay_ms = min(
+        MCP_RECONNECT_BACKOFF_MAX_MS,
+        MCP_RECONNECT_BACKOFF_BASE_MS * (2 ** (failures - 1)),
+    )
+    state["reconnectFailures"] = failures
+    state["reconnectBackoffUntil"] = time.monotonic() + delay_ms / 1000
+
+
 async def _ensure_connected(state: dict[str, Any], cwd: str, on_event: Callable[..., Any]) -> dict[str, Any]:
     if state.get("connected") and state.get("client"):
         return state
-    if state.get("state") == "authorization_required" and state.get("oauth"):
-        if not await state["oauth"].has_usable_token():
+    async with _state_connect_lock(state):
+        # A concurrent caller may have finished the reconnect while this one
+        # waited on the lock; without it, racing callers spawn duplicate
+        # stdio processes and leak the loser.
+        if state.get("connected") and state.get("client"):
+            return state
+        if state.get("state") == "authorization_required" and state.get("oauth"):
+            if not await state["oauth"].has_usable_token():
+                raise RuntimeError(f"MCP server requires authorization: {state['config'].get('name')}")
+        remaining = float(state.get("reconnectBackoffUntil") or 0) - time.monotonic()
+        if remaining > 0:
+            detail = f" ({state.get('error')})" if state.get("error") else ""
+            raise RuntimeError(
+                f"MCP server is not connected (reconnect backoff, retry in {max(1, round(remaining))}s): "
+                f"{state['config'].get('name')}{detail}"
+            )
+        await _connect_state(state, cwd, on_event)
+        if state.get("connected") and state.get("client"):
+            return state
+        if state.get("state") == "authorization_required":
             raise RuntimeError(f"MCP server requires authorization: {state['config'].get('name')}")
-    await _connect_state(state, cwd, on_event)
-    if state.get("connected") and state.get("client"):
-        return state
-    if state.get("state") == "authorization_required":
-        raise RuntimeError(f"MCP server requires authorization: {state['config'].get('name')}")
-    detail = f" ({state.get('error')})" if state.get("error") else ""
-    raise RuntimeError(f"MCP server is not connected: {state['config'].get('name')}{detail}")
+        detail = f" ({state.get('error')})" if state.get("error") else ""
+        raise RuntimeError(f"MCP server is not connected: {state['config'].get('name')}{detail}")
 
 
 async def _require_connected(states: list[dict[str, Any]], server: str, cwd: str, on_event: Callable[..., Any]) -> dict[str, Any]:
