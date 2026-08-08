@@ -65,13 +65,15 @@ class Package28McpProtocolTests(AgentCoreTestCase):
 
     def test_structured_content_is_preserved_bounded_and_model_visible(self):
         huge = {f"key-{index}": "x" * 4_000 for index in range(100)}
-        result = mcp_module.normalization._normalize_tool_call_result(
-            "fake",
-            "structured",
-            {
-                "content": [{"type": "text", "text": "summary"}],
-                "structuredContent": huge,
-            },
+        result = run(
+            mcp_module.normalization._normalize_tool_call_result(
+                "fake",
+                "structured",
+                {
+                    "content": [{"type": "text", "text": "summary"}],
+                    "structuredContent": huge,
+                },
+            )
         )
         self.assertIn("structuredContent", result)
         self.assertLessEqual(len(result["structuredContent"]), 40)

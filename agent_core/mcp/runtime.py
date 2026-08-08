@@ -123,7 +123,7 @@ async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
         assert_open()
         state = await _require_connected(states, server, cwd, on_event)
         result = await _request_with_state_tracking(state, "tools/call", {"name": name, "arguments": tool_args or {}})
-        return _normalize_tool_call_result(server, name, result)
+        return await _normalize_tool_call_result(server, name, result)
 
     def create_tool_definitions() -> list[ToolDefinition]:
         definitions: list[ToolDefinition] = []

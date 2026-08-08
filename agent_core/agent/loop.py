@@ -104,7 +104,12 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     runtime_contract = metadata.get("subagentRuntimeContract") if isinstance(metadata, dict) else None
     apply_pending_mcp = runtime.get("applyPendingMcpCatalogChanges")
     if callable(apply_pending_mcp):
-        await maybe_await(apply_pending_mcp())
+        refreshed_tools = await maybe_await(apply_pending_mcp())
+        # refreshMcpToolRegistry returns the recomposed tool list when the MCP
+        # catalog changed; without adopting it here the turn keeps serving the
+        # registry captured when the bindings were created.
+        if isinstance(refreshed_tools, list):
+            runtime["tools"] = refreshed_tools
     tool_names = set(filterToolsByPolicy(config))
     runtime_tools = filterToolsForAgentAuthority(
         filter_tools_for_subagent(runtime.get("tools", []), runtime_contract),
