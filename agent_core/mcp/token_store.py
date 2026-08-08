@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -35,11 +37,33 @@ class FileMcpTokenStore:
         await asyncio.to_thread(self._delete_sync, server_key)
 
     def _get_sync(self, server_key: str) -> dict[str, Any] | None:
+        # The read path mirrors the write discipline: no symlink traversal,
+        # regular owner-only files, bounded size.
         path = self._path(server_key)
         try:
-            value = json.loads(path.read_text(encoding="utf-8"))
+            descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
         except FileNotFoundError:
             return None
+        except OSError as error:
+            if error.errno in (errno.ELOOP, getattr(errno, "EMLINK", errno.ELOOP)):
+                raise RuntimeError("MCP token store record is not a regular file.") from None
+            raise
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode):
+                raise RuntimeError("MCP token store record is not a regular file.")
+            if hasattr(os, "geteuid") and info.st_uid != os.geteuid():
+                raise RuntimeError("MCP token store record is not owned by the current user.")
+            if os.name == "posix" and info.st_mode & 0o077:
+                raise RuntimeError("MCP token store record permissions are not owner-only.")
+            if info.st_size > 1_048_576:
+                raise RuntimeError("MCP token store record exceeds the allowed size.")
+            with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+                descriptor = -1
+                value = json.loads(handle.read())
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
         if not isinstance(value, dict):
             raise RuntimeError("MCP token store record is invalid.")
         return value

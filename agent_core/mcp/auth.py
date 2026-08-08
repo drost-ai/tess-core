@@ -9,11 +9,18 @@ import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
-from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
 
 from .._utils import maybe_await
+from .auth_http import (
+    _assert_oauth_url,
+    _fetch_json,
+    _fetch_json_optional,
+    _parse_resource_metadata_url,
+    _request_tokens,
+    _strip_url_query,
+    _well_known,
+)
 from .auth_loopback import LoopbackListener
 from .token_store import mcpTokenStoreKey, token_store_get, token_store_set
 from .transport_policy import resolveMcpTransportPolicy
@@ -49,6 +56,7 @@ class McpOAuthRuntime:
         self.authorization_callback = authorization_callback
         self.key = mcpTokenStoreKey(config)
         self.resource_origin = canonical_origin(str(config.get("commandOrUrl") or ""))
+        self.resource_uri = _canonical_resource_uri(str(config.get("commandOrUrl") or ""))
         self.timeout = resolveMcpTransportPolicy(config)["requestTimeoutMs"] / 1000
         self._refresh_task: asyncio.Task[dict[str, Any]] | None = None
         self._last_authorization_url: str | None = None
@@ -128,6 +136,7 @@ class McpOAuthRuntime:
         fields = {
             "grant_type": "refresh_token",
             "refresh_token": str(record.get("refreshToken") or ""),
+            "resource": self.resource_uri,
             **self._client_auth_fields(record),
         }
         scopes = _scopes(self.oauth)
@@ -178,6 +187,7 @@ class McpOAuthRuntime:
                 pkce=pkce,
                 scopes=_scopes(self.oauth),
                 state=state,
+                resource=self.resource_uri,
             )
             self._authorization_required(authorization_url, continuation_id)
             if listener:
@@ -192,6 +202,7 @@ class McpOAuthRuntime:
                                 "authorizationUrl": authorization_url,
                                 "continuationId": continuation_id,
                                 "redirectUri": redirect_uri,
+                                "state": state,
                             }
                         )
                     )
@@ -200,6 +211,9 @@ class McpOAuthRuntime:
                 code = callback_result.get("code") if isinstance(callback_result, dict) else callback_result
                 if not isinstance(code, str) or not code:
                     raise RuntimeError("MCP OAuth authorization callback did not return a code.")
+                returned_state = callback_result.get("state") if isinstance(callback_result, dict) else None
+                if isinstance(returned_state, str) and returned_state != state:
+                    raise RuntimeError("MCP OAuth authorization callback returned a mismatched state.")
             self._ensure_open()
             response = await _request_tokens(
                 str(metadata["token_endpoint"]),
@@ -208,6 +222,7 @@ class McpOAuthRuntime:
                     "code": code,
                     "redirect_uri": redirect_uri,
                     "code_verifier": pkce.verifier,
+                    "resource": self.resource_uri,
                     **self._client_auth_fields(client_record),
                     "client_id": client_id,
                 },
@@ -279,6 +294,7 @@ class McpOAuthRuntime:
         protected = await _fetch_json_optional(metadata_url, timeout=self.timeout)
         servers = protected.get("authorization_servers") if isinstance(protected, dict) else None
         issuer = servers[0] if isinstance(servers, list) and servers and isinstance(servers[0], str) else canonical_origin(resource_url)
+        _assert_oauth_url(issuer)
         for suffix in ("oauth-authorization-server", "openid-configuration"):
             metadata = await _fetch_json_optional(_well_known(issuer, suffix), timeout=self.timeout)
             if (
@@ -286,6 +302,16 @@ class McpOAuthRuntime:
                 and isinstance(metadata.get("authorization_endpoint"), str)
                 and isinstance(metadata.get("token_endpoint"), str)
             ):
+                declared = metadata.get("issuer")
+                # RFC 8414: the declared issuer must be the one the metadata
+                # URL was derived from, or the whole document is untrusted.
+                if not isinstance(declared, str) or declared.rstrip("/") != issuer.rstrip("/"):
+                    raise RuntimeError(
+                        f"MCP OAuth metadata issuer mismatch for {self.config.get('name')}: "
+                        f"expected {issuer}, got {declared!r}."
+                    )
+                _assert_oauth_url(str(metadata["authorization_endpoint"]))
+                _assert_oauth_url(str(metadata["token_endpoint"]))
                 return metadata
         raise RuntimeError(f"Could not discover OAuth metadata for MCP server {self.config.get('name')}.")
 
@@ -347,6 +373,12 @@ def canonical_origin(raw: str) -> str:
     return f"{scheme}://{hostname}{f':{port}' if port else ''}"
 
 
+def _canonical_resource_uri(raw: str) -> str:
+    """RFC 8707 resource indicator: the MCP server's canonical URI."""
+    parsed = urlsplit(raw)
+    return urlunsplit((*urlsplit(canonical_origin(raw))[:2], parsed.path.rstrip("/"), parsed.query, ""))
+
+
 def _bearer(record: dict[str, Any]) -> dict[str, str]:
     return {"Authorization": f"{record.get('tokenType') or 'Bearer'} {record.get('accessToken') or ''}"}
 
@@ -383,81 +415,6 @@ def _merge_token_response(
     }
 
 
-async def _request_tokens(endpoint: str, fields: dict[str, str], timeout: float) -> dict[str, Any]:
-    result = await _fetch_json(
-        endpoint,
-        method="POST",
-        headers={"content-type": "application/x-www-form-urlencoded", "accept": "application/json"},
-        body=urlencode(fields).encode("utf-8"),
-        timeout=timeout,
-    )
-    if not isinstance(result, dict) or not isinstance(result.get("access_token"), str):
-        raise RuntimeError("MCP OAuth token endpoint did not return an access token.")
-    return result
-
-
-async def _fetch_json_optional(url: str, *, timeout: float) -> dict[str, Any] | None:
-    try:
-        value = await _fetch_json(url, timeout=timeout)
-        return value if isinstance(value, dict) else None
-    except _OAuthNotFound:
-        return None
-
-
-async def _fetch_json(
-    url: str,
-    *,
-    method: str = "GET",
-    headers: dict[str, str] | None = None,
-    body: bytes | None = None,
-    timeout: float,
-) -> Any:
-    def fetch() -> Any:
-        request = Request(url, data=body, headers=headers or {"accept": "application/json"}, method=method)
-        try:
-            with urlopen(request, timeout=timeout) as response:
-                raw = response.read(1_048_577)
-        except HTTPError as exc:
-            if exc.code == 404:
-                exc.close()
-                raise _OAuthNotFound() from None
-            exc.close()
-            raise RuntimeError(f"MCP OAuth request failed with HTTP {exc.code}.") from None
-        if len(raw) > 1_048_576:
-            raise RuntimeError("MCP OAuth response exceeded the allowed size.")
-        try:
-            return json.loads(raw.decode("utf-8"))
-        except Exception:
-            raise RuntimeError("MCP OAuth endpoint returned invalid JSON.") from None
-
-    return await asyncio.to_thread(fetch)
-
-
-class _OAuthNotFound(Exception):
-    pass
-
-
-def _parse_resource_metadata_url(value: str | None) -> str | None:
-    if not value:
-        return None
-    import re
-
-    match = re.search(r'resource_metadata="?([^",\s]+)"?', value, re.I)
-    return match.group(1) if match else None
-
-
-def _well_known(base: str, suffix: str) -> str:
-    parsed = urlsplit(base)
-    path = parsed.path.rstrip("/")
-    suffix_path = f"/.well-known/{suffix}{path if path and path != '/' else ''}"
-    return urlunsplit((parsed.scheme, parsed.netloc, suffix_path, "", ""))
-
-
-def _strip_url_query(raw: str) -> str:
-    parsed = urlsplit(raw)
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
-
-
 def _create_pkce() -> _Pkce:
     verifier = _base64_url(secrets.token_bytes(32))
     challenge = _base64_url(hashlib.sha256(verifier.encode("ascii")).digest())
@@ -476,6 +433,7 @@ def _build_authorization_url(
     pkce: _Pkce,
     scopes: list[str],
     state: str,
+    resource: str | None = None,
 ) -> str:
     parsed = urlsplit(endpoint)
     query = parse_qs(parsed.query, keep_blank_values=True)
@@ -489,6 +447,8 @@ def _build_authorization_url(
             "state": [state],
         }
     )
+    if resource:
+        query["resource"] = [resource]
     if scopes:
         query["scope"] = [" ".join(scopes)]
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query, doseq=True), ""))
