@@ -15,8 +15,6 @@ from ..storage import loadCodexAuthToken
 
 
 CODEX_SPARK_COMPACTION_MODEL = "gpt-5.3-codex-spark"
-DEFAULT_COMPACTION_SYNTHESIS_TIMEOUT_MS = 300_000
-DEFAULT_COMPACTION_VERIFICATION_TIMEOUT_MS = 300_000
 
 # Backward-compatible public names; runtime selection is now profile/session based.
 FIXED_COMPACTION_PROVIDER = "openai"
@@ -330,6 +328,10 @@ async def _run_compaction_request_with_timeout(provider: str, providerLabel: str
 
 
 def _resolve_compaction_timeout_ms(purpose: str | None) -> int:
+    from ..config._knobs import knobValue
+
+    # Legacy TESS_* env names stay as aliases until the E6 deprecation
+    # sweep; they beat the knob layer like an env override would.
     env_name = "TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS" if purpose == "synthesis" else "TESS_COMPACTION_VERIFICATION_TIMEOUT_MS"
     try:
         parsed = int(float(os.environ.get(env_name, "")))
@@ -337,6 +339,7 @@ def _resolve_compaction_timeout_ms(purpose: str | None) -> int:
         parsed = 0
     if parsed > 0:
         return parsed
-    return DEFAULT_COMPACTION_SYNTHESIS_TIMEOUT_MS if purpose == "synthesis" else DEFAULT_COMPACTION_VERIFICATION_TIMEOUT_MS
+    knob = "compaction.synthesis_timeout_ms" if purpose == "synthesis" else "compaction.verification_timeout_ms"
+    return int(knobValue(knob))
 
 

@@ -15,7 +15,7 @@ from .rendering import (
     renderRegionSummaryReinjectionLines,
     summarizeContinuationRegion,
 )
-from .shared import RELIEF_PREFERRED_RAW_TAIL_TOKENS, RELIEF_PRESERVE_MIN_MESSAGES
+from .shared import relief_knob
 from .tokens import (
     asRecord,
     collapseWhitespace,
@@ -30,12 +30,12 @@ from ...session.message_origin import (
 
 
 def choosePreservedRawStart(messages: list[dict[str, Any]]) -> int:
-    fallback_start = max(0, len(messages) - RELIEF_PRESERVE_MIN_MESSAGES)
+    fallback_start = max(0, len(messages) - relief_knob("context.relief_preserve_min_messages"))
     last_plain_user_index = findLastPlainUserIndex(messages)
     if last_plain_user_index is None or last_plain_user_index <= 0:
         return _adjustPreservedRawStartToProtocolBoundary(messages, fallback_start)
     tail_tokens = estimateMessagesTokens(messages[last_plain_user_index:])
-    candidate = last_plain_user_index if tail_tokens <= RELIEF_PREFERRED_RAW_TAIL_TOKENS else fallback_start
+    candidate = last_plain_user_index if tail_tokens <= relief_knob("context.relief_raw_tail_tokens") else fallback_start
     return _adjustPreservedRawStartToProtocolBoundary(messages, candidate)
 
 
@@ -142,9 +142,9 @@ def compactMessageForContinuation(message: dict[str, Any], toolUses: dict[str, s
 
 
 def applySessionMemoryCompaction(messages: list[dict[str, Any]], retrievedMemory: dict[str, Any], reactiveAttempt: int = 0) -> dict[str, Any]:
-    if not retrievedMemory.get("records") or len(messages) <= RELIEF_PRESERVE_MIN_MESSAGES:
+    if not retrievedMemory.get("records") or len(messages) <= relief_knob("context.relief_preserve_min_messages"):
         return emptyCompactionResult(messages)
-    keep_count = max(4, max(8, RELIEF_PRESERVE_MIN_MESSAGES // 2) - (reactiveAttempt * 2))
+    keep_count = max(4, max(8, relief_knob("context.relief_preserve_min_messages") // 2) - (reactiveAttempt * 2))
     preserved_raw_start_index = _adjustPreservedRawStartToProtocolBoundary(messages, max(0, len(messages) - keep_count))
     if preserved_raw_start_index <= 0:
         return emptyCompactionResult(messages)
@@ -174,7 +174,7 @@ def applySessionMemoryCompaction(messages: list[dict[str, Any]], retrievedMemory
 
 
 def applyPartialCompaction(messages: list[dict[str, Any]], reactiveAttempt: int = 0) -> dict[str, Any]:
-    if len(messages) <= RELIEF_PRESERVE_MIN_MESSAGES + 4:
+    if len(messages) <= relief_knob("context.relief_preserve_min_messages") + 4:
         return emptyCompactionResult(messages)
     keep_count = max(2, 4 - reactiveAttempt)
     preserved_raw_start_index = _adjustPreservedRawStartToProtocolBoundary(messages, min(max(0, len(messages) - keep_count), choosePreservedRawStart(messages) + (reactiveAttempt * 4)))

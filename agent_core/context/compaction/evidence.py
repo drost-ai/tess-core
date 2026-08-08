@@ -4,14 +4,7 @@ import json
 import os
 from .parsing import asRecord, parseMaybeJson
 from .shared import (
-    COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT,
-    COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT,
-    COMPACTION_EVIDENCE_TOKEN_BUDGET,
-    COMPACTION_FILE_PREVIEW_LINES,
-    COMPACTION_MATCH_PREVIEW_LIMIT,
-    COMPACTION_MESSAGE_TEXT_CHAR_LIMIT,
-    COMPACTION_TOOL_INPUT_CHAR_LIMIT,
-    COMPACTION_TOOL_RESULT_CHAR_LIMIT,
+    compaction_knob,
 )
 from .utils import collapseWhitespace, estimateTextTokens, truncate
 from typing import Any
@@ -23,7 +16,7 @@ def buildCompactionEvidence(args: dict[str, Any] | None = None, **kwargs: Any) -
     source_messages = args.get("sourceMessages") or []
     source_start = int(args.get("sourceStart") or 0)
     cwd = args.get("cwd") or os.getcwd()
-    token_budget = int(args.get("tokenBudget") or COMPACTION_EVIDENCE_TOKEN_BUDGET)
+    token_budget = int(args.get("tokenBudget") or compaction_knob("compaction.evidence_token_budget"))
     tool_uses: dict[str, dict[str, Any]] = {}
     entries: list[dict[str, str]] = []
     for offset, message in enumerate(source_messages):
@@ -112,7 +105,7 @@ def buildEvidenceEntriesForMessage(message: dict[str, Any], messageIndex: int, t
 
 def buildTextEvidenceEntry(args: dict[str, Any]) -> dict[str, str]:
     normalized = collapseWhitespace(str(args.get("text") or ""))
-    full_body = truncate(normalized, COMPACTION_MESSAGE_TEXT_CHAR_LIMIT)
+    full_body = truncate(normalized, compaction_knob("compaction.message_text_char_limit"))
     compact_body = truncate(normalized, 480)
     return {
         "full": f"[{args['messageIndex']}] {args['role']} {args['label']}\n{full_body}",
@@ -121,7 +114,7 @@ def buildTextEvidenceEntry(args: dict[str, Any]) -> dict[str, str]:
 
 
 def buildToolUseEvidenceEntry(messageIndex: int, toolName: str, input: dict[str, Any]) -> dict[str, str]:
-    serialized_input = truncate(json.dumps(input, indent=2, ensure_ascii=False), COMPACTION_TOOL_INPUT_CHAR_LIMIT)
+    serialized_input = truncate(json.dumps(input, indent=2, ensure_ascii=False), compaction_knob("compaction.tool_input_char_limit"))
     compact_input = truncate(json.dumps(input, ensure_ascii=False), 320)
     return {
         "full": f"[{messageIndex}] assistant tool_use {toolName}\ninput={serialized_input}",
@@ -132,8 +125,8 @@ def buildToolUseEvidenceEntry(messageIndex: int, toolName: str, input: dict[str,
 def buildToolResultEvidenceEntry(messageIndex: int, block: dict[str, Any], toolUse: dict[str, Any] | None, cwd: str) -> dict[str, str]:
     tool_name = (toolUse or {}).get("name") or "UnknownTool"
     content = str(block.get("content") or "")
-    full = summarizeToolResultForCompaction(content, cwd, COMPACTION_TOOL_RESULT_CHAR_LIMIT)
-    compact = summarizeToolResultForCompaction(content, cwd, COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT)
+    full = summarizeToolResultForCompaction(content, cwd, compaction_knob("compaction.tool_result_char_limit"))
+    compact = summarizeToolResultForCompaction(content, cwd, compaction_knob("compaction.compact_tool_result_char_limit"))
     prefix = f"[{messageIndex}] user tool_result {tool_name}{' error' if block.get('is_error') else ''}"
     return {"full": f"{prefix}\n{full}", "compact": f"{prefix}\n{compact}"}
 
@@ -162,13 +155,13 @@ def summarizeToolResultForCompaction(content: str, cwd: str, limit: int) -> str:
             f"cwd={record['cwd']}" if isinstance(record.get("cwd"), str) else None,
             f"exit_code={record['exitCode']}" if isinstance(record.get("exitCode"), (int, float)) and not isinstance(record.get("exitCode"), bool) else None,
             f"timed_out={record['timedOut']}" if isinstance(record.get("timedOut"), bool) else None,
-            f"stdout={truncate(collapseWhitespace(record['stdout']), COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)}" if isinstance(record.get("stdout"), str) else None,
-            f"stderr={truncate(collapseWhitespace(record['stderr']), COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)}" if isinstance(record.get("stderr"), str) else None,
+            f"stdout={truncate(collapseWhitespace(record['stdout']), compaction_knob("compaction.command_preview_char_limit"))}" if isinstance(record.get("stdout"), str) else None,
+            f"stderr={truncate(collapseWhitespace(record['stderr']), compaction_knob("compaction.command_preview_char_limit"))}" if isinstance(record.get("stderr"), str) else None,
         ]
         return truncate("\n".join(part for part in parts if part), limit)
 
     if isinstance(record.get("matches"), list):
-        matches = [trimPathEvidence(value, cwd) for value in record["matches"] if isinstance(value, str)][:COMPACTION_MATCH_PREVIEW_LIMIT]
+        matches = [trimPathEvidence(value, cwd) for value in record["matches"] if isinstance(value, str)][:compaction_knob("compaction.match_preview_limit")]
         parts = [
             f"type={record['type']}" if isinstance(record.get("type"), str) else None,
             f"pattern={record['pattern']}" if isinstance(record.get("pattern"), str) else None,
@@ -191,7 +184,7 @@ def compactStructuredRecord(record: dict[str, Any], cwd: str) -> dict[str, Any]:
         elif isinstance(value, (int, float, bool)):
             next_record[key] = value
     if isinstance(record.get("matches"), list):
-        next_record["matches"] = record["matches"][:COMPACTION_MATCH_PREVIEW_LIMIT]
+        next_record["matches"] = record["matches"][:compaction_knob("compaction.match_preview_limit")]
         next_record["matchCount"] = len(record["matches"])
     if isinstance(record.get("content"), str):
         next_record["contentPreview"] = truncate(collapseWhitespace(record["content"]), 600)
@@ -200,11 +193,11 @@ def compactStructuredRecord(record: dict[str, Any], cwd: str) -> dict[str, Any]:
 
 def buildFilePreview(content: str) -> str:
     lines = content.split("\n")
-    if len(lines) <= COMPACTION_FILE_PREVIEW_LINES * 2:
-        return truncate(collapseWhitespace(content), COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)
-    head = " ".join(lines[:COMPACTION_FILE_PREVIEW_LINES]).strip()
-    tail = " ".join(lines[-COMPACTION_FILE_PREVIEW_LINES:]).strip()
-    return truncate(f"{collapseWhitespace(head)} ... {collapseWhitespace(tail)}", COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT)
+    if len(lines) <= compaction_knob("compaction.file_preview_lines") * 2:
+        return truncate(collapseWhitespace(content), compaction_knob("compaction.command_preview_char_limit"))
+    head = " ".join(lines[:compaction_knob("compaction.file_preview_lines")]).strip()
+    tail = " ".join(lines[-compaction_knob("compaction.file_preview_lines"):]).strip()
+    return truncate(f"{collapseWhitespace(head)} ... {collapseWhitespace(tail)}", compaction_knob("compaction.command_preview_char_limit"))
 
 
 def trimPathEvidence(filePath: str, cwd: str) -> str:

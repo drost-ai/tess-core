@@ -12,6 +12,60 @@ knobs:
     reply_poll_ms: 500
     # Default milliseconds a SendMessage(expects_reply=true) call waits for the counterpart's reply before returning a visible non-answer. [1000..3600000]
     reply_timeout_ms: 300000
+  compaction:
+    # Character cap for command output previews in compaction evidence. [100..1000000]
+    command_preview_char_limit: 6000
+    # Character cap per tool result in the compact evidence fallback passes. [50..1000000]
+    compact_tool_result_char_limit: 600
+    # Token budget for the transcript evidence given to the compaction model. [5000..1000000]
+    evidence_token_budget: 90000
+    # Line cap for file previews in compaction evidence. [4..10000]
+    file_preview_lines: 48
+    # Maximum search matches quoted in compaction evidence. [1..10000]
+    match_preview_limit: 32
+    # Maximum recent tool exchange pairs preserved verbatim across compaction. [3..100]
+    max_preserved_tool_pairs: 10
+    # Character cap per message text when building compaction evidence. [200..1000000]
+    message_text_char_limit: 8000
+    # Minimum recent messages always kept out of compaction. [2..1000]
+    min_recent_messages: 20
+    # Token budget for a preserved agentic-trace record carried across compaction. [1000..1000000]
+    preserved_trace_token_budget: 20000
+    # Token budget for the raw tail retained alongside a checkpoint. [1000..10000000]
+    raw_tail_token_budget: 40000
+    # Token size of the raw transcript tail compaction aims to preserve. [1000..10000000]
+    raw_tail_token_target: 100000
+    # Retries for a failed compaction synthesis call before compaction is abandoned for the turn. [0..10]
+    synthesis_max_retries: 3
+    # Milliseconds a compaction synthesis model call may run before it is failed. [10000..3600000]
+    synthesis_timeout_ms: 300000
+    # Character cap per tool input when building compaction evidence. [100..1000000]
+    tool_input_char_limit: 2400
+    # Character cap per tool result when building compaction evidence. [100..1000000]
+    tool_result_char_limit: 8000
+    # Retries for a failed compaction verification call before the unverified checkpoint path is taken. [0..10]
+    verification_max_retries: 3
+    # Milliseconds a compaction verification model call may run before it is failed. [10000..3600000]
+    verification_timeout_ms: 300000
+    # Token ceiling for the working-context document compaction maintains. [10000..10000000]
+    working_context_token_limit: 200000
+  context:
+    # Safety margin tokens added to estimated request input sizes. [0..100000]
+    estimate_margin_tokens: 2000
+    # Raw-context token level at which a durable checkpoint is considered. [10000..10000000]
+    raw_checkpoint_token_limit: 200000
+    # Context token ceiling that triggers relief handling. [10000..10000000]
+    relief_context_token_limit: 200000
+    # Character cap per message text under context relief. [100..1000000]
+    relief_message_text_chars: 1200
+    # Minimum messages always preserved when context-relief trimming activates. [2..1000]
+    relief_preserve_min_messages: 12
+    # Preferred raw-tail token size when context relief rebuilds the transcript. [1000..10000000]
+    relief_raw_tail_tokens: 24000
+    # Character cap per tool input under context relief. [50..1000000]
+    relief_tool_input_chars: 500
+    # Character cap per tool result under context relief. [50..1000000]
+    relief_tool_result_chars: 750
   daemon:
     # Milliseconds a connecting client gets to complete the daemon auth handshake. [25..30000]
     auth_timeout_ms: 2000
@@ -47,6 +101,15 @@ knobs:
     rpc_timeout_ms: 30000
     # Milliseconds to wait for a starting containment daemon to accept connections before startup is failed. [25..600000]
     start_timeout_ms: 30000
+  memory:
+    # Maximum durable memory records persisted per project. [1..10000]
+    max_records: 48
+    # Character cap per durable memory record. [40..100000]
+    max_text_chars: 480
+    # Maximum durable memory records retrieved into a session's context. [1..1000]
+    retrieved_records: 8
+    # Token budget for retrieved durable memory in a session's context. [100..1000000]
+    retrieved_token_budget: 1600
   process:
     # Milliseconds an owned worker process waits for its activation payload on stdin before exiting. [1000..600000]
     activation_timeout_ms: 30000

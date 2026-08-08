@@ -4,13 +4,10 @@ import json
 from typing import Any
 
 
-RELIEF_PRESERVE_MIN_MESSAGES = 12
-RELIEF_PREFERRED_RAW_TAIL_TOKENS = 24_000
-RELIEF_MESSAGE_TEXT_CHAR_LIMIT = 1_200
-RELIEF_TOOL_INPUT_CHAR_LIMIT = 500
-RELIEF_TOOL_RESULT_CHAR_LIMIT = 750
 LOW_VALUE_TOOL_NAMES = {"SetStatus", "TodoWrite", "Config"}
-RELIEF_CONTEXT_TOKEN_LIMIT = 200_000
+
+
+from .._knob_reader import context_knob as relief_knob
 
 
 def _tool_result_content_string(value: Any) -> str:

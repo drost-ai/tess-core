@@ -17,12 +17,8 @@ from ..payloads.utf8_bounds import utf8ByteLength as _utf8_byte_length
 
 
 MANUAL_MEMORY_RECORD_ID = "manual-project-memory"
-MAX_DURABLE_MEMORY_RECORDS = 48
-MAX_MEMORY_TEXT_LENGTH = 480
-_MAX_MEMORY_TEXT_BYTES = MAX_MEMORY_TEXT_LENGTH
+from ._knob_reader import context_knob as _memory_knob
 _MAX_MANUAL_MEMORY_ACQUISITION_BYTES = 4_096
-MAX_RETRIEVED_MEMORY_RECORDS = 8
-MAX_RETRIEVED_MEMORY_TOKEN_BUDGET = 1_600
 _MEMORY_PROMPT_PREFIX = [
     "Relevant durable memory for this workspace is available below.",
     "Use it when it helps continuation, but prefer recent raw turns and current working context if they conflict.",
@@ -77,7 +73,7 @@ async def synchronizeManualProjectMemory(cwd: str) -> list[dict[str, Any]]:
             "confidence": "high",
             "tags": deriveTagsFromText(manual_text),
         }
-        return [manual, *without_manual][:MAX_DURABLE_MEMORY_RECORDS]
+        return [manual, *without_manual][:_memory_knob("memory.max_records")]
 
     return await mutateProjectMemoryRecords(cwd, sync)
 
@@ -128,7 +124,7 @@ async def updateDurableMemoryFromWorkingContext(*positional: Any, **kwargs: Any)
         persisted = list(next_records.values())
         persisted.sort(key=lambda record: record.get("updatedAt", ""), reverse=True)
         persisted.sort(key=lambda record: 0 if record.get("id") == MANUAL_MEMORY_RECORD_ID else 1)
-        return persisted[:MAX_DURABLE_MEMORY_RECORDS]
+        return persisted[:_memory_knob("memory.max_records")]
 
     return await mutateProjectMemoryRecords(cwd, update)
 
@@ -145,7 +141,7 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
     max_records = max(
         0,
         int(
-            MAX_RETRIEVED_MEMORY_RECORDS
+            _memory_knob("memory.retrieved_records")
             if max_records_value is None
             else max_records_value
         ),
@@ -154,7 +150,7 @@ async def retrieveRelevantDurableMemory(args: dict[str, Any] | None = None, **kw
     max_token_budget = max(
         0,
         int(
-            MAX_RETRIEVED_MEMORY_TOKEN_BUDGET
+            _memory_knob("memory.retrieved_token_budget")
             if max_token_budget_value is None
             else max_token_budget_value
         ),
@@ -230,7 +226,7 @@ def renderRetrievedMemoryPrompt(memory: dict[str, Any]) -> str | None:
     records = memory.get("records") or []
     if not records:
         return None
-    max_bytes = int(memory.get("maxPromptBytes") or MAX_RETRIEVED_MEMORY_TOKEN_BUDGET)
+    max_bytes = int(memory.get("maxPromptBytes") or _memory_knob("memory.retrieved_token_budget"))
     lines = list(_MEMORY_PROMPT_PREFIX)
     for record in records:
         rendered = renderRetrievedMemoryLine(record)
@@ -349,14 +345,14 @@ def truncateMemoryText(text: str, provenance: str = "") -> str:
     source = str(text)
     source_bytes = _utf8_byte_length(source)
     normalized = re.sub(
-        r"\s+", " ", _slice_utf8_prefix(source, _MAX_MEMORY_TEXT_BYTES * 4).strip()
+        r"\s+", " ", _slice_utf8_prefix(source, _memory_knob("memory.max_text_chars") * 4).strip()
     )
     suffix = provenance or (
         f" [truncated from {source_bytes} bytes]"
-        if source_bytes > _MAX_MEMORY_TEXT_BYTES
+        if source_bytes > _memory_knob("memory.max_text_chars")
         else ""
     )
-    available = max(0, _MAX_MEMORY_TEXT_BYTES - _utf8_byte_length(suffix))
+    available = max(0, _memory_knob("memory.max_text_chars") - _utf8_byte_length(suffix))
     return f"{_slice_utf8_prefix(normalized, available).rstrip()}{suffix}"
 
 

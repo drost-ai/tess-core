@@ -10,11 +10,9 @@ from .evidence import buildCompactionEvidence
 from .parsing import parseCompactionSynthesisResponse, parseCompactionVerificationResponse
 from .prompts import buildCompactionSynthesisPrompt, buildCompactionVerificationPrompt
 from .shared import (
-    COMPACTION_EVIDENCE_FALLBACK_BUDGETS,
-    COMPACTION_EVIDENCE_TOKEN_BUDGET,
-    COMPACTION_SYNTHESIS_MAX_RETRIES,
+    compaction_evidence_fallback_budgets,
+    compaction_knob,
     COMPACTION_SYSTEM_PROMPT,
-    COMPACTION_VERIFICATION_MAX_RETRIES,
     COMPACTION_VERIFICATION_SYSTEM_PROMPT,
     MAX_FAILURES,
 )
@@ -33,7 +31,7 @@ def buildCompactionAttemptStrategies(modelCandidates: list[dict[str, Any]], opti
     budget_for_model = (options or {}).get("evidenceTokenBudgetForModel")
     for model in modelCandidates:
         preferred_budget = _normalize_evidence_token_budget(budget_for_model(model) if callable(budget_for_model) else None)
-        evidence_budgets = [budget for budget in [preferred_budget, *COMPACTION_EVIDENCE_FALLBACK_BUDGETS] if isinstance(budget, int)]
+        evidence_budgets = [budget for budget in [preferred_budget, *compaction_evidence_fallback_budgets()] if isinstance(budget, int)]
         for evidence_budget in evidence_budgets:
             key = ":".join([str(model.get("purpose")), str(model.get("provider")), str(model.get("model")), str(model.get("effort") or ""), str(evidence_budget)])
             if key in seen:
@@ -96,7 +94,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
     args = {**(args or {}), **kwargs}
     session = args["session"]
     model = args["model"]
-    evidence_budget = int(args.get("evidenceTokenBudget") or COMPACTION_EVIDENCE_TOKEN_BUDGET)
+    evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
     evidence = buildCompactionEvidence(
         {
             "sourceMessages": args["sourceMessages"],
@@ -112,7 +110,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
     token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
     target_preservation_tokens = math.ceil(source_token_estimate * DEFAULT_COMPACTION_PRESERVATION_RATIO)
-    for attempt in range(1, COMPACTION_SYNTHESIS_MAX_RETRIES + 1):
+    for attempt in range(1, compaction_knob("compaction.synthesis_max_retries") + 1):
         response = await _call_model_client(
             args["modelClient"],
             {
@@ -159,7 +157,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
             "model": model,
             "usage": usage,
             "rawResponseText": last_raw_response_text,
-            "reason": f"Compaction synthesis returned malformed JSON after {COMPACTION_SYNTHESIS_MAX_RETRIES} attempts. {last_error}",
+            "reason": f"Compaction synthesis returned malformed JSON after {compaction_knob("compaction.synthesis_max_retries")} attempts. {last_error}",
         }
     )
 
@@ -191,7 +189,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
     args = {**(args or {}), **kwargs}
     session = args["session"]
     model = args["model"]
-    evidence_budget = int(args.get("evidenceTokenBudget") or COMPACTION_EVIDENCE_TOKEN_BUDGET)
+    evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
     source_start = int(args.get("sourceStart") or 0)
     evidence = buildCompactionEvidence(
         {
@@ -209,7 +207,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
     token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
     target_preservation_tokens = math.ceil(source_token_estimate * DEFAULT_COMPACTION_PRESERVATION_RATIO)
-    for attempt in range(1, COMPACTION_VERIFICATION_MAX_RETRIES + 1):
+    for attempt in range(1, compaction_knob("compaction.verification_max_retries") + 1):
         response = await _call_model_client(
             args["modelClient"],
             {
@@ -251,7 +249,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
         return {
             "verdict": "reject",
             "confidence": "low",
-            "reason": f"Compaction verification did not return valid verification JSON after {COMPACTION_VERIFICATION_MAX_RETRIES} attempts; rejecting the candidate checkpoint instead. {last_error}",
+            "reason": f"Compaction verification did not return valid verification JSON after {compaction_knob("compaction.verification_max_retries")} attempts; rejecting the candidate checkpoint instead. {last_error}",
             "issues": [last_error],
             "notes": [],
             "usage": usage,
@@ -300,7 +298,7 @@ def describeCompactionSynthesisFailure(error: BaseException | None) -> str:
 
 
 def buildSkippedCompactionSynthesis(args: dict[str, Any]) -> dict[str, Any]:
-    evidence_budget = int(args.get("evidenceTokenBudget") or COMPACTION_EVIDENCE_TOKEN_BUDGET)
+    evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
     evidence = buildCompactionEvidence(
         {
             "sourceMessages": args["sourceMessages"],

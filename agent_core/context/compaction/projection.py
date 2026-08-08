@@ -9,7 +9,7 @@ from ...session.message_origin import syntheticUserMessage as _synthetic_user_me
 from ...storage import getSessionCompactionsDir
 from .documents import loadWorkingContextArtifact
 from .prompts import renderWorkingContextPromptContext
-from .shared import CONTINUATION_BRIDGE_MESSAGE, WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT
+from .shared import CONTINUATION_BRIDGE_MESSAGE, compaction_knob
 from .utils import estimateMessageTokens, estimateTextTokens
 
 def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
@@ -28,7 +28,7 @@ def shouldAutoCompact(
     targetTokenLimit: int | None = None,
 ) -> dict[str, Any]:
     current_token_estimate = currentInputTokens if currentInputTokens is not None else estimateWorkingContextTokens(session)
-    limit = int(tokenLimit or WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT)
+    limit = int(tokenLimit or compaction_knob("compaction.working_context_token_limit"))
     target = int(targetTokenLimit or limit)
     if current_token_estimate >= limit:
         return {

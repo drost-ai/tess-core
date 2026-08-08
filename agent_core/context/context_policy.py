@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._knob_reader import context_knob as _context_knob
+
 from .._utils import safe_int as _safe_int
 
 import json
@@ -9,7 +11,6 @@ from typing import Any
 from .continuation.tokens import estimateMessagesTokens, estimateTextTokens
 
 
-RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT = 200_000
 
 
 def estimateRawContextPressure(session: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
@@ -42,7 +43,7 @@ def estimateRawContextPressure(session: dict[str, Any], now: datetime | None = N
 
 def decideDurableCheckpoint(session: dict[str, Any], pressure: dict[str, Any] | None = None, tokenLimit: int | None = None) -> dict[str, Any]:
     raw_context = pressure or estimateRawContextPressure(session)
-    limit = _safe_int(tokenLimit) or RAW_CONTEXT_CHECKPOINT_TOKEN_LIMIT
+    limit = _safe_int(tokenLimit) or _context_knob("context.raw_checkpoint_token_limit")
     if not raw_context.get("hasDurableCheckpoint"):
         if _safe_int(raw_context.get("rawTokenEstimate")) >= limit:
             return _checkpoint(

@@ -38,7 +38,6 @@ from .prompts import renderWorkingContextPromptContext
 from .shared import (
     COMPACTION_STRATEGY,
     CONTINUATION_BRIDGE_MESSAGE,
-    WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT,
 )
 from .utils import estimateMessageTokens, estimateTextTokens
 from typing import Any

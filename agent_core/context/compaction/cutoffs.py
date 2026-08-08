@@ -3,12 +3,9 @@ from __future__ import annotations
 from ...storage import listPlanApprovals
 from .artifacts import _read_text
 from .shared import (
+    compaction_knob,
     LOW_VALUE_TAIL_TOOL_NAMES,
-    MAX_PRESERVED_TOOL_EXCHANGE_PAIRS,
     MIN_PRESERVED_TOOL_EXCHANGE_PAIRS,
-    MIN_RECENT_MESSAGE_COUNT,
-    RAW_TAIL_TOKEN_BUDGET,
-    RAW_TAIL_TOKEN_TARGET,
 )
 from .utils import estimateMessageTokens
 from typing import Any
@@ -22,11 +19,11 @@ def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, 
     if tool_aware_cutoff is not None and tool_aware_cutoff > previousCutoff:
         return tool_aware_cutoff
 
-    fallback_index = max(1, len(messages) - MIN_RECENT_MESSAGE_COUNT)
+    fallback_index = max(1, len(messages) - compaction_knob("compaction.min_recent_messages"))
     index = len(messages)
     token_count = 0
     message_count = 0
-    while index > 0 and (message_count < MIN_RECENT_MESSAGE_COUNT or token_count < RAW_TAIL_TOKEN_TARGET):
+    while index > 0 and (message_count < compaction_knob("compaction.min_recent_messages") or token_count < compaction_knob("compaction.raw_tail_token_target")):
         index -= 1
         token_count += estimateMessageTokens([messages[index]])
         message_count += 1
@@ -46,10 +43,10 @@ def chooseToolAwareCompactionCutoff(messages: list[dict[str, Any]], previousCuto
     pair_starts = collectSubstantiveToolExchangeStarts(messages, previousCutoff)
     if not pair_starts:
         return None
-    preserved_starts = pair_starts[-min(MAX_PRESERVED_TOOL_EXCHANGE_PAIRS, len(pair_starts)) :]
+    preserved_starts = pair_starts[-min(compaction_knob("compaction.max_preserved_tool_pairs"), len(pair_starts)) :]
     while len(preserved_starts) > MIN_PRESERVED_TOOL_EXCHANGE_PAIRS:
         cutoff = preserved_starts[0]
-        if estimateMessageTokens(messages[cutoff:]) <= RAW_TAIL_TOKEN_BUDGET:
+        if estimateMessageTokens(messages[cutoff:]) <= compaction_knob("compaction.raw_tail_token_budget"):
             return cutoff
         preserved_starts = preserved_starts[1:]
     return preserved_starts[0]

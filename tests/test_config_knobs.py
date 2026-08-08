@@ -212,6 +212,44 @@ class DaemonKnobWiringTests(unittest.TestCase):
         self.assertEqual(_storage_lock_timeout_ms(), 1_500)
 
 
+class ContextKnobWiringTests(unittest.TestCase):
+    """The E3 compaction/memory/context knobs drive their machinery."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+        for name in ("TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS", "TESS_COMPACTION_VERIFICATION_TIMEOUT_MS"):
+            os.environ.pop(name, None)
+
+    def test_compaction_model_timeouts_read_knob_with_legacy_tess_alias(self):
+        from agent_core.context.compaction_models import _resolve_compaction_timeout_ms
+
+        self.assertEqual(_resolve_compaction_timeout_ms("synthesis"), 300_000)
+        configureKnobs({"compaction": {"synthesis_timeout_ms": 45_000, "verification_timeout_ms": 55_000}})
+        self.assertEqual(_resolve_compaction_timeout_ms("synthesis"), 45_000)
+        self.assertEqual(_resolve_compaction_timeout_ms("verification"), 55_000)
+        os.environ["TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS"] = "77000"
+        self.assertEqual(_resolve_compaction_timeout_ms("synthesis"), 77_000)  # legacy env stays an alias
+
+    def test_compaction_relief_and_memory_budgets_read_knobs(self):
+        from agent_core.context.compaction.shared import compaction_evidence_fallback_budgets, compaction_knob
+        from agent_core.context.continuation.shared import relief_knob
+        from agent_core.context.durable_memory import _memory_knob
+
+        self.assertEqual(compaction_knob("compaction.min_recent_messages"), 20)
+        self.assertEqual(compaction_evidence_fallback_budgets(), [90_000, 60_000, 40_000])
+        self.assertEqual(relief_knob("context.relief_context_token_limit"), 200_000)
+        self.assertEqual(_memory_knob("memory.retrieved_records"), 8)
+        configureKnobs({
+            "compaction": {"min_recent_messages": 5, "evidence_token_budget": 70_000},
+            "context": {"relief_context_token_limit": 111_000},
+            "memory": {"retrieved_records": 3},
+        })
+        self.assertEqual(compaction_knob("compaction.min_recent_messages"), 5)
+        self.assertEqual(compaction_evidence_fallback_budgets(), [70_000, 60_000, 40_000])
+        self.assertEqual(relief_knob("context.relief_context_token_limit"), 111_000)
+        self.assertEqual(_memory_knob("memory.retrieved_records"), 3)
+
+
 class KnobResolutionIntegrationTests(AgentCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()

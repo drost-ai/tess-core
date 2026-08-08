@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ._knob_reader import context_knob as _context_knob
 
 import asyncio
 import importlib as _importlib
@@ -20,7 +21,6 @@ from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthrop
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
 from ..runtime.secret_provider import resolveProviderConfigSecrets
 
-DEFAULT_ESTIMATE_MARGIN_TOKENS = 2000
 MAX_CODEX_ERROR_SAMPLES = 12
 
 async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -58,7 +58,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
         except Exception as error:
             _rethrow_parent_abort(args.get("abortSignal"), error)
             base_estimate = _estimate_request_tokens(request, images["estimatedInputTokens"])
-            estimate = base_estimate + DEFAULT_ESTIMATE_MARGIN_TOKENS
+            estimate = base_estimate + _context_knob("context.estimate_margin_tokens")
             if _exact_token_count_required(config):
                 raise _normalize_mandatory_exact_failure(config, request["model"], error)
             _emit_token_count_fallback(
@@ -70,7 +70,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
             return {
                 "inputTokens": estimate,
                 "baseInputTokens": base_estimate,
-                "safetyMarginTokens": DEFAULT_ESTIMATE_MARGIN_TOKENS,
+                "safetyMarginTokens": _context_knob("context.estimate_margin_tokens"),
                 "source": "legacy_estimate", "exactCountFallback": True,
                 "measuredAt": measured_at,
                 "provider": "anthropic",
@@ -114,7 +114,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
             )
             _emit_token_count_fallback(
                 args=args,
-                estimate=fallback_base + DEFAULT_ESTIMATE_MARGIN_TOKENS,
+                estimate=fallback_base + _context_knob("context.estimate_margin_tokens"),
                 source=_openai_estimate_source(mode),
                 error=error,
             )
@@ -128,7 +128,7 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
     margin = (
         _compute_codex_safety_margin(args.get("session", {}))
         if mode == "codex"
-        else DEFAULT_ESTIMATE_MARGIN_TOKENS
+        else _context_knob("context.estimate_margin_tokens")
         if exact_count_fallback
         else 0
     )
@@ -494,7 +494,7 @@ def _image_measurement_fields(images: dict[str, Any]) -> dict[str, Any]:
 def _compute_codex_safety_margin(session: dict[str, Any]) -> int:
     errors = session.get("metadata", {}).get("tokenTracking", {}).get("calibration", {}).get("codexPositiveErrors", [])
     if not errors:
-        return DEFAULT_ESTIMATE_MARGIN_TOKENS
+        return _context_knob("context.estimate_margin_tokens")
     sorted_errors = sorted(errors)
     index = min(len(sorted_errors) - 1, max(0, int(len(sorted_errors) * 0.95) - 1))
-    return max(DEFAULT_ESTIMATE_MARGIN_TOKENS, sorted_errors[index])
+    return max(_context_knob("context.estimate_margin_tokens"), sorted_errors[index])

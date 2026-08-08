@@ -11,19 +11,15 @@ from .tokens import classifyContextPressure
 from .parsing import emptyReliefSummary
 from .rendering import normalizeReinjectionLines
 from .shared import (
+    relief_knob,
     LOW_VALUE_TOOL_NAMES,
-    RELIEF_CONTEXT_TOKEN_LIMIT,
-    RELIEF_MESSAGE_TEXT_CHAR_LIMIT,
-    RELIEF_PRESERVE_MIN_MESSAGES,
-    RELIEF_TOOL_INPUT_CHAR_LIMIT,
-    RELIEF_TOOL_RESULT_CHAR_LIMIT,
 )
 from .tokens import estimateMessagesTokens
 from typing import Any
 
 
 def applyLightweightContextRelief(messages: list[dict[str, Any]], session: dict[str, Any]) -> dict[str, Any]:
-    if len(messages) <= RELIEF_PRESERVE_MIN_MESSAGES:
+    if len(messages) <= relief_knob("context.relief_preserve_min_messages"):
         return {"messages": messages, "summary": emptyReliefSummary()}
     preserved_raw_start_index = choosePreservedRawStart(messages)
     if preserved_raw_start_index <= 0:
@@ -31,9 +27,9 @@ def applyLightweightContextRelief(messages: list[dict[str, Any]], session: dict[
     compacted_prefix = compactHistoricalTail(
         messages[:preserved_raw_start_index],
         {
-            "messageTextCharLimit": RELIEF_MESSAGE_TEXT_CHAR_LIMIT,
-            "toolInputCharLimit": RELIEF_TOOL_INPUT_CHAR_LIMIT,
-            "toolResultCharLimit": RELIEF_TOOL_RESULT_CHAR_LIMIT,
+            "messageTextCharLimit": relief_knob("context.relief_message_text_chars"),
+            "toolInputCharLimit": relief_knob("context.relief_tool_input_chars"),
+            "toolResultCharLimit": relief_knob("context.relief_tool_result_chars"),
             "lowValueToolNames": LOW_VALUE_TOOL_NAMES,
         },
     )
@@ -199,10 +195,10 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
         result = applyCompactPrefix(
             args["messages"],
             {
-                "preserveMinMessages": RELIEF_PRESERVE_MIN_MESSAGES,
-                "messageTextCharLimit": max(320, RELIEF_MESSAGE_TEXT_CHAR_LIMIT - (reactive_attempt * 220)),
-                "toolInputCharLimit": max(120, RELIEF_TOOL_INPUT_CHAR_LIMIT - (reactive_attempt * 120)),
-                "toolResultCharLimit": max(180, RELIEF_TOOL_RESULT_CHAR_LIMIT - (reactive_attempt * 180)),
+                "preserveMinMessages": relief_knob("context.relief_preserve_min_messages"),
+                "messageTextCharLimit": max(320, relief_knob("context.relief_message_text_chars") - (reactive_attempt * 220)),
+                "toolInputCharLimit": max(120, relief_knob("context.relief_tool_input_chars") - (reactive_attempt * 120)),
+                "toolResultCharLimit": max(180, relief_knob("context.relief_tool_result_chars") - (reactive_attempt * 180)),
                 "lowValueToolNames": LOW_VALUE_TOOL_NAMES,
             },
         )
@@ -224,7 +220,7 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
         result = applyCompactPrefix(
             args["messages"],
             {
-                "preserveMinMessages": max(6, RELIEF_PRESERVE_MIN_MESSAGES - 2 - (reactive_attempt * 2)),
+                "preserveMinMessages": max(6, relief_knob("context.relief_preserve_min_messages") - 2 - (reactive_attempt * 2)),
                 "messageTextCharLimit": max(260, 900 - (reactive_attempt * 200)),
                 "toolInputCharLimit": max(120, 320 - (reactive_attempt * 80)),
                 "toolResultCharLimit": max(180, 420 - (reactive_attempt * 120)),
@@ -309,4 +305,4 @@ def _token_limit_or_default(value: Any) -> int:
         parsed = int(value or 0)
     except Exception:
         parsed = 0
-    return parsed if parsed > 0 else RELIEF_CONTEXT_TOKEN_LIMIT
+    return parsed if parsed > 0 else relief_knob("context.relief_context_token_limit")

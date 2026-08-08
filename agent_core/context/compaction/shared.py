@@ -7,40 +7,31 @@ from typing import Any
 
 
 COMPACTION_STRATEGY = "checkpoint-v2"
-MIN_RECENT_MESSAGE_COUNT = 20
-RAW_TAIL_TOKEN_TARGET = 100_000
-RAW_TAIL_TOKEN_BUDGET = 40_000
-WORKING_CONTEXT_COMPACTION_TOKEN_LIMIT = 200_000
-MAX_PRESERVED_TOOL_EXCHANGE_PAIRS = 10
 MIN_PRESERVED_TOOL_EXCHANGE_PAIRS = 3
 MAX_ACTIVITY_LINES = 16
 MAX_FAILURES = 8
 MAX_TODOS = 12
 LOW_VALUE_TAIL_TOOL_NAMES = {"SetStatus", "TodoWrite", "Config"}
-COMPACTION_SYNTHESIS_MAX_RETRIES = 3
-COMPACTION_VERIFICATION_MAX_RETRIES = 3
-COMPACTION_EVIDENCE_TOKEN_BUDGET = 90_000
-COMPACTION_EVIDENCE_FALLBACK_BUDGETS = [COMPACTION_EVIDENCE_TOKEN_BUDGET, 60_000, 40_000]
-COMPACTION_MESSAGE_TEXT_CHAR_LIMIT = 8_000
-COMPACTION_TOOL_INPUT_CHAR_LIMIT = 2_400
-COMPACTION_TOOL_RESULT_CHAR_LIMIT = 8_000
-COMPACTION_COMPACT_TOOL_RESULT_CHAR_LIMIT = 600
-COMPACTION_COMMAND_PREVIEW_CHAR_LIMIT = 6_000
-COMPACTION_FILE_PREVIEW_LINES = 48
-COMPACTION_MATCH_PREVIEW_LIMIT = 32
-_PRESERVED_TRACE_PROMPT_TOKEN_BUDGET = 20_000
+
+
+from .._knob_reader import context_knob as compaction_knob
+
+
+def compaction_evidence_fallback_budgets() -> list[int]:
+    return [compaction_knob("compaction.evidence_token_budget"), 60_000, 40_000]
 
 
 def _bound_preserved_trace_record(record: dict[str, Any]) -> dict[str, Any]:
     content = str(record.get("content") or "")
-    char_limit = _PRESERVED_TRACE_PROMPT_TOKEN_BUDGET * 4
+    token_budget = compaction_knob("compaction.preserved_trace_token_budget")
+    char_limit = token_budget * 4
     if len(content) <= char_limit:
         return {**record, "content": content}
     bounded_content = content[: max(0, char_limit - 1)].rstrip() + "…"
     return {
         **record,
         "tokenEstimate": (len(bounded_content) + 3) // 4,
-        "tokenBudget": _PRESERVED_TRACE_PROMPT_TOKEN_BUDGET,
+        "tokenBudget": token_budget,
         "truncated": True,
         "content": bounded_content,
     }
