@@ -139,6 +139,59 @@ class AnthropicAsyncHttpConnectionOwner:
         self._connection_key: tuple[Any, ...] | None = None
         self._connecting_socket: socket.socket | None = None
         self._closed = False
+        self._last_request_reused = False
+
+    async def start(
+        self,
+        *,
+        url: str,
+        body: bytes,
+        headers: dict[str, str],
+        timeout_seconds: float,
+    ) -> AsyncAnthropicHttpResponse:
+        """Send one request and return the parsed response head.
+
+        Pull-mode entry: the caller owns body consumption and must close the
+        owner when done. Does not take the request lock — single-caller use
+        only (``request()`` provides the locked consume-callback form).
+        """
+        if self._closed:
+            raise ConnectionError("Anthropic transport connection closed")
+        parts = urlsplit(url)
+        proxy = _proxy_for(parts.scheme, parts.hostname or "")
+        key = _connection_key(parts, proxy)
+        reused = self._writer is not None and self._connection_key == key and not self._writer.is_closing()
+        self._last_request_reused = reused
+        try:
+            if not reused:
+                self._close_stream()
+                self._reader, self._writer = await asyncio.wait_for(
+                    self._open_stream(parts, proxy),
+                    timeout=max(0.001, timeout_seconds),
+                )
+                self._connection_key = key
+                self._emit("connection_opened")
+            self._emit("request_started", reused=reused)
+            assert self._reader is not None and self._writer is not None
+            request_target = url if proxy is not None and parts.scheme == "http" else _origin_form(parts)
+            wire_headers = _wire_headers(parts, headers, body, self.keep_alive, proxy)
+            request_head = [f"POST {request_target} HTTP/1.1\r\n"]
+            request_head.extend(f"{key}: {value}\r\n" for key, value in wire_headers.items())
+            request_head.append("\r\n")
+            self._writer.write("".join(request_head).encode("latin-1") + body)
+            await self._writer.drain()
+            return await asyncio.wait_for(
+                _read_response_head(self._reader),
+                timeout=max(0.001, timeout_seconds),
+            )
+        except asyncio.CancelledError:
+            self.cancel()
+            raise
+        except (ConnectionError, OSError, EOFError, asyncio.IncompleteReadError, asyncio.TimeoutError):
+            if not self._closed:
+                self._emit("transport_failed", reused=reused)
+            self._close_stream()
+            raise
 
     async def request(
         self,
@@ -150,34 +203,11 @@ class AnthropicAsyncHttpConnectionOwner:
         consume: Callable[[AsyncAnthropicHttpResponse], Awaitable[Any]],
     ) -> Any:
         async with self._request_lock:
-            if self._closed:
-                raise ConnectionError("Anthropic transport connection closed")
-            parts = urlsplit(url)
-            proxy = _proxy_for(parts.scheme, parts.hostname or "")
-            key = _connection_key(parts, proxy)
-            reused = self._writer is not None and self._connection_key == key and not self._writer.is_closing()
+            response = await self.start(
+                url=url, body=body, headers=headers, timeout_seconds=timeout_seconds
+            )
+            reused = self._last_request_reused
             try:
-                if not reused:
-                    self._close_stream()
-                    self._reader, self._writer = await asyncio.wait_for(
-                        self._open_stream(parts, proxy),
-                        timeout=max(0.001, timeout_seconds),
-                    )
-                    self._connection_key = key
-                    self._emit("connection_opened")
-                self._emit("request_started", reused=reused)
-                assert self._reader is not None and self._writer is not None
-                request_target = url if proxy is not None and parts.scheme == "http" else _origin_form(parts)
-                wire_headers = _wire_headers(parts, headers, body, self.keep_alive, proxy)
-                request_head = [f"POST {request_target} HTTP/1.1\r\n"]
-                request_head.extend(f"{key}: {value}\r\n" for key, value in wire_headers.items())
-                request_head.append("\r\n")
-                self._writer.write("".join(request_head).encode("latin-1") + body)
-                await self._writer.drain()
-                response = await asyncio.wait_for(
-                    _read_response_head(self._reader),
-                    timeout=max(0.001, timeout_seconds),
-                )
                 if response.status >= 400:
                     error_body = await response.read()
                     self._finish_response(response)
