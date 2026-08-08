@@ -32,6 +32,81 @@ class SettingsFolderTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_config_fragments_merge_in_filename_order_with_deep_merge(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "config.yaml", "permissionMode: default\nknobs:\n  subagents:\n    max_live: 4\n")
+            _write(home / "settings" / "config" / "20-comms.yaml", "knobs:\n  comms:\n    reply_poll_ms: 250\n")
+            _write(home / "settings" / "config" / "10-daemon.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 5000\n")
+            _write(home / "settings" / "config" / "empty.yaml", "# only a comment\n")
+            _write(home / "settings" / "config" / ".hidden.yaml", "permissionMode: plan\n")
+            _write(home / "settings" / "config" / "notes.txt", "not: yaml\n")
+            settings = run(core.loadSettings("user", str(workspace)))
+            self.assertEqual(settings["permissionMode"], "default")
+            self.assertEqual(settings["knobs"], {
+                "subagents": {"max_live": 4},
+                "daemon": {"heartbeat_ms": 5000},
+                "comms": {"reply_poll_ms": 250},
+            })
+        finally:
+            self.restore_home(root, previous)
+
+    def test_same_setting_in_two_files_is_fatal_naming_both(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "config.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 3000\n")
+            _write(home / "settings" / "config" / "daemon.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 5000\n")
+            with self.assertRaises(ValueError) as base_conflict:
+                run(core.loadSettings("user", str(workspace)))
+            self.assertIn("knobs.daemon.heartbeat_ms", str(base_conflict.exception))
+            self.assertIn("config.yaml", str(base_conflict.exception))
+            self.assertIn("config/daemon.yaml", str(base_conflict.exception))
+
+            (home / "settings" / "config.yaml").unlink()
+            _write(home / "settings" / "config" / "extra.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 4000\n")
+            with self.assertRaises(ValueError) as fragment_conflict:
+                run(core.loadSettings("user", str(workspace)))
+            self.assertIn("config/daemon.yaml", str(fragment_conflict.exception))
+            self.assertIn("config/extra.yaml", str(fragment_conflict.exception))
+
+            # Section-vs-value mismatch is a conflict too, not a merge.
+            (home / "settings" / "config" / "extra.yaml").unlink()
+            _write(home / "settings" / "config" / "zz-flat.yaml", "knobs: 5\n")
+            with self.assertRaises(ValueError) as shape_conflict:
+                run(core.loadSettings("user", str(workspace)))
+            self.assertIn("knobs", str(shape_conflict.exception))
+            self.assertIn("config/zz-flat.yaml", str(shape_conflict.exception))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_fragment_must_be_a_mapping_and_providers_yaml_still_wins(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "config" / "bad.yaml", "- just\n- a\n- list\n")
+            with self.assertRaises(ValueError) as bad:
+                run(core.loadSettings("user", str(workspace)))
+            self.assertIn("mapping", str(bad.exception))
+
+            (home / "settings" / "config" / "bad.yaml").unlink()
+            _write(home / "settings" / "config" / "selection.yaml", "provider: from-fragment\nmodel: fragment-model\n")
+            _write(home / "settings" / "providers.yaml", "provider: from-providers\n")
+            settings = run(core.loadSettings("user", str(workspace)))
+            self.assertEqual(settings["provider"], "from-providers")  # providers.yaml wins for its keys
+            self.assertEqual(settings["model"], "fragment-model")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_fragment_knobs_reach_knob_values_via_resolve_config(self):
+        from agent_core.config._knobs import knobValue
+
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "config" / "subagents.yaml", "knobs:\n  subagents:\n    max_live: 3\n")
+            run(core.resolveConfig({"provider": "openai"}, str(workspace)))
+            self.assertEqual(knobValue("subagents.max_live"), 3)
+        finally:
+            self.restore_home(root, previous)
+
     def test_legacy_settings_json_still_reads_without_folder(self):
         root, home, workspace, previous = self.temp_context()
         try:

@@ -8,12 +8,21 @@ user-scope settings.json:
     settings/.env            credentials only (KEY=VALUE), feeds the env block
     settings/providers.yaml  provider profiles + provider/model selection
     settings/config.yaml     runtime configuration knobs
+    settings/config/*.yaml   optional per-section fragments of config.yaml
 
-All three are optional; the folder augments and overrides the legacy
+All are optional; the folder augments and overrides the legacy
 settings.json record per top-level key (env and providerProfiles merge
 per-entry). YAML files use the strict subset documented in
 agent_core/config/YAML_SUBSET.md. Malformed content raises immediately —
 settings errors must fail loud at startup, never silently degrade.
+
+Fragment semantics (full contract in agent_core/config/SETTINGS_FOLDER.md):
+config.yaml is the base, then settings/config/*.yaml merge in
+lexicographic filename order (non-recursive; dotfiles and non-.yaml
+ignored; empty files skipped). Mappings deep-merge, but the same setting
+defined in two files is a FATAL startup error naming both files — each
+setting lives in exactly one file. providers.yaml still wins for its
+keys, and env vars remain the only override layer above the folder.
 """
 
 import os
@@ -35,15 +44,79 @@ def loadSettingsFolder() -> dict[str, Any] | None:
     folder = settingsFolderPath()
     if not os.path.isdir(folder):
         return None
-    record: dict[str, Any] = {}
-    for name in ("config.yaml", "providers.yaml"):
-        overlay = _read_yaml_mapping(os.path.join(folder, name))
-        if overlay:
-            record = mergeSettingsRecords(record, overlay)
+    record = _load_config_with_fragments(folder)
+    providers = _read_yaml_mapping(os.path.join(folder, "providers.yaml"))
+    if providers:
+        record = mergeSettingsRecords(record, providers)
     env = _read_env_file(os.path.join(folder, ".env"))
     if env:
         record["env"] = {**(record.get("env") or {}), **env}
     return record
+
+
+def _load_config_with_fragments(folder: str) -> dict[str, Any]:
+    """config.yaml plus settings/config/*.yaml fragments, strictly merged."""
+
+    base_name = "config.yaml"
+    record: dict[str, Any] = {}
+    origins: dict[str, str] = {}
+    base = _read_yaml_mapping(os.path.join(folder, base_name))
+    if base:
+        record = base
+        _record_leaf_origins(origins, base, base_name)
+    fragments_dir = os.path.join(folder, "config")
+    if not os.path.isdir(fragments_dir):
+        return record
+    for name in sorted(os.listdir(fragments_dir)):
+        if name.startswith(".") or not name.endswith(".yaml"):
+            continue
+        overlay = _read_yaml_mapping(os.path.join(fragments_dir, name))
+        if not overlay:
+            continue
+        fragment_name = f"config/{name}"
+        _merge_fragment(record, overlay, origins, fragment_name)
+        _record_leaf_origins(origins, overlay, fragment_name)
+    return record
+
+
+def _merge_fragment(
+    base: dict[str, Any],
+    overlay: dict[str, Any],
+    origins: dict[str, str],
+    fragment_name: str,
+    prefix: str = "",
+) -> None:
+    """Deep-merge one fragment into the combined record.
+
+    Each setting may live in exactly one file: any leaf (or
+    section-vs-value mismatch) already present is a fatal conflict naming
+    both files — last-wins conf.d semantics were explicitly rejected.
+    """
+
+    for key, value in overlay.items():
+        path = f"{prefix}{key}"
+        if key not in base:
+            base[key] = value
+            continue
+        existing = base[key]
+        if isinstance(existing, dict) and isinstance(value, dict):
+            _merge_fragment(existing, value, origins, fragment_name, prefix=f"{path}.")
+            continue
+        owner = origins.get(path) or next(
+            (origins[known] for known in origins if known.startswith(f"{path}.")), "config.yaml"
+        )
+        raise ValueError(
+            f"{path} is set in both {owner} and {fragment_name} — each setting may live in exactly one file; remove one."
+        )
+
+
+def _record_leaf_origins(origins: dict[str, str], mapping: dict[str, Any], source: str, prefix: str = "") -> None:
+    for key, value in mapping.items():
+        path = f"{prefix}{key}"
+        if isinstance(value, dict):
+            _record_leaf_origins(origins, value, source, prefix=f"{path}.")
+        else:
+            origins.setdefault(path, source)
 
 
 def mergeSettingsRecords(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
