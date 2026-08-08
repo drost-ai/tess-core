@@ -15,7 +15,6 @@ from ..providers.errors import (
     createProviderRequestError as _create_provider_request_error,
     isProviderRequestError as _is_provider_request_error,
 )
-from ..providers.timeouts import DEFAULT_TOKEN_COUNT_TIMEOUT_MS as _DEFAULT_TOKEN_COUNT_TIMEOUT_MS
 from ..providers.watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
@@ -298,7 +297,7 @@ async def _run_exact_token_count(
     timeout_ms: int,
     operation: Any,
 ) -> int:
-    configured_timeout_ms = max(1, int(timeout_ms or _DEFAULT_TOKEN_COUNT_TIMEOUT_MS))
+    configured_timeout_ms = max(1, int(timeout_ms or _context_knob("provider.token_count_timeout_ms")))
     remaining_ms = _deadline_remaining_ms(deadlines)
     effective_timeout_ms = (
         max(1, min(configured_timeout_ms, remaining_ms))
@@ -341,7 +340,7 @@ def _configured_token_count_timeout_ms(args: dict[str, Any]) -> int:
     return (
         _positive_timeout(deadline_timeout)
         or _positive_timeout(profile.get("tokenCountTimeoutMs"))
-        or _DEFAULT_TOKEN_COUNT_TIMEOUT_MS
+        or _context_knob("provider.token_count_timeout_ms")
     )
 
 

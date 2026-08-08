@@ -44,7 +44,7 @@ from typing import Any
 from ..compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...session.message_origin import syntheticUserMessage as _synthetic_user_message
-from ...providers.token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO as _DEFAULT_COMPACTION_PRESERVATION_RATIO
+from ...providers._knob_reader import provider_knob as _provider_knob
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 
 
@@ -103,7 +103,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     )
     target_estimated_relief = max(
         0,
-        source_token_estimate - math.ceil(source_token_estimate * _DEFAULT_COMPACTION_PRESERVATION_RATIO),
+        source_token_estimate - math.ceil(source_token_estimate * float(_provider_knob("provider.compaction_preservation_ratio"))),
     )
     if (
         trigger in {"auto_hard_limit", "auto_target_headroom"}

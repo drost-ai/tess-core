@@ -20,7 +20,8 @@ from .utils import collapseWhitespace, estimateMessageTokens, truncate
 from typing import Any
 from .artifacts import mergeCompactionUsageIntoSession
 from ...session.message_origin import isGenuineUserRequest as _is_genuine_user_request
-from ...providers.token_budget import DEFAULT_COMPACTION_PRESERVATION_RATIO, resolveCompactionRequestOutputTokens
+from ...providers._knob_reader import provider_knob
+from ...providers.token_budget import resolveCompactionRequestOutputTokens
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 from ..compaction_models import resolveCompactionTokenPolicy
 
@@ -109,7 +110,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
     token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
-    target_preservation_tokens = math.ceil(source_token_estimate * DEFAULT_COMPACTION_PRESERVATION_RATIO)
+    target_preservation_tokens = math.ceil(source_token_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
     for attempt in range(1, compaction_knob("compaction.synthesis_max_retries") + 1):
         response = await _call_model_client(
             args["modelClient"],
@@ -206,7 +207,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
     token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
-    target_preservation_tokens = math.ceil(source_token_estimate * DEFAULT_COMPACTION_PRESERVATION_RATIO)
+    target_preservation_tokens = math.ceil(source_token_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
     for attempt in range(1, compaction_knob("compaction.verification_max_retries") + 1):
         response = await _call_model_client(
             args["modelClient"],

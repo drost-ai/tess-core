@@ -118,14 +118,28 @@ knobs:
     # Milliseconds an owned worker process gets to exit after SIGTERM before the runtime escalates to SIGKILL. [100..60000]
     term_grace_ms: 3000
   provider:
+    # Default attempts per Anthropic request before the turn fails; per-call maxAttempts wins. [1..20]
+    anthropic_max_attempts: 2
     # Quick-retry delay ladder in milliseconds for Anthropic messages requests; a small random jitter is added on top. [0..600000]
     anthropic_retry_delays_ms:
       - 350
       - 700
+    # Byte budget per inline tool-result batch on codex-style responses transports. [1024..10000000]
+    codex_inline_tool_result_batch_bytes: 24000
+    # Fraction of the compaction threshold reserved as output headroom for the compaction model. [0.01..0.9]
+    compaction_headroom_ratio: 0.25
+    # Fraction of the source transcript compaction aims to preserve verbatim. [0.01..0.9]
+    compaction_preservation_ratio: 0.1
+    # Default token level that triggers compaction when the profile does not declare compactionThresholdTokens. [10000..100000000]
+    compaction_threshold_tokens: 200000
     # Milliseconds to wait for a complete non-streaming provider JSON response. [1000..3600000]
     json_response_timeout_ms: 120000
+    # Default provider context length in tokens when the profile does not declare maxContextLength and no model rule infers one. [8000..100000000]
+    max_context_length: 200000
     # Fallback max output tokens per provider request when neither the request nor the provider profile specifies one. [256..1000000]
     max_output_tokens: 16384
+    # Default attempts per OpenAI-kind request before the turn fails; per-call maxAttempts wins. [1..20]
+    openai_max_attempts: 6
     # Escalating retry backoff ladder in milliseconds for OpenAI-kind provider requests; attempts beyond the ladder reuse its last entry. [0..600000]
     openai_retry_delays_ms:
       - 1000
@@ -133,10 +147,18 @@ knobs:
       - 5000
       - 10000
       - 30000
+    # Safety margin subtracted from the provider output budget when sizing requests. [0..1000000]
+    output_budget_safety_margin_tokens: 4096
+    # Milliseconds to wait for a partial-output sink acknowledgement before proceeding without it. [100..600000]
+    partial_output_ack_timeout_ms: 5000
     # Milliseconds to wait for a provider request to start streaming before the attempt is failed as timed out. [1000..3600000]
     request_start_timeout_ms: 120000
     # Milliseconds of stream silence tolerated before a provider attempt is failed as idle. [1000..3600000]
     stream_idle_timeout_ms: 60000
+    # Default milliseconds for a provider token-count request; per-profile tokenCountTimeoutMs and per-call options win. [1000..600000]
+    token_count_timeout_ms: 15000
+    # Default milliseconds for a whole provider request; per-profile totalRequestTimeoutMs and per-call options win. [10000..7200000]
+    total_request_timeout_ms: 600000
   runtime:
     # Milliseconds runtime close waits for component cleanup before reporting the close as failed. [500..600000]
     close_failure_ms: 10000

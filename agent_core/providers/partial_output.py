@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._knob_reader import provider_knob
+
 import asyncio
 import hashlib
 from collections.abc import Mapping
@@ -19,7 +21,6 @@ from .partial_output_state import (
 
 PARTIAL_OUTPUT_SINK_SCHEMA_VERSION = 2
 PARTIAL_OUTPUT_STATE_STORE_SCHEMA_VERSION = 1
-PARTIAL_OUTPUT_ACK_TIMEOUT_MS = 5_000
 PARTIAL_OUTPUT_MODES = frozenset({"buffered", "replaceable", "append_only"})
 _METHODS = ("begin", "append", "supersede", "reconcile", "commit", "interrupt", "recover")
 
@@ -42,7 +43,7 @@ class PartialOutputDelivery:
         self.recovery_policy = partialOutputRecoveryPolicy(runtime)
         self.timeout_ms = _positive_timeout(
             runtime.get("partialOutputAckTimeoutMs"),
-            PARTIAL_OUTPUT_ACK_TIMEOUT_MS,
+            int(provider_knob("provider.partial_output_ack_timeout_ms")),
         )
         self.runtime_authority = partialOutputRuntimeAuthority(runtime)
         self.active_generation: int | None = None

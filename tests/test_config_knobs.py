@@ -250,6 +250,41 @@ class ContextKnobWiringTests(unittest.TestCase):
         self.assertEqual(_memory_knob("memory.retrieved_records"), 3)
 
 
+class ProviderKnobWiringTests(unittest.TestCase):
+    """The E4 provider default-layer knobs (incl. the first float knobs)."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+        for name in list(os.environ):
+            if name.startswith("AGENT_CORE_PROVIDER_"):
+                del os.environ[name]
+
+    def test_provider_defaults_and_float_ratios_read_knobs(self):
+        from agent_core.providers._knob_reader import provider_knob
+        from agent_core.providers.token_budget import resolve_compaction_threshold_tokens, resolve_provider_token_limits
+
+        self.assertEqual(provider_knob("provider.openai_max_attempts"), 6)
+        self.assertEqual(provider_knob("provider.anthropic_max_attempts"), 2)
+        self.assertAlmostEqual(provider_knob("provider.compaction_preservation_ratio"), 0.1)
+        self.assertEqual(resolve_provider_token_limits({})["maxContextLength"], 200_000)
+        self.assertEqual(resolve_compaction_threshold_tokens({}), 200_000)
+
+        configureKnobs({"provider": {
+            "compaction_preservation_ratio": 0.2,
+            "max_context_length": 128_000,
+            "compaction_threshold_tokens": 90_000,
+        }})
+        self.assertAlmostEqual(provider_knob("provider.compaction_preservation_ratio"), 0.2)
+        self.assertEqual(resolve_provider_token_limits({})["maxContextLength"], 128_000)
+        self.assertEqual(resolve_compaction_threshold_tokens({}), 90_000)
+        # Profile values still beat the knob default layer.
+        self.assertEqual(resolve_provider_token_limits({"maxContextLength": 32_000})["maxContextLength"], 32_000)
+
+        os.environ["AGENT_CORE_PROVIDER_COMPACTION_HEADROOM_RATIO"] = "0.5"
+        configureKnobs({})
+        self.assertAlmostEqual(provider_knob("provider.compaction_headroom_ratio"), 0.5)  # float env coercion
+
+
 class KnobResolutionIntegrationTests(AgentCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()

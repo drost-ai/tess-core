@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._knob_reader import provider_knob
+
 from ..activity import emitProviderActivity
 from .recovery_attempt import openai_retry_delay_ms as _openai_retry_delay_ms
 import asyncio
@@ -31,7 +33,6 @@ from .transport import (
 )
 from typing import Any
 
-_OPENAI_DEFAULT_MAX_ATTEMPTS = 6
 
 
 async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -43,7 +44,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
     provider_label = getOpenAiProviderLabel("chat_completions", base_url)
     max_attempts = max(
         1,
-        int(args.get("maxAttempts") or _OPENAI_DEFAULT_MAX_ATTEMPTS),
+        int(args.get("maxAttempts") or provider_knob("provider.openai_max_attempts")),
     )
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")

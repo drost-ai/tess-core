@@ -91,6 +91,17 @@ _DECLARATIONS: tuple[tuple[str, Any, str, str, float | None, float | None], ...]
     ("context.relief_tool_input_chars", 500, "int", "Character cap per tool input under context relief.", 50, 1000000),
     ("context.relief_tool_result_chars", 750, "int", "Character cap per tool result under context relief.", 50, 1000000),
     ("context.relief_context_token_limit", 200000, "int", "Context token ceiling that triggers relief handling.", 10000, 10000000),
+    ("provider.token_count_timeout_ms", 15_000, "int", "Default milliseconds for a provider token-count request; per-profile tokenCountTimeoutMs and per-call options win.", 1_000, 600_000),
+    ("provider.total_request_timeout_ms", 600_000, "int", "Default milliseconds for a whole provider request; per-profile totalRequestTimeoutMs and per-call options win.", 10_000, 7_200_000),
+    ("provider.max_context_length", 200_000, "int", "Default provider context length in tokens when the profile does not declare maxContextLength and no model rule infers one.", 8_000, 100_000_000),
+    ("provider.compaction_threshold_tokens", 200_000, "int", "Default token level that triggers compaction when the profile does not declare compactionThresholdTokens.", 10_000, 100_000_000),
+    ("provider.compaction_preservation_ratio", 0.1, "float", "Fraction of the source transcript compaction aims to preserve verbatim.", 0.01, 0.9),
+    ("provider.compaction_headroom_ratio", 0.25, "float", "Fraction of the compaction threshold reserved as output headroom for the compaction model.", 0.01, 0.9),
+    ("provider.output_budget_safety_margin_tokens", 4_096, "int", "Safety margin subtracted from the provider output budget when sizing requests.", 0, 1_000_000),
+    ("provider.codex_inline_tool_result_batch_bytes", 24_000, "int", "Byte budget per inline tool-result batch on codex-style responses transports.", 1_024, 10_000_000),
+    ("provider.openai_max_attempts", 6, "int", "Default attempts per OpenAI-kind request before the turn fails; per-call maxAttempts wins.", 1, 20),
+    ("provider.anthropic_max_attempts", 2, "int", "Default attempts per Anthropic request before the turn fails; per-call maxAttempts wins.", 1, 20),
+    ("provider.partial_output_ack_timeout_ms", 5_000, "int", "Milliseconds to wait for a partial-output sink acknowledgement before proceeding without it.", 100, 600_000),
 )
 
 

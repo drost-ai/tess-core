@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from .._knob_reader import provider_knob
 from ...contracts.providers import ProviderResponse
 from ..partial_output import PartialOutputDelivery
 from ..activity import emitProviderActivity
@@ -36,7 +38,6 @@ from .transport import (
 )
 from typing import Any
 
-_OPENAI_DEFAULT_MAX_ATTEMPTS = 6
 
 
 async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
@@ -54,7 +55,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
     provider_label = getOpenAiProviderLabel(mode, base_url)
     max_attempts = max(
         1,
-        int(args.get("maxAttempts") or _OPENAI_DEFAULT_MAX_ATTEMPTS),
+        int(args.get("maxAttempts") or provider_knob("provider.openai_max_attempts")),
     )
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")

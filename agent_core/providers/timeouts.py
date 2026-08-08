@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._knob_reader import provider_knob
+
 import time
 from typing import Any, Mapping
 
@@ -7,8 +9,6 @@ from .errors import createProviderFailureRecord, createProviderRequestError
 from .watchdog import ProviderRequestWatchdog, createProviderRequestWatchdog
 
 
-DEFAULT_TOKEN_COUNT_TIMEOUT_MS = 15_000
-DEFAULT_TOTAL_REQUEST_TIMEOUT_MS = 600_000
 
 
 class TurnDeadlineContext:
@@ -93,13 +93,13 @@ def create_turn_deadline_context(
     token_count_timeout_ms = (
         _positive_int(per_call.get("tokenCountTimeoutMs"))
         or _positive_int(profile.get("tokenCountTimeoutMs"))
-        or DEFAULT_TOKEN_COUNT_TIMEOUT_MS
+        or int(provider_knob("provider.token_count_timeout_ms"))
     )
     total_request_timeout_ms = (
         _positive_int(per_call.get("totalRequestTimeoutMs"))
         or _positive_int(profile.get("totalRequestTimeoutMs"))
         or contract_timeout
-        or DEFAULT_TOTAL_REQUEST_TIMEOUT_MS
+        or int(provider_knob("provider.total_request_timeout_ms"))
     )
     request_start_timeout_ms = (
         transport.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms")

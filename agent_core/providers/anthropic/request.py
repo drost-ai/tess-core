@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._knob_reader import provider_knob
+
 import copy
 import time
 
@@ -55,7 +57,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
     config = await resolveProviderConfigSecrets(args["config"])
     request = args["request"]
     runtime = args.get("runtime") or {}
-    max_attempts = max(1, int(args.get("maxAttempts") or 2))
+    max_attempts = max(1, int(args.get("maxAttempts") or provider_knob("provider.anthropic_max_attempts")))
     stream = bool(runtime.get("streamProviderMessages") or runtime.get("includePartialMessages"))
     timeout_ms = int(
         args.get("streamIdleTimeoutMs" if stream else "jsonResponseTimeoutMs")

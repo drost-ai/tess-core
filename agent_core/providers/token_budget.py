@@ -1,17 +1,13 @@
 from __future__ import annotations
 
+from ._knob_reader import provider_knob
+
 import math
 import re
 from typing import Any, Callable
 
 
-DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH = 200_000
-DEFAULT_COMPACTION_THRESHOLD_TOKENS = 200_000
-DEFAULT_COMPACTION_PRESERVATION_RATIO = 0.1
-DEFAULT_COMPACTION_HEADROOM_RATIO = 0.25
-DEFAULT_OUTPUT_BUDGET_SAFETY_MARGIN_TOKENS = 4_096
 MIN_USEFUL_PROVIDER_OUTPUT_TOKENS = 256
-DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES = 24_000
 
 
 def normalize_positive_integer(value: Any) -> int | None:
@@ -30,7 +26,7 @@ def resolve_provider_token_limits(input: dict[str, Any] | None = None) -> dict[s
     explicit_output = normalize_positive_integer(profile.get("maxOutputTokens"))
     inferred = _infer_model_token_limits(profile) or {}
     return {
-        "maxContextLength": explicit_context or inferred.get("maxContextLength") or DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH,
+        "maxContextLength": explicit_context or inferred.get("maxContextLength") or int(provider_knob("provider.max_context_length")),
         "maxOutputTokens": explicit_output or inferred.get("maxOutputTokens") or _fallback_max_output_tokens(),
     }
 
@@ -67,14 +63,14 @@ def resolve_compaction_policy(input: dict[str, Any] | None = None) -> dict[str, 
     explicit_target = normalize_positive_integer(profile.get("compactionTargetTokens"))
     if target_present and explicit_target is None:
         raise ValueError("compactionTargetTokens must be a positive integer")
-    raw_threshold = explicit_threshold or DEFAULT_COMPACTION_THRESHOLD_TOKENS
+    raw_threshold = explicit_threshold or int(provider_knob("provider.compaction_threshold_tokens"))
     threshold = min(raw_threshold, limits["maxContextLength"])
-    default_output = math.ceil(threshold * DEFAULT_COMPACTION_PRESERVATION_RATIO)
+    default_output = math.ceil(threshold * float(provider_knob("provider.compaction_preservation_ratio")))
     raw_output = explicit_output or min(limits["maxOutputTokens"], default_output)
     output = min(raw_output, limits["maxOutputTokens"])
     derived_headroom = max(
         output,
-        math.ceil(threshold * DEFAULT_COMPACTION_HEADROOM_RATIO),
+        math.ceil(threshold * float(provider_knob("provider.compaction_headroom_ratio"))),
     )
     target = explicit_target or (threshold - derived_headroom)
     if target <= 0 or target >= threshold:
@@ -111,7 +107,7 @@ def resolve_interactive_context_policy(input: dict[str, Any] | None = None) -> d
 
     batch_bytes = _explicit_positive_integer(profile, "inlineToolResultBatchBytes")
     if codex_profile:
-        batch_bytes = batch_bytes or DEFAULT_CODEX_INLINE_TOOL_RESULT_BATCH_BYTES
+        batch_bytes = batch_bytes or int(provider_knob("provider.codex_inline_tool_result_batch_bytes"))
     return {
         # Admission-time interactive relief is retired; the policy resolver stays for config compatibility.
         # Historical keys remain accepted as inert compatibility input.
@@ -136,7 +132,7 @@ def resolve_interactive_context_policy(input: dict[str, Any] | None = None) -> d
 
 
 def resolve_compaction_threshold_tokens(input: dict[str, Any] | None = None) -> int:
-    return int(resolve_compaction_policy(input).get("compactionThresholdTokens") or DEFAULT_COMPACTION_THRESHOLD_TOKENS)
+    return int(resolve_compaction_policy(input).get("compactionThresholdTokens") or int(provider_knob("provider.compaction_threshold_tokens")))
 
 
 def resolve_compaction_output_tokens(input: dict[str, Any] | None = None) -> int:
@@ -147,7 +143,7 @@ def resolve_compaction_request_output_tokens(args: dict[str, Any] | None = None,
     args = {**(args or {}), **kwargs}
     policy = resolve_compaction_policy(args.get("profile") or {})
     source_estimate = normalize_positive_integer(args.get("sourceTokenEstimate")) or 0
-    preservation_target = math.ceil(source_estimate * DEFAULT_COMPACTION_PRESERVATION_RATIO)
+    preservation_target = math.ceil(source_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
     return min(policy["maxOutputTokens"], max(policy["compactionOutputTokens"], preservation_target))
 
 
@@ -171,8 +167,8 @@ def resolve_provider_profile_token_limits(args: dict[str, Any] | None = None, **
 
 def resolve_context_token_limit(profile: dict[str, Any] | None = None) -> int:
     if not profile:
-        return DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH
-    return normalize_positive_integer(profile.get("maxContextLength")) or DEFAULT_PROVIDER_MAX_CONTEXT_LENGTH
+        return int(provider_knob("provider.max_context_length"))
+    return normalize_positive_integer(profile.get("maxContextLength")) or int(provider_knob("provider.max_context_length"))
 
 
 def compute_provider_token_budget(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -181,7 +177,7 @@ def compute_provider_token_budget(args: dict[str, Any] | None = None, **kwargs: 
     estimated_input_tokens = max(0, math.floor(float(args.get("estimatedInputTokens") or 0)))
     safety_margin = max(
         0,
-        math.floor(float(args.get("safetyMarginTokens") if args.get("safetyMarginTokens") is not None else DEFAULT_OUTPUT_BUDGET_SAFETY_MARGIN_TOKENS)),
+        math.floor(float(args.get("safetyMarginTokens") if args.get("safetyMarginTokens") is not None else int(provider_knob("provider.output_budget_safety_margin_tokens")))),
     )
     min_useful = max(
         1,
