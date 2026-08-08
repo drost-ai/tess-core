@@ -310,6 +310,25 @@ class OpenAiWireFramingTests(unittest.TestCase):
         self.assertEqual(ctx.exception.record["category"], "transport")
         self.assertTrue(ctx.exception.record["retryable"])
 
+    def test_missing_content_type_header_still_streams(self):
+        # The chatgpt.com codex backend sends valid chunked SSE with no
+        # content-type header at all — the parser, not the header, decides.
+        script = {
+            "responses": [
+                {
+                    "omitContentType": True,
+                    "chunked": True,
+                    "rawBody": openaiResponsesSseBody(self._ok_events()),
+                }
+            ]
+        }
+        server, _requests = _openai_server(script)
+        try:
+            response = run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+        finally:
+            server.close()
+        self.assertEqual(response["content"], [{"type": "text", "text": "framed"}])
+
     def test_crlf_line_endings_parse(self):
         body = openaiResponsesSseBody(self._ok_events()).replace("\n", "\r\n")
         script = {

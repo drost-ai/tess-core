@@ -83,9 +83,13 @@ class OpenAiWireClient:
             raise
         if response.status >= 400:
             raise await _http_failure(owner, response)
-        content_type = str(response.headers.get("content-type", "") or "")
-        if "text/event-stream" not in content_type.lower():
-            raise await _content_type_failure(owner, response, content_type)
+        content_type = response.headers.get("content-type")
+        # A present-but-wrong content type is a real error shape (JSON error
+        # envelopes, HTML interstitials). A missing header is not: the codex
+        # backend streams valid SSE with no content-type at all, so let the
+        # frame parser be the judge there.
+        if content_type is not None and "text/event-stream" not in str(content_type).lower():
+            raise await _content_type_failure(owner, response, str(content_type))
         stream = OpenAiWireStream(
             owner=owner, response=response, on_close=self._streams.discard
         )

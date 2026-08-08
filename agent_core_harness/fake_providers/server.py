@@ -123,7 +123,8 @@ class FakeProviderHttpServer:
         chunks = _response_chunks(response)
         body = b"".join(chunk[1] for chunk in chunks)
         handler.send_response(status)
-        handler.send_header("content-type", content_type)
+        if not response.get("omitContentType"):
+            handler.send_header("content-type", content_type)
         if chunked:
             handler.send_header("transfer-encoding", "chunked")
         else:
