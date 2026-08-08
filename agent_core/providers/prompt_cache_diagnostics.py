@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._core import finite_nonnegative_int as _finite_nonnegative
+
 import hashlib
 import json
 import math
@@ -16,6 +18,26 @@ MAX_BETA_HASHES = 32
 MAX_REASON_DELTAS = 16
 MAX_RESPONSE_ID_BYTES = 256
 MAX_PROMPT_CACHE_STATE_BYTES = 128 * 1024
+
+# The single source of the provider-diagnosis vocabulary; validators import
+# these instead of transcribing the sets.
+PROMPT_CACHE_MISS_REASONS = frozenset(
+    {
+        "model_changed",
+        "system_changed",
+        "tools_changed",
+        "messages_changed",
+        "previous_message_not_found",
+        "unavailable",
+    }
+)
+PROMPT_CACHE_PROVIDER_REASONS = PROMPT_CACHE_MISS_REASONS | {
+    "not_requested",
+    "warmup_no_comparison",
+    "no_divergence",
+    "comparison_pending",
+    "unknown",
+}
 
 
 def buildPromptCacheRequestSnapshot(input: dict[str, Any]) -> dict[str, Any]:
@@ -163,15 +185,7 @@ def normalizePromptCacheProviderReason(args: dict[str, Any]) -> str:
     if reason is None:
         return "comparison_pending"
     kind = reason.get("type") if isinstance(reason, dict) else None
-    allowed = {
-        "model_changed",
-        "system_changed",
-        "tools_changed",
-        "messages_changed",
-        "previous_message_not_found",
-        "unavailable",
-    }
-    return kind if kind in allowed else "unknown"
+    return kind if kind in PROMPT_CACHE_MISS_REASONS else "unknown"
 
 
 def canonicalPromptCacheJson(value: Any) -> str:
@@ -251,10 +265,6 @@ def _diagnosis(reason: str, confidence: str, deltas: list[str] | None = None) ->
     return {"reason": reason, "confidence": confidence, "deltas": (deltas or [])[:MAX_REASON_DELTAS]}
 
 
-def _finite_nonnegative(value: Any) -> int:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-        return 0
-    return max(0, int(value))
 
 
 def _elapsed_ms(value: Any, now: Any) -> int:

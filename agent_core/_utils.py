@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable
 
-from .providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 
 
 MISSING = object()
@@ -21,6 +20,15 @@ def now_iso() -> str:
 
 def clone(value: Any) -> Any:
     return copy.deepcopy(value)
+
+
+def signal_aborted(signal: Any) -> bool:
+    """One abort check for every signal shape: None, dict, or attr object."""
+    if not signal:
+        return False
+    if isinstance(signal, dict):
+        return bool(signal.get("aborted"))
+    return bool(getattr(signal, "aborted", False))
 
 
 def get_value(obj: Any, key: str, default: Any = None) -> Any:
@@ -82,7 +90,11 @@ def pretty_json(value: Any) -> str:
 
 
 def merge_usage(target: dict[str, Any], next_usage: dict[str, Any]) -> None:
-    _merge_provider_usage(target, next_usage)
+    # Call-time import: _utils is foundational and must not import provider
+    # modules at load (providers import _utils).
+    from .providers.usage_costs import mergeProviderUsage
+
+    mergeProviderUsage(target, next_usage)
 
 
 def truthy_string(value: Any) -> str | None:

@@ -10,7 +10,6 @@ from ..errors import (
     createProviderFailureRecord,
     createProviderRequestError,
 )
-from .normalization import _extract_output_blocks
 from .transport import _emit
 
 
@@ -219,23 +218,6 @@ async def finalize_interrupted_openai_preview(
             reason=str(interrupted["reason"]),
         )
     return failure
-
-
-def authoritative_openai_response(
-    output: list[Any],
-) -> tuple[list[dict[str, Any]], str, bool, bool, str]:
-    blocks = _extract_output_blocks(output)
-    text = "".join(
-        block.get("text", "") for block in blocks if block.get("type") == "text"
-    )
-    had_tool_use = any(block.get("type") == "tool_use" for block in blocks)
-    return (
-        blocks,
-        text,
-        bool(text),
-        had_tool_use,
-        "tool_calls" if had_tool_use else "stop",
-    )
 
 
 async def append_openai_partial(

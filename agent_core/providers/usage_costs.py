@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from ._core import (
+    finite_nonnegative_int as _finite_nonnegative,
+    finite_nonnegative_int_or_none as _finite_optional,
+)
+
 import math
 from typing import Any, Mapping
 
@@ -184,15 +189,5 @@ def roundUsd(value: float) -> float:
     return math.floor(numeric * 1_000_000 + 0.5) / 1_000_000
 
 
-def _finite_optional(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if not math.isfinite(value) or value < 0:
-        return None
-    return int(value)
-
-
-def _finite_nonnegative(value: Any) -> int:
-    return _finite_optional(value) or 0
 
 

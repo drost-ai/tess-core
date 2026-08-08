@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import math
-
 import asyncio
 import contextlib
 from .._core import (
+    finite_nonnegative_int_or_none as _finite_usage_number,
     _activity_state_bool,
     race_provider_activity as _race_provider_activity,
     raise_if_provider_aborted as _raise_if_provider_aborted,
@@ -93,12 +92,6 @@ def _apply_usage_snapshot(target: dict[str, Any], usage: dict[str, Any]) -> None
         )
 
 
-def _finite_usage_number(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if not math.isfinite(value) or value < 0:
-        return None
-    return int(value)
 
 
 applyAnthropicUsageSnapshot = _apply_usage_snapshot

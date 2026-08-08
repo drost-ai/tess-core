@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import math
 import random
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from .._utils import signal_aborted
 from .errors import (
     ProviderRequestError,
     createProviderFailureRecord,
@@ -23,6 +25,22 @@ from .errors import (
 )
 
 DEFAULT_ABORT_POLL_INTERVAL_MS = 50
+
+
+def finite_nonnegative_int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(value) or value < 0:
+        return None
+    return int(value)
+
+
+def finite_nonnegative_int(value: Any) -> int:
+    return finite_nonnegative_int_or_none(value) or 0
+
+
+def is_nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 RETRY_JITTER_MS = 119
 RETRY_AFTER_CAP_MS = 60_000
 
@@ -48,14 +66,6 @@ class AbortSignal:
 
     async def wait(self) -> None:
         await self.event.wait()
-
-
-def signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    if isinstance(signal, dict):
-        return bool(signal.get("aborted"))
-    return bool(getattr(signal, "aborted", False))
 
 
 def signal_reason(signal: Any) -> BaseException:

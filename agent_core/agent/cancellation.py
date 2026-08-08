@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import signal_aborted as _signal_aborted
+
 from ..runtime.events.emit import safeEmit as _safe_emit
 
 from dataclasses import dataclass as _dataclass
@@ -87,12 +89,6 @@ def _is_turn_abort_error(error: BaseException, signal: Any = None) -> bool:
         return True
     return getattr(error, "name", None) == "AbortError"
 
-def _signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    if isinstance(signal, dict):
-        return bool(signal.get("aborted"))
-    return bool(getattr(signal, "aborted", False))
 
 def _signal_reason(signal: Any) -> Any:
     if not signal:

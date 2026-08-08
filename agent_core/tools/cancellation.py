@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .._utils import signal_aborted as _signal_aborted
+
 from ..contracts.context import ToolContext
 
 from typing import Any
@@ -16,9 +18,3 @@ def _create_tool_abort_error() -> RuntimeError:
     return error
 
 
-def _signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    if isinstance(signal, dict):
-        return bool(signal.get("aborted"))
-    return bool(getattr(signal, "aborted", False))

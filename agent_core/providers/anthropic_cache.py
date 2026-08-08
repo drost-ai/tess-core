@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._core import is_nonnegative_int as _nonnegative_integer
+
 import copy
 from typing import Any, Mapping
 
@@ -327,7 +329,5 @@ def _messages(value: Any) -> list[dict[str, Any]]:
     return output
 
 
-def _nonnegative_integer(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 

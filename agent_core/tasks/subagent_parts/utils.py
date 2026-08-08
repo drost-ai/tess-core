@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..._utils import signal_aborted as _signal_aborted
+
 from ...runtime.workspace import createGitWorktree
 from typing import Any
 
@@ -79,12 +81,6 @@ def _is_subagent_abort_error(error: BaseException, signal: Any = None) -> bool:
     return getattr(error, "name", None) == "AbortError"
 
 
-def _signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    if isinstance(signal, dict):
-        return bool(signal.get("aborted"))
-    return bool(getattr(signal, "aborted", False))
 
 
 def _signal_reason(signal: Any) -> Any:

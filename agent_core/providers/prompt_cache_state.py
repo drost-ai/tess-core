@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .prompt_cache_diagnostics import PROMPT_CACHE_PROVIDER_REASONS
+
+from ._core import is_nonnegative_int as _nonnegative_int
+
 import copy
 import json
 import math
@@ -105,10 +109,7 @@ def _placement(value: Any) -> bool:
 
 def _response(value: Any) -> bool:
     response = _record(value)
-    allowed_reasons = {
-        "not_requested", "warmup_no_comparison", "no_divergence", "comparison_pending", "model_changed",
-        "system_changed", "tools_changed", "messages_changed", "previous_message_not_found", "unavailable", "unknown",
-    }
+    allowed_reasons = PROMPT_CACHE_PROVIDER_REASONS
     return bool(
         _only(response, {"id", "cacheReadInputTokens", "cacheCreationInputTokens", "cacheCreation5mInputTokens", "cacheCreation1hInputTokens", "providerDiagnosis"})
         and all(_nonnegative_number(response.get(key)) for key in ("cacheReadInputTokens", "cacheCreationInputTokens", "cacheCreation5mInputTokens", "cacheCreation1hInputTokens"))
@@ -179,8 +180,6 @@ def _nonnegative_number(value: Any) -> bool:
     return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
 
 
-def _nonnegative_int(value: Any) -> bool:
-    return not isinstance(value, bool) and isinstance(value, int) and value >= 0
 
 
 def _positive_int(value: Any) -> bool:

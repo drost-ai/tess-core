@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ...providers.prompt_cache_diagnostics import PROMPT_CACHE_PROVIDER_REASONS
+
 import math
 from typing import Any
 
@@ -18,10 +20,7 @@ _LOCAL_REASONS = {
     "cache_read_observed", "cache_write_without_read_observed", "no_cache_usage_reported",
     "compatible_provider_unknown",
 }
-_PROVIDER_REASONS = {
-    "not_requested", "warmup_no_comparison", "no_divergence", "comparison_pending", "model_changed",
-    "system_changed", "tools_changed", "messages_changed", "previous_message_not_found", "unavailable", "unknown",
-}
+_PROVIDER_REASONS = PROMPT_CACHE_PROVIDER_REASONS
 _STATE_STATUSES = {"committed", "stale", "unavailable", "recorded"}
 
 

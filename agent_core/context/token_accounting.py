@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from .._utils import signal_aborted as _signal_aborted
 from ._knob_reader import context_knob as _context_knob
 
 import asyncio
@@ -445,10 +447,6 @@ def _rethrow_parent_abort(signal: Any, error: BaseException) -> None:
     raise reason if isinstance(reason, BaseException) else error
 
 
-def _signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    return bool(signal.get("aborted")) if isinstance(signal, dict) else bool(getattr(signal, "aborted", False))
 
 
 def _bounded_failure_reason(error: BaseException) -> str:

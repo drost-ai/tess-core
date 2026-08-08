@@ -34,30 +34,6 @@ def _normalize_openai_schema(schema: Any) -> Any:
             record[key] = _normalize_openai_schema(record[key])
     return record
 
-def _extract_output_blocks(output: list[Any]) -> list[dict[str, Any]]:
-    blocks: list[dict[str, Any]] = []
-    for item in output:
-        if get_value(item, "type") == "message":
-            for content in get_value(item, "content", []) or []:
-                if get_value(content, "type") == "output_text" and isinstance(get_value(content, "text"), str):
-                    blocks.append({"type": "text", "text": get_value(content, "text")})
-        elif get_value(item, "type") == "function_call":
-            call_id = str(get_value(item, "call_id", None) or get_value(item, "id", "") or "")
-            name = str(get_value(item, "name", "") or "")
-            if not call_id or not name:
-                raise ValueError("Function-call output ended before its id and name were complete.")
-            blocks.append(
-                {
-                    "type": "tool_use",
-                    "id": call_id,
-                    "name": name,
-                    "input": _parse_complete_json_object(
-                        str(get_value(item, "arguments", "") or "")
-                    ),
-                }
-            )
-    return blocks
-
 def _apply_openai_usage(usage: dict[str, Any], next_usage: Any) -> None:
     if get_value(next_usage, "input_tokens") is not None:
         usage["input_tokens"] = get_value(next_usage, "input_tokens")

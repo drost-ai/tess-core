@@ -33,28 +33,10 @@ class ProviderTurnSession:
         self.profile = profile
         self.model = model
         self.runtime = runtime
-        self._logical_call_count = 0
-        self._activity_sequence = 0
-        self._last_coalesced_activity_at: dict[str, float] = {}
         self._active_task: asyncio.Future[Any] | None = None
         self._active_stream: Any = None
         self._cancelled = False
         self._closed = False
-
-    def start_logical_call(self, model: str | None = None) -> str:
-        self._logical_call_count += 1
-        if model:
-            self.model = model
-        return f"{self.logical_turn_id}:provider-{self._logical_call_count}"
-
-    async def prepare(self, request: Any) -> Any:
-        return request
-
-    async def record_success(self, request: Any, response: Any) -> None:
-        return None
-
-    async def record_failure(self, request: Any, failure: BaseException) -> None:
-        return None
 
     def bind_activity_task(self, task: asyncio.Future[Any]) -> None:
         self._active_task = task
@@ -71,40 +53,6 @@ class ProviderTurnSession:
             self._active_stream = None
         if close:
             await _close_resource(stream)
-
-    def emit_activity(
-        self,
-        *,
-        logical_call_id: str,
-        attempt: int,
-        phase: str,
-        activity_kind: str,
-        model: str | None = None,
-    ) -> None:
-        if activity_kind in {"stream_frame", "reasoning", "output_delta"}:
-            now = time.monotonic()
-            previous = self._last_coalesced_activity_at.get(activity_kind)
-            if previous is not None and now - previous < 0.25:
-                return
-            self._last_coalesced_activity_at[activity_kind] = now
-        self._activity_sequence += 1
-        payload = {
-            "session_id": self.session_id,
-            "logical_turn_id": self.logical_turn_id,
-            "logical_call_id": logical_call_id,
-            "attempt": max(1, int(attempt or 1)),
-            "provider": self.provider,
-            "profile": self.profile,
-            "model": model or self.model,
-            "phase": phase,
-            "activity_kind": activity_kind,
-            "monotonic_sequence": self._activity_sequence,
-            "occurred_at": datetime.now(timezone.utc).isoformat(),
-        }
-        try:
-            self.runtime.get("emitEvent", lambda *_: None)("provider.activity", payload)
-        except Exception:
-            pass
 
     async def cancel(self, reason: str = "cancelled") -> None:
         if self._cancelled:
