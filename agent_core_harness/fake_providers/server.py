@@ -118,11 +118,18 @@ class FakeProviderHttpServer:
             return
         status = int(response.get("status") or 200)
         content_type = str(response.get("contentType") or "application/json")
+        chunked = bool(response.get("chunked"))
+        truncate_after = response.get("truncateAfterBytes")
         chunks = _response_chunks(response)
         body = b"".join(chunk[1] for chunk in chunks)
         handler.send_response(status)
         handler.send_header("content-type", content_type)
-        handler.send_header("content-length", str(len(body)))
+        if chunked:
+            handler.send_header("transfer-encoding", "chunked")
+        else:
+            # A truncation fault still declares the full length so the client
+            # observes a mid-body cut, not a short-but-complete response.
+            handler.send_header("content-length", str(len(body)))
         extra_headers = response.get("headers")
         if isinstance(extra_headers, dict):
             for key, value in extra_headers.items():
@@ -135,16 +142,38 @@ class FakeProviderHttpServer:
         ):
             record["clientDisconnected"] = True
             return
+        sent = 0
+        truncated = False
         for chunk_delay_ms, chunk in chunks:
             if chunk_delay_ms > 0:
                 time.sleep(chunk_delay_ms / 1000)
+            if isinstance(truncate_after, int):
+                remaining = truncate_after - sent
+                if remaining <= 0:
+                    truncated = True
+                    break
+                if len(chunk) > remaining:
+                    chunk = chunk[:remaining]
+                    truncated = True
             try:
-                handler.wfile.write(chunk)
+                if chunked:
+                    handler.wfile.write(
+                        f"{len(chunk):x}\r\n".encode("ascii") + chunk + b"\r\n"
+                    )
+                else:
+                    handler.wfile.write(chunk)
                 handler.wfile.flush()
+                sent += len(chunk)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 record["clientDisconnected"] = True
                 break
-        if response.get("closeAfterResponse"):
+            if truncated:
+                break
+        if chunked and not truncated and not record.get("clientDisconnected"):
+            with suppress(OSError):
+                handler.wfile.write(b"0\r\n\r\n")
+                handler.wfile.flush()
+        if truncated or response.get("closeAfterResponse"):
             handler.close_connection = True
             with suppress(OSError):
                 handler.connection.shutdown(socket.SHUT_RDWR)

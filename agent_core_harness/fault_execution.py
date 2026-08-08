@@ -10,7 +10,6 @@ from typing import Any
 import agent_core as core
 from agent_core.providers.errors import (
     canRetryProviderFailure,
-    classifyProviderHttpFailure,
     createProviderRequestError,
     normalizeUnknownProviderFailure,
 )
@@ -18,10 +17,10 @@ from agent_core.providers.anthropic.sse import (
     AnthropicSseAccumulator,
     parseAnthropicSseEvents,
 )
-from agent_core.providers._core import create_provider_timeout_error
 from agent_core.providers.openai.transport import _raise_openai_cancelled
 
 from .fake_providers import FakeProviderRuntime
+from .fake_providers.server import openaiResponsesSseBody
 from .fault_crash_execution import executeCrashFaultCell
 from .fault_session_evidence import verifyFaultSessionIntegrity
 async def executeFaultContractAsync(cells: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -93,12 +92,14 @@ async def _execute_cell(cell: dict[str, Any], root: Path) -> dict[str, Any]:
 async def _execute_adapter_cell(cell: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     provider = cell["providerFamily"]
     if provider == "anthropic_messages_sse":
-        return _execute_anthropic_adapter(cell)
+        return await _execute_anthropic_adapter(cell)
     return await _execute_openai_adapter(cell)
 
 
-def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+async def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     state, fault = cell["state"], cell["fault"]
+    if fault in {"F1", "F2", "F5", "F6", "F7", "F8", "F9"}:
+        return await _execute_anthropic_wire_cell(cell)
     events: list[tuple[str, dict[str, Any]]] = []
     accumulator = AnthropicSseAccumulator(
         {"model": "claude-sonnet-4-6"},
@@ -115,46 +116,10 @@ def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any], di
     response = None
     invocation = "AnthropicSseAccumulator.process_raw_event"
     try:
-        if fault in {"F1", "F2"}:
-            error = normalizeUnknownProviderFailure(
-                error=ConnectionResetError("injected connection reset"),
-                provider="anthropic",
-                providerLabel="Anthropic",
-                phase=_phase(state),
-                attempt=1,
-                hadAssistantOutput=accumulator.had_assistant_output,
-                hadToolUse=accumulator.had_tool_use,
-            )
-            invocation = "normalizeUnknownProviderFailure(ConnectionResetError)"
-        elif fault in {"F3", "F4"}:
+        if fault in {"F3", "F4"}:
             accumulator.process_raw_event(
                 {"event": "content_block_delta", "data": '{"type":'}
             )
-        elif fault in {"F5", "F6"}:
-            error = create_provider_timeout_error(
-                provider="anthropic",
-                provider_label="Anthropic",
-                message_label="Anthropic",
-                phase=_phase(state),
-                attempt=1,
-                had_output=accumulator.had_assistant_output,
-                had_tool_use=accumulator.had_tool_use,
-                timeout_ms=1,
-            )
-            invocation = "create_provider_timeout_error"
-        elif fault in {"F7", "F8", "F9"}:
-            status = {"F7": 429, "F8": 529, "F9": 500}[fault]
-            error = classifyProviderHttpFailure(
-                provider="anthropic",
-                providerLabel="Anthropic",
-                phase=_phase(state),
-                status=status,
-                body="injected provider status",
-                attempt=1,
-                hadAssistantOutput=accumulator.had_assistant_output,
-                hadToolUse=accumulator.had_tool_use,
-            )
-            invocation = "classifyProviderHttpFailure"
         elif fault == "F10":
             response = accumulator.finalize()
         elif fault == "F11":
@@ -214,31 +179,60 @@ async def _execute_openai_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any],
     response = None
     event_names: list[str] = []
     invocation = "sendOpenAiResponsesRequest(FakeOpenAIClientFactory)"
-    if fault in {"F5", "F6"}:
-        error = create_provider_timeout_error(
-            provider="openai",
-            provider_label="OpenAI",
-            message_label="OpenAI",
-            phase=_phase(state),
-            attempt=1,
-            had_output=output,
-            had_tool_use=tool,
-            timeout_ms=1,
+    if fault in {"F3", "F5", "F6", "F7", "F8", "F9"}:
+        data: dict[str, Any] = {
+            "provider": "openai",
+            "api": "responses",
+            "wire": True,
+            "expectFailure": True,
+            "maxAttempts": 1,
+            "runtime": {"streamProviderMessages": True, "includePartialMessages": True},
+        }
+        if fault in {"F7", "F8", "F9"}:
+            status = {"F7": 429, "F8": 529, "F9": 500}[fault]
+            data["script"] = {
+                "responses": [
+                    {
+                        "status": status,
+                        "contentType": "application/json",
+                        "body": {"error": {"type": "injected_status", "message": "injected provider status"}},
+                    }
+                ]
+            }
+        else:
+            prefix_events = [
+                action["event"]
+                for action in _openai_state_prefix(state)
+                if "event" in action
+            ]
+            body = openaiResponsesSseBody(prefix_events)
+            if fault == "F3":
+                # Malformed SSE bytes on the wire.
+                data["script"] = {
+                    "responses": [
+                        {
+                            "contentType": "text/event-stream",
+                            "rawBody": body + "event: response.output_text.delta\ndata: {broken\n\n",
+                        }
+                    ]
+                }
+            else:
+                if fault == "F5":
+                    # Slow loris: a partial frame trickles, never completing.
+                    chunks = ([{"raw": body}] if body else []) + [
+                        {"raw": "event: response.out"},
+                        {"delayMs": 5_000, "raw": "put_text.delta\n"},
+                    ]
+                else:
+                    # Idle silence after the prefix.
+                    chunks = ([{"raw": body}] if body else []) + [
+                        {"delayMs": 5_000, "raw": ": stalled\n\n"}
+                    ]
+                data["script"] = {"responses": [{"contentType": "text/event-stream", "chunks": chunks}]}
+                data["streamIdleTimeoutMs"] = 80
+        return await _run_wire_fault_cell(
+            cell, data, "sendOpenAiResponsesRequest(FakeProviderHttpServer wire)"
         )
-        invocation = "create_provider_timeout_error"
-    elif fault in {"F7", "F8", "F9"}:
-        status = {"F7": 429, "F8": 529, "F9": 500}[fault]
-        error = classifyProviderHttpFailure(
-            provider="openai",
-            providerLabel="OpenAI",
-            phase=_phase(state),
-            status=status,
-            body="injected provider status",
-            attempt=1,
-            hadAssistantOutput=output,
-            hadToolUse=tool,
-        )
-        invocation = "classifyProviderHttpFailure"
     elif fault == "F13":
         try:
             _raise_openai_cancelled(
@@ -329,6 +323,75 @@ def _actual_from_result(
         "hadAssistantOutput": bool(record.get("hadAssistantOutput")),
         "hadToolUse": bool(record.get("hadToolUse")),
         "eventSequence": [],
+    }
+
+
+async def _execute_anthropic_wire_cell(cell: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Inject the fault through a real socket and the production request path."""
+    state, fault = cell["state"], cell["fault"]
+    prefix = _anthropic_state_prefix(state)
+    data: dict[str, Any] = {
+        "provider": "anthropic",
+        "api": "messages",
+        "expectFailure": True,
+        "maxAttempts": 1,
+        "runtime": {"streamProviderMessages": True, "includePartialMessages": True},
+    }
+    if fault in {"F7", "F8", "F9"}:
+        status = {"F7": 429, "F8": 529, "F9": 500}[fault]
+        data["script"] = {
+            "messages": [
+                {
+                    "status": status,
+                    "contentType": "application/json",
+                    "body": {"error": {"type": "injected_status", "message": "injected provider status"}},
+                }
+            ]
+        }
+    elif fault in {"F1", "F2"}:
+        if state in {"S0", "S1"}:
+            data["script"] = {"messages": [{"fault": "disconnect_before_headers"}]}
+        else:
+            data["script"] = {
+                "messages": [
+                    {
+                        "contentType": "text/event-stream",
+                        "rawBody": prefix + ": padding\n\n",
+                        "truncateAfterBytes": max(1, len(prefix.encode("utf-8"))),
+                    }
+                ]
+            }
+    else:
+        chunks = ([{"raw": prefix}] if prefix else []) + [
+            {"delayMs": 5_000, "raw": ": stalled\n\n"}
+        ]
+        data["script"] = {"messages": [{"contentType": "text/event-stream", "chunks": chunks}]}
+        data["streamIdleTimeoutMs"] = 80
+    return await _run_wire_fault_cell(cell, data, "sendAnthropicMessagesRequest(FakeProviderHttpServer)")
+
+
+async def _run_wire_fault_cell(
+    cell: dict[str, Any], data: dict[str, Any], invocation: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    state = cell["state"]
+    output = int(state[1:]) >= 3
+    tool = 4 <= int(state[1:]) <= 6
+    runtime = FakeProviderRuntime()
+    try:
+        result = await runtime.run(data)
+    finally:
+        runtime.close()
+    error = (
+        createProviderRequestError(result["failure"])
+        if result["status"] == "failed"
+        else None
+    )
+    response = result.get("response") if error is None else None
+    actual = _actual_from_result(error, response, output=output, tool=tool)
+    return actual, {
+        "adapterInvocation": invocation,
+        "eventNames": [item["event"] for item in runtime.events],
+        "statePrefixDigest": _digest(json.dumps(data.get("script"), sort_keys=True, default=str)),
     }
 
 

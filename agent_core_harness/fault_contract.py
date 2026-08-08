@@ -121,10 +121,6 @@ def _impossible_reason(provider: str, state: str, fault: str) -> str | None:
         return "A duplicate terminal can only arrive after the first terminal has committed."
     if fault == "F12" and state not in {"S7", "S8"}:
         return "Usage omission is a property of the terminal transition from a pre-terminal state."
-    if provider == "openai_responses" and fault == "F3":
-        return "The SDK adapter yields decoded events; malformed SSE bytes are below this adapter boundary."
-    if provider == "openai_responses" and fault == "F5":
-        return "Byte pacing is below the fake SDK adapter boundary; its observable equivalent is F6 idle silence."
     return None
 
 
