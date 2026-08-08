@@ -14,7 +14,7 @@ from ..storage import getProjectRoot
 
 
 _FILESYSTEM_RANK = {"read-only": 0, "workspace-write": 1, "full": 2}
-_VALID_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
+_VALID_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"}
 
 
 class AgentAuthorityError(PermissionError):
@@ -118,18 +118,15 @@ def meetPermissionModes(left: str, right: str) -> str:
         return right
     if right == "bypassPermissions":
         return left
-    if "plan" in {left, right}:
-        return "plan"
     if {left, right} == {"default", "acceptEdits"}:
         return "default"
     if left in {"auto", "dontAsk"} and right in {"auto", "dontAsk"}:
         return "auto"
-    return "plan"
+    # Incomparable modes meet at the most restrictive remaining mode.
+    return "default"
 
 
 def _default_filesystem(mode: str) -> str:
-    if mode == "plan":
-        return "read-only"
     if mode == "bypassPermissions":
         return "full"
     return "workspace-write"

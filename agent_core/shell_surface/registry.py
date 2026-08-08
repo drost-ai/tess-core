@@ -18,7 +18,6 @@ _COMMANDS: list[tuple[str, str, str]] = [
     ("effort", "/effort LEVEL", "Set the reasoning effort for this session"),
     ("permissions", "/permissions [mode]", "View or update the permission mode"),
     ("agents", "/agents [running|all|inspect|attach|stop|retry <id>]", "Show and control child agents"),
-    ("plans", "/plans [status]", "Show plan approvals linked to this session"),
     ("todos", "/todos", "Show the current todo list"),
     ("memory", "/memory", "Show project memory"),
     ("extensions", "/extensions", "Show MCP/plugin/runtime extension state"),

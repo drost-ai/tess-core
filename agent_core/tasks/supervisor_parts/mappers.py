@@ -36,8 +36,6 @@ def _map_status(value: Any) -> str:
         return "degraded"
     if value in ("running", "completed", "failed", "stopped", "queued", "awaiting_input", "reconciling", "degraded"):
         return str(value)
-    if value == "awaiting_plan_approval":
-        return "awaiting_input"
     if value == "truncated":
         return "failed"
     if value in ("terminated", "cancelled"):
@@ -78,7 +76,7 @@ def _is_active_child_agent_status(status: Any) -> bool:
 def _map_child_agent_status_to_task_status(status: Any) -> str:
     if status in {"queued", "running", "backgrounded", "completed", "failed"}:
         return str(status)
-    if status in {"awaiting_input", "awaiting_plan_approval"}:
+    if status == "awaiting_input":
         return "awaiting_input"
     if status in {"cancelled", "stopped"}:
         return "stopped"
@@ -116,5 +114,4 @@ def _is_terminal_worker_status(status: Any) -> bool:
         "cancelled",
         "truncated",
         "awaiting_input",
-        "awaiting_plan_approval",
     }

@@ -267,7 +267,7 @@ def _project_session(session: dict[str, Any]) -> dict[str, Any]:
             "provider": session.get("provider"),
             "model": session.get("model"),
             "permissionMode": session.get("permissionMode"),
-            "metadata": {key: metadata.get(key) for key in ("workspaceName", "originalCwd", "usage", "compactions", "depth", "childSessionIds", "childAgentIds", "planMode")},
+            "metadata": {key: metadata.get(key) for key in ("workspaceName", "originalCwd", "usage", "compactions", "depth", "childSessionIds", "childAgentIds")},
         }
     )
 

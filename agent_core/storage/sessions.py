@@ -434,6 +434,5 @@ def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> S
             "depth": 0,
             "childSessionIds": [],
             "childAgentIds": [],
-            "planMode": {"state": "inactive"},
         },
     }

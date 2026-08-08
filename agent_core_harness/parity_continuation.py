@@ -69,7 +69,6 @@ async def _build_fixture(data: dict[str, Any], paths: dict[str, Any]) -> tuple[d
         {"content": "Build continuation relief parity", "activeForm": "building continuation relief parity", "status": "in_progress"},
         {"content": "Commit compaction repair pack", "activeForm": "committing compaction repair pack", "status": "completed"},
     ]
-    session.setdefault("metadata", {})["planMode"] = {"state": "active", "requestId": "plan-continuation-relief", "plan": "Cover pressure, relief modes, reinjection, and repeated payload handling."}
     if data.get("oldHistoryTokens"):
         session["metadata"]["compactionState"] = {"compactedContextTokenEstimate": data["oldHistoryTokens"]}
     return config, session, _messages(str(data.get("fixture") or "tool-heavy")), _retrieved_memory(bool(data.get("retrievedMemory")))

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Callable, TypeVar
+from typing import Any
 
 
 def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
@@ -92,7 +92,7 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
 
         flush_text()
 
-    return _compact_plan_transcript_entries(session, compactTranscriptEntries(entries))
+    return compactTranscriptEntries(entries)
 
 
 def makeTextEntry(args: dict[str, Any]) -> dict[str, Any]:
@@ -237,36 +237,6 @@ def inferToolNameFromLabel(label: str | None) -> str | None:
     return match.group(1) if match else None
 
 
-T = TypeVar("T")
-
-
-def _find_last_index(items: list[T], predicate: Callable[[T], bool]) -> int:
-    for index in range(len(items) - 1, -1, -1):
-        if predicate(items[index]):
-            return index
-    return -1
-
-
-def _compact_plan_transcript_entries(session: dict[str, Any], entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    plan_state = session.get("metadata", {}).get("planMode")
-    plan_text = plan_state.get("plan", "").strip() if isinstance(plan_state, dict) and plan_state.get("state") != "inactive" else ""
-    without_exit_plan = [entry for entry in entries if entry.get("payload", {}).get("toolName") != "ExitPlanMode"]
-    if not plan_text:
-        return without_exit_plan
-    normalized_plan = _collapse_whitespace(plan_text)
-    plan_index = _find_last_index(
-        without_exit_plan,
-        lambda entry: entry.get("tone") == "assistant" and _bodies_roughly_match(str(entry.get("body") or ""), normalized_plan),
-    )
-    if plan_index == -1:
-        return without_exit_plan
-    user_index = _find_last_index(without_exit_plan[:plan_index], lambda entry: entry.get("tone") == "user")
-    if user_index == -1:
-        return without_exit_plan
-    plan_entry = {**without_exit_plan[plan_index], "body": plan_text, "title": "Plan"}
-    return [*without_exit_plan[: user_index + 1], plan_entry, *without_exit_plan[plan_index + 1 :]]
-
-
 def _can_group_tool_entries(left: dict[str, Any], right: dict[str, Any]) -> bool:
     left_payload = left.get("payload")
     right_payload = right.get("payload")
@@ -304,11 +274,3 @@ def _truncate_inline(value: str, limit: int) -> str:
     return f"{collapsed[: limit - 1]}\u2026"
 
 
-def _collapse_whitespace(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def _bodies_roughly_match(body: str, normalized_plan: str) -> bool:
-    normalized_body = _collapse_whitespace(body)
-    plan_prefix = normalized_plan[:120]
-    return plan_prefix in normalized_body or normalized_body in normalized_plan

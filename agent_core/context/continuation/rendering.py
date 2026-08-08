@@ -19,7 +19,7 @@ from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
 def renderContinuationOverlay(session: dict[str, Any]) -> str | None:
-    parts = [renderTodoOverlay(session), _render_active_task_overlay(session), renderPlanOverlay(session)]
+    parts = [renderTodoOverlay(session), _render_active_task_overlay(session)]
     return "\n\n".join(part for part in parts if part) or None
 
 
@@ -57,21 +57,6 @@ def _render_active_task_overlay(session: dict[str, Any]) -> str | None:
     if active.get("activeForm"):
         lines.append(f"active_form={_bound_todo_view_text(active.get('activeForm'), _TODO_WRITE_LIMITS['maxViewActiveFormBytes'])}")
     lines.append("</active_task>")
-    return "\n".join(lines)
-
-
-def renderPlanOverlay(session: dict[str, Any]) -> str | None:
-    plan_state = (session.get("metadata") or {}).get("planMode")
-    if not isinstance(plan_state, dict) or plan_state.get("state") == "inactive":
-        return None
-    lines = ["<plan_state>", f"state={plan_state.get('state')}"]
-    if plan_state.get("requestId"):
-        lines.append(f"request_id={plan_state['requestId']}")
-    if plan_state.get("filePath"):
-        lines.append(f"file={plan_state['filePath']}")
-    if isinstance(plan_state.get("plan"), str) and plan_state["plan"].strip():
-        lines.append(f"summary={truncate(plan_state['plan'].strip(), 800)}")
-    lines.append("</plan_state>")
     return "\n".join(lines)
 
 

@@ -31,7 +31,6 @@ from .prompts import (
     filterToolsByPolicy,
     getDefaultSystemPrompt,
     getDefaultToolList,
-    isPlanRevisionPrompt,
     resolveAgentDefinition,
     resolveModelForAgent,
 )
@@ -112,7 +111,6 @@ __all__ = [
     "getDefaultSystemPrompt",
     "getDefaultToolList",
     "inferProviderForModel",
-    "isPlanRevisionPrompt",
     "listEffortLevels",
     "listModelsForProvider",
     "listProviderProfiles",

@@ -20,7 +20,7 @@ class ToolResult(_ToolResultRequired, total=False):
 
     isError: bool
     meta: dict[str, Any]               # carries "execution" descriptors
-    pause: Literal["approval"]         # plan-mode approval pause
+    pause: Literal["approval"]         # interactive approval pause
     structuredContent: Any             # bounded MCP structured companion
     attachments: list[dict[str, Any]]  # in-memory current-turn binary attachments
 

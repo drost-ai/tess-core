@@ -17,7 +17,6 @@ SESSION_FORK_METADATA_DISPOSITIONS = {
     "workspaceRoot": "recomputed",
     "workspaceName": "recomputed",
     "gitRoot": "recomputed",
-    "gitRepoPlanOnly": "inherited",
     "gitBranch": "recomputed",
     "prNumber": "recomputed",
     "prUrl": "recomputed",
@@ -39,7 +38,6 @@ SESSION_FORK_METADATA_DISPOSITIONS = {
     "teamName": "fresh",
     "childSessionIds": "fresh",
     "childAgentIds": "fresh",
-    "planMode": "fresh",
     "remoteSessionId": "fresh",
     "remoteSessionTitle": "fresh",
     "remoteControlEnabled": "fresh",
@@ -88,13 +86,10 @@ def createForkedSession(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         "depth": 0,
         "childSessionIds": [],
         "childAgentIds": [],
-        "planMode": {"state": "inactive"},
         "tmuxSessionName": values.get("tmuxSessionName"),
         "tmuxWindowName": values.get("tmuxWindowName"),
         "tmuxMode": values.get("tmuxMode"),
     }
-    if parent.get("metadata", {}).get("gitRepoPlanOnly") is not None:
-        metadata["gitRepoPlanOnly"] = parent["metadata"]["gitRepoPlanOnly"]
     metadata = {key: value for key, value in metadata.items() if value is not None}
     return {
         "id": values["id"],

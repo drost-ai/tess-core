@@ -203,23 +203,6 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "writableRoots": _string_array(_field(data, "writable_roots", "writableRoots")),
             "allowNetwork": _optional_boolean(_field(data, "allow_network", "allowNetwork")),
         }
-    if event == "plan.requested":
-        return "plan.requested", {
-            "plan": _optional_string(_field(data, "plan")),
-            "filePath": _optional_string(_field(data, "file_path", "filePath")),
-        }
-    if event == "plan.approved":
-        return "plan.approved", {"summary": _optional_string(_field(data, "summary"))}
-    if event == "plan.rejected":
-        return "plan.rejected", {"summary": _optional_string(_field(data, "summary"))}
-    if event == "plan.contract_enforced":
-        return "plan.contract_enforced", {"reason": _optional_string(_field(data, "reason"))}
-    if event in {"plan.mcp_tool_allowed", "plan.mcp_tool_blocked"}:
-        return event, {
-            "server": _bounded_optional_string(_field(data, "server"), 256),
-            "tool": _bounded_optional_string(_field(data, "tool"), 256),
-            "reason": _bounded_optional_string(_field(data, "reason"), 64),
-        }
     if event == "mcp.authorization_required":
         return event, {
             "server": _bounded_optional_string(_field(data, "server"), 256),

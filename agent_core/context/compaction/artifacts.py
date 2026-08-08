@@ -36,7 +36,6 @@ def buildArtifactPaths(sessionId: str, generation: int) -> dict[str, str]:
         "workingContext": os.path.join(directory, "working-context.json"),
         "decisions": os.path.join(directory, "decisions.md"),
         "todos": os.path.join(directory, "todos.json"),
-        "plan": os.path.join(directory, "plan.md"),
         "activity": os.path.join(directory, "activity.md"),
         "checkpoint": compactionCheckpointPath(sessionId, generation),
     }

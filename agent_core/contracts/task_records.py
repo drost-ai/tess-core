@@ -43,7 +43,6 @@ ChildAgentStatus = Literal[
     "stopped",
     "truncated",
     "awaiting_input",
-    "awaiting_plan_approval",
 ]
 HealthCheckStatus = Literal[
     "active",

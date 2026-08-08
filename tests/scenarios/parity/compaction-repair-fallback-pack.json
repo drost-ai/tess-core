@@ -9,8 +9,7 @@
     "workspace": {
       "files": {
         "README.md": "repair and fallback compaction parity\n",
-        "agent_core/context/compaction.py": "def checkpoint():\n    return 'v2 parity'\n",
-        "plans/compaction-v2.md": "# Compaction V2 Plan\n\n- Cover repair paths.\n- Cover retry and skip paths.\n"
+        "agent_core/context/compaction.py": "def checkpoint():\n    return 'v2 parity'\n"
       }
     }
   },

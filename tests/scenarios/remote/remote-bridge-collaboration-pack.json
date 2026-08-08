@@ -52,7 +52,7 @@
         "bridgeStatus": "active",
         "workersInclude": {
           "Running worker": "running",
-          "Awaiting plan": "awaiting_input",
+          "Awaiting input": "awaiting_input",
           "Remote QA": "awaiting_input"
         },
         "eventsInclude": [
@@ -118,7 +118,7 @@
         "workersInclude": {
           "Running worker": "completed",
           "Failed worker": "failed",
-          "Awaiting plan": "awaiting_input"
+          "Awaiting input": "awaiting_input"
         },
         "eventsInclude": [
           "subagent.status_changed"

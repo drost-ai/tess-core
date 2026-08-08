@@ -3,18 +3,15 @@ from __future__ import annotations
 from ..contracts.records import (
     ChildAgentRecord,
     MonitorRecord,
-    PlanApprovalRecord,
     TaskMeta,
     TaskRecord,
 )
 from ..runtime.identifiers import (
     RuntimeIdentifierError,
     parseAgentId,
-    parseApprovalRequestId,
     parseMonitorId,
     parseTaskId,
     tryParseAgentId,
-    tryParseApprovalRequestId,
     tryParseMonitorId,
     tryParseTaskId,
 )
@@ -23,18 +20,15 @@ from ..session.persisted_record_validation import (
     isChildAgentRecord,
     isHealthCheckTaskRecord,
     isMonitorRecord,
-    isPlanApprovalRecord,
     isTaskMetaRecord,
     isTaskRecord,
 )
 
 import os
-import random
-import uuid
 from typing import Any
 
 from .json_io import fileLock, readJsonFile, writeJsonFile
-from .paths import getPlansDir, getStateRoot
+from .paths import getStateRoot
 
 def taskDir(taskId: str) -> str:
     return os.path.join(getStateRoot(), "tasks", parseTaskId(taskId))
@@ -76,7 +70,6 @@ _CHILD_AGENT_STATUS_RANK = {
     "running": 1,
     "backgrounded": 1,
     "awaiting_input": 2,
-    "awaiting_plan_approval": 2,
     "completed": 3,
     "failed": 3,
     "cancelled": 3,
@@ -198,71 +191,6 @@ async def listChildAgents() -> list[ChildAgentRecord]:
     )
     return sorted(scan["records"], key=lambda item: item.get("startedAt", ""), reverse=True)
 
-def planApprovalPath(requestId: str) -> str:
-    return os.path.join(
-        getStateRoot(),
-        "plan-approvals",
-        f"{parseApprovalRequestId(requestId)}.json",
-    )
-
-async def savePlanApproval(record: PlanApprovalRecord) -> None:
-    await _save_by_path(planApprovalPath(record["requestId"]), record)
-
-async def loadPlanApproval(requestId: str) -> PlanApprovalRecord | None:
-    request_id = parseApprovalRequestId(requestId)
-    result = await readPersistedJsonRecord(
-        family="plan_approval",
-        id=request_id,
-        filePath=planApprovalPath(request_id),
-        validate=isPlanApprovalRecord,
-    )
-    return result.get("record")
-
-async def listPlanApprovals() -> list[PlanApprovalRecord]:
-    directory = os.path.join(getStateRoot(), "plan-approvals")
-    scan = await scanPersistedJsonRecords(
-        family="plan_approval",
-        directory=directory,
-        select=lambda entry: _json_candidate(directory, entry, tryParseApprovalRequestId),
-        validate=isPlanApprovalRecord,
-    )
-    return sorted(scan["records"], key=lambda item: item.get("createdAt", ""), reverse=True)
-
-PLAN_ADJECTIVES = ["amber", "brisk", "clear", "copper", "ember", "gentle", "midnight", "quiet", "rapid", "silver", "solid", "steady", "sunlit", "tidy", "velvet"]
-PLAN_NOUNS = ["anchor", "beacon", "bridge", "compass", "falcon", "harbor", "lantern", "meadow", "signal", "sparrow", "summit", "thunder", "trail", "valley", "willow"]
-async def writePlanFile(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    args = {**(args or {}), **kwargs}
-    file_path = args.get("filePath")
-    if not file_path:
-        for _ in range(12):
-            candidate = os.path.join(getPlansDir(), f"{random.choice(PLAN_ADJECTIVES)}-{random.choice(PLAN_NOUNS)}.md")
-            if not os.path.exists(candidate):
-                file_path = candidate
-                break
-        file_path = file_path or os.path.join(getPlansDir(), f"{uuid.uuid4()}.md")
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    lines = [
-        "# Assistant Plan",
-        "",
-        f"- request id: `{args['requestId']}`",
-        f"- session id: `{args['sessionId']}`",
-        f"- status: `{args['status']}`",
-        f"- cwd: `{args['cwd']}`",
-        f"- created at: `{args['createdAt']}`",
-    ]
-    if args.get("resolvedAt"):
-        lines.append(f"- resolved at: `{args['resolvedAt']}`")
-    if args.get("reason"):
-        lines.append(f"- reason: {args['reason']}")
-    lines.extend(["", "## Plan", "", (args.get("plan") or "").strip() or "_No plan text captured._"])
-    if args.get("allowedPrompts"):
-        lines.extend(["", "## Allowed Prompts", ""])
-        for prompt in args["allowedPrompts"]:
-            lines.append(f"- `{prompt.get('tool')}`: {prompt.get('prompt')}")
-    lines.extend(["", "## Retention", "", "This plan is retained indefinitely for session history and auditability.", ""])
-    with open(file_path, "w", encoding="utf-8") as handle:
-        handle.write("\n".join(lines))
-    return file_path
 async def writeTaskMeta(taskId: str, value: TaskMeta) -> None:
     path = taskMetaPath(taskId)
     async with fileLock(path):

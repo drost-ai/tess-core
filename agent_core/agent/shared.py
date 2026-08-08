@@ -4,25 +4,6 @@ from typing import Any
 
 
 
-PLAN_SAFE_TOOL_NAMES = {
-    "Read",
-    "Glob",
-    "Grep",
-    "WebFetch",
-    "WebSearch",
-    "SetStatus",
-    "Agent",
-    "AskUserQuestion",
-    "Config",
-    "ExitPlanMode",
-    "TaskMonitorStart",
-    "TaskMonitorStop",
-    "Mcp",
-    "ListMcpResources",
-    "ReadMcpResource",
-    "ReadToolArtifact",
-}
-
 IMAGE_INPUT_UNSUPPORTED_MESSAGE = "This model does not support image inputs."
 
 

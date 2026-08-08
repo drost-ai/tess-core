@@ -439,7 +439,7 @@ def isRelatedChildAgent(session: dict[str, Any], record: dict[str, Any]) -> bool
 
 
 def mapChildAgentStatus(status: str | None) -> str:
-    return {"queued": "idle", "running": "running", "backgrounded": "backgrounded", "awaiting_plan_approval": "awaiting_input", "awaiting_input": "awaiting_input", "completed": "completed", "failed": "failed", "truncated": "failed", "cancelled": "stopped", "stopped": "stopped"}.get(status or "", "idle")
+    return {"queued": "idle", "running": "running", "backgrounded": "backgrounded", "awaiting_input": "awaiting_input", "completed": "completed", "failed": "failed", "truncated": "failed", "cancelled": "stopped", "stopped": "stopped"}.get(status or "", "idle")
 
 
 def mapMonitorStatus(status: str | None) -> str:

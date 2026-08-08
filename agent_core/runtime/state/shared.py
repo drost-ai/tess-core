@@ -199,12 +199,6 @@ def _default_tool_status_detail(name: str) -> str | None:
     return None
 
 def _default_outcome_message(stop_reason: str | None) -> str:
-    if stop_reason == "plan_approval_required":
-        return "Plan ready for review."
-    if stop_reason == "plan_chat_requested":
-        return "Still in plan mode. Awaiting your reply."
-    if stop_reason == "plan_rejected":
-        return "Plan rejected."
     if stop_reason == "max_tokens":
         return "Response truncated. Awaiting your next prompt."
     if stop_reason == "max_budget_exceeded":

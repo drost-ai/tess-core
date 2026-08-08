@@ -78,7 +78,7 @@
         "pendingBridgeMessages": 1,
         "remoteStatus": "awaiting_input",
         "workersInclude": {
-          "Awaiting plan": "awaiting_input",
+          "Awaiting input": "awaiting_input",
           "Remote QA": "awaiting_input",
           "Running worker": "running"
         }
@@ -139,7 +139,7 @@
         "index": 1,
         "pendingBridgeMessages": 0,
         "workersInclude": {
-          "Awaiting plan": "awaiting_input",
+          "Awaiting input": "awaiting_input",
           "Failed worker": "failed",
           "Running worker": "completed"
         }

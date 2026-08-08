@@ -26,7 +26,7 @@ class HarnessMcpDriverTests(AgentCoreTestCase):
             }
             self.assertEqual(
                 set(probes),
-                {"plan_gate", "dispatch", "protocol", "catalog_boundary", "headless_auth"},
+                {"dispatch", "protocol", "catalog_boundary", "headless_auth"},
             )
             self.assertTrue(probes["dispatch"]["parallelOverlapped"])
             self.assertEqual(probes["headless_auth"]["afterState"], "connected")

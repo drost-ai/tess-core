@@ -14,9 +14,6 @@
     "gitBranch": "<git-branch>",
     "gitRoot": "<git-root>",
     "originalCwd": "<workspace>",
-    "planMode": {
-      "state": "inactive"
-    },
     "prNumber": null,
     "prUrl": null,
     "runtimeRestore": {

@@ -127,9 +127,6 @@ async def _build_session_for(data: dict[str, Any], paths: dict[str, Any], *, def
     session["todos"] = [{"id": "todo-1", "text": "Build compaction parity primitives", "status": "in_progress"}]
     metadata = session.setdefault("metadata", {})
     metadata["workspaceName"] = data.get("workspaceName") or "Compaction Parity"
-    plan_path = paths["python_workspace"] / "plans" / "compaction-v2.md"
-    if plan_path.exists():
-        metadata["planMode"] = {"requestId": "plan-compaction-v2", "state": "approved", "filePath": str(plan_path)}
     return config, session
 
 

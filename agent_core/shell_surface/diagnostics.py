@@ -139,7 +139,7 @@ async def buildCollaborationStatusReport(session: dict[str, Any]) -> str:
     metadata = session.get("metadata", {})
     remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
     bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
-    awaiting = [record for record in agents if record.get("status") in {"awaiting_plan_approval", "awaiting_input"}]
+    awaiting = [record for record in agents if record.get("status") in {"awaiting_input"}]
     failed = [record for record in [*agents, *tasks, *monitors] if record.get("status") in {"failed", "crashed", "orphaned"}]
     sections = [
         "\n".join(

@@ -100,9 +100,6 @@ def getProjectMemoryPath(cwd: str) -> str:
 def getProjectMemoryRecordsPath(cwd: str) -> str:
     return os.path.join(getProjectStateDir(cwd), "memory-records.json")
 
-def getPlansDir() -> str:
-    return os.path.join(getStateRoot(), "plans")
-
 def getDaemonDir() -> str:
     return os.path.join(getStateRoot(), "daemon")
 
@@ -190,8 +187,6 @@ async def ensureBaseLayout(cwd: str, paths: RuntimePaths | None = None) -> None:
         graph.taskRecordsDir,
         graph.monitorsDir,
         graph.agentsDir,
-        graph.planApprovalsDir,
-        graph.plansDir,
         graph.remoteSessionsDir,
         graph.bridgesDir,
         graph.logsDir,

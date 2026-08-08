@@ -18,8 +18,6 @@ class PublicApiTests(AgentCoreTestCase):
         self.assertTrue(callable(provider_watchdog.createProviderRequestWatchdog))
         self.assertEqual(platform_common.buildShellCommand("echo", ["hello world"], {"FOO": "bar baz"}), "FOO='bar baz' echo 'hello world'")
         self.assertEqual(
-            subagents_module.parseAllowedPrompts(
-                [{"tool": "Bash", "prompt": "  pytest  "}, {"tool": "Read", "prompt": "ignored"}]
-            ),
-            [{"tool": "Bash", "prompt": "pytest"}],
+            subagents_module.sanitizePermissionMode("bogus"),
+            "default",
         )

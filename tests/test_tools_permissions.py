@@ -15,12 +15,6 @@ class ToolPermissionTests(AgentCoreTestCase):
             with self.assertRaises(PermissionError):
                 run(write.handler({"file_path": str(workspace / "blocked.txt"), "content": "blocked"}, context))
 
-            session["permissionMode"] = "plan"
-            config["permissionMode"] = "plan"
-            with self.assertRaises(PermissionError) as plan_ctx:
-                run(write.handler({"file_path": str(workspace / "plan.txt"), "content": "blocked"}, context))
-            self.assertIn("plan mode", str(plan_ctx.exception))
-
             session["permissionMode"] = "acceptEdits"
             config["permissionMode"] = "acceptEdits"
             run(write.handler({"file_path": str(workspace / "accepted.txt"), "content": "ok"}, context))
@@ -129,7 +123,6 @@ class ToolPermissionTests(AgentCoreTestCase):
 
             cases = [
                 ("Write", "edit", "bypassPermissions", False, None, {"decision": "allow", "source": "mode"}),
-                ("Bash", "shell", "plan", False, "git status", {"decision": "deny", "source": "mode", "reason": "Bash is blocked in plan mode. Switch to /permissions default or /permissions acceptEdits to execute changes."}),
                 ("Write", "edit", "default", False, None, {"decision": "ask", "source": "mode", "switchMode": "acceptEdits", "reason": "This tool changes files on disk."}),
                 ("EnterWorktree", "worktree", "auto", False, None, {"decision": "deny", "source": "mode", "reason": "Worktree creation is blocked in non-interactive permission modes."}),
                 ("TaskStop", "process", "dontAsk", False, None, {"decision": "deny", "source": "mode", "reason": "Stopping processes is blocked in non-interactive permission modes."}),
@@ -251,11 +244,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         self.assertEqual(core.sanitizePermissionMode("bypassPermissions"), "bypassPermissions")
         self.assertEqual(core.sanitizePermissionMode("bogus"), "default")
         self.assertEqual(core.inheritParentPermissionMode("default", "bypassPermissions"), "bypassPermissions")
-        self.assertEqual(core.inheritParentPermissionMode("plan", "acceptEdits"), "acceptEdits")
         self.assertEqual(core.inheritParentPermissionMode("auto", "acceptEdits"), "auto")
-        self.assertEqual(core.inheritParentPermissionMode("bypassPermissions", "plan"), "plan")
-        self.assertEqual(core.mapStopReasonToStatus("plan_approval_required"), "awaiting_plan_approval")
-        self.assertEqual(core.mapStopReasonToStatus("plan_chat_requested"), "awaiting_input")
         self.assertEqual(core.mapStopReasonToStatus("cancelled"), "cancelled")
         self.assertEqual(core.mapStopReasonToStatus("max_tokens"), "truncated")
         self.assertEqual(core.mapStopReasonToStatus("max_output_tokens"), "truncated")
@@ -267,7 +256,6 @@ class ToolPermissionTests(AgentCoreTestCase):
         self.assertEqual(core.mapStopReasonToStatus("timeout_ms"), "truncated")
         self.assertEqual(core.mapStopReasonToStatus("max_budget_exceeded"), "failed")
         self.assertEqual(core.mapStopReasonToStatus("max_budget_usd"), "failed")
-        self.assertEqual(core.mapStopReasonToStatus("plan_rejected"), "failed")
         self.assertEqual(core.mapStopReasonToCompletionReason("max_tokens"), "max_output_tokens")
         self.assertEqual(core.mapStopReasonToCompletionReason("max_output_tokens"), "max_output_tokens")
         self.assertEqual(core.mapStopReasonToCompletionReason("length"), "max_output_tokens")

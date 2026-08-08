@@ -32,7 +32,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 "description": "Investigate",
                 "prompt": "Find the issue",
                 "agentType": "researcher",
-                "mode": "plan",
+                "mode": "default",
                 "teamName": "alpha",
                 "runInBackground": True,
             }))
@@ -41,7 +41,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 (child_session["messages"][0]["content"], child_session["messages"][0]["metadata"]["agentCoreOrigin"]["kind"]),
                 ("Find the issue", "subagent_task_prompt"),
             )
-            self.assertEqual(child_session["permissionMode"], "plan")
+            self.assertEqual(child_session["permissionMode"], "default")
             self.assertEqual(child_session["metadata"]["depth"], 1)
             self.assertEqual(child_session["metadata"]["parentSessionId"], parent["id"])
             self.assertNotIn("assistantName", child_session["metadata"])

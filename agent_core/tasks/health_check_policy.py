@@ -210,7 +210,7 @@ def assertHealthCheckExecutionPolicy(spec: dict[str, Any], policy: dict[str, Any
     environment = policy.get("environment")
     valid = (
         policy.get("schemaVersion") == 1
-        and policy.get("permissionMode") in {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
+        and policy.get("permissionMode") in {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"}
         and isinstance(policy.get("permissionSource"), str)
         and bool(policy.get("permissionSource"))
         and isinstance(policy.get("authorizedAt"), str)

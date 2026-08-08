@@ -48,7 +48,6 @@ from .mcp_package28 import (
     record_mcp_protocol_probe,
     recover_mcp_headless_auth,
     run_mcp_dispatch_probe,
-    run_mcp_plan_probe,
 )
 from .model import Scenario, ScenarioAssertionError, ScenarioResult, StepResult
 from .normalization import normalize_observations
@@ -285,8 +284,6 @@ async def _execute_step(
         return await call_mcp_tool(data, sandbox, state)
     if step_type == "call_mcp_generated_tool":
         return await call_mcp_generated_tool(data, sandbox, state)
-    if step_type == "run_mcp_plan_probe":
-        return await run_mcp_plan_probe(data, sandbox, state)
     if step_type == "run_mcp_dispatch_probe":
         return await run_mcp_dispatch_probe(data, sandbox, state)
     if step_type == "apply_mcp_catalog_change":

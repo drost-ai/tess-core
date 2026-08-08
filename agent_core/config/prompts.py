@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from .providers import normalizeModelName, resolveProviderForModelSelection
@@ -44,27 +43,6 @@ def resolveModelForAgent(config: dict[str, Any], agentName: str | None, fallback
     model = (definition or {}).get("model") or fallbackModel or config["model"]
     return normalizeModelName(model, resolveProviderForModelSelection(config.get("provider"), model))
 
-def isPlanRevisionPrompt(prompt: str) -> bool:
-    normalized = prompt.strip().lower()
-    if not normalized:
-        return False
-    patterns = [
-        r"\bupdate (the )?plan\b",
-        r"\brevise (the )?plan\b",
-        r"\bmodify (the )?plan\b",
-        r"\bregenerate (the )?plan\b",
-        r"\brefresh (the )?plan\b",
-        r"\bnew plan\b",
-        r"\bfinali[sz]e (the )?plan\b",
-        r"\bshow (me )?(the )?updated plan\b",
-        r"\bproceed with implementation\b",
-        r"\bgo ahead and (build|implement|start)\b",
-        r"\bstart (building|implementing)\b",
-        r"\buse the original (plan|document|doc)\b",
-        r"\buse .* as (the )?(spec|reference|implementation guide)\b",
-    ]
-    return any(re.search(pattern, normalized) for pattern in patterns)
-
 def filterToolsByPolicy(config: dict[str, Any]) -> list[str]:
     allow = set(config.get("allowedTools") or [])
     deny = set(config.get("disallowedTools") or [])
@@ -89,7 +67,6 @@ def defaultToolList() -> list[str]:
         "SendMessage",
         "AskUserQuestion",
         "Config",
-        "ExitPlanMode",
         "NotebookEdit",
         "TaskOutput",
         "TaskStop",

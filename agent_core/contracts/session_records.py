@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-from .plan_records import PlanModeState
-
 
 class SessionUsageTotals(TypedDict):
     """``metadata.usage`` counters."""
@@ -66,7 +64,6 @@ class SessionMetadata(TypedDict, total=False):
     depth: int
     childSessionIds: list[str]
     childAgentIds: list[str]
-    planMode: PlanModeState
     compactionState: CompactionState
     fullTranscriptLog: FullTranscriptLog
     forkedFromSessionId: str

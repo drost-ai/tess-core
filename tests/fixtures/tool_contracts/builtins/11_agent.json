@@ -34,8 +34,7 @@
           "acceptEdits",
           "bypassPermissions",
           "dontAsk",
-          "auto",
-          "plan"
+          "auto"
         ]
       },
       "isolation": {

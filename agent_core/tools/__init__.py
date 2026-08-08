@@ -19,7 +19,7 @@ from .processes import _BACKGROUND_RUNNERS, _background_runner_env, _communicate
 from .registry import createBuiltinToolContractSnapshot, createBuiltinTools
 from .schemas import BUILTIN_TOOL_DESCRIPTIONS, BUILTIN_TOOL_INPUT_SCHEMAS, BUILTIN_TOOL_SPECS, builtin_tool
 from .session_metadata import _append_unique_metadata_list, _apply_workspace_snapshot_metadata
-from .session_tools import _ask_user_question_tool, _config_tool, _derive_todo_active_form, _exit_plan_mode_tool, _extract_latest_assistant_text, _normalize_todo_item, _set_status_tool, _todo_tool, parseAllowedPrompts
+from .session_tools import _ask_user_question_tool, _config_tool, _derive_todo_active_form, _normalize_todo_item, _set_status_tool, _todo_tool
 from .shell import _bash_tool, _normalize_bash_timeout
 from .tasks import _stopped_task_execution_descriptor, _task_health_check_start_tool, _task_health_check_stop_tool, _task_monitor_start_tool, _task_monitor_stop_tool, _task_output_tool, _task_stop_tool
 from .validation import _require_list, _require_number, _require_optional_number, _require_string, _without_none_values
@@ -38,7 +38,6 @@ __all__ = [
     "fetch",
     "normalizeBingResultUrl",
     "normalizeDuckDuckGoResultUrl",
-    "parseAllowedPrompts",
     "parseBingResults",
     "parseDuckDuckGoResults",
     "searchBing",

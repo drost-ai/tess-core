@@ -28,7 +28,6 @@ FAMILY_MAX_BYTES = {
     "daemon_state": 256 * 1024,
     "health_check": 512 * 1024,
     "monitor": 512 * 1024,
-    "plan_approval": 512 * 1024,
     "remote_session": 512 * 1024,
     "task_meta": 1024 * 1024,
     "task_record": 1024 * 1024,

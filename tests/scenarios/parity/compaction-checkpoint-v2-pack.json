@@ -9,8 +9,7 @@
     "workspace": {
       "files": {
         "README.md": "checkpoint-v2 compaction parity\n",
-        "agent_core/context/compaction.py": "def checkpoint():\n    return 'v2 parity'\n",
-        "plans/compaction-v2.md": "# Compaction V2 Plan\n\n- Build fake model clients.\n- Compare checkpoint artifacts.\n"
+        "agent_core/context/compaction.py": "def checkpoint():\n    return 'v2 parity'\n"
       }
     }
   },

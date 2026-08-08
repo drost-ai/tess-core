@@ -193,7 +193,7 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
                         'name': {'type': 'string'},
                         'team_name': {'type': 'string'},
                         'mode': {'type': 'string',
-                                 'enum': ['default', 'acceptEdits', 'bypassPermissions', 'dontAsk', 'auto', 'plan']},
+                                 'enum': ['default', 'acceptEdits', 'bypassPermissions', 'dontAsk', 'auto']},
                         'isolation': {'type': 'string', 'enum': ['shared', 'worktree', 'none']}},
          'required': ['description', 'prompt'],
          'additionalProperties': False},
@@ -210,11 +210,6 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
         "description": 'Return the active runtime configuration snapshot.',
         "concurrency": 'parallel',
         "schema": {'type': 'object', 'additionalProperties': False},
-    },
-    "ExitPlanMode": {
-        "description": 'Request approval to exit plan mode and continue with implementation.',
-        "concurrency": 'exclusive',
-        "schema": {'type': 'object', 'properties': {'allowedPrompts': {'type': 'array'}}, 'additionalProperties': False},
     },
     "NotebookEdit": {
         "description": 'Edit Jupyter notebook cells by ID.',

@@ -153,7 +153,7 @@
         "completionReason": null,
         "id": "agent-awaiting",
         "kind": "subagent",
-        "label": "Awaiting plan",
+        "label": "Awaiting input",
         "latestResultAt": null,
         "monitorId": null,
         "owner": "daemon",
@@ -166,10 +166,10 @@
         "sessionId": "child-awaiting",
         "status": "awaiting_input",
         "stoppable": true,
-        "summary": "Needs plan approval.",
+        "summary": "Needs operator input.",
         "taskId": null,
         "updatedAt": "<timestamp>",
-        "waitingReason": "Needs plan approval."
+        "waitingReason": "Needs operator input."
       }
     ]
   },

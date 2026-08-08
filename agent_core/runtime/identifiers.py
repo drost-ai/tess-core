@@ -67,10 +67,6 @@ def parseArtifactId(value: Any) -> str:
     return _parse_runtime_id(value, "artifact")
 
 
-def parseApprovalRequestId(value: Any) -> str:
-    return _parse_runtime_id(value, "approval request")
-
-
 def parseTaskReference(value: Any) -> dict[str, str]:
     if not isinstance(value, str):
         raise RuntimeIdentifierError("task reference", value, "expected a string")
@@ -133,7 +129,5 @@ def tryParseRemoteSessionId(value: Any) -> str | None:
     return _try_parse(value, parseRemoteSessionId)
 
 
-def tryParseApprovalRequestId(value: Any) -> str | None:
-    return _try_parse(value, parseApprovalRequestId)
 
 

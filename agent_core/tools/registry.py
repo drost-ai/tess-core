@@ -10,7 +10,7 @@ from .files import _edit_tool, _read_tool, _write_tool
 from .mcp import _list_mcp_resources_tool, _mcp_tool, _read_mcp_resource_tool
 from .messaging import _send_message_tool
 from .notebook import _notebook_edit_tool
-from .session_tools import _ask_user_question_tool, _config_tool, _exit_plan_mode_tool, _set_status_tool, _todo_tool
+from .session_tools import _ask_user_question_tool, _config_tool, _set_status_tool, _todo_tool
 from .shell import _bash_tool
 from .tasks import _task_health_check_start_tool, _task_health_check_stop_tool, _task_monitor_start_tool, _task_monitor_stop_tool, _task_output_tool, _task_stop_tool
 from .web import _web_fetch_tool, _web_search_tool
@@ -43,7 +43,6 @@ def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefini
         _send_message_tool(),
         _ask_user_question_tool(),
         _config_tool(),
-        _exit_plan_mode_tool(),
         _notebook_edit_tool(),
         _task_output_tool(),
         _task_stop_tool(),

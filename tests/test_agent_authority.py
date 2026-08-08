@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from tests.support.agent_core_case import *
 
 
-MODES = ("default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan")
+MODES = ("default", "acceptEdits", "bypassPermissions", "dontAsk", "auto")
 
 
 def _seal_authority(root: str, **overrides):

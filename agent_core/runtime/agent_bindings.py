@@ -64,8 +64,6 @@ _EXTENSION_FIELDS = frozenset({
     "openaiClientFactory",
     "partialOutputRecoveryPolicy",
     "repositoryIdentity",
-    "resolveMcpOperatorPolicy",
-    "resolve_mcp_operator_policy",
 })
 
 # Public union for adapters that filter a wider component surface down to

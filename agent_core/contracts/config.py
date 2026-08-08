@@ -11,7 +11,7 @@ from typing import Any, Literal, TypedDict, Union
 
 
 # Mirrors PERMISSION_MODES in tools/permissions.py (sync-tested).
-PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"]
+PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"]
 
 ProviderKind = Literal["anthropic", "openai"]
 

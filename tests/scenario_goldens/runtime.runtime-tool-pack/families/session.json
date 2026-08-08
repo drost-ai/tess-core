@@ -133,9 +133,6 @@
     "gitRoot": "<git-root>",
     "monitorIds": [],
     "originalCwd": "<workspace>",
-    "planMode": {
-      "state": "inactive"
-    },
     "prNumber": null,
     "prUrl": null,
     "runtimeRestore": {

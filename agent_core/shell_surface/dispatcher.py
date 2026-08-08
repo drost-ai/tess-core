@@ -41,7 +41,7 @@ from .status import (
     buildTodosReport,
     formatUsageBreakdown,
 )
-from .tasks import _handle_plans, _handle_tasks
+from .tasks import _handle_tasks
 from typing import Any, Callable
 
 
@@ -73,7 +73,6 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "memory": lambda c: _handle_memory(c["argText"], c["session"], c["hooks"]),
     "extensions": lambda c: _handle_extensions(c["hooks"]),
     "cost": lambda c: _info(c["hooks"], "Usage", formatUsageBreakdown(c["session"].get("metadata", {}).get("usage"))),
-    "plans": lambda c: _handle_plans(c["argText"], c["session"], c["hooks"]),
     "tasks": lambda c: _handle_tasks(c["argText"], c["session"], c["hooks"], c["request"]),
     "agents": lambda c: _handle_agents(c["argText"], c["session"], c["config"], c["hooks"], c["request"]),
     "background": lambda c: _handle_background(c["argText"], c["session"], c["hooks"]),

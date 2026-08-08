@@ -98,7 +98,7 @@ async def _build_agents_report(session: dict[str, Any], config: dict[str, Any], 
     if not normalized:
         configured = config.get("agents") or {}
         active = [record for record in related_agents if _is_active_child_agent(record)]
-        awaiting = [record for record in related_agents if record.get("status") == "awaiting_plan_approval"]
+        awaiting = [record for record in related_agents if record.get("status") == "awaiting_input"]
         configured_lines = _format_configured_agents(configured)
         return "\n".join(
             [
@@ -215,4 +215,4 @@ def _is_related_child_agent(session: dict[str, Any], record: dict[str, Any]) -> 
 
 
 def _is_active_child_agent(record: dict[str, Any]) -> bool:
-    return record.get("status") in {"queued", "running", "backgrounded", "awaiting_plan_approval", "awaiting_input"}
+    return record.get("status") in {"queued", "running", "backgrounded", "awaiting_input"}

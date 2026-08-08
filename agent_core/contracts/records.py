@@ -8,7 +8,6 @@ owned by one record family.
 from __future__ import annotations
 
 from .monitor_records import MonitorRecord, MonitorStatus
-from .plan_records import PlanApprovalRecord, PlanModeState
 from .session_records import (
     CompactionState,
     FullTranscriptLog,
@@ -60,8 +59,6 @@ __all__ = [
     "OwnedProcessIdentity",
     "MonitorRecord",
     "MonitorStatus",
-    "PlanApprovalRecord",
-    "PlanModeState",
     "SessionMetadata",
     "SessionBodyMessageRecord",
     "SessionBodyRef",

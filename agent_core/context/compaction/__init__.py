@@ -17,7 +17,6 @@ from .cutoffs import (
     isSafeWorkingSetStart,
     messageHasToolResults,
     messageHasToolUses,
-    resolveLatestPlan,
 )
 from .documents import (
     assertModelBackedCompactionArtifacts,
@@ -30,7 +29,6 @@ from .documents import (
     loadWorkingContextArtifact,
     renderActivityMarkdown,
     renderDecisionsMarkdown,
-    renderPlanMarkdown,
     renderSummaryMarkdown,
 )
 from .evidence import (
@@ -192,10 +190,8 @@ __all__ = [
     "parseMaybeJson",
     "renderActivityMarkdown",
     "renderDecisionsMarkdown",
-    "renderPlanMarkdown",
     "renderSummaryMarkdown",
     "renderWorkingContextPromptContext",
-    "resolveLatestPlan",
     "runCompaction",
     "runCompactionCheckpointVerification",
     "runCompactionCheckpointVerificationWithFallback",

@@ -75,7 +75,6 @@ def coerceWorkingContextDocument(value: Any) -> dict[str, Any] | None:
     current_state = asRecord(record.get("currentState")) or {}
     todos = asRecord(record.get("todos")) or {}
     activity = asRecord(record.get("activity")) or {}
-    plan = asRecord(record.get("plan"))
     compaction = asRecord(record.get("compaction"))
     compaction_record = None
     if compaction and compaction.get("provider") == "openai" and isinstance(compaction.get("model"), str):
@@ -117,15 +116,6 @@ def coerceWorkingContextDocument(value: Any) -> dict[str, Any] | None:
         "currentState": {"completed": asStringArray(current_state.get("completed")), "inProgress": asStringArray(current_state.get("inProgress")), "blocked": asStringArray(current_state.get("blocked"))},
         "decisions": asStringArray(record.get("decisions")),
         "discoveries": asStringArray(record.get("discoveries")),
-        "plan": {
-            "requestId": plan.get("requestId") if plan and isinstance(plan.get("requestId"), str) else None,
-            "status": plan.get("status") if plan and isinstance(plan.get("status"), str) else None,
-            "filePath": plan.get("filePath") if plan and isinstance(plan.get("filePath"), str) else None,
-            "exists": bool(plan and plan.get("exists")),
-            "content": plan.get("content") if plan and isinstance(plan.get("content"), str) else None,
-        }
-        if plan
-        else None,
         "todos": {
             "open": asStringArray(todos.get("open")),
             "completed": asStringArray(todos.get("completed")),

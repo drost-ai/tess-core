@@ -1,37 +1,5 @@
 [
   {
-    "decisions": [
-      {
-        "data": {
-          "reason": "read_only_hint",
-          "server": "policy",
-          "tool": "read"
-        },
-        "event": "plan.mcp_tool_allowed"
-      },
-      {
-        "data": {
-          "reason": "not_read_only",
-          "server": "policy",
-          "tool": "mutate"
-        },
-        "event": "plan.mcp_tool_blocked"
-      }
-    ],
-    "probe": "plan_gate",
-    "status": "passed",
-    "toolResults": [
-      {
-        "isError": false,
-        "toolUseId": "plan-0"
-      },
-      {
-        "isError": true,
-        "toolUseId": "plan-1"
-      }
-    ]
-  },
-  {
     "defaultConcurrency": "exclusive",
     "exclusiveSerialized": true,
     "execution": [

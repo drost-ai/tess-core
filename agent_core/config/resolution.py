@@ -16,7 +16,6 @@ from ..storage import (
     configureRuntimeHome,
     ensureBaseLayout,
     getContextRuntimeHome,
-    getPlansDir,
     loadAuth,
     loadCodexAuthToken,
     resolveMaybeRelative,
@@ -350,7 +349,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     allowed_tools = _dedupe(_parse_tool_list(options.get("allowedTools"), merged_settings.get("allowedTools"), tools))
     disallowed_tools = _dedupe(_parse_tool_list(options.get("disallowedTools"), merged_settings.get("disallowedTools"), []))
     plugin_dirs = [resolveMaybeRelative(cwd, item) for item in options.get("pluginDir", [])]
-    allowed_roots = _dedupe([cwd, getPlansDir(), *[resolveMaybeRelative(cwd, item) for item in options.get("addDir", [])]])
+    allowed_roots = _dedupe([cwd, *[resolveMaybeRelative(cwd, item) for item in options.get("addDir", [])]])
 
     agents = {**clone(BUILTIN_AGENTS), **(merged_settings.get("agents") or {}), **(_parse_inline_agents(options.get("agents")) or {})}
     assistant_name = options.get("assistantName") or merged_settings.get("assistantName") or DEFAULT_ASSISTANT_NAME

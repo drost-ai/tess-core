@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from ...storage import listPlanApprovals
-from .artifacts import _read_text
 from .shared import (
     compaction_knob,
     LOW_VALUE_TAIL_TOOL_NAMES,
@@ -118,27 +116,3 @@ def messageHasToolUses(message: dict[str, Any]) -> bool:
 
 def messageHasToolResults(message: dict[str, Any]) -> bool:
     return isinstance(message.get("content"), list) and any(block.get("type") == "tool_result" for block in message["content"])
-
-
-async def resolveLatestPlan(session: dict[str, Any]) -> dict[str, Any] | None:
-    approvals = [record for record in await listPlanApprovals() if record.get("sessionId") == session.get("id") or record.get("parentSessionId") == session.get("id")]
-    approvals = sorted(approvals, key=lambda record: record.get("createdAt", ""), reverse=True)
-    latest_approval = approvals[0] if approvals else None
-    current_plan_state = session.get("metadata", {}).get("planMode")
-    file_path = None
-    if isinstance(current_plan_state, dict):
-        file_path = current_plan_state.get("filePath")
-    if not file_path and latest_approval:
-        file_path = latest_approval.get("filePath")
-    content = _read_text(file_path) if file_path else ""
-    if not current_plan_state and not latest_approval and not file_path:
-        return None
-    request_id = (current_plan_state or {}).get("requestId") if isinstance(current_plan_state, dict) and "requestId" in current_plan_state else (latest_approval or {}).get("requestId")
-    status = (current_plan_state or {}).get("state") if isinstance(current_plan_state, dict) and current_plan_state.get("state") is not None else (latest_approval or {}).get("status")
-    return {
-        "requestId": request_id,
-        "status": status,
-        "filePath": file_path,
-        "exists": bool(file_path and content),
-        "content": content or None,
-    }

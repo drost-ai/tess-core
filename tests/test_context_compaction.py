@@ -250,7 +250,7 @@ class ContextCompactionTests(AgentCoreTestCase):
 
         fatal = FatalClient()
         with self.assertRaises(RuntimeError):
-            run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": fatal, "previousWorkingContext": None, "latestPlan": None, "sourceMessages": source_messages, "sourceStart": 0}))
+            run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": fatal, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
         self.assertEqual(fatal.calls, 1)
 
         class ContextLimitClient:
@@ -292,7 +292,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                 return {"text": json.dumps(payload), "usage": {}, "model": args["model"]}
 
         context_limit = ContextLimitClient()
-        result = run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": context_limit, "previousWorkingContext": None, "latestPlan": None, "sourceMessages": source_messages, "sourceStart": 0}))
+        result = run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": context_limit, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
         self.assertEqual(result["qualityClassification"], "usable")
         self.assertEqual(context_limit.calls, 2)
 

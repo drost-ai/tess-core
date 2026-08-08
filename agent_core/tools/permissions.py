@@ -12,7 +12,7 @@ from ..authority.shell_command_policy import classifyReadOnlyShellCommand, parse
 from ..storage import getProjectRoot, loadAutoMode
 
 
-PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto", "plan"}
+PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"}
 
 
 def _pinned_child_authority(session: dict[str, Any]) -> dict[str, Any] | None:
@@ -160,8 +160,6 @@ async def _resolve_tool_permission(
         }
     if mode == "bypassPermissions":
         return {"decision": "allow", "source": "mode"}
-    if mode == "plan":
-        return {"decision": "deny", "source": "mode", "reason": f"{tool_name} is blocked in plan mode. Switch to /permissions default or /permissions acceptEdits to execute changes."}
     ask_rule = matched("ask")
     if ask_rule:
         return {

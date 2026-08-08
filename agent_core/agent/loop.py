@@ -24,7 +24,6 @@ from .cancellation import (
     _safe_emit,
     _throw_if_turn_cancelled,
 )
-from .shared import PLAN_SAFE_TOOL_NAMES
 from ._turn_state import TurnState
 from ..providers.usage_costs import (
     ensureUsageTotals as _ensure_usage_totals,
@@ -32,9 +31,7 @@ from ..providers.usage_costs import (
     mergeUsageIntoSession as _merge_usage_into_session,
     roundUsd as _round_usd,
 )
-from .plan_policy import _requires_plan_approval
 from typing import Any
-from .plan_policy import plan_mode_denial as _plan_mode_denial
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit
 from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
 from .prompt_content import extractAssistantText as extractAssistantText, normalize_agent_prompt as _normalize_agent_prompt
@@ -358,17 +355,6 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                     {"kind": "synthesized", "content": message, "isError": True},
                     rejected=True,
                 )
-            if _requires_plan_approval(session):
-                denial = await _plan_mode_denial(
-                    tool=tool, tool_use=tool_use, runtime=runtime, config=config, session=session
-                )
-                if denial is not None:
-                    return await finish_tool_result(
-                        tool_use,
-                        {"kind": "synthesized", "content": denial, "isError": True},
-                        blocked_by_plan_contract=True,
-                        rejected=True,
-                    )
             invalid_tool_input = _invalid_tool_input_message(tool_use)
             if invalid_tool_input:
                 state.tool_count += 1
@@ -439,19 +425,17 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             finally:
                 await image_budget.complete(tool_priorities.get(id(tool_use), -1))
             pause = result.pop("_pauseMessage", None)
-            blocked = bool(result.pop("_blockedByPlanContract", False))
             additional = result.pop("_additionalBlocks", [])
             return {
                 "result": result,
                 **({"additionalResults": additional} if additional else {}),
                 **({"pauseMessage": pause} if pause else {}),
-                **({"blockedByPlanContract": True} if blocked else {}),
             }
 
         try:
             batch = await _run_tool_dispatch_batch(
                 tool_uses=tool_uses,
-                sequential=_requires_plan_approval(session),
+                sequential=False,
                 concurrency_of=lambda tool_use: _resolve_tool_concurrency(tools_by_name.get(tool_use["name"])),
                 run=dispatch_single,
             )

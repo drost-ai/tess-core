@@ -11,7 +11,6 @@ from .subagent_parts.permissions import (
     mapStopReasonToCompletionReason,
     mapStopReasonToStatus,
     mapStopReasonToWaitingReason,
-    parseAllowedPrompts,
     sanitizePermissionMode,
 )
 
@@ -22,7 +21,6 @@ __all__ = [
     "mapStopReasonToCompletionReason",
     "mapStopReasonToStatus",
     "mapStopReasonToWaitingReason",
-    "parseAllowedPrompts",
     "prepareSubagent",
     "sanitizePermissionMode",
     "startBackgroundSubagent",

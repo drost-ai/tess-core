@@ -61,23 +61,10 @@
     },
     {
       "create_mcp_runtime": {
-        "permissionMode": "plan",
         "servers": [
           "policy"
         ],
         "useSession": true
-      }
-    },
-    {
-      "run_mcp_plan_probe": {
-        "expectedReasons": [
-          "read_only_hint",
-          "not_read_only"
-        ],
-        "runtimeNames": [
-          "mcp__policy__read",
-          "mcp__policy__mutate"
-        ]
       }
     },
     {

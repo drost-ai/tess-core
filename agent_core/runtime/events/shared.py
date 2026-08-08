@@ -44,12 +44,6 @@ KNOWN_RUNTIME_EVENTS = {
     "permission.decided",
     "sandbox.applied",
     "sandbox.downgraded",
-    "plan.requested",
-    "plan.approved",
-    "plan.rejected",
-    "plan.contract_enforced",
-    "plan.mcp_tool_allowed",
-    "plan.mcp_tool_blocked",
     "mcp.authorization_required",
     "mcp.catalog_changed_applied",
     "mcp.catalog_refresh_failed",
@@ -176,7 +170,7 @@ def _provider_field(value: Any) -> str:
     return "anthropic" if value == "anthropic" else "openai"
 
 def _permission_mode_field(value: Any) -> str:
-    return value if value in {"acceptEdits", "bypassPermissions", "default", "dontAsk", "plan", "auto"} else "default"
+    return value if value in {"acceptEdits", "bypassPermissions", "default", "dontAsk", "auto"} else "default"
 
 def _optional_number(value: Any) -> int | float | None:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None

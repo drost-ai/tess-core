@@ -65,7 +65,6 @@ class CompactionHardeningTests(AgentCoreTestCase):
                 "session": session,
                 "generation": 3,
                 "createdAt": "2026-07-20T17:01:07.533Z",
-                "latestPlan": None,
                 "sourceRange": source_range,
                 "candidate": {
                     "qualityClassification": "usable",

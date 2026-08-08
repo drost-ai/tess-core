@@ -58,9 +58,7 @@ from .status import (
     normalizeModel,
 )
 from .tasks import (
-    buildPlansReport,
     buildTasksReport,
-    formatPlanApprovalRecord,
     formatTaskInspectReport,
     formatTaskListReport,
     formatTaskResultReport,
@@ -78,7 +76,6 @@ __all__ = [
     "buildDaemonReport",
     "buildMonitorsReport",
     "buildPermissionsReport",
-    "buildPlansReport",
     "buildProviderProfilesReport",
     "buildRemoteFallbackReport",
     "buildRemoteListReport",
@@ -96,7 +93,6 @@ __all__ = [
     "formatDebugBundleReport",
     "formatDiagnosticsReport",
     "formatMonitorRecord",
-    "formatPlanApprovalRecord",
     "formatPreflightTokenSummary",
     "formatRemoteSessionRecord",
     "formatSessionCandidate",

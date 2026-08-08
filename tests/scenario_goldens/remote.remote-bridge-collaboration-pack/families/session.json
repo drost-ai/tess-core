@@ -23,9 +23,6 @@
       "monitor-remote"
     ],
     "originalCwd": "<workspace>",
-    "planMode": {
-      "state": "inactive"
-    },
     "prNumber": null,
     "prUrl": null,
     "remoteControlEnabled": true,
@@ -76,16 +73,16 @@
         },
         {
           "attachableSessionId": "child-awaiting",
-          "detailStatus": "awaiting_plan_approval",
+          "detailStatus": "awaiting_input",
           "foregroundMode": "background",
           "id": "agent-awaiting",
           "kind": "subagent",
-          "resultSummary": "Needs plan approval.",
+          "resultSummary": "Needs operator input.",
           "retrieveOnly": false,
           "status": "awaiting_input",
-          "summary": "Needs plan approval.",
+          "summary": "Needs operator input.",
           "taskFamily": "subagent",
-          "title": "Awaiting plan",
+          "title": "Awaiting input",
           "updatedAt": "<timestamp>"
         }
       ],

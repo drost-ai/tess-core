@@ -3,11 +3,9 @@ from __future__ import annotations
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 
-import uuid
 from typing import Any
 
-from .._utils import maybe_await, now_iso, pretty_json
-from ..storage import savePlanApproval, writePlanFile
+from .._utils import maybe_await, pretty_json
 from ..tasks.communication import create_task_question, read_task_questions
 from ..payloads.todo_policy import requireTodoItems, serializeTodoStateSummary, updateActiveTaskFromTodos
 from .cancellation import _throw_if_tool_cancelled
@@ -131,93 +129,6 @@ def _config_tool() -> ToolDefinition:
     return builtin_tool("Config", handler)
 
 
-def _exit_plan_mode_tool() -> ToolDefinition:
-    async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        session = context["session"]
-        config = context["config"]
-        if session.get("permissionMode") != "plan":
-            return {"content": "ExitPlanMode is only available while the session is in plan mode.", "isError": True}
-        allowed = parseAllowedPrompts(input.get("allowedPrompts"))
-        plan = _extract_latest_assistant_text(session)
-        request_id = str(uuid.uuid4())
-        created_at = now_iso()
-        metadata = session.setdefault("metadata", {})
-        file_path = await writePlanFile(requestId=request_id, sessionId=session["id"], cwd=session["cwd"], plan=plan, allowedPrompts=allowed, status="pending", createdAt=created_at)
-        record_base = {
-            "requestId": request_id,
-            "sessionId": session["id"],
-            "agentId": metadata.get("agentId"),
-            "parentSessionId": metadata.get("parentSessionId"),
-            "plan": plan,
-            "filePath": file_path,
-            "allowedPrompts": allowed,
-            "createdAt": created_at,
-        }
-        context.get("outputJson", lambda *_: None)("plan.requested", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "plan": plan, "file_path": file_path})
-
-        if not context.get("interactive"):
-            metadata["planMode"] = {"state": "pending", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed}
-            await savePlanApproval({**record_base, "status": "pending"})
-            await maybe_await(context.get("persistSession", lambda: None)())
-            return {
-                "content": pretty_json(
-                    {
-                        "plan": plan,
-                        "isAgent": bool(metadata.get("parentSessionId")),
-                        "filePath": file_path,
-                        "awaitingLeaderApproval": True,
-                        "requestId": request_id,
-                        "allowedPrompts": allowed,
-                    }
-                )
-            }
-
-        answer = await maybe_await(
-            context.get("askQuestion", lambda *_: "Reject plan")(
-                f"Review the plan and choose the next action.\nSaved to: {file_path}",
-                ["Approve plan", "Chat with the assistant about the plan", "Reject plan"],
-            )
-        )
-        if answer == "Approve plan":
-            approved_at = now_iso()
-            await writePlanFile(requestId=request_id, sessionId=session["id"], cwd=session["cwd"], plan=plan, allowedPrompts=allowed, status="approved", createdAt=created_at, resolvedAt=approved_at, filePath=file_path)
-            next_mode = "plan" if metadata.get("gitRepoPlanOnly") else "acceptEdits"
-            session["permissionMode"] = next_mode
-            config["permissionMode"] = next_mode
-            metadata["planMode"] = {"state": "approved", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed, "approvedAt": approved_at}
-            await savePlanApproval({**record_base, "status": "approved", "resolvedAt": approved_at})
-            await maybe_await(context.get("persistSession", lambda: None)())
-            context.get("outputJson", lambda *_: None)("plan.approved", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "file_path": file_path, "next_mode": next_mode})
-            return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": True, "nextMode": next_mode, "allowedPrompts": allowed})}
-
-        if answer != "Reject plan":
-            metadata["planMode"] = {"state": "chatting", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed}
-            await maybe_await(context.get("persistSession", lambda: None)())
-            return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": False, "chat": True})}
-
-        rejected_at = now_iso()
-        await writePlanFile(requestId=request_id, sessionId=session["id"], cwd=session["cwd"], plan=plan, allowedPrompts=allowed, status="rejected", createdAt=created_at, resolvedAt=rejected_at, reason="Plan rejected by user", filePath=file_path)
-        session["permissionMode"] = "default"
-        config["permissionMode"] = "default"
-        metadata["planMode"] = {"state": "rejected", "requestId": request_id, "plan": plan, "filePath": file_path, "allowedPrompts": allowed, "rejectedAt": rejected_at, "reason": "Plan rejected by user"}
-        await savePlanApproval({**record_base, "status": "rejected", "resolvedAt": rejected_at, "reason": "Plan rejected by user"})
-        await maybe_await(context.get("persistSession", lambda: None)())
-        context.get("outputJson", lambda *_: None)("plan.rejected", {"request_id": request_id, "session_id": session["id"], "agent_id": metadata.get("agentId"), "file_path": file_path})
-        return {"content": pretty_json({"plan": plan, "isAgent": bool(metadata.get("parentSessionId")), "filePath": file_path, "awaitingLeaderApproval": False, "requestId": request_id, "approved": False, "reason": "Plan rejected by user"})}
-
-    return builtin_tool("ExitPlanMode", handler)
-
-
-def parseAllowedPrompts(value: Any) -> list[dict[str, str]]:
-    if not isinstance(value, list):
-        return []
-    out = []
-    for item in value:
-        if isinstance(item, dict) and item.get("tool") == "Bash" and isinstance(item.get("prompt"), str) and item["prompt"].strip():
-            out.append({"tool": "Bash", "prompt": item["prompt"].strip()})
-    return out
-
-
 def _normalize_todo_item(value: Any) -> dict[str, str]:
     return requireTodoItems([value])[0]
 
@@ -226,20 +137,3 @@ def _derive_todo_active_form(content: str) -> str:
     from ..payloads.todo_policy import deriveTodoActiveForm
 
     return deriveTodoActiveForm(content)
-
-
-def _extract_latest_assistant_text(session: dict[str, Any]) -> str | None:
-    for message in reversed(session.get("messages", [])):
-        if message.get("role") != "assistant":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            text = content.strip()
-            if text:
-                return text
-            continue
-        if isinstance(content, list):
-            text = "".join(str(block.get("text", "")) for block in content if isinstance(block, dict) and block.get("type") == "text").strip()
-            if text:
-                return text
-    return None

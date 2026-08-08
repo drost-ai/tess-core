@@ -18,7 +18,6 @@ def _working_context(session: dict[str, Any]) -> dict[str, Any]:
             "session": session,
             "generation": 1,
             "createdAt": "2026-07-27T19:08:22Z",
-            "latestPlan": None,
             "sourceRange": {
                 "generation": 1,
                 "start": 0,

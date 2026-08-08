@@ -234,7 +234,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 "model": "gpt-5.4",
                 "mode": "auto",
                 "runInBackground": True,
-                "status": "awaiting_plan_approval",
+                "status": "awaiting_input",
                 "startedAt": "2026-01-01T00:00:00Z",
                 "taskId": "task-agent-plan",
                 "attachableSessionId": target["id"],
@@ -244,34 +244,6 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             }
             run(core.saveChildAgent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
-            run(
-                core.savePlanApproval(
-                    {
-                        "requestId": "plan-pending-shell",
-                        "sessionId": target["id"],
-                        "parentSessionId": session["id"],
-                        "agentId": child["agentId"],
-                        "status": "pending",
-                        "createdAt": "2026-01-01T00:00:01Z",
-                        "filePath": str(workspace / "plan.md"),
-                        "plan": "Migrate shell command reports to parity.",
-                        "allowedPrompts": [{"tool": "Bash", "prompt": "python3 -m unittest discover -s tests"}],
-                    }
-                )
-            )
-            run(
-                core.savePlanApproval(
-                    {
-                        "requestId": "plan-approved-shell",
-                        "sessionId": session["id"],
-                        "status": "approved",
-                        "createdAt": "2026-01-01T00:00:02Z",
-                        "resolvedAt": "2026-01-01T00:00:03Z",
-                        "plan": "Approved plan",
-                        "allowedPrompts": [],
-                    }
-                )
-            )
 
             resumed = []
             stopped = []
@@ -295,7 +267,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             self.assertIn("awaiting     1", agents_summary["message"])
             agents_running = run(core.handleSlashCommand({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Plan worker", agents_running["message"])
-            self.assertIn("awaiting_plan_approval", agents_running["message"])
+            self.assertIn("awaiting_input", agents_running["message"])
             inspected = run(core.handleSlashCommand({"command": "/agents inspect plan-shell", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("waiting      Review the proposed migration plan.", inspected["message"])
 
@@ -307,15 +279,5 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             self.assertEqual(retried, ["task-agent-plan"])
             self.assertIn("Stopped Plan worker", stop["message"])
             self.assertIn("new task     task-agent-retry", retry["message"])
-
-            plans_pending = run(core.handleSlashCommand({"command": "/plans", "session": session, "config": config, "hooks": hooks}))
-            self.assertIn("current state  inactive", plans_pending["message"])
-            self.assertIn("plan-pending", plans_pending["message"])
-            self.assertIn("agent agent-plan", plans_pending["message"])
-            self.assertIn("Bash(python3 -m unittest discover -s tests)", plans_pending["message"])
-            plans_approved = run(core.handleSlashCommand({"command": "/plans approved", "session": session, "config": config, "hooks": hooks}))
-            self.assertIn("plan-approve", plans_approved["message"])
-            plans_missing = run(core.handleSlashCommand({"command": "/plans missing-query", "session": session, "config": config, "hooks": hooks}))
-            self.assertIn("No plan approvals matched: missing-query", plans_missing["message"])
         finally:
             self.restore_home(root, previous)

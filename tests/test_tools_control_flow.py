@@ -117,62 +117,6 @@ class ToolControlFlowTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_exit_plan_mode_matches_reference_pending_and_approval_flows(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "ExitPlanMode")
-            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
-
-            blocked = run(tool.handler({}, base_context))
-            self.assertTrue(blocked["isError"])
-            self.assertIn("only available", blocked["content"])
-
-            events = []
-            persisted = {"count": 0}
-            session["permissionMode"] = "plan"
-            config["permissionMode"] = "plan"
-            session["messages"] = [{"role": "assistant", "content": [{"type": "text", "text": "1. Build it.\n2. Test it."}]}]
-            context = {**base_context, "outputJson": lambda event, data: events.append((event, data)), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
-            pending = run(tool.handler({"allowedPrompts": [{"tool": "Bash", "prompt": "  pytest  "}, {"tool": "Bash", "prompt": "   "}, {"tool": "Read", "prompt": "ignored"}]}, context))
-            payload = json.loads(pending["content"])
-            self.assertEqual(payload["plan"], "1. Build it.\n2. Test it.")
-            self.assertTrue(payload["awaitingLeaderApproval"])
-            self.assertEqual(payload["allowedPrompts"], [{"tool": "Bash", "prompt": "pytest"}])
-            self.assertEqual(session["metadata"]["planMode"]["state"], "pending")
-            self.assertEqual(events[0][0], "plan.requested")
-            self.assertEqual(run(core.loadPlanApproval(payload["requestId"]))["status"], "pending")
-            self.assertEqual(persisted["count"], 1)
-
-            approve_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="plan")
-            approve_config = {**config, "permissionMode": "plan"}
-            approve_session["messages"] = [{"role": "assistant", "content": "Approve this plan."}]
-            approve_events = []
-            approved = run(
-                tool.handler(
-                    {},
-                    {
-                        "session": approve_session,
-                        "config": approve_config,
-                        "interactive": True,
-                        "askQuestion": lambda *_: "Approve plan",
-                        "outputJson": lambda event, data: approve_events.append((event, data)),
-                        "cwd": str(workspace),
-                        "persistSession": lambda: None,
-                    },
-                )
-            )
-            approved_payload = json.loads(approved["content"])
-            self.assertTrue(approved_payload["approved"])
-            self.assertEqual(approved_payload["nextMode"], "acceptEdits")
-            self.assertEqual(approve_session["permissionMode"], "acceptEdits")
-            self.assertEqual(approve_config["permissionMode"], "acceptEdits")
-            self.assertEqual([event for event, _ in approve_events], ["plan.requested", "plan.approved"])
-            self.assertEqual(run(core.loadPlanApproval(approved_payload["requestId"]))["status"], "approved")
-        finally:
-            self.restore_home(root, previous)
-
     def test_monitor_health_check_mcp_resource_and_ripgrep_tool_edges(self):
         root, home, workspace, previous = self.temp_context()
         original_fetch = tools_module.fetch

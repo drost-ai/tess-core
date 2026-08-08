@@ -152,7 +152,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                     "model": "gpt-5.4",
                     "mode": "bypassPermissions",
                     "runInBackground": True,
-                    "status": "awaiting_plan_approval",
+                    "status": "awaiting_input",
                     "startedAt": "2026-01-01T00:00:02Z",
                     "lastUpdatedAt": "2026-01-01T00:00:02Z",
                     "waitingReason": "Needs plan approval.",

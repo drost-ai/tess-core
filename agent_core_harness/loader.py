@@ -71,7 +71,6 @@ SUPPORTED_STEPS = {
     "run_python",
     "run_agent",
     "run_mcp_dispatch_probe",
-    "run_mcp_plan_probe",
     "run_slash_command",
     "run_subprocess",
     "run_worker_entrypoint",

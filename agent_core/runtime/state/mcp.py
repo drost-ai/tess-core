@@ -8,8 +8,6 @@ from .shared import _field
 
 
 MCP_RUNTIME_STATE_EVENTS = {
-    "plan.mcp_tool_allowed",
-    "plan.mcp_tool_blocked",
     "mcp.authorization_required",
     "mcp.server_connected",
     "mcp.server_connection_failed",
@@ -25,17 +23,6 @@ def reduce_mcp_runtime_state(
     timestamp: str,
 ) -> dict[str, Any]:
     mcp = copy.deepcopy(state.get("mcp") or {})
-    if event_type in {"plan.mcp_tool_allowed", "plan.mcp_tool_blocked"}:
-        mcp["lastPlanDecision"] = {
-            "decision": "allow" if event_type.endswith("allowed") else "block",
-            "server": _field(data, "server"),
-            "tool": _field(data, "tool"),
-            "reason": _field(data, "reason"),
-            "updatedAt": timestamp,
-        }
-        state["mcp"] = mcp
-        return state
-
     server = _field(data, "server") or "unknown"
     servers = copy.deepcopy(mcp.get("servers") or {})
     if event_type == "mcp.authorization_required":

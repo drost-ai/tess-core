@@ -28,18 +28,6 @@
     "finishedAt": "<timestamp>",
     "index": 2,
     "observationKeys": [
-      "mcp_package28_results",
-      "mcp_package28_events",
-      "transcript"
-    ],
-    "startedAt": "<timestamp>",
-    "status": "passed",
-    "type": "run_mcp_plan_probe"
-  },
-  {
-    "finishedAt": "<timestamp>",
-    "index": 3,
-    "observationKeys": [
       "mcp_package28_results"
     ],
     "startedAt": "<timestamp>",
@@ -48,13 +36,24 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 4,
+    "index": 3,
     "observationKeys": [
       "mcp_driver_results"
     ],
     "startedAt": "<timestamp>",
     "status": "passed",
     "type": "close_mcp_runtime"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 4,
+    "observationKeys": [
+      "mcp_servers",
+      "mcp_driver_results"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "start_fake_mcp"
   },
   {
     "finishedAt": "<timestamp>",
@@ -82,17 +81,6 @@
     "finishedAt": "<timestamp>",
     "index": 7,
     "observationKeys": [
-      "mcp_servers",
-      "mcp_driver_results"
-    ],
-    "startedAt": "<timestamp>",
-    "status": "passed",
-    "type": "start_fake_mcp"
-  },
-  {
-    "finishedAt": "<timestamp>",
-    "index": 8,
-    "observationKeys": [
       "mcp_events",
       "mcp_status",
       "mcp_tools",
@@ -102,6 +90,16 @@
     "startedAt": "<timestamp>",
     "status": "passed",
     "type": "create_mcp_runtime"
+  },
+  {
+    "finishedAt": "<timestamp>",
+    "index": 8,
+    "observationKeys": [
+      "mcp_status"
+    ],
+    "startedAt": "<timestamp>",
+    "status": "passed",
+    "type": "assert_mcp_status"
   },
   {
     "finishedAt": "<timestamp>",
@@ -127,16 +125,6 @@
     "finishedAt": "<timestamp>",
     "index": 11,
     "observationKeys": [
-      "mcp_status"
-    ],
-    "startedAt": "<timestamp>",
-    "status": "passed",
-    "type": "assert_mcp_status"
-  },
-  {
-    "finishedAt": "<timestamp>",
-    "index": 12,
-    "observationKeys": [
       "mcp_results",
       "mcp_status",
       "mcp_tools"
@@ -147,7 +135,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 13,
+    "index": 12,
     "observationKeys": [
       "mcp_results"
     ],
@@ -157,7 +145,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 14,
+    "index": 13,
     "observationKeys": [
       "mcp_package28_results",
       "mcp_status"
@@ -168,7 +156,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 15,
+    "index": 14,
     "observationKeys": [
       "mcp_driver_results"
     ],
@@ -178,7 +166,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 16,
+    "index": 15,
     "observationKeys": [
       "mcp_servers",
       "mcp_driver_results"
@@ -189,7 +177,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 17,
+    "index": 16,
     "observationKeys": [
       "mcp_events",
       "mcp_status",
@@ -203,7 +191,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 18,
+    "index": 17,
     "observationKeys": [
       "mcp_package28_results",
       "mcp_events",
@@ -216,7 +204,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 19,
+    "index": 18,
     "observationKeys": [
       "mcp_driver_results"
     ],
@@ -226,7 +214,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 20,
+    "index": 19,
     "observationKeys": [
       "mcp_servers",
       "mcp_driver_results"
@@ -237,7 +225,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 21,
+    "index": 20,
     "observationKeys": [
       "mcp_events",
       "mcp_status",
@@ -251,7 +239,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 22,
+    "index": 21,
     "observationKeys": [
       "mcp_package28_results",
       "mcp_events",
@@ -263,7 +251,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 23,
+    "index": 22,
     "observationKeys": [
       "mcp_driver_results"
     ],
@@ -273,7 +261,7 @@
   },
   {
     "finishedAt": "<timestamp>",
-    "index": 24,
+    "index": 23,
     "observationKeys": [
       "mcp_driver_results",
       "mcp_events",

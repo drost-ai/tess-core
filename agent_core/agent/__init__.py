@@ -26,12 +26,6 @@ from .dynamic_context import (
 )
 from .continuity import readOpenChildQuestions, runParentContinuityTurn
 from .loop import runAgentPrompt
-from .plan_policy import (
-    OperatorPolicyDecision,
-    bounded_mcp_identity,
-    plan_mode_denial,
-    resolve_plan_mode_mcp_verdict,
-)
 from .progress import (
     LogicalTurnProgressLedger,
     MAX_RECORDED_ARTIFACTS,
@@ -59,7 +53,6 @@ from .request_integrity import (
 )
 from .shared import (
     IMAGE_INPUT_UNSUPPORTED_MESSAGE,
-    PLAN_SAFE_TOOL_NAMES,
     modelSupportsImageInputs,
     requestHasImageInputs,
     unsupportedImageInputResponse,
@@ -99,8 +92,6 @@ __all__ = [
     "MAX_RECORDED_ARTIFACTS",
     "MAX_RECORDED_FINGERPRINTS",
     "MAX_REPEATED_CYCLE_BATCHES",
-    "OperatorPolicyDecision",
-    "PLAN_SAFE_TOOL_NAMES",
     "PROGRESS_LEDGER_SCHEMA_VERSION",
     "STRICT_TOOL_PROTOCOL_PROVIDERS",
     "SerialQueue",
@@ -112,7 +103,6 @@ __all__ = [
     "applyProviderTokenBudget",
     "approval_skip_result",
     "assessContextHeadroom",
-    "bounded_mcp_identity",
     "buildToolContext",
     "build_tool_hook_context",
     "completeEmptyProviderResponse",
@@ -134,14 +124,12 @@ __all__ = [
     "noProgressTurnResult",
     "normalizeProviderRequestMessages",
     "normalize_agent_prompt",
-    "plan_mode_denial",
     "prepareProviderRequest",
     "recordContinuationRelief",
     "recordEmptyResponseUsage",
     "requestHasImageInputs",
     "requestProviderResponse",
     "resolve_effective_provider_turn_binding",
-    "resolve_plan_mode_mcp_verdict",
     "resolve_tool_concurrency",
     "runAgentPrompt",
     "runParentContinuityTurn",

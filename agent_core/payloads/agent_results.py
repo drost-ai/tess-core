@@ -153,7 +153,6 @@ def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any)
         outcome: dict[str, Any],
         *,
         tool_name: str | None = None,
-        blocked_by_plan_contract: bool = False,
         rejected: bool = False,
         side_effects_may_have_occurred: bool = False,
         max_bytes: int | None = None,
@@ -181,8 +180,6 @@ def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any)
             block["_pauseMessage"] = (
                 completed["result"].get("content") or ""
             ).strip() or "Approval required before continuing."
-        if blocked_by_plan_contract:
-            block["_blockedByPlanContract"] = True
         return block
 
     return finish

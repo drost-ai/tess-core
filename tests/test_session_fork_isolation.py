@@ -38,7 +38,6 @@ class SessionForkIsolationTests(AgentCoreTestCase):
             parent["metadata"].update(
                 {
                     "workspaceId": "hostile-parent-workspace-id",
-                    "gitRepoPlanOnly": True,
                     "compactionState": {"generation": 5},
                     "fullTranscriptLog": {"path": "/parent/archive", "archivedMessageCount": 2},
                     "taskIds": ["parent-task"],
@@ -78,7 +77,6 @@ class SessionForkIsolationTests(AgentCoreTestCase):
             child["messages"][0]["content"] = "parent message 1"
             self.assertEqual(child["todos"], [])
             self._assert_fresh(child)
-            self.assertTrue(child["metadata"]["gitRepoPlanOnly"])
             self.assertEqual(child["metadata"]["tmuxSessionName"], "current-tmux")
 
             run(core.persistSession(child, config))
@@ -109,7 +107,6 @@ class SessionForkIsolationTests(AgentCoreTestCase):
         self.assertEqual(SESSION_FORK_METADATA_DISPOSITIONS["fullTranscriptLog"], "fresh")
         self.assertEqual(SESSION_FORK_METADATA_DISPOSITIONS["compactionState"], "fresh")
         self.assertEqual(SESSION_FORK_METADATA_DISPOSITIONS["bridgeId"], "fresh")
-        self.assertEqual(SESSION_FORK_METADATA_DISPOSITIONS["gitRepoPlanOnly"], "inherited")
 
     def _assert_fresh(self, session, *, allow_archive=False):
         metadata = session["metadata"]
@@ -128,7 +125,7 @@ class SessionForkIsolationTests(AgentCoreTestCase):
         self.assertEqual(metadata["depth"], 0)
         self.assertEqual(metadata["childSessionIds"], [])
         self.assertEqual(metadata["childAgentIds"], [])
-        self.assertEqual(metadata["planMode"], {"state": "inactive"})
+        self.assertNotIn("planMode", metadata)
         for field in (
             "compactionState", "parentSessionId", "agentId", "subagentTaskId",
             "effectiveAgentAuthority", "remoteSessionId", "bridgeId", "monitorIds",

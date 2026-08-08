@@ -67,7 +67,6 @@
       "SendMessage",
       "AskUserQuestion",
       "Config",
-      "ExitPlanMode",
       "NotebookEdit",
       "TaskOutput",
       "TaskStop",

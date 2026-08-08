@@ -15,13 +15,6 @@ def isChildAgentRecord(value: Any, candidate: dict[str, Any]) -> bool:
     )
 
 
-def isPlanApprovalRecord(value: Any, candidate: dict[str, Any]) -> bool:
-    return _matches_id(value, "requestId", candidate.get("id")) and _has_strings(
-        value,
-        ("sessionId", "status", "createdAt"),
-    )
-
-
 def isTaskRecord(value: Any, candidate: dict[str, Any]) -> bool:
     return _matches_id(value, "id", candidate.get("id")) and _has_strings(
         value,
@@ -99,7 +92,6 @@ __all__ = [
     "isDaemonStateRecord",
     "isHealthCheckTaskRecord",
     "isMonitorRecord",
-    "isPlanApprovalRecord",
     "isRemoteSessionRecord",
     "isTaskMetaRecord",
     "isTaskRecord",

@@ -3,79 +3,7 @@
   "cwd": "<workspace>",
   "effort": "xhigh",
   "id": "<uuid:1>",
-  "messages": [
-    {
-      "content": "exercise MCP plan policy",
-      "metadata": {
-        "agentCoreOrigin": {
-          "actor": "user",
-          "intentAuthority": "request",
-          "kind": "user_request",
-          "lineage": {
-            "logicalTurnId": "turn-<uuid:2>"
-          },
-          "schemaVersion": 1,
-          "synthetic": false
-        }
-      },
-      "role": "user"
-    },
-    {
-      "content": [
-        {
-          "id": "plan-0",
-          "input": {},
-          "name": "mcp__policy__read",
-          "type": "tool_use"
-        },
-        {
-          "id": "plan-1",
-          "input": {},
-          "name": "mcp__policy__mutate",
-          "type": "tool_use"
-        }
-      ],
-      "role": "assistant"
-    },
-    {
-      "content": [
-        {
-          "content": "policy:",
-          "is_error": false,
-          "tool_use_id": "plan-0",
-          "type": "tool_result"
-        },
-        {
-          "content": "MCP tool policy/mutate is blocked while plan approval is required (not_read_only).",
-          "is_error": true,
-          "tool_use_id": "plan-1",
-          "type": "tool_result"
-        }
-      ],
-      "metadata": {
-        "agentCoreOrigin": {
-          "actor": "tool",
-          "intentAuthority": "none",
-          "kind": "tool_result_batch",
-          "lineage": {
-            "logicalTurnId": "turn-<uuid:2>"
-          },
-          "schemaVersion": 1,
-          "synthetic": true
-        }
-      },
-      "role": "user"
-    },
-    {
-      "content": [
-        {
-          "text": "plan probe complete",
-          "type": "text"
-        }
-      ],
-      "role": "assistant"
-    }
-  ],
+  "messages": [],
   "metadata": {
     "assistantDescription": null,
     "assistantName": null,
@@ -84,156 +12,21 @@
     "compactions": 0,
     "depth": 0,
     "originalCwd": "<workspace>",
-    "planMode": {
-      "state": "inactive"
-    },
-    "runtimeRestore": {
-      "activeTasks": [],
-      "contextReliefEscalationReason": "",
-      "contextReliefEscalationRequested": false,
-      "lastContextReliefDetail": null,
-      "lastContextReliefKind": "none",
-      "lastContextReliefMode": "none",
-      "lastContextReliefPressureLevel": "low",
-      "lastContextReliefProjectionHash": "5cc2256acd42dce2",
-      "lastContextReliefReactiveAttempt": 0,
-      "lastContextReliefReinjectionSummary": null,
-      "recentContextReliefCount": 0,
-      "restoredTaskCount": 0,
-      "savedAt": "<timestamp>"
-    },
-    "tokenTracking": {
-      "calibration": {
-        "codexPositiveErrors": [
-          0,
-          0
-        ]
-      },
-      "lastActualInputTokens": 1,
-      "lastActualOutputTokens": 1,
-      "lastEstimateDelta": -369,
-      "lastPreflight": {
-        "baseInputTokens": 370,
-        "estimatedFixedInputTokens": "<token-estimate>",
-        "estimatedImageInputTokens": "<token-estimate>",
-        "estimatedMessageInputTokens": "<token-estimate>",
-        "exactCountFallback": false,
-        "inputTokens": 2370,
-        "measuredAt": "<timestamp>",
-        "model": "gpt-5.4",
-        "provider": "openai",
-        "requestPreflight": {
-          "admission": {
-            "compactionTargetTokens": "<token-estimate>",
-            "compactionThresholdTokens": "<token-estimate>",
-            "configuredMaxOutputTokens": "<token-estimate>",
-            "effectiveMaxOutputTokens": "<token-estimate>",
-            "minimumUsefulOutputTokens": "<token-estimate>",
-            "outputBudgetClamped": false,
-            "reason": null,
-            "remainingHeadroomTokens": "<token-estimate>",
-            "remainingOutputTokens": "<token-estimate>",
-            "status": "ready"
-          },
-          "categories": {
-            "checkpoint": "<token-estimate>",
-            "continuationOverlays": "<token-estimate>",
-            "currentMedia": "<token-estimate>",
-            "currentText": "<token-estimate>",
-            "pendingToolResults": "<token-estimate>",
-            "protocolOverhead": "<token-estimate>",
-            "recentHistory": "<token-estimate>",
-            "selectedSkills": "<token-estimate>",
-            "systemIdentity": "<token-estimate>",
-            "toolDefinitions": "<token-estimate>",
-            "unattributed": "<token-estimate>"
-          },
-          "compaction": {
-            "cutoffMessageIndex": 0,
-            "generation": 0,
-            "outcome": null,
-            "outcomeReason": null,
-            "reliefApplied": false,
-            "reliefMode": "none"
-          },
-          "measurement": {
-            "baseInputTokens": "<token-estimate>",
-            "componentEstimateTokens": "<token-estimate>",
-            "exactCountFallback": false,
-            "inputTokens": "<token-estimate>",
-            "measuredAt": "<timestamp>",
-            "measurementDeltaTokens": "<token-estimate>",
-            "safetyMarginTokens": "<token-estimate>",
-            "source": "codex_estimate"
-          },
-          "model": "gpt-5.4",
-          "profile": "codex",
-          "provenance": {
-            "continuationSegments": {
-              "checkpointTokens": "<token-estimate>",
-              "continuationOverlayTokens": "<token-estimate>",
-              "reliefTokens": "<token-estimate>",
-              "retrievedMemoryTokens": "<token-estimate>",
-              "status": "measured"
-            },
-            "currentTurn": {
-              "messageIndex": null,
-              "status": "inferred",
-              "trusted": false,
-              "turnIdHash": null
-            },
-            "selectedSkills": {
-              "reason": "not_provided",
-              "status": "unknown",
-              "trusted": false
-            }
-          },
-          "provider": "openai",
-          "requestFingerprint": "<request-fingerprint>",
-          "schemaVersion": 1
-        },
-        "safetyMarginTokens": 2000,
-        "source": "codex_estimate"
-      }
-    },
-    "turnProgress": {
-      "artifactFailures": {},
-      "artifactOffsets": {},
-      "batchOccurrences": {
-        "<progress-fingerprint:1>": 1
-      },
-      "completed": true,
-      "completionReason": "provider_response",
-      "consecutiveNoProgress": 0,
-      "lastBatchFingerprint": "<progress-fingerprint:1>",
-      "lastBatchOccurrenceCount": 1,
-      "lastBatchTotalOccurrences": 1,
-      "lastProgressReason": "novel_reachable_evidence",
-      "logicalTurnId": "turn-<uuid:2>",
-      "providerCallIndex": 2,
-      "recentBatchFingerprints": [
-        "<progress-fingerprint:1>"
-      ],
-      "schemaVersion": 1,
-      "terminalReason": null,
-      "toolBatchIndex": 1,
-      "updatedAt": "<timestamp>"
-    },
     "usage": {
       "cacheCreation1hInputTokens": 0,
       "cacheCreation5mInputTokens": 0,
       "cacheCreationInputTokens": 0,
       "cacheCreationTtlDetailComplete": true,
       "cacheReadInputTokens": 0,
-      "inputTokens": 2,
-      "outputTokens": 2,
-      "toolCalls": 1,
-      "turns": 1
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "toolCalls": 0,
+      "turns": 0
     }
   },
   "model": "gpt-5.4",
   "name": null,
-  "permissionMode": "plan",
+  "permissionMode": "bypassPermissions",
   "provider": "openai",
   "providerProfileName": "codex",
   "systemPrompt": "You are assistant, a helpful and reliable software engineering agent.\nWork directly in the user's codebase.\nPrefer concrete actions over long explanations.\nUse tools when needed, keep edits minimal, and preserve user intent.\nBefore modifying files, inspect the relevant code and respect the existing style.\nUse SetStatus to keep the live UI updated when you change phases or begin a meaningful chunk of work. Keep statuses brief and concrete, for example: 'Reading plan...', 'Searching code...', 'Updating plan...', or 'Running tests...'.",

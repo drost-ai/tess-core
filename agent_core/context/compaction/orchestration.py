@@ -15,7 +15,7 @@ from ...storage import (
 from ..compaction_models import createDefaultCompactionModelClient
 from ..durable_memory import updateDurableMemoryFromWorkingContext
 from .artifacts import _write_json, _write_text, buildArtifactPaths
-from .cutoffs import chooseCompactionCutoff, resolveLatestPlan
+from .cutoffs import chooseCompactionCutoff
 from .documents import (
     assertModelBackedCompactionArtifacts,
     buildCompactionQualityFromCandidate,
@@ -26,7 +26,6 @@ from .documents import (
     loadWorkingContextArtifact,
     renderActivityMarkdown,
     renderDecisionsMarkdown,
-    renderPlanMarkdown,
     renderSummaryMarkdown,
 )
 from .models import (
@@ -140,7 +139,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     artifacts = buildArtifactPaths(session["id"], generation)
 
     previous_working_context = await loadWorkingContextArtifact(((previous_manifest or {}).get("artifacts") or {}).get("workingContext"))
-    latest_plan = await resolveLatestPlan(session)
     synthesized = await runModelBackedCompactionSynthesisWithFallback(
         {
             "session": session,
@@ -148,7 +146,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "runtime": runtime,
             "modelClient": model_client,
             "previousWorkingContext": previous_working_context,
-            "latestPlan": latest_plan,
             "sourceMessages": source_messages,
             "sourceStart": previous_cutoff,
         }
@@ -172,7 +169,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "session": session,
             "generation": generation,
             "createdAt": created_at,
-            "latestPlan": latest_plan,
             "sourceRange": source_range,
             "synthesized": synthesized,
         }
@@ -184,7 +180,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "runtime": runtime,
             "modelClient": model_client,
             "previousWorkingContext": previous_working_context,
-            "latestPlan": latest_plan,
             "sourceMessages": source_messages,
             "sourceStart": previous_cutoff,
             "candidate": {
@@ -208,8 +203,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
                 "session": session,
                 "generation": generation,
                 "createdAt": created_at,
-                "latestPlan": latest_plan,
-                "sourceRange": source_range,
+                    "sourceRange": source_range,
                 "candidate": {**repaired, "model": synthesized["model"]},
                 "preservedTraceEvidence": verification.get("evidence"),
             }
@@ -221,8 +215,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
                 "runtime": runtime,
                 "modelClient": model_client,
                 "previousWorkingContext": previous_working_context,
-                "latestPlan": latest_plan,
-                "sourceMessages": source_messages,
+                    "sourceMessages": source_messages,
                 "sourceStart": previous_cutoff,
                 "candidate": repaired,
                 "repairAttempt": 1,
@@ -262,7 +255,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "cutoff": cutoff,
             "sourceMessages": source_messages,
             "previousWorkingContext": previous_working_context,
-            "latestPlan": latest_plan,
             "synthesized": synthesized,
             "verification": verification,
             "repairCount": repair_count,
@@ -291,7 +283,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         },
     )
     todos = {"sessionId": session["id"], "generatedAt": created_at, "todos": session.get("todos", [])}
-    plan_markdown = renderPlanMarkdown(working_context)
     prompt_context = renderWorkingContextPromptContext(working_context)
     compacted_context_token_estimate = estimateTextTokens(prompt_context)
     working_context_token_estimate = compacted_context_token_estimate + estimateMessageTokens(recent_messages)
@@ -302,8 +293,6 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     _write_json(artifacts["todos"], todos)
     _write_json(artifacts["state"], state_snapshot)
     _write_json(artifacts["workingContext"], working_context)
-    if plan_markdown:
-        _write_text(artifacts["plan"], plan_markdown.rstrip() + "\n")
 
     await updateDurableMemoryFromWorkingContext({"session": session, "workingContext": working_context})
 

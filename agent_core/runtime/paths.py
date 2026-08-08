@@ -23,8 +23,6 @@ class RuntimePaths:
     remoteSessionsDir: str
     compactionsDir: str
     artifactsDir: str
-    plansDir: str
-    planApprovalsDir: str
     trustDir: str
     repositoryTrustDir: str
     executableSnapshotsDir: str
@@ -75,8 +73,6 @@ def resolveRuntimePaths(cwd: str | None = None, candidate: str | None = None) ->
         remoteSessionsDir=os.path.join(home, "remote-sessions"),
         compactionsDir=os.path.join(home, "compactions"),
         artifactsDir=os.path.join(home, "tool-artifacts"),
-        plansDir=os.path.join(home, "plans"),
-        planApprovalsDir=os.path.join(home, "plan-approvals"),
         trustDir=trust,
         repositoryTrustDir=os.path.join(trust, "repositories"),
         executableSnapshotsDir=os.path.join(trust, "snapshots"),

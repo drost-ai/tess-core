@@ -69,29 +69,13 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
         entries = core.buildTranscriptSnapshot(session)
         self.assertEqual(entries[0]["body"], "First update.\n\nSecond update.")
 
-    def test_transcript_plan_compaction_and_bug_command_match_reference(self):
-        plan_text = "Implement shell parity.\nRun the focused tests."
+    def test_bug_command_matches_reference(self):
         session = {
             "id": "session-transcript",
             "cwd": "/tmp/work",
-            "metadata": {"planMode": {"state": "pending", "plan": plan_text}},
-            "messages": [
-                {"role": "user", "content": "make a plan"},
-                {
-                    "role": "assistant",
-                    "content": [
-                        {"type": "text", "text": "Implement shell parity. Run the focused tests."},
-                        {"type": "tool_use", "id": "plan-tool", "name": "ExitPlanMode", "input": {}},
-                    ],
-                },
-                {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "plan-tool", "content": "pending"}]},
-            ],
+            "metadata": {},
+            "messages": [],
         }
-
-        entries = core.buildTranscriptSnapshot(session)
-        self.assertEqual([entry["title"] for entry in entries], ["You", "Plan"])
-        self.assertEqual(entries[1]["body"], plan_text)
-        self.assertTrue(all(entry.get("payload", {}).get("toolName") != "ExitPlanMode" for entry in entries))
 
         infos = []
         result = run(core.handleSlashCommand({"command": "/bug", "session": session, "config": {}, "hooks": {"info": lambda title, message: infos.append((title, message))}}))

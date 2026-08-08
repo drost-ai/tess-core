@@ -14,7 +14,6 @@ from ..storage import (
     ensureBaseLayout,
     getStateRoot,
     listChildAgents,
-    listPlanApprovals,
     listSessionMonitors,
     loadBridge,
     loadBridgeEvents,
@@ -48,7 +47,6 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
 
     related_agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
     monitors = await listSessionMonitors(session["id"])
-    plan_approvals = [record for record in await listPlanApprovals() if _is_related_plan_approval(session, record)]
     remote = await loadRemoteSession(session.get("metadata", {}).get("remoteSessionId")) if session.get("metadata", {}).get("remoteSessionId") else None
     bridge = await loadBridge(session.get("metadata", {}).get("bridgeId")) if session.get("metadata", {}).get("bridgeId") else None
     bridge_inbox = await loadBridgeInbox(bridge["id"]) if bridge else []
@@ -73,7 +71,6 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
     )
     await _write_json_artifact(os.path.join(bundle_dir, "runtime", "child-agents.json"), related_agents, included_files)
     await _write_json_artifact(os.path.join(bundle_dir, "runtime", "monitors.json"), monitors, included_files)
-    await _write_json_artifact(os.path.join(bundle_dir, "runtime", "plan-approvals.json"), plan_approvals, included_files)
     await _write_json_artifact(os.path.join(bundle_dir, "runtime", "tasks.json"), tasks, included_files)
     await _write_json_artifact(os.path.join(bundle_dir, "runtime", "doctor.json"), doctor, included_files)
 
@@ -112,7 +109,6 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
         "summary": {
             "childAgentCount": len(related_agents),
             "monitorCount": len(monitors),
-            "planApprovalCount": len(plan_approvals),
             "hasCompaction": bool(compaction_manifest),
             "hasRemote": bool(remote),
             "hasBridge": bool(bridge),
@@ -127,15 +123,6 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
         "files": included_files,
     }
 
-
-
-def _is_related_plan_approval(session: dict[str, Any], record: dict[str, Any]) -> bool:
-    if record.get("sessionId") == session.get("id") or record.get("parentSessionId") == session.get("id"):
-        return True
-    agent_id = record.get("agentId")
-    if agent_id and agent_id in (session.get("metadata", {}).get("childAgentIds") or []):
-        return True
-    return agent_id == session.get("metadata", {}).get("agentId")
 
 
 def _sanitize_timestamp(value: str) -> str:

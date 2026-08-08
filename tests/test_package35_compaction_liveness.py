@@ -134,7 +134,6 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                     "session": session,
                     "generation": 3,
                     "createdAt": "2026-07-25T00:00:00Z",
-                    "latestPlan": None,
                     "sourceRange": {
                         "generation": 3,
                         "start": 0,

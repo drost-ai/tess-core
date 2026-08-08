@@ -136,9 +136,6 @@
           "compactions": 0,
           "depth": 0,
           "originalCwd": "<workspace>",
-          "planMode": {
-            "state": "inactive"
-          },
           "usage": {
             "cacheCreation1hInputTokens": 0,
             "cacheCreation5mInputTokens": 0,

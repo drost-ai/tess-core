@@ -278,7 +278,7 @@ def _child_records(session_id: str) -> list[dict[str, Any]]:
         {**base, "agentId": "agent-running", "sessionId": "child-running", "name": "Running worker", "status": "running", "startedAt": "2026-01-01T00:00:01Z", "lastUpdatedAt": "2026-01-01T00:00:01Z", "lastSummary": "Still running.", "stoppable": True},
         {**base, "agentId": "agent-completed", "sessionId": "child-completed", "name": "Completed worker", "status": "completed", "completedAt": "2026-01-01T00:00:04Z", "lastUpdatedAt": "2026-01-01T00:00:04Z", "completionReason": "finished", "resultSummary": "Collected final notes.", "latestResultAt": "2026-01-01T00:00:04Z", "stoppable": False},
         {**base, "agentId": "agent-failed", "sessionId": "child-failed", "name": "Failed worker", "status": "failed", "completedAt": "2026-01-01T00:00:03Z", "lastUpdatedAt": "2026-01-01T00:00:03Z", "completionReason": "worker_failed", "resultSummary": "Tests failed.", "retryable": True, "stoppable": False},
-        {**base, "agentId": "agent-awaiting", "sessionId": "child-awaiting", "name": "Awaiting plan", "status": "awaiting_plan_approval", "startedAt": "2026-01-01T00:00:02Z", "lastUpdatedAt": "2026-01-01T00:00:02Z", "waitingReason": "Needs plan approval.", "stoppable": True},
+        {**base, "agentId": "agent-awaiting", "sessionId": "child-awaiting", "name": "Awaiting input", "status": "awaiting_input", "startedAt": "2026-01-01T00:00:02Z", "lastUpdatedAt": "2026-01-01T00:00:02Z", "waitingReason": "Needs operator input.", "stoppable": True},
     ]
 
 

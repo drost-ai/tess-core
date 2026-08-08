@@ -126,7 +126,6 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
         "currentState": working_context["currentState"],
         "decisions": working_context["decisions"],
         "discoveries": working_context["discoveries"],
-        "plan": args.get("latestPlan") or previous.get("plan"),
         "todos": {
             "open": open_todos,
             "completed": completed_todos,
@@ -323,11 +322,6 @@ def renderActivityMarkdown(context: dict[str, Any]) -> str:
     appendActivitySection(lines, "Web", [f"- {entry}" for entry in activity.get("web", [])[:MAX_ACTIVITY_LINES]])
     appendActivitySection(lines, "Failures", [f"- {entry}" for entry in activity.get("failures", [])[:MAX_FAILURES]])
     return "\n".join(lines) + "\n"
-
-
-def renderPlanMarkdown(context: dict[str, Any]) -> str | None:
-    content = (context.get("plan") or {}).get("content")
-    return content.strip() if isinstance(content, str) and content.strip() else None
 
 
 async def loadWorkingContextArtifact(filePath: str | None) -> dict[str, Any] | None:

@@ -98,7 +98,6 @@ class Package44ProvenanceTests(AgentCoreTestCase):
                     "tokenBudget": 32,
                 },
                 "evidenceBudgetTokens": 32,
-                "latestPlan": None,
                 "model": {"provider": "openai", "model": "gpt-5.6-sol"},
             }
         )

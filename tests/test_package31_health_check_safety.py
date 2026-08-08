@@ -123,7 +123,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_tool_authorizes_before_daemon_and_plan_mode_never_persists(self):
+    def test_tool_authorizes_before_daemon(self):
         root, home, workspace, previous = self.temp_context()
         try:
             config, session = self._session(home, workspace)
@@ -153,26 +153,6 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             self.assertEqual(calls[0]["specDigest"], healthCheckSpecDigest(calls[0]["spec"]))
             self.assertEqual(calls[0]["executionPolicy"]["allowedOrigins"], ["http://example.test"])
 
-            plan_config, plan_session = self._session(home, workspace, "plan")
-            plan_calls = []
-            with self.assertRaises(PermissionError):
-                run(
-                    tool.handler(
-                        {
-                            "title": "blocked",
-                            "mode": "http",
-                            "url": "http://example.test/",
-                            "expected_status_codes": [200],
-                            "expected_body_policy": "ignore",
-                        },
-                        self._context(
-                            plan_config,
-                            plan_session,
-                            {"startHealthCheck": lambda payload: plan_calls.append(payload)},
-                        ),
-                    )
-                )
-            self.assertEqual(plan_calls, [])
         finally:
             self.restore_home(root, previous)
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 from tests.support.agent_core_case import *
 
-from agent_core.agent.plan_policy import resolve_plan_mode_mcp_verdict
 from agent_core.agent.tool_dispatch import (
     create_serial_queue,
     resolve_tool_concurrency,
@@ -310,154 +309,6 @@ class Package28DispatchTests(AgentCoreTestCase):
 
         run(exercise())
 
-    def test_plan_mcp_policy_deny_allow_annotation_and_malformed_matrix(self):
-        read_tool = core.ToolDefinition(
-            "mcp__fake__read",
-            "read",
-            {"type": "object"},
-            _ok_handler,
-            mcp={"server": "fake", "name": "read", "annotations": {"readOnlyHint": True}},
-        )
-        unknown_tool = core.ToolDefinition(
-            "mcp__fake__unknown",
-            "unknown",
-            {"type": "object"},
-            _ok_handler,
-            mcp={"server": "fake", "name": "unknown"},
-        )
-        malformed_tool = core.ToolDefinition(
-            "mcp__fake__malformed",
-            "malformed",
-            {"type": "object"},
-            _ok_handler,
-            mcp={"server": "", "name": "malformed"},
-        )
-
-        async def decision(value):
-            async def resolver(**_kwargs):
-                return value
-
-            return resolver
-
-        self.assertEqual(
-            run(resolve_plan_mode_mcp_verdict(tool=read_tool, repository_identity="repo", resolve_operator_policy=None)),
-            {"decision": "allow", "reason": "read_only_hint"},
-        )
-        self.assertEqual(
-            run(resolve_plan_mode_mcp_verdict(tool=read_tool, repository_identity="repo", resolve_operator_policy=run(decision("deny")))),
-            {"decision": "block", "reason": "operator_deny"},
-        )
-        self.assertEqual(
-            run(resolve_plan_mode_mcp_verdict(tool=unknown_tool, repository_identity="repo", resolve_operator_policy=run(decision("allow")))),
-            {"decision": "allow", "reason": "operator_allow"},
-        )
-        self.assertEqual(
-            run(resolve_plan_mode_mcp_verdict(tool=unknown_tool, repository_identity="repo", resolve_operator_policy=None)),
-            {"decision": "block", "reason": "not_read_only"},
-        )
-        self.assertEqual(
-            run(resolve_plan_mode_mcp_verdict(tool=malformed_tool, repository_identity="repo", resolve_operator_policy=run(decision("allow")))),
-            {"decision": "block", "reason": "unresolved_target"},
-        )
-
-    def test_integrated_plan_gate_allows_annotated_read_and_blocks_unknown(self):
-        async def exercise_case(read_only, operator_decision=None):
-            with tempfile.TemporaryDirectory(prefix="agent-core-p28-plan-") as cwd:
-                config = await core.resolveConfig(
-                    {"provider": "openai", "runtimeHome": cwd, "permissionMode": "plan"}, cwd
-                )
-                name = "mcp__fake__tool"
-                config.update({"tools": [name], "allowedTools": [name], "disallowedTools": []})
-                session = core.createEmptySession(
-                    cwd=cwd,
-                    provider=config["provider"],
-                    providerProfileName=config["providerProfileName"],
-                    model=config["model"],
-                    effort=config["effort"],
-                    systemPrompt=config["systemPrompt"],
-                    permissionMode="plan",
-                )
-                ran = []
-                events = []
-
-                async def handler(_input, _context):
-                    ran.append(True)
-                    return {"content": "ran", "isError": False}
-
-                metadata = {"server": "fake", "name": "tool"}
-                if read_only is not None:
-                    metadata["annotations"] = {"readOnlyHint": read_only}
-                tool = core.ToolDefinition(name, "MCP tool", {"type": "object"}, handler, mcp=metadata)
-                calls = 0
-                observed_result = None
-
-                async def send(request):
-                    nonlocal calls, observed_result
-                    calls += 1
-                    if calls == 1:
-                        return {
-                            "model": config["model"],
-                            "stopReason": "tool_use",
-                            "usage": {"input_tokens": 1, "output_tokens": 1},
-                            "content": [{"type": "tool_use", "id": "call", "name": name, "input": {"secret": "not-in-policy-event"}}],
-                        }
-                    observed_result = next(
-                        block
-                        for message in request["messages"]
-                        if isinstance(message.get("content"), list)
-                        for block in message["content"]
-                        if block.get("type") == "tool_result"
-                    )
-                    return {
-                        "model": config["model"],
-                        "stopReason": "end_turn",
-                        "usage": {"input_tokens": 1, "output_tokens": 1},
-                        "content": [{"type": "text", "text": "done"}],
-                    }
-
-                async def resolve_operator_policy(**_kwargs):
-                    return operator_decision or "unset"
-
-                await core.runAgentPrompt(
-                    session=session,
-                    config=config,
-                    runtime=bind_test_runtime(session, {
-                        "interactive": False,
-                        "askQuestion": lambda *_: "",
-                        "emitEvent": lambda event, data: events.append((event, data)),
-                        "tools": [tool],
-                        "repositoryIdentity": "repo-identity",
-                        "resolveMcpOperatorPolicy": resolve_operator_policy,
-                    }),
-                    prompt="run",
-                    providerOverride={"send": send},
-                )
-                return ran, events, observed_result
-
-        ran, events, result = run(exercise_case(True))
-        self.assertEqual(ran, [True])
-        self.assertFalse(result.get("is_error"))
-        policy_event = next(data for event, data in events if event == "plan.mcp_tool_allowed")
-        self.assertEqual(policy_event, {"server": "fake", "tool": "tool", "reason": "read_only_hint"})
-
-        ran, events, result = run(exercise_case(None))
-        self.assertEqual(ran, [])
-        self.assertTrue(result["is_error"])
-        self.assertIn("not_read_only", result["content"])
-        policy_event = next(data for event, data in events if event == "plan.mcp_tool_blocked")
-        self.assertEqual(policy_event, {"server": "fake", "tool": "tool", "reason": "not_read_only"})
-        self.assertNotIn("secret", policy_event)
-
-        ran, events, result = run(exercise_case(False, "allow"))
-        self.assertEqual(ran, [True])
-        self.assertFalse(result.get("is_error"))
-        self.assertTrue(any(event == "plan.mcp_tool_allowed" and data["reason"] == "operator_allow" for event, data in events))
-
-        ran, events, result = run(exercise_case(True, "deny"))
-        self.assertEqual(ran, [])
-        self.assertTrue(result["is_error"])
-        self.assertTrue(any(event == "plan.mcp_tool_blocked" and data["reason"] == "operator_deny" for event, data in events))
-
     def test_new_mcp_events_have_bounded_typed_payloads_and_runtime_projection(self):
         state = core.createInitialRuntimeState()
         authorization = core.createRuntimeEvent(
@@ -479,14 +330,6 @@ class Package28DispatchTests(AgentCoreTestCase):
             state["mcp"]["servers"]["fake"]["authorizationUrl"],
             "https://auth.example/authorize",
         )
-
-        allowed = core.createRuntimeEvent(
-            event="plan.mcp_tool_allowed",
-            data={"server": "fake", "tool": "read", "reason": "read_only_hint", "input": {"secret": True}},
-        )
-        self.assertEqual(allowed["payload"], {"server": "fake", "tool": "read", "reason": "read_only_hint"})
-        state = core.reduceRuntimeState(state, allowed)
-        self.assertEqual(state["mcp"]["lastPlanDecision"]["decision"], "allow")
 
         applied = core.createRuntimeEvent(
             event="mcp.catalog_changed_applied",

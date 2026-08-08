@@ -271,8 +271,6 @@ async def _handle_permissions(arg_text: str, session: dict[str, Any], config: di
         return await _handle_auto_mode_policy(arg_text, session, config, hooks)
     if arg_text not in PERMISSION_MODES:
         return _error(hooks, f"Unknown permission mode: {arg_text}. Expected one of: {', '.join(PERMISSION_MODE_ORDER)}")
-    if (session.get("metadata") or {}).get("gitRepoPlanOnly") and arg_text != "plan":
-        return _error(hooks, "Git repository not initialized. Only plan mode is available until you run `git init`.")
     session["permissionMode"] = config["permissionMode"] = arg_text
     await _persist_shell_settings(config, session, {"permissionMode": arg_text}, hooks)
     await _persist(hooks)

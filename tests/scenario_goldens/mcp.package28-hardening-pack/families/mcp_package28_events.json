@@ -1,18 +1,1 @@
-[
-  {
-    "data": {
-      "reason": "read_only_hint",
-      "server": "policy",
-      "tool": "read"
-    },
-    "event": "plan.mcp_tool_allowed"
-  },
-  {
-    "data": {
-      "reason": "not_read_only",
-      "server": "policy",
-      "tool": "mutate"
-    },
-    "event": "plan.mcp_tool_blocked"
-  }
-]
+[]
