@@ -352,7 +352,7 @@ class Package45CancellationTests(unittest.TestCase):
 
         self.assertEqual(response["content"][0]["text"], "via proxy")
         self.assertEqual(len(requests), 1)
-        self.assertEqual(requests[0]["path"], "http://package45-target.invalid:8123/v1/messages?beta=true")
+        self.assertEqual(requests[0]["path"], "http://package45-target.invalid:8123/v1/messages")
         self.assertEqual(requests[0]["headers"]["host"], "package45-target.invalid:8123")
         self.assertEqual(requests[0]["headers"]["x-package"], "45")
 

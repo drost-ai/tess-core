@@ -86,7 +86,6 @@
     },
     "headers": {
       "accept": "text/event-stream",
-      "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
       "user-agent": "tess/0.1.0 (sdk-cli)",
@@ -94,7 +93,7 @@
       "x-app": "cli"
     },
     "method": "POST",
-    "path": "/v1/messages?beta=true",
+    "path": "/v1/messages",
     "provider": "anthropic"
   },
   {
@@ -134,7 +133,6 @@
     },
     "headers": {
       "accept": "text/event-stream",
-      "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
       "user-agent": "tess/0.1.0 (sdk-cli)",
@@ -142,7 +140,7 @@
       "x-app": "cli"
     },
     "method": "POST",
-    "path": "/v1/messages?beta=true",
+    "path": "/v1/messages",
     "provider": "anthropic"
   },
   {
@@ -174,7 +172,6 @@
     },
     "headers": {
       "accept": "application/json",
-      "anthropic-beta": "fine-grained-tool-streaming-2025-05-14",
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
       "user-agent": "tess/0.1.0 (sdk-cli)",

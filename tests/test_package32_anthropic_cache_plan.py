@@ -306,7 +306,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         beta = buildAnthropicBetaHeader(config, {"providerDiagnostics": True})
         self.assertEqual(
             beta,
-            "fine-grained-tool-streaming-2025-05-14,cache-diagnosis-2026-04-07,Custom-Beta,second-beta",
+            "cache-diagnosis-2026-04-07,Custom-Beta,second-beta",
         )
         headers = buildAnthropicHeaders(config, features={"providerDiagnostics": True})
         self.assertEqual(headers["anthropic-beta"], beta)

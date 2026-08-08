@@ -200,19 +200,16 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
             [capture["url"] for capture in captures],
             [
                 "https://api.kimi.com/coding/v1/messages?beta=true",
-                "https://compatible.example/v1/messages?beta=true",
+                "https://compatible.example/v1/messages",
             ],
         )
         self.assertEqual(
             captures[0]["headers"]["anthropic-beta"],
-            "claude-code-20250219,fine-grained-tool-streaming-2025-05-14",
+            "claude-code-20250219",
         )
         self.assertEqual(
             captures[1]["headers"]["anthropic-beta"],
-            (
-                "fine-grained-tool-streaming-2025-05-14,"
-                "cache-diagnosis-2026-04-07,cache-scope-future-token"
-            ),
+            "cache-diagnosis-2026-04-07,cache-scope-future-token",
         )
         self.assertEqual(countAnthropicCacheControls(captures[0]["payload"]), 0)
         self.assertNotIn("diagnostics", captures[0]["payload"])
@@ -347,22 +344,16 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
 
         self.assertEqual(
             [capture["path"] for capture in captures],
-            ["/v1/messages?beta=true"] * 2,
+            ["/v1/messages"] * 2,
         )
         for capture in captures:
             self.assertEqual(capture["headers"].get("x-api-key"), "test-key")
             self.assertEqual(capture["headers"].get("content-type"), "application/json")
             self.assertEqual(capture["headers"].get("anthropic-version"), "2023-06-01")
-        self.assertEqual(
-            captures[0]["headers"]["anthropic-beta"],
-            "fine-grained-tool-streaming-2025-05-14",
-        )
+        self.assertNotIn("anthropic-beta", captures[0]["headers"])
         self.assertEqual(
             captures[1]["headers"]["anthropic-beta"],
-            (
-                "fine-grained-tool-streaming-2025-05-14,"
-                "cache-diagnosis-2026-04-07,cache-scope-future-token"
-            ),
+            "cache-diagnosis-2026-04-07,cache-scope-future-token",
         )
         self.assertEqual(countAnthropicCacheControls(captures[0]["payload"]), 0)
         self.assertNotIn("diagnostics", captures[0]["payload"])

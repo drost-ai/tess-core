@@ -15,6 +15,7 @@ from ..prompt_cache import isKimiAnthropicCodingBackend, resolvePromptCachePolic
 from .shared import MESSAGES_API_URL, MESSAGES_COUNT_TOKENS_API_URL
 from ..token_budget import resolve_request_max_output_tokens as _resolve_max_output_tokens
 from typing import Any
+from urllib.parse import urlparse
 from ..prompt_cache_diagnostics import (
     buildPromptCacheRequestSnapshot,
 )
@@ -39,7 +40,20 @@ def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
     base = _normalize_anthropic_api_base_url(baseUrl)
     if not base:
         return MESSAGES_API_URL
-    return f"{base}/messages?beta=true"
+    return f"{base}/messages{_messages_beta_query(base)}"
+
+
+def _messages_beta_query(base: str) -> str:
+    # Policy (Migel, 2026-08-08): ?beta=true is a Claude Code idiom — send it
+    # only to the official API and the kimi coding backend (which emulates
+    # Claude Code). Compatible gateways get clean /v1/messages URLs.
+    try:
+        official = urlparse(base).hostname == "api.anthropic.com"
+    except Exception:
+        official = False
+    if official or _is_kimi_anthropic_coding_backend({"anthropicBaseUrl": base}):
+        return "?beta=true"
+    return ""
 
 def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
     base = _normalize_anthropic_api_base_url(baseUrl)
@@ -47,11 +61,13 @@ def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
         return MESSAGES_COUNT_TOKENS_API_URL
     return f"{base}/messages/count_tokens"
 
-DEFAULT_API_KEY_BETAS = ["fine-grained-tool-streaming-2025-05-14"]
+# fine-grained-tool-streaming-2025-05-14 was removed 2026-08-08: the feature
+# is GA (eager_input_streaming on the tool definition rides through the tool
+# passthrough) and the server ignores the stale token.
+DEFAULT_API_KEY_BETAS: list[str] = []
 DEFAULT_OAUTH_BETAS = [
     "claude-code-20250219",
     "oauth-2025-04-20",
-    "fine-grained-tool-streaming-2025-05-14",
 ]
 
 
@@ -70,12 +86,15 @@ def buildAnthropicHeaders(
         for name, value in custom_headers.items()
         if str(name).lower() not in {"anthropic-beta", "authorization", "x-api-key"}
     }
+    beta_header = buildAnthropicBetaHeader(config, features or {})
     headers = {
         "accept": "text/event-stream" if options.get("stream") else "application/json",
         "content-type": "application/json",
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": buildAnthropicBetaHeader(config, features or {}),
         "anthropic-dangerous-direct-browser-access": "true",
+        # Deliberate compatibility shim (Migel, 2026-08-08): the kimi coding
+        # backend gates access on Claude Code identity, so it gets the
+        # claude-cli user agent (and the claude-code beta token below).
         "user-agent": (
             "claude-cli/2.1.2 (external, cli)"
             if _is_kimi_anthropic_coding_backend(config)
@@ -84,6 +103,8 @@ def buildAnthropicHeaders(
         "x-app": "cli",
         **unrelated_custom_headers,
     }
+    if beta_header:
+        headers["anthropic-beta"] = beta_header
     if config.get("authToken"):
         headers["authorization"] = f"Bearer {config['authToken']}"
     elif config.get("apiKey"):
