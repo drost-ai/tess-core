@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .clients import JsonRpcClient, _McpHttpUnauthorized
-from .http_body import _open_without_redirects, _validate_outgoing_headers
+from .http_body import _open_mcp_http, _validate_outgoing_headers
 from .http_exchange import _HttpExchange
 import asyncio
 import json
@@ -224,7 +224,7 @@ class HttpMcpClient(JsonRpcClient):
     ) -> Any:
         _validate_outgoing_headers(headers)
         request = Request(url, data=body, headers=headers, method=method)
-        opener = _open_without_redirects
+        opener = _open_mcp_http
         try:
             response = opener(
                 request,
@@ -256,7 +256,9 @@ class HttpMcpClient(JsonRpcClient):
         if content_type == "text/event-stream":
             decoder = McpSseDecoder()
             matched: dict[str, Any] | None = None
-            for chunk in iterateMcpBody(response, self.policy):
+            # continuous: servers may hold the POST stream open (keepalives)
+            # after the response event, so read incrementally and return on match.
+            for chunk in iterateMcpBody(response, self.policy, continuous=True):
                 try:
                     for event in decoder.push(chunk):
                         matched = self._consume_rpc_sse_event(event, request_id) or matched

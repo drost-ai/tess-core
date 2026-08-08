@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .clients import JsonRpcClient
-from .http_body import _close_http_response
+from .http_body import _close_http_response, _url_origin
 from .http_transport import HttpMcpClient
 import asyncio
 import contextlib
@@ -200,8 +200,3 @@ class SseMcpClient(HttpMcpClient):
             )
         with self.state_lock:
             self.post_url = endpoint
-
-
-def _url_origin(value: Any) -> tuple[str, str, int]:
-    default = 443 if value.scheme == "https" else 80
-    return value.scheme.lower(), str(value.hostname or "").lower(), value.port or default

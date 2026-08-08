@@ -9,7 +9,7 @@ from .._utils import now_iso, pretty_json
 from .auth import McpAuthorizationRequiredError, createMcpOAuthRuntime
 from .clients import JsonRpcClient
 from .http_transport import HttpMcpClient
-from .protocol import _runtime_tool_name, _without_none_values
+from .protocol import McpProtocolError, _runtime_tool_name, _without_none_values
 from .sse_transport import SseMcpClient
 from .stdio_transport import StdioMcpClient
 from .transport_policy import McpTransportError, resolveMcpTransportPolicy
@@ -161,21 +161,56 @@ async def _require_connected(states: list[dict[str, Any]], server: str, cwd: str
     return await _ensure_connected(state, cwd, on_event)
 
 
+def _is_connection_fatal(error: BaseException) -> bool:
+    # A JSON-RPC error response or one slow request comes from a live server;
+    # only transport-level faults justify tearing the connection down (which
+    # for stdio means respawning the process and losing server-side state).
+    if isinstance(error, McpProtocolError):
+        return False
+    if isinstance(error, McpTransportError) and error.code == "request_timeout":
+        return False
+    return True
+
+
 async def _request_with_state_tracking(state: dict[str, Any], method: str, params: Any = None) -> Any:
     try:
         return await state["client"].request(method, params)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        _mark_state_failure(state, exc)
+        if _is_connection_fatal(exc):
+            _mark_state_failure(state, exc)
         raise
 
 
+MCP_LIST_PAGE_MAX = 64
+
+
+async def _paginated_list(state: dict[str, Any], method: str, key: str) -> list[Any] | None:
+    """Collect every page of a cursor-paginated list; None if the method is unsupported."""
+    items: list[Any] = []
+    cursor: str | None = None
+    seen_cursors: set[str] = set()
+    for _page in range(MCP_LIST_PAGE_MAX):
+        params = {"cursor": cursor} if cursor is not None else None
+        result = await _safe_request(state, method, params)
+        if result is None:
+            return items if items else None
+        page = result.get(key) if isinstance(result, dict) else None
+        if isinstance(page, list):
+            items.extend(page)
+        next_cursor = result.get("nextCursor") if isinstance(result, dict) else None
+        if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen_cursors:
+            return items
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
+    return items
+
+
 async def _refresh_tools(state: dict[str, Any]) -> list[dict[str, Any]]:
-    result = await _safe_request(state, "tools/list")
-    if result is None:
+    tools = await _paginated_list(state, "tools/list", "tools")
+    if tools is None:
         return []
-    tools = result.get("tools") if isinstance(result, dict) else []
     out = []
     for tool in tools or []:
         if not isinstance(tool, dict) or not isinstance(tool.get("name"), str):
@@ -206,10 +241,9 @@ def _normalize_tool_annotations(value: Any) -> dict[str, Any] | None:
 
 
 async def _refresh_resources(state: dict[str, Any]) -> list[dict[str, Any]]:
-    result = await _safe_request(state, "resources/list")
-    if result is None:
+    resources = await _paginated_list(state, "resources/list", "resources")
+    if resources is None:
         return state.get("resources") or []
-    resources = result.get("resources") if isinstance(result, dict) else []
     out = []
     for item in resources or []:
         if not isinstance(item, dict) or not isinstance(item.get("uri"), str) or not isinstance(item.get("name"), str):
@@ -232,7 +266,8 @@ async def _safe_request(state: dict[str, Any], method: str, params: Any = None) 
     except Exception as exc:
         if re.search(r"-32601|Method not found|not implemented", str(exc), re.I):
             return None
-        _mark_state_failure(state, exc)
+        if _is_connection_fatal(exc):
+            _mark_state_failure(state, exc)
         raise
 
 

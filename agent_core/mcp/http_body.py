@@ -6,7 +6,7 @@ import socket
 import zlib
 from http.client import HTTPConnection, HTTPResponse, HTTPSConnection
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 from .transport_policy import (
@@ -346,7 +346,32 @@ class _BoundedHTTPResponse(HTTPResponse):
         self.fp = _BoundedHeaderReader(self.fp)
 
 
-def _open_without_redirects(
+MCP_REDIRECT_MAX_HOPS = 5
+_MCP_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+
+
+def _parse_mcp_url(url: str) -> Any:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise McpTransportError("invalid_framing", "MCP HTTP URL is invalid.")
+    if parsed.username is not None or parsed.password is not None:
+        raise McpTransportError(
+            "invalid_framing",
+            "MCP HTTP URL must not contain embedded credentials.",
+        )
+    try:
+        parsed.port
+    except ValueError as error:
+        raise McpTransportError("invalid_framing", "MCP HTTP URL port is invalid.") from error
+    return parsed
+
+
+def _url_origin(parsed: Any) -> tuple[str, str, int]:
+    default = 443 if parsed.scheme == "https" else 80
+    return parsed.scheme.lower(), str(parsed.hostname or "").lower(), parsed.port or default
+
+
+def _open_mcp_http(
     request: Request,
     connect_timeout: float,
     headers_timeout: float | None = None,
@@ -359,20 +384,44 @@ def _open_without_redirects(
         )
     if exchange is None:
         return build_opener(_NoMcpRedirect()).open(request, timeout=connect_timeout)
-    parsed = urlparse(request.full_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise McpTransportError("invalid_framing", "MCP HTTP URL is invalid.")
-    if parsed.username is not None or parsed.password is not None:
-        raise McpTransportError(
-            "invalid_framing",
-            "MCP HTTP URL must not contain embedded credentials.",
-        )
-    try:
-        port = parsed.port
-    except ValueError as error:
-        raise McpTransportError("invalid_framing", "MCP HTTP URL port is invalid.") from error
+    origin = _url_origin(_parse_mcp_url(request.full_url))
+    url = request.full_url
+    for _hop in range(MCP_REDIRECT_MAX_HOPS + 1):
+        response = _open_direct(request, url, connect_timeout, headers_timeout, exchange)
+        status = int(getattr(response, "status", 200))
+        location = _first_header(getattr(response, "headers", None), "location")
+        if status not in _MCP_REDIRECT_STATUSES or not location:
+            return response
+        exchange.unbind(response)
+        _close_http_response(response)
+        if request.get_method() != "GET" and status not in (307, 308):
+            raise McpTransportError(
+                "redirect_refused",
+                f"MCP HTTP {status} redirect would change the request method.",
+            )
+        target = urljoin(url, location)
+        if _url_origin(_parse_mcp_url(target)) != origin:
+            raise McpTransportError(
+                "redirect_refused",
+                "MCP HTTP redirect left the configured server origin.",
+            )
+        url = target
+    raise McpTransportError(
+        "redirect_limit",
+        f"MCP HTTP redirect limit {MCP_REDIRECT_MAX_HOPS} exceeded.",
+    )
+
+
+def _open_direct(
+    request: Request,
+    url: str,
+    connect_timeout: float,
+    headers_timeout: float | None,
+    exchange: Any,
+) -> Any:
+    parsed = _parse_mcp_url(url)
     connection_type = HTTPSConnection if parsed.scheme == "https" else HTTPConnection
-    connection = connection_type(parsed.hostname, port, timeout=connect_timeout)
+    connection = connection_type(parsed.hostname, parsed.port, timeout=connect_timeout)
     connection.response_class = _BoundedHTTPResponse
     exchange.bind(connection)
     try:

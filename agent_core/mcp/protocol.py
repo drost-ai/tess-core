@@ -17,12 +17,26 @@ def _sanitize_name(value: str) -> str:
     return normalized or "item"
 
 
+class McpProtocolError(RuntimeError):
+    """A JSON-RPC error response from a live server; the transport is healthy."""
+
+    def __init__(self, message: str, code: Any = None, data: Any = None):
+        super().__init__(message)
+        self.name = "McpProtocolError"
+        self.code = code
+        self.data = data
+
+
 def _unwrap_json_rpc_response(response: dict[str, Any]) -> Any:
     if response.get("error"):
         error = response["error"]
         if isinstance(error, dict):
-            raise RuntimeError(f"{error.get('code')}: {error.get('message')}")
-        raise RuntimeError(str(error))
+            raise McpProtocolError(
+                f"{error.get('code')}: {error.get('message')}",
+                code=error.get("code"),
+                data=error.get("data"),
+            )
+        raise McpProtocolError(str(error))
     if "result" in response:
         return response.get("result")
     return None
