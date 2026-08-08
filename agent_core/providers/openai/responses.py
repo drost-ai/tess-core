@@ -42,9 +42,10 @@ from typing import Any
 
 async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
-    if args["mode"] == "chat_completions":
+    mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
+    if mode == "chat_completions":
         return await sendOpenAiChatCompletionsRequest(args)
-    return await sendOpenAiResponsesRequest(args)
+    return await sendOpenAiResponsesRequest({**args, "mode": mode})
 async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     # Call-time import: the config package imports providers at module load.
     from ...config._knobs import knobValue

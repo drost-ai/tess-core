@@ -4,7 +4,7 @@ from tests.support.agent_core_case import *
 
 
 class OpenAISdkTransportTests(AgentCoreTestCase):
-    def test_openai_sdk_transport_fallback_without_client_factory(self):
+    def test_openai_sdk_transport_used_on_explicit_opt_in(self):
         captured: dict[str, Any] = {}
 
         class FakeResponses:
@@ -42,6 +42,7 @@ class OpenAISdkTransportTests(AgentCoreTestCase):
                     {
                         "token": "sdk-token",
                         "mode": "codex",
+                        "config": {"openaiTransport": "sdk"},
                         "headers": {"x-sdk": "1"},
                         "request": {
                             "model": "gpt-5.5",

@@ -24,9 +24,31 @@ def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
         options["defaultHeaders"] = args["headers"]
     if base_url:
         options["baseURL"] = base_url
-    if not factory:
+    if factory:
+        return factory(options)
+    if _openai_transport_preference(args) == "sdk":
         return _create_openai_sdk_client(options)
-    return factory(options)
+    return _create_openai_wire_client(options)
+
+
+def _openai_transport_preference(args: dict[str, Any]) -> str:
+    config = args.get("config")
+    preference = (
+        str(config.get("openaiTransport") or "").strip().lower()
+        if isinstance(config, dict)
+        else ""
+    )
+    return "sdk" if preference == "sdk" else "wire"
+
+
+def _create_openai_wire_client(options: dict[str, Any]) -> Any:
+    from ._wire import OpenAiWireClient
+
+    return OpenAiWireClient(
+        api_key=options.get("apiKey"),
+        base_url=options.get("baseURL"),
+        default_headers=options.get("defaultHeaders"),
+    )
 
 
 def _assert_openai_transport_secrets(args: dict[str, Any]) -> None:
@@ -130,17 +152,42 @@ async def _race_openai_activity(
                 turn_session.clear_activity_task(task)
 
 
+class _ClientFactoryIdentity:
+    """Identity token for a clientFactory in the turn-session client cache.
+
+    Pins a strong reference so a recycled ``id()`` can never alias two
+    factories, compares by object identity, and survives the cache's
+    ``deepcopy`` untouched.
+    """
+
+    __slots__ = ("factory",)
+
+    def __init__(self, factory: Any) -> None:
+        self.factory = factory
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, _ClientFactoryIdentity) and self.factory is other.factory
+
+    def __hash__(self) -> int:
+        return id(self.factory)
+
+    def __deepcopy__(self, _memo: Any) -> _ClientFactoryIdentity:
+        return self
+
+
 async def _acquire_openai_client(
     args: dict[str, Any], base_url: str | None
 ) -> tuple[Any, bool]:
     turn_session = args.get("turnSession") or args.get("turn_session")
     if turn_session is None or not hasattr(turn_session, "acquire_client"):
         return _create_openai_client(args, base_url), False
+    factory = args.get("clientFactory") or args.get("client_factory")
     identity = (
         args.get("token"),
         base_url,
         tuple(sorted((args.get("headers") or {}).items())),
-        id(args.get("clientFactory") or args.get("client_factory")),
+        _ClientFactoryIdentity(factory) if factory is not None else None,
+        _openai_transport_preference(args),
     )
     return await turn_session.acquire_client(
         identity=identity,
