@@ -101,7 +101,6 @@ class FakeProviderRuntime:
         raise ScenarioAssertionError(f"Unsupported fake provider request: {provider}.{api}", category="harness")
 
     async def _run_openai(self, api: str, data: dict[str, Any], runtime: dict[str, Any], signal: AbortSignal) -> dict[str, Any]:
-        fake = FakeOpenAIClientFactory(api=api, script=data.get("script"), request_recorder=self.requests, abort_signal=signal)
         args = {
             "token": data.get("token", "test-token"),
             "headers": data.get("headers"),
@@ -109,8 +108,20 @@ class FakeProviderRuntime:
             "request": _request(provider="openai", data=data),
             "runtime": runtime,
             "maxAttempts": data.get("maxAttempts", 1),
-            "clientFactory": fake.client_factory,
         }
+        if data.get("wire"):
+            # Real-wire mode: the stock stdlib transport talks SSE to a local
+            # socket server; scripts use HTTP shapes (status/contentType/rawBody).
+            server = FakeProviderHttpServer(
+                provider="openai",
+                script=data.get("script"),
+                request_recorder=self.requests,
+            ).start()
+            self.servers.append(server)
+            args["baseUrl"] = data.get("baseUrl") or server.base_url
+        else:
+            fake = FakeOpenAIClientFactory(api=api, script=data.get("script"), request_recorder=self.requests, abort_signal=signal)
+            args["clientFactory"] = fake.client_factory
         _copy_timeout_options(data, args)
         original_delay = openai_module.shared.providerRetryDelayMs
         [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]

@@ -177,6 +177,45 @@ class OpenAiWireClientSelectionTests(unittest.TestCase):
         self.assertNotIn("extra_body", record["body"])
 
 
+class FakeProviderRuntimeWireModeTests(unittest.TestCase):
+    def test_scenario_runtime_wire_mode_drives_real_socket(self):
+        from agent_core_harness.fake_providers.runtime import FakeProviderRuntime
+
+        provider_runtime = FakeProviderRuntime()
+        try:
+            result = run(
+                provider_runtime.run(
+                    {"provider": "openai", "api": "responses", "wire": True}
+                )
+            )
+        finally:
+            provider_runtime.close()
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(
+            result["response"]["content"], [{"type": "text", "text": "ok"}]
+        )
+        record = provider_runtime.requests[0]
+        self.assertEqual(record["api"], "responses")
+        self.assertEqual(record["path"], "/v1/responses")
+
+    def test_scenario_runtime_wire_mode_chat_completions(self):
+        from agent_core_harness.fake_providers.runtime import FakeProviderRuntime
+
+        provider_runtime = FakeProviderRuntime()
+        try:
+            result = run(
+                provider_runtime.run(
+                    {"provider": "openai", "api": "chat_completions", "wire": True}
+                )
+            )
+        finally:
+            provider_runtime.close()
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(
+            provider_runtime.requests[0]["path"], "/v1/chat/completions"
+        )
+
+
 class OpenAiWireChatStreamShapeTests(unittest.TestCase):
     def test_chat_stream_with_tool_calls_over_wire(self):
         chunks = [
