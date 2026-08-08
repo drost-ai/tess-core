@@ -63,7 +63,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         }
         captured = {}
 
-        async def fake_send(_config, payload, _timeout, _stream, header_features, turn_session=None):
+        async def fake_send(_config, payload, _timeout, _stream, header_features, turn_session=None, **_kwargs):
             captured["payload"] = payload
             captured["headerFeatures"] = header_features
             return (
@@ -133,13 +133,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         class FixtureResponse:
             headers = {"content-type": "application/json"}
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *_args):
-                return None
-
-            def read(self):
+            async def read(self):
                 return json.dumps(
                     {
                         "model": "compatible-model",
@@ -155,15 +149,22 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
                     }
                 ).encode("utf-8")
 
-        def fixture_urlopen(request, **_kwargs):
-            captures.append(
-                {
-                    "url": request.full_url,
-                    "headers": {key.lower(): value for key, value in request.header_items()},
-                    "payload": json.loads(request.data.decode("utf-8")),
-                }
-            )
-            return FixtureResponse()
+        class FixtureTransport:
+            async def request(self, *, url, body, headers, timeout_seconds, consume):
+                captures.append(
+                    {
+                        "url": url,
+                        "headers": {key.lower(): value for key, value in headers.items()},
+                        "payload": json.loads(body.decode("utf-8")),
+                    }
+                )
+                return await consume(FixtureResponse())
+
+            def cancel(self):
+                return None
+
+            def close(self):
+                return None
 
         base_request = {
             "model": "compatible-model",
@@ -188,13 +189,13 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
                 "providerDiagnostics": True, "scope": "global",
             },
         }
-        with mock.patch.object(anthropic_request_module, "urlopen", fixture_urlopen):
-            first = run(anthropic_request_module.sendAnthropicMessagesRequest(
-                {"config": kimi, "request": base_request, "runtime": {}, "maxAttempts": 1}
-            ))
-            second = run(anthropic_request_module.sendAnthropicMessagesRequest(
-                {"config": compatible, "request": base_request, "runtime": {}, "maxAttempts": 1}
-            ))
+        transport = FixtureTransport()
+        first = run(anthropic_request_module.sendAnthropicMessagesRequest(
+            {"config": kimi, "request": base_request, "runtime": {}, "maxAttempts": 1, "transport": transport}
+        ))
+        second = run(anthropic_request_module.sendAnthropicMessagesRequest(
+            {"config": compatible, "request": base_request, "runtime": {}, "maxAttempts": 1, "transport": transport}
+        ))
         self.assertEqual(
             [capture["url"] for capture in captures],
             [

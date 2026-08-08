@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import math
 
-from ..anthropic_http_transport import (
-    cancelAnthropicTransportFuture as _cancel_anthropic_transport_future,
-)
-
 import asyncio
 import contextlib
 from .._core import (
@@ -49,7 +45,11 @@ async def _race_anthropic_activity(
 
 
 async def _cancel_anthropic_activity_task(task: asyncio.Future[Any]) -> None:
-    await _cancel_anthropic_transport_future(task)
+    owner = getattr(task, "_anthropic_transport_owner", None)
+    if owner is not None:
+        owner.cancel()
+    if not task.done():
+        task.cancel()
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await task
 

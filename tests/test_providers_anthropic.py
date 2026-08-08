@@ -260,13 +260,13 @@ class AnthropicProviderTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_anthropic_messages_request_timeout(self):
-        original_send = anthropic_module.request._send_anthropic_messages_sync
+        original_send = anthropic_module.request._send_anthropic_messages_async
 
-        def slow_send(*_args):
-            time.sleep(0.05)
+        async def slow_send(*_args, **_kwargs):
+            await asyncio.sleep(0.05)
             return "{}", "application/json"
 
-        anthropic_module.request._send_anthropic_messages_sync = slow_send
+        anthropic_module.request._send_anthropic_messages_async = slow_send
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
@@ -283,7 +283,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             self.assertEqual(ctx.exception.record["phase"], "request_start")
             self.assertTrue(ctx.exception.record["retryable"])
         finally:
-            anthropic_module.request._send_anthropic_messages_sync = original_send
+            anthropic_module.request._send_anthropic_messages_async = original_send
 
     def test_anthropic_streaming_emits_live_partials_before_response_completes(self):
         partial_seen = threading.Event()

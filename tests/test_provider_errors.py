@@ -57,14 +57,14 @@ class ProviderErrorTests(AgentCoreTestCase):
         self.assertEqual(calls["openai"], 0)
         self.assertFalse(any(event == "provider.request_started" for event, _ in openai_events))
 
-        original_send = anthropic_module.request._send_anthropic_messages_sync
+        original_send = anthropic_module.request._send_anthropic_messages_async
         anthropic_events = []
 
-        def send_anthropic(*_args):
+        async def send_anthropic(*_args, **_kwargs):
             calls["anthropic"] += 1
             return "{}", "application/json"
 
-        anthropic_module.request._send_anthropic_messages_sync = send_anthropic
+        anthropic_module.request._send_anthropic_messages_async = send_anthropic
         try:
             with self.assertRaises(core.ProviderRequestError) as anthropic_ctx:
                 run(
@@ -82,7 +82,7 @@ class ProviderErrorTests(AgentCoreTestCase):
             self.assertEqual(calls["anthropic"], 0)
             self.assertFalse(any(event == "provider.request_started" for event, _ in anthropic_events))
         finally:
-            anthropic_module.request._send_anthropic_messages_sync = original_send
+            anthropic_module.request._send_anthropic_messages_async = original_send
 
     def test_provider_requests_cancel_when_abort_signal_flips_during_activity(self):
         openai_signal = SimpleNamespace(aborted=False)
@@ -112,15 +112,15 @@ class ProviderErrorTests(AgentCoreTestCase):
         self.assertEqual(calls["openai"], 1)
 
         anthropic_signal = SimpleNamespace(aborted=False)
-        original_send = anthropic_module.request._send_anthropic_messages_sync
+        original_send = anthropic_module.request._send_anthropic_messages_async
 
-        def slow_send(*_args):
+        async def slow_send(*_args, **_kwargs):
             calls["anthropic"] += 1
             anthropic_signal.aborted = True
-            time.sleep(0.2)
+            await asyncio.sleep(0.2)
             return "{}", "application/json"
 
-        anthropic_module.request._send_anthropic_messages_sync = slow_send
+        anthropic_module.request._send_anthropic_messages_async = slow_send
         try:
             with self.assertRaises(core.ProviderRequestError) as anthropic_ctx:
                 run(
@@ -138,7 +138,7 @@ class ProviderErrorTests(AgentCoreTestCase):
             self.assertFalse(anthropic_ctx.exception.record["retryable"])
             self.assertEqual(calls["anthropic"], 1)
         finally:
-            anthropic_module.request._send_anthropic_messages_sync = original_send
+            anthropic_module.request._send_anthropic_messages_async = original_send
 
     def test_provider_failure_classifier_matrix_matches_reference(self):
         base = {"provider": "openai", "providerLabel": "OpenAI", "phase": "request_start", "attempt": 1, "hadAssistantOutput": False, "hadToolUse": False}

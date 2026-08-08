@@ -362,7 +362,7 @@ async def _measure_anthropic_transport_turn(
         "connectionCount": len({item["connectionId"] for item in requests}),
         "requestCount": len(requests),
         "reusedRequests": telemetry["reusedRequests"],
-        "liveThreadsAfterClose": telemetry["threadsStarted"] - telemetry["threadsSettled"],
+        "liveThreadsAfterClose": telemetry.get("threadsStarted", 0) - telemetry.get("threadsSettled", 0),
     }
 
 
@@ -425,7 +425,7 @@ async def _measure_anthropic_cancel() -> dict[str, Any]:
             "cancelToSettlementMs": round((settled_at - abort_at) * 1_000, 3),
             "serverObservedDisconnect": bool(requests and requests[0].get("clientDisconnected")),
             "failureCategory": category,
-            "liveThreadsAfterClose": telemetry["threadsStarted"] - telemetry["threadsSettled"],
+            "liveThreadsAfterClose": telemetry.get("threadsStarted", 0) - telemetry.get("threadsSettled", 0),
         },
     }
 

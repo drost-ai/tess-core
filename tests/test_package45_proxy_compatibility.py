@@ -9,9 +9,7 @@ from tests.test_package45_transport import _config, _send, _turn
 
 
 class Package45ProxyCompatibilityTests(unittest.TestCase):
-    def test_capability_off_matches_legacy_urllib_request(self):
-        import agent_core.providers.anthropic.request as request_module
-
+    def test_capability_off_uses_fresh_connection_per_request(self):
         async def exercise():
             requests = []
             server = FakeProviderHttpServer(
@@ -22,32 +20,21 @@ class Package45ProxyCompatibilityTests(unittest.TestCase):
             ).start()
             runtime = {"emitEvent": lambda *_: None}
             config = _config(server, keep_alive=False)
-
-            def legacy_sync(*args, **kwargs):
-                return request_module._DEFAULT_SEND_ANTHROPIC_MESSAGES_SYNC(
-                    *args, **kwargs
-                )
-
             try:
-                current_turn = _turn(config, runtime, "current-wire")
-                await _send(config, runtime, current_turn)
-                await current_turn.close()
-                legacy_turn = _turn(config, runtime, "legacy-wire")
-                with mock.patch.object(
-                    request_module,
-                    "_send_anthropic_messages_sync",
-                    legacy_sync,
-                ):
-                    await _send(config, runtime, legacy_turn)
-                await legacy_turn.close()
+                turn = _turn(config, runtime, "fresh-wire")
+                await _send(config, runtime, turn)
+                await _send(config, runtime, turn)
+                await turn.close()
             finally:
                 server.close()
             return requests
 
-        current, legacy = run(exercise())
-        self.assertEqual(current["path"], legacy["path"])
-        self.assertEqual(current["body"], legacy["body"])
-        self.assertEqual(current["headers"], legacy["headers"])
+        first, second = run(exercise())
+        self.assertEqual(first["path"], second["path"])
+        self.assertEqual(first["body"], second["body"])
+        self.assertEqual(first["headers"], second["headers"])
+        self.assertEqual(first["headers"]["connection"], "close")
+        self.assertNotEqual(first["connectionId"], second["connectionId"])
 
     def test_https_proxy_uses_connect_and_no_proxy_bypasses(self):
         connect_targets = []
