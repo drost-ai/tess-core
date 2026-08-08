@@ -6,28 +6,13 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-
-class AbortError(RuntimeError):
-    def __init__(self, message: str = "Request cancelled"):
-        super().__init__(message)
-        self.name = "AbortError"
-
-
-class AbortSignal:
-    def __init__(self) -> None:
-        self.aborted = False
-        self.reason: BaseException | None = None
-        self.event = asyncio.Event()
-
-    def abort(self, reason: BaseException | None = None) -> None:
-        if self.aborted:
-            return
-        self.aborted = True
-        self.reason = reason or AbortError()
-        self.event.set()
-
-    async def wait(self) -> None:
-        await self.event.wait()
+from ._core import (
+    AbortError,
+    AbortSignal,
+    signal_aborted as _signal_aborted,
+    signal_reason as _signal_reason,
+    wait_for_abort as _wait_for_signal,
+)
 
 
 class ProviderRequestWatchdog:
@@ -177,38 +162,9 @@ def createProviderRequestWatchdog(args: dict[str, Any] | None = None, **kwargs: 
     )
 
 
-def _signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    if isinstance(signal, dict):
-        return bool(signal.get("aborted"))
-    return bool(getattr(signal, "aborted", False))
-
-
-def _signal_reason(signal: Any) -> BaseException:
-    reason = signal.get("reason") if isinstance(signal, dict) else getattr(signal, "reason", None)
-    return reason if isinstance(reason, BaseException) else AbortError()
-
-
 def _consume_task_result(task: asyncio.Future[Any]) -> None:
     with _contextlib.suppress(asyncio.CancelledError, Exception):
         task.result()
-
-
-async def _wait_for_signal(signal: Any) -> None:
-    if signal is None:
-        await asyncio.Event().wait()
-        return
-    waiter = getattr(signal, "wait", None)
-    if callable(waiter):
-        await waiter()
-        return
-    event = signal.get("event") if isinstance(signal, dict) else getattr(signal, "event", None)
-    if isinstance(event, asyncio.Event):
-        await event.wait()
-        return
-    while not _signal_aborted(signal):
-        await asyncio.sleep(0.05)
 
 
 __all__ = ["AbortError", "AbortSignal", "ProviderRequestWatchdog", "createProviderRequestWatchdog"]

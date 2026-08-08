@@ -41,11 +41,12 @@ def _request() -> dict[str, Any]:
 
 
 class OpenAiRetryPolicyTests(AgentCoreTestCase):
-    def test_exact_openai_backoff_schedule_caps_at_thirty_seconds(self) -> None:
-        self.assertEqual(
-            [openai_module.shared.providerRetryDelayMs(attempt) for attempt in range(1, 8)],
-            [1_000, 3_000, 5_000, 10_000, 30_000, 30_000, 30_000],
-        )
+    def test_openai_backoff_ladder_caps_at_thirty_seconds_with_bounded_jitter(self) -> None:
+        ladder = [1_000, 3_000, 5_000, 10_000, 30_000, 30_000, 30_000]
+        for attempt, base in enumerate(ladder, start=1):
+            delay = openai_module.shared.providerRetryDelayMs(attempt)
+            self.assertGreaterEqual(delay, base)
+            self.assertLessEqual(delay, base + 119)
 
     def test_codex_defaults_to_six_attempts_for_output_free_overload(self) -> None:
         attempts = 0

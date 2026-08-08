@@ -60,7 +60,11 @@ class ScriptedAsyncStream:
                 yield action
                 continue
             if action.get("abort"):
-                setattr(self.abort_signal, "aborted", True)
+                abort = getattr(self.abort_signal, "abort", None)
+                if callable(abort):
+                    abort()
+                else:
+                    setattr(self.abort_signal, "aborted", True)
             delay_ms = int(action.get("delayMs") or 0)
             if delay_ms > 0:
                 await asyncio.sleep(delay_ms / 1000)

@@ -53,7 +53,7 @@ class AnthropicProviderTransportTests(AgentCoreTestCase):
 
     def test_anthropic_http_retry_and_non_retry_classification(self):
         original_delay = anthropic_module.request.providerRetryDelayMs
-        anthropic_module.request.providerRetryDelayMs = lambda _attempt: 0
+        anthropic_module.request.providerRetryDelayMs = lambda _attempt, *_a, **_kw: 0
         retry_calls = {"count": 0, "accept": None, "payload": None}
 
         class RetryHandler(http.server.BaseHTTPRequestHandler):

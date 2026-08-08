@@ -96,14 +96,14 @@ class KnobWiringTests(unittest.TestCase):
             if name.startswith("AGENT_CORE_PROVIDER_"):
                 del os.environ[name]
 
-    def test_openai_retry_ladder_reads_knob(self):
+    def test_openai_retry_ladder_reads_knob_with_jitter(self):
         delay = openai_module.shared.providerRetryDelayMs
-        self.assertEqual(delay(1), 1_000)
-        self.assertEqual(delay(5), 30_000)
-        self.assertEqual(delay(9), 30_000)
+        self.assertTrue(1_000 <= delay(1) <= 1_119, delay(1))
+        self.assertTrue(30_000 <= delay(5) <= 30_119, delay(5))
+        self.assertTrue(30_000 <= delay(9) <= 30_119, delay(9))
         configureKnobs({"provider": {"openai_retry_delays_ms": [5, 7]}})
-        self.assertEqual(delay(1), 5)
-        self.assertEqual(delay(3), 7)
+        self.assertTrue(5 <= delay(1) <= 124, delay(1))
+        self.assertTrue(7 <= delay(3) <= 126, delay(3))
 
     def test_anthropic_quick_retry_reads_knob_with_jitter(self):
         from agent_core.providers.errors import providerRetryDelayMs

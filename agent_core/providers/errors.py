@@ -1,15 +1,7 @@
 from __future__ import annotations
 
-from .error_diagnostics import (
-    looksLikeAuth as _looks_like_auth,
-    looksLikeQuota as _looks_like_quota,
-    looksLikeTimeout as _looks_like_timeout,
-    looksLikeTransport as _looks_like_transport,
-)
-
 import json
 import http.client as _http_client
-import random
 import re
 from collections.abc import Mapping as _Mapping
 from typing import Any
@@ -22,6 +14,10 @@ from .error_diagnostics import (
     boundedInterruptedPreview as _bounded_interrupted_preview,
     boundDiagnosticText as _bound_diagnostic_text,
     boundOptionalDiagnosticText as _bound_optional_diagnostic_text,
+    looksLikeAuth as _looks_like_auth,
+    looksLikeQuota as _looks_like_quota,
+    looksLikeTimeout as _looks_like_timeout,
+    looksLikeTransport as _looks_like_transport,
     nonnegativeOptionalInteger as _nonnegative_optional_integer,
     partialOutputMode as _partial_output_mode,
     positiveOptionalInteger as _positive_optional_integer,
@@ -320,15 +316,23 @@ def canRetryProviderFailure(error: ProviderRequestError, maxAttempts: int) -> bo
 
 
 def fallbackEligibleProviderFailure(error: Any) -> bool:
-    return isinstance(error, ProviderRequestError) and error.record.get("category") in {"rate_limit", "transport", "timeout", "server"}
+    # A failure after committed output or tool use must not silently re-run
+    # the turn on a fallback path — same policy as retry eligibility.
+    return (
+        isinstance(error, ProviderRequestError)
+        and error.record.get("category") in {"rate_limit", "transport", "timeout", "server"}
+        and not error.record.get("hadAssistantOutput")
+        and not error.record.get("hadToolUse")
+    )
 
 
-def providerRetryDelayMs(attempt: int) -> int:
-    # Call-time import: the config package imports providers at module load.
+def providerRetryDelayMs(attempt: int, failure: Any = None) -> int:
+    # Call-time imports: config and _core both import this module at load.
     from ..config._knobs import knobValue
+    from ._core import provider_retry_delay_ms
 
     ladder = tuple(knobValue("provider.anthropic_retry_delays_ms"))
-    return retryDelayFromLadder(ladder, attempt) + random.randint(0, 119)
+    return provider_retry_delay_ms(attempt, ladder=ladder, failure=failure)
 
 
 def retryDelayFromLadder(ladder: tuple[int, ...], attempt: int) -> int:

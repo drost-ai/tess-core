@@ -111,7 +111,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(codex_captured["params"]["tools"][0]["parameters"]["properties"]["path"], {"type": "string"})
 
         original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             compatible_attempts = {"count": 0}
             compatible_captured = {}
@@ -155,7 +155,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
     def test_openai_responses_error_event_retry_and_protocol_edges(self):
         original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             attempts = {"count": 0}
             events = []
@@ -424,7 +424,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
     def test_openai_retry_events_for_responses_and_chat(self):
         original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             response_attempts = {"count": 0}
             response_events = []

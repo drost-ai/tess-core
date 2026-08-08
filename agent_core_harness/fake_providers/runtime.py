@@ -124,7 +124,7 @@ class FakeProviderRuntime:
             args["clientFactory"] = fake.client_factory
         _copy_timeout_options(data, args)
         original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             if api == "chat_completions":
                 return await core.sendOpenAiChatCompletionsRequest(args)
@@ -156,7 +156,7 @@ class FakeProviderRuntime:
         }
         _copy_timeout_options(data, args)
         original_delay = anthropic_module.request.providerRetryDelayMs
-        anthropic_module.request.providerRetryDelayMs = lambda _attempt: 0
+        anthropic_module.request.providerRetryDelayMs = lambda _attempt, *_a, **_kw: 0
         try:
             return await core.sendAnthropicMessagesRequest(args)
         finally:

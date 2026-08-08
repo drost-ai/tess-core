@@ -188,7 +188,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             )
         last_failure = failure
         if canRetryProviderFailure(failure, max_attempts):
-            delay_ms = providerRetryDelayMs(attempt)
+            delay_ms = providerRetryDelayMs(attempt, failure)
             _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             runtime.get("emitEvent", lambda *_: None)("provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
             emitProviderActivity(

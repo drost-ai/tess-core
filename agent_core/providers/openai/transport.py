@@ -5,10 +5,12 @@ from ...runtime.events.emit import safeEmit as _emit
 import importlib
 from types import SimpleNamespace
 
-import asyncio
-import contextlib
 from ..._utils import get_value, maybe_await
-from ..errors import createProviderFailureRecord, createProviderRequestError
+from .._core import (
+    race_provider_activity as _race_provider_activity,
+    raise_if_provider_aborted as _raise_if_provider_aborted,
+    signal_aborted as _signal_aborted,
+)
 from .params import isCodexBaseUrl
 from .shared import OPENAI_ABORT_POLL_INTERVAL_MS
 from typing import Any
@@ -123,33 +125,20 @@ async def _race_openai_activity(
     abort_signal: Any = None,
     turn_session: Any = None,
 ) -> Any:
-    _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
-    task = asyncio.ensure_future(awaitable)
-    if turn_session is not None:
-        turn_session.bind_activity_task(task)
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + (max(1, timeout_ms) / 1000)
-    poll_seconds = OPENAI_ABORT_POLL_INTERVAL_MS / 1000
-    while True:
-        if task.done():
-            return task.result()
-        if _signal_aborted(abort_signal):
-            await _cancel_openai_activity_task(task)
-            _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
-        remaining = deadline - loop.time()
-        if remaining <= 0:
-            await _cancel_openai_activity_task(task)
-            _raise_openai_cancelled({"abortSignal": abort_signal}, provider_label, phase, attempt, had_output, had_tool_use)
-            raise _create_openai_timeout(provider_label, phase, attempt, had_output, had_tool_use, timeout_ms)
-        try:
-            return await asyncio.wait_for(asyncio.shield(task), timeout=min(poll_seconds, remaining))
-        except asyncio.TimeoutError:
-            if task.done():
-                return task.result()
-            continue
-        finally:
-            if task.done() and turn_session is not None:
-                turn_session.clear_activity_task(task)
+    return await _race_provider_activity(
+        awaitable,
+        provider="openai",
+        provider_label=provider_label,
+        message_label="OpenAI",
+        timeout_ms=timeout_ms,
+        phase=phase,
+        attempt=attempt,
+        had_output=had_output,
+        had_tool_use=had_tool_use,
+        abort_signal=abort_signal,
+        turn_session=turn_session,
+        abort_poll_interval_ms=OPENAI_ABORT_POLL_INTERVAL_MS,
+    )
 
 
 class _ClientFactoryIdentity:
@@ -214,55 +203,15 @@ def _plain_openai_value(value: Any) -> Any:
         }
     return value
 
-def _create_openai_timeout(provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool, timeout_ms: int) -> Any:
-    code = (
-        "provider_request_start_timeout"
-        if phase == "request_start"
-        else "provider_stream_idle_timeout"
-    )
-    return createProviderRequestError(
-        createProviderFailureRecord(
-            provider="openai",
-            providerLabel=provider_label,
-            phase=phase,
-            category="timeout",
-            retryable=True,
-            attempt=attempt,
-            hadAssistantOutput=had_output,
-            hadToolUse=had_tool_use,
-            code=code,
-            rawMessage=f"OpenAI request timed out after {timeout_ms}ms while waiting for provider activity.",
-        )
-    )
-
-async def _cancel_openai_activity_task(task: asyncio.Future[Any]) -> None:
-    if task.done():
-        return
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError, Exception):
-        await task
-
 def _raise_openai_cancelled(runtime: dict[str, Any], provider_label: str, phase: str, attempt: int, had_output: bool, had_tool_use: bool) -> None:
-    if not _signal_aborted(runtime.get("abortSignal")):
-        return
-    raise createProviderRequestError(
-        createProviderFailureRecord(
-            provider="openai",
-            providerLabel=provider_label,
-            phase=phase,
-            category="cancelled",
-            retryable=False,
-            attempt=attempt,
-            hadAssistantOutput=had_output,
-            hadToolUse=had_tool_use,
-            rawMessage="OpenAI request was cancelled.",
-        )
+    _raise_if_provider_aborted(
+        runtime.get("abortSignal"),
+        provider="openai",
+        provider_label=provider_label,
+        message_label="OpenAI",
+        phase=phase,
+        attempt=attempt,
+        had_output=had_output,
+        had_tool_use=had_tool_use,
     )
-
-def _signal_aborted(signal: Any) -> bool:
-    if not signal:
-        return False
-    if isinstance(signal, dict):
-        return bool(signal.get("aborted"))
-    return bool(getattr(signal, "aborted", False))
 

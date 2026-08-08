@@ -98,7 +98,7 @@ async def recover_openai_attempt(
                 {**failure.record, "next_generation": attempt + 1},
             )
     if can_retry:
-        delay_ms = openai_retry_delay_ms(args, attempt)
+        delay_ms = openai_retry_delay_ms(args, attempt, failure)
         _raise_openai_cancelled(
             runtime,
             provider_label,
@@ -151,11 +151,11 @@ async def recover_openai_attempt(
     return failure, False
 
 
-def openai_retry_delay_ms(args: dict[str, Any], attempt: int) -> int:
+def openai_retry_delay_ms(args: dict[str, Any], attempt: int, failure: Any = None) -> int:
     override = args.get("retryDelay")
     if callable(override):
         try:
             return max(0, int(override(attempt)))
         except (TypeError, ValueError):
             pass
-    return int(providerRetryDelayMs(attempt))
+    return int(providerRetryDelayMs(attempt, failure))

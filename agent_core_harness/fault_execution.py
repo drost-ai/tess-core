@@ -18,11 +18,8 @@ from agent_core.providers.anthropic.sse import (
     AnthropicSseAccumulator,
     parseAnthropicSseEvents,
 )
-from agent_core.providers.anthropic.transport import _create_anthropic_timeout
-from agent_core.providers.openai.transport import (
-    _create_openai_timeout,
-    _raise_openai_cancelled,
-)
+from agent_core.providers._core import create_provider_timeout_error
+from agent_core.providers.openai.transport import _raise_openai_cancelled
 
 from .fake_providers import FakeProviderRuntime
 from .fault_crash_execution import executeCrashFaultCell
@@ -134,14 +131,17 @@ def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any], di
                 {"event": "content_block_delta", "data": '{"type":'}
             )
         elif fault in {"F5", "F6"}:
-            error = _create_anthropic_timeout(
-                _phase(state),
-                1,
-                accumulator.had_assistant_output,
-                accumulator.had_tool_use,
-                1,
+            error = create_provider_timeout_error(
+                provider="anthropic",
+                provider_label="Anthropic",
+                message_label="Anthropic",
+                phase=_phase(state),
+                attempt=1,
+                had_output=accumulator.had_assistant_output,
+                had_tool_use=accumulator.had_tool_use,
+                timeout_ms=1,
             )
-            invocation = "_create_anthropic_timeout"
+            invocation = "create_provider_timeout_error"
         elif fault in {"F7", "F8", "F9"}:
             status = {"F7": 429, "F8": 529, "F9": 500}[fault]
             error = classifyProviderHttpFailure(
@@ -215,8 +215,17 @@ async def _execute_openai_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any],
     event_names: list[str] = []
     invocation = "sendOpenAiResponsesRequest(FakeOpenAIClientFactory)"
     if fault in {"F5", "F6"}:
-        error = _create_openai_timeout("OpenAI", _phase(state), 1, output, tool, 1)
-        invocation = "_create_openai_timeout"
+        error = create_provider_timeout_error(
+            provider="openai",
+            provider_label="OpenAI",
+            message_label="OpenAI",
+            phase=_phase(state),
+            attempt=1,
+            had_output=output,
+            had_tool_use=tool,
+            timeout_ms=1,
+        )
+        invocation = "create_provider_timeout_error"
     elif fault in {"F7", "F8", "F9"}:
         status = {"F7": 429, "F8": 529, "F9": 500}[fault]
         error = classifyProviderHttpFailure(

@@ -476,7 +476,10 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 )
             self.assertEqual(ctx.exception.record["category"], "timeout")
             self.assertTrue(ctx.exception.record["hadAssistantOutput"])
-            self.assertFalse(ctx.exception.record["retryable"])
+            # The record flags the fault class as retryable; the retry decision
+            # blocks the re-run because output was already streamed.
+            self.assertTrue(ctx.exception.record["retryable"])
+            self.assertFalse(core.canRetryProviderFailure(ctx.exception, 2))
             self.assertEqual(calls["count"], 1)
         finally:
             anthropic_module.request._send_anthropic_messages_streaming_async = original_stream

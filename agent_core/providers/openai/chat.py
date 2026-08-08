@@ -285,7 +285,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             )
             last_failure = failure
             if canRetryProviderFailure(failure, max_attempts):
-                delay_ms = _openai_retry_delay_ms(args, attempt)
+                delay_ms = _openai_retry_delay_ms(args, attempt, failure)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
                 emitProviderActivity(
