@@ -169,6 +169,18 @@ knobs:
     file_change_diff_target_bytes: 8000
     # Byte cap for a file-change tool result payload before its diff is trimmed. [1000..10000000]
     file_change_result_max_bytes: 12000
+    # Inline byte budget for Glob results in the large payload class. [1000..1000000]
+    glob_inline_bytes_large: 10000
+    # Inline byte budget for Glob results in the medium payload class. [1000..1000000]
+    glob_inline_bytes_medium: 8000
+    # Inline byte budget for Glob results in the small payload class. [1000..1000000]
+    glob_inline_bytes_small: 6000
+    # Inline byte budget for Grep results in the large payload class. [1000..1000000]
+    grep_inline_bytes_large: 18000
+    # Inline byte budget for Grep results in the medium payload class. [1000..1000000]
+    grep_inline_bytes_medium: 12000
+    # Inline byte budget for Grep results in the small payload class. [1000..1000000]
+    grep_inline_bytes_small: 8000
     # Byte ceiling for tool results of families that never spill to artifacts. [4096..512000]
     non_artifact_tool_result_max_bytes: 32000
     # Byte cap per notebook cell source in a NotebookRead page. [100..10000000]
@@ -177,6 +189,24 @@ knobs:
     notebook_cells_per_page: 20
     # Byte cap per sampled notebook cell output. [50..10000000]
     notebook_output_sample_bytes: 600
+    # Inline byte budget for Read results in the large payload class. [1000..1000000]
+    read_inline_bytes_large: 18000
+    # Inline byte budget for Read results in the medium payload class. [1000..1000000]
+    read_inline_bytes_medium: 12000
+    # Inline byte budget for Read results in the small payload class. [1000..1000000]
+    read_inline_bytes_small: 8000
+    # Final serialized byte cap for any tool result in the large payload class. [2000..512000]
+    result_final_bytes_large: 24000
+    # Final serialized byte cap for any tool result in the medium payload class. [2000..512000]
+    result_final_bytes_medium: 18000
+    # Final serialized byte cap for any tool result in the small payload class. [2000..512000]
+    result_final_bytes_small: 12000
+    # Inline byte budget for text tool results in the large payload class; line caps derive from it (~20 bytes/line). [1000..1000000]
+    text_inline_bytes_large: 18000
+    # Inline byte budget for text tool results in the medium payload class; line caps derive from it (~20 bytes/line). [1000..1000000]
+    text_inline_bytes_medium: 12000
+    # Inline byte budget for text tool results in the small payload class; line caps derive from it (~20 bytes/line). [1000..1000000]
+    text_inline_bytes_small: 8000
   process:
     # Milliseconds an owned worker process waits for its activation payload on stdin before exiting. [1000..600000]
     activation_timeout_ms: 30000

@@ -361,6 +361,40 @@ class ClosingWaveKnobWiringTests(unittest.TestCase):
         self.assertIn("AGENT_CORE_SUBAGENTS_MAX_LIVE", output)
 
 
+class PayloadClassKnobTests(unittest.TestCase):
+    """E7: per-profile payloadClass + knob-backed payload budgets."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+
+    def test_profile_payload_class_beats_the_name_heuristic(self):
+        from agent_core.payloads.tools import deriveToolPayloadClass
+
+        sniffed = {"providerKind": "openai", "openaiBaseUrl": "https://api.example.test", "model": "deepseek-v4-flash"}
+        self.assertEqual(deriveToolPayloadClass(sniffed), "small")  # heuristic fallback
+        declared = {**sniffed, "providerProfile": {"payloadClass": "large"}}
+        self.assertEqual(deriveToolPayloadClass(declared), "large")
+        junk = {**sniffed, "providerProfile": {"payloadClass": "enormous"}}
+        self.assertEqual(deriveToolPayloadClass(junk), "small")  # invalid values fall through
+
+    def test_payload_budget_knobs_drive_policy_and_derived_line_caps(self):
+        from agent_core.payloads.result_guard import getToolResultMaxBytes
+        from agent_core.payloads.tools import getToolPayloadPolicy
+
+        small = {"providerKind": "openai", "openaiBaseUrl": "https://x.test", "model": "deepseek-v4-flash"}
+        policy = getToolPayloadPolicy(small)
+        self.assertEqual(policy["textInlineBytes"], 8_000)
+        self.assertEqual(policy["textInlineLines"], 400)
+        self.assertEqual(getToolResultMaxBytes(small), 12_000)
+        configureKnobs({"payloads": {"text_inline_bytes_small": 16_000, "result_final_bytes_small": 20_000}})
+        policy = getToolPayloadPolicy(small)
+        self.assertEqual(policy["textInlineBytes"], 16_000)
+        self.assertEqual(policy["textInlineLines"], 800)  # derived: bytes // 20
+        self.assertEqual(policy["textHeadLines"], 200)
+        self.assertEqual(policy["textTailLines"], 400)
+        self.assertEqual(getToolResultMaxBytes(small), 20_000)
+
+
 class KnobResolutionIntegrationTests(AgentCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()

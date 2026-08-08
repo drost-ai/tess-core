@@ -110,6 +110,7 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "name": name,
         "kind": record["kind"],
         "apiMode": api_mode,
+        "payloadClass": record.get("payloadClass") if record.get("payloadClass") in ("small", "medium", "large") else None,
         "baseUrl": (overrides.get("openaiBaseUrl") if record.get("kind") == "openai" else None) or (record.get("baseUrl") or None),
         "defaultModel": record.get("defaultModel"),
         "auth": clone(record.get("auth") or {}),

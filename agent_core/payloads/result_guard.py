@@ -188,7 +188,9 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
 
 
 def getToolResultMaxBytes(config: dict[str, Any]) -> int:
-    return TOOL_RESULT_FINAL_BYTES[deriveToolPayloadClass(config)]
+    from ..config._knobs import knobValue
+
+    return int(knobValue(f"payloads.result_final_bytes_{deriveToolPayloadClass(config)}"))
 
 
 def serializedContentBytes(content: str) -> int:

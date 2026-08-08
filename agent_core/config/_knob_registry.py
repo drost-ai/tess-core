@@ -160,6 +160,21 @@ _DECLARATIONS: tuple[tuple[str, Any, str, str, float | None, float | None], ...]
     ("process.bash_termination_grace_ms", 1_000, "int", "Milliseconds a Bash process gets after SIGTERM before SIGKILL.", 100, 60_000),
     ("process.bash_termination_fallback_ms", 4_000, "int", "Milliseconds the Bash termination ladder waits overall before giving up.", 500, 600_000),
     ("process.spool_max_bytes", 64 * 1024 * 1024, "int", "Byte cap for a subprocess output spool file before output is truncated.", 1024 * 1024, 4 * 1024 * 1024 * 1024),
+    ("payloads.text_inline_bytes_small", 8000, "int", "Inline byte budget for text tool results in the small payload class; line caps derive from it (~20 bytes/line).", 1_000, 1_000_000),
+    ("payloads.read_inline_bytes_small", 8000, "int", "Inline byte budget for Read results in the small payload class.", 1_000, 1_000_000),
+    ("payloads.glob_inline_bytes_small", 6000, "int", "Inline byte budget for Glob results in the small payload class.", 1_000, 1_000_000),
+    ("payloads.grep_inline_bytes_small", 8000, "int", "Inline byte budget for Grep results in the small payload class.", 1_000, 1_000_000),
+    ("payloads.result_final_bytes_small", 12000, "int", "Final serialized byte cap for any tool result in the small payload class.", 2_000, 512_000),
+    ("payloads.text_inline_bytes_medium", 12000, "int", "Inline byte budget for text tool results in the medium payload class; line caps derive from it (~20 bytes/line).", 1_000, 1_000_000),
+    ("payloads.read_inline_bytes_medium", 12000, "int", "Inline byte budget for Read results in the medium payload class.", 1_000, 1_000_000),
+    ("payloads.glob_inline_bytes_medium", 8000, "int", "Inline byte budget for Glob results in the medium payload class.", 1_000, 1_000_000),
+    ("payloads.grep_inline_bytes_medium", 12000, "int", "Inline byte budget for Grep results in the medium payload class.", 1_000, 1_000_000),
+    ("payloads.result_final_bytes_medium", 18000, "int", "Final serialized byte cap for any tool result in the medium payload class.", 2_000, 512_000),
+    ("payloads.text_inline_bytes_large", 18000, "int", "Inline byte budget for text tool results in the large payload class; line caps derive from it (~20 bytes/line).", 1_000, 1_000_000),
+    ("payloads.read_inline_bytes_large", 18000, "int", "Inline byte budget for Read results in the large payload class.", 1_000, 1_000_000),
+    ("payloads.glob_inline_bytes_large", 10000, "int", "Inline byte budget for Glob results in the large payload class.", 1_000, 1_000_000),
+    ("payloads.grep_inline_bytes_large", 18000, "int", "Inline byte budget for Grep results in the large payload class.", 1_000, 1_000_000),
+    ("payloads.result_final_bytes_large", 24000, "int", "Final serialized byte cap for any tool result in the large payload class.", 2_000, 512_000),
 )
 
 

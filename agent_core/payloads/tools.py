@@ -211,6 +211,13 @@ async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
 
 
 def deriveToolPayloadClass(config: dict[str, Any]) -> str:
+    profile = config.get("providerProfile") if isinstance(config.get("providerProfile"), dict) else {}
+    declared = profile.get("payloadClass")
+    if declared in TOOL_PAYLOAD_POLICIES:
+        # An explicit providers.yaml payloadClass beats the model-name
+        # heuristic below — names like "deepseek-v4-flash" say nothing
+        # reliable about a model's real capacity.
+        return declared
     model = str(config.get("model", "")).lower()
     if config.get("providerKind") == "anthropic":
         return "large"
@@ -224,7 +231,23 @@ def deriveToolPayloadClass(config: dict[str, Any]) -> str:
 
 
 def getToolPayloadPolicy(config: dict[str, Any]) -> dict[str, int]:
-    return TOOL_PAYLOAD_POLICIES[deriveToolPayloadClass(config)]
+    cls = deriveToolPayloadClass(config)
+    policy = dict(TOOL_PAYLOAD_POLICIES[cls])
+    from ..config._knobs import knobValue
+
+    text_bytes = int(knobValue(f"payloads.text_inline_bytes_{cls}"))
+    policy.update({
+        "textInlineBytes": text_bytes,
+        # Line caps are backstops; the byte budget is the binding
+        # constraint (~20 bytes/line of short-lined text).
+        "textInlineLines": max(1, text_bytes // 20),
+        "textHeadLines": max(1, text_bytes // 80),
+        "textTailLines": max(1, text_bytes // 40),
+        "readInlineBytes": int(knobValue(f"payloads.read_inline_bytes_{cls}")),
+        "globInlineBytes": int(knobValue(f"payloads.glob_inline_bytes_{cls}")),
+        "grepInlineBytes": int(knobValue(f"payloads.grep_inline_bytes_{cls}")),
+    })
+    return policy
 
 
 def getDefaultGlobExcludes() -> list[str]:
