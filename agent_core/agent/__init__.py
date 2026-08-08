@@ -33,14 +33,11 @@ from .plan_policy import (
     resolve_plan_mode_mcp_verdict,
 )
 from .progress import (
-    ARTIFACT_ACQUISITION_FAILURE_LIMIT,
-    GENERAL_NO_PROGRESS_LIMIT,
     LogicalTurnProgressLedger,
     MAX_RECORDED_ARTIFACTS,
     MAX_RECORDED_FINGERPRINTS,
     MAX_REPEATED_CYCLE_BATCHES,
     PROGRESS_LEDGER_SCHEMA_VERSION,
-    REPEATED_TOOL_CYCLE_LIMIT,
     appendToolResultBatch,
     noProgressEventData,
     noProgressTurnResult,
@@ -97,8 +94,6 @@ from .turn_session import (
 )
 
 __all__ = [
-    "ARTIFACT_ACQUISITION_FAILURE_LIMIT",
-    "GENERAL_NO_PROGRESS_LIMIT",
     "IMAGE_INPUT_UNSUPPORTED_MESSAGE",
     "LogicalTurnProgressLedger",
     "MAX_RECORDED_ARTIFACTS",
@@ -107,7 +102,6 @@ __all__ = [
     "OperatorPolicyDecision",
     "PLAN_SAFE_TOOL_NAMES",
     "PROGRESS_LEDGER_SCHEMA_VERSION",
-    "REPEATED_TOOL_CYCLE_LIMIT",
     "STRICT_TOOL_PROTOCOL_PROVIDERS",
     "SerialQueue",
     "ToolDispatchOutcome",

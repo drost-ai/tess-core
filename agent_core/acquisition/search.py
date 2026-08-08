@@ -14,7 +14,6 @@ from typing import Any, Callable
 
 from ..process.output import (
     SUBPROCESS_RING_MAX_BYTES,
-    SUBPROCESS_SPOOL_MAX_BYTES,
     createSubprocessOutputCollector,
 )
 from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
@@ -148,7 +147,7 @@ async def runStreamingSearch(**kwargs: Any) -> dict[str, Any]:
         family=kwargs["family"],
         stdoutContentType=kwargs["contentType"],
         stderrContentType="text",
-        maxSpoolBytes=kwargs.get("maxSpoolBytes", SUBPROCESS_SPOOL_MAX_BYTES),
+        maxSpoolBytes=kwargs.get("maxSpoolBytes", int(_knob("process.spool_max_bytes"))),
         maxRingBytes=kwargs.get("maxRingBytes", SUBPROCESS_RING_MAX_BYTES),
     )
     sampler = _make_sampler(kwargs)
@@ -234,7 +233,7 @@ async def buildStreamingSearchFromOutput(
         family=kwargs["family"],
         stdoutContentType=kwargs["contentType"],
         stderrContentType="text",
-        maxSpoolBytes=kwargs.get("maxSpoolBytes", SUBPROCESS_SPOOL_MAX_BYTES),
+        maxSpoolBytes=kwargs.get("maxSpoolBytes", int(_knob("process.spool_max_bytes"))),
         maxRingBytes=kwargs.get("maxRingBytes", SUBPROCESS_RING_MAX_BYTES),
     )
     sampler = _make_sampler(kwargs)

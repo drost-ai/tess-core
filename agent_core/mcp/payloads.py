@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import json
 from typing import Any, Iterable
 
@@ -9,14 +15,12 @@ from ..payloads.tools import _persist_artifact, getToolPayloadPolicy
 from ..payloads.utf8_bounds import sliceUtf8Prefix, sliceUtf8Window, utf8ByteLength
 
 
-DEFAULT_INLINE_BYTES = 8_000
-MAX_MCP_RESOURCE_PAGE = 40
 MAX_MCP_CONTENTS = 12
 
 
 async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
     inline_bytes = _inline_budget(args.get("context"))
-    limit = min(_limit(args.get("requestedLimit"), MAX_MCP_RESOURCE_PAGE), MAX_MCP_RESOURCE_PAGE)
+    limit = min(_limit(args.get("requestedLimit"), int(_knob("mcp.max_resource_page"))), int(_knob("mcp.max_resource_page")))
     resources = sorted(args.get("resources", []), key=_resource_sort_key)
     fingerprint = fingerprintPayloadSource(
         _resource_list_cursor_parts(resources, args.get("server"))
@@ -318,7 +322,7 @@ def _resource_sort_key(value: Any) -> str:
 
 
 def _inline_budget(context: dict[str, Any] | None) -> int:
-    return getToolPayloadPolicy(context["config"])["textInlineBytes"] if context else DEFAULT_INLINE_BYTES
+    return getToolPayloadPolicy(context["config"])["textInlineBytes"] if context else int(_knob("mcp.inline_bytes"))
 
 
 def _offset(value: Any) -> int:

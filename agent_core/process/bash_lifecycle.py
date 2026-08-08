@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import contextlib
 import os
@@ -11,9 +17,6 @@ from .identity import captureOwnedProcessIdentity
 from .output import createSubprocessOutputCollector
 
 
-DEFAULT_STDIO_LEAK_GRACE_MS = 2_000
-DEFAULT_TERMINATION_GRACE_MS = 1_000
-DEFAULT_TERMINATION_FALLBACK_MS = 4_000
 
 STDIO_LEAK_DIAGNOSTIC = (
     "The shell exited, but stdout/stderr did not close. A background descendant likely inherited "
@@ -115,8 +118,8 @@ async def runInlineShellCommand(
         await _settle_process(
             process,
             wait_task,
-            int(values.get("terminationGraceMs") or DEFAULT_TERMINATION_GRACE_MS),
-            int(values.get("terminationFallbackMs") or DEFAULT_TERMINATION_FALLBACK_MS),
+            int(values.get("terminationGraceMs") or int(_knob("process.bash_termination_grace_ms"))),
+            int(values.get("terminationFallbackMs") or int(_knob("process.bash_termination_fallback_ms"))),
         )
     else:
         await wait_task
@@ -126,7 +129,7 @@ async def runInlineShellCommand(
             reader_tasks,
             timeout=max(
                 0.001,
-                float(values.get("stdioLeakGraceMs") or DEFAULT_STDIO_LEAK_GRACE_MS) / 1000,
+                float(values.get("stdioLeakGraceMs") or int(_knob("process.stdio_leak_grace_ms"))) / 1000,
             ),
         )
         if len(readers_done) != len(reader_tasks):
@@ -141,7 +144,7 @@ async def runInlineShellCommand(
         pipes_closed = await _drain_readers_and_group(
             process,
             reader_tasks,
-            int(values.get("terminationGraceMs") or DEFAULT_TERMINATION_GRACE_MS),
+            int(values.get("terminationGraceMs") or int(_knob("process.bash_termination_grace_ms"))),
         )
     await asyncio.gather(*reader_tasks, return_exceptions=True)
 

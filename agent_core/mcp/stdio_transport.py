@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from .clients import JsonRpcClient
 import asyncio
 import contextlib
@@ -13,9 +19,6 @@ import time
 from typing import Any, Callable
 
 from .transport_policy import (
-    MCP_CLOSE_GRACE_MS,
-    MCP_CLOSE_KILL_WAIT_MS,
-    MCP_CLOSE_STDIN_GRACE_MS,
     MCP_FRAME_MAX_BYTES,
     MCP_PENDING_REQUEST_MAX,
     MCP_STDERR_TAIL_MAX_BYTES,
@@ -270,16 +273,16 @@ class StdioMcpClient(JsonRpcClient):
                 with contextlib.suppress(Exception):
                     proc.stdin.close()
             if proc:
-                self._wait_parent(MCP_CLOSE_STDIN_GRACE_MS)
+                self._wait_parent(int(_knob("mcp.close_stdin_grace_ms")))
                 if self._owned_group_alive():
                     self._signal_owned_group(signal.SIGTERM)
-                    if not self._wait_group(MCP_CLOSE_GRACE_MS):
+                    if not self._wait_group(int(_knob("mcp.close_grace_ms"))):
                         self._signal_owned_group(signal.SIGKILL)
-                        if not self._wait_group(MCP_CLOSE_KILL_WAIT_MS):
+                        if not self._wait_group(int(_knob("mcp.close_kill_wait_ms"))):
                             raise RuntimeError(
                                 f"MCP stdio process group survived SIGKILL: {self.config.get('name')}."
                             )
-                if not self._wait_parent(MCP_CLOSE_KILL_WAIT_MS):
+                if not self._wait_parent(int(_knob("mcp.close_kill_wait_ms"))):
                     raise RuntimeError(
                         f"MCP stdio child did not close after termination: {self.config.get('name')}."
                     )

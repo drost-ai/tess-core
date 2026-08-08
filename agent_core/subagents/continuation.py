@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from ._shared import _string
 
 from ..runtime.events.emit import safeEmit as _emit
@@ -146,7 +152,7 @@ async def _maybe_start_group_continuation(
     requested = attempts > 0 or phase == "retryable" or bool(group.get("continuationRequestedAt"))
     if requested and not unconsumed_for_group:
         return {"started": False, "reason": "satisfied_intent", "launchGroupId": group_id}
-    if requested and attempts >= int(policy.get("maxRecoveryAttempts") or 3):
+    if requested and attempts >= int(policy.get("maxRecoveryAttempts") or _knob("subagents.max_recovery_attempts")):
         return {"started": False, "reason": "recovery_exhausted", "launchGroupId": group_id}
     ready = evaluateParentContinuationReadiness(
         records,

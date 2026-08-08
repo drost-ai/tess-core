@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import inspect
 import os
@@ -12,7 +18,6 @@ from ..storage import toolArtifactDataPath, toolArtifactMetaPath, writeJsonFile
 from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, sliceUtf8Suffix, utf8ByteLength
 
 
-SUBPROCESS_SPOOL_MAX_BYTES = 64 * 1024 * 1024
 SUBPROCESS_RING_MAX_BYTES = 128 * 1024
 StreamKind = Literal["stdout", "stderr"]
 
@@ -69,7 +74,7 @@ class SubprocessOutputCollector:
         family: str = "bash",
         stdout_content_type: str = "text",
         stderr_content_type: str = "text",
-        max_spool_bytes: int = SUBPROCESS_SPOOL_MAX_BYTES,
+        max_spool_bytes: int = int(_knob("process.spool_max_bytes")),
         max_ring_bytes: int = SUBPROCESS_RING_MAX_BYTES,
         metadata_writer: Callable[[str, Any], Any] | None = None,
     ):
@@ -80,7 +85,7 @@ class SubprocessOutputCollector:
             "stdout": stdout_content_type,
             "stderr": stderr_content_type,
         }
-        self.max_spool_bytes = _positive(max_spool_bytes, SUBPROCESS_SPOOL_MAX_BYTES)
+        self.max_spool_bytes = _positive(max_spool_bytes, int(_knob("process.spool_max_bytes")))
         self.max_ring_bytes = _positive(max_ring_bytes, SUBPROCESS_RING_MAX_BYTES)
         self.metadata_writer = metadata_writer or writeJsonFile
         per_stream = max(1, self.max_ring_bytes // 2)
@@ -231,7 +236,7 @@ async def createSubprocessOutputCollector(**kwargs: Any) -> SubprocessOutputColl
         "family": kwargs.get("family", "bash"),
         "stdout_content_type": kwargs.get("stdoutContentType", "text"),
         "stderr_content_type": kwargs.get("stderrContentType", "text"),
-        "max_spool_bytes": kwargs.get("maxSpoolBytes", SUBPROCESS_SPOOL_MAX_BYTES),
+        "max_spool_bytes": kwargs.get("maxSpoolBytes", int(_knob("process.spool_max_bytes"))),
         "max_ring_bytes": kwargs.get("maxRingBytes", SUBPROCESS_RING_MAX_BYTES),
         "metadata_writer": kwargs.get("metadataWriter"),
     }

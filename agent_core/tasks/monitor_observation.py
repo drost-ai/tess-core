@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from .._utils import parse_iso_ms
 
 from datetime import datetime, timezone
 from typing import Any
 
 
-MIN_PROGRESS_BYTES = 120
 
 
 def applyMonitorObservation(
@@ -127,7 +132,7 @@ def _narration_reason(
     if status_changed and final_status not in {"active", "muted"}:
         return final_status
     progress = max(0, output_size - int(monitor.get("lastNarratedOutputSize") or 0))
-    if output_size != int(monitor.get("lastObservedOutputSize") or 0) and progress >= MIN_PROGRESS_BYTES:
+    if output_size != int(monitor.get("lastObservedOutputSize") or 0) and progress >= int(_knob("tasks.monitor_min_progress_bytes")):
         return "progress"
     if now - int(parse_iso_ms(monitor.get("lastAssistantUpdateAt") or monitor.get("createdAt")) or 0) >= int(monitor.get("heartbeatIntervalMs") or 0):
         return "heartbeat"

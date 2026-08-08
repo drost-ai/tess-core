@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from typing import Any
 
 
-DEFAULT_SUBAGENT_MAX_DEPTH = 2
 
 
 def resolveSubagentMaxDepth(config: dict[str, Any] | None = None, session: dict[str, Any] | None = None) -> int:
@@ -24,7 +29,7 @@ def resolveSubagentMaxDepth(config: dict[str, Any] | None = None, session: dict[
             continue
         if value >= 0:
             return value
-    return DEFAULT_SUBAGENT_MAX_DEPTH
+    return int(_knob("subagents.max_depth"))
 
 
 def checkSubagentDepthAllowed(session: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -38,7 +43,7 @@ def checkSubagentDepthAllowed(session: dict[str, Any], config: dict[str, Any] | 
     allowed = child_depth <= max_depth
     message = (
         "Delegation depth limit reached."
-        if max_depth == DEFAULT_SUBAGENT_MAX_DEPTH
+        if max_depth == int(_knob("subagents.max_depth"))
         else f"Delegation depth limit reached (child depth {child_depth} exceeds max {max_depth})."
     )
     return {

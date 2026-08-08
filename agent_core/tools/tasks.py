@@ -51,7 +51,9 @@ def _task_output_tool() -> ToolDefinition:
                 meta = await readTaskMeta(task_id)
                 if not meta or meta.get("status") not in ("running", "reconciling"):
                     break
-                await asyncio.sleep(0.25)
+                from ..config._knobs import knobValue
+
+                await asyncio.sleep(int(knobValue("tools.task_output_poll_ms")) / 1000)
         owned = await requireModelOwnedTask(context, task_id, "output")
         meta = owned["meta"]
         policy = getToolPayloadPolicy(context["config"])

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import math
 from typing import Any
 
@@ -12,14 +18,6 @@ MCP_NOTIFICATION_QUEUE_MAX = 256
 MCP_PENDING_REQUEST_MAX = 256
 MCP_STDERR_TAIL_MAX_BYTES = 16 * 1024
 
-MCP_DEFAULT_STARTUP_TIMEOUT_MS = 10_000
-MCP_DEFAULT_REQUEST_TIMEOUT_MS = 30_000
-MCP_DEFAULT_CONNECT_TIMEOUT_MS = 10_000
-MCP_DEFAULT_HEADERS_TIMEOUT_MS = 10_000
-MCP_DEFAULT_BODY_IDLE_TIMEOUT_MS = 10_000
-MCP_CLOSE_GRACE_MS = 750
-MCP_CLOSE_STDIN_GRACE_MS = 100
-MCP_CLOSE_KILL_WAIT_MS = 2_000
 
 
 class McpTransportError(RuntimeError):
@@ -35,27 +33,27 @@ def resolveMcpTransportPolicy(config: dict[str, Any] | None = None) -> dict[str,
         "startupTimeoutMs": _positive_timeout(
             values.get("startupTimeoutMs"),
             values.get("startupTimeoutSeconds"),
-            MCP_DEFAULT_STARTUP_TIMEOUT_MS,
+            int(_knob("mcp.startup_timeout_ms")),
         ),
         "requestTimeoutMs": _positive_timeout(
             values.get("requestTimeoutMs"),
             values.get("requestTimeoutSeconds"),
-            MCP_DEFAULT_REQUEST_TIMEOUT_MS,
+            int(_knob("mcp.request_timeout_ms")),
         ),
         "connectTimeoutMs": _positive_timeout(
             values.get("connectTimeoutMs"),
             None,
-            MCP_DEFAULT_CONNECT_TIMEOUT_MS,
+            int(_knob("mcp.connect_timeout_ms")),
         ),
         "headersTimeoutMs": _positive_timeout(
             values.get("headersTimeoutMs"),
             None,
-            MCP_DEFAULT_HEADERS_TIMEOUT_MS,
+            int(_knob("mcp.headers_timeout_ms")),
         ),
         "bodyIdleTimeoutMs": _positive_timeout(
             values.get("bodyIdleTimeoutMs"),
             values.get("streamTimeoutSeconds"),
-            MCP_DEFAULT_BODY_IDLE_TIMEOUT_MS,
+            int(_knob("mcp.body_idle_timeout_ms")),
         ),
     }
 

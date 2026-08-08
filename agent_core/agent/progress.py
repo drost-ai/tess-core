@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
@@ -10,9 +16,6 @@ from ..session.message_origin import syntheticUserMessage
 
 
 PROGRESS_LEDGER_SCHEMA_VERSION = 1
-REPEATED_TOOL_CYCLE_LIMIT = 3
-ARTIFACT_ACQUISITION_FAILURE_LIMIT = 3
-GENERAL_NO_PROGRESS_LIMIT = 12
 MAX_RECORDED_FINGERPRINTS = 64
 MAX_RECORDED_ARTIFACTS = 32
 MAX_REPEATED_CYCLE_BATCHES = 8
@@ -148,13 +151,13 @@ class LogicalTurnProgressLedger:
             diagnostic["artifactId"] = artifact_observation["artifactId"]
         elif (
             repeated_cycle is not None
-            and repeated_cycle["occurrences"] >= REPEATED_TOOL_CYCLE_LIMIT
+            and repeated_cycle["occurrences"] >= int(_knob("agent.repeated_tool_cycle_limit"))
         ):
             terminal_reason = "repeated_tool_cycle"
             diagnostic["cycleFingerprint"] = repeated_cycle["fingerprint"]
         elif (
             int(self.receipt.get("consecutiveNoProgress") or 0)
-            >= GENERAL_NO_PROGRESS_LIMIT
+            >= int(_knob("agent.no_progress_limit"))
         ):
             terminal_reason = "no_semantic_progress"
             diagnostic["cycleFingerprint"] = batch_fingerprint
@@ -208,7 +211,7 @@ class LogicalTurnProgressLedger:
                 advanced = True
             else:
                 failures[artifact_id] = int(failures.get(artifact_id) or 0) + 1
-                if failures[artifact_id] >= ARTIFACT_ACQUISITION_FAILURE_LIMIT:
+                if failures[artifact_id] >= int(_knob("agent.artifact_acquisition_failure_limit")):
                     failed_artifact = artifact_id
 
         _prune_mapping(offsets, MAX_RECORDED_ARTIFACTS)

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import base64
 import hashlib
 import os
@@ -19,7 +25,7 @@ async def _save_blob_content(server: str, uri: str, data: str) -> str:
     raw = base64.b64decode(data)
     target = target_dir / _blob_file_name(uri, raw)
     target.write_bytes(raw)
-    _cleanup_blob_dir(target_dir, keep=int(os.environ.get("AGENT_CORE_MCP_BLOB_KEEP") or 64))
+    _cleanup_blob_dir(target_dir, keep=int(_knob("mcp.blob_keep")))
     return str(target)
 
 

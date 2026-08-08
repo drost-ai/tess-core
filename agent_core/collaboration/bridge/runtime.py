@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ...config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from .generation import requireBridgeLedger as _require_ledger
 
 import asyncio
@@ -32,8 +38,6 @@ from ...storage.remote import (
     saveRemoteSession,
 )
 
-BRIDGE_POLL_SECONDS = 0.75
-BRIDGE_POLL_DEADLINE_SECONDS = 10.0
 
 
 class LifecycleClosedError(RuntimeError):
@@ -347,12 +351,12 @@ class BridgeRuntimeController:
             self._stop.wait(self._poll_interval())
 
     def _poll_interval(self):
-        return float(self._args.get("pollIntervalSeconds", self._args.get("pollIntervalMs", BRIDGE_POLL_SECONDS * 1000) / 1000))
+        return float(self._args.get("pollIntervalSeconds", self._args.get("pollIntervalMs", (int(_knob("collab.bridge_poll_ms")) / 1000) * 1000) / 1000))
 
     def _deadline(self):
         if "pollDeadlineSeconds" in self._args:
             return max(0.001, float(self._args["pollDeadlineSeconds"]))
-        return max(0.001, float(self._args.get("pollDeadlineMs", BRIDGE_POLL_DEADLINE_SECONDS * 1000)) / 1000)
+        return max(0.001, float(self._args.get("pollDeadlineMs", (int(_knob("collab.bridge_poll_deadline_ms")) / 1000) * 1000)) / 1000)
 
 
 async def createBridgeRuntimeController(args):

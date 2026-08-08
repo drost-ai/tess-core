@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+
+def _spool_max_bytes() -> int:
+    from ..config._knobs import knobValue
+
+    return int(knobValue("process.spool_max_bytes"))
+
 from typing import Any
 
-from ..process.output import SUBPROCESS_SPOOL_MAX_BYTES
 from .tools import shapeTextToolResult
 from .utf8_bounds import sliceUtf8Prefix
 
@@ -46,7 +51,7 @@ async def buildBashResultPayload(
                 "retryable": False,
                 "sideEffectsMayHaveOccurred": True,
                 "outputTruncated": True,
-                "limitBytes": values.get("spoolLimitBytes") or SUBPROCESS_SPOOL_MAX_BYTES,
+                "limitBytes": values.get("spoolLimitBytes") or _spool_max_bytes(),
                 **({"artifactUnavailable": True} if run["artifactUnavailable"] else {}),
                 "note": (
                     "The command was terminated after reaching the output acquisition limit. "

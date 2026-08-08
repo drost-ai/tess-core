@@ -311,6 +311,56 @@ class PayloadKnobWiringTests(unittest.TestCase):
         self.assertEqual(default_max_image_input_bytes(), 1_000_000)
 
 
+class ClosingWaveKnobWiringTests(unittest.TestCase):
+    """The E6 tasks/agent/mcp/process knobs + legacy alias warnings."""
+
+    def tearDown(self):
+        resetConfiguredKnobs()
+        for name in ("TESS_SUBAGENT_MAX_CONCURRENCY", "TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS", "AGENT_CORE_MCP_BLOB_KEEP"):
+            os.environ.pop(name, None)
+
+    def test_monitor_agent_mcp_and_process_knobs_drive_machinery(self):
+        from agent_core.authority.hooks import _knob as hooks_knob
+        from agent_core.subagents.depth_policy import checkSubagentDepthAllowed
+        from agent_core.tasks.monitors import defaultMonitorCheckIntervalMs
+
+        self.assertEqual(defaultMonitorCheckIntervalMs(None), 5_000)
+        self.assertEqual(int(hooks_knob("agent.hook_timeout_ms")), 60_000)
+        deep_session = {"metadata": {"depth": 2}}
+        self.assertFalse(checkSubagentDepthAllowed(deep_session, {})["allowed"])  # default depth 2
+        configureKnobs({
+            "tasks": {"monitor_check_interval_ms": 9_000},
+            "agent": {"hook_timeout_ms": 1_000},
+            "subagents": {"max_depth": 4},
+        })
+        self.assertEqual(defaultMonitorCheckIntervalMs(None), 9_000)
+        self.assertEqual(int(hooks_knob("agent.hook_timeout_ms")), 1_000)
+        self.assertTrue(checkSubagentDepthAllowed(deep_session, {})["allowed"])
+
+    def test_mcp_blob_keep_env_absorption_is_canonical(self):
+        from agent_core.mcp.blobs import _knob as mcp_knob
+
+        self.assertEqual(int(mcp_knob("mcp.blob_keep")), 64)
+        os.environ["AGENT_CORE_MCP_BLOB_KEEP"] = "5"  # the legacy name IS the knob env
+        self.assertEqual(int(mcp_knob("mcp.blob_keep")), 5)
+
+    def test_legacy_env_aliases_warn_once_naming_the_canonical_form(self):
+        import io
+        from contextlib import redirect_stderr
+
+        from agent_core.config._knobs import _warned_legacy_env, warnLegacyEnvAlias
+
+        _warned_legacy_env.discard("TESS_SUBAGENT_MAX_CONCURRENCY")
+        os.environ["TESS_SUBAGENT_MAX_CONCURRENCY"] = "4"
+        captured = io.StringIO()
+        with redirect_stderr(captured):
+            warnLegacyEnvAlias("TESS_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
+            warnLegacyEnvAlias("TESS_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
+        output = captured.getvalue()
+        self.assertEqual(output.count("deprecated"), 1)  # once, ever
+        self.assertIn("AGENT_CORE_SUBAGENTS_MAX_LIVE", output)
+
+
 class KnobResolutionIntegrationTests(AgentCoreTestCase):
     def test_resolve_config_installs_knobs_from_settings_folder(self):
         root, home, workspace, previous = self.temp_context()

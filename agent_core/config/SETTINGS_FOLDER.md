@@ -48,3 +48,26 @@ never silently degrade.
 `config.yaml.example` (generated from the knob registry, lockstep-tested) is
 the single complete reference of every knob; fragments never add settings
 that the example does not document.
+
+## Knobs
+
+Every process-wide tunable is a **knob**: declared once in
+`_knob_registry.py` with a dotted name, default, type, bounds, and
+description. Override precedence: default < `knobs:` in
+`config.yaml`/fragments < `AGENT_CORE_<DOTTED>` env var (dots become
+underscores, upper-cased — `daemon.rpc_timeout_ms` →
+`AGENT_CORE_DAEMON_RPC_TIMEOUT_MS`). Unknown knob names in settings are a
+fatal startup error.
+
+What may become a knob at all is governed by `KNOB_CLASSIFICATION.md`:
+security bounds, protocol constants, and schema versions never; per-provider
+values belong in `providers.yaml`; per-session behavior in config keys.
+Where a knob backs a per-profile field (timeouts, image caps, compaction
+threshold), the profile always wins — the knob is only the default layer.
+
+Deprecated env aliases (`TESS_COMPACTION_*_TIMEOUT_MS`,
+`TESS_SUBAGENT_MAX_CONCURRENCY`, `AGENT_CORE_SUBAGENT_MAX_CONCURRENCY`)
+still work but print a one-time warning naming the canonical form.
+`TESS_SUBAGENT_CONCURRENCY_GROUP_LIMITS` /
+`AGENT_CORE_SUBAGENT_CONCURRENCY_GROUP_LIMITS` (a `group=limit` comma list)
+remains env-only — structured values do not fit the knob grammar.

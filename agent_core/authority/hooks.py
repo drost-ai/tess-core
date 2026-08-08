@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import hashlib
 import json
@@ -15,14 +21,13 @@ from ..storage import getProjectRoot, loadSettings
 
 HOOK_EVENTS = ("PreToolUse", "PostToolUse", "Stop", "SessionEnd")
 _SETTINGS_SCOPES = ("user", "project", "local")
-DEFAULT_HOOK_TIMEOUT_SECONDS = 60
 
 
 def _normalize_hook(raw: Any, event: str, scope: str, approved: bool) -> dict[str, Any] | None:
     if not isinstance(raw, Mapping) or not isinstance(raw.get("command"), str) or not raw["command"].strip():
         return None
     timeout = raw.get("timeout")
-    timeout_seconds = float(timeout) if isinstance(timeout, (int, float)) and timeout > 0 else DEFAULT_HOOK_TIMEOUT_SECONDS
+    timeout_seconds = float(timeout) if isinstance(timeout, (int, float)) and timeout > 0 else (int(_knob("agent.hook_timeout_ms")) / 1000)
     matcher = raw.get("matcher") if isinstance(raw.get("matcher"), str) and raw["matcher"].strip() else None
     return {
         "event": event,

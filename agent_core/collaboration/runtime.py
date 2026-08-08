@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import copy
 import json
@@ -15,8 +21,6 @@ from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemo
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 
-MIN_ASSISTANT_UPDATE_SPACING_MS = 20_000
-COLLABORATION_TICK_MS = 1_500
 
 # Preserve the historical monkeypatch surface after splitting provider
 # narration into a focused module. Tests and embedders may replace these on
@@ -41,8 +45,8 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     )
     runtime_paths = args.get("runtimePaths")
     emit = args.get("emit") or (lambda *_: None)
-    min_update_spacing_ms = int(args.get("minAssistantUpdateSpacingMs", MIN_ASSISTANT_UPDATE_SPACING_MS))
-    tick_interval = float(args.get("tickIntervalMs", COLLABORATION_TICK_MS)) / 1000
+    min_update_spacing_ms = int(args.get("minAssistantUpdateSpacingMs", int(_knob("collab.min_update_spacing_ms"))))
+    tick_interval = float(args.get("tickIntervalMs", int(_knob("collab.tick_ms")))) / 1000
     refresh_lock = threading.Lock()
     state_lock = threading.RLock()
     stop_event = threading.Event()

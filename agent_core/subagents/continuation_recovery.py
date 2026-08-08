@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import copy
 from datetime import datetime, timedelta
 from typing import Any
@@ -16,7 +22,6 @@ from .coordination import (
 )
 
 
-LEGACY_CLAIM_GRACE_MS = 30_000
 TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped"}
 
 
@@ -131,9 +136,9 @@ def _recover_legacy_claim_without_child(
         return _retryable(group, now, "legacy_claimant_dead_without_child")
     source = _first_timestamp(state.get("startingAt"), state.get("claimedAt"), group.get("continuationRequestedAt"))
     grace_expires = (
-        now_dt + timedelta(milliseconds=LEGACY_CLAIM_GRACE_MS)
+        now_dt + timedelta(milliseconds=int(_knob("subagents.legacy_claim_grace_ms")))
         if claimant_status == "live" or source is None
-        else source + timedelta(milliseconds=LEGACY_CLAIM_GRACE_MS)
+        else source + timedelta(milliseconds=int(_knob("subagents.legacy_claim_grace_ms")))
     )
     if grace_expires <= now_dt:
         return _retryable(group, now, "legacy_claimant_unverified_after_grace")

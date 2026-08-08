@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import os
 from pathlib import Path
 from typing import Any, Callable
@@ -14,9 +20,6 @@ from .health_check_policy import (
 )
 
 
-HEALTH_LOG_MAX_BYTES = 4 * 1024 * 1024
-HEALTH_LOG_ROTATIONS = 3
-HEALTH_EVENT_EXCERPT_BYTES = 4 * 1024
 
 
 async def executeHealthCheck(
@@ -73,7 +76,7 @@ async def appendHealthCheckLog(
     )
     Path(target).parent.mkdir(parents=True, exist_ok=True)
     with open(target, "a", encoding="utf-8") as handle:
-        handle.write(sliceUtf8Prefix(line, HEALTH_EVENT_EXCERPT_BYTES + 512))
+        handle.write(sliceUtf8Prefix(line, int(_knob("tasks.health_event_excerpt_bytes")) + 512))
 
 
 async def _execute_command(
@@ -181,7 +184,7 @@ async def _execute_http(record: dict[str, Any], signal: Any) -> dict[str, Any]:
         lastStatusCode=response.get("statusCode"),
         lastTimedOut=False,
         lastTerminated=False,
-        responseSnippet=sliceUtf8Prefix(body, HEALTH_EVENT_EXCERPT_BYTES),
+        responseSnippet=sliceUtf8Prefix(body, int(_knob("tasks.health_event_excerpt_bytes"))),
         measuredBytes=max(int(response.get("compressedBytes") or 0), int(response.get("decodedBytes") or 0)),
     )
 
@@ -190,7 +193,7 @@ def _shape(**values: Any) -> dict[str, Any]:
     result = {key: value for key, value in values.items() if value is not None}
     result["outputExcerpt"] = sliceUtf8Prefix(
         str(result.get("output") or result.get("lastError") or "(no output)"),
-        HEALTH_EVENT_EXCERPT_BYTES,
+        int(_knob("tasks.health_event_excerpt_bytes")),
     )
     return result
 
@@ -198,15 +201,15 @@ def _shape(**values: Any) -> dict[str, Any]:
 async def _rotate_log(target: str) -> None:
     path = Path(target)
     try:
-        if path.stat().st_size < HEALTH_LOG_MAX_BYTES:
+        if path.stat().st_size < int(_knob("tasks.health_log_max_bytes")):
             return
     except OSError:
         return
     try:
-        Path(f"{target}.{HEALTH_LOG_ROTATIONS}").unlink()
+        Path(f"{target}.{int(_knob("tasks.health_log_rotations"))}").unlink()
     except OSError:
         pass
-    for index in range(HEALTH_LOG_ROTATIONS - 1, 0, -1):
+    for index in range(int(_knob("tasks.health_log_rotations")) - 1, 0, -1):
         try:
             os.replace(f"{target}.{index}", f"{target}.{index + 1}")
         except OSError:

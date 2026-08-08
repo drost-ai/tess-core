@@ -9,13 +9,18 @@ blocked child always unblocks.
 """
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from typing import Any
 
 from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..tasks.communication import answer_task_question, read_task_questions
 from ..storage import readTaskMeta
 
-MAX_QUESTION_NUDGES = 3
 
 
 async def read_open_child_questions(session: dict[str, Any]) -> list[dict[str, Any]]:

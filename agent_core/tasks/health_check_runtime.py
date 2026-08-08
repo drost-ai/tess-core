@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 import asyncio
 import contextlib
 import uuid
@@ -28,7 +34,6 @@ from .health_check_record import (
 )
 
 
-HEALTH_CHECK_DRAIN_TIMEOUT_SECONDS = 10
 
 
 def createHealthCheckController(
@@ -96,12 +101,12 @@ def createHealthCheckController(
         try:
             await asyncio.wait_for(
                 asyncio.shield(active["task"]),
-                timeout=HEALTH_CHECK_DRAIN_TIMEOUT_SECONDS,
+                timeout=(int(_knob("tasks.health_drain_timeout_ms")) / 1000),
             )
         except asyncio.TimeoutError as exc:
             raise RuntimeError(
                 f"drain health check {task_id} exceeded "
-                f"{HEALTH_CHECK_DRAIN_TIMEOUT_SECONDS * 1000}ms"
+                f"{(int(_knob("tasks.health_drain_timeout_ms")) / 1000) * 1000}ms"
             ) from exc
 
     async def _close() -> None:
@@ -116,12 +121,12 @@ def createHealthCheckController(
                     asyncio.gather(
                         *(entry["task"] for entry in active), return_exceptions=True
                     ),
-                    timeout=HEALTH_CHECK_DRAIN_TIMEOUT_SECONDS,
+                    timeout=(int(_knob("tasks.health_drain_timeout_ms")) / 1000),
                 )
             except asyncio.TimeoutError as exc:
                 raise RuntimeError(
                     "close health-check runtime exceeded "
-                    f"{HEALTH_CHECK_DRAIN_TIMEOUT_SECONDS * 1000}ms"
+                    f"{(int(_knob("tasks.health_drain_timeout_ms")) / 1000) * 1000}ms"
                 ) from exc
         in_flight.clear()
 

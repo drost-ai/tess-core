@@ -67,7 +67,7 @@ from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithR
 from ..subagents.contract import filter_tools_for_subagent
 from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..tasks.communication import deliver_queued_task_messages_to_session
-from ._question_gate import MAX_QUESTION_NUDGES as _MAX_QUESTION_NUDGES, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
+from ._question_gate import _knob as _question_knob, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
 from ..runtime.transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
 from ..payloads.attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
@@ -278,12 +278,12 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         await _persist_partial_output_commit(session, config, runtime, response)
         if not tool_uses:
             open_questions = await _read_open_child_questions(session)
-            if open_questions and question_nudges < _MAX_QUESTION_NUDGES:
+            if open_questions and question_nudges < int(_question_knob("agent.max_question_nudges")):
                 # The reply invariant: a parent turn may not simply end while
                 # children are blocked on questions. Nudge a continuation.
                 question_nudges += 1
                 session.setdefault("messages", []).append(_user_request_message(
-                    f"[REPLY REQUIRED] {len(open_questions)} child question(s) are still unanswered (nudge {question_nudges}/{_MAX_QUESTION_NUDGES}).\n" + await _build_question_reminder(open_questions),
+                    f"[REPLY REQUIRED] {len(open_questions)} child question(s) are still unanswered (nudge {question_nudges}/{int(_question_knob("agent.max_question_nudges"))}).\n" + await _build_question_reminder(open_questions),
                     lineage={"logicalTurnId": parent_turn_id, "kind": "question_nudge"},
                 ))
                 await persistSession(session, config)

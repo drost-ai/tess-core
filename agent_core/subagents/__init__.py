@@ -9,7 +9,7 @@ from .continuation import (
     defaultParentContinuationPrompt,
     evaluateParentContinuationReadiness,
 )
-from .continuation_recovery import LEGACY_CLAIM_GRACE_MS, TERMINAL_TASK_STATUSES, recoverSubagentLaunchGroupContinuations
+from .continuation_recovery import TERMINAL_TASK_STATUSES, recoverSubagentLaunchGroupContinuations
 from .contract import (
     filter_tools_for_subagent,
     normalize_subagent_runtime_contract,
@@ -17,7 +17,6 @@ from .contract import (
     summarize_subagent_runtime_contract,
 )
 from .coordination import (
-    DEFAULT_CONTINUATION_LEASE_MS,
     claimSubagentLaunchGroupContinuation,
     claimUnconsumedSubagentReconciliations,
     completeSubagentReconciliationClaim,
@@ -31,7 +30,6 @@ from .coordination import (
     withSubagentCoordinationTransaction,
 )
 from .depth_policy import (
-    DEFAULT_SUBAGENT_MAX_DEPTH,
     checkSubagentDepthAllowed,
     requireSubagentDepthAllowed,
     resolveSubagentMaxDepth,
@@ -78,9 +76,6 @@ from ..tasks.subagents import (
 
 __all__ = [
     "ACTIVE_TASK_STATUSES",
-    "DEFAULT_CONTINUATION_LEASE_MS",
-    "DEFAULT_SUBAGENT_MAX_DEPTH",
-    "LEGACY_CLAIM_GRACE_MS",
     "TERMINAL_RECONCILIATION_STATUSES",
     "TERMINAL_TASK_STATUSES",
     "appendLaunchGroupMetadata",

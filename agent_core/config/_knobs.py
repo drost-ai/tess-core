@@ -19,6 +19,7 @@ machinery. Whether a constant may become a knob at all is decided by
 """
 
 import os
+import sys
 from typing import Any
 
 from ._knob_registry import KNOB_REGISTRY, Knob
@@ -63,6 +64,21 @@ def configureKnobs(overrides: Any) -> None:
 
 def resetConfiguredKnobs() -> None:
     _configured.clear()
+
+
+_warned_legacy_env: set[str] = set()
+
+
+def warnLegacyEnvAlias(legacy_name: str, knob_name: str) -> None:
+    """One-time stderr warning when a deprecated env alias is in use."""
+
+    if legacy_name in _warned_legacy_env or not os.environ.get(legacy_name):
+        return
+    _warned_legacy_env.add(legacy_name)
+    print(
+        f"[agent-core] {legacy_name} is deprecated; use {_env_name(knob_name)} (knob {knob_name}) instead.",
+        file=sys.stderr,
+    )
 
 
 def renderKnobsExample() -> str:

@@ -20,8 +20,6 @@ from .remote import (
     updateRemoteSession,
 )
 from .runtime import (
-    COLLABORATION_TICK_MS,
-    MIN_ASSISTANT_UPDATE_SPACING_MS,
     authorCollaborationUpdate,
     buildCollaborationWorkers,
     buildSubagentWorkerSummary,
@@ -49,8 +47,6 @@ from .updates import (
 )
 
 __all__ = [
-    "COLLABORATION_TICK_MS",
-    "MIN_ASSISTANT_UPDATE_SPACING_MS",
     "appendAssistantCollaborationMessage",
     "authorCollaborationUpdate",
     "authorCollaborationUpdateWithProvider",

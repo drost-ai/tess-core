@@ -328,18 +328,19 @@ async def _run_compaction_request_with_timeout(provider: str, providerLabel: str
 
 
 def _resolve_compaction_timeout_ms(purpose: str | None) -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knobValue, warnLegacyEnvAlias
 
-    # Legacy TESS_* env names stay as aliases until the E6 deprecation
-    # sweep; they beat the knob layer like an env override would.
+    # Deprecated TESS_* aliases still beat the knob layer like an env
+    # override would; a one-time warning names the canonical knob env.
     env_name = "TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS" if purpose == "synthesis" else "TESS_COMPACTION_VERIFICATION_TIMEOUT_MS"
+    knob_name = "compaction.synthesis_timeout_ms" if purpose == "synthesis" else "compaction.verification_timeout_ms"
+    warnLegacyEnvAlias(env_name, knob_name)
     try:
         parsed = int(float(os.environ.get(env_name, "")))
     except Exception:
         parsed = 0
     if parsed > 0:
         return parsed
-    knob = "compaction.synthesis_timeout_ms" if purpose == "synthesis" else "compaction.verification_timeout_ms"
-    return int(knobValue(knob))
+    return int(knobValue(knob_name))
 
 

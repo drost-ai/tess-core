@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from ._shared import withSubagentCoordinationTransaction
 
 import contextlib
@@ -16,7 +22,6 @@ from . import groups as _groups
 from . import reconciliation as _reconciliations
 
 
-DEFAULT_CONTINUATION_LEASE_MS = 30_000
 
 
 
@@ -34,7 +39,7 @@ async def claimUnconsumedSubagentReconciliations(
     consumer_id = _required(values, "consumerId")
     now = values.get("now") or now_iso()
     now_dt = _parse_time(now)
-    lease_ms = max(1, int(values.get("leaseMs") or DEFAULT_CONTINUATION_LEASE_MS))
+    lease_ms = max(1, int(values.get("leaseMs") or int(_knob("subagents.continuation_lease_ms"))))
     token = str(uuid.uuid4())
     claimed: list[dict[str, Any]] = []
     path = _reconciliations.subagentReconciliationLogPath(parent_id)
@@ -146,7 +151,7 @@ async def claimSubagentLaunchGroupContinuation(
                 "claimantPid": os.getpid(),
                 "claimedAt": now,
                 "leaseExpiresAt": _format_time(
-                    now_dt + timedelta(milliseconds=max(1, int(values.get("leaseMs") or DEFAULT_CONTINUATION_LEASE_MS)))
+                    now_dt + timedelta(milliseconds=max(1, int(values.get("leaseMs") or int(_knob("subagents.continuation_lease_ms")))))
                 ),
             }
             if birth:
@@ -180,7 +185,7 @@ async def markSubagentLaunchGroupContinuationStarting(
             "phase": "starting",
             "revision": int(state.get("revision") or 0) + 1,
             "startingAt": state.get("startingAt") or timestamp,
-            "leaseExpiresAt": _format_time(_parse_time(timestamp) + timedelta(milliseconds=DEFAULT_CONTINUATION_LEASE_MS)),
+            "leaseExpiresAt": _format_time(_parse_time(timestamp) + timedelta(milliseconds=int(_knob("subagents.continuation_lease_ms")))),
         },
         timestamp,
     )

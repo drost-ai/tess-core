@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+def _knob(name: str):
+    from ..config._knobs import knobValue
+
+    return knobValue(name)
+
+
 from .._utils import is_process_alive as _is_process_alive
 
 from .._utils import parse_iso_ms
@@ -25,11 +31,6 @@ from .monitor_transactions import (
 from ..session.persistence import persistSession
 from ..storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
 
-MONITOR_TICK_MS = 1500
-DEFAULT_CHECK_INTERVAL_MS = 5000
-DEFAULT_HEARTBEAT_INTERVAL_MS = 60000
-MIN_NARRATION_SPACING_MS = 20000
-MAX_OUTPUT_EXCERPT_CHARS = 6000
 
 
 async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -37,7 +38,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     session_ref = args.get("session") or {}
     config_ref = args.get("config") or {}
     emit: Callable[[str, dict[str, Any]], Any] = args.get("emit") or (lambda *_: None)
-    tick_interval = int(args.get("tickIntervalMs") or MONITOR_TICK_MS) / 1000
+    tick_interval = int(args.get("tickIntervalMs") or int(_knob("tasks.monitor_tick_ms"))) / 1000
     closed = False
     foreground_busy = False
     tick_in_flight = False
@@ -110,9 +111,9 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
             return
         if reason in {"progress", "heartbeat"}:
             elapsed = now_ms - int(parse_iso_ms(next_monitor.get("lastAssistantUpdateAt") or next_monitor.get("createdAt")) or 0)
-            if elapsed < MIN_NARRATION_SPACING_MS:
+            if elapsed < int(_knob("tasks.monitor_narration_spacing_ms")):
                 return
-        excerpt = _read_output_excerpt(monitor.get("taskId"), int(next_monitor.get("lastNarratedOutputSize") or 0), output_size, MAX_OUTPUT_EXCERPT_CHARS)
+        excerpt = _read_output_excerpt(monitor.get("taskId"), int(next_monitor.get("lastNarratedOutputSize") or 0), output_size, int(_knob("tasks.monitor_output_excerpt_chars")))
         text = await _author_monitor_update(config_ref, session_ref, next_monitor, task, reason, excerpt["text"], excerpt["omittedBytes"])
         if not text:
             return
@@ -194,13 +195,13 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
 
 def defaultMonitorCheckIntervalMs(value: Any) -> int:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
-        return DEFAULT_CHECK_INTERVAL_MS
+        return int(_knob("tasks.monitor_check_interval_ms"))
     return max(2000, min(round(value), 60000))
 
 
 def defaultMonitorHeartbeatIntervalMs(value: Any) -> int:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
-        return DEFAULT_HEARTBEAT_INTERVAL_MS
+        return int(_knob("tasks.monitor_heartbeat_interval_ms"))
     return max(15000, min(round(value), 15 * 60_000))
 
 
@@ -256,7 +257,7 @@ def _monitor_snapshot_payload(session: dict[str, Any], snapshot: dict[str, Any])
 def _should_check_monitor(monitor: dict[str, Any], now_ms: int) -> bool:
     if monitor.get("status") not in {"active", "muted"}:
         return False
-    return now_ms - int(parse_iso_ms(monitor.get("lastCheckAt")) or 0) >= int(monitor.get("checkIntervalMs") or DEFAULT_CHECK_INTERVAL_MS)
+    return now_ms - int(parse_iso_ms(monitor.get("lastCheckAt")) or 0) >= int(monitor.get("checkIntervalMs") or int(_knob("tasks.monitor_check_interval_ms")))
 
 
 async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
@@ -326,7 +327,7 @@ def _compute_snapshot(monitors: list[dict[str, Any]], now_ms: int) -> dict[str, 
     active = [monitor for monitor in monitors if monitor.get("status") == "active"]
     next_check = None
     if active:
-        next_check = _bucket_ms(max(0, min(int(parse_iso_ms(monitor.get("lastCheckAt")) or 0) + int(monitor.get("checkIntervalMs") or DEFAULT_CHECK_INTERVAL_MS) - now_ms for monitor in active)))
+        next_check = _bucket_ms(max(0, min(int(parse_iso_ms(monitor.get("lastCheckAt")) or 0) + int(monitor.get("checkIntervalMs") or int(_knob("tasks.monitor_check_interval_ms"))) - now_ms for monitor in active)))
     return {
         "total": len(monitors),
         "active": len(active),

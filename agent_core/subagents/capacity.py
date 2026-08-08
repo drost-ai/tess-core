@@ -18,6 +18,11 @@ def _positive_int(value: Any) -> int | None:
 
 def resolve_subagent_concurrency_policy(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     source = env or os.environ
+    if env is None:
+        from ..config._knobs import warnLegacyEnvAlias
+
+        warnLegacyEnvAlias("TESS_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
+        warnLegacyEnvAlias("AGENT_CORE_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
     default_limit = _positive_int(source.get("TESS_SUBAGENT_MAX_CONCURRENCY")) or _positive_int(
         source.get("AGENT_CORE_SUBAGENT_MAX_CONCURRENCY")
     )
