@@ -331,6 +331,25 @@ class ServerBlockPreservationTests(unittest.TestCase):
         self.assertEqual(response["stopReason"], "end_turn")
 
 
+class EffortModelSupportTests(unittest.TestCase):
+    def test_five_family_models_keep_their_effort(self):
+        from agent_core.config.providers import normalizeEffortForModel
+
+        for model in ("claude-fable-5", "claude-mythos-5", "claude-opus-5", "claude-sonnet-5"):
+            self.assertEqual(normalizeEffortForModel("anthropic", model, "xhigh"), "xhigh", model)
+            self.assertEqual(normalizeEffortForModel("anthropic", model, "max"), "max", model)
+            self.assertEqual(normalizeEffortForModel("anthropic", model, "high"), "high", model)
+
+    def test_pre_xhigh_models_downgrade_xhigh_only(self):
+        from agent_core.config.providers import normalizeEffortForModel
+
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-sonnet-4-6", "xhigh"), "high")
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-sonnet-4-6", "max"), "max")
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-opus-4-8", "xhigh"), "xhigh")
+        self.assertEqual(normalizeEffortForModel("anthropic", "claude-opus-4-6", "xhigh"), "high")
+        self.assertIsNone(normalizeEffortForModel("anthropic", "claude-haiku-4-5", "high"))
+
+
 class ThinkingDisplayTests(unittest.TestCase):
     def test_profile_thinking_display_reaches_the_wire(self):
         server, requests = _server()

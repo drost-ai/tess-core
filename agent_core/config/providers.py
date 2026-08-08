@@ -181,20 +181,48 @@ def ensureProviderForModelSelection(provider: str | None, model: str | None, fal
 def modelSupportsEffort(provider: str, model: str) -> bool:
     normalized = model.strip().lower()
     if provider == "anthropic":
-        return "opus-4-" in normalized or "sonnet-4-" in normalized
+        return (
+            "fable-5" in normalized
+            or "mythos-5" in normalized
+            or "opus-5" in normalized
+            or "sonnet-5" in normalized
+            or "opus-4-" in normalized
+            or "sonnet-4-" in normalized
+        )
     return normalized.startswith("gpt-5.4") or normalized.startswith("gpt-5")
 
 def modelSupportsMaxEffort(provider: str, model: str) -> bool:
-    return provider == "anthropic" and "opus-4-" in model.strip().lower()
+    if provider != "anthropic":
+        return False
+    normalized = model.strip().lower()
+    return (
+        "fable-5" in normalized
+        or "mythos-5" in normalized
+        or "opus-5" in normalized
+        or "sonnet-5" in normalized
+        or "opus-4-" in normalized
+        or "sonnet-4-6" in normalized
+    )
 
 def modelSupportsXhighEffort(provider: str, model: str) -> bool:
-    return provider == "openai" and model.strip().lower().startswith("gpt-5.4")
+    normalized = model.strip().lower()
+    if provider == "anthropic":
+        # xhigh arrived with Opus 4.7; the 5-family carries the full ladder.
+        return (
+            "fable-5" in normalized
+            or "mythos-5" in normalized
+            or "opus-5" in normalized
+            or "sonnet-5" in normalized
+            or "opus-4-7" in normalized
+            or "opus-4-8" in normalized
+        )
+    return normalized.startswith("gpt-5.4")
 
 def normalizeEffortForModel(provider: str, model: str, effort: str | None) -> str | None:
     if not effort or not modelSupportsEffort(provider, model):
         return None
     if provider == "anthropic":
-        if effort == "xhigh":
+        if effort == "xhigh" and not modelSupportsXhighEffort(provider, model):
             return "high"
         if effort == "max" and not modelSupportsMaxEffort(provider, model):
             return "high"
