@@ -12,7 +12,7 @@ from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceS
 from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord
-from ..communication import read_undelivered_task_messages, send_task_message
+from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...tools import createBuiltinTools
 from ...runtime.generation import createRuntimeSessionBinding
@@ -24,6 +24,34 @@ async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:
     await finalizeBackgroundSubagentSuccessFromEnv(session, result)
     await saveSession(session)
     return payload
+
+
+def _create_trace_emitter(task_id: str):
+    """Compact activity trace for live visibility: appended to the task's
+    events.jsonl, forwarded by the daemon as subagent.trace events."""
+
+    def emit(event: str, data: dict[str, Any]) -> None:
+        if event == "tool.started":
+            record = {"tool": data.get("name"), "input_preview": _preview(data.get("input"), 160)}
+        elif event == "tool.completed":
+            record = {"tool": data.get("name"), "error": bool(data.get("error")), "output_chars": len(str(data.get("output") or ""))}
+        elif event == "message.assistant":
+            record = {"text_preview": _preview(data.get("text"), 200)}
+        else:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(append_task_event(task_id, {"type": "trace", "event": event, **record}))
+
+    return emit
+
+
+def _preview(value: Any, limit: int) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    text = " ".join(text.split())
+    return text[:limit]
 
 
 async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Any]:
@@ -42,7 +70,7 @@ async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[st
     _apply_session_overrides(config, session)
     await enforceSessionAgentAuthority(session=session, config=config)
     runtime = createAgentRuntimeBindings({
-        "emitEvent": lambda _event, _data: None,
+        "emitEvent": _create_trace_emitter(args["taskId"]),
         "tools": createBuiltinTools(),
         "daemon": {"state": "unavailable", "reason": {"code": "subagent.daemon_unavailable", "message": "No task daemon is attached to this background subagent runner."}},
         "refreshMcpToolRegistry": lambda: None,
@@ -74,6 +102,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
 
     session, config, runtime = await _prepare_worker(args)
     task_id, agent_id = args["taskId"], args["agentId"]
+    await _mark_resident_status(task_id, agent_id, "running", None)
     result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
     await saveSession(session)
     await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=[])

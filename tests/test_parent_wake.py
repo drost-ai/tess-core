@@ -52,6 +52,54 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_sweep_forwards_new_trace_events_exactly_once(self):
+        from agent_core.tasks.communication import append_task_event
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await core.writeTaskMeta("trace-wake", {
+                    "type": "subagent", "taskId": "trace-wake", "id": "trace-wake",
+                    "sessionId": "trace-child", "session_id": "trace-child",
+                    "parent_session_id": "trace-parent", "status": "running",
+                    "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                })
+                await core.saveTaskRecord({
+                    "id": "trace-wake", "sessionId": "trace-child", "sourceId": "trace-wake",
+                    "kind": "subagent", "status": "running", "title": "trace worker",
+                    "summary": "running", "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:00Z", "owner": "daemon",
+                })
+                events = []
+
+                async def emit(event, data, session_id=None):
+                    events.append((event, data, session_id))
+
+                sweep = create_mailbox_watch_loop(emit).sweep_once
+                await append_task_event("trace-wake", {"type": "status", "detail": "not a trace"})
+                self.assertEqual(await sweep(), 0)
+
+                await append_task_event("trace-wake", {"type": "trace", "event": "tool.started", "tool": "Read", "input_preview": "file.py"})
+                await append_task_event("trace-wake", {"type": "trace", "event": "message.assistant", "text_preview": "reading now"})
+                self.assertEqual(await sweep(), 2)
+                self.assertEqual(await sweep(), 0)  # cursor: forwarded once, ever
+
+                names = [event for event, _data, _sid in events]
+                self.assertEqual(names, ["subagent.trace", "subagent.trace"])
+                first = events[0][1]
+                self.assertEqual(first["task_id"], "trace-wake")
+                self.assertEqual(first["trace_event"], "tool.started")
+                self.assertEqual(first["tool"], "Read")
+                self.assertEqual(first["parent_session_id"], "trace-parent")
+                self.assertEqual(events[0][2], "trace-parent")  # routes on the PARENT session
+
+                await append_task_event("trace-wake", {"type": "trace", "event": "tool.completed", "tool": "Read", "output_chars": 120, "error": False})
+                self.assertEqual(await sweep(), 1)
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
 
 class WakeControllerTests(AgentCoreTestCase):
     def _runtime(self, in_flight):

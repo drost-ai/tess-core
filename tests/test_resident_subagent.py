@@ -2,7 +2,77 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.tasks.communication import read_task_mailbox_messages, send_task_message
+from agent_core.tasks.communication import read_task_events, read_task_mailbox_messages, send_task_message
+
+
+class TraceEmitterTests(AgentCoreTestCase):
+    def test_worker_events_land_as_compact_trace_records(self):
+        from agent_core.tasks.runners.subagent import _create_trace_emitter
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await core.writeTaskMeta("trace-task", {
+                    "type": "subagent", "taskId": "trace-task", "id": "trace-task",
+                    "sessionId": "trace-child", "session_id": "trace-child",
+                    "parent_session_id": "trace-parent", "status": "running",
+                    "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                })
+                emit = _create_trace_emitter("trace-task")
+                emit("tool.started", {"name": "Bash", "tool_use_id": "t1", "input": {"command": "ls " + "x" * 500}})
+                emit("tool.completed", {"name": "Bash", "tool_use_id": "t1", "output": "some output", "error": False})
+                emit("message.assistant", {"text": "  I looked at\nthe files  ", "model": "m"})
+                emit("turn.cancelled", {"session_id": "trace-child"})  # not traced
+                await asyncio.gather(*[t for t in asyncio.all_tasks() if t is not asyncio.current_task()])
+                return await read_task_events("trace-task")
+
+            events = run(exercise())
+            traces = [e for e in events if e.get("type") == "trace"]
+            self.assertEqual([e["event"] for e in traces], ["tool.started", "tool.completed", "message.assistant"])
+            started, completed, spoke = traces
+            self.assertEqual(started["tool"], "Bash")
+            self.assertLessEqual(len(started["input_preview"]), 160)
+            self.assertFalse(completed["error"])
+            self.assertEqual(completed["output_chars"], len("some output"))
+            self.assertEqual(spoke["text_preview"], "I looked at the files")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_initial_resident_turn_marks_running_before_the_first_prompt(self):
+        import agent_core.tasks.runners.subagent as runner_module
+
+        calls = []
+
+        async def fake_prepare(_args):
+            calls.append(("prepare",))
+            return {"id": "s"}, {}, {}
+
+        async def fake_prompt(_values):
+            calls.append(("prompt",))
+            return {"text": "done", "stopReason": "end_turn"}
+
+        async def fake_save(_session):
+            return None
+
+        async def fake_mark(_task_id, _agent_id, status, waiting_reason, summary=None):
+            calls.append(("mark", status, waiting_reason))
+
+        async def fake_publish(_task_id, _agent_id, _session, _result, *, trigger_ids):
+            calls.append(("publish", trigger_ids))
+            raise asyncio.CancelledError  # initial turn observed; stop the resident loop
+
+        async def exercise():
+            with mock.patch.object(runner_module, "_prepare_worker", fake_prepare), \
+                    mock.patch.object(runner_module, "runAgentPrompt", fake_prompt), \
+                    mock.patch.object(runner_module, "saveSession", fake_save), \
+                    mock.patch.object(runner_module, "_mark_resident_status", fake_mark), \
+                    mock.patch.object(runner_module, "_publish_resident_turn_result", fake_publish):
+                with self.assertRaises(asyncio.CancelledError):
+                    await runner_module._run_resident_subagent({"taskId": "t", "agentId": "a", "sessionId": "s"})
+
+        run(exercise())
+        self.assertEqual(calls, [("prepare",), ("mark", "running", None), ("prompt",), ("publish", [])])
 
 
 class ResidentSubagentTests(AgentCoreTestCase):

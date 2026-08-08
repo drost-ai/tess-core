@@ -13,8 +13,8 @@ import os
 from typing import Any, Callable
 
 from ..._utils import maybe_await
-from ...storage import listTaskRecords
-from ..communication import read_task_mailbox_messages, task_mailbox_path
+from ...storage import listTaskRecords, readTaskMeta
+from ..communication import read_task_events, read_task_mailbox_messages, task_events_path, task_mailbox_path
 
 _WATCHED_TASK_STATUSES = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
 _MAX_ANNOUNCED_KEYS = 8_192
@@ -24,6 +24,49 @@ def create_mailbox_watch_loop(
     emit: Callable[[str, dict[str, Any], str | None], Any],
 ) -> Callable[[], Any]:
     announced: set[str] = set()
+    trace_cursors: dict[str, int] = {}
+    parent_ids: dict[str, str | None] = {}
+
+    async def _parent_session_id(task_id: str) -> str | None:
+        # Trace events must route on the PARENT session: attached parent
+        # runtimes subscribe filtered by their own session id.
+        if task_id not in parent_ids:
+            meta = await readTaskMeta(task_id) or {}
+            parent = meta.get("parent_session_id") or meta.get("parentSessionId")
+            parent_ids[task_id] = parent if isinstance(parent, str) and parent else None
+        return parent_ids[task_id]
+
+    async def forward_trace_events(task_id: str) -> int:
+        if not os.path.exists(task_events_path(task_id)):
+            return 0
+        events = await read_task_events(task_id)
+        start = trace_cursors.get(task_id, 0)
+        if start >= len(events):
+            return 0
+        parent_session_id = await _parent_session_id(task_id)
+        forwarded = 0
+        for event in events[start:]:
+            if event.get("type") != "trace":
+                continue
+            await maybe_await(
+                emit(
+                    "subagent.trace",
+                    {
+                        "task_id": task_id,
+                        "trace_event": event.get("event"),
+                        "tool": event.get("tool"),
+                        "input_preview": event.get("input_preview"),
+                        "output_chars": event.get("output_chars"),
+                        "error": event.get("error"),
+                        "text_preview": event.get("text_preview"),
+                        "parent_session_id": parent_session_id,
+                    },
+                    parent_session_id,
+                )
+            )
+            forwarded += 1
+        trace_cursors[task_id] = len(events)
+        return forwarded
 
     async def sweep_once() -> int:
         emitted = 0
@@ -31,7 +74,10 @@ def create_mailbox_watch_loop(
             if record.get("kind") != "subagent" or record.get("status") not in _WATCHED_TASK_STATUSES:
                 continue
             task_id = record.get("id") or record.get("taskId")
-            if not isinstance(task_id, str) or not task_id or not os.path.exists(task_mailbox_path(task_id)):
+            if not isinstance(task_id, str) or not task_id:
+                continue
+            emitted += await forward_trace_events(task_id)
+            if not os.path.exists(task_mailbox_path(task_id)):
                 continue
             for message in await read_task_mailbox_messages(task_id):
                 if message.get("direction") != "to_parent" or message.get("status") != "queued":
