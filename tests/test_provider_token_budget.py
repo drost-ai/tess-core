@@ -97,3 +97,66 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
             self.assertEqual(testing.buildAnthropicMessagesPayload(request)["max_tokens"], 128_000)
         finally:
             self.restore_home(root, previous)
+
+
+class ModelLimitRulesTests(AgentCoreTestCase):
+    def tearDown(self):
+        from agent_core.providers.token_budget import resetConfiguredModelLimitRules
+
+        resetConfiguredModelLimitRules()
+
+    def test_configured_rules_beat_builtin_inference_and_lose_to_explicit_fields(self):
+        from agent_core.providers.token_budget import (
+            configureModelLimitRules,
+            resolve_provider_token_limits,
+        )
+
+        profile = {"kind": "openai", "profileName": "my-endpoint", "model": "deepseek-v4-flash"}
+        builtin = resolve_provider_token_limits(profile)
+        self.assertEqual(builtin["maxContextLength"], 1_000_000)  # builtin deepseek-v4 rule
+
+        configureModelLimitRules([{"match": "deepseek-v4", "maxContextLength": 65_536, "maxOutputTokens": 16_384}])
+        ruled = resolve_provider_token_limits(profile)
+        self.assertEqual(ruled, {"maxContextLength": 65_536, "maxOutputTokens": 16_384})
+
+        explicit = resolve_provider_token_limits({**profile, "maxContextLength": 9_999})
+        self.assertEqual(explicit["maxContextLength"], 9_999)  # explicit profile field still wins
+
+        # A partial rule only supplies what it declares; the rest falls through.
+        configureModelLimitRules([{"match": "my-endpoint", "maxContextLength": 32_000}])
+        partial = resolve_provider_token_limits({"kind": "openai", "profileName": "my-endpoint", "model": "unknown-model"})
+        self.assertEqual(partial["maxContextLength"], 32_000)
+        self.assertEqual(partial["maxOutputTokens"], 16_384)  # provider.max_output_tokens knob default
+
+    def test_malformed_rules_fail_loud(self):
+        from agent_core.providers.token_budget import configureModelLimitRules
+
+        for bad in (
+            [{"maxContextLength": 1000}],
+            [{"match": ""}],
+            [{"match": "x"}],
+            [{"match": "x", "maxContextLength": -5}],
+            [{"match": "x", "maxContextLength": 1000, "surprise": 1}],
+        ):
+            with self.assertRaises(ValueError):
+                configureModelLimitRules(bad)
+
+    def test_rules_load_from_providers_yaml_via_resolve_config(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            settings_dir = home / "settings"
+            settings_dir.mkdir()
+            (settings_dir / "providers.yaml").write_text(
+                "modelLimitRules:\n"
+                "  - match: my-local-model\n"
+                "    maxContextLength: 48000\n"
+                "    maxOutputTokens: 8000\n",
+                encoding="utf-8",
+            )
+            run(core.resolveConfig({"provider": "openai"}, str(workspace)))
+            from agent_core.providers.token_budget import resolve_provider_token_limits
+
+            limits = resolve_provider_token_limits({"kind": "openai", "profileName": "p", "model": "my-local-model-v1"})
+            self.assertEqual(limits, {"maxContextLength": 48_000, "maxOutputTokens": 8_000})
+        finally:
+            self.restore_home(root, previous)

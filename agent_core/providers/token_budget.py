@@ -205,6 +205,9 @@ def _infer_model_token_limits(input: dict[str, Any]) -> dict[str, int] | None:
         "apiMode": input.get("apiMode"),
         "model": str(input.get("model") or "").strip().lower(),
     }
+    for rule in _configured_model_limit_rules:
+        if rule["match"] in normalized["model"] or rule["match"] in normalized["profileName"]:
+            return {key: value for key, value in rule.items() if key != "match"}
     for max_context, max_output, predicate in _MODEL_LIMIT_RULES:
         if predicate(normalized):
             return {"maxContextLength": max_context, "maxOutputTokens": max_output}
@@ -228,6 +231,43 @@ def _explicit_positive_integer(input: dict[str, Any], key: str) -> int | None:
 
 def _rule(max_context: int, max_output: int, predicate: Callable[[dict[str, Any]], bool]) -> tuple[int, int, Callable[[dict[str, Any]], bool]]:
     return (max_context, max_output, predicate)
+
+
+_configured_model_limit_rules: list[dict[str, Any]] = []
+
+
+def configureModelLimitRules(rules: Any) -> None:
+    """Install providers.yaml ``modelLimitRules`` process-wide.
+
+    Each rule: {match: <substring>, maxContextLength and/or maxOutputTokens}.
+    The match is case-insensitive against the model name and the profile
+    name; user rules are consulted before the builtin table, and explicit
+    profile fields still beat every rule. Malformed rules fail loud at
+    settings load.
+    """
+
+    validated: list[dict[str, Any]] = []
+    for index, rule in enumerate(rules or []):
+        if not isinstance(rule, dict) or not isinstance(rule.get("match"), str) or not rule["match"].strip():
+            raise ValueError(f"modelLimitRules[{index}]: each rule needs a non-empty 'match' string.")
+        unknown = set(rule) - {"match", "maxContextLength", "maxOutputTokens"}
+        if unknown:
+            raise ValueError(f"modelLimitRules[{index}]: unknown key(s): {', '.join(sorted(unknown))}.")
+        entry: dict[str, Any] = {"match": rule["match"].strip().lower()}
+        for key in ("maxContextLength", "maxOutputTokens"):
+            if rule.get(key) is not None:
+                value = normalize_positive_integer(rule.get(key))
+                if value is None:
+                    raise ValueError(f"modelLimitRules[{index}].{key} must be a positive integer.")
+                entry[key] = value
+        if len(entry) == 1:
+            raise ValueError(f"modelLimitRules[{index}]: declare maxContextLength and/or maxOutputTokens.")
+        validated.append(entry)
+    _configured_model_limit_rules[:] = validated
+
+
+def resetConfiguredModelLimitRules() -> None:
+    _configured_model_limit_rules.clear()
 
 
 _MODEL_LIMIT_RULES = [

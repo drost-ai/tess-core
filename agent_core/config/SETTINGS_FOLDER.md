@@ -49,6 +49,23 @@ never silently degrade.
 the single complete reference of every knob; fragments never add settings
 that the example does not document.
 
+## Model limit rules (providers.yaml)
+
+`providers.yaml` may carry a top-level `modelLimitRules` list to extend or
+override the builtin model→token-limit inference table:
+
+```yaml
+modelLimitRules:
+  - match: my-local-model        # case-insensitive substring of model OR profile name
+    maxContextLength: 48000
+    maxOutputTokens: 8000        # either field may be omitted
+```
+
+Precedence per field: explicit profile fields (`maxContextLength`,
+`maxOutputTokens`) > `modelLimitRules` (first match wins) > builtin
+inference table > `provider.*` knob defaults. Malformed rules are a fatal
+startup error.
+
 ## Knobs
 
 Every process-wide tunable is a **knob**: declared once in
