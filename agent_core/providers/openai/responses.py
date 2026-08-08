@@ -125,6 +125,9 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 {
                     "isCodexBackend": mode == "codex",
                     "request": args["request"],
+                    "reasoningSummary": (
+                        (args.get("config") or {}).get("providerProfile") or {}
+                    ).get("openAiChatReasoningSummary"),
                     "requestOptions": openAiPromptCacheRequestOptions(
                         mode=mode,
                         base_url=base_url,

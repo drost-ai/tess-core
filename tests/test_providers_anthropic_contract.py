@@ -331,6 +331,45 @@ class ServerBlockPreservationTests(unittest.TestCase):
         self.assertEqual(response["stopReason"], "end_turn")
 
 
+class ThinkingDisplayTests(unittest.TestCase):
+    def test_profile_thinking_display_reaches_the_wire(self):
+        server, requests = _server()
+        try:
+            run(
+                core.sendAnthropicMessagesRequest(
+                    config=_config(
+                        server,
+                        providerProfile={"anthropicThinkingDisplay": "summarized"},
+                    ),
+                    request=_request(effort="high"),
+                    runtime={},
+                    maxAttempts=1,
+                )
+            )
+        finally:
+            server.close()
+        body = requests[0]["body"]
+        self.assertEqual(
+            body["thinking"], {"type": "adaptive", "display": "summarized"}
+        )
+        self.assertEqual(body["output_config"], {"effort": "high"})
+
+    def test_no_display_key_without_profile_option(self):
+        server, requests = _server()
+        try:
+            run(
+                core.sendAnthropicMessagesRequest(
+                    config=_config(server),
+                    request=_request(effort="high"),
+                    runtime={},
+                    maxAttempts=1,
+                )
+            )
+        finally:
+            server.close()
+        self.assertEqual(requests[0]["body"]["thinking"], {"type": "adaptive"})
+
+
 class RetryAfterCaptureTests(unittest.TestCase):
     def test_anthropic_429_captures_retry_after_ms(self):
         server, _requests = _server(

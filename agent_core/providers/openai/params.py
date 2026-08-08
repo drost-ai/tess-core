@@ -27,8 +27,14 @@ def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any
         "store": False,
         "stream": True,
     }
+    reasoning: dict[str, Any] = {}
     if request.get("effort"):
-        params["reasoning"] = {"effort": request["effort"]}
+        reasoning["effort"] = request["effort"]
+    if args.get("reasoningSummary"):
+        # Responses-mode backends only stream reasoning summaries when asked.
+        reasoning["summary"] = args["reasoningSummary"]
+    if reasoning:
+        params["reasoning"] = reasoning
     if not is_codex:
         params["max_output_tokens"] = _resolve_max_output_tokens(request)
     tools = _convert_tools(request.get("tools", []))

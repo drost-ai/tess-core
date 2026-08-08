@@ -212,6 +212,20 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                         if turn_session is not None:
                             turn_session.mark_provider_activity("reasoning")
                         reasoning_content += reasoning_delta
+                        if runtime.get("includePartialMessages"):
+                            _emit(
+                                runtime,
+                                "message.assistant.thinking.partial",
+                                {
+                                    "session_id": None,
+                                    "model": args["request"]["model"],
+                                    "thinking_delta": reasoning_delta,
+                                    "thinking": reasoning_content,
+                                    "reasoning_kind": "raw_thinking",
+                                    "user_visible": False,
+                                    "provider_event_type": "chat.completion.chunk.reasoning_content",
+                                },
+                            )
                     raw_tool_calls = get_value(delta, "tool_calls", [])
                     tool_calls = raw_tool_calls if isinstance(raw_tool_calls, list) else []
                     for default_index, tool_call in enumerate(tool_calls):

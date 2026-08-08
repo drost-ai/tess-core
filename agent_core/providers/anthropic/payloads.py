@@ -264,7 +264,13 @@ def _build_anthropic_payload_parts(
         payload["stream"] = True
     effort = request.get("effort")
     if effort:
-        payload["thinking"] = {"type": "adaptive"}
+        thinking: dict[str, Any] = {"type": "adaptive"}
+        display = (config.get("providerProfile") or {}).get("anthropicThinkingDisplay")
+        if display:
+            # Fable/Opus 5/Sonnet 5 default to display "omitted" (empty
+            # thinking text); profiles opt into "summarized" to see traces.
+            thinking["display"] = display
+        payload["thinking"] = thinking
         payload["output_config"] = {"effort": effort}
     if countAnthropicCacheControls(payload) != plan["usedBreakpoints"]:
         raise RuntimeError("Anthropic cache plan does not match serialized controls.")
