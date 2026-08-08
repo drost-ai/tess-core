@@ -77,18 +77,34 @@ class ConfigProfileTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_default_system_prompt_layers_between_settings_and_engine_fallback(self):
+    def test_system_prompt_precedence_options_file_product_builtin(self):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
             self.assertEqual(config["systemPrompt"], "product prompt")
 
-            (home / "settings.json").write_text(json.dumps({"systemPrompt": "settings prompt"}), encoding="utf-8")
-            settings_config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
-            self.assertEqual(settings_config["systemPrompt"], "settings prompt")
+            (home / "settings").mkdir()
+            (home / "settings" / "system_prompt.md").write_text("file prompt\n", encoding="utf-8")
+            file_config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            self.assertEqual(file_config["systemPrompt"], "file prompt")
 
             explicit_config = run(core.resolveConfig({"runtimeHome": str(home), "systemPrompt": "explicit prompt", "defaultSystemPrompt": "product prompt"}, str(workspace)))
             self.assertEqual(explicit_config["systemPrompt"], "explicit prompt")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_settings_record_prompt_keys_are_not_consulted(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            (home / "settings.json").write_text(
+                json.dumps({"systemPrompt": "legacy prompt", "defaultSystemPrompt": "legacy default", "appendSystemPrompt": "legacy append"}),
+                encoding="utf-8",
+            )
+            (home / "settings").mkdir()
+            (home / "settings" / "config.yaml").write_text("systemPrompt: yaml prompt\n", encoding="utf-8")
+            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
+            self.assertIsNone(config["appendSystemPrompt"])
         finally:
             self.restore_home(root, previous)
 

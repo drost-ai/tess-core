@@ -212,6 +212,55 @@ class SettingsFolderTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_prompt_files_flow_through_resolve_config_into_session_stamping(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "system_prompt.md", "You are a folder-configured agent.\n\nBe terse.\n")
+            _write(home / "settings" / "system_prompt_append.md", "Always answer in haiku.  \n\n")
+            config = run(core.resolveConfig({}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], "You are a folder-configured agent.\n\nBe terse.")
+            self.assertEqual(config["appendSystemPrompt"], "Always answer in haiku.")
+
+            session = run(core.resolveSession({}, config))
+            self.assertEqual(
+                session["systemPrompt"],
+                "You are a folder-configured agent.\n\nBe terse.\n\nAlways answer in haiku.",
+            )
+        finally:
+            self.restore_home(root, previous)
+
+    def test_options_beat_prompt_files_and_append_composes_onto_builtin(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "system_prompt_append.md", "Cite sources.\n")
+            config = run(core.resolveConfig({}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
+            session = run(core.resolveSession({}, config))
+            self.assertEqual(session["systemPrompt"], f"{core.buildDefaultSystemPrompt()}\n\nCite sources.")
+
+            _write(home / "settings" / "system_prompt.md", "file prompt\n")
+            overridden = run(
+                core.resolveConfig({"systemPrompt": "option prompt", "appendSystemPrompt": "option append"}, str(workspace))
+            )
+            self.assertEqual(overridden["systemPrompt"], "option prompt")
+            self.assertEqual(overridden["appendSystemPrompt"], "option append")
+        finally:
+            self.restore_home(root, previous)
+
+    def test_whitespace_only_prompt_files_are_skipped(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            _write(home / "settings" / "system_prompt.md", "   \n\n\t\n")
+            _write(home / "settings" / "system_prompt_append.md", "")
+            settings = run(core.loadSettings("user", str(workspace)))
+            self.assertNotIn("systemPromptFile", settings)
+            self.assertNotIn("systemPromptAppendFile", settings)
+            config = run(core.resolveConfig({}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
+            self.assertIsNone(config["appendSystemPrompt"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_resolve_config_reads_permission_mode_from_settings_folder(self):
         # Headless embedders grant full permissions durably via
         # settings/config.yaml; an explicit option still wins.

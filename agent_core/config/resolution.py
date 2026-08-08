@@ -355,11 +355,13 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     agents = {**clone(BUILTIN_AGENTS), **(merged_settings.get("agents") or {}), **(_parse_inline_agents(options.get("agents")) or {})}
     assistant_name = options.get("assistantName") or merged_settings.get("assistantName") or DEFAULT_ASSISTANT_NAME
     assistant_description = options.get("assistantDescription") or merged_settings.get("assistantDescription") or DEFAULT_ASSISTANT_DESCRIPTION
+    # Settings-layer prompts come only from settings/system_prompt*.md files
+    # (systemPromptFile / systemPromptAppendFile); systemPrompt keys inside
+    # settings records are deliberately not consulted.
     system_prompt = (
         options.get("systemPrompt")
-        or merged_settings.get("systemPrompt")
+        or merged_settings.get("systemPromptFile")
         or options.get("defaultSystemPrompt")
-        or merged_settings.get("defaultSystemPrompt")
         or buildDefaultSystemPrompt({"assistantName": assistant_name, "assistantDescription": assistant_description})
     )
     settings_sandbox = merged_settings.get("sandbox") if isinstance(merged_settings.get("sandbox"), dict) else {}
@@ -409,7 +411,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "assistantName": assistant_name,
         "assistantDescription": assistant_description,
         "systemPrompt": system_prompt,
-        "appendSystemPrompt": options.get("appendSystemPrompt") or merged_settings.get("appendSystemPrompt"),
+        "appendSystemPrompt": options.get("appendSystemPrompt") or merged_settings.get("systemPromptAppendFile"),
         "sandbox": sandbox_config,
         "subagents": subagents_config,
         "webSearch": web_search_config,

@@ -8,13 +8,15 @@ TypeScript, Rust) must load it identically.
 
 ```
 settings/
-  .env            credentials only (KEY=VALUE lines), feeds the env block
-  providers.yaml  provider profiles + provider/model selection
-  config.yaml     runtime configuration (knobs: section + config keys)
-  config/         optional fragments of config.yaml, one file per section
+  .env                     credentials only (KEY=VALUE lines), feeds the env block
+  providers.yaml           provider profiles + provider/model selection
+  config.yaml              runtime configuration (knobs: section + config keys)
+  config/                  optional fragments of config.yaml, one file per section
     daemon.yaml
     compaction.yaml
     ...
+  system_prompt.md         replaces the base system prompt
+  system_prompt_append.md  appended after whichever base prompt wins
 ```
 
 Everything is optional. YAML files use the strict subset specified in
@@ -42,6 +44,25 @@ never silently degrade.
 - The folder augments and overrides legacy `settings.json` per top-level key.
 - Process environment variables (`AGENT_CORE_<DOTTED>`) remain the only
   override layer above the folder.
+
+## System prompt
+
+The system prompt is two concepts, each with one settings-layer file:
+
+- **Replace**: `system_prompt.md` becomes the base prompt. Full precedence:
+  `options.systemPrompt` (embedder force) > `settings/system_prompt.md` >
+  `options.defaultSystemPrompt` (product layer) > the built-in default
+  (`buildDefaultSystemPrompt`, `config/prompts.py`).
+- **Append**: `system_prompt_append.md` is appended after whichever base
+  wins, separated by a blank line (`options.appendSystemPrompt` wins over
+  the file). Composition happens in `buildEffectiveSystemPrompt`
+  (`config/prompts.py`); sessions stamp the composed prompt at creation.
+
+Any text is valid; trailing whitespace is stripped, and an empty or
+whitespace-only file is ignored. `systemPrompt` / `appendSystemPrompt` /
+`defaultSystemPrompt` keys inside settings records (`config.yaml` or legacy
+`settings.json`) are **not** consulted — the files are the settings-layer
+mechanism.
 
 ## Reference
 

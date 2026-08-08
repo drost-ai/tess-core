@@ -120,9 +120,8 @@ class SettingsRecord(TypedDict, total=False):
     permissionMode: PermissionMode
     assistantName: str
     assistantDescription: str
-    systemPrompt: str
-    defaultSystemPrompt: str
-    appendSystemPrompt: str
+    systemPromptFile: str
+    systemPromptAppendFile: str
     tools: list[str]
     allowedTools: list[str]
     disallowedTools: list[str]

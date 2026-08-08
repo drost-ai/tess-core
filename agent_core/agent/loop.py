@@ -114,7 +114,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         authority,
     )
     tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
-    base_system_prompt = args.get("systemPromptOverride") or session["systemPrompt"]
+    base_system_prompt = session["systemPrompt"]
     usage_totals = _ensure_usage_totals(session)
     tool_result_budget = _ToolResultBatchBudget(config.get("providerProfile") or {})
     parent_turn_id = args["logicalTurnId"]

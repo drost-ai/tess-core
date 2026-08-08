@@ -7,6 +7,7 @@ from typing import Any
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from .._utils import now_iso
+from ..config.prompts import buildEffectiveSystemPrompt
 from ..storage.persistence_metrics import (
     beginPersistenceCall as _begin_persistence_call,
     finishPersistenceCall as _finish_persistence_call,
@@ -41,7 +42,7 @@ async def resolveSession(options: dict[str, Any], config: dict[str, Any], launch
         providerProfileName=config.get("providerProfileName"),
         model=config["model"],
         effort=config.get("effort"),
-        systemPrompt=config["systemPrompt"],
+        systemPrompt=buildEffectiveSystemPrompt(config),
         permissionMode=config["permissionMode"],
         name=config.get("name"),
         assistantName=config.get("assistantName"),
@@ -385,7 +386,7 @@ def _fork_or_reuse_session(session: dict[str, Any], options: dict[str, Any], con
         name=options.get("name") or session.get("name"),
         model=config["model"],
         effort=config.get("effort"),
-        systemPrompt=config["systemPrompt"],
+        systemPrompt=buildEffectiveSystemPrompt(config),
         permissionMode=config["permissionMode"],
         assistantName=config.get("assistantName"),
         assistantDescription=config.get("assistantDescription"),

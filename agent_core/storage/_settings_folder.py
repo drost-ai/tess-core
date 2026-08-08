@@ -5,10 +5,12 @@ from __future__ import annotations
 The settings folder is the cross-runtime replacement for the monolithic
 user-scope settings.json:
 
-    settings/.env            credentials only (KEY=VALUE), feeds the env block
-    settings/providers.yaml  provider profiles + provider/model selection
-    settings/config.yaml     runtime configuration knobs
-    settings/config/*.yaml   optional per-section fragments of config.yaml
+    settings/.env                     credentials only (KEY=VALUE), feeds the env block
+    settings/providers.yaml           provider profiles + provider/model selection
+    settings/config.yaml              runtime configuration knobs
+    settings/config/*.yaml            optional per-section fragments of config.yaml
+    settings/system_prompt.md         replaces the base system prompt
+    settings/system_prompt_append.md  appended after whichever base prompt wins
 
 All are optional; the folder augments and overrides the legacy
 settings.json record per top-level key (env and providerProfiles merge
@@ -51,7 +53,25 @@ def loadSettingsFolder() -> dict[str, Any] | None:
     env = _read_env_file(os.path.join(folder, ".env"))
     if env:
         record["env"] = {**(record.get("env") or {}), **env}
+    for filename, key in (
+        ("system_prompt.md", "systemPromptFile"),
+        ("system_prompt_append.md", "systemPromptAppendFile"),
+    ):
+        prompt = _read_prompt_file(os.path.join(folder, filename))
+        if prompt:
+            record[key] = prompt
     return record
+
+
+def _read_prompt_file(path: str) -> str | None:
+    """A prompt file's rstripped text; None when absent or whitespace-only."""
+
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        return None
+    return text.rstrip() or None
 
 
 def _load_config_with_fragments(folder: str) -> dict[str, Any]:
