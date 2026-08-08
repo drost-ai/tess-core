@@ -178,7 +178,7 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
          'additionalProperties': False},
     },
     "Agent": {
-        "description": 'Spawn a delegated resident subagent to work on a focused task. Returns immediately by default — the child\'s result arrives later as a child message that wakes you. Set wait=true only when you need the initial result before continuing.',
+        "description": 'Spawn a delegated resident subagent to work on a focused task. Always returns at spawn — the child works in the background and its result arrives later as a child message that wakes you. Keep working (or end the turn) in the meantime; never idle-poll for the child.',
         "concurrency": 'exclusive',
         "schema": {'type': 'object',
          'properties': {'description': {'type': 'string'},
@@ -188,8 +188,6 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
                                                          'OMIT unless the runtime has agent profiles configured — most have '
                                                          'none, and any value then fails the spawn.'},
                         'model': {'type': 'string'},
-                        'wait': {'type': 'boolean',
-                                 'description': 'Block until the child\'s initial result (default false: return at spawn, result arrives as a child message).'},
                         'name': {'type': 'string'},
                         'team_name': {'type': 'string'},
                         'mode': {'type': 'string',

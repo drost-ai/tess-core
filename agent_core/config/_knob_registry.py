@@ -28,7 +28,6 @@ class Knob:
 
 _DECLARATIONS: tuple[tuple[str, Any, str, str, float | None, float | None], ...] = (
     ("subagents.max_live", 8, "int", "Maximum live subagent processes per runtime instance; at capacity the Agent tool returns the live-children roster instead of spawning.", 1, 64),
-    ("subagents.initial_result_timeout_ms", 600000, "int", "Milliseconds the Agent tool blocks waiting for a spawned child's initial result before returning with the child still working.", 100, 3600000),
     ("subagents.resident_poll_ms", 1000, "int", "Milliseconds between a resident subagent's mailbox polls while idle between turns.", 100, 60000),
     ("provider.max_output_tokens", 16384, "int", "Fallback max output tokens per provider request when neither the request nor the provider profile specifies one.", 256, 1000000),
     ("provider.request_start_timeout_ms", 120000, "int", "Milliseconds to wait for a provider request to start streaming before the attempt is failed as timed out.", 1000, 3600000),

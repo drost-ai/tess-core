@@ -273,8 +273,6 @@ knobs:
   subagents:
     # Milliseconds a subagent continuation lease stays valid before it may be re-claimed. [1000..3600000]
     continuation_lease_ms: 30000
-    # Milliseconds the Agent tool blocks waiting for a spawned child's initial result before returning with the child still working. [100..3600000]
-    initial_result_timeout_ms: 600000
     # Milliseconds a legacy continuation claim is honored before recovery may steal it. [1000..3600000]
     legacy_claim_grace_ms: 30000
     # Maximum nesting depth for subagents spawning subagents. [1..10]

@@ -157,17 +157,23 @@ class ToolAgentTests(AgentCoreTestCase):
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             result = run(
                 agent.handler(
-                    {"description": "Run async", "prompt": "Work in the background", "name": "Async worker", "wait": True},
+                    {"description": "Run async", "prompt": "Work in the background", "name": "Async worker"},
                     {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
                 )
             )
             payload = json.loads(result["content"])
             task_id = payload["task_id"]
-            self.assertEqual(payload["status"], "idle_resident")
-            self.assertIn("No credential is configured", payload["result"])
+            self.assertIsNone(payload["result"])
+            self.assertIn("child message", payload["note"])
             self.assertEqual(parent["metadata"]["backgroundSessionIds"], [payload["session_id"]])
             self.assertEqual(parent["metadata"]["childAgentIds"], [payload["agent_id"]])
-            child_record = run(core.loadChildAgent(payload["agent_id"]))
+            # The spawn never blocks; the child settles in the background.
+            deadline = time.monotonic() + 20
+            while True:
+                child_record = run(core.loadChildAgent(payload["agent_id"]))
+                if child_record["status"] == "awaiting_input" or time.monotonic() > deadline:
+                    break
+                time.sleep(0.05)
             self.assertEqual(child_record["status"], "awaiting_input")
             self.assertEqual(child_record["taskId"], task_id)
             self.assertTrue(child_record["stoppable"])
@@ -377,6 +383,6 @@ class NonBlockingSpawnTests(AgentCoreTestCase):
             payload = json.loads(result["content"])
             self.assertEqual(payload["task_id"], "nb-task")
             self.assertIsNone(payload["result"])
-            self.assertIn("not waiting", payload["note"])
+            self.assertIn("result will arrive as a child message", payload["note"])
         finally:
             self.restore_home(root, previous)

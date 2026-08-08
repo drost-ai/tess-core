@@ -3,7 +3,6 @@ from __future__ import annotations
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 
-import asyncio
 import json
 from typing import Any
 
@@ -14,7 +13,6 @@ from .permissions import _ensure_tool_permission, _parse_permission_mode_value
 from .schemas import builtin_tool
 from .validation import _require_string
 from ..subagents.depth_policy import checkSubagentDepthAllowed
-from ..tasks.communication import mark_task_message_delivered, read_task_mailbox_messages
 
 
 def _agent_tool() -> ToolDefinition:
@@ -42,9 +40,9 @@ def _agent_tool() -> ToolDefinition:
         _throw_if_tool_cancelled(context)
         from ..subagents import startBackgroundSubagent
 
-        # Background-only: every spawn is a daemon-supervised resident child.
-        # The call still blocks for the child's initial result so the
-        # model-facing contract keeps its ask-and-receive feel.
+        # Background-only: every spawn is a daemon-supervised resident child;
+        # the parent never blocks on it (settled subagent-v2 design). Results
+        # arrive as child messages that wake the parent at a turn boundary.
         launched = await startBackgroundSubagent(
             {
                 "context": context,
@@ -71,69 +69,19 @@ def _agent_tool() -> ToolDefinition:
         task_id = payload.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             return launched
-        if not input.get("wait"):
-            # Default: don't hold the turn hostage to the child's first turn.
-            # The result arrives as a child message and wakes an idle parent.
-            return {
-                "content": pretty_json(
-                    {
-                        **payload,
-                        "result": None,
-                        "note": (
-                            "Spawned; not waiting. The child's result will arrive as a child message. "
-                            "SendMessage(to=<agent_id>) reaches it; TaskOutput/TaskStop manage it."
-                        ),
-                    }
-                )
-            }
-        # Call-time import: config package imports tools at module load.
-        from ..config._knobs import knobValue
-
-        timeout_ms = int(knobValue("subagents.initial_result_timeout_ms"))
-        initial = await _await_initial_result(task_id, timeout_ms, context)
-        if initial is None:
-            return {
-                "content": pretty_json(
-                    {
-                        **payload,
-                        "result": None,
-                        "note": (
-                            f"The child has not reported within {timeout_ms}ms. It stays resident; "
-                            "its result will arrive as a child message, and SendMessage(to=<agent_id>) reaches it."
-                        ),
-                    }
-                )
-            }
+        # The parent never waits on a child: the spawn returns immediately and
+        # the child's result arrives as a child message that wakes the parent.
         return {
             "content": pretty_json(
                 {
                     **payload,
-                    "status": "idle_resident",
-                    "result": initial.get("content"),
-                    "note": "The child stays resident: SendMessage(to=<agent_id>) sends follow-up work in the same context.",
+                    "result": None,
+                    "note": (
+                        "Spawned. The child's result will arrive as a child message. "
+                        "SendMessage(to=<agent_id>) reaches it; TaskOutput/TaskStop manage it."
+                    ),
                 }
             )
         }
 
     return builtin_tool("Agent", handler)
-
-
-async def _await_initial_result(task_id: str, timeout_ms: int, context: ToolContext) -> dict[str, Any] | None:
-    from ..config._knobs import knobValue
-
-    poll_seconds = int(knobValue("comms.reply_poll_ms")) / 1000
-    deadline = asyncio.get_running_loop().time() + timeout_ms / 1000
-    while asyncio.get_running_loop().time() < deadline:
-        signal = context.get("abortSignal")
-        if signal is not None and getattr(signal, "aborted", False):
-            return None
-        for record in await read_task_mailbox_messages(task_id):
-            if record.get("direction") != "to_parent" or record.get("kind") != "result":
-                continue
-            if record.get("status") == "queued":
-                # Claim it: the result rides this tool result, so the boundary
-                # drain must not re-inject it as a child message.
-                await mark_task_message_delivered(task_id, str(record.get("messageId")))
-            return record
-        await asyncio.sleep(poll_seconds)
-    return None
