@@ -3,7 +3,9 @@ from __future__ import annotations
 from .clients import JsonRpcClient, _McpHttpUnauthorized
 from .http_body import _open_mcp_http, _validate_outgoing_headers
 from .http_exchange import _HttpExchange
+from .http_stream import _HttpServerPushMixin
 import asyncio
+import contextlib
 import json
 import threading
 import time
@@ -30,7 +32,7 @@ from .transport_shared import BoundedNotificationQueue, _decode_json_rpc_payload
 from .sse_decoder import McpSseDecoder
 
 
-class HttpMcpClient(JsonRpcClient):
+class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
     def __init__(
         self,
         config: dict[str, Any],
@@ -49,6 +51,8 @@ class HttpMcpClient(JsonRpcClient):
         self.stream_stop = threading.Event()
         self.close_done = threading.Event()
         self.close_error: BaseException | None = None
+        self.session_id: str | None = None
+        self.reply_auth_headers: dict[str, str] = {}
 
     async def initialize(self) -> None:
         await super().initialize()
@@ -131,6 +135,15 @@ class HttpMcpClient(JsonRpcClient):
                 raise self.close_error
             return
         try:
+            if self.session_id and self.config.get("transport") == "http":
+                # Spec: clients SHOULD terminate their session with a DELETE.
+                # Best-effort; 405 means the server declines client termination.
+                with contextlib.suppress(BaseException):
+                    resource_url = self._request_url()
+                    auth_headers = (
+                        await self.auth.authorize_headers(resource_url) if self.auth else {}
+                    )
+                    await asyncio.to_thread(self._delete_session_sync, auth_headers)
             self.stream_stop.set()
             self.notifications.close()
             close_error = McpTransportError(
@@ -156,6 +169,12 @@ class HttpMcpClient(JsonRpcClient):
 
     def _request_url(self) -> str:
         return self.config["commandOrUrl"]
+
+    def _http_headers(self, base: dict[str, str]) -> dict[str, str]:
+        headers = super()._http_headers(base)
+        if self.session_id:
+            headers["Mcp-Session-Id"] = self.session_id
+        return headers
 
     def _send_sync(
         self,
@@ -189,6 +208,7 @@ class HttpMcpClient(JsonRpcClient):
             ),
             **(auth_headers or {}),
         }
+        self.reply_auth_headers = dict(auth_headers or {})
         response = self._open_response(
             self._request_url(),
             "POST",
@@ -205,11 +225,24 @@ class HttpMcpClient(JsonRpcClient):
                 )
                 _close_http_response(response)
                 raise _McpHttpUnauthorized(challenge)
+            if status == 404 and self.session_id:
+                # Spec: 404 with a session id means the session expired; the
+                # client must re-initialize. Failing the connection routes the
+                # next call through a fresh initialize.
+                self.session_id = None
+                _close_http_response(response)
+                raise McpTransportError(
+                    "session_expired",
+                    f"MCP session expired (HTTP 404) for {self.config.get('name')}.",
+                )
             if status < 200 or status >= 300:
                 _close_http_response(response)
                 raise RuntimeError(
                     f"HTTP {status} from MCP server {self.config.get('name')}"
                 )
+            session = _first_header(getattr(response, "headers", None), "mcp-session-id")
+            if session:
+                self.session_id = session
             return self._parse_rpc_response(response, request.get("id"))
         finally:
             exchange.unbind(response)
@@ -237,6 +270,13 @@ class HttpMcpClient(JsonRpcClient):
                 challenge = error.headers.get("WWW-Authenticate") if error.headers else None
                 _close_http_response(error)
                 raise _McpHttpUnauthorized(challenge) from None
+            if error.code == 404 and self.session_id:
+                self.session_id = None
+                _close_http_response(error)
+                raise McpTransportError(
+                    "session_expired",
+                    f"MCP session expired (HTTP 404) for {self.config.get('name')}.",
+                ) from None
             _close_http_response(error)
             raise RuntimeError(
                 f"HTTP {error.code} from MCP server {self.config.get('name')}"
@@ -309,98 +349,17 @@ class HttpMcpClient(JsonRpcClient):
         if not data:
             return None
         message = _decode_json_rpc_payload(data, "SSE event")
-        if isinstance(message.get("method"), str) and message.get("id") is None:
-            self.notifications.push(
-                {"method": message["method"], "params": message.get("params")}
-            )
+        if isinstance(message.get("method"), str):
+            # Method present: a notification or a server-initiated request —
+            # never our response, even when its id collides with request_id.
+            if message.get("id") is None:
+                self.notifications.push(
+                    {"method": message["method"], "params": message.get("params")}
+                )
+            else:
+                self._answer_server_request(message["id"], message["method"])
             return None
         return message if message.get("id") == request_id else None
-
-    async def _start_optional_notification_stream(self) -> None:
-        if not self.on_notification:
-            return
-        resource_url = self.config["commandOrUrl"]
-        auth_headers = await self.auth.authorize_headers(resource_url) if self.auth else {}
-        thread = threading.Thread(
-            target=self._notification_stream_loop,
-            args=(resource_url, auth_headers, False, None, None),
-            daemon=True,
-        )
-        self.stream_threads.add(thread)
-        thread.start()
-
-    def _notification_stream_loop(
-        self,
-        url: str,
-        auth_headers: dict[str, str],
-        require_endpoint: bool,
-        ready: threading.Event | None,
-        error_ref: dict[str, BaseException] | None,
-    ) -> None:
-        exchange: _HttpExchange | None = None
-        try:
-            exchange = self._admit_exchange("notification stream")
-            headers = {
-                **self._http_headers({"accept": "text/event-stream"}),
-                **auth_headers,
-            }
-            response = self._open_response(url, "GET", headers, None, exchange)
-            try:
-                if _content_type(response) != "text/event-stream":
-                    raise McpTransportError(
-                        "invalid_content_type",
-                        "Expected text/event-stream from MCP server.",
-                    )
-                decoder = McpSseDecoder()
-                endpoint_seen = False
-                for chunk in iterateMcpBody(response, self.policy, continuous=True):
-                    if self.stream_stop.is_set():
-                        break
-                    for event in decoder.push(chunk):
-                        endpoint_seen = self._consume_stream_event(event, url, ready) or endpoint_seen
-                    self.notifications.flush()
-                for event in decoder.push(b"", final=True):
-                    endpoint_seen = self._consume_stream_event(event, url, ready) or endpoint_seen
-                self.notifications.flush()
-                if require_endpoint and not endpoint_seen:
-                    raise McpTransportError(
-                        "invalid_framing",
-                        "MCP SSE stream ended before publishing its endpoint.",
-                    )
-            finally:
-                exchange.unbind(response)
-        except BaseException as error:
-            self._handle_stream_error(error)
-            if error_ref is not None:
-                error_ref["error"] = error
-        finally:
-            if exchange:
-                exchange.release()
-            if ready:
-                ready.set()
-            self.stream_threads.discard(threading.current_thread())
-
-    def _handle_stream_error(self, error: BaseException) -> None:
-        return None
-
-    def _consume_stream_event(self, event: dict[str, str], base_url: str, ready: threading.Event | None) -> bool:
-        data = event.get("data")
-        if not data:
-            return False
-        if event.get("event") == "endpoint":
-            self._set_endpoint(data, base_url)
-            if ready:
-                ready.set()
-            return True
-        message = _decode_json_rpc_payload(data, "SSE event")
-        if isinstance(message.get("method"), str) and message.get("id") is None:
-            self.notifications.push(
-                {"method": message["method"], "params": message.get("params")}
-            )
-        return False
-
-    def _set_endpoint(self, data: str, base_url: str) -> None:
-        return None
 
     async def _run_sync(self, exchange: _HttpExchange, function: Callable[..., Any], *args: Any) -> Any:
         exchange.start_worker()

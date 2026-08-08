@@ -84,13 +84,34 @@ def _validate_transport_message(value: Any, source: str) -> dict[str, Any]:
         )
     request_id = message.get("id")
     if request_id is not None and (
-        isinstance(request_id, bool) or not isinstance(request_id, int)
+        isinstance(request_id, bool) or not isinstance(request_id, (int, str))
+    ):
+        raise McpTransportError(
+            "invalid_framing",
+            f"MCP {source} id is not a string or number.",
+        )
+    # Server-initiated requests (they carry a method) may use any legal id
+    # shape; responses settle against our ids, which are always numeric.
+    if (
+        request_id is not None
+        and not isinstance(request_id, int)
+        and not isinstance(message.get("method"), str)
     ):
         raise McpTransportError(
             "invalid_framing",
             f"MCP {source} response id is not numeric.",
         )
     return message
+
+
+def _server_request_reply(request_id: Any, method: str) -> dict[str, Any]:
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32601, "message": f"Method not found: {method}"},
+    }
 
 
 def _decode_json_rpc_payload(payload: str, source: str) -> dict[str, Any]:

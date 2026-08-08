@@ -28,6 +28,7 @@ from .transport_policy import (
 from .transport_shared import (
     BoundedNotificationQueue,
     _decode_json_rpc_payload,
+    _server_request_reply,
     _transport_error,
 )
 from .stdio_decoder import McpStdioFrameDecoder
@@ -222,8 +223,11 @@ class StdioMcpClient(JsonRpcClient):
         message = _decode_json_rpc_payload(payload, "stdio frame")
         request_id = message.get("id")
         method = message.get("method")
-        if isinstance(method, str) and request_id is None:
-            self.notifications.push({"method": method, "params": message.get("params")})
+        if isinstance(method, str):
+            if request_id is None:
+                self.notifications.push({"method": method, "params": message.get("params")})
+            else:
+                self._answer_server_request(request_id, method)
             return
         if isinstance(request_id, int) and not isinstance(request_id, bool):
             self._settle(request_id, message)
@@ -233,6 +237,12 @@ class StdioMcpClient(JsonRpcClient):
                 "invalid_framing",
                 "MCP stdio response id did not match a numeric pending request.",
             )
+
+    def _answer_server_request(self, request_id: Any, method: str) -> None:
+        # Best-effort reply from the reader thread; a dead stdin surfaces
+        # through its own terminal-failure path.
+        with contextlib.suppress(Exception):
+            self._write_message(_server_request_reply(request_id, method))
 
     def _settle(self, request_id: int, value: dict[str, Any] | BaseException) -> None:
         with self.pending_lock:

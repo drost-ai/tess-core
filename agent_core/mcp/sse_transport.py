@@ -142,10 +142,13 @@ class SseMcpClient(HttpMcpClient):
             return True
         message = _decode_json_rpc_payload(data, "SSE event")
         request_id = message.get("id")
-        if isinstance(message.get("method"), str) and request_id is None:
-            self.notifications.push(
-                {"method": message["method"], "params": message.get("params")}
-            )
+        if isinstance(message.get("method"), str):
+            if request_id is None:
+                self.notifications.push(
+                    {"method": message["method"], "params": message.get("params")}
+                )
+            else:
+                self._answer_server_request(request_id, message["method"])
             return False
         if isinstance(request_id, int) and not isinstance(request_id, bool):
             with self.pending_lock:
