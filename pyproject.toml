@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "agent-core-python"
 version = "0.1.0"
 description = "Python port of the agent-core runtime."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
@@ -29,7 +29,7 @@ pythonpath = ["."]
 # installed; the test skips gracefully when it is not.
 [tool.mypy]
 files = ["agent_core/contracts"]
-python_version = "3.10"
+python_version = "3.12"
 strict = true
 warn_unreachable = true
 
