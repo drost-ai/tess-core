@@ -12,6 +12,7 @@ from typing import Any
 from .._utils import now_iso
 from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
+from ..storage.io_executor import runStorageIo as _run_storage_io
 
 
 TERMINAL_RECONCILIATION_STATUSES = {"completed", "failed", "stopped", "timed_out"}
@@ -412,7 +413,7 @@ def _structured_summary(value: dict[str, Any]) -> str:
         return ""
 
 
-async def _read_records(path: str) -> list[dict[str, Any]]:
+def _read_records_sync(path: str) -> list[dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             lines = handle.readlines()
@@ -431,7 +432,11 @@ async def _read_records(path: str) -> list[dict[str, Any]]:
     return records
 
 
-async def _write_records(path: str, records: list[dict[str, Any]]) -> None:
+async def _read_records(path: str) -> list[dict[str, Any]]:
+    return await _run_storage_io(_read_records_sync, path)
+
+
+def _write_records_sync(path: str, records: list[dict[str, Any]]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.{uuid.uuid4()}.tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
@@ -439,6 +444,10 @@ async def _write_records(path: str, records: list[dict[str, Any]]) -> None:
             json.dump(record, handle, ensure_ascii=False, sort_keys=True)
             handle.write("\n")
     os.replace(tmp, path)
+
+
+async def _write_records(path: str, records: list[dict[str, Any]]) -> None:
+    await _run_storage_io(_write_records_sync, path, records)
 
 
 def _sort_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:

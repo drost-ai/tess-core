@@ -27,8 +27,15 @@ from ..session.persisted_record_validation import (
 import os
 from typing import Any
 
-from .json_io import fileLock, readJsonFile, writeJsonFile
+from .json_io import readJsonFile, withRecordTransaction, writeJsonFile
 from .paths import getStateRoot
+
+# Every record mutation acquires its family's record transaction, keyed by
+# record id. Task record, task meta, and health-check meta are one lifecycle
+# unit sharing the "task-lifecycle" domain: a holder of that transaction
+# (terminal_store) excludes ALL writers of all three files, not only other
+# transaction holders. The transaction is reentrant within a task context, so
+# these writers compose with an enclosing transaction instead of deadlocking.
 
 def taskDir(taskId: str) -> str:
     return os.path.join(getStateRoot(), "tasks", parseTaskId(taskId))
@@ -145,8 +152,9 @@ def _json_candidate(directory: str, entry: os.DirEntry[str], parse_id) -> dict[s
     return {"id": record_id, "filePath": os.path.join(directory, entry.name)}
 
 async def saveChildAgent(record: ChildAgentRecord) -> None:
-    path = childAgentPath(record["agentId"])
-    async with fileLock(path):
+    agent_id = parseAgentId(record["agentId"])
+    path = childAgentPath(agent_id)
+    async with withRecordTransaction("agent-record", agent_id):
         current = await _load_by_path(path)
         await writeJsonFile(path, _omit_none_fields(_merge_child_agent_for_full_save(current, record)))
 
@@ -160,8 +168,9 @@ async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:
     The persisted value passes through the same ``None``-field omission as
     ``saveChildAgent``.
     """
-    path = childAgentPath(agentId)
-    async with fileLock(path):
+    agent_id = parseAgentId(agentId)
+    path = childAgentPath(agent_id)
+    async with withRecordTransaction("agent-record", agent_id):
         current = await _load_by_path(path)
         updated = mutate(current)
         if updated is None:
@@ -192,9 +201,9 @@ async def listChildAgents() -> list[ChildAgentRecord]:
     return sorted(scan["records"], key=lambda item: item.get("startedAt", ""), reverse=True)
 
 async def writeTaskMeta(taskId: str, value: TaskMeta) -> None:
-    path = taskMetaPath(taskId)
-    async with fileLock(path):
-        await writeJsonFile(path, value)
+    task_id = parseTaskId(taskId)
+    async with withRecordTransaction("task-lifecycle", task_id):
+        await writeJsonFile(taskMetaPath(task_id), value)
 
 
 async def mutateTaskMeta(taskId: str, mutate, fallback: TaskMeta | None = None) -> TaskMeta | None:
@@ -205,8 +214,9 @@ async def mutateTaskMeta(taskId: str, mutate, fallback: TaskMeta | None = None) 
     nothing was loaded, or persists the received value after in-place
     mutation.
     """
-    path = taskMetaPath(taskId)
-    async with fileLock(path):
+    task_id = parseTaskId(taskId)
+    path = taskMetaPath(task_id)
+    async with withRecordTransaction("task-lifecycle", task_id):
         current = await readJsonFile(path, fallback)
         updated = mutate(current)
         if updated is None:
@@ -227,9 +237,9 @@ async def readTaskMeta(taskId: str) -> TaskMeta | None:
     return result.get("record")
 
 async def saveTaskRecord(record: TaskRecord) -> None:
-    path = taskRecordPath(record["id"])
-    async with fileLock(path):
-        await writeJsonFile(path, _omit_none_fields(record))
+    task_id = parseTaskId(record["id"])
+    async with withRecordTransaction("task-lifecycle", task_id):
+        await writeJsonFile(taskRecordPath(task_id), _omit_none_fields(record))
 
 async def loadTaskRecord(taskId: str) -> TaskRecord | None:
     task_id = parseTaskId(taskId)
@@ -255,9 +265,9 @@ async def listSessionTaskRecords(sessionId: str) -> list[TaskRecord]:
     return [task for task in await listTaskRecords() if task.get("sessionId") == sessionId]
 
 async def saveMonitor(record: MonitorRecord) -> None:
-    path = monitorPath(record["id"])
-    async with fileLock(path):
-        await writeJsonFile(path, record)
+    monitor_id = parseMonitorId(record["id"])
+    async with withRecordTransaction("monitor-record", monitor_id):
+        await writeJsonFile(monitorPath(monitor_id), record)
 
 async def loadMonitor(monitorId: str) -> MonitorRecord | None:
     monitor_id = parseMonitorId(monitorId)
@@ -283,15 +293,16 @@ async def listSessionMonitors(sessionId: str) -> list[MonitorRecord]:
     return [monitor for monitor in await listMonitors() if monitor.get("sessionId") == sessionId]
 
 async def saveHealthCheckTask(record: TaskMeta) -> None:
-    path = healthCheckMetaPath(record["taskId"])
-    async with fileLock(path):
-        await writeJsonFile(path, record)
+    task_id = parseTaskId(record["taskId"])
+    async with withRecordTransaction("task-lifecycle", task_id):
+        await writeJsonFile(healthCheckMetaPath(task_id), record)
 
 
 async def mutateHealthCheckTask(taskId: str, mutate) -> TaskMeta | None:
     """Locked read-modify-write for the health-check meta record."""
-    path = healthCheckMetaPath(taskId)
-    async with fileLock(path):
+    task_id = parseTaskId(taskId)
+    path = healthCheckMetaPath(task_id)
+    async with withRecordTransaction("task-lifecycle", task_id):
         current = await readJsonFile(path, None)
         updated = mutate(current)
         if updated is None:

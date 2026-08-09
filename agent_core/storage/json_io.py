@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib as _contextlib
 import contextvars as _contextvars
 import hashlib as _hashlib
+import random as _random
 import time as _time
 import weakref as _weakref
 from typing import Callable
@@ -27,21 +28,19 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
     _fcntl = None
 
 
-# Record ownership matrix. Locking is applied only
-# where multiple processes genuinely mutate the same file; single-writer
-# records stay unlocked-fast with owner discipline:
+# Record ownership matrix. Multi-writer record families serialize through a
+# NAMED record-transaction domain keyed by record id (see storage/records.py);
+# per-data-file sidecar locks are not used for records, because a lock that
+# holders of the family transaction do not take excludes nothing:
 #
-#   Session JSON        multi-writer (parent loop, supervisor task-id updates,
-#                       child prep)            -> locked save + mutateSessionRecord
-#   Child-agent record  multi-writer (parent create, child-runner finalize,
-#                       supervisor reconcile)  -> locked save + mutateChildAgent
-#   Task meta           supervisor-owned; child finalizer and local Bash
-#                       placeholder also write -> locked save + mutateTaskMeta
-#   Health-check meta   supervisor-owned       -> locked save + mutateHealthCheckTask
-#   Monitor record      parent-owned           -> locked save (cheap insurance)
+#   Task record + task meta + health-check meta
+#                       one lifecycle unit -> shared "task-lifecycle" domain
+#   Child-agent record  multi-writer       -> "agent-record" domain
+#   Monitor record      parent-owned       -> "monitor-record" domain
+#   Session JSON        multi-writer       -> locked save + mutateSessionRecord
 #   Settings/auto-mode/project memory/MCP/plugin records
 #                       low-contention multi-writer -> locked helper available
-#   Daemon state/events cursor-based + append-only     -> unchanged by design
+#   Daemon state/events cursor-based + append-only  -> unchanged by design
 #
 # Default bound for acquiring a record lock. A timeout fails closed: a
 # successful mutation must never have raced through an unlocked fallback.
@@ -138,8 +137,9 @@ async def fileLock(filePath: str, *, timeoutMs: int | None = None):
     other processes (the daemon's background children). Acquisition is bounded
     by ``timeoutMs``; a timeout is observable and raises
     ``StorageTransactionError`` without entering the caller's critical
-    section. The flock is taken non-blocking in a thread so the event loop is
-    never blocked, and it releases automatically on process death.
+    section. The flock is probed non-blocking (a microsecond syscall, safe
+    inline on the loop) with jittered backoff between probes, and it releases
+    automatically on process death.
     """
     path = os.path.abspath(filePath)
     if timeoutMs is None:
@@ -174,13 +174,21 @@ async def fileLock(filePath: str, *, timeoutMs: int | None = None):
             )
             os_handle = handle
             acquired_os = False
+            # Probe inline, not through the storage executor: its few threads
+            # are busy doing the very writes the waiters queue behind, so
+            # executor-routed probes amplify contention into a convoy. Full
+            # jitter desynchronizes waiters so acquisition is not a
+            # fixed-cadence lottery that starves unlucky processes.
+            delay = 0.001
             while True:
-                if await _run_storage_io(_try_flock, handle):
+                if _try_flock(handle):
                     acquired_os = True
                     break
-                if _time.monotonic() >= deadline:
+                now = _time.monotonic()
+                if now >= deadline:
                     break
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(min(_random.uniform(0.0005, delay), deadline - now))
+                delay = min(delay * 1.7, 0.04)
             if not acquired_os:
                 payload = {
                     "path": path,
@@ -349,9 +357,16 @@ def _read_json_lines_sync(file_path: str) -> list[dict[str, Any]]:
 
 
 async def readJsonLines(filePath: str) -> list[dict[str, Any]]:
+    """Tolerant lock-free JSONL read.
+
+    Appends emit one line per write and rewrites replace atomically, so the
+    worst case for an unlocked reader is a torn tail line, skipped by the
+    tolerant parser until the next read observes it complete. Polling readers
+    must not contend with writers for the record transaction;
+    read-modify-write callers use :func:`mutateJsonLines`, which does.
+    """
     path = os.path.abspath(filePath)
-    async with withRecordTransaction("jsonl", path):
-        return await _run_storage_io(_read_json_lines_sync, path)
+    return await _run_storage_io(_read_json_lines_sync, path)
 
 
 def _write_json_lines_sync(file_path: str, records: list[dict[str, Any]]) -> None:

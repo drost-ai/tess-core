@@ -10,6 +10,7 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import sessionArchiveDir, withRecordTransaction
+from ..storage.io_executor import runStorageIo as _run_storage_io
 
 
 def resolveSubagentLaunchGroupId(args: dict[str, Any], parentSession: dict[str, Any], context: dict[str, Any] | None = None) -> str:
@@ -50,9 +51,9 @@ def _subagent_launch_groups_path(parentSessionId: str) -> str:
     return os.path.join(sessionArchiveDir(parentSessionId), "subagent-launch-groups.json")
 
 
-async def _read_subagent_launch_groups(parentSessionId: str) -> list[dict[str, Any]]:
+def _read_subagent_launch_groups_sync(path: str) -> list[dict[str, Any]]:
     try:
-        with open(_subagent_launch_groups_path(parentSessionId), "r", encoding="utf-8") as handle:
+        with open(path, "r", encoding="utf-8") as handle:
             value = json.load(handle)
     except FileNotFoundError:
         return []
@@ -61,6 +62,12 @@ async def _read_subagent_launch_groups(parentSessionId: str) -> list[dict[str, A
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+async def _read_subagent_launch_groups(parentSessionId: str) -> list[dict[str, Any]]:
+    return await _run_storage_io(
+        _read_subagent_launch_groups_sync, _subagent_launch_groups_path(parentSessionId)
+    )
 
 
 async def _upsert_subagent_launch_group(parentSessionId: str, group: dict[str, Any]) -> dict[str, Any]:
@@ -100,13 +107,17 @@ def _merge_group_record(current: dict[str, Any], group: dict[str, Any], parent_s
     return {key: value for key, value in merged.items() if value is not None}
 
 
-async def _write_subagent_launch_groups(path: str, records: list[dict[str, Any]]) -> None:
+def _write_subagent_launch_groups_sync(path: str, records: list[dict[str, Any]]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.{os.getpid()}.{uuid.uuid4()}.tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(records, handle, ensure_ascii=False, sort_keys=True, indent=2)
         handle.write("\n")
     os.replace(tmp, path)
+
+
+async def _write_subagent_launch_groups(path: str, records: list[dict[str, Any]]) -> None:
+    await _run_storage_io(_write_subagent_launch_groups_sync, path, records)
 
 
 def _sort_groups(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
