@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .shared import PERMISSION_MODES
+PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"}
 from typing import Any
 
 _OUTPUT_LIMIT_STOP_REASONS = {"max_tokens", "max_output_tokens", "length"}

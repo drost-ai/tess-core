@@ -25,7 +25,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 }
             }
             parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
-            from agent_core.tasks.subagents import prepareSubagent
+            from agent_core.subagents import prepareSubagent
 
             context = {
                 "session": parent,

@@ -13,8 +13,8 @@ from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord, withRecordTransaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
-from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
-from ..subagent_parts.finalizers import _background_structured_result_fields
+from ...subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
+from ...subagents.finalizers import _background_structured_result_fields
 from ...tools import createBuiltinTools
 from ...runtime.generation import createRuntimeSessionBinding
 from ..._utils import now_iso

@@ -31,7 +31,7 @@ import agent_core.tasks.monitor_narration as monitors_module
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
 import agent_core.runtime.bootstrap as runtime_module
-import agent_core.tasks.subagents as subagents_module
+import agent_core.subagents as subagents_module
 import agent_core.tools as tools_module
 
 

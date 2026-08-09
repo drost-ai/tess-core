@@ -6,7 +6,7 @@ class ToolAgentTests(AgentCoreTestCase):
     def test_agent_tool_prepares_child_session_and_record(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            from agent_core.tasks.subagents import prepareSubagent
+            from agent_core.subagents import prepareSubagent
 
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
             config["systemPrompt"] = "Config level prompt."

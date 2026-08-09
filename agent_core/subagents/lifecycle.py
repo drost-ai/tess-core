@@ -2,31 +2,31 @@ from __future__ import annotations
 
 import os
 import uuid
-from ..._utils import maybe_await, now_iso, pretty_json
-from ...config import (
+from .._utils import maybe_await, now_iso, pretty_json
+from ..config import (
     buildSystemPromptForAgent,
     normalizeModelName,
     resolveModelForAgent,
     resolveProviderForModelSelection,
 )
-from ...storage import (
+from ..storage import (
     createEmptySession,
     saveChildAgent,
     saveSession,
     taskOutputPath,
 )
-from ...subagents.contract import (
+from .contract import (
     runtime_contract_for_agent,
     summarize_subagent_runtime_contract,
 )
-from ...subagents.depth_policy import requireSubagentDepthAllowed
-from ...subagents.groups import (
+from .depth_policy import requireSubagentDepthAllowed
+from .groups import (
     _upsert_subagent_launch_group,
     appendLaunchGroupMetadata,
     resolveSubagentLaunchGroupId,
 )
 from .permissions import inheritParentPermissionMode, sanitizePermissionMode
-from .utils import (
+from .spawn_utils import (
     _create_subagent_worktree,
     _dedupe,
     _output,
@@ -35,13 +35,13 @@ from .utils import (
     _without_none_values,
 )
 from typing import Any
-from ...session.message_origin import messageWithOrigin as _message_with_origin
-from ...authority.agent import (
+from ..session.message_origin import messageWithOrigin as _message_with_origin
+from ..authority.agent import (
     captureAgentAuthority,
     deriveChildAgentAuthority,
     sandboxConfigForAgentAuthority,
 )
-from ...contracts.records import launch_output_file, launch_task_id
+from ..contracts.records import launch_output_file, launch_task_id
 
 
 async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

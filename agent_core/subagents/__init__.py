@@ -45,16 +45,17 @@ from .result import (
     persist_structured_subagent_result,
     structured_result_path,
 )
-from ..tasks.subagents import (
+from .finalizers import (
     finalizeBackgroundSubagentFailureFromEnv,
     finalizeBackgroundSubagentSuccessFromEnv,
+)
+from .lifecycle import prepareSubagent, startBackgroundSubagent
+from .permissions import (
     inheritParentPermissionMode,
     mapStopReasonToCompletionReason,
     mapStopReasonToStatus,
     mapStopReasonToWaitingReason,
-    prepareSubagent,
     sanitizePermissionMode,
-    startBackgroundSubagent,
 )
 
 __all__ = [

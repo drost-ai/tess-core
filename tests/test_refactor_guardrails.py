@@ -29,7 +29,6 @@ PUBLIC_MODULES = [
     "agent_core.providers.anthropic",
     "agent_core.providers.openai",
     "agent_core.tasks.runtime",
-    "agent_core.tasks.subagents",
     "agent_core.tasks.supervisor",
 ]
 

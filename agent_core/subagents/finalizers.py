@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import os
-from ..._utils import now_iso
-from ...storage import mutateChildAgent, mutateTaskMeta, taskOutputPath, writeTaskMeta
-from ...subagents.groups import _upsert_subagent_launch_group
+from .._utils import now_iso
+from ..storage import mutateChildAgent, mutateTaskMeta, taskOutputPath, writeTaskMeta
+from .groups import _upsert_subagent_launch_group
 
 _TERMINAL_CHILD_STATUSES = {"completed", "failed", "cancelled", "stopped", "truncated"}
 _TERMINAL_META_STATUSES = {"completed", "failed", "terminated", "stopped", "cancelled", "truncated"}
-from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
-from ...subagents.result import evaluate_subagent_result, persist_structured_subagent_result
-from ..communication import append_task_event
+from .reconciliation import createSubagentReconciliationForTerminalChild
+from .result import evaluate_subagent_result, persist_structured_subagent_result
+from ..tasks.communication import append_task_event
 from .permissions import (
     mapStopReasonToCompletionReason,
     mapStopReasonToStatus,
