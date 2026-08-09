@@ -8,6 +8,7 @@ from ...process.identity import (
     verifyOwnedProcessIdentity,
 )
 from ...storage import (
+    listLiveDaemonStates,
     listTaskRecords,
     loadChildAgent,
     loadTaskRecord,
@@ -43,6 +44,11 @@ async def _reconcile_persisted_tasks(
     records = await listTaskRecords()
     active_statuses = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
     recoverable_kinds = {"background_command", "main_session", "subagent"}
+    live_foreign_supervisors = {
+        state["supervisorId"]
+        for state in await listLiveDaemonStates()
+        if isinstance(state.get("supervisorId"), str) and state["supervisorId"] != supervisor_id
+    }
     for record in records:
         try:
             if record.get("owner") != "daemon":
@@ -54,6 +60,27 @@ async def _reconcile_persisted_tasks(
                 continue
             meta = await readTaskMeta(task_id)
             if not meta:
+                continue
+            stamped_supervisor = record.get("supervisorId") or meta.get("supervisorId")
+            if stamped_supervisor in live_foreign_supervisors:
+                # The sweep owns only its own epoch. A record stamped by a
+                # supervisor whose daemon instance is still alive (shared
+                # runtime home) is that instance's to reconcile — classifying
+                # it against OUR in-memory registry would call its healthy
+                # worker an orphan and kill it.
+                await maybe_await(
+                    emit(
+                        "task.reconcile_skipped",
+                        {
+                            "task_id": task_id,
+                            "reason": "owned_by_live_instance",
+                            "supervisor_id": stamped_supervisor,
+                            "status": record.get("status"),
+                            "kind": record.get("kind"),
+                        },
+                        record.get("sessionId"),
+                    )
+                )
                 continue
             if _has_interrupted_launch(record, meta):
                 await _reconcile_interrupted_launch(
