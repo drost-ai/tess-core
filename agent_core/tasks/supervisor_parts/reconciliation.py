@@ -28,7 +28,7 @@ from .mappers import (
 )
 from .processes import _process_exit_summary
 from .records import _build_recovered_subagent_task_record, _build_task_record
-from .shared import _DEAD_WORKER_SUMMARY, _PROCESS_REGISTRY, _TASK_WATCHERS
+from .shared import _DEAD_WORKER_SUMMARY, SupervisorRegistries
 from typing import Any, Callable
 from .launch_reconciliation import (
     _has_interrupted_launch,
@@ -40,6 +40,7 @@ from ...process._termination import drain_owned_process
 async def _reconcile_persisted_tasks(
     supervisor_id: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
+    registries: SupervisorRegistries,
 ) -> None:
     records = await listTaskRecords()
     active_statuses = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
@@ -93,7 +94,7 @@ async def _reconcile_persisted_tasks(
                 continue
             if record.get("status") not in active_statuses:
                 continue
-            process_state = await _classify_persisted_process(task_id, record, meta)
+            process_state = await _classify_persisted_process(task_id, record, meta, registries)
             if process_state["state"] in {"completed", "failed"}:
                 await _mark_terminal_process_from_meta(task_id, record, meta, supervisor_id, emit, process_state)
             elif process_state["state"] == "running":
@@ -388,7 +389,7 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
     )
 
 
-async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
+async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta: dict[str, Any], registries: SupervisorRegistries) -> dict[str, Any]:
     status = meta.get("status")
     if _is_terminal_worker_status(status) and not (status == "awaiting_input" and await _identity_verifies_alive(record, meta)):
         # awaiting_input is terminal only for an exited one-shot worker; a
@@ -412,7 +413,7 @@ async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta
             "status": status,
             "identity_error": exc.code,
         }
-    proc = _PROCESS_REGISTRY.get(task_id)
+    proc = registries.processes.get(task_id)
     source = "process_registry" if proc and proc.poll() is None and proc.pid == verified["pid"] else "process_identity"
     return {
         "state": "running" if source == "process_registry" else "orphaned",

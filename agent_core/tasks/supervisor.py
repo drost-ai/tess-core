@@ -39,7 +39,7 @@ from .supervisor_parts.projection import (
 from .supervisor_parts.reconciliation import _reconcile_persisted_tasks
 from .supervisor_parts.record_issues import _report_persisted_record_issues
 from .supervisor_parts.records import _build_task_record
-from .supervisor_parts.shared import _PROCESS_REGISTRY, _TASK_WATCHERS, _THREAD_WATCHERS
+from .supervisor_parts.shared import SupervisorRegistries
 from .supervisor_parts.stop import _create_task_stopper
 from .supervisor_parts.subagent_launch import _create_subagent_task_starter
 from .supervisor_parts.utils import _dedupe, _require_string
@@ -56,13 +56,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     on_event: Callable[[dict[str, Any]], Any] = args.get("onEvent") or (lambda _event: None)
     await ensureBaseLayout(cwd)
     supervisor_id = str(uuid.uuid4())
+    registries = SupervisorRegistries()
     live_work_cache = _create_live_work_verdict_cache()
     subscribers: set[Callable[[dict[str, Any]], Any]] = set()
     attached_all_count = 0
     attached_sessions: dict[str, int] = {}
     reported_record_issues: set[str] = set()
-    construction_task_watchers = set(_TASK_WATCHERS)
-    construction_thread_watchers = set(_THREAD_WATCHERS)
 
     async def emit(event: str, data: dict[str, Any], session_id: str | None = None) -> None:
         payload = {"event": event, "data": data, "sessionId": session_id}
@@ -75,11 +74,12 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         live_work_cache,
         emit,
         task_stop_coordinator.waitForStopCommit,
+        registries,
     )
 
     def _track_health_task(task: asyncio.Task[Any]) -> None:
-        _TASK_WATCHERS.add(task)
-        task.add_done_callback(_TASK_WATCHERS.discard)
+        registries.taskWatchers.add(task)
+        task.add_done_callback(registries.taskWatchers.discard)
 
     health_check_controller = createHealthCheckController(
         emit=emit,
@@ -397,7 +397,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return release
 
     async def close() -> None:
-        live = [(task_id, proc) for task_id, proc in list(_PROCESS_REGISTRY.items()) if proc.poll() is None]
+        live = [(task_id, proc) for task_id, proc in list(registries.processes.items()) if proc.poll() is None]
         if live:
             # Report-then-kill, no prompt: the parent learns what is being
             # stopped, then every owned worker is escalated to guaranteed death.
@@ -409,16 +409,16 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             if outcome == "survived":
                 await maybe_await(emit("supervisor.reconcile_failed", {"reason": f"worker for {task_id} survived SIGKILL", "family": "shutdown"}))
         await health_check_controller["close"]()
-        for thread in list(_THREAD_WATCHERS):
+        for thread in list(registries.threadWatchers):
             if thread is not threading.current_thread() and thread.is_alive():
                 thread.join(timeout=2)
-        for task in list(_TASK_WATCHERS):
+        for task in list(registries.taskWatchers):
             task.cancel()
-        await asyncio.gather(*list(_TASK_WATCHERS), return_exceptions=True)
-        _PROCESS_REGISTRY.clear()
+        await asyncio.gather(*list(registries.taskWatchers), return_exceptions=True)
+        registries.processes.clear()
 
     def get_state() -> dict[str, Any]:
-        return {"supervisorId": supervisor_id, "watchedSessions": len(attached_sessions), "activeTasks": sum(1 for proc in _PROCESS_REGISTRY.values() if proc.poll() is None) + health_check_controller["activeCount"](), "attachedClients": attached_all_count + sum(attached_sessions.values())}
+        return {"supervisorId": supervisor_id, "watchedSessions": len(attached_sessions), "activeTasks": sum(1 for proc in registries.processes.values() if proc.poll() is None) + health_check_controller["activeCount"](), "attachedClients": attached_all_count + sum(attached_sessions.values())}
 
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
         records = await _project_session_task_records(session_id, live_work_cache=live_work_cache)
@@ -438,26 +438,27 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                 )
 
     try:
-        await _reconcile_persisted_tasks(supervisor_id, emit)
+        await _reconcile_persisted_tasks(supervisor_id, emit, registries)
         await listChildAgents()
         await listHealthCheckTasks()
         await health_check_controller["tick"]()
         await _report_persisted_record_issues(emit, reported_record_issues)
     except Exception:
-        created_tasks = set(_TASK_WATCHERS) - construction_task_watchers
-        for task in created_tasks:
+        # The registries are per-instance, so everything in them was created
+        # by this construction and is ours to unwind.
+        for task in list(registries.taskWatchers):
             task.cancel()
-        await asyncio.gather(*created_tasks, return_exceptions=True)
-        _TASK_WATCHERS.difference_update(created_tasks)
-        _THREAD_WATCHERS.difference_update(set(_THREAD_WATCHERS) - construction_thread_watchers)
+        await asyncio.gather(*list(registries.taskWatchers), return_exceptions=True)
+        registries.taskWatchers.clear()
+        registries.threadWatchers.clear()
         raise
 
     health_reconcile = asyncio.create_task(health_reconcile_loop())
-    _TASK_WATCHERS.add(health_reconcile)
-    health_reconcile.add_done_callback(_TASK_WATCHERS.discard)
+    registries.taskWatchers.add(health_reconcile)
+    health_reconcile.add_done_callback(registries.taskWatchers.discard)
     mailbox_watch = asyncio.create_task(create_mailbox_watch_loop(emit)())
-    _TASK_WATCHERS.add(mailbox_watch)
-    mailbox_watch.add_done_callback(_TASK_WATCHERS.discard)
+    registries.taskWatchers.add(mailbox_watch)
+    mailbox_watch.add_done_callback(registries.taskWatchers.discard)
 
     return {
         "close": close,
@@ -475,6 +476,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         "startHealthCheck": start_health_check,
         "subscribe": subscribe,
         "getState": get_state,
+        "registries": registries,
     }
 
 

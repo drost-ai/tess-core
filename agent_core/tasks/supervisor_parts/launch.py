@@ -9,7 +9,7 @@ from ...storage import (
     saveTaskRecord,
     writeTaskMeta,
 )
-from .shared import _PROCESS_REGISTRY, _THREAD_WATCHERS
+from .shared import SupervisorRegistries
 from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
@@ -26,6 +26,7 @@ def _create_process_task_launcher(
     live_work_cache: dict[str, Any],
     emit: Callable[[str, dict[str, Any], str | None], Any],
     wait_for_stop_commit: Callable[[str], None],
+    registries: SupervisorRegistries,
 ) -> Callable[..., Any]:
     async def launch_process_task(
         *,
@@ -125,16 +126,16 @@ def _create_process_task_launcher(
         )
         if launched.identity is None:
             raise RuntimeError(f"Task {task_id} exited before its process identity could be attached.")
-        _PROCESS_REGISTRY[task_id] = launched.child
+        registries.processes[task_id] = launched.child
         _invalidate_live_work_cache(live_work_cache, *(target for target, _ in reserve_session_updates))
         current_record = await loadTaskRecord(task_id) or record
         await emit("task.updated", _task_record_event_payload(current_record), session_id)
         watcher = threading.Thread(
             target=_watch_process_thread,
-            args=(task_id, command, task_cwd, output_file, emit, wait_for_stop_commit),
+            args=(task_id, command, task_cwd, output_file, emit, wait_for_stop_commit, registries),
             daemon=True,
         )
-        _THREAD_WATCHERS.add(watcher)
+        registries.threadWatchers.add(watcher)
         watcher.start()
         return {
             "taskId": task_id,

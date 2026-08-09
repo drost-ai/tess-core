@@ -1,6 +1,8 @@
 """Direction-2 dead-man switch: the runtime watches its containment daemon.
 
-A heartbeat ticker checks the daemon's state-file pid. When the daemon is
+A heartbeat ticker checks the daemon's state-file pid AND that its socket
+still accepts connections — a bare pid check reads a wedged listener or a
+recycled pid as healthy forever. When the daemon is
 gone (crash, SIGKILL), the runtime replaces it with exactly ONE fresh
 instance — ensureTaskSupervisorDaemon's per-instance lock guarantees
 single-spawn and kills a wedged predecessor with identity verification.
@@ -11,11 +13,33 @@ events.
 """
 from __future__ import annotations
 
+import asyncio
 import threading
 from typing import Any
 
 from .._utils import is_process_alive as _is_process_alive, maybe_await
 from ._ticker import run_scoped_async, start_ticker
+
+
+async def _daemon_socket_accepting(instance_id: str, state: dict[str, Any] | None) -> bool:
+    """A live pid is not a live daemon: a recycled pid or an exited daemon
+    behind a stale state file reads alive forever under kill(pid, 0), so
+    health additionally requires the instance's socket to accept. One short
+    retry absorbs a transiently busy listener; a probe that raises (unsafe
+    socket path) counts as inactive so the restart path surfaces the error."""
+    from ..daemon import isDaemonSocketListenerActive
+    from ..storage import daemonSocketPath
+
+    socket_path = (state or {}).get("socketPath") or daemonSocketPath(instance_id)
+    for attempt in range(2):
+        try:
+            if await isDaemonSocketListenerActive(socket_path):
+                return True
+        except Exception:
+            return False
+        if attempt == 0:
+            await asyncio.sleep(0.25)
+    return False
 
 
 async def check_daemon_once(context: dict[str, Any]) -> str:
@@ -32,10 +56,23 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
         spawned.poll()
     state = await loadDaemonState(instance_id)
     pid = (state or {}).get("pid")
-    if isinstance(pid, int) and _is_process_alive(pid) and not (spawned is not None and spawned.pid == pid and spawned.returncode is not None):
+    pid_alive = (
+        isinstance(pid, int)
+        and _is_process_alive(pid)
+        and not (spawned is not None and spawned.pid == pid and spawned.returncode is not None)
+    )
+    if pid_alive and await _daemon_socket_accepting(instance_id, state):
         return "healthy"
     emit = context.get("emit") or (lambda _event, _data: None)
-    emit("daemon.lost", {"instance_id": instance_id, "last_pid": pid, "last_epoch": (state or {}).get("epoch")})
+    emit(
+        "daemon.lost",
+        {
+            "instance_id": instance_id,
+            "last_pid": pid,
+            "last_epoch": (state or {}).get("epoch"),
+            "reason": "socket_inactive" if pid_alive else "process_dead",
+        },
+    )
     from ..daemon import ensureTaskSupervisorDaemon
 
     try:

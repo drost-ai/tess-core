@@ -16,7 +16,7 @@ from .mappers import (
     _task_record_event_payload,
 )
 from .records import _build_task_record
-from .shared import _PROCESS_REGISTRY, _THREAD_WATCHERS
+from .shared import SupervisorRegistries
 from pathlib import Path
 from typing import Any, Callable
 from ..terminal_store import commitTaskProcessCompletion, saveProjectedTaskRecord
@@ -99,14 +99,15 @@ def _watch_process_thread(
     output_file: str,
     emit: Callable[[str, dict[str, Any], str | None], Any],
     wait_for_stop_commit: Callable[[str], None],
+    registries: SupervisorRegistries,
 ) -> None:
     try:
-        proc = _PROCESS_REGISTRY.get(task_id)
+        proc = registries.processes.get(task_id)
         if not proc:
             return
         code = proc.wait()
         wait_for_stop_commit(task_id)
-        _PROCESS_REGISTRY.pop(task_id, None)
+        registries.processes.pop(task_id, None)
         signal_name = _signal_name(abs(code)) if code is not None and code < 0 else None
 
         async def finalize() -> None:
@@ -159,7 +160,7 @@ def _watch_process_thread(
 
         asyncio.run(finalize())
     finally:
-        _THREAD_WATCHERS.discard(threading.current_thread())
+        registries.threadWatchers.discard(threading.current_thread())
 
 
 

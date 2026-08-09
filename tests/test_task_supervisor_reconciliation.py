@@ -287,6 +287,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                 "attachableSessionId": child_session_id,
                 "detailStatus": "worker_running",
                 "owner": "daemon",
+                "supervisorId": "peer-supervisor-stop",
             }
             run(core.writeTaskMeta(task_id, meta))
             run(
@@ -316,9 +317,23 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                     }
                 )
             )
-            from agent_core.tasks.supervisor_parts.shared import _PROCESS_REGISTRY
+            # The worker belongs to a live peer instance: the boot sweep must
+            # leave it alone, and the deliberate stop below still works
+            # because stopping goes through process identity, not the
+            # in-memory registry.
+            from agent_core.storage.daemon import saveDaemonState
 
-            _PROCESS_REGISTRY[task_id] = proc
+            run(
+                saveDaemonState(
+                    "peer-instance-stop",
+                    {
+                        "instanceId": "peer-instance-stop",
+                        "pid": os.getpid(),
+                        "supervisorId": "peer-supervisor-stop",
+                        "status": "running",
+                    },
+                )
+            )
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             stopped = run(supervisor["stopTask"](task_id))
             self.assertEqual((stopped["status"], stopped["changed"]), ("stopped", True))

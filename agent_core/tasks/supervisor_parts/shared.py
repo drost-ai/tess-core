@@ -6,9 +6,18 @@ import threading
 from typing import Any
 
 
-_PROCESS_REGISTRY: dict[str, subprocess.Popen[Any]] = {}
-_THREAD_WATCHERS: set[threading.Thread] = set()
-_TASK_WATCHERS: set[asyncio.Task[Any]] = set()
+class SupervisorRegistries:
+    """Per-supervisor-instance process and watcher tracking.
+
+    One instance per ``createTaskSupervisor`` call: two supervisors in the
+    same process (tests, embedders, watchdog restarts) must never observe
+    each other's workers, and ``close()`` must only reap its own.
+    """
+
+    def __init__(self) -> None:
+        self.processes: dict[str, subprocess.Popen[Any]] = {}
+        self.threadWatchers: set[threading.Thread] = set()
+        self.taskWatchers: set[asyncio.Task[Any]] = set()
 
 # Shared summary for a worker whose process died without recording a result.
 # Both the projection-time sweep (live_work) and the daemon-restart

@@ -345,9 +345,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 if Path(output_file).exists() and "armed" in Path(output_file).read_text(encoding="utf-8"):
                     break
                 time.sleep(0.05)
-            from agent_core.tasks.supervisor_parts.shared import _PROCESS_REGISTRY
-
-            proc = _PROCESS_REGISTRY.get(task_id)
+            proc = supervisor["registries"].processes.get(task_id)
             self.assertIsNotNone(proc)
             os.environ["AGENT_CORE_PROCESS_TERM_GRACE_MS"] = "400"
             try:
