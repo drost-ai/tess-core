@@ -7,7 +7,15 @@ from agent_core.tasks.supervisor_parts.mailbox_watch import create_mailbox_watch
 
 
 class MailboxWatchSweepTests(AgentCoreTestCase):
-    def test_sweep_announces_queued_to_parent_messages_exactly_once(self):
+    def test_sweep_reannounces_queued_messages_until_delivered(self):
+        """Bug regression: the sweep used to announce each message once,
+        EVER - if that single announcement landed while the parent's turn was
+        in flight, the wake was dropped and the parent idled on a finished
+        child's result until the user typed. Level-triggered: a still-queued
+        message is re-announced (paced) until a drain claims it."""
+        from agent_core.tasks.communication import mark_task_message_delivered
+        from agent_core.tasks.supervisor_parts import mailbox_watch as watch_module
+
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
@@ -36,7 +44,6 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
                     "direction": "to_parent", "content": "first result ready",
                 })
                 self.assertEqual(await sweep(), 1)
-                self.assertEqual(await sweep(), 0)  # announced once, ever
                 event, data, session_id = events[0]
                 self.assertEqual(event, "subagent.message")
                 self.assertEqual(data["task_id"], "wake-task")
@@ -45,9 +52,63 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
                 self.assertEqual(session_id, "wake-parent")
                 self.assertIn("first result", data["preview"])
 
+                # Re-announcement is paced, not dead: quiet inside the
+                # interval, announced again once it elapses.
+                for _ in range(watch_module._REANNOUNCE_SWEEPS - 1):
+                    self.assertEqual(await sweep(), 0)
+                self.assertEqual(await sweep(), 1)
+
+                # Delivery silences it.
+                await mark_task_message_delivered("wake-task", record["messageId"])
+                for _ in range(watch_module._REANNOUNCE_SWEEPS + 1):
+                    self.assertEqual(await sweep(), 0)
+
                 # to_child traffic is not a parent-wake signal
                 await core.sendTaskMessage("wake-task", {"direction": "to_child", "content": "guidance"})
                 self.assertEqual(await sweep(), 0)
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_sweep_announces_dying_message_of_terminal_task(self):
+        """Bug regression: terminal statuses were excluded from the sweep, so
+        a child's dying message ([turn failed]) written moments before its
+        record went terminal was unannounceable forever."""
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await core.writeTaskMeta("dying-task", {
+                    "type": "subagent", "taskId": "dying-task", "id": "dying-task",
+                    "sessionId": "dying-child", "session_id": "dying-child",
+                    "parent_session_id": "dying-parent", "status": "failed",
+                    "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:00Z",
+                })
+                await core.saveTaskRecord({
+                    "id": "dying-task", "sessionId": "dying-child", "sourceId": "dying-task",
+                    "kind": "subagent", "status": "running", "title": "dying worker",
+                    "summary": "running", "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:00Z", "owner": "daemon",
+                })
+                record = await core.sendTaskMessage("dying-task", {
+                    "direction": "to_parent", "content": "[turn failed] boom",
+                })
+                await core.saveTaskRecord({
+                    "id": "dying-task", "sessionId": "dying-child", "sourceId": "dying-task",
+                    "kind": "subagent", "status": "failed", "title": "dying worker",
+                    "summary": "failed", "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-01-01T00:00:01Z", "owner": "daemon",
+                })
+                events = []
+
+                async def emit(event, data, session_id=None):
+                    events.append((event, data, session_id))
+
+                sweep = create_mailbox_watch_loop(emit).sweep_once
+                self.assertEqual(await sweep(), 1)
+                announced = [entry for entry in events if entry[0] == "subagent.message"]
+                self.assertEqual(announced[0][1]["message_id"], record["messageId"])
+                self.assertIn("[turn failed]", announced[0][1]["preview"])
             run(exercise())
         finally:
             self.restore_home(root, previous)
@@ -129,13 +190,27 @@ class WakeControllerTests(AgentCoreTestCase):
         listeners[0](envelope)
         self.assertEqual(resumed, [1])
 
+        # The sweep re-announces while queued; the controller dedupes -
+        # one resume per idle burst, not one per announcement.
+        listeners[0](envelope)
+        listeners[0](envelope)
+        self.assertEqual(resumed, [1])
+
+        # A turn starting re-arms the controller for the next idle burst.
+        in_flight["value"] = True
+        listeners[0](envelope)
+        self.assertEqual(resumed, [1])
+        in_flight["value"] = False
+        listeners[0](envelope)
+        self.assertEqual(resumed, [1, 1])
+
         listeners[0]({"event": "task.updated", "data": {}})
-        self.assertEqual(resumed, [1])  # other events do not wake
+        self.assertEqual(resumed, [1, 1])  # other events do not wake
 
         controller["close"]()
         self.assertEqual(listeners, [])
         self.assertFalse(controller["wake"]())
-        self.assertEqual(resumed, [1])
+        self.assertEqual(resumed, [1, 1])
 
     def test_session_controller_tracks_turn_in_flight(self):
         controller = core.createSessionRuntimeController({

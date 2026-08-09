@@ -9,6 +9,7 @@ addressing is rejected until a routing story exists.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -23,6 +24,7 @@ from ..tasks.communication import (
     mark_task_message_delivered,
     read_task_mailbox_messages,
     read_task_questions,
+    requeue_task_message,
     send_task_message,
     skip_task_question,
 )
@@ -74,7 +76,16 @@ def _send_message_tool() -> ToolDefinition:
                     "metadata": {"messageId": record["messageId"]},
                 },
             )
-            reply = await _await_reply(own_task_id, "to_child", record["messageId"], timeout_ms, context)
+            reply = None
+            try:
+                reply = await _await_reply(own_task_id, "to_child", record["messageId"], timeout_ms, context)
+            except asyncio.CancelledError:
+                # The claim was taken but this tool result will never commit;
+                # requeue so the answer is not lost to the cancellation.
+                if isinstance(reply, dict) and reply.get("messageId"):
+                    with contextlib.suppress(Exception):
+                        await requeue_task_message(own_task_id, str(reply["messageId"]))
+                raise
             if reply is None:
                 await skip_task_question(own_task_id, record["messageId"], "unanswered:child_timeout")
             await _restore_running_status(own_task_id)
@@ -108,10 +119,27 @@ def _send_message_tool() -> ToolDefinition:
             record = await maybe_await(daemon["sendTaskMessage"](payload))
         else:
             record = await send_task_message(task_id, payload)
-        if not expects_reply:
-            return _queued(record)
-        reply = await _await_reply(task_id, "to_parent", record["messageId"], timeout_ms, context)
-        return _reply_result(record, reply, timeout_ms)
+        if expects_reply:
+            # expects_reply is direction-gated to child->parent. A parent
+            # blocking up to the full reply timeout on a possibly-dead child
+            # - with no question record and no backstop - violates the
+            # non-blocking parent contract; the child's reply arrives as a
+            # child message and wakes the parent instead.
+            return {
+                "content": pretty_json(
+                    {
+                        "status": "queued",
+                        "message_id": record.get("messageId"),
+                        "task_id": record.get("taskId"),
+                        "note": (
+                            "Parents do not block on children: expects_reply is ignored for "
+                            "parent->child messages. The child's reply will arrive as a child "
+                            "message and wake this session."
+                        ),
+                    }
+                )
+            }
+        return _queued(record)
 
     return builtin_tool("SendMessage", handler)
 
@@ -141,8 +169,15 @@ async def _await_reply(
                 continue
             if record.get("status") == "queued":
                 # Claim it here so the boundary drain does not re-inject the
-                # same reply into the transcript.
-                await mark_task_message_delivered(task_id, str(record.get("messageId")))
+                # same reply into the transcript. A cancel landing inside the
+                # claim write must not strand the reply delivered-but-unseen.
+                message_id = str(record.get("messageId"))
+                try:
+                    await mark_task_message_delivered(task_id, message_id)
+                except asyncio.CancelledError:
+                    with contextlib.suppress(Exception):
+                        await requeue_task_message(task_id, message_id)
+                    raise
             return record
         await asyncio.sleep(poll_seconds)
     return None

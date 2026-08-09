@@ -111,6 +111,29 @@ async def read_undelivered_task_messages(task_id: str, child_session_id: str | N
     return messages
 
 
+async def requeue_task_message(task_id: str, message_id: str) -> dict[str, Any] | None:
+    """Undo a delivery claim whose consumer never committed the result.
+
+    A reply claimed inside a tool call that is then cancelled would
+    otherwise be lost entirely: delivered on disk, absent from the
+    transcript. Requeueing lets the level-triggered sweep and the next
+    drain surface it."""
+    def _requeue(records: list[dict[str, Any]]) -> dict[str, Any]:
+        messages = _latest_records(records, "messageId")
+        updated: dict[str, Any] | None = None
+        for index, message in enumerate(messages):
+            if message.get("messageId") == message_id and message.get("status") == "delivered":
+                updated = {**message, "status": "queued", "deliveredAt": None}
+                messages[index] = updated
+                break
+        return {"records": messages, "result": updated, "changed": updated is not None}
+
+    updated = await mutateJsonLines(task_mailbox_path(task_id), _requeue)
+    if updated:
+        await append_task_event(task_id, {"type": "message.requeued", "messageId": message_id})
+    return updated
+
+
 async def mark_task_message_delivered(task_id: str, message_id: str) -> dict[str, Any] | None:
     delivered_at = now_iso()
     def _mark(records: list[dict[str, Any]]) -> dict[str, Any]:

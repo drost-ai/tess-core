@@ -15,7 +15,7 @@ from typing import Any
 
 from .._utils import maybe_await
 from . import updates as _collaboration_updates
-from .updates import appendAssistantCollaborationMessage
+from .updates import appendAssistantCollaborationMessage, staleWorkPayload
 from ..session.persistence import persistSession
 from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
@@ -114,6 +114,12 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
                     narratable = next((candidate for candidate in candidates if shouldNarrateWorker(candidate.get("worker") or {})), None)
                     if narratable:
                         text = await authorCollaborationUpdate({"config": captured_config, "session": captured_session, "worker": narratable.get("worker"), "summary": narratable.get("summary") or ""})
+                        with state_lock:
+                            busy_after_authoring = state["foregroundBusy"]
+                        if busy_after_authoring:
+                            # A turn started during authoring; appending now
+                            # would land mid-turn. Next idle tick re-narrates.
+                            return get_snapshot()
                         if text and _is_active(captured_binding):
                             appendAssistantCollaborationMessage(captured_session, text)
                             await persistSession(captured_session, captured_config)
@@ -161,18 +167,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     async def _report_stale(binding: Any, source_event: str) -> None:
         with state_lock:
             active = runtime_binding
-        await _emit_contained(
-            "runtime.stale_work_discarded",
-            {
-                "session_id": active.get("sessionId"),
-                "stale_session_id": binding.get("sessionId"),
-                "stale_generation": binding.get("generation"),
-                "active_generation": active.get("generation"),
-                "runtime_instance_id": active.get("runtimeInstanceId"),
-                "path_graph_id": active.get("pathGraphId"),
-                "source_event": source_event,
-            },
-        )
+        await _emit_contained("runtime.stale_work_discarded", staleWorkPayload(active, binding, source_event))
 
     async def _emit_bound(binding: Any, event: str, data: dict[str, Any]) -> None:
         if not _is_active(binding):

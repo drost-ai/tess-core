@@ -95,3 +95,25 @@ async def resolve_open_questions_with_backstop(
         if answered:
             resolved.append(answered)
     return resolved
+
+
+async def backstop_open_questions_on_turn_exit(session, emit) -> None:
+    """The reply invariant must hold on EVERY turn exit - cancel,
+    subagent-limit, empty response, exception - not only the clean
+    end-of-turn path: a child blocked on an unanswered question otherwise
+    eats its full reply timeout. Idempotent: resolves only still-pending
+    questions, so a clean path that already backstopped costs one read."""
+    try:
+        open_questions = await read_open_child_questions(session)
+        if open_questions:
+            backstopped = await resolve_open_questions_with_backstop(session)
+            emit(
+                "subagent.question.unanswered",
+                {
+                    "session_id": session["id"],
+                    "question_ids": [q.get("questionId") for q in backstopped],
+                    "count": len(backstopped),
+                },
+            )
+    except Exception:
+        pass

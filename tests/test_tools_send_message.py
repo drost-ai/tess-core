@@ -92,7 +92,7 @@ class SendMessageToolTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_expects_reply_round_trip_and_timeout(self):
+    def test_parent_expects_reply_is_direction_gated_to_queued(self):
         root, _home, workspace, previous = self.temp_context()
         try:
             parent, child = self._sessions(workspace)
@@ -121,18 +121,13 @@ class SendMessageToolTests(AgentCoreTestCase):
 
                 result = run(round_trip())
                 payload = json.loads(result["content"])
-                self.assertEqual(payload["status"], "reply_received")
-                self.assertEqual(payload["reply"], "answer: use option B")
-                reply_records = [m for m in run(core.readTaskMailboxMessages("sm-task")) if m.get("direction") == "to_parent"]
-                self.assertEqual(reply_records[0]["status"], "delivered")
-
-                timeout_result = run(tool.handler(
-                    {"to": "sm-agent", "message": "anyone?", "expects_reply": True, "timeout_ms": 300},
-                    _context(parent, workspace),
-                ))
-                timeout_payload = json.loads(timeout_result["content"])
-                self.assertEqual(timeout_payload["status"], "no_reply")
-                self.assertIn("300ms", timeout_payload["detail"])
+                # expects_reply is direction-gated to child->parent: a parent
+                # never blocks on a child. The message still queues and the
+                # child's reply arrives as a wake-bearing child message.
+                self.assertEqual(payload["status"], "queued")
+                self.assertIn("expects_reply is ignored", payload["note"])
+                queued = [m for m in run(core.readTaskMailboxMessages("sm-task")) if m.get("direction") == "to_child"]
+                self.assertEqual(queued[0]["status"], "queued")
             finally:
                 os.environ.pop("AGENT_CORE_COMMS_REPLY_POLL_MS", None)
         finally:

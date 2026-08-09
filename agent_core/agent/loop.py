@@ -64,7 +64,7 @@ from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithR
 from ..subagents.contract import filter_tools_for_subagent
 from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..tasks.communication import deliver_queued_task_messages_to_session
-from ._question_gate import _knob as _question_knob, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
+from ._question_gate import _knob as _question_knob, backstop_open_questions_on_turn_exit as _backstop_open_questions_on_turn_exit, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
 from ..runtime.transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
 from ..payloads.attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
@@ -193,295 +193,298 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             )
         return delivered_messages
 
-    while True:
-        if _is_turn_cancelled(runtime):
-            return await cancel_turn()
-        exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
-        if exceeded and exceeded.get("reason") != "max_tool_calls":
-            return await finish_subagent_limit(exceeded)
-        await drain_mailboxes()
-        await _inject_open_question_reminders(session, reminded_question_ids)
-        try:
-            provider_result = await _request_provider_response(
-                {
-                    "config": config, "runtime": runtime, "session": session, "paths": paths,
-                    "runtimeContract": runtime_contract, "providerOverride": provider_override,
-                    "providerTurnSession": args["providerTurnSession"],
-                    "providerRequestOptions": args.get("providerRequestOptions") or {},
-                    "requestPreflightHints": args.get("requestPreflightHints") or {},
-                    "baseSystemPrompt": base_system_prompt, "toolRegistry": tool_registry,
-                    "activeModel": state.active_model, "prompt": prompt_text, "repair": repair,
-                    "totalUsage": state.total_usage,
-                    "logicalTurnId": parent_turn_id,
-                    "logicalCallIndex": state.provider_call_index + 1,
-                }
-            )
-            prepared_request, response = provider_result["preparedRequest"], provider_result["response"]
-            state.cost += float(provider_result.get("emptyResponseCostUsd") or 0)
-        except _ImageBudgetError as error:
-            _restore_session_state(session, state.rollback_snapshot)
-            await persistSession(session, config)
-            _safe_emit(
-                runtime,
-                "provider.image_budget_rejected",
-                {"session_id": session["id"], "code": error.code, "message": str(error), **error.measurement},
-            )
-            raise
-        except Exception as error:
-            if _is_turn_abort_error(error, runtime.get("abortSignal")):
+    try:
+        while True:
+            if _is_turn_cancelled(runtime):
                 return await cancel_turn()
-            raise
-
-        if session.setdefault("metadata", {}).get("lastProviderFailure"):
-            last = copy.deepcopy(session["metadata"]["lastProviderFailure"])
-            recovered_at = _now()
-            await persistProviderRecovery(session, config, {"provider": config["provider"], "recoveredAt": recovered_at, "attempts": last.get("attempt", 1), "lastFailure": last})
-            session["metadata"].pop("lastProviderFailure", None)
-
-        try:
-            _throw_if_turn_cancelled(runtime)
-        except Exception as error:
-            if _is_turn_abort_error(error, runtime.get("abortSignal")):
-                return await cancel_turn()
-            raise
-        empty_result = await _complete_empty_provider_response(
-            {
-                "response": response, "session": session, "config": config, "runtime": runtime,
-                "totalUsage": state.total_usage, "estimatedCostUsd": state.cost,
-                "emptyResponseAttempts": provider_result.get("emptyResponseAttempts"),
-                "textParts": state.text_parts, "toolCount": state.tool_count,
-            }
-        )
-        if empty_result is not None:
-            return empty_result
-        state.active_model = response["model"]
-        state.provider_call_index += 1
-        _emit_provider_response_completed(
-            runtime=runtime,
-            session=session,
-            config=config,
-            response=response,
-            prepared_request=prepared_request,
-            call_index=state.provider_call_index,
-        )
-        _replace_session_messages_with_persisted_canonical(session, _strip_in_memory_image_data(session["messages"]))
-        session["messages"].append({"role": "assistant", "content": response["content"]})
-        merge_usage(state.total_usage, response.get("usage") or {})
-        _merge_usage_into_session(session, response.get("usage") or {})
-        recordActualTokenUsage(session, response.get("usage") or {})
-        state.cost += _estimate_usage_cost(response.get("usage") or {}, response["model"])
-
-        text = "".join(block.get("text", "") for block in response["content"] if block.get("type") == "text")
-        if text:
-            state.text_parts.append(text)
-            _safe_emit(runtime, "message.assistant", {"text": text, "model": response["model"], "session_id": session["id"]})
-
-        tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
-        await _persist_partial_output_commit(session, config, runtime, response)
-        if not tool_uses:
-            open_questions = await _read_open_child_questions(session)
-            if open_questions and question_nudges < int(_question_knob("agent.max_question_nudges")):
-                # The reply invariant: a parent turn may not simply end while
-                # children are blocked on questions. Nudge a continuation.
-                question_nudges += 1
-                session.setdefault("messages", []).append(_user_request_message(
-                    f"[REPLY REQUIRED] {len(open_questions)} child question(s) are still unanswered (nudge {question_nudges}/{int(_question_knob("agent.max_question_nudges"))}).\n" + await _build_question_reminder(open_questions),
-                    lineage={"logicalTurnId": parent_turn_id, "kind": "question_nudge"},
-                ))
-                await persistSession(session, config)
-                continue
-            if open_questions:
-                backstopped = await _resolve_open_questions_with_backstop(session)
-                _safe_emit(runtime, "subagent.question.unanswered", {"session_id": session["id"], "question_ids": [q.get("questionId") for q in backstopped], "count": len(backstopped)})
-            progress_ledger.complete(provider_call_index=state.provider_call_index)
-            await persistSession(session, config)
-            # Final drain before the turn returns: anything a child sent while
-            # the last provider call ran lands in the transcript now, so the
-            # wake controller's idle check is the single remaining race point.
+            exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
+            if exceeded and exceeded.get("reason") != "max_tool_calls":
+                return await finish_subagent_limit(exceeded)
             await drain_mailboxes()
-            await _record_prompt_cache_eviction_intent_at_finalization(
-                {
-                    "session": session,
-                    "config": config,
-                    "runtime": runtime,
-                    "stopReason": response.get("stopReason"),
-                }
-            )
-            return state.result(response.get("stopReason"))
-
-        tool_results: list[dict[str, Any] | None] = [None] * len(tool_uses)
-        paused_for_approval = False
-        paused_message = ""
-        persist_queue = _create_serial_queue()
-        tools_by_name = {tool.name: tool for tool in tool_registry}
-        image_budget = _create_image_budget_reservation(
-            _resolve_runtime_provider_capabilities(config), _image_attachment_reservation_order(tool_uses)
-        )
-        tool_priorities = {id(tool_use): index for index, tool_use in enumerate(tool_uses)}
-
-        async def persist_tool_session() -> None:
-            async def commit() -> None:
-                await persistSession(session, config)
-            await persist_queue.run(commit)
-
-        def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
-            return _build_tool_context(
-                session=session, config=config, runtime=runtime,
-                persist=persist_tool_session, imageBudget=image_budget,
-                priority=tool_priorities.get(id(tool_use)), toolUse=tool_use,
-                parentTurnId=parent_turn_id,
-            )
-
-        finish_tool_result, effective_result_budget = tool_result_budget.createFinalizer(
-            config=config,
-            sessionId=session["id"],
-            assistantMessageIndex=len(session.get("messages", [])) - 1,
-            resultCount=len(tool_uses),
-            emit=lambda event, data: _safe_emit(runtime, event, data),
-        )
-        async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
-            _throw_if_turn_cancelled(runtime)
-            tool = tools_by_name.get(tool_use["name"])
-            dispatch_deny = await findDispatchDenyRule(
-                {
-                    "cwd": session["cwd"],
-                    "toolName": tool_use["name"],
-                    "input": tool_use.get("input") or {},
-                    "settingsSources": config.get("settingsSources"),
-                    "inlineSettings": config.get("inlineSettings"),
-                    "rules": (authority or {}).get("permissionRules") if authority else None,
-                    "projectRoot": (authority or {}).get("permissionRuleProjectRoot") if authority else None,
-                }
-            )
-            if dispatch_deny:
-                message = f"Blocked by permission rule {dispatch_deny['raw']} ({dispatch_deny['scope']} settings)."
-                return await finish_tool_result(
-                    tool_use,
-                    {"kind": "synthesized", "content": message, "isError": True},
-                    rejected=True,
+            await _inject_open_question_reminders(session, reminded_question_ids)
+            try:
+                provider_result = await _request_provider_response(
+                    {
+                        "config": config, "runtime": runtime, "session": session, "paths": paths,
+                        "runtimeContract": runtime_contract, "providerOverride": provider_override,
+                        "providerTurnSession": args["providerTurnSession"],
+                        "providerRequestOptions": args.get("providerRequestOptions") or {},
+                        "requestPreflightHints": args.get("requestPreflightHints") or {},
+                        "baseSystemPrompt": base_system_prompt, "toolRegistry": tool_registry,
+                        "activeModel": state.active_model, "prompt": prompt_text, "repair": repair,
+                        "totalUsage": state.total_usage,
+                        "logicalTurnId": parent_turn_id,
+                        "logicalCallIndex": state.provider_call_index + 1,
+                    }
                 )
-            invalid_tool_input = _invalid_tool_input_message(tool_use)
-            if invalid_tool_input:
+                prepared_request, response = provider_result["preparedRequest"], provider_result["response"]
+                state.cost += float(provider_result.get("emptyResponseCostUsd") or 0)
+            except _ImageBudgetError as error:
+                _restore_session_state(session, state.rollback_snapshot)
+                await persistSession(session, config)
+                _safe_emit(
+                    runtime,
+                    "provider.image_budget_rejected",
+                    {"session_id": session["id"], "code": error.code, "message": str(error), **error.measurement},
+                )
+                raise
+            except Exception as error:
+                if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                    return await cancel_turn()
+                raise
+
+            if session.setdefault("metadata", {}).get("lastProviderFailure"):
+                last = copy.deepcopy(session["metadata"]["lastProviderFailure"])
+                recovered_at = _now()
+                await persistProviderRecovery(session, config, {"provider": config["provider"], "recoveredAt": recovered_at, "attempts": last.get("attempt", 1), "lastFailure": last})
+                session["metadata"].pop("lastProviderFailure", None)
+
+            try:
+                _throw_if_turn_cancelled(runtime)
+            except Exception as error:
+                if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                    return await cancel_turn()
+                raise
+            empty_result = await _complete_empty_provider_response(
+                {
+                    "response": response, "session": session, "config": config, "runtime": runtime,
+                    "totalUsage": state.total_usage, "estimatedCostUsd": state.cost,
+                    "emptyResponseAttempts": provider_result.get("emptyResponseAttempts"),
+                    "textParts": state.text_parts, "toolCount": state.tool_count,
+                }
+            )
+            if empty_result is not None:
+                return empty_result
+            state.active_model = response["model"]
+            state.provider_call_index += 1
+            _emit_provider_response_completed(
+                runtime=runtime,
+                session=session,
+                config=config,
+                response=response,
+                prepared_request=prepared_request,
+                call_index=state.provider_call_index,
+            )
+            _replace_session_messages_with_persisted_canonical(session, _strip_in_memory_image_data(session["messages"]))
+            session["messages"].append({"role": "assistant", "content": response["content"]})
+            merge_usage(state.total_usage, response.get("usage") or {})
+            _merge_usage_into_session(session, response.get("usage") or {})
+            recordActualTokenUsage(session, response.get("usage") or {})
+            state.cost += _estimate_usage_cost(response.get("usage") or {}, response["model"])
+
+            text = "".join(block.get("text", "") for block in response["content"] if block.get("type") == "text")
+            if text:
+                state.text_parts.append(text)
+                _safe_emit(runtime, "message.assistant", {"text": text, "model": response["model"], "session_id": session["id"]})
+
+            tool_uses = [block for block in response["content"] if block.get("type") == "tool_use"]
+            await _persist_partial_output_commit(session, config, runtime, response)
+            if not tool_uses:
+                open_questions = await _read_open_child_questions(session)
+                if open_questions and question_nudges < int(_question_knob("agent.max_question_nudges")):
+                    # The reply invariant: a parent turn may not simply end while
+                    # children are blocked on questions. Nudge a continuation.
+                    question_nudges += 1
+                    session.setdefault("messages", []).append(_user_request_message(
+                        f"[REPLY REQUIRED] {len(open_questions)} child question(s) are still unanswered (nudge {question_nudges}/{int(_question_knob("agent.max_question_nudges"))}).\n" + await _build_question_reminder(open_questions),
+                        lineage={"logicalTurnId": parent_turn_id, "kind": "question_nudge"},
+                    ))
+                    await persistSession(session, config)
+                    continue
+                if open_questions:
+                    backstopped = await _resolve_open_questions_with_backstop(session)
+                    _safe_emit(runtime, "subagent.question.unanswered", {"session_id": session["id"], "question_ids": [q.get("questionId") for q in backstopped], "count": len(backstopped)})
+                progress_ledger.complete(provider_call_index=state.provider_call_index)
+                await persistSession(session, config)
+                # Final drain before the turn returns: anything a child sent while
+                # the last provider call ran lands in the transcript now, so the
+                # wake controller's idle check is the single remaining race point.
+                await drain_mailboxes()
+                await _record_prompt_cache_eviction_intent_at_finalization(
+                    {
+                        "session": session,
+                        "config": config,
+                        "runtime": runtime,
+                        "stopReason": response.get("stopReason"),
+                    }
+                )
+                return state.result(response.get("stopReason"))
+
+            tool_results: list[dict[str, Any] | None] = [None] * len(tool_uses)
+            paused_for_approval = False
+            paused_message = ""
+            persist_queue = _create_serial_queue()
+            tools_by_name = {tool.name: tool for tool in tool_registry}
+            image_budget = _create_image_budget_reservation(
+                _resolve_runtime_provider_capabilities(config), _image_attachment_reservation_order(tool_uses)
+            )
+            tool_priorities = {id(tool_use): index for index, tool_use in enumerate(tool_uses)}
+
+            async def persist_tool_session() -> None:
+                async def commit() -> None:
+                    await persistSession(session, config)
+                await persist_queue.run(commit)
+
+            def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
+                return _build_tool_context(
+                    session=session, config=config, runtime=runtime,
+                    persist=persist_tool_session, imageBudget=image_budget,
+                    priority=tool_priorities.get(id(tool_use)), toolUse=tool_use,
+                    parentTurnId=parent_turn_id,
+                )
+
+            finish_tool_result, effective_result_budget = tool_result_budget.createFinalizer(
+                config=config,
+                sessionId=session["id"],
+                assistantMessageIndex=len(session.get("messages", [])) - 1,
+                resultCount=len(tool_uses),
+                emit=lambda event, data: _safe_emit(runtime, event, data),
+            )
+            async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
+                _throw_if_turn_cancelled(runtime)
+                tool = tools_by_name.get(tool_use["name"])
+                dispatch_deny = await findDispatchDenyRule(
+                    {
+                        "cwd": session["cwd"],
+                        "toolName": tool_use["name"],
+                        "input": tool_use.get("input") or {},
+                        "settingsSources": config.get("settingsSources"),
+                        "inlineSettings": config.get("inlineSettings"),
+                        "rules": (authority or {}).get("permissionRules") if authority else None,
+                        "projectRoot": (authority or {}).get("permissionRuleProjectRoot") if authority else None,
+                    }
+                )
+                if dispatch_deny:
+                    message = f"Blocked by permission rule {dispatch_deny['raw']} ({dispatch_deny['scope']} settings)."
+                    return await finish_tool_result(
+                        tool_use,
+                        {"kind": "synthesized", "content": message, "isError": True},
+                        rejected=True,
+                    )
+                invalid_tool_input = _invalid_tool_input_message(tool_use)
+                if invalid_tool_input:
+                    state.tool_count += 1
+                    usage_totals["toolCalls"] += 1
+                    return await finish_tool_result(
+                        tool_use,
+                        {"kind": "synthesized", "content": invalid_tool_input, "isError": True},
+                    )
+                if not tool:
+                    return await finish_tool_result(
+                        tool_use,
+                        {"kind": "synthesized", "content": f"Tool not available: {tool_use['name']}", "isError": True},
+                    )
+                exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
+                if exceeded and exceeded.get("reason") == "max_tool_calls":
+                    result = build_subagent_tool_limit_result(tool_use, exceeded)
+                    _safe_emit(runtime, "subagent.limit_exceeded", {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")})
+                    return await finish_tool_result(
+                        tool_use,
+                        {"kind": "synthesized", "content": result["content"], "isError": True},
+                        tool_name=tool.name,
+                    )
                 state.tool_count += 1
                 usage_totals["toolCalls"] += 1
-                return await finish_tool_result(
-                    tool_use,
-                    {"kind": "synthesized", "content": invalid_tool_input, "isError": True},
-                )
-            if not tool:
-                return await finish_tool_result(
-                    tool_use,
-                    {"kind": "synthesized", "content": f"Tool not available: {tool_use['name']}", "isError": True},
-                )
-            exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
-            if exceeded and exceeded.get("reason") == "max_tool_calls":
-                result = build_subagent_tool_limit_result(tool_use, exceeded)
-                _safe_emit(runtime, "subagent.limit_exceeded", {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")})
-                return await finish_tool_result(
-                    tool_use,
-                    {"kind": "synthesized", "content": result["content"], "isError": True},
-                    tool_name=tool.name,
-                )
-            state.tool_count += 1
-            usage_totals["toolCalls"] += 1
-            hook_fire = _build_tool_hook_context(session, config, authority)
-            pre_hook = await _run_pre_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
-            if pre_hook["decision"] == "deny":
-                message = f"{tool.name} call blocked by PreToolUse hook"
-                if pre_hook.get("reason"):
-                    message = f"{message}: {pre_hook['reason']}"
-                else:
-                    message = f"{message}."
-                return await finish_tool_result(
-                    tool_use,
-                    {"kind": "synthesized", "content": message, "isError": True},
-                    tool_name=tool.name,
-                    rejected=True,
-                )
+                hook_fire = _build_tool_hook_context(session, config, authority)
+                pre_hook = await _run_pre_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
+                if pre_hook["decision"] == "deny":
+                    message = f"{tool.name} call blocked by PreToolUse hook"
+                    if pre_hook.get("reason"):
+                        message = f"{message}: {pre_hook['reason']}"
+                    else:
+                        message = f"{message}."
+                    return await finish_tool_result(
+                        tool_use,
+                        {"kind": "synthesized", "content": message, "isError": True},
+                        tool_name=tool.name,
+                        rejected=True,
+                    )
 
-            _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
-            side_effects_may_have_occurred = _resolve_tool_concurrency(tool) == "exclusive"
-            try:
-                result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
-            except Exception as exc:
-                if _is_turn_abort_error(exc, runtime.get("abortSignal")):
-                    raise
+                _safe_emit(runtime, "tool.started", {"name": tool.name, "tool_use_id": tool_use["id"], "input": tool_use.get("input") or {}, "session_id": session["id"]})
+                side_effects_may_have_occurred = _resolve_tool_concurrency(tool) == "exclusive"
+                try:
+                    result = await tool.handler(tool_use.get("input") or {}, build_context(tool_use))
+                except Exception as exc:
+                    if _is_turn_abort_error(exc, runtime.get("abortSignal")):
+                        raise
+                    completed = await finish_tool_result(
+                        tool_use,
+                        {"kind": "thrown", "error": exc},
+                        tool_name=tool.name,
+                        side_effects_may_have_occurred=side_effects_may_have_occurred,
+                    )
+                    await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
+                    return completed
                 completed = await finish_tool_result(
                     tool_use,
-                    {"kind": "thrown", "error": exc},
+                    {"kind": "returned", "result": result},
                     tool_name=tool.name,
                     side_effects_may_have_occurred=side_effects_may_have_occurred,
                 )
+                _throw_if_turn_cancelled(runtime)
                 await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
                 return completed
-            completed = await finish_tool_result(
-                tool_use,
-                {"kind": "returned", "result": result},
-                tool_name=tool.name,
-                side_effects_may_have_occurred=side_effects_may_have_occurred,
-            )
-            _throw_if_turn_cancelled(runtime)
-            await _run_post_tool_hook(tool, tool_use, hook_fire, runtime.get("emitEvent"))
-            return completed
 
-        async def dispatch_single(tool_use: dict[str, Any]) -> dict[str, Any]:
+            async def dispatch_single(tool_use: dict[str, Any]) -> dict[str, Any]:
+                try:
+                    result = await run_single(tool_use)
+                finally:
+                    await image_budget.complete(tool_priorities.get(id(tool_use), -1))
+                pause = result.pop("_pauseMessage", None)
+                additional = result.pop("_additionalBlocks", [])
+                return {
+                    "result": result,
+                    **({"additionalResults": additional} if additional else {}),
+                    **({"pauseMessage": pause} if pause else {}),
+                }
+
             try:
-                result = await run_single(tool_use)
-            finally:
-                await image_budget.complete(tool_priorities.get(id(tool_use), -1))
-            pause = result.pop("_pauseMessage", None)
-            additional = result.pop("_additionalBlocks", [])
-            return {
-                "result": result,
-                **({"additionalResults": additional} if additional else {}),
-                **({"pauseMessage": pause} if pause else {}),
-            }
-
-        try:
-            batch = await _run_tool_dispatch_batch(
-                tool_uses=tool_uses,
-                sequential=False,
-                concurrency_of=lambda tool_use: _resolve_tool_concurrency(tools_by_name.get(tool_use["name"])),
-                run=dispatch_single,
-            )
-            tool_results = batch["blocks"]
-            paused_for_approval = batch["pausedForApproval"]
-            paused_message = batch["pausedMessage"]
-            _throw_if_turn_cancelled(runtime)
-            budget_event = tool_result_budget.record(tool_results, tool_uses)
-            if budget_event is not None:
-                _safe_emit(
-                    runtime,
-                    "tool.result_budget",
-                    {
-                        "session_id": session["id"],
-                        "effective_result_budget_bytes": effective_result_budget,
-                        **budget_event,
-                    },
+                batch = await _run_tool_dispatch_batch(
+                    tool_uses=tool_uses,
+                    sequential=False,
+                    concurrency_of=lambda tool_use: _resolve_tool_concurrency(tools_by_name.get(tool_use["name"])),
+                    run=dispatch_single,
                 )
-        except Exception as error:
-            if _is_turn_abort_error(error, runtime.get("abortSignal")):
-                return await cancel_turn()
-            raise
+                tool_results = batch["blocks"]
+                paused_for_approval = batch["pausedForApproval"]
+                paused_message = batch["pausedMessage"]
+                _throw_if_turn_cancelled(runtime)
+                budget_event = tool_result_budget.record(tool_results, tool_uses)
+                if budget_event is not None:
+                    _safe_emit(
+                        runtime,
+                        "tool.result_budget",
+                        {
+                            "session_id": session["id"],
+                            "effective_result_budget_bytes": effective_result_budget,
+                            **budget_event,
+                        },
+                    )
+            except Exception as error:
+                if _is_turn_abort_error(error, runtime.get("abortSignal")):
+                    return await cancel_turn()
+                raise
 
-        no_progress = _append_tool_result_batch(
-            session=session,
-            ledger=progress_ledger,
-            logical_turn_id=parent_turn_id,
-            tool_uses=tool_uses,
-            tool_results=tool_results,
-            provider_call_index=state.provider_call_index,
-        )
-        await persistSession(session, config)
-        state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
-        if paused_for_approval:
-            if paused_message:
-                state.text_parts.append(paused_message)
-            return state.result("approval_required")
-        if no_progress is not None:
-            event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=no_progress)
-            _safe_emit(runtime, "agent.no_progress", event)
-            return _no_progress_turn_result(receipt=no_progress, text=state.text(), tool_count=state.tool_count, usage=state.total_usage, model=state.active_model, estimated_cost_usd=_round_usd(state.cost))
-        stable_boundary = await _finish_stable_boundary(hook=runtime.get("shouldStopAfterStableBoundary"), text_parts=state.text_parts, tool_count=state.tool_count, usage=state.total_usage, model=state.active_model, estimated_cost_usd=_round_usd(state.cost), session_id=session["id"], emit=lambda event, data: _safe_emit(runtime, event, data))
-        if stable_boundary is not None:
-            return stable_boundary
+            no_progress = _append_tool_result_batch(
+                session=session,
+                ledger=progress_ledger,
+                logical_turn_id=parent_turn_id,
+                tool_uses=tool_uses,
+                tool_results=tool_results,
+                provider_call_index=state.provider_call_index,
+            )
+            await persistSession(session, config)
+            state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
+            if paused_for_approval:
+                if paused_message:
+                    state.text_parts.append(paused_message)
+                return state.result("approval_required")
+            if no_progress is not None:
+                event = _no_progress_event_data(session_id=session["id"], logical_turn_id=parent_turn_id, receipt=no_progress)
+                _safe_emit(runtime, "agent.no_progress", event)
+                return _no_progress_turn_result(receipt=no_progress, text=state.text(), tool_count=state.tool_count, usage=state.total_usage, model=state.active_model, estimated_cost_usd=_round_usd(state.cost))
+            stable_boundary = await _finish_stable_boundary(hook=runtime.get("shouldStopAfterStableBoundary"), text_parts=state.text_parts, tool_count=state.tool_count, usage=state.total_usage, model=state.active_model, estimated_cost_usd=_round_usd(state.cost), session_id=session["id"], emit=lambda event, data: _safe_emit(runtime, event, data))
+            if stable_boundary is not None:
+                return stable_boundary
+    finally:
+        await _backstop_open_questions_on_turn_exit(session, lambda event, data: _safe_emit(runtime, event, data))

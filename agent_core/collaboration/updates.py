@@ -135,3 +135,15 @@ __all__ = [
     "buildDeterministicCollaborationUpdate",
     "mergeUsage",
 ]
+
+
+def staleWorkPayload(active: dict[str, Any], binding: dict[str, Any], source_event: str) -> dict[str, Any]:
+    return {
+        "session_id": active.get("sessionId"),
+        "stale_session_id": binding.get("sessionId"),
+        "stale_generation": binding.get("generation"),
+        "active_generation": active.get("generation"),
+        "runtime_instance_id": active.get("runtimeInstanceId"),
+        "path_graph_id": active.get("pathGraphId"),
+        "source_event": source_event,
+    }
