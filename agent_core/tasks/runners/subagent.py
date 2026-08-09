@@ -11,7 +11,7 @@ from ...agent import runAgentPrompt
 from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
 from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
-from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord
+from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord, withRecordTransaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...tools import createBuiltinTools
@@ -168,11 +168,17 @@ async def _publish_resident_turn_result(task_id: str, agent_id: str, session: di
     await _mark_resident_status(task_id, agent_id, "awaiting_input", "resident_idle", summary=summary)
 
 
+_TERMINAL_RESIDENT_META_STATUSES = {"completed", "failed", "terminated", "stopped", "cancelled", "truncated"}
+
+
 async def _mark_resident_status(task_id: str, agent_id: str, status: str, waiting_reason: str | None, summary: str | None = None) -> None:
     now = now_iso()
 
     def _mark(meta: dict[str, Any] | None) -> dict[str, Any] | None:
-        if not meta:
+        # First-terminal-wins applies to the meta too: a stop or failure
+        # committed between this turn's read and write must not be revived
+        # into awaiting_input by the resident's idle stamp.
+        if not meta or meta.get("status") in _TERMINAL_RESIDENT_META_STATUSES:
             return meta
         next_meta = {**meta, "status": status, "waitingReason": waiting_reason, "updatedAt": now, "stoppable": True}
         next_meta.pop("completedAt", None)
@@ -183,22 +189,23 @@ async def _mark_resident_status(task_id: str, agent_id: str, status: str, waitin
         return next_meta
 
     await mutateTaskMeta(task_id, _mark)
-    record = await loadTaskRecord(task_id)
-    if record and record.get("status") not in {"completed", "failed", "stopped"}:
-        # Keep the shared record store aligned so capacity governance and
-        # the boot sweep see the resident's real state; terminal records are
-        # first-terminal-wins and never regress here.
-        next_record = {
-            **record,
-            "status": status,
-            "detailStatus": waiting_reason or status,
-            "updatedAt": now,
-        }
-        if summary is not None:
-            next_record["summary"] = summary
-            next_record["resultSummary"] = summary
-        next_record.pop("completedAt", None)
-        await saveTaskRecord(next_record)
+    async with withRecordTransaction("task-lifecycle", task_id):
+        record = await loadTaskRecord(task_id)
+        if record and record.get("status") not in {"completed", "failed", "stopped"}:
+            # Keep the shared record store aligned so capacity governance and
+            # the boot sweep see the resident's real state; terminal records are
+            # first-terminal-wins and never regress here.
+            next_record = {
+                **record,
+                "status": status,
+                "detailStatus": waiting_reason or status,
+                "updatedAt": now,
+            }
+            if summary is not None:
+                next_record["summary"] = summary
+                next_record["resultSummary"] = summary
+            next_record.pop("completedAt", None)
+            await saveTaskRecord(next_record)
 
 
 def main() -> None:

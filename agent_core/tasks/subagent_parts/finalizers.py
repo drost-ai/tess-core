@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import os
 from ..._utils import now_iso
-from ...storage import mutateChildAgent, taskOutputPath, writeTaskMeta
+from ...storage import mutateChildAgent, mutateTaskMeta, taskOutputPath, writeTaskMeta
 from ...subagents.groups import _upsert_subagent_launch_group
+
+_TERMINAL_CHILD_STATUSES = {"completed", "failed", "cancelled", "stopped", "truncated"}
+_TERMINAL_META_STATUSES = {"completed", "failed", "terminated", "stopped", "cancelled", "truncated"}
 from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
 from ...subagents.result import evaluate_subagent_result, persist_structured_subagent_result
 from ..communication import append_task_event
@@ -149,6 +152,12 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
     completed_at = now_iso()
 
     def _finalize_failure(current: dict[str, Any] | None) -> dict[str, Any]:
+        if current and current.get("status") in _TERMINAL_CHILD_STATUSES:
+            # A committed terminal result outranks a late failure signal: the
+            # success finalizer can complete durably and THEN the runner hit
+            # an error (e.g. a storage timeout in a later step) - rewriting
+            # completed as failed would destroy the result.
+            return current
         existing = current or {
             "agentId": agent_id,
             "sessionId": session_id,
@@ -164,6 +173,8 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
 
     child_record = await mutateChildAgent(agent_id, _finalize_failure)
     child_record = child_record or {}
+    if child_record.get("status") in _TERMINAL_CHILD_STATUSES and child_record.get("status") != "failed":
+        return
     task_meta = {
         "type": "subagent",
         "task_id": task_id,
@@ -186,7 +197,13 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         "stoppable": False,
         "owner": "daemon",
     }
-    await writeTaskMeta(task_id, task_meta)
+    await mutateTaskMeta(
+        task_id,
+        lambda current_meta: current_meta
+        if current_meta and current_meta.get("status") in _TERMINAL_META_STATUSES
+        else task_meta,
+        fallback=task_meta,
+    )
     reconciliation = await createSubagentReconciliationForTerminalChild(
         childRecord=child_record,
         taskMeta=task_meta,

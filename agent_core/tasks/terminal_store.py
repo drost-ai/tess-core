@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..process.identity import processIdentityFromRecord
+from ..process.identity import ProcessIdentityError, processIdentityFromRecord
 from ..storage import (
     loadHealthCheckTask,
     loadTaskRecord,
@@ -70,7 +70,15 @@ async def prepareTaskStop(
                 "result": toTaskStopResult(taskId, transition, transition_id),
                 "transitionId": transition_id,
             }
-        identity = processIdentityFromRecord(record, meta)
+        identity_error: str | None = None
+        try:
+            identity = processIdentityFromRecord(record, meta)
+        except ProcessIdentityError as exc:
+            # No owned process is durably attached (launch window, or a
+            # legacy record). Raising here left the task unstoppable until
+            # reboot; the caller decides how to finish a processless stop.
+            identity = None
+            identity_error = exc.code
         intent = {
             "schemaVersion": 1,
             "transitionId": transition_id,
@@ -85,6 +93,7 @@ async def prepareTaskStop(
             **common,
             "transitionId": transition_id,
             "identity": identity,
+            "identityError": identity_error,
         }
 
 

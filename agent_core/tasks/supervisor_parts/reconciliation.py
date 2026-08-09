@@ -30,6 +30,7 @@ from .processes import _process_exit_summary
 from .records import _build_recovered_subagent_task_record, _build_task_record
 from .shared import _DEAD_WORKER_SUMMARY, SupervisorRegistries
 from typing import Any, Callable
+from .finalize_child import _process_state_metadata, finalizeLostWorker
 from .launch_reconciliation import (
     _has_interrupted_launch,
     _reconcile_interrupted_launch,
@@ -157,74 +158,13 @@ async def _mark_lost_process(
 ) -> None:
     if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
         return
-    now = now_iso()
-    is_subagent = record.get("kind") == "subagent"
-    if cause == "daemon_lost":
-        summary = (
-            "The owning daemon was lost while this worker was active; the orphaned worker was terminated at daemon boot."
-        )
-    elif is_subagent:
-        summary = "Daemon restarted while this worker was active and the worker process is no longer running."
-    else:
-        summary = _DEAD_WORKER_SUMMARY
-    state = (process_state or {}).get("state") or "failed"
-    meta_metadata = dict(meta.get("metadata") or {})
-    meta_metadata.update(_process_state_metadata(process_state))
-    record_metadata = dict(record.get("metadata") or {})
-    record_metadata.update(_process_state_metadata(process_state))
-    next_meta = {
-        **meta,
-        "type": record.get("kind"),
-        "taskId": task_id,
-        "status": "failed" if is_subagent else "terminated",
-        "updatedAt": now,
-        "finishedAt": now,
-        "owner": "daemon",
-        "supervisorId": supervisor_id,
-        "metadata": meta_metadata,
-        "processState": state,
-        "processReconciledAt": now,
-    }
-    if is_subagent:
-        next_meta["error"] = meta.get("error") or summary
-        next_meta["summary"] = meta.get("summary") or summary
-        next_meta["completionReason"] = meta.get("completionReason") or cause
-        next_meta["completedAt"] = meta.get("completedAt") or now
-    else:
-        next_meta.pop("error", None)
-        next_meta["summary"] = meta.get("summary") or summary
-    next_record = {
-        **_build_task_record(next_meta, summary),
-        **record,
-        "status": "failed" if is_subagent else "stopped",
-        "summary": summary,
-        "updatedAt": now,
-        "completedAt": now,
-        **({"detailStatus": "daemon_lost"} if cause == "daemon_lost" else {}),
-        "owner": "daemon",
-        "supervisorId": supervisor_id,
-        "metadata": record_metadata,
-    }
-    await writeTaskMeta(task_id, next_meta)
-    await saveTaskRecord(next_record)
-    if is_subagent:
-        agent_id = meta.get("agent_id") or record_metadata.get("agent_id") or record.get("sourceId")
-        if isinstance(agent_id, str) and agent_id:
-            await mutateChildAgent(
-                agent_id,
-                lambda current: {
-                    **current,
-                    "status": "failed",
-                    "error": current.get("error") or summary,
-                    "completionReason": current.get("completionReason") or cause,
-                    "completedAt": current.get("completedAt") or now,
-                    "lastUpdatedAt": now,
-                }
-                if current and _is_active_child_agent_status(current.get("status"))
-                else current,
-            )
-    await maybe_await(
-        emit("task.failed" if is_subagent else "task.stopped", _task_record_event_payload(next_record), record.get("sessionId"))
+    await finalizeLostWorker(
+        taskId=task_id,
+        cause=cause,
+        source="boot_sweep",
+        supervisorId=supervisor_id,
+        emit=emit,
+        processState=process_state,
     )
 
 
@@ -443,19 +383,3 @@ def _extract_pid(record: dict[str, Any], meta: dict[str, Any]) -> int | None:
     return None
 
 
-def _process_state_metadata(process_state: dict[str, Any] | None) -> dict[str, Any]:
-    if not process_state:
-        return {}
-    result = {
-        "process_state": process_state.get("state"),
-        "process_state_source": process_state.get("source"),
-    }
-    if isinstance(process_state.get("pid"), int):
-        result["process_pid"] = process_state["pid"]
-    if process_state.get("status") is not None:
-        result["process_meta_status"] = process_state.get("status")
-    if process_state.get("identity_error") is not None:
-        result["process_identity_error"] = process_state.get("identity_error")
-    if process_state.get("kill_outcome") is not None:
-        result["process_kill_outcome"] = process_state.get("kill_outcome")
-    return result

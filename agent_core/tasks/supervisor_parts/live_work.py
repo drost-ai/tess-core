@@ -22,7 +22,10 @@ from ...storage import (
     remoteSessionPath as _remote_session_path,
     saveMonitor as _save_monitor,
     taskMetaPath as _task_meta_path,
-    writeTaskMeta as _write_task_meta,
+)
+from .finalize_child import (
+    finalizeLostWorker as _finalize_lost_worker,
+    workerVerifiedDead as _worker_verified_dead,
 )
 from .mappers import _is_active_child_agent_status, _is_related_child_agent
 from .processes import _is_process_alive
@@ -261,7 +264,9 @@ async def _reconcile_dead_task_meta(
     if meta.get("status") not in active:
         return meta, False
     pid = meta.get("pid")
-    if not isinstance(pid, int) or pid <= 0 or _is_process_alive(pid) or not _past_dead_work_grace(meta.get("startedAt")):
+    if not isinstance(pid, int) or pid <= 0 or not _past_dead_work_grace(meta.get("startedAt")):
+        return meta, False
+    if not await _worker_verified_dead(meta):
         return meta, False
     now = _now_iso()
     if kind == "subagent":
@@ -277,19 +282,23 @@ async def _reconcile_dead_task_meta(
             "completedAt": meta.get("completedAt") or now,
         }
     else:
+        summary = meta.get("summary") or _DEAD_WORKER_SUMMARY
         next_meta = {
             **meta,
             "status": "terminated",
-            "summary": meta.get("summary") or _DEAD_WORKER_SUMMARY,
+            "summary": summary,
             "updatedAt": now,
             "finishedAt": meta.get("finishedAt") or now,
         }
     if apply:
-        await _write_task_meta(task_id, next_meta)
-        if kind == "subagent":
-            agent_id = meta.get("agent_id") or (meta.get("metadata") or {}).get("agent_id")
-            if isinstance(agent_id, str) and agent_id:
-                await _reconcile_child_by_id(agent_id, now, next_meta["summary"])
+        outcome = await _finalize_lost_worker(
+            taskId=task_id,
+            cause="worker_lost",
+            source="live_work",
+            summary=summary if kind == "subagent" else _DEAD_WORKER_SUMMARY,
+        )
+        if outcome and isinstance(outcome.get("meta"), dict):
+            return outcome["meta"], True
     return next_meta, True
 
 
@@ -301,7 +310,9 @@ async def _reconcile_dead_child_agent(
     if not _is_active_child_agent_status(child.get("status")):
         return child, False
     pid = child.get("pid")
-    if not isinstance(pid, int) or pid <= 0 or _is_process_alive(pid) or not _past_dead_work_grace(child.get("startedAt")):
+    if not isinstance(pid, int) or pid <= 0 or not _past_dead_work_grace(child.get("startedAt")):
+        return child, False
+    if not await _worker_verified_dead(child):
         return child, False
     now = _now_iso()
     summary = "Worker process is no longer running; marked failed during reconciliation."
@@ -317,22 +328,6 @@ async def _reconcile_dead_child_agent(
         agent_id = child["agentId"]
         await _mutate_child_agent(agent_id, lambda current: next_child if current else None)
     return next_child, True
-
-
-async def _reconcile_child_by_id(agent_id: str, now: str, summary: str) -> None:
-    def mutate(current: dict[str, _Any] | None) -> dict[str, _Any] | None:
-        if not current or not _is_active_child_agent_status(current.get("status")):
-            return current
-        return {
-            **current,
-            "status": "failed",
-            "error": current.get("error") or summary,
-            "completionReason": current.get("completionReason") or "worker_lost",
-            "completedAt": current.get("completedAt") or now,
-            "lastUpdatedAt": now,
-        }
-
-    await _mutate_child_agent(agent_id, mutate)
 
 
 async def _reconcile_terminal_monitor(
