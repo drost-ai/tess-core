@@ -170,7 +170,24 @@ def createHealthCheckController(
                 )
             )
             return
-        if committed["status"] == "unhealthy":
+        if committed["status"] == "failed":
+            # The threshold crossing is the one event a health check exists
+            # for; it used to be the only transition that emitted nothing.
+            await maybe_await(
+                emit(
+                    "health_check.failed",
+                    {
+                        "task_id": committed["taskId"],
+                        "title": committed["title"],
+                        "failures": committed.get("consecutiveFailures", 0),
+                        "threshold": committed.get("failureThreshold"),
+                        "error": committed.get("lastError"),
+                        "generation": generation,
+                    },
+                    committed.get("sessionId"),
+                )
+            )
+        elif committed["status"] == "unhealthy":
             await maybe_await(
                 emit(
                     "health_check.unhealthy",
@@ -349,3 +366,48 @@ def _failed_result(error: Exception) -> dict[str, Any]:
     }
 
 
+
+
+async def drainOrphanedHealthProbes(
+    emit: Callable[[str, dict[str, Any], str | None], Any],
+) -> int:
+    """Boot containment for probe shells orphaned by a daemon crash.
+
+    activeProcessIdentity was previously write-only: no reader ever consulted
+    it, so a daemon that died mid-probe leaked one live probe shell per
+    crash, forever. At boot no probe can legitimately be in flight, so any
+    recorded identity belongs to a dead epoch - drain it (identity-verified,
+    never a raw pid kill) and clear the marker."""
+    from ..process._termination import drain_owned_process
+
+    drained = 0
+    for record in await listHealthCheckTasks():
+        identity = record.get("activeProcessIdentity")
+        task_id = record.get("taskId")
+        if not isinstance(identity, dict) or not isinstance(task_id, str) or not task_id:
+            continue
+        try:
+            outcome = await drain_owned_process(identity)
+        except Exception as exc:
+            outcome = f"unavailable:{type(exc).__name__}"
+
+        def _clear(current: dict[str, Any] | None) -> dict[str, Any] | None:
+            if not current or not isinstance(current.get("activeProcessIdentity"), dict):
+                return current
+            next_record = {key: value for key, value in current.items() if key != "activeProcessIdentity"}
+            next_record["revision"] = int(current.get("revision") or 0) + 1
+            next_record["updatedAt"] = now_iso()
+            return next_record
+
+        from ..storage import mutateHealthCheckTask
+
+        await mutateHealthCheckTask(task_id, _clear)
+        drained += 1
+        await maybe_await(
+            emit(
+                "health_check.probe_drained",
+                {"task_id": task_id, "outcome": outcome or "drained"},
+                record.get("sessionId"),
+            )
+        )
+    return drained

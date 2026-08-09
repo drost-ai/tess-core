@@ -20,7 +20,6 @@ from ...storage import (
     mutateChildAgent as _mutate_child_agent,
     readTaskMeta as _read_task_meta,
     remoteSessionPath as _remote_session_path,
-    saveMonitor as _save_monitor,
     taskMetaPath as _task_meta_path,
 )
 from .finalize_child import (
@@ -72,6 +71,22 @@ def _is_active_health_check(record: dict[str, _Any]) -> bool:
 
 def _is_active_monitor_status(status: _Any) -> bool:
     return status in {"active", "muted"}
+
+
+_TERMINAL_TASK_META_STATUSES = {"completed", "failed", "terminated", "stopped", "cancelled", "truncated"}
+
+
+async def _monitor_task_is_terminal(monitor: dict[str, _Any]) -> bool:
+    task_id = monitor.get("taskId")
+    if not isinstance(task_id, str) or not task_id:
+        return True
+    try:
+        meta = await _read_task_meta(task_id)
+    except Exception:
+        return False
+    if not isinstance(meta, dict):
+        return True
+    return meta.get("status") in _TERMINAL_TASK_META_STATUSES
 
 
 async def _resolve_session_live_work(
@@ -162,13 +177,17 @@ async def _resolve_session_live_work(
                 continue
             monitor_id = str(monitor["id"])
             seen_monitor_ids.add(monitor_id)
-            next_monitor, changed = await _reconcile_terminal_monitor(monitor, apply=reconcile)
-            if changed:
-                mark_reconciled(f"monitor:{monitor_id}")
-            if _is_active_monitor_status(next_monitor.get("status")):
-                mark_family("monitors")
+            # Classification only: transitions belong to the daemon's monitor
+            # watch, which commits them with revision + transitionId + event.
+            # An active monitor whose task is already terminal counts as
+            # stale here - the watch will terminalize it within a tick.
+            if _is_active_monitor_status(monitor.get("status")):
+                if await _monitor_task_is_terminal(monitor):
+                    mark_stale(f"monitor:{monitor_id}:task_terminal")
+                else:
+                    mark_family("monitors")
             else:
-                mark_stale(f"monitor:{monitor_id}:{next_monitor.get('status') or 'inactive'}")
+                mark_stale(f"monitor:{monitor_id}:{monitor.get('status') or 'inactive'}")
         for monitor_id in sorted(monitor_ids - seen_monitor_ids):
             mark_stale(f"monitor:{monitor_id}:missing")
 
@@ -328,46 +347,6 @@ async def _reconcile_dead_child_agent(
         agent_id = child["agentId"]
         await _mutate_child_agent(agent_id, lambda current: next_child if current else None)
     return next_child, True
-
-
-async def _reconcile_terminal_monitor(
-    monitor: dict[str, _Any],
-    *,
-    apply: bool,
-) -> tuple[dict[str, _Any], bool]:
-    if not _is_active_monitor_status(monitor.get("status")):
-        return monitor, False
-    task_id = monitor.get("taskId")
-    if not isinstance(task_id, str) or not task_id:
-        return monitor, False
-    try:
-        task = await _read_task_meta(task_id)
-    except Exception:
-        return monitor, False
-    if not isinstance(task, dict):
-        return monitor, False
-    status = task.get("status")
-    if status == "completed":
-        next_status = "completed"
-    elif status in {"failed", "truncated"}:
-        next_status = "failed"
-    elif status in {"terminated", "stopped", "cancelled"}:
-        next_status = "stopped"
-    else:
-        return monitor, False
-    now = _now_iso()
-    next_monitor = {
-        **monitor,
-        "status": next_status,
-        "updatedAt": now,
-        "completedAt": monitor.get("completedAt") or now,
-        "lastObservedTaskStatus": status,
-    }
-    if next_status in {"failed", "stopped"}:
-        next_monitor["failureReason"] = task.get("error") or monitor.get("failureReason")
-    if apply:
-        await _save_monitor(next_monitor)
-    return next_monitor, True
 
 
 def _task_belongs_to_session(meta: dict[str, _Any], session_id: str, kind: str) -> bool:

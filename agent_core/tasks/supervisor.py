@@ -24,6 +24,7 @@ from ..storage.session_archive import loadSession
 from .supervisor_parts.communication import createTaskCommunicationApi, readTaskOutput
 from .supervisor_parts.health import _inspect_latest_task_record
 from .supervisor_parts.launch import _create_process_task_launcher
+from .supervisor_parts.monitor_watch import tick_daemon_monitors as _tick_daemon_monitors
 from .supervisor_parts.mailbox_watch import create_mailbox_watch_loop
 from .supervisor_parts.live_work import _create_live_work_verdict_cache, _invalidate_live_work_cache
 from .supervisor_parts.processes import _prepare_shell_argv, _worker_env
@@ -46,7 +47,7 @@ from .supervisor_parts.utils import _dedupe, _require_string
 from typing import Any, Callable
 from ..contracts.records import launch_task_id
 from .health_check_executor import recordToSpec
-from .health_check_runtime import createHealthCheckController
+from .health_check_runtime import createHealthCheckController, drainOrphanedHealthProbes
 from .task_stop_coordination import createTaskStopCoordinator
 
 
@@ -437,11 +438,25 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
                     {"reason": str(exc), "family": "health_check"},
                 )
 
+    async def monitor_watch_loop() -> None:
+        from ..config._knobs import knobValue
+
+        while True:
+            await asyncio.sleep(int(knobValue("tasks.monitor_tick_ms")) / 1000)
+            try:
+                await _tick_daemon_monitors(emit)
+            except Exception as exc:
+                await emit(
+                    "supervisor.reconcile_failed",
+                    {"reason": str(exc), "family": "monitors"},
+                )
+
     try:
         await _reconcile_persisted_tasks(supervisor_id, emit, registries)
         await listChildAgents()
-        await listHealthCheckTasks()
+        await drainOrphanedHealthProbes(emit)
         await health_check_controller["tick"]()
+        await _tick_daemon_monitors(emit)
         await _report_persisted_record_issues(emit, reported_record_issues)
     except Exception:
         # The registries are per-instance, so everything in them was created
@@ -456,6 +471,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     health_reconcile = asyncio.create_task(health_reconcile_loop())
     registries.taskWatchers.add(health_reconcile)
     health_reconcile.add_done_callback(registries.taskWatchers.discard)
+    monitor_watch = asyncio.create_task(monitor_watch_loop())
+    registries.taskWatchers.add(monitor_watch)
+    monitor_watch.add_done_callback(registries.taskWatchers.discard)
     mailbox_watch = asyncio.create_task(create_mailbox_watch_loop(emit)())
     registries.taskWatchers.add(mailbox_watch)
     mailbox_watch.add_done_callback(registries.taskWatchers.discard)

@@ -114,7 +114,10 @@ class Package29LiveWorkTests(AgentCoreTestCase):
             }
             terminal = run(live_work._resolve_session_live_work(session, terminal_context))
             self.assertEqual(terminal["families"], ["tasks"])
-            self.assertEqual(run(core.loadMonitor("monitor-live"))["status"], "completed")
+            # The verdict classifies, it does not write: a muted monitor is
+            # never terminalized (mute means leave it alone), and transitions
+            # for active monitors belong to the daemon's monitor watch.
+            self.assertEqual(run(core.loadMonitor("monitor-live"))["status"], "muted")
 
             opaque = self._session(workspace, "64444444-4444-4444-8444-444444444444", {"remoteSessionId": "opaque"})
             self.assertEqual(run(live_work._resolve_session_live_work(opaque))["families"], ["remote"])

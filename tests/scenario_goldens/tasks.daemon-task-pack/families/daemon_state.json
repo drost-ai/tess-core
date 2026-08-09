@@ -2,7 +2,7 @@
   "activeTasks": 0,
   "attachedClients": 1,
   "authTokenId": "<auth-token-id>",
-  "cursor": 18,
+  "cursor": 20,
   "cwd": "<workspace>",
   "epoch": "<uuid:3>",
   "instanceId": "harness-daemon-instance",

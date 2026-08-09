@@ -238,6 +238,23 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             session["metadata"]["childAgentIds"] = ["bootstrap-agent"]
             run(core.saveSession(session))
             run(core.saveMonitor(monitor))
+            # The watched task must exist and be live: the daemon's monitor
+            # watch runs at supervisor construction and fails a monitor whose
+            # task has vanished.
+            run(
+                core.writeTaskMeta(
+                    "bootstrap-monitor-task",
+                    {
+                        "type": "background_command",
+                        "taskId": "bootstrap-monitor-task",
+                        "id": "bootstrap-monitor-task",
+                        "sessionId": session["id"],
+                        "status": "running",
+                        "startedAt": "2026-01-01T00:00:00Z",
+                        "outputFile": core.taskOutputPath("bootstrap-monitor-task"),
+                    },
+                )
+            )
             run(
                 core.saveChildAgent(
                     {
