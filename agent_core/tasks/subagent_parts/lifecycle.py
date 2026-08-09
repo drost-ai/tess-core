@@ -73,6 +73,45 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
                 "runtimeContract": prepared.get("runtimeContract"),
             }
         )
+    if isinstance(launched, dict) and launched.get("atCapacity"):
+        # The supervisor refused the launch. Finalize the child record that
+        # prepareSubagent already persisted - leaving it "queued" with no task
+        # creates a phantom that no sweep, message, or stop can ever reach -
+        # and surface the structured refusal so the model can decide.
+        refused_at = now_iso()
+        await saveChildAgent(
+            {
+                **child_record,
+                "status": "cancelled",
+                "completionReason": "at_capacity",
+                "completedAt": refused_at,
+                "stoppable": False,
+                "retryable": True,
+                "waitingReason": None,
+                "lastUpdatedAt": refused_at,
+                "lastSummary": "Launch refused: subagent capacity is full.",
+            }
+        )
+        await maybe_await(context.get("persistSession", lambda: None)())
+        return {
+            "content": pretty_json(
+                _without_none_values(
+                    {
+                        "agent_id": agent_id,
+                        "at_capacity": True,
+                        "status": "refused",
+                        "reason": launched.get("reason"),
+                        "limit": launched.get("limit"),
+                        "active": launched.get("active"),
+                        "children": launched.get("children"),
+                        "note": (
+                            "Subagent capacity is full; nothing was launched. "
+                            "SendMessage(to=<agent_id>) an existing child, or stop one and retry."
+                        ),
+                    }
+                )
+            )
+        }
     task_id = launch_task_id(launched)
     output_file = launch_output_file(launched) or (taskOutputPath(task_id) if task_id else None)
     started_at = now_iso()
@@ -163,16 +202,17 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         tools=parent_tools,
     )
     parent.setdefault("metadata", {})["effectiveAgentAuthority"] = parent_authority
+    launch_group_id = resolveSubagentLaunchGroupId(args, parent, context)
+    worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     derived_authority = deriveChildAgentAuthority(
         parent=parent_authority,
         requestedMode=requested_mode,
         contract=runtime_contract,
         permissionRuleProjectRoot=os.path.realpath(parent["cwd"]),
+        grantedWorkspaceRoots=[worktree_path] if worktree_path else None,
     )
     child_authority = derived_authority["authority"]
     child_mode = child_authority["mode"]
-    launch_group_id = resolveSubagentLaunchGroupId(args, parent, context)
-    worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     child_cwd = worktree_path or parent["cwd"]
     parent_metadata = parent.setdefault("metadata", {})
     parent_has_original_cwd = parent_metadata.get("originalCwd") is not None

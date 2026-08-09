@@ -386,3 +386,43 @@ class NonBlockingSpawnTests(AgentCoreTestCase):
             self.assertIn("result will arrive as a child message", payload["note"])
         finally:
             self.restore_home(root, previous)
+
+    def test_at_capacity_refusal_reaches_model_and_leaves_no_phantom_child(self):
+        """Bug regression: the supervisor's structured capacity refusal was
+        silently swallowed - a phantom child (taskId None, backgrounded) was
+        persisted and the model told 'running'. The refusal must reach the
+        tool result and the prepared child record must finalize as refused."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.saveSession(parent))
+
+            async def refuse_start(task_args):
+                return {
+                    "atCapacity": True,
+                    "reason": "max_children",
+                    "limit": 2,
+                    "active": 2,
+                    "children": [{"agentId": "agent-a"}, {"agentId": "agent-b"}],
+                }
+
+            result = run(
+                next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
+                    {"description": "Refused", "prompt": "go"},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": {"startSubagentTask": refuse_start}},
+                )
+            )
+            payload = json.loads(result["content"])
+            self.assertTrue(payload["at_capacity"])
+            self.assertEqual(payload["status"], "refused")
+            self.assertEqual(payload["limit"], 2)
+            self.assertNotIn("task_id", payload)
+            child = run(core.loadChildAgent(payload["agent_id"]))
+            self.assertEqual(child["status"], "cancelled")
+            self.assertEqual(child["completionReason"], "at_capacity")
+            self.assertNotIn("taskId", child)
+            self.assertFalse(child["stoppable"])
+            self.assertTrue(child["retryable"])
+        finally:
+            self.restore_home(root, previous)

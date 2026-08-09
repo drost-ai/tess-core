@@ -356,6 +356,22 @@ def deriveChildAgentAuthority(
             "meet",
             "Computed child authority is not a semantic subset of parent authority.",
         )
+    granted = [
+        os.path.realpath(path)
+        for path in (args.get("grantedWorkspaceRoots") or [])
+        if isinstance(path, str) and path
+    ]
+    if granted:
+        # An isolation worktree lies OUTSIDE the parent's roots by
+        # construction (a sibling of the repo), so it is granted explicitly
+        # AFTER the subset check rather than threaded through it: the
+        # launcher vouches only for workspaces it just created from content
+        # the parent already had full authority over.
+        authority["readableRoots"] = sorted({*authority["readableRoots"], *granted})
+        if authority["sandbox"]["filesystem"] != "read-only":
+            authority["writableRoots"] = sorted({*authority["writableRoots"], *granted})
+        authority["fingerprint"] = ""
+        authority["fingerprint"] = fingerprintAgentAuthority(authority)
     return {"authority": authority, "reductions": reductions}
 
 
