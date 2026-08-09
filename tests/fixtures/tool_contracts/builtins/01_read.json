@@ -16,9 +16,6 @@
       },
       "limit": {
         "type": "number"
-      },
-      "pages": {
-        "type": "string"
       }
     },
     "required": [

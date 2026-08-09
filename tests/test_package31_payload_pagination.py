@@ -104,6 +104,73 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
         self.assertEqual(forced["skippedBytes"], 4)
         self.assertEqual(forced["nextByteOffset"], 4)
 
+    def test_zero_filled_cursor_and_offset_inputs_are_treated_as_absent(self):
+        # Zero-filling providers (Codex-family models) populate every optional
+        # schema field instead of omitting it: an unused cursor arrives as ""
+        # or 0 and an unused offset as 0. Neither may trip the cursor/offset
+        # mutual-exclusion guard.
+        fingerprint = fingerprintPayloadSource(["zero-fill", "fixture"])
+        encoded = encodePayloadCursor(
+            family="read_text",
+            sourceFingerprint=fingerprint,
+            position={"recordOffset": 7},
+        )
+        for empty_cursor in (None, "", 0, False):
+            self.assertEqual(
+                resolvePayloadCursor(
+                    family="read_text",
+                    sourceFingerprint=fingerprint,
+                    cursor=empty_cursor,
+                    legacyOffset=0,
+                    legacyBase=1,
+                ),
+                {"recordOffset": 0, "source": "legacy"},
+            )
+        resolved = resolvePayloadCursor(
+            family="read_text",
+            sourceFingerprint=fingerprint,
+            cursor=encoded,
+            legacyOffset=0,
+            legacyBase=1,
+        )
+        self.assertEqual(resolved["recordOffset"], 7)
+        self.assertEqual(resolved["source"], "cursor")
+        with self.assertRaisesRegex(ValueError, "cursor or offset, not both"):
+            resolvePayloadCursor(
+                family="read_text",
+                sourceFingerprint=fingerprint,
+                cursor=encoded,
+                legacyOffset=1,
+                legacyBase=1,
+            )
+        with self.assertRaisesRegex(ValueError, "Invalid read_text cursor"):
+            resolvePayloadCursor(
+                family="read_text",
+                sourceFingerprint=fingerprint,
+                cursor=5,
+                legacyBase=1,
+            )
+
+    def test_read_tool_accepts_codex_zero_filled_pagination_input(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            target = workspace / "conversation.txt"
+            target.write_text("first line\nsecond line\n", encoding="utf-8")
+            context = self._context(home, workspace, "zero-fill-read")
+            read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+            # Exact input shapes observed from a Codex-provider session.
+            for zero_filled in (
+                {"file_path": str(target), "offset": 0, "cursor": 0, "limit": 500, "pages": "1"},
+                {"file_path": str(target), "offset": 0, "cursor": "", "limit": 500, "pages": "1-1"},
+                {"file_path": str(target), "offset": 0, "cursor": "", "limit": 500, "pages": ""},
+            ):
+                shaped = self._parse(run(read.handler(zero_filled, context)))
+                self.assertEqual(shaped["file"]["startLine"], 1)
+                self.assertIn("first line", shaped["file"]["content"])
+                self.assertIn("second line", shaped["file"]["content"])
+        finally:
+            self.restore_home(root, previous)
+
     def test_read_cursor_reconstructs_oversized_unicode_line(self):
         root, home, workspace, previous = self.temp_context()
         try:

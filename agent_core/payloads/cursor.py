@@ -66,8 +66,12 @@ def resolvePayloadCursor(
     legacyOffset: int | float | None = None,
     legacyBase: Literal[0, 1],
 ) -> dict[str, Any]:
-    if cursor is not None:
-        if legacyOffset is not None:
+    # Zero-filling providers (Codex-family models) send every optional field:
+    # an unused cursor arrives as "" or 0 and an unused offset as 0. A falsy
+    # cursor carries no position, and only a positive offset conflicts with a
+    # genuine cursor.
+    if cursor:
+        if _finite_number(legacyOffset) and math.floor(legacyOffset) > 0:
             raise ValueError("Provide cursor or offset, not both.")
         return {
             **_decode_payload_cursor(

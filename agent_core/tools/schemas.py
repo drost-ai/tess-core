@@ -23,8 +23,7 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
                         'cursor': {'type': 'string',
                                    'description': 'Opaque continuation cursor returned by a previous Read page. Do '
                                                   'not combine with offset.'},
-                        'limit': {'type': 'number'},
-                        'pages': {'type': 'string'}},
+                        'limit': {'type': 'number'}},
          'required': ['file_path'],
          'additionalProperties': False},
     },
