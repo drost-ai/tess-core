@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-import agent_core.subagents.continuation as continuation_module
 import agent_core.subagents.groups as groups_module
-import agent_core.tasks.subagent_parts.finalizers as finalizers_module
 from tests.support.agent_core_case import *
 
 
@@ -235,179 +233,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_parent_continuation_readiness_supports_batch_policies(self):
-        records = [
-            {"id": "a", "terminalStatus": "completed"},
-            {"id": "b", "terminalStatus": "failed"},
-        ]
-        self.assertFalse(core.evaluateParentContinuationReadiness(records, {"waitFor": "manual"})["ready"])
-        self.assertTrue(core.evaluateParentContinuationReadiness(records, {"waitFor": "any"})["ready"])
-        self.assertTrue(core.evaluateParentContinuationReadiness(records, {"waitFor": "all"})["ready"])
-        self.assertTrue(core.evaluateParentContinuationReadiness(records, {"waitFor": "quorum", "quorumCount": 2})["ready"])
-        self.assertFalse(core.evaluateParentContinuationReadiness(records[:1], {"waitFor": "quorum", "quorumCount": 2})["ready"])
-
-    def test_group_readiness_waits_for_all_children_before_continuation(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(parent))
-            run(
-                groups_module._upsert_subagent_launch_group(
-                    parent["id"],
-                    {"id": "group-all", "label": "Batch", "childAgentIds": ["agent-a", "agent-b"], "taskIds": ["task-a", "task-b"]},
-                )
-            )
-            run(
-                core.createSubagentReconciliationForTerminalChild(
-                    childRecord={"agentId": "agent-a", "sessionId": "child-a", "parentSessionId": parent["id"], "name": "A", "status": "completed"},
-                    taskMeta={"task_id": "task-a", "status": "completed", "completedAt": "2026-07-05T00:00:00Z"},
-                    result={"text": "A done.", "stopReason": "end_turn"},
-                    source="test",
-                )
-            )
-            launched = []
-
-            async def starter(args):
-                launched.append(args)
-                return {"taskId": f"continuation-{len(launched)}"}
-
-            first = run(
-                continuation_module._maybe_start_ready_parent_continuations(
-                    parent["id"],
-                    launchGroupId="group-all",
-                    policy={"enabled": True, "waitFor": "all"},
-                    starter=starter,
-                )
-            )
-            self.assertEqual(first[0]["reason"], "all")
-            self.assertFalse(first[0]["ready"])
-            self.assertEqual(launched, [])
-
-            run(
-                core.createSubagentReconciliationForTerminalChild(
-                    childRecord={"agentId": "agent-b", "sessionId": "child-b", "parentSessionId": parent["id"], "name": "B", "status": "failed"},
-                    taskMeta={"task_id": "task-b", "status": "failed", "completedAt": "2026-07-05T00:00:01Z", "error": "B failed safely."},
-                    result={"text": "B failed safely.", "stopReason": "max_budget_usd"},
-                    source="test",
-                )
-            )
-            second = run(
-                continuation_module._maybe_start_ready_parent_continuations(
-                    parent["id"],
-                    launchGroupId="group-all",
-                    policy={"enabled": True, "waitFor": "all"},
-                    starter=starter,
-                )
-            )
-            self.assertEqual(second[0]["started"], True)
-            self.assertEqual(second[0]["continuationTaskId"], "continuation-1")
-            self.assertEqual(len(launched), 1)
-            self.assertEqual(launched[0]["prompt"], core.defaultParentContinuationPrompt())
-
-            third = run(
-                continuation_module._maybe_start_ready_parent_continuations(
-                    parent["id"],
-                    launchGroupId="group-all",
-                    policy={"enabled": True, "waitFor": "all"},
-                    starter=starter,
-                )
-            )
-            self.assertEqual(third[0]["reason"], "already_requested")
-            self.assertEqual(len(launched), 1)
-        finally:
-            self.restore_home(root, previous)
-
-    def test_group_readiness_counts_consumed_terminal_reconciliations(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(parent))
-            run(
-                groups_module._upsert_subagent_launch_group(
-                    parent["id"],
-                    {"id": "group-consumed", "label": "Batch", "childAgentIds": ["agent-a", "agent-b"], "taskIds": ["task-a", "task-b"]},
-                )
-            )
-            first_record = run(
-                core.createSubagentReconciliationForTerminalChild(
-                    childRecord={"agentId": "agent-a", "sessionId": "child-a", "parentSessionId": parent["id"], "name": "A", "status": "completed"},
-                    taskMeta={"task_id": "task-a", "status": "completed", "completedAt": "2026-07-05T00:00:00Z"},
-                    result={"text": "A done.", "stopReason": "end_turn"},
-                    source="test",
-                )
-            )
-            run(core.markSubagentReconciliationsConsumed(parent["id"], [first_record["id"]], parentMessageIndex=0, parentTurnId="turn-after-a"))
-            run(
-                core.createSubagentReconciliationForTerminalChild(
-                    childRecord={"agentId": "agent-b", "sessionId": "child-b", "parentSessionId": parent["id"], "name": "B", "status": "completed"},
-                    taskMeta={"task_id": "task-b", "status": "completed", "completedAt": "2026-07-05T00:00:01Z"},
-                    result={"text": "B done.", "stopReason": "end_turn"},
-                    source="test",
-                )
-            )
-            launched = []
-
-            async def starter(args):
-                launched.append(args)
-                return {"taskId": "continuation-consumed"}
-
-            outcome = run(
-                continuation_module._maybe_start_ready_parent_continuations(
-                    parent["id"],
-                    launchGroupId="group-consumed",
-                    policy={"enabled": True, "waitFor": "all"},
-                    starter=starter,
-                )
-            )
-            self.assertEqual(outcome[0]["terminal"], 2)
-            self.assertTrue(outcome[0]["started"])
-            self.assertEqual(outcome[0]["continuationTaskId"], "continuation-consumed")
-            self.assertEqual(len(launched), 1)
-        finally:
-            self.restore_home(root, previous)
-
-    def test_unavailable_continuation_starter_does_not_burn_recovery_attempt(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(parent))
-            run(
-                groups_module._upsert_subagent_launch_group(
-                    parent["id"],
-                    {"id": "group-no-supervisor", "label": "Batch", "childAgentIds": ["agent-a"], "taskIds": ["task-a"]},
-                )
-            )
-            run(
-                core.createSubagentReconciliationForTerminalChild(
-                    childRecord={"agentId": "agent-a", "sessionId": "child-a", "parentSessionId": parent["id"], "name": "A", "status": "completed"},
-                    taskMeta={"task_id": "task-a", "status": "completed", "completedAt": "2026-07-05T00:00:00Z"},
-                    result={"text": "A done.", "stopReason": "end_turn"},
-                    source="test",
-                )
-            )
-
-            async def no_starter(_runtime=None):
-                return None
-
-            with mock.patch.object(continuation_module, "_resolve_continuation_starter", no_starter):
-                outcome = run(
-                    continuation_module._maybe_start_ready_parent_continuations(
-                        parent["id"],
-                        launchGroupId="group-no-supervisor",
-                        policy={"enabled": True, "waitFor": "all"},
-                    )
-                )
-            self.assertEqual(outcome[0]["reason"], "supervisor_unavailable")
-            groups = run(groups_module._read_subagent_launch_groups(parent["id"]))
-            self.assertIsNone(groups[0].get("continuationRequestedAt"))
-            self.assertEqual(groups[0].get("continuationAttemptCount"), None)
-        finally:
-            self.restore_home(root, previous)
-
-    def test_finalizer_updates_launch_group_and_invokes_parent_continuation_policy(self):
+    def test_finalizer_updates_launch_group(self):
         root, home, workspace, previous = self.temp_context()
         previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}
         try:
@@ -419,23 +245,16 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                     "agentId": "agent-finalizer-group",
                     "agentName": "Group worker",
                     "launchGroupId": "group-finalizer",
-                    "parentContinuation": {"enabled": True, "waitFor": "all"},
                 }
             )
             os.environ["TESS_CHILD_AGENT_ID"] = "agent-finalizer-group"
             os.environ["TESS_CHILD_TASK_ID"] = "task-finalizer-group"
             os.environ["TESS_CHILD_SESSION_ID"] = child["id"]
-            with mock.patch.object(finalizers_module, "_maybe_start_ready_parent_continuations", new=mock.AsyncMock()) as maybe_continue:
-                run(core.finalizeBackgroundSubagentSuccessFromEnv(child, {"text": "Group worker done.", "stopReason": "end_turn"}))
+            run(core.finalizeBackgroundSubagentSuccessFromEnv(child, {"text": "Group worker done.", "stopReason": "end_turn"}))
             groups = run(groups_module._read_subagent_launch_groups("parent-finalizer-group"))
             self.assertEqual(groups[0]["id"], "group-finalizer")
             self.assertEqual(groups[0]["childAgentIds"], ["agent-finalizer-group"])
             self.assertEqual(groups[0]["taskIds"], ["task-finalizer-group"])
-            maybe_continue.assert_awaited_once_with(
-                "parent-finalizer-group",
-                launchGroupId="group-finalizer",
-                policy={"enabled": True, "waitFor": "all"},
-            )
         finally:
             for name, value in previous_env.items():
                 if value is None:

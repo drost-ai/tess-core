@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from ..._utils import now_iso
 from ...storage import mutateChildAgent, taskOutputPath, writeTaskMeta
-from ...subagents.continuation import _maybe_start_ready_parent_continuations
 from ...subagents.groups import _upsert_subagent_launch_group
 from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
 from ...subagents.result import evaluate_subagent_result, persist_structured_subagent_result
@@ -126,7 +125,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
                 "terminalStatus": reconciliation.get("terminalStatus"),
             },
         )
-    await _upsert_and_maybe_continue_parent(session, child_record or {}, task_meta)
+    await _upsert_parent_launch_group(session, child_record or {}, task_meta)
     await append_task_event(
         task_id,
         {
@@ -207,7 +206,7 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
                 "terminalStatus": reconciliation.get("terminalStatus"),
             },
         )
-    await _upsert_and_maybe_continue_parent(None, child_record, task_meta)
+    await _upsert_parent_launch_group(None, child_record, task_meta)
     await append_task_event(
         task_id,
         {"type": "task.subagent.failed", "agentId": agent_id, "childSessionId": session_id, "status": "failed", "error": message},
@@ -229,7 +228,7 @@ async def _background_structured_result_fields(task_id: str, session: dict[str, 
     }
 
 
-async def _upsert_and_maybe_continue_parent(session: dict[str, Any] | None, child_record: dict[str, Any], task_meta: dict[str, Any]) -> None:
+async def _upsert_parent_launch_group(session: dict[str, Any] | None, child_record: dict[str, Any], task_meta: dict[str, Any]) -> None:
     metadata = session.get("metadata") if isinstance(session, dict) and isinstance(session.get("metadata"), dict) else {}
     parent_session_id = metadata.get("parentSessionId") or child_record.get("parentSessionId") or task_meta.get("parent_session_id")
     launch_group_id = metadata.get("launchGroupId") or child_record.get("launchGroupId") or task_meta.get("launch_group_id")
@@ -244,5 +243,3 @@ async def _upsert_and_maybe_continue_parent(session: dict[str, Any] | None, chil
             "taskIds": [task_meta.get("task_id")],
         },
     )
-    policy = metadata.get("parentContinuation") if isinstance(metadata.get("parentContinuation"), dict) else child_record.get("parentContinuation")
-    await _maybe_start_ready_parent_continuations(parent_session_id, launchGroupId=launch_group_id, policy=policy if isinstance(policy, dict) else None)

@@ -52,7 +52,6 @@ TASK_PROCESS_FILES = (
 )
 SCENARIO_PROCESS_FILES = (
     "test_coordination_transaction_migrations.py",
-    "test_coordination_transactions.py",
     "test_harness_ci_runner.py",
     "test_harness_context_driver.py",
     "test_harness_executor.py",

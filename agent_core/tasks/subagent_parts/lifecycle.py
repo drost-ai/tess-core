@@ -209,8 +209,6 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     metadata["launchGroupId"] = launch_group_id
     metadata["worktreePath"] = worktree_path
     metadata["effectiveAgentAuthority"] = child_authority
-    if isinstance(config.get("parentContinuation"), dict):
-        metadata["parentContinuation"] = dict(config["parentContinuation"])
     if runtime_contract:
         metadata["subagentRuntimeContract"] = runtime_contract
     metadata["childSessionIds"] = []
@@ -290,7 +288,6 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "runInBackground": run_in_background,
         "runtimeContract": runtime_contract,
         "effectiveAgentAuthority": child_authority,
-        "parentContinuation": metadata.get("parentContinuation"),
         "status": "queued" if run_in_background else "running",
         "startedAt": now,
         "owner": "daemon" if run_in_background and context.get("daemon") else "client",

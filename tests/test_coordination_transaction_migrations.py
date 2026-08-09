@@ -4,18 +4,70 @@ import asyncio
 import multiprocessing
 import time
 from pathlib import Path
-from unittest.mock import patch
 
 import agent_core as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
-from tests.test_coordination_transactions import (
-    BRIDGE_ID,
-    PARENT_ID,
-    _coordination_writer,
-    _create_group,
-    _legacy_claim,
-    _reconciliation,
-)
+
+BRIDGE_ID = "30000000-0000-4000-8000-000000000001"
+PARENT_ID = "30000000-0000-4000-8000-000000000002"
+
+
+def _coordination_writer(home: str, writer_id: str, barrier_dir: str) -> None:
+    core.configureRuntimeHome(home)
+    Path(barrier_dir, f"ready-{writer_id}").write_text("ready\n", encoding="utf-8")
+    deadline = time.monotonic() + 20
+    while not Path(barrier_dir, "go").exists():
+        if time.monotonic() >= deadline:
+            raise TimeoutError("coordination barrier timed out")
+        time.sleep(0.005)
+
+    async def write() -> None:
+        created_at = "2026-01-01T00:00:00.000Z"
+        await asyncio.gather(
+            core.appendBridgeInboxMessage({
+                "id": f"message-{writer_id}",
+                "bridgeId": BRIDGE_ID,
+                "createdAt": created_at,
+                "source": "local",
+                "text": f"writer {writer_id}",
+            }),
+            core.appendBridgeEvent({
+                "id": f"event-{writer_id}",
+                "bridgeId": BRIDGE_ID,
+                "createdAt": created_at,
+                "event": "test.writer",
+                "data": {"writer_id": writer_id},
+            }),
+            core.upsertSubagentReconciliation({
+                "id": f"reconciliation-{writer_id}",
+                "idempotencyKey": f"writer:{writer_id}",
+                "parentSessionId": PARENT_ID,
+                "childSessionId": f"child-session-{writer_id}",
+                "childAgentId": f"child-agent-{writer_id}",
+                "taskId": f"task-{writer_id}",
+                "terminalStatus": "completed",
+                "summary": f"writer {writer_id}",
+                "childCompletedAt": created_at,
+                "createdAt": created_at,
+            }),
+        )
+
+    asyncio.run(write())
+
+
+def _reconciliation(parent_id: str, suffix: str) -> dict:
+    return {
+        "id": f"reconciliation-{suffix}",
+        "idempotencyKey": f"key-{suffix}",
+        "parentSessionId": parent_id,
+        "childSessionId": f"child-session-{suffix}",
+        "childAgentId": f"child-agent-{suffix}",
+        "taskId": f"task-{suffix}",
+        "terminalStatus": "completed",
+        "summary": "done",
+        "childCompletedAt": "2026-01-01T00:00:00.000Z",
+        "createdAt": "2026-01-01T00:00:00.000Z",
+    }
 
 
 class CoordinationTransactionMigrationTests(AgentCoreTestCase):
@@ -58,105 +110,6 @@ class CoordinationTransactionMigrationTests(AgentCoreTestCase):
                 if process.is_alive():
                     process.terminate()
                     process.join(5)
-            self.restore_home(root, previous)
-
-    def test_p03_legacy_live_dead_and_unknown_claimants_migrate_once(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            parent_id = "40000000-0000-4000-8000-000000000040"
-            live_pid = 41001
-            dead_pid = 41002
-            for group_id, continuation in (
-                (
-                    "legacy-live",
-                    _legacy_claim(
-                        claimantPid=live_pid,
-                        claimantStartToken="live-token",
-                        claimantPlatform="test",
-                    ),
-                ),
-                (
-                    "legacy-dead",
-                    _legacy_claim(
-                        claimantPid=dead_pid,
-                        claimantStartToken="dead-token",
-                        claimantPlatform="test",
-                    ),
-                ),
-                (
-                    "legacy-unknown-fresh",
-                    _legacy_claim(
-                        claimedAt="2026-01-01T00:01:50.000Z",
-                        startingAt="2026-01-01T00:01:51.000Z",
-                    ),
-                ),
-                ("legacy-unknown-old", _legacy_claim()),
-            ):
-                run(_create_group(parent_id, group_id, continuation))
-
-            async def observe(pid: int) -> dict:
-                if pid == live_pid:
-                    return {
-                        "pid": live_pid,
-                        "processGroupId": live_pid,
-                        "startToken": "live-token",
-                        "platform": "test",
-                        "observedCommandDigest": "live",
-                    }
-                if pid == dead_pid:
-                    raise core.ProcessIdentityError(
-                        "process.not_found", "injected dead claimant"
-                    )
-                raise core.ProcessIdentityError(
-                    "process.inspect_unavailable", "injected unknown claimant"
-                )
-
-            with patch(
-                "agent_core.process.identity._process_identity_observer_for_tests",
-                observe,
-            ):
-                run(core.recoverSubagentLaunchGroupContinuations(
-                    parent_id, "2026-01-01T00:02:00.000Z"
-                ))
-                groups = {
-                    group["id"]: group
-                    for group in run(core.listSubagentLaunchGroups(parent_id))
-                }
-                self.assertEqual(
-                    groups["legacy-live"]["continuation"]["recoveryReason"],
-                    "legacy_claimant_live_grace",
-                )
-                self.assertEqual(
-                    groups["legacy-dead"]["continuation"]["phase"],
-                    "retryable",
-                )
-                self.assertEqual(
-                    groups["legacy-unknown-fresh"]["continuation"]["recoveryReason"],
-                    "legacy_claimant_unknown_grace",
-                )
-                self.assertEqual(
-                    groups["legacy-unknown-old"]["continuation"]["phase"],
-                    "retryable",
-                )
-                self.assertEqual(
-                    run(core.recoverSubagentLaunchGroupContinuations(
-                        parent_id, "2026-01-01T00:02:00.000Z"
-                    )),
-                    [],
-                )
-                run(core.recoverSubagentLaunchGroupContinuations(
-                    parent_id, "2026-01-01T00:03:00.000Z"
-                ))
-            groups = {
-                group["id"]: group
-                for group in run(core.listSubagentLaunchGroups(parent_id))
-            }
-            self.assertEqual(groups["legacy-live"]["continuation"]["phase"], "retryable")
-            self.assertEqual(
-                groups["legacy-unknown-fresh"]["continuation"]["phase"],
-                "retryable",
-            )
-        finally:
             self.restore_home(root, previous)
 
     def test_concurrent_parent_delivery_has_one_claim_and_one_consumption(self):

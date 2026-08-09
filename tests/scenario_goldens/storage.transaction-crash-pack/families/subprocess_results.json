@@ -6,14 +6,13 @@
       "unittest",
       "-q",
       "tests.test_session_transactions",
-      "tests.test_coordination_transactions",
       "tests.test_coordination_transaction_migrations",
       "tests.test_record_corruption_isolation"
     ],
     "driver": "run_subprocess",
     "returnCode": 0,
     "status": "passed",
-    "stderr": "----------------------------------------------------------------------\nRan 12 tests in <duration-s>\n\nOK\n",
+    "stderr": "----------------------------------------------------------------------\nRan 9 tests in <duration-s>\n\nOK\n",
     "stdout": ""
   }
 ]

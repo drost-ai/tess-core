@@ -5,11 +5,6 @@ The facade re-exports exactly the public names its submodules define.
 from __future__ import annotations
 
 from .capacity import ACTIVE_TASK_STATUSES, check_subagent_capacity, resolve_subagent_concurrency_policy
-from .continuation import (
-    defaultParentContinuationPrompt,
-    evaluateParentContinuationReadiness,
-)
-from .continuation_recovery import TERMINAL_TASK_STATUSES, recoverSubagentLaunchGroupContinuations
 from .contract import (
     filter_tools_for_subagent,
     normalize_subagent_runtime_contract,
@@ -17,15 +12,10 @@ from .contract import (
     summarize_subagent_runtime_contract,
 )
 from .coordination import (
-    claimSubagentLaunchGroupContinuation,
     claimUnconsumedSubagentReconciliations,
     completeSubagentReconciliationClaim,
     listSubagentLaunchGroups,
     listSubagentReconciliations,
-    markSubagentLaunchGroupContinuationCompleted,
-    markSubagentLaunchGroupContinuationRunning,
-    markSubagentLaunchGroupContinuationStarting,
-    releaseSubagentLaunchGroupContinuationClaim,
     upsertSubagentLaunchGroup,
     withSubagentCoordinationTransaction,
 )
@@ -76,7 +66,6 @@ from ..tasks.subagents import (
 __all__ = [
     "ACTIVE_TASK_STATUSES",
     "TERMINAL_RECONCILIATION_STATUSES",
-    "TERMINAL_TASK_STATUSES",
     "appendLaunchGroupMetadata",
     "appendPendingSubagentReconciliationsToSession",
     "boundedSubagentError",
@@ -87,13 +76,10 @@ __all__ = [
     "checkSubagentDepthAllowed",
     "check_subagent_capacity",
     "check_subagent_runtime_limits",
-    "claimSubagentLaunchGroupContinuation",
     "claimUnconsumedSubagentReconciliations",
     "completeSubagentReconciliationClaim",
     "consumeAppendedSubagentReconciliations",
     "createSubagentReconciliationForTerminalChild",
-    "defaultParentContinuationPrompt",
-    "evaluateParentContinuationReadiness",
     "evaluate_subagent_result",
     "extract_structured_result_json",
     "filter_tools_for_subagent",
@@ -106,16 +92,11 @@ __all__ = [
     "mapStopReasonToCompletionReason",
     "mapStopReasonToStatus",
     "mapStopReasonToWaitingReason",
-    "markSubagentLaunchGroupContinuationCompleted",
-    "markSubagentLaunchGroupContinuationRunning",
-    "markSubagentLaunchGroupContinuationStarting",
     "markSubagentReconciliationsConsumed",
     "normalize_subagent_runtime_contract",
     "persist_structured_subagent_result",
     "prepareSubagent",
     "readSubagentReconciliations",
-    "recoverSubagentLaunchGroupContinuations",
-    "releaseSubagentLaunchGroupContinuationClaim",
     "renderSubagentReconciliationMessage",
     "requireSubagentDepthAllowed",
     "resolveSubagentLaunchGroupId",

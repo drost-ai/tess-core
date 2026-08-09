@@ -23,7 +23,6 @@
           "unittest",
           "-q",
           "tests.test_session_transactions",
-          "tests.test_coordination_transactions",
           "tests.test_coordination_transaction_migrations",
           "tests.test_record_corruption_isolation"
         ]
