@@ -43,7 +43,3 @@ from .providers.openai import (
     sendOpenAiResponsesRequest,
 )
 from .runtime.secrets import resolveRuntimeSecretString
-from .tasks.health_check_revalidation import (
-    __setHealthCheckGrantClockForTests,
-    __setHealthCheckRevalidationTestHookForTests,
-)

@@ -165,24 +165,6 @@ def _watch_process_thread(
 
 
 
-def _terminate_process(pid: int | None) -> bool:
-    if not pid:
-        return False
-    try:
-        if hasattr(os, "killpg"):
-            os.killpg(os.getpgid(pid), signal.SIGTERM)
-        else:
-            os.kill(pid, signal.SIGTERM)
-        return True
-    except ProcessLookupError:
-        return False
-    except Exception:
-        with contextlib.suppress(Exception):
-            os.kill(pid, signal.SIGTERM)
-            return True
-        return False
-
-
 def _signal_name(signum: int) -> str | None:
     try:
         return signal.Signals(signum).name

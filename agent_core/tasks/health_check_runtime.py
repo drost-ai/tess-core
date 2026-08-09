@@ -22,7 +22,6 @@ from ..storage import (
     writeTaskMeta,
 )
 from .health_check_executor import appendHealthCheckLog, executeHealthCheck
-from .health_check_migration import migrateLegacyHealthCheck
 from .health_check_policy import (
     assertHealthCheckExecutionPolicy,
     healthCheckSpecDigest,
@@ -55,7 +54,10 @@ def createHealthCheckController(
             return
         now_ms = datetime.now(timezone.utc).timestamp() * 1000
         for candidate in await listHealthCheckTasks():
-            record = await migrateLegacyHealthCheck(candidate["taskId"])
+            # Legacy (pre-v2) records are inert: never runnable, never
+            # mutated. The old migration lane suspended them into a state
+            # with no shipped un-suspend path; skipping is the remedy.
+            record = candidate
             if not record or not _is_active(record.get("status")) or not _is_runnable(record):
                 continue
             last_run_ms = _timestamp_ms(record.get("lastRunAt"))

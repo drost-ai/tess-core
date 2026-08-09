@@ -333,6 +333,11 @@ async def _rotate_daemon_events_periodically(instance_id: str, shutdown: asyncio
 
 
 def _inject_daemon_boot_fault(stage: str, instance_id: str) -> None:
+    # Two-key arming: a staged boot crash (os._exit) in a production daemon
+    # must never be one stray environment variable away. The harness sets
+    # both keys; either alone is inert.
+    if os.environ.get("AGENT_CORE_TEST_FAULTS") != "daemon-boot":
+        return
     if os.environ.get("AGENT_CORE_TEST_DAEMON_BOOT_FAULT_STAGE") != stage:
         return
     marker = os.environ.get("P02_FAULT_MARKER")

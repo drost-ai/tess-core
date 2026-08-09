@@ -45,12 +45,6 @@ from .result import (
     persist_structured_subagent_result,
     structured_result_path,
 )
-from .result_payload import (
-    boundedSubagentError,
-    boundedSubagentEventSummary,
-    boundedSubagentRuntimeContract,
-    shapeForegroundSubagentResult,
-)
 from ..tasks.subagents import (
     finalizeBackgroundSubagentFailureFromEnv,
     finalizeBackgroundSubagentSuccessFromEnv,
@@ -68,9 +62,6 @@ __all__ = [
     "TERMINAL_RECONCILIATION_STATUSES",
     "appendLaunchGroupMetadata",
     "appendPendingSubagentReconciliationsToSession",
-    "boundedSubagentError",
-    "boundedSubagentEventSummary",
-    "boundedSubagentRuntimeContract",
     "buildSubagentReconciliationRecord",
     "build_subagent_tool_limit_result",
     "checkSubagentDepthAllowed",
@@ -105,7 +96,6 @@ __all__ = [
     "resolve_subagent_runtime_limits",
     "runtime_contract_for_agent",
     "sanitizePermissionMode",
-    "shapeForegroundSubagentResult",
     "startBackgroundSubagent",
     "structured_result_path",
     "subagentReconciliationLogPath",

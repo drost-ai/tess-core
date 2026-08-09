@@ -167,26 +167,6 @@ def _latest_records(records: list[dict[str, Any]], id_field: str) -> list[dict[s
     )
 
 
-async def _claim_undelivered_task_messages(
-    task_id: str,
-    child_session_id: str | None,
-) -> list[dict[str, Any]]:
-    delivered_at = now_iso()
-
-    def _claim(records: list[dict[str, Any]]) -> dict[str, Any]:
-        messages = _latest_records(records, "messageId")
-        claimed: list[dict[str, Any]] = []
-        for index, message in enumerate(messages):
-            matches_session = not child_session_id or message.get("childSessionId") == child_session_id
-            if message.get("status") == "queued" and matches_session:
-                updated = {**message, "status": "delivered", "deliveredAt": delivered_at}
-                messages[index] = updated
-                claimed.append(updated)
-        return {"records": messages, "result": claimed, "changed": bool(claimed)}
-
-    return await mutateJsonLines(task_mailbox_path(task_id), _claim)
-
-
 def _session_task_message_ids(session: Mapping[str, Any]) -> set[str]:
     found: set[str] = set()
     for message in session.get("messages") or []:

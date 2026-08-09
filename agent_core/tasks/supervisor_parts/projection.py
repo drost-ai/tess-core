@@ -40,6 +40,8 @@ from .utils import (
 )
 from typing import Any, Callable
 
+from ...subagents.capacity import ACTIVE_TASK_STATUSES
+
 
 async def _project_session_task_records(
     session_id: str,
@@ -294,7 +296,7 @@ async def _collaboration_snapshot(session_id: str) -> dict[str, Any]:
 
 
 def _is_active_task_status(status: Any) -> bool:
-    return status in {"queued", "running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
+    return status in ACTIVE_TASK_STATUSES
 
 
 def _restore_without_saved_at(value: dict[str, Any]) -> dict[str, Any]:

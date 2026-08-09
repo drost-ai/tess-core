@@ -290,7 +290,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             or health.get("status") not in {"stopped", "failed"}
         ):
             raise RuntimeError(
-                "Health check requires explicit revalidation before retry."
+                "Legacy health check cannot be retried; start a new health check."
             )
         return await health_check_controller["start"](
             {

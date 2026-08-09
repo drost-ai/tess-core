@@ -14,6 +14,7 @@ from ...config import resolveConfig
 from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord, withRecordTransaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ..subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
+from ..subagent_parts.finalizers import _background_structured_result_fields
 from ...tools import createBuiltinTools
 from ...runtime.generation import createRuntimeSessionBinding
 from ..._utils import now_iso
@@ -146,6 +147,10 @@ async def _publish_resident_turn_result(task_id: str, agent_id: str, session: di
     summary = text[:280]
     now = now_iso()
     await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": text, "metadata": _reply_metadata(trigger_ids)})
+    # Structured results are part of the advertised contract in resident mode
+    # too (the default): evaluate the latest turn's text against the child's
+    # responseSchema, not only in the one-shot finalizer.
+    structured_fields = await _background_structured_result_fields(task_id, session, text)
 
     def _idle_child(current: dict[str, Any] | None) -> dict[str, Any] | None:
         if not current:
@@ -162,6 +167,7 @@ async def _publish_resident_turn_result(task_id: str, agent_id: str, session: di
             "retryable": False,
             "lastUpdatedAt": now,
             "lastSummary": summary,
+            **structured_fields,
         }
 
     await mutateChildAgent(agent_id, _idle_child)

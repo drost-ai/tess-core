@@ -4,11 +4,6 @@ from tests.support.agent_core_case import *
 from agent_core._utils import now_iso
 
 from agent_core.tasks import health_check_executor as executor
-from agent_core.tasks import health_check_revalidation as revalidation
-from agent_core.tasks.health_check_migration import (
-    loadHealthCheckRevalidationJournal,
-    migrateLegacyHealthCheck,
-)
 from agent_core.tasks.health_check_policy import (
     authorizeHealthCheckSpec,
     healthCheckSpecDigest,
@@ -312,71 +307,6 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             self.assertEqual(run(core.loadHealthCheckTask(task_id))["status"], "stopped")
         finally:
             self.restore_home(root, previous)
-
-    def test_legacy_migration_is_inert_exact_and_revalidation_is_idempotent(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            config, session = self._session(home, workspace)
-            task_id = "health-legacy-active"
-            legacy = {
-                "taskId": task_id,
-                "sessionId": session["id"],
-                "title": "legacy health",
-                "mode": "command",
-                "command": "printf legacy",
-                "cwd": str(workspace),
-                "intervalMs": 1000,
-                "timeoutMs": 1000,
-                "failureThreshold": 2,
-                "backoffMultiplier": 2,
-                "maxIntervalMs": 4000,
-                "status": "active",
-                "createdAt": now_iso(),
-                "updatedAt": now_iso(),
-            }
-            run(core.saveHealthCheckTask(legacy))
-            source_path = Path(core.healthCheckMetaPath(task_id))
-            source_bytes = source_path.read_bytes()
-            suspended = run(migrateLegacyHealthCheck(task_id))
-            self.assertEqual((suspended["status"], suspended["generation"]), ("suspended_unverified", 0))
-            journal = run(loadHealthCheckRevalidationJournal(task_id))
-            self.assertEqual(base64.b64decode(journal["rawLegacyBytesBase64"]), source_bytes)
-            self.assertNotIn("executionPolicy", suspended)
-
-            context = self._context(config, session)
-            grant = run(revalidation.authorizeHealthCheckRevalidation(context, task_id))
-            values = {
-                "taskId": task_id,
-                "expectedSuspensionRevision": suspended["suspensionRevision"],
-                "expectedSpecDigest": suspended["specDigest"],
-                "approvalGrant": grant,
-            }
-
-            async def concurrent():
-                return await asyncio.gather(
-                    revalidation.revalidateHealthCheck(values),
-                    revalidation.revalidateHealthCheck(values),
-                )
-
-            first, second = run(concurrent())
-            self.assertEqual(first, second)
-            replacement = run(core.loadHealthCheckTask(first["replacementTaskId"]))
-            self.assertEqual((replacement["status"], replacement["generation"]), ("active", 1))
-            self.assertEqual(replacement["supersedes"], task_id)
-            self.assertEqual(run(core.loadHealthCheckTask(task_id))["status"], "suspended_unverified")
-
-            terminal_id = "health-legacy-stopped"
-            terminal = {**legacy, "taskId": terminal_id, "status": "stopped"}
-            run(core.saveHealthCheckTask(terminal))
-            terminal_path = Path(core.healthCheckMetaPath(terminal_id))
-            before = terminal_path.read_bytes()
-            run(migrateLegacyHealthCheck(terminal_id))
-            self.assertEqual(terminal_path.read_bytes(), before)
-        finally:
-            getattr(revalidation, "__setHealthCheckGrantClockForTests")()
-            getattr(revalidation, "__setHealthCheckRevalidationTestHookForTests")()
-            self.restore_home(root, previous)
-
 
 if __name__ == "__main__":
     unittest.main()

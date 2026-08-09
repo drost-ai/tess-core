@@ -5,10 +5,6 @@ from tests.support.agent_core_case import *
 from agent_core.process.bash_lifecycle import _process_group_live, runInlineShellCommand
 from agent_core.payloads.bash_results import buildBashResultPayload
 from agent_core.process.output import createSubprocessOutputCollector
-from agent_core.subagents.result_payload import (
-    boundedSubagentError,
-    shapeForegroundSubagentResult,
-)
 from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guardToolCallResult,
@@ -82,43 +78,6 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertIsNone(core.renderRetrievedMemoryPrompt(too_small))
         finally:
             self.restore_home(root, previous)
-
-    def test_foreground_subagent_result_uses_child_session_recovery_instead_of_nesting(self):
-        huge = ("child result 漢🙂\\\"" * 400_000) + "\ud800"
-        payload = shapeForegroundSubagentResult(
-            config={"providerKind": "anthropic", "model": "claude-opus-4-8"},
-            agentId="agent-child",
-            sessionId="child-session",
-            agentType="reviewer",
-            status="completed",
-            text=huge,
-            usage={"input_tokens": 10, "output_tokens": 20},
-            toolCount=4,
-            durationMs=123,
-            stopReason="end_turn",
-            structuredResultStatus="valid",
-            structuredResult={
-                "duplicate": huge,
-                "rows": [{"id": index} for index in range(500)],
-            },
-            structuredResultErrors=[],
-            effectiveAuthority={"roots": ["/runtime-owned"]},
-            runtimeContract={"tools": [huge for _ in range(500)]},
-        )
-        content = json.dumps(payload, indent=2, ensure_ascii=False)
-        self.assertEqual(payload["type"], "foreground_subagent_result")
-        self.assertEqual(payload["recovery"]["type"], "child_session")
-        self.assertEqual(payload["recovery"]["session_id"], "child-session")
-        self.assertTrue(payload["content_truncated"])
-        self.assertTrue(payload["structured_result_truncated"])
-        self.assertTrue(payload["runtime_contract_truncated"])
-        self.assertLess(len(payload["content"]), len(huge) // 100)
-        self.assertLessEqual(serializedContentBytes(content), TOOL_RESULT_FINAL_BYTES["large"])
-        self.assertFalse(hasLoneUtf16Surrogate(content))
-        self.assertNotIn(
-            "sk-super-secret-value",
-            boundedSubagentError(RuntimeError("Bearer abcdefghijklmnop sk-super-secret-value")),
-        )
 
     def test_dispatch_bounds_returned_and_thrown_results_before_provider_reuse(self):
         root, home, workspace, previous = self.temp_context()

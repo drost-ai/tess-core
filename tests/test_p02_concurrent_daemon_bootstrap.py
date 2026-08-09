@@ -61,6 +61,7 @@ def _ensure_daemon_worker(
     os.environ["AGENT_CORE_HOME"] = runtime_home
     os.environ["AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS"] = "15000"
     if fault_stage:
+        os.environ["AGENT_CORE_TEST_FAULTS"] = "daemon-boot"
         os.environ["AGENT_CORE_TEST_DAEMON_BOOT_FAULT_STAGE"] = fault_stage
     if fault_marker:
         os.environ["P02_FAULT_MARKER"] = fault_marker
