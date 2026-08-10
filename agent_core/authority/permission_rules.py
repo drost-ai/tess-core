@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping
 from urllib.parse import urlsplit
 
 from .repository_trust import approveRepositoryContent, checkRepositoryApproval
-from .shell_command_policy import parseSingleShellCommand
+from .shell_command_policy import parseSingleShellCommand, splitShellCommandConstituents
 from ..storage import fileOrJson, getProjectRoot, loadSettings
 
 
@@ -79,7 +79,6 @@ def matchesBashRulePattern(
 ) -> bool:
     if command is None:
         return False
-    normalized = normalizeShellCommand(command)
     if requireSingleCommand:
         parsed_command = parseSingleShellCommand(command)
         raw_pattern = pattern[:-2] if pattern.endswith(":*") else pattern
@@ -96,10 +95,30 @@ def matchesBashRulePattern(
             command_argv[index].startswith(value) if index == len(pattern_argv) - 1 else command_argv[index] == value
             for index, value in enumerate(pattern_argv)
         )
+    return any(
+        _loose_bash_pattern_matches(pattern, candidate)
+        for candidate in _deny_command_candidates(command)
+    )
+
+
+def _loose_bash_pattern_matches(pattern: str, normalized: str) -> bool:
     if pattern.endswith(":*"):
         prefix = normalizeShellCommand(pattern[:-2])
         return bool(prefix and normalized.startswith(prefix))
     return normalized == normalizeShellCommand(pattern)
+
+
+def _deny_command_candidates(command: str) -> list[str]:
+    """Every view a deny rule must see: the whole command, each constituent
+    simple command (env-assignment prefixes stripped), and each constituent
+    with its binary path collapsed to the basename."""
+    candidates = [normalizeShellCommand(command)]
+    for argv in splitShellCommandConstituents(command):
+        candidates.append(normalizeShellCommand(" ".join(argv)))
+        basename = os.path.basename(argv[0])
+        if basename and basename != argv[0]:
+            candidates.append(normalizeShellCommand(" ".join([basename, *argv[1:]])))
+    return candidates
 
 
 def matchesPathRulePattern(pattern: str, candidatePath: str | None, projectRoot: str | None = None) -> bool:
@@ -146,6 +165,11 @@ def _rule_matches(rule: Mapping[str, Any], call: Mapping[str, Any], project_root
             call.get("command"),
             requireSingleCommand=rule.get("effect") == "allow",
         )
+    if str(rule.get("tool") or "").startswith("mcp__"):
+        # No argument-pattern language exists for MCP calls. A pattern that
+        # cannot be evaluated may narrow an allow (never match) but must not
+        # weaken a deny/ask: those fire on the tool match alone.
+        return rule.get("effect") != "allow"
     return matchesPathRulePattern(pattern, call.get("path"), project_root)
 
 

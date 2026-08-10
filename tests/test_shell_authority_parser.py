@@ -75,3 +75,23 @@ class ShellAuthorityParserTests(unittest.TestCase):
         self.assertFalse(matchesBashRulePattern("git status:*", "git status; touch pwned"))
         self.assertTrue(_matches_command_policy("git status --short", ["git status"]))
         self.assertFalse(_matches_command_policy("git status; touch pwned", ["git status"]))
+
+    def test_deny_matching_pierces_env_prefixes_paths_and_composition(self):
+        def deny(pattern: str, command: str) -> bool:
+            return matchesBashRulePattern(pattern, command, requireSingleCommand=False)
+
+        self.assertTrue(deny("rm:*", "rm -rf /"))
+        self.assertTrue(deny("rm:*", "FOO=1 rm -rf /"))
+        self.assertTrue(deny("rm:*", "/bin/rm -rf /"))
+        self.assertTrue(deny("rm:*", "./bin/rm -rf /"))
+        self.assertTrue(deny("rm:*", "echo x && rm -rf /"))
+        self.assertTrue(deny("rm:*", "echo x; rm -rf /"))
+        self.assertTrue(deny("rm:*", "true | rm -rf /"))
+        self.assertTrue(deny("rm:*", 'echo "$(rm -rf /)"'))
+        self.assertTrue(deny("rm:*", "echo `rm -rf /`"))
+        self.assertTrue(deny("rm:*", "FOO=1 BAR=2 /usr/bin/rm -rf / && echo done"))
+        self.assertTrue(deny("git push:*", "FOO=bar git push origin main"))
+        self.assertTrue(deny("git push", "git   PUSH"))
+        self.assertFalse(deny("rm:*", "echo rm"))
+        self.assertFalse(deny("rm:*", "firm -rf /"))
+        self.assertFalse(deny("git push:*", "git pull origin main"))

@@ -117,6 +117,85 @@ def parseSingleShellCommand(command: Any) -> dict[str, Any]:
     return {"ok": True, "argv": argv}
 
 
+_ENV_ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def splitShellCommandConstituents(command: Any) -> list[list[str]]:
+    """Split a possibly-compound shell command into constituent argv lists.
+
+    Quote-aware and deliberately conservative for deny matching: every list,
+    pipeline, grouping, redirection, and substitution boundary ends the
+    current constituent, so each command the shell could run surfaces on its
+    own. Leading env-var assignments are stripped from every constituent.
+    """
+    if not isinstance(command, str):
+        return []
+    constituents: list[list[str]] = []
+    argv: list[str] = []
+    word: list[str] = []
+    word_started = False
+    state = "plain"
+
+    def push_word() -> None:
+        nonlocal word, word_started
+        if word_started:
+            argv.append("".join(word))
+            word = []
+            word_started = False
+
+    def push_argv() -> None:
+        nonlocal argv
+        push_word()
+        while argv and _ENV_ASSIGNMENT_PATTERN.match(argv[0]):
+            argv.pop(0)
+        if argv:
+            constituents.append(argv)
+        argv = []
+
+    index = 0
+    while index < len(command):
+        character = command[index]
+        if state == "single":
+            if character == "'":
+                state = "plain"
+            else:
+                word.append(character)
+        elif state == "double":
+            if character == '"':
+                state = "plain"
+            elif character in "$`":
+                # Substitution inside quotes still runs commands: surface them.
+                push_argv()
+                state = "plain"
+            elif character == "\\" and index + 1 < len(command):
+                index += 1
+                word.append(command[index])
+                word_started = True
+            else:
+                word.append(character)
+                word_started = True
+        elif character in "'\"":
+            state = "single" if character == "'" else "double"
+            word_started = True
+        elif character == "\\" and index + 1 < len(command):
+            index += 1
+            word.append(command[index])
+            word_started = True
+        elif character in ";&|\n(){}`<>":
+            push_argv()
+        elif character == "$" and index + 1 < len(command) and command[index + 1] == "(":
+            push_argv()
+            index += 1
+        elif character.isspace():
+            push_word()
+        else:
+            word.append(character)
+            word_started = True
+        index += 1
+    push_argv()
+    return constituents
+
+
 def _display_command(argv: list[str]) -> str:
     if argv and argv[0] == "git" and len(argv) > 1:
         return f"git {argv[1]}"

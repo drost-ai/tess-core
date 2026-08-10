@@ -46,6 +46,13 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
                 ({"ask": ["mcp__srv__tool"]}, "bypassPermissions", "allow", "mode"),
                 ({"deny": ["mcp__srv"]}, "bypassPermissions", "deny", "rule:inline"),
                 ({"allow": ["mcp__other"]}, "default", "ask", "mode"),
+                # Argument patterns have no MCP matching language: they must
+                # not weaken deny/ask (fire on the tool alone) and may only
+                # narrow allow (never match).
+                ({"deny": ["mcp__srv__tool(secret)"]}, "bypassPermissions", "deny", "rule:inline"),
+                ({"deny": ["mcp__srv(anything)"]}, "default", "deny", "rule:inline"),
+                ({"ask": ["mcp__srv__tool(x)"]}, "default", "ask", "rule:inline"),
+                ({"allow": ["mcp__srv__tool(x)"]}, "default", "ask", "mode"),
             ]
             for permissions, mode, decision, source in cases:
                 with self.subTest(permissions=permissions, mode=mode):
