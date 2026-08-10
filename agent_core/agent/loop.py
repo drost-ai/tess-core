@@ -167,6 +167,8 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     if appended_reconciliations.get("records"):
         await persistSession(session, config)
         await consumeAppendedSubagentReconciliations(session, appended_reconciliations, runtime=runtime)
+        # consumedAt is on disk; a cancel must not roll back past these records.
+        state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
 
     if prompt_content is not None:
         message = _user_request_message(prompt_content, lineage={"logicalTurnId": parent_turn_id})
@@ -181,6 +183,9 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     async def drain_mailboxes() -> list[dict[str, Any]]:
         delivered_messages = await deliver_queued_task_messages_to_session(session, config)
         if delivered_messages:
+            # Delivery is committed on disk and never requeued; advance the
+            # rollback authority so a cancel cannot truncate it away.
+            state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
             _safe_emit(
                 runtime,
                 "subagent.mailbox.delivered",
@@ -221,7 +226,12 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                 state.cost += float(provider_result.get("emptyResponseCostUsd") or 0)
             except _ImageBudgetError as error:
                 _restore_session_state(session, state.rollback_snapshot)
-                await persistSession(session, config)
+                # cancel_turn's write-back contract: the restore may shorten.
+                await persistSession(
+                    session,
+                    config,
+                    {"force": True, "truncateTranscript": True},
+                )
                 _safe_emit(
                     runtime,
                     "provider.image_budget_rejected",
