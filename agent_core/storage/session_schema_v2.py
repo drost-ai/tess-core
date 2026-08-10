@@ -22,7 +22,7 @@ from .session_body_v2 import (
     _replace_body_sync,
     _scan_body_bytes,
 )
-from .json_io import readJsonFile, withRecordTransaction, writeJsonFile
+from .json_io import readJsonFileTolerant, withRecordTransaction, writeJsonFile
 from .paths import getStateRoot, sessionPath
 
 SESSION_SCHEMA_V2 = 2
@@ -273,7 +273,7 @@ async def migrateSessionToV2(
 ) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
     async with withRecordTransaction("session", session_id):
-        raw = await readJsonFile(sessionPath(session_id), None)
+        raw = await readJsonFileTolerant(sessionPath(session_id), None)
         hydrated = await hydratePersistedSession(session_id, raw)
         record = hydrated["record"]
         if record is None:
@@ -293,7 +293,7 @@ async def migrateSessionToV2(
 async def writeBackSessionV1(sessionId: str) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
     async with withRecordTransaction("session", session_id):
-        raw = await readJsonFile(sessionPath(session_id), None)
+        raw = await readJsonFileTolerant(sessionPath(session_id), None)
         hydrated = await hydratePersistedSession(session_id, raw)
         record = hydrated["record"]
         if record is None:
@@ -312,7 +312,7 @@ async def writeBackSessionV1(sessionId: str) -> dict[str, Any]:
 async def compactSessionMessageBody(sessionId: str) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
     async with withRecordTransaction("session", session_id):
-        raw = await readJsonFile(sessionPath(session_id), None)
+        raw = await readJsonFileTolerant(sessionPath(session_id), None)
         hydrated = await hydratePersistedSession(session_id, raw)
         record = hydrated["record"]
         if record is None:

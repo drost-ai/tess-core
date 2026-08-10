@@ -22,7 +22,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from .json_io import _in_process_lock, readJsonFile, withRecordTransaction, writeJsonFile
+from .json_io import _in_process_lock, readJsonFile, readJsonFileTolerant, withRecordTransaction, writeJsonFile
 from .paths import (
     compactionCheckpointPath,
     compactionManifestPath,
@@ -36,7 +36,7 @@ from .session_transactions import normalizeSessionRevision
 async def saveSession(session: SessionRecord) -> None:
     path = sessionPath(session["id"])
     async with withRecordTransaction("session", session["id"]):
-        raw = await readJsonFile(path, None)
+        raw = await readJsonFileTolerant(path, None)
         hydrated = await hydratePersistedSession(session["id"], raw)
         current = hydrated["record"]
         merged = _sanitize_media_for_persistence(_merge_session_for_full_save(current, session))

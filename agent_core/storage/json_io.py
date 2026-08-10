@@ -295,16 +295,45 @@ async def readJsonFile(filePath: str, fallback: Any) -> Any:
     return await _run_storage_io(_read_json_file_sync, filePath, fallback)
 
 
+def _read_json_file_tolerant_sync(file_path: str, fallback: Any) -> Any:
+    try:
+        return _read_json_file_sync(file_path, fallback)
+    except (OSError, ValueError):
+        return fallback
+
+
+async def readJsonFileTolerant(filePath: str, fallback: Any) -> Any:
+    """Degrade a torn or unreadable record to ``fallback`` instead of raising —
+    only for records recovery can rebuild (e.g. v2 heads from body + archive)."""
+    return await _run_storage_io(_read_json_file_tolerant_sync, filePath, fallback)
+
+
+def _fsync_directory_sync(directory: str) -> None:
+    try:
+        fd = os.open(directory or ".", os.O_RDONLY)
+    except OSError:  # pragma: no cover - platforms without directory fds
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _write_json_file_sync(file_path: str, value: Any) -> None:
     measure = _persistence_observers_active()
     started_ns = _time.perf_counter_ns() if measure else 0
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     tmp = f"{file_path}.{os.getpid()}.{uuid.uuid4()}.tmp"
+    # Heads and records must never read back torn after a crash: fsync the
+    # payload before the atomic rename and the directory entry after it.
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(value, handle, indent=2, ensure_ascii=False)
         handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     byte_count = os.path.getsize(tmp) if measure else 0
     os.replace(tmp, file_path)
+    _fsync_directory_sync(os.path.dirname(file_path))
     if measure:
         _record_persistence_io("write", file_path, byte_count, _time.perf_counter_ns() - started_ns)
 

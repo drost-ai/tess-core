@@ -9,7 +9,7 @@ from ..session.message_history import (
     SessionMessageList,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
-from .json_io import _storage_lock_timeout_ms, readJsonFile, withRecordTransaction
+from .json_io import _storage_lock_timeout_ms, readJsonFileTolerant, withRecordTransaction
 from .paths import sessionPath
 from .session_schema_v2 import (
     commitSessionV2,
@@ -55,7 +55,7 @@ async def mutateSessionRecordTransaction(
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
 
     async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
-        raw = await readJsonFile(sessionPath(session_id), None)
+        raw = await readJsonFileTolerant(sessionPath(session_id), None)
         hydrated = await hydratePersistedSession(session_id, raw)
         latest = hydrated["record"]
         if latest is not None and latest.get("id") != session_id:
@@ -143,7 +143,7 @@ async def mutateSessionHeadDeltaTransaction(
     settings = {**(options or {}), **kwargs}
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
     async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
-        raw = await readJsonFile(sessionPath(session_id), None)
+        raw = await readJsonFileTolerant(sessionPath(session_id), None)
         if not isSessionHeadV2(raw):
             return None
         current_revision = normalizeSessionRevision(raw.get("revision"))

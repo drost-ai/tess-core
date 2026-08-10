@@ -17,7 +17,7 @@ from ..storage import (
     getStateRoot,
     listLiveDaemonStates,
     loadSessionRecordShallow,
-    readJsonFile,
+    readJsonFileTolerant,
     sessionPath,
     sessionTranscriptLogPath,
     writeJsonFile,
@@ -188,7 +188,7 @@ async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwarg
             if before_raw is None or _sha256(before_raw) != candidate["beforeHash"]:
                 result["invalidated"].append({"sessionId": candidate["sessionId"], "reason": "record_changed"})
                 continue
-            current = await readJsonFile(path, None)
+            current = await readJsonFileTolerant(path, None)
             if not isinstance(current, dict):
                 result["invalidated"].append({"sessionId": candidate["sessionId"], "reason": "record_unavailable"})
                 continue

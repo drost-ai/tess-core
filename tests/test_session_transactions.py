@@ -132,6 +132,40 @@ class SessionTransactionTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_torn_head_degrades_to_absent_and_full_save_repairs(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = core.createEmptySession(
+                cwd=str(workspace),
+                provider="anthropic",
+                model="claude-sonnet-4-6",
+                systemPrompt="test",
+                permissionMode="default",
+            )
+            session["messages"] = [{"role": "user", "content": "durable"}]
+            run(core.saveSession(session))
+            path = Path(core.sessionPath(session["id"]))
+            path.write_bytes(b'{"id": "torn')
+
+            with self.assertRaises(core.SessionRecordNotFoundError):
+                run(core.updateSessionRecord(
+                    session["id"],
+                    lambda latest: {"changed": True, "session": latest},
+                ))
+            self.assertIsNone(run(core.loadSession(session["id"])))
+
+            run(core.saveSession(session))
+            committed = run(core.updateSessionRecord(
+                session["id"],
+                lambda latest: {"changed": True, "session": {**latest, "name": "repaired"}},
+            ))
+            self.assertEqual(committed["session"]["name"], "repaired")
+            persisted = run(core.loadSession(session["id"]))
+            self.assertEqual(persisted["messages"], [{"role": "user", "content": "durable"}])
+            self.assertEqual(persisted["name"], "repaired")
+        finally:
+            self.restore_home(root, previous)
+
     def test_stale_foreground_persist_preserves_concurrent_fields_and_revision(self):
         root, home, workspace, previous = self.temp_context()
         try:

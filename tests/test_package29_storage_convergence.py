@@ -7,6 +7,7 @@ import json
 import os
 import time
 from pathlib import Path
+from unittest import mock
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
@@ -110,6 +111,76 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         finally:
             if hasattr(sessions_module, "open"):
                 delattr(sessions_module, "open")
+            self.restore_home(root, previous)
+
+    def test_torn_head_recovers_from_archive_and_converges(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = self._session(workspace, "66666666-6666-4666-8666-666666666666")
+            run(core.saveSession(session))
+            run(
+                core.appendSessionTranscriptLogEntries(
+                    session["id"],
+                    [
+                        {
+                            "type": "session_header",
+                            "schema_version": 1,
+                            "session_id": session["id"],
+                            "persisted_at": "2026-06-01T00:00:00Z",
+                            "session": {key: value for key, value in session.items() if key != "messages"},
+                        },
+                        {"type": "message", "session_id": session["id"], "message_index": 0, "role": "user", "content": "hello", "persisted_at": "2026-06-01T00:00:00Z"},
+                        {"type": "message", "session_id": session["id"], "message_index": 1, "role": "assistant", "content": "world", "persisted_at": "2026-06-01T00:00:00Z"},
+                    ],
+                )
+            )
+            target = Path(core.sessionPath(session["id"]))
+            for torn in (b"", b'{"id": "66666666-6666-4666-8666-666666666666", "schemaV'):
+                target.write_bytes(torn)
+                recovered = run(core.loadSessionWithReconciliation(session["id"]))
+                self.assertTrue(recovered["changed"])
+                self.assertEqual(recovered["reason"], "archive_recovery")
+                self.assertEqual(
+                    [message["content"] for message in recovered["record"]["messages"]],
+                    ["hello", "world"],
+                )
+                self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["schemaVersion"], 2)
+                settled = run(core.loadSessionWithReconciliation(session["id"]))
+                self.assertFalse(settled["changed"])
+                self.assertEqual(len(settled["record"]["messages"]), 2)
+        finally:
+            self.restore_home(root, previous)
+
+    def test_torn_head_without_archive_header_reads_as_absent(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = self._session(workspace, "77777777-7777-4777-8777-777777777777")
+            run(core.saveSession(session))
+            target = Path(core.sessionPath(session["id"]))
+            target.write_bytes(b'{"id": "77777777-7777-4777-8777-777777777777"')
+            result = run(core.loadSessionWithReconciliation(session["id"]))
+            self.assertIsNone(result["record"])
+            self.assertFalse(result["changed"])
+            self.assertIsNone(run(core.loadSessionRecordShallow(session["id"])))
+        finally:
+            self.restore_home(root, previous)
+
+    def test_head_write_fsyncs_payload_and_directory_entry(self):
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            real_fsync = os.fsync
+            fsyncs: list[int] = []
+
+            def tracking_fsync(fd):
+                fsyncs.append(fd)
+                return real_fsync(fd)
+
+            target = Path(core.sessionPath("88888888-8888-4888-8888-888888888888"))
+            with mock.patch("os.fsync", tracking_fsync):
+                run(core.writeJsonFile(str(target), {"probe": True}))
+            self.assertEqual(len(fsyncs), 2)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"probe": True})
+        finally:
             self.restore_home(root, previous)
 
     def test_summary_cache_reparses_only_changed_records(self):

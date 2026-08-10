@@ -13,7 +13,7 @@ from .io_executor import runStorageIo as _run_storage_io
 import json
 
 from ..runtime.identifiers import parseSessionId
-from .json_io import readJsonFile, withRecordTransaction
+from .json_io import readJsonFileTolerant, withRecordTransaction
 from .paths import sessionPath, sessionTranscriptLogPath
 from .session_schema_v2 import commitSessionV2, hydratePersistedSession
 from .session_transactions import (
@@ -65,7 +65,7 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
     """Full selected-session load with an explicit, convergent repair verdict."""
     path = sessionPath(sessionId)
     async with withRecordTransaction("session", sessionId):
-        raw = await readJsonFile(path, None)
+        raw = await readJsonFileTolerant(path, None)
         if not raw:
             recovered = await _rebuild_session_from_transcript_archive(sessionId)
             if recovered is None:
