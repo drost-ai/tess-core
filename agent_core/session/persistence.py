@@ -17,6 +17,7 @@ from .message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
+from .tool_boundaries import findIncompleteToolExchange as _find_incomplete_tool_exchange
 from ..storage import (
     appendSessionTranscriptLogEntries,
     createEmptySession,
@@ -328,27 +329,7 @@ async def _persist_session_transcript_log(
 
 
 def _find_invalid_tool_use_boundary(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
-    for index, message in enumerate(messages):
-        if message.get("role") != "assistant":
-            continue
-        tool_ids = _collect_tool_use_ids(message)
-        if not tool_ids:
-            continue
-        next_message = messages[index + 1] if index + 1 < len(messages) else None
-        if not next_message or next_message.get("role") != "user" or not isinstance(next_message.get("content"), list):
-            return {"index": index, "missingToolUseIds": tool_ids}
-        result_ids = {block.get("tool_use_id") for block in next_message["content"] if block.get("type") == "tool_result"}
-        missing = [tool_id for tool_id in tool_ids if tool_id not in result_ids]
-        if missing:
-            return {"index": index, "missingToolUseIds": missing}
-    return None
-
-
-def _collect_tool_use_ids(message: dict[str, Any]) -> list[str]:
-    content = message.get("content")
-    if not isinstance(content, list):
-        return []
-    return [block["id"] for block in content if block.get("type") == "tool_use" and block.get("id")]
+    return _find_incomplete_tool_exchange(messages)
 
 
 async def _resolve_existing_session(options: dict[str, Any], sessions: list[dict[str, Any]], launch: dict[str, Any]) -> dict[str, Any] | None:

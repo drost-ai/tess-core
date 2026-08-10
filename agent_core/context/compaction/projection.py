@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from ...session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ...session.tool_boundaries import adjustStartToToolBoundary as _adjust_start_to_tool_boundary
 from ...storage import getSessionCompactionsDir
 from .documents import loadWorkingContextArtifact
 from .prompts import renderWorkingContextPromptContext
@@ -52,8 +53,14 @@ def buildMessagesForWorkingContext(session: dict[str, Any]) -> list[dict[str, An
     state = session.get("metadata", {}).get("compactionState")
     if not state:
         return list(session.get("messages", []))
-    cutoff = int(state.get("compactedThroughMessageIndex") or 0)
-    recent_messages = list(session.get("messages", [])[cutoff:])
+    messages = list(session.get("messages", []))
+    # Index drift (e.g. a manifest refresh) can land the stored cutoff inside
+    # a tool exchange; back it up to a boundary so the working set never
+    # starts with an orphan tool_result.
+    cutoff = _adjust_start_to_tool_boundary(
+        messages, int(state.get("compactedThroughMessageIndex") or 0)
+    )
+    recent_messages = messages[cutoff:]
     if not recent_messages or recent_messages[0].get("role") == "user":
         return recent_messages
     return [

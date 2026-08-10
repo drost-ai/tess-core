@@ -27,33 +27,17 @@ from ...session.message_origin import (
     isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
     syntheticUserMessage as _synthetic_user_message,
 )
+from ...session.tool_boundaries import adjustStartToToolBoundary as _adjust_start_to_tool_boundary
 
 
 def choosePreservedRawStart(messages: list[dict[str, Any]]) -> int:
     fallback_start = max(0, len(messages) - relief_knob("context.relief_preserve_min_messages"))
     last_plain_user_index = findLastPlainUserIndex(messages)
     if last_plain_user_index is None or last_plain_user_index <= 0:
-        return _adjustPreservedRawStartToProtocolBoundary(messages, fallback_start)
+        return _adjust_start_to_tool_boundary(messages, fallback_start)
     tail_tokens = estimateMessagesTokens(messages[last_plain_user_index:])
     candidate = last_plain_user_index if tail_tokens <= relief_knob("context.relief_raw_tail_tokens") else fallback_start
-    return _adjustPreservedRawStartToProtocolBoundary(messages, candidate)
-
-
-def _adjustPreservedRawStartToProtocolBoundary(messages: list[dict[str, Any]], candidate: int) -> int:
-    index = max(0, min(len(messages), candidate))
-    while index > 0 and _startsWithToolResultWithoutPreviousToolUse(messages, index):
-        index -= 1
-    return index
-
-
-def _startsWithToolResultWithoutPreviousToolUse(messages: list[dict[str, Any]], index: int) -> bool:
-    if index >= len(messages):
-        return False
-    message = messages[index]
-    content = message.get("content")
-    if message.get("role") != "user" or not isinstance(content, list):
-        return False
-    return any(isinstance(block, dict) and block.get("type") == "tool_result" for block in content)
+    return _adjust_start_to_tool_boundary(messages, candidate)
 
 
 def findLastPlainUserIndex(messages: list[dict[str, Any]]) -> int | None:
@@ -145,7 +129,7 @@ def applySessionMemoryCompaction(messages: list[dict[str, Any]], retrievedMemory
     if not retrievedMemory.get("records") or len(messages) <= relief_knob("context.relief_preserve_min_messages"):
         return emptyCompactionResult(messages)
     keep_count = max(4, max(8, relief_knob("context.relief_preserve_min_messages") // 2) - (reactiveAttempt * 2))
-    preserved_raw_start_index = _adjustPreservedRawStartToProtocolBoundary(messages, max(0, len(messages) - keep_count))
+    preserved_raw_start_index = _adjust_start_to_tool_boundary(messages, max(0, len(messages) - keep_count))
     if preserved_raw_start_index <= 0:
         return emptyCompactionResult(messages)
     removed_region = messages[:preserved_raw_start_index]
@@ -177,7 +161,7 @@ def applyPartialCompaction(messages: list[dict[str, Any]], reactiveAttempt: int 
     if len(messages) <= relief_knob("context.relief_preserve_min_messages") + 4:
         return emptyCompactionResult(messages)
     keep_count = max(2, 4 - reactiveAttempt)
-    preserved_raw_start_index = _adjustPreservedRawStartToProtocolBoundary(messages, min(max(0, len(messages) - keep_count), choosePreservedRawStart(messages) + (reactiveAttempt * 4)))
+    preserved_raw_start_index = _adjust_start_to_tool_boundary(messages, min(max(0, len(messages) - keep_count), choosePreservedRawStart(messages) + (reactiveAttempt * 4)))
     if preserved_raw_start_index <= 2:
         return emptyCompactionResult(messages)
     region = messages[:preserved_raw_start_index]

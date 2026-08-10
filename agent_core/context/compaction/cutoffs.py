@@ -8,6 +8,13 @@ from .shared import (
 from .utils import estimateMessageTokens
 from typing import Any
 from ...session.message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
+from ...session.tool_boundaries import (
+    assistantToolUsesAreCompleted,
+    messageHasToolResults,
+    messageHasToolUses,
+    messageToolResultIds as _message_tool_result_ids,
+    missingToolResultIds as _missing_tool_result_ids,
+)
 
 
 def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, previousCutoff: int = 0) -> int | None:
@@ -51,7 +58,6 @@ def chooseToolAwareCompactionCutoff(messages: list[dict[str, Any]], previousCuto
 
 
 def collectSubstantiveToolExchangeStarts(messages: list[dict[str, Any]], previousCutoff: int = 0) -> list[int]:
-    tool_results = collectToolResultIds(messages)
     starts: list[int] = []
     for message_index, message in enumerate(messages):
         if message_index <= previousCutoff or message.get("role") != "assistant" or not isinstance(message.get("content"), list):
@@ -62,7 +68,7 @@ def collectSubstantiveToolExchangeStarts(messages: list[dict[str, Any]], previou
         has_substantive_tool = any(tool_use.get("name") not in LOW_VALUE_TAIL_TOOL_NAMES for tool_use in tool_uses)
         if not has_substantive_tool:
             continue
-        if all(str(tool_use.get("id") or "") in tool_results for tool_use in tool_uses):
+        if not _missing_tool_result_ids(messages, message_index):
             starts.append(message_index)
     return starts
 
@@ -70,12 +76,7 @@ def collectSubstantiveToolExchangeStarts(messages: list[dict[str, Any]], previou
 def collectToolResultIds(messages: list[dict[str, Any]]) -> set[str]:
     result_ids: set[str] = set()
     for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "tool_result":
-                result_ids.add(str(block.get("tool_use_id") or ""))
+        result_ids |= _message_tool_result_ids(message)
     return result_ids
 
 
@@ -95,24 +96,5 @@ def isSafeWorkingSetStart(messages: list[dict[str, Any]], index: int) -> bool:
     return assistantToolUsesAreCompleted(messages, index)
 
 
-def assistantToolUsesAreCompleted(messages: list[dict[str, Any]], index: int) -> bool:
-    message = messages[index] if 0 <= index < len(messages) else None
-    if not message or not isinstance(message.get("content"), list):
-        return False
-    tool_use_ids = [
-        str(block.get("id") or "")
-        for block in message["content"]
-        if isinstance(block, dict) and block.get("type") == "tool_use"
-    ]
-    if not tool_use_ids:
-        return True
-    result_ids = collectToolResultIds(messages[index + 1 :])
-    return all(tool_id in result_ids for tool_id in tool_use_ids)
-
-
-def messageHasToolUses(message: dict[str, Any]) -> bool:
-    return isinstance(message.get("content"), list) and any(block.get("type") == "tool_use" for block in message["content"])
-
-
-def messageHasToolResults(message: dict[str, Any]) -> bool:
-    return isinstance(message.get("content"), list) and any(block.get("type") == "tool_result" for block in message["content"])
+# assistantToolUsesAreCompleted, messageHasToolUses, and messageHasToolResults
+# are re-exported from session.tool_boundaries — the single boundary encoding.
