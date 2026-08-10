@@ -10,7 +10,7 @@ from typing import Any, Iterable
 _REQUIRED_DIST_FILES = (
     "dist/index.js",
     "dist/testing.js",
-    "dist/lib/tool-dispatch.js",
+    "dist/lib/tools/tool-dispatch.js",
 )
 
 
