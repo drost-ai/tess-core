@@ -222,6 +222,11 @@ async def commitSessionV2Delta(
     safe_suffix = _sanitize_media(messages[base_count:])
     if not isinstance(safe_suffix, list):
         raise TypeError("Sanitized session delta must remain a message list.")
+    # The caller shares the live message list by reference: the committed
+    # count is snapshotted with the suffix, before any await, so an append
+    # racing the body write belongs to the next delta instead of inflating
+    # the head past the body's commit marker.
+    message_count = base_count + len(safe_suffix)
     entries = [
         _message_entry(session_id, base_count + offset, message)
         for offset, message in enumerate(safe_suffix)
@@ -229,7 +234,7 @@ async def commitSessionV2Delta(
     body_commit_id = previous_commit_id
     if entries:
         body_commit_id = str(uuid.uuid4())
-        entries.append(_commit_entry(session_id, body_commit_id, len(messages)))
+        entries.append(_commit_entry(session_id, body_commit_id, message_count))
     await _inject(faultInjector, "before_body")
     if entries:
         await _run_storage_io(
@@ -243,7 +248,7 @@ async def commitSessionV2Delta(
         previousRaw,
         safe_head,
         safe_suffix,
-        len(messages),
+        message_count,
         body_commit_id,
     )
     await writeJsonFile(sessionPath(session_id), head)
@@ -253,6 +258,7 @@ async def commitSessionV2Delta(
         "persistedHead": head,
         "appendedMessages": safe_suffix,
         "bodyCommitId": body_commit_id,
+        "messageCount": message_count,
     }
 
 

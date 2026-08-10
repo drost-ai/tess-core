@@ -194,8 +194,11 @@ async def mutateSessionHeadDeltaTransaction(
         safe_head = committed["head"]
         revision = normalizeSessionRevision(safe_head.get("revision"))
         body_commit_id = committed["bodyCommitId"]
+        # Stamp the count the commit actually covered, not the live list's
+        # current length: an append racing the commit stays unpersisted and
+        # rides the next delta.
         _set_session_persistence_checkpoint(
-            {"messages": messages}, revision, len(messages), body_commit_id
+            {"messages": messages}, revision, committed["messageCount"], body_commit_id
         )
         return {
             "changed": True,

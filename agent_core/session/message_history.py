@@ -222,8 +222,11 @@ class SessionMessageList(list):
     def set_checkpoint(
         self, revision: int, message_count: int, body_commit_id: str | None
     ) -> None:
-        if message_count != len(self):
-            raise ValueError("Persistence checkpoint must cover the complete live history.")
+        # A commit may cover only a prefix of the live history: an append
+        # racing the commit's awaits stays past the watermark and rides the
+        # next delta. Covering more than exists is always a caller bug.
+        if message_count > len(self):
+            raise ValueError("Persistence checkpoint cannot exceed the live history.")
         self._checkpoint = SessionPersistenceCheckpoint(
             revision, message_count, body_commit_id
         )

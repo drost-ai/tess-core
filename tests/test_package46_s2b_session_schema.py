@@ -256,6 +256,62 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             schema._read_body_sync = original_read
             self.restore_home(root, previous)
 
+    def test_delta_commit_snapshots_the_live_list_before_awaits(self):
+        root, _home, workspace, previous = self.temp_context()
+        schema = importlib.import_module("agent_core.storage.session_schema_v2")
+        original_read = schema._read_body_sync
+        try:
+            session = self._session(workspace, "package46-delta-race", 1)
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            session = run(core.loadSession(session["id"]))
+            session["messages"].append({"role": "assistant", "content": "committed"})
+            raced = {"role": "user", "content": "raced append"}
+
+            def inject(boundary):
+                if boundary == "after_body":
+                    session["messages"].append(raced)
+
+            def forbidden_read(*_args):
+                raise AssertionError("fast append hydrated the persisted body")
+
+            schema._read_body_sync = forbidden_read
+            try:
+                run(
+                    core.persistSession(
+                        session,
+                        {"sessionPersistence": True},
+                        touch=False,
+                        faultInjector=inject,
+                    )
+                )
+            finally:
+                schema._read_body_sync = original_read
+
+            head = run(core.readJsonFile(core.sessionPath(session["id"]), None))
+            commits = [
+                entry
+                for entry in map(
+                    json.loads,
+                    Path(core.sessionMessagesPath(session["id"])).read_text().splitlines(),
+                )
+                if entry["type"] == "commit"
+            ]
+            self.assertEqual(head["messageCount"], 2)
+            self.assertEqual(commits[-1]["message_count"], 2)
+            restored = run(core.loadSessionWithReconciliation(session["id"]))
+            self.assertEqual(
+                [message["content"] for message in restored["record"]["messages"]],
+                ["message-0", "committed"],
+            )
+
+            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            final = run(core.loadSession(session["id"]))
+            self.assertEqual(len(final["messages"]), 3)
+            self.assertEqual(final["messages"][-1], raced)
+        finally:
+            schema._read_body_sync = original_read
+            self.restore_home(root, previous)
+
     def test_nested_prefix_mutation_falls_back_and_persists_the_edit(self):
         root, _home, workspace, previous = self.temp_context()
         try:
