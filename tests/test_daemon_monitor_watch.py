@@ -26,7 +26,7 @@ def _completed_task_with_monitor(task_id: str) -> dict:
             },
         )
     )
-    monitor = core.create_monitor_record(sessionId=SESSION_ID, taskId=task_id, goal="watch the build")
+    monitor = core.create_monitor_record({"sessionId": SESSION_ID, "taskId": task_id, "goal": "watch the build"})
     run(core.save_monitor(monitor))
     return monitor
 
