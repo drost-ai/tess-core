@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 
 _CRASH_CHILD = """
 import asyncio, json, os, signal, sys
-import agent_core as core
+import agent_core._facade as core
 home, session_id, provider, model, state = sys.argv[1:]
 core.configure_runtime_home(home)
 async def main():

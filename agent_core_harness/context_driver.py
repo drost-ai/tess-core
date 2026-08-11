@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 import agent_core.agent as agent_module
 import agent_core.agent.context as agent_context_module
 

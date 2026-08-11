@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 from .model import ScenarioAssertionError
 from .runtime_driver import ensure_session_config

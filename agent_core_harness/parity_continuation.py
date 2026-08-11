@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 
 async def run_continuation_relief(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:

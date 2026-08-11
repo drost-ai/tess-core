@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.session.fork import SESSION_FORK_METADATA_DISPOSITIONS
 from tests.support.agent_core_case import AgentCoreTestCase, run
 

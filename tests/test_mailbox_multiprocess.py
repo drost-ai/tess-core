@@ -7,7 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.tasks.communication import (
     _deliver_mailbox_transaction,
     mark_task_message_delivered,

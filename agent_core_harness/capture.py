@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.contracts import (
     MonitorRecord,
     SessionRecord,

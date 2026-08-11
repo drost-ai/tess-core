@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.context.compaction.models import _extract_recent_user_requests
 from agent_core.context.request_preflight import _request_fingerprint
 from agent_core.storage.message_origin import (

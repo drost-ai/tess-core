@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.agent.tool_dispatch import (
     resolve_tool_concurrency,
     run_tool_dispatch_batch,

@@ -12,7 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 from .goldens import compare_golden, expected_observations, render_diff, update_golden
 from .loader import load_scenario

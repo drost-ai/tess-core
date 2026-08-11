@@ -7,7 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.storage.daemon import save_daemon_state
 from tests.support.agent_core_case import AgentCoreTestCase, run
 

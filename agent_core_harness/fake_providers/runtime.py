@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
 from agent_core.providers.turn_session import createProviderTurnSession

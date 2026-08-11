@@ -5,7 +5,7 @@ import unittest
 
 from tests.support.agent_core_case import run
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.context.compaction.utils import estimateMessageTokens
 
 

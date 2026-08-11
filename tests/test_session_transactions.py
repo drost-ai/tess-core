@@ -7,7 +7,7 @@ import time
 import uuid
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 

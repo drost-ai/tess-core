@@ -5,7 +5,7 @@ import json
 import os
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.contracts import ToolContext
 
 from .model import ScenarioAssertionError

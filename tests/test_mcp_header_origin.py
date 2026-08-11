@@ -7,7 +7,7 @@ import threading
 import unittest
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
 from agent_core.runtime.secrets import authorizeRuntimeSecretWrite, storeRuntimeSecret
 

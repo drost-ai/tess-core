@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
 from agent_core.providers.token_budget import resolve_interactive_context_policy

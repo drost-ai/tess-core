@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.context.compaction.projection import build_messages_for_working_context
 from agent_core.session.tool_boundaries import (
     adjustStartToToolBoundary,

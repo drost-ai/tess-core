@@ -4,7 +4,7 @@ import asyncio
 import os
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.runtime.lifecycle_barrier import (
     LifecycleCloseTimeoutError,
     LifecycleClosedError,

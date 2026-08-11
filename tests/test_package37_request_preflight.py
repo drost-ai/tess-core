@@ -5,7 +5,7 @@ import json
 import time
 from unittest import mock
 
-import agent_core as core
+import agent_core._facade as core
 import agent_core.agent.context as context_module
 from agent_core.context.request_preflight import (
     RECEIPT_MAX_BYTES,

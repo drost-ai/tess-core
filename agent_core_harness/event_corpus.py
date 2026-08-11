@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 from .fake_providers import FakeProviderRuntime
 from .paths import REPO_ROOT

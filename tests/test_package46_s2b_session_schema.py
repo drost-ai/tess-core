@@ -8,14 +8,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.storage.persistence_metrics import register_persistence_observer
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
 _CRASH_SCRIPT = r"""
 import asyncio, os, signal, sys
-import agent_core as core
+import agent_core._facade as core
 
 async def main():
     home, session_id, boundary, mode = sys.argv[1:]

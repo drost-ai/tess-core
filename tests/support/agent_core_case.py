@@ -23,7 +23,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core import testing
 import agent_core.agent as agent_module
 import agent_core.mcp as mcp_module

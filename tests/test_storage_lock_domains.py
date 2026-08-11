@@ -6,7 +6,7 @@ import sys
 import textwrap
 import unittest
 
-import agent_core as core
+import agent_core._facade as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 from tests.test_storage_concurrency import REPO_ROOT
@@ -73,7 +73,7 @@ class TaskLifecycleLockDomainTests(AgentCoreTestCase):
                 """
                 import asyncio, sys
                 sys.path.insert(0, sys.argv[2])
-                import agent_core as core
+                import agent_core._facade as core
                 from agent_core.storage import with_record_transaction
 
                 async def main():

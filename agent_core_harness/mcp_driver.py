@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 from .mcp_fakes import start_fake_mcp_server
 from .mcp_package28 import MemoryMcpTokenStore

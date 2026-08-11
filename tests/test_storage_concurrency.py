@@ -9,7 +9,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,7 +79,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 """
                 import asyncio, sys
                 sys.path.insert(0, sys.argv[3])
-                import agent_core as core
+                import agent_core._facade as core
 
                 async def main():
                     index = sys.argv[2]
@@ -155,7 +155,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 """
                 import asyncio, sys, time
                 sys.path.insert(0, sys.argv[2])
-                import agent_core as core
+                import agent_core._facade as core
 
                 async def main():
                     async with core.file_lock(sys.argv[1]):
@@ -196,7 +196,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 """
                 import asyncio, os, sys
                 sys.path.insert(0, sys.argv[2])
-                import agent_core as core
+                import agent_core._facade as core
                 from agent_core.storage import json_io
 
                 real_replace = os.replace

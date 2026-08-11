@@ -1,9 +1,27 @@
 """Host-environment surface: install/doctor, tmux, IDE, and Chrome companion.
 
-The facade re-exports exactly the public names its submodules define.
+The facade re-exports the public names its submodules define, plus the
+platform-entrypoint names of docs/public-api-contract.md whose implementations
+live in other planes (source trust, executable config parsing, runtime secrets).
 """
 from __future__ import annotations
 
+from ..authority.executable_config import (
+    parseInstalledPluginRecord,
+    parseMarketplaceManifest,
+    parseMcpServerConfig,
+    parseMcpServerConfigList,
+    parsePluginManifestV1,
+)
+from ..authority.executable_source_policy import (
+    approveMcpSource,
+    approvePluginSource,
+    inspectMcpSourceTrust,
+    inspectPluginSourceTrust,
+    parseSettingSources,
+)
+from ..authority.repository_trust import getRepositoryTrustStatus, revokeRepositoryApproval
+from ..runtime.secrets import authorizeRuntimeSecretWrite, isRuntimeSecretRef, storeRuntimeSecret
 from .chrome import (
     buildChromeNativeHostManifest,
     detectChromeCompanionStatus,

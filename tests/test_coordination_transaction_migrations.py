@@ -5,7 +5,7 @@ import multiprocessing
 import time
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 BRIDGE_ID = "30000000-0000-4000-8000-000000000001"

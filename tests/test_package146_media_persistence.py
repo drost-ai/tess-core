@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.headless.stream import JsonStreamSink
 from agent_core.payloads.media_persistence import sanitizeMediaForPersistence
 from tests.support.agent_core_case import bind_test_runtime, run

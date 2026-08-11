@@ -5,7 +5,7 @@ import subprocess
 import sys
 import unittest
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.tasks.supervisor_parts.finalize_child import finalizeLostWorker
 from agent_core.tasks.supervisor_parts.live_work import _reconcile_dead_task_meta
 from tests.support.agent_core_case import AgentCoreTestCase, run

@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 from .assertions import assert_file_exists, assert_observation, assert_session, validate_workspace_rel_path
 from .capture import collect_observations, write_observations

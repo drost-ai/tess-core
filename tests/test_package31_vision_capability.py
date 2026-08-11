@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.payloads.attachments import resolveRuntimeProviderCapabilities
 
 

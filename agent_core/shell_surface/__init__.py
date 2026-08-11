@@ -1,8 +1,19 @@
 """Slash-command surface: registry, dispatcher, and command handlers.
 
-The facade re-exports exactly the public names its submodules define.
+The facade re-exports the public names its submodules define, plus the
+shell-entrypoint names of docs/public-api-contract.md whose implementations
+live in other planes (transcript entry builders, image budget estimation).
 """
 from __future__ import annotations
+
+from ..payloads.image_budget import estimateEncodedImageRequestBytes
+from ..session.transcript import (
+    buildTranscriptSnapshot,
+    makeTextEntry,
+    makeToolEntry,
+    mergeTranscriptEntry,
+    normalizeTranscriptBody,
+)
 
 from .agents import (
     buildAgentsReport,

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 from .runtime_bindings import bind_agent_runtime
 

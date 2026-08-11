@@ -64,7 +64,7 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
         child = """
 import asyncio
 import sys
-import agent_core as core
+import agent_core._facade as core
 from agent_core.storage.json_io import append_json_line
 home, path, prefix = sys.argv[1:]
 core.configure_runtime_home(home)

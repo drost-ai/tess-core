@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.tasks.health_check_policy import (
     authorizeHealthCheckSpec,
     healthCheckSpecDigest,

@@ -11,7 +11,7 @@ from unittest import mock
 
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.payloads.agent_results import finalizeToolDispatchResult
 from agent_core.payloads.image_budget import (
     ImageBudgetError,

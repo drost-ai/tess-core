@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.storage.persistence_metrics import register_persistence_observer
 from agent_core.providers.turn_session import createProviderTurnSession
 from agent_core.providers.watchdog import AbortSignal

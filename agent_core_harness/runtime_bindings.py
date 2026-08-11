@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 
 
 def bind_agent_runtime(

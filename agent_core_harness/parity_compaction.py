@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.providers.errors import createProviderFailureRecord, createProviderRequestError
 
 from .parity_compaction_fixtures import build_compaction_authority_states

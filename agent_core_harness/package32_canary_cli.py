@@ -14,7 +14,7 @@ async def _loadAnthropicCredentialFromRuntimeHome(
     provider_profile_name: str,
     model: str,
 ) -> dict[str, Any]:
-    import agent_core as core
+    import agent_core._facade as core
 
     selected_home = os.path.abspath(os.path.expanduser(runtime_home))
     async with core.scoped_runtime_home(selected_home):

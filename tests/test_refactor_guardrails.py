@@ -9,50 +9,44 @@ from tests.support.file_size import find_line_budget_violations
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_API_EXPORTS = ROOT / "tests" / "fixtures" / "public_api" / "exports.json"
+CONTRACT = json.loads((ROOT / "tests" / "fixtures" / "public_api" / "contract.json").read_text())
 
-PUBLIC_MODULES = [
-    "agent_core",
-    "agent_core.agent",
-    "agent_core.config",
-    "agent_core.daemon",
-    "agent_core.mcp",
-    "agent_core.platform_support",
-    "agent_core.remote",
-    "agent_core.shell_surface",
-    "agent_core.storage",
-    "agent_core.subagents",
-    "agent_core.testing",
-    "agent_core.tools",
-    "agent_core.context.compaction",
-    "agent_core.context.continuation",
-    "agent_core.providers.anthropic",
-    "agent_core.providers.openai",
-    "agent_core.tasks.runtime",
-    "agent_core.tasks.supervisor",
-]
-
-# The top-level facade is a generated re-export manifest: one line per public
-# name plus the __all__ literal. Its size tracks the public API surface, not
-# module complexity; shrink it by shrinking the API, not by splitting the file.
-LINE_BUDGET_ALLOWLIST = {"agent_core/__init__.py": 800}
+# The internal aggregation facade (agent_core/_facade.py) keeps the full
+# historical namespace for the test suite and harness; it shrinks as Epic M
+# converts planes. It is not public API and tracks no module complexity.
+LINE_BUDGET_ALLOWLIST = {"agent_core/_facade.py": 800}
 
 
-def _public_names(module_name: str) -> list[str]:
-    module = importlib.import_module(module_name)
-    return sorted(name for name in dir(module) if not name.startswith("_"))
+def _active(entrypoint: str) -> list[dict]:
+    return [n for n in CONTRACT["names"] if n["entrypoint"] == entrypoint and n["status"] == "active"]
 
 
 class RefactorGuardrailTests(unittest.TestCase):
-    def test_public_module_exports_match_snapshot(self):
-        for module_name in PUBLIC_MODULES:
-            importlib.import_module(module_name)
+    def test_root_entrypoint_exports_exactly_the_contract(self):
+        module = importlib.import_module(CONTRACT["entrypoints"]["root"])
+        expected = sorted(n["py"] for n in _active("root"))
+        self.assertEqual(sorted(module.__all__), expected)
+        for name in expected:
+            self.assertTrue(hasattr(module, name), f"agent_core is missing contract name {name}")
 
-        snapshot = json.loads(PUBLIC_API_EXPORTS.read_text())
-        self.assertEqual(sorted(PUBLIC_MODULES), sorted(snapshot))
+    def test_entrypoints_export_their_contract_names(self):
+        for entrypoint, module_name in CONTRACT["entrypoints"].items():
+            module = importlib.import_module(module_name)
+            for row in _active(entrypoint):
+                self.assertTrue(
+                    hasattr(module, row["py"]),
+                    f"{module_name} is missing contract name {row['py']} ({row['concept']})",
+                )
 
-        for module_name in PUBLIC_MODULES:
-            self.assertEqual(snapshot[module_name], _public_names(module_name))
+    def test_contract_homes_still_define_their_names(self):
+        for row in CONTRACT["names"]:
+            if row["status"] != "active":
+                continue
+            module = importlib.import_module(row["py_module"])
+            self.assertTrue(
+                hasattr(module, row["py"]),
+                f"{row['py_module']} no longer defines contract name {row['py']}",
+            )
 
     def test_hand_authored_files_respect_line_budget_or_shrinking_allowlist(self):
         failures = find_line_budget_violations(ROOT, LINE_BUDGET_ALLOWLIST)

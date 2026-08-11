@@ -19,6 +19,7 @@ from .context.compaction import (
     should_auto_compact,
 )
 from .context.compaction_transport import (
+    CompactionModelClient,
     create_default_compaction_model_client,
     resolve_compaction_execution_plan,
     resolve_compaction_model_candidates,
@@ -33,8 +34,9 @@ from .providers.anthropic import (
     normalizeAnthropicSseResponse,
     resolveAnthropicCountTokensUrl,
     resolveAnthropicMessagesUrl,
+    sendAnthropicMessagesRequest,
 )
-from .providers.errors import createProviderFailureRecord, createProviderRequestError
+from .providers.errors import createProviderFailureRecord, createProviderRequestError, isProviderRequestError
 from .providers.openai import (
     DEFAULT_CODEX_BASE_URL,
     buildChatCompletionsCreateParams,

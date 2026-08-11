@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import agent_core as core
+import agent_core._facade as core
 from agent_core.runtime.secret_provider import resolveProviderConfigSecrets
 from agent_core.runtime.secrets import (
     RuntimeSecretError,
