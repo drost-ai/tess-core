@@ -12,6 +12,11 @@ from urllib.request import Request, urlopen
 from .._utils import get_value as _get_value, maybe_await as _maybe_await, now_iso
 from ..payloads.image_budget import measureAdmittedImageSet as _measure_admitted_image_set
 from ..payloads.image_redaction import redactImagePayloads as _redact_image_payloads
+from .request_estimation import (
+    _estimate_openai_request_tokens,
+    _estimate_request_tokens,
+)
+from ..payloads.token_estimation import estimateTextTokens
 from ..providers.errors import (
     createProviderFailureRecord as _create_provider_failure_record,
     createProviderRequestError as _create_provider_request_error,
@@ -171,16 +176,7 @@ def recordActualTokenUsage(session: dict[str, Any], usage: dict[str, Any]) -> No
 
 
 def _estimate_text_tokens(value: str) -> int:
-    return (len(value) + 3) // 4
-
-
-def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 0) -> int:
-    total = _estimate_text_tokens(request.get("system", ""))
-    for message in request.get("messages", []):
-        total += _estimate_text_tokens(json.dumps(_redact_image_payloads(message), ensure_ascii=False))
-    if request.get("tools"):
-        total += _estimate_text_tokens(json.dumps(request["tools"], ensure_ascii=False))
-    return total + image_input_tokens
+    return estimateTextTokens(value)
 
 
 def _request_component_fields(
@@ -466,13 +462,6 @@ def _openai_estimate_source(mode: str) -> str:
     return "openai_responses_estimate"
 
 
-def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_input_tokens: int = 0) -> int:
-    params = buildChatCompletionsCreateParams(request) if mode == "chat_completions" else buildResponsesCreateParams({"isCodexBackend": mode == "codex", "request": request})
-    params.pop("stream", None)
-    params.pop("store", None)
-    params.pop("max_output_tokens", None)
-    params = _redact_image_payloads(params)
-    return _estimate_text_tokens(json.dumps(params, ensure_ascii=False)) + image_input_tokens
 
 
 def _image_measurement_fields(images: dict[str, Any]) -> dict[str, Any]:

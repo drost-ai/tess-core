@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from ..payloads.image_redaction import redactImagePayloads
+from ..payloads.token_estimation import estimateTextTokens
 from ..storage.message_origin import (
     isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
     messageForStableFingerprint as _message_for_stable_fingerprint,
@@ -453,7 +454,7 @@ def _estimate_json_tokens(value: Any) -> int:
 
 
 def _estimate_text_tokens(value: str) -> int:
-    return (len(value) + 3) // 4
+    return estimateTextTokens(value)
 
 
 def _count(value: Any) -> int:

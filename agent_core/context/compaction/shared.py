@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ...storage.message_origin import CONTINUATION_BRIDGE_MESSAGE
+from ...payloads.token_estimation import estimateTextTokens
 
 from typing import Any
 
@@ -30,7 +31,7 @@ def _bound_preserved_trace_record(record: dict[str, Any]) -> dict[str, Any]:
     bounded_content = content[: max(0, char_limit - 1)].rstrip() + "…"
     return {
         **record,
-        "tokenEstimate": (len(bounded_content) + 3) // 4,
+        "tokenEstimate": estimateTextTokens(bounded_content),
         "tokenBudget": token_budget,
         "truncated": True,
         "content": bounded_content,

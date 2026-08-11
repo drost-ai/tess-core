@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..compaction.utils import collapseWhitespace, estimateTextTokens, truncate
+from ...payloads.token_estimation import estimateMessageTokens as _estimate_message_tokens
 
 from ..coerce import asRecord
 
@@ -14,12 +15,7 @@ from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
 def estimateMessagesTokens(messages: list[dict[str, Any]]) -> int:
-    total = 0
-    for message in messages:
-        content = message.get("content")
-        value = f"{message.get('role')}:{content if isinstance(content, str) else json.dumps(_redact_image_payloads(content), ensure_ascii=False, separators=(',', ':'))}"
-        total += estimateTextTokens(value)
-    return total
+    return _estimate_message_tokens(messages)
 
 
 def estimateTodoAndPlanTokens(session: dict[str, Any]) -> int:

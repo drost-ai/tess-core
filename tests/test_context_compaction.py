@@ -454,3 +454,41 @@ class ContextCompactionTests(AgentCoreTestCase):
         finally:
             agent_checkpoints_module.runCompaction = original_run_compaction
             self.restore_home(root, previous)
+
+
+class TokenEstimatorUnificationTests(AgentCoreTestCase):
+    def test_every_estimator_shares_one_message_serialization(self):
+        from agent_core.context.token_accounting import _estimate_request_tokens
+        from agent_core.context.continuation.tokens import estimateMessagesTokens
+        from agent_core.context.compaction.utils import estimateMessageTokens as compaction_estimate
+        from agent_core.payloads.token_estimation import (
+            estimateMessageTokens,
+            estimateTextTokens,
+            stringifyValueForTokenEstimate,
+        )
+
+        messages = [
+            {"role": "user", "content": "plain prompt", "actor": "human", "kind": "prompt"},
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "output " * 50}],
+                "actor": "tool",
+                "kind": "tool_result_batch",
+                "lineage": {"logicalTurnId": "turn-1"},
+            },
+        ]
+        canonical = estimateMessageTokens(messages)
+        # Origin metadata must not count: the whole-dict spaced serialization
+        # measured 43.5% above the role:content form on tool results, and the
+        # relief gate subtracts these numbers from each other.
+        self.assertEqual(compaction_estimate(messages), canonical)
+        self.assertEqual(estimateMessagesTokens(messages), canonical)
+        request = {"system": "sys", "messages": messages, "tools": [{"name": "Bash"}]}
+        self.assertEqual(
+            _estimate_request_tokens(request),
+            estimateTextTokens("sys")
+            + canonical
+            + estimateTextTokens(stringifyValueForTokenEstimate(request["tools"])),
+        )
+        stripped = [{"role": m["role"], "content": m["content"]} for m in messages]
+        self.assertEqual(estimateMessageTokens(stripped), canonical)
