@@ -84,6 +84,7 @@ async def mutateSessionRecordTransaction(
                     latest,
                     _sanitize_media_for_persistence(latest),
                     faultInjector=settings.get("faultInjector"),
+                    presanitized=True,
                 )
                 session = commit["session"]
                 return {
@@ -110,6 +111,7 @@ async def mutateSessionRecordTransaction(
             latest,
             safe,
             faultInjector=settings.get("faultInjector"),
+            presanitized=True,
         )
         session = commit["session"]
         return {

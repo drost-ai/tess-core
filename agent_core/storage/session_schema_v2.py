@@ -164,9 +164,13 @@ async def commitSessionV2(
     nextSession: dict[str, Any],
     *,
     faultInjector: Callable[[str], Any] | None = None,
+    presanitized: bool = False,
 ) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
-    safe = _sanitize_media(copy.deepcopy(nextSession))
+    # sanitizeMediaForPersistence rebuilds every container, so a caller that
+    # just sanitized may hand its decoupled output over without paying for a
+    # second deepcopy-and-walk of the full history.
+    safe = nextSession if presanitized else _sanitize_media(copy.deepcopy(nextSession))
     if safe.get("id") != session_id or not isinstance(safe.get("messages"), list):
         raise ValueError(f"Invalid hydrated session for v2 commit: {session_id}.")
     old_messages = (

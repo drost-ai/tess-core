@@ -58,16 +58,16 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
         try:
             session = self._session(workspace, "package46-first-persist", 2)
             run(core.writeJsonFile(core.sessionPath(session["id"]), session))
-            committed = run(
+            run(
                 core.persistSession(session, {"sessionPersistence": True}, touch=False)
             )
             head = run(core.readJsonFile(core.sessionPath(session["id"]), None))
             self.assertEqual(head["schemaVersion"], 2)
             self.assertEqual(head["messageCount"], 2)
-            self.assertEqual(committed["revision"], 1)
+            self.assertEqual(head["revision"], 1)
             restored = run(core.loadSession(session["id"]))
-            self.assertEqual(restored["messages"], committed["messages"])
-            self.assertEqual(restored["revision"], committed["revision"])
+            self.assertEqual(list(restored["messages"]), list(session["messages"]))
+            self.assertEqual(restored["revision"], 1)
         finally:
             self.restore_home(root, previous)
 
@@ -242,7 +242,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             schema._read_body_sync = forbidden_read
             unsubscribe = registerPersistenceObserver(events.append)
             try:
-                committed = run(
+                run(
                     core.persistSession(
                         session, {"sessionPersistence": True}, touch=False
                     )
@@ -251,7 +251,9 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
                 unsubscribe()
             io = [event for event in events if event.get("event") == "storage_io"]
             self.assertEqual([event["operation"] for event in io], ["append", "append", "write"])
-            self.assertEqual(committed["messages"][-1]["content"], "delta")
+            schema._read_body_sync = original_read
+            reloaded = run(core.loadSession(session["id"]))
+            self.assertEqual(reloaded["messages"][-1]["content"], "delta")
         finally:
             schema._read_body_sync = original_read
             self.restore_home(root, previous)

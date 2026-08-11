@@ -71,7 +71,7 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
             if recovered is None:
                 return {"record": None, "changed": False, "reason": None}
             safe_recovered = _sanitize_media_for_persistence(recovered)
-            commit = await commitSessionV2(sessionId, None, None, safe_recovered)
+            commit = await commitSessionV2(sessionId, None, None, safe_recovered, presanitized=True)
             _set_session_persistence_checkpoint(
                 safe_recovered,
                 normalizeSessionRevision(safe_recovered.get("revision")),
@@ -85,7 +85,7 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
         safe_record = _sanitize_media_for_persistence(result["record"])
         body_commit_id = hydration.get("bodyCommitId")
         if result["changed"]:
-            commit = await commitSessionV2(sessionId, raw, record, safe_record)
+            commit = await commitSessionV2(sessionId, raw, record, safe_record, presanitized=True)
             body_commit_id = commit["bodyCommitId"]
         _set_session_persistence_checkpoint(
             safe_record,

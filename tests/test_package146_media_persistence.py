@@ -217,9 +217,9 @@ class Package146MediaSanitizerTests(unittest.TestCase):
                     loaded["messages"].append(
                         {"role": "user", "content": "current turn"}
                     )
-                    committed = await core.persistSession(loaded, config, touch=False)
-                    self.assertIsNotNone(committed)
-                    self.assertNotIn(_SENTINEL, json.dumps(committed))
+                    await core.persistSession(loaded, config, touch=False)
+                    reloaded = await core.loadSession(legacy["id"])
+                    self.assertNotIn(_SENTINEL, json.dumps(reloaded))
                     self.assertNotIn(_SENTINEL, json.dumps(loaded))
                     self.assertNotIn(_SENTINEL, path.read_text(encoding="utf-8"))
 

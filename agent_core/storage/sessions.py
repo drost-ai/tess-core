@@ -46,7 +46,7 @@ async def saveSession(session: SessionRecord) -> None:
                 normalizeSessionRevision(merged.get("revision")),
             )
         if current != merged or not isSessionHeadV2(raw):
-            commit = await commitSessionV2(session["id"], raw, current, merged)
+            commit = await commitSessionV2(session["id"], raw, current, merged, presanitized=True)
             committed = commit["session"]
             _set_session_persistence_checkpoint(
                 session,

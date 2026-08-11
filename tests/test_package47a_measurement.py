@@ -86,9 +86,10 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
 
             unsubscribe = registerPersistenceObserver(broken_observer)
             try:
-                persisted = run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+                run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
             finally:
                 unsubscribe()
+            persisted = run(core.loadSession(session["id"]))
             self.assertEqual(persisted["id"], session["id"])
             self.assertTrue(Path(core.sessionPath(session["id"])).exists())
         finally:

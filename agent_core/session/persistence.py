@@ -5,7 +5,6 @@ import os
 import re
 from typing import Any
 
-from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from .._utils import now_iso
 from ..config.prompts import buildEffectiveSystemPrompt
 from ..storage.persistence_metrics import (
@@ -14,7 +13,9 @@ from ..storage.persistence_metrics import (
 )
 from .fork import createForkArchiveHeader, createForkedSession
 from .message_history import (
+    SessionMessageList,
     createSessionMessageList as _create_session_message_list,
+    sessionPersistenceCheckpoint as _session_persistence_checkpoint,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
 from .tool_boundaries import findIncompleteToolExchange as _find_incomplete_tool_exchange
@@ -62,7 +63,7 @@ async def persistSession(
     config: dict[str, Any],
     options: dict[str, Any] | None = None,
     **kwargs: Any,
-) -> dict[str, Any] | None:
+) -> None:
     measurement = _begin_persistence_call(str(session.get("id") or ""), len(session.get("messages") or []))
     try:
         persist_options = {**(options or {}), **kwargs}
@@ -72,6 +73,7 @@ async def persistSession(
         ):
             _finish_persistence_call(measurement, "skipped")
             return None
+        checkpoint_before = _session_persistence_checkpoint(session)
         snapshot = _copy_session_for_persist(session)
         repair = repairSessionTranscript(snapshot)
         await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
@@ -92,11 +94,12 @@ async def persistSession(
             committed,
             message_source=snapshot.get("messages"),
         )
-        # sanitizeMediaForPersistence returns a content-free copy, so both
-        # paths decouple the returned record without a second full deepcopy.
-        result = _sanitize_media_for_persistence(committed["session"])
+        if repair.get("repaired"):
+            _adopt_repaired_checkpoint(session, snapshot, committed, checkpoint_before)
+        # Returns nothing, like the TS peer: building a sanitized copy of the
+        # committed record cost an O(history) walk per persist that no
+        # production caller ever read.
         _finish_persistence_call(measurement, "persisted", revision=committed["revision"])
-        return result
     except BaseException:
         _finish_persistence_call(measurement, "error")
         raise
@@ -253,13 +256,49 @@ def _sync_committed_session_state(
         )
 
 
+def _adopt_repaired_checkpoint(
+    session: dict[str, Any],
+    snapshot: dict[str, Any],
+    committed: dict[str, Any],
+    checkpoint_before: Any,
+) -> None:
+    """After a repair-persist, stamp the commit's watermark on the live list.
+
+    The repaired snapshot holds a different list object, so the identity check
+    in _sync_committed_session_state cannot refresh the live checkpoint — and
+    a stale one forces the next persist into the full fallback. The commit
+    covered exactly the live prefix the truncated copy was taken from, so the
+    watermark transfers whenever the live lineage is unchanged since capture.
+    """
+    live = session.get("messages")
+    covered = len(snapshot.get("messages") or [])
+    if (
+        not isinstance(live, SessionMessageList)
+        or checkpoint_before is None
+        or live.checkpoint() != checkpoint_before
+        or covered < checkpoint_before.messageCount
+        or covered > len(live)
+        or committed.get("bodyCommitId") is None
+    ):
+        return
+    live.set_checkpoint(
+        _valid_revision(committed.get("revision")), covered, committed["bodyCommitId"]
+    )
+
+
 def repairSessionTranscript(session: dict[str, Any]) -> dict[str, Any]:
     invalid = _find_invalid_tool_use_boundary(session.get("messages", []))
     if not invalid:
         return {"repaired": False, "removedCount": 0, "missingToolUseIds": []}
-    removed = len(session.get("messages", [])) - invalid["index"]
-    session["messages"] = _create_session_message_list(
-        session.get("messages", [])[: invalid["index"]]
+    messages = session.get("messages", [])
+    removed = len(messages) - invalid["index"]
+    # A dangling in-flight tail is the routine mid-batch case: dropping only
+    # unpersisted messages keeps the checkpoint, so the commit stays on the
+    # head/delta fast path instead of a full-body fallback.
+    session["messages"] = (
+        messages.truncated_copy(invalid["index"])
+        if isinstance(messages, SessionMessageList)
+        else _create_session_message_list(messages[: invalid["index"]])
     )
     return {"repaired": True, "truncatedFrom": invalid["index"], "removedCount": removed, "missingToolUseIds": invalid["missingToolUseIds"]}
 

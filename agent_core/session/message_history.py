@@ -235,6 +235,23 @@ class SessionMessageList(list):
     def invalidate(self, index: int = 0) -> None:
         self._mark_dirty(max(0, index))
 
+    def truncated_copy(self, count: int) -> "SessionMessageList":
+        """A copy of the first ``count`` messages that keeps persistence lineage.
+
+        Dropping only unpersisted tail messages (an in-flight tool exchange)
+        leaves the persisted-prefix authority intact, so the copy carries the
+        checkpoint and stays eligible for a head/delta commit. Truncating into
+        the persisted prefix — or copying from a list without a valid
+        checkpoint — yields a fresh list that fails safely to the full loader.
+        """
+        bounded = max(0, min(count, len(self)))
+        clone = SessionMessageList(list.__getitem__(self, slice(0, bounded)))
+        checkpoint = self.checkpoint()
+        if checkpoint is not None and bounded >= checkpoint.messageCount:
+            clone._checkpoint = checkpoint
+            clone._dirty_from = min(self._dirty_from, bounded)
+        return clone
+
     def replace_persisted_canonical(self, values: Iterable[Any]) -> None:
         checkpoint = self._checkpoint
         dirty_from = self._dirty_from
