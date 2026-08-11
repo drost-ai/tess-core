@@ -180,7 +180,7 @@ async def close_runtime_driver(state: dict[str, Any]) -> None:
 async def ensure_session_config(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     if state.get("session") and state.get("config"):
         return state["session"], state["config"]
-    config = await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": data.get("permissionMode", "bypassPermissions")}, str(sandbox.workspace))
+    config = await core.resolve_config({"runtimeHome": str(sandbox.home), "permissionMode": data.get("permissionMode", "bypassPermissions")}, str(sandbox.workspace))
     session = core.create_empty_session(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode=data.get("permissionMode", "bypassPermissions"))
     state["config"] = config
     state["session"] = session

@@ -92,7 +92,7 @@ class ResidentSubagentTests(AgentCoreTestCase):
             encoding="utf-8",
         )
         os.environ.pop("AGENT_CORE_TEST_MISSING_RESIDENT_KEY", None)
-        config = run(core.resolveConfig(
+        config = run(core.resolve_config(
             {"provider": "resident-openai", "settings": str(settings_path), "runtimeHome": str(home), "permissionMode": "bypassPermissions"},
             str(workspace),
         ))
@@ -110,7 +110,7 @@ class ResidentSubagentTests(AgentCoreTestCase):
         child["metadata"]["parentSessionId"] = parent["id"]
         child["metadata"]["agentId"] = "resident-agent"
         child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
-        child_authority = run(core.captureAgentAuthority(config=config, session=child, tools=core.create_builtin_tools()))
+        child_authority = run(core.capture_agent_authority(config=config, session=child, tools=core.create_builtin_tools()))
         child["metadata"]["effectiveAgentAuthority"] = child_authority
         run(core.save_session(parent))
         run(core.save_session(child))

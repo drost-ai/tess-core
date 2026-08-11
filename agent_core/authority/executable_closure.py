@@ -10,7 +10,7 @@ import time
 import uuid
 from typing import Any, Callable
 
-from .repository_trust import resolveRepositoryIdentity
+from .repository_trust import resolve_repository_identity
 from ..storage.paths import get_state_root
 
 
@@ -48,7 +48,7 @@ class ExecutableClosureError(RuntimeError):
 _closure_test_hook: Callable[[str], Any] | None = None
 
 
-def __setExecutableClosureTestHookForTests(hook: Callable[[str], Any] | None) -> None:
+def _set_executable_closure_test_hook_for_tests(hook: Callable[[str], Any] | None) -> None:
     global _closure_test_hook
     _closure_test_hook = hook
 
@@ -99,7 +99,7 @@ def _validate_relative(relative: str, limits: dict[str, int]) -> None:
 async def _collect(
     spec: dict[str, Any], limits: dict[str, int], started: float
 ) -> dict[str, Any]:
-    repository = await resolveRepositoryIdentity(str(spec["cwd"]))
+    repository = await resolve_repository_identity(str(spec["cwd"]))
     entries: list[dict[str, Any]] = []
     roots: list[dict[str, str]] = []
     counters = {"fileCount": 0, "totalFileBytes": 0, "memberCount": 0}
@@ -321,7 +321,7 @@ async def _inspect_internal(
     }
 
 
-async def inspectExecutableClosure(
+async def inspect_executable_closure(
     spec: dict[str, Any], limitOverrides: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     result = await _inspect_internal(spec, _normalized_limits(limitOverrides))
@@ -340,7 +340,7 @@ def _ensure_snapshot_base() -> str:
     return base
 
 
-async def snapshotExecutableClosure(
+async def snapshot_executable_closure(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
@@ -408,7 +408,7 @@ async def snapshotExecutableClosure(
         raise
 
 
-def mapClosureRootToSnapshot(snapshot: dict[str, Any], sourcePath: str) -> str | None:
+def map_closure_root_to_snapshot(snapshot: dict[str, Any], sourcePath: str) -> str | None:
     normalized = os.path.normpath(sourcePath)
     for root in snapshot.get("roots") or []:
         if os.path.normpath(str(root.get("sourcePath"))) == normalized:

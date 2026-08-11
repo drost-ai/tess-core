@@ -22,15 +22,15 @@ from ..storage import (
     resolve_runtime_home,
 )
 from .defaults import (
-    getDefaultEffortForProvider,
-    getDefaultModelForProvider,
-    normalizeEffortLevel,
-    normalizeOpenAiApiModeSetting,
-    normalizeProviderName,
-    normalizeProviderProfileName,
-    normalizeTuiScreenMode,
+    get_default_effort_for_provider,
+    get_default_model_for_provider,
+    normalize_effort_level,
+    normalize_openai_api_mode_setting,
+    normalize_provider_name,
+    normalize_provider_profile_name,
+    normalize_tui_screen_mode,
 )
-from ._knobs import configureKnobs
+from ._knobs import configure_knobs
 from .parsing import (
     _dedupe,
     _load_mcp_config,
@@ -42,7 +42,7 @@ from .parsing import (
     _parse_tool_list,
     _resolve_api_key_from_helper,
 )
-from .prompts import buildDefaultSystemPrompt, defaultToolList
+from .prompts import build_default_system_prompt, default_tool_list
 from .credentials import (
     _get_stored_anthropic_api_key,
     _get_stored_anthropic_auth_token,
@@ -50,12 +50,12 @@ from .credentials import (
     _resolve_openai_credential,
 )
 from .providers import (
-    normalizeModelName,
-    resolveCompactionProviderProfileBinding,
-    resolveProviderForModelSelection,
-    resolveProviderProfile,
-    resolveProviderProfiles,
-    resolveSelectedProviderProfileName,
+    normalize_model_name,
+    resolve_compaction_provider_profile_binding,
+    resolve_provider_for_model_selection,
+    resolve_provider_profile,
+    resolve_provider_profiles,
+    resolve_selected_provider_profile_name,
 )
 from .shared import (
     BUILTIN_AGENTS,
@@ -112,8 +112,8 @@ def _resolve_requested_model(
     """
     provider_override_name = options.get("provider") or os.environ.get("TESS_PROVIDER")
     requested_provider_name = provider_override_name or merged_settings.get("provider")
-    override_profile_name = normalizeProviderProfileName(provider_override_name)
-    settings_profile_name = normalizeProviderProfileName(merged_settings.get("provider"))
+    override_profile_name = normalize_provider_profile_name(provider_override_name)
+    settings_profile_name = normalize_provider_profile_name(merged_settings.get("provider"))
     provider_override_selects_profile = bool(
         provider_override_name
         and override_profile_name
@@ -122,7 +122,7 @@ def _resolve_requested_model(
     )
     settings_model_input = None if provider_override_selects_profile else merged_settings.get("model")
     direct_model_input = options.get("model") or os.environ.get("TESS_MODEL") or settings_model_input
-    explicit_provider_kind = normalizeProviderName(requested_provider_name)
+    explicit_provider_kind = normalize_provider_name(requested_provider_name)
     provider_env_model = None
     if not provider_override_selects_profile:
         provider_env_model = (
@@ -158,17 +158,17 @@ def _resolve_compaction_selection(
             or merged_settings.get(option_key)
         )
 
-    requested_provider = normalizeProviderName(setting("Provider", "PROVIDER"))
+    requested_provider = normalize_provider_name(setting("Provider", "PROVIDER"))
     requested_model = setting("Model", "MODEL")
     provider = (
-        resolveProviderForModelSelection(requested_provider, requested_model)
+        resolve_provider_for_model_selection(requested_provider, requested_model)
         if requested_model
         else requested_provider
     )
     return {
         "provider": provider,
-        "model": normalizeModelName(requested_model, provider) if requested_model and provider else requested_model,
-        "effort": normalizeEffortLevel(setting("Effort", "EFFORT")),
+        "model": normalize_model_name(requested_model, provider) if requested_model and provider else requested_model,
+        "effort": normalize_effort_level(setting("Effort", "EFFORT")),
         "profileName": setting("ProviderProfile", "PROVIDER_PROFILE"),
     }
 
@@ -180,7 +180,7 @@ def _resolve_screen_mode(
     if options.get("noAltScreen") or options.get("altScreen") is False:
         return "inline"
     return (
-        normalizeTuiScreenMode(
+        normalize_tui_screen_mode(
             options.get("screenMode")
             or os.environ.get("TESS_SCREEN_MODE")
             or os.environ.get("TESS_ALTERNATE_SCREEN")
@@ -191,21 +191,21 @@ def _resolve_screen_mode(
         or DEFAULT_TUI_SCREEN_MODE
     )
 
-async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
+async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
     options = options or {}
     runtime_home = _resolve_runtime_home(options, cwd)
     await ensure_base_layout(cwd)
 
     sources = _parse_setting_sources(options.get("settingSources"))
     merged_settings = await _load_merged_settings(sources, cwd, options.get("settings"))
-    configureKnobs(merged_settings.get("knobs"))
+    configure_knobs(merged_settings.get("knobs"))
     from ..providers.token_budget import configure_model_limit_rules
 
     configure_model_limit_rules(merged_settings.get("modelLimitRules"))
     auth = await load_auth()
     settings_env = merged_settings.get("env") or {}
     helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
-    provider_profiles = resolveProviderProfiles(merged_settings.get("providerProfiles"))
+    provider_profiles = resolve_provider_profiles(merged_settings.get("providerProfiles"))
     requested_provider_name, requested_model_input = _resolve_requested_model(options, merged_settings, provider_profiles)
 
     stored_anthropic_auth_token = _get_stored_anthropic_auth_token(auth)
@@ -224,7 +224,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     openai_stored_token = (auth or {}).get("openaiToken")
     openai_codex_token = await load_codex_auth_token(openai_codex_auth_path)
     openai_base_url = os.environ.get("OPENAI_BASE_URL") or settings_env.get("OPENAI_BASE_URL") or merged_settings.get("openaiBaseUrl")
-    requested_openai_api_mode = normalizeOpenAiApiModeSetting(
+    requested_openai_api_mode = normalize_openai_api_mode_setting(
         options.get("openaiApiMode")
         or os.environ.get("TESS_OPENAI_API_MODE")
         or os.environ.get("OPENAI_API_MODE")
@@ -233,7 +233,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         or merged_settings.get("openaiApiMode")
     )
 
-    selected_name = resolveSelectedProviderProfileName(
+    selected_name = resolve_selected_provider_profile_name(
         {
             "requestedName": requested_provider_name,
             "requestedModel": requested_model_input,
@@ -249,17 +249,17 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
             "storedAnthropicProvider": (auth or {}).get("anthropicProvider") or (auth or {}).get("provider"),
         }
     )
-    selected_profile = resolveProviderProfile(
+    selected_profile = resolve_provider_profile(
         selected_name,
         provider_profiles.get(selected_name) or BUILTIN_PROVIDER_PROFILES[DEFAULT_PROVIDER_PROFILE_NAME],
         {"requestedOpenAiApiMode": requested_openai_api_mode, "openaiBaseUrl": openai_base_url},
     )
     resolved_provider = selected_profile["kind"]
-    resolved_model = normalizeModelName(
-        requested_model_input or selected_profile.get("defaultModel") or getDefaultModelForProvider(resolved_provider),
+    resolved_model = normalize_model_name(
+        requested_model_input or selected_profile.get("defaultModel") or get_default_model_for_provider(resolved_provider),
         resolved_provider,
     )
-    selected_profile = resolveProviderProfile(
+    selected_profile = resolve_provider_profile(
         selected_name,
         provider_profiles.get(selected_name) or BUILTIN_PROVIDER_PROFILES[DEFAULT_PROVIDER_PROFILE_NAME],
         {"requestedOpenAiApiMode": requested_openai_api_mode, "openaiBaseUrl": openai_base_url, "model": resolved_model},
@@ -291,13 +291,13 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "anthropicHeaders": anthropic_headers,
     }
     compaction_provider_profile = await normalize_compaction_provider_secrets(
-        resolveCompactionProviderProfileBinding(
+        resolve_compaction_provider_profile_binding(
             {"requestedProfileName": compaction["profileName"], **profile_binding_inputs}
         ),
         f"config:{selected_name}:compaction",
     )
     compaction_verification_provider_profile = await normalize_compaction_provider_secrets(
-        resolveCompactionProviderProfileBinding(
+        resolve_compaction_provider_profile_binding(
             {"requestedProfileName": verification["profileName"], **profile_binding_inputs}
         ),
         f"config:{selected_name}:compaction-verification",
@@ -345,7 +345,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         f"config:{selected_name}",
     )
 
-    tools = _parse_tool_list(options.get("tools"), merged_settings.get("tools"), defaultToolList())
+    tools = _parse_tool_list(options.get("tools"), merged_settings.get("tools"), default_tool_list())
     allowed_tools = _dedupe(_parse_tool_list(options.get("allowedTools"), merged_settings.get("allowedTools"), tools))
     disallowed_tools = _dedupe(_parse_tool_list(options.get("disallowedTools"), merged_settings.get("disallowedTools"), []))
     plugin_dirs = [resolve_maybe_relative(cwd, item) for item in options.get("pluginDir", [])]
@@ -361,7 +361,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         options.get("systemPrompt")
         or merged_settings.get("systemPromptFile")
         or options.get("defaultSystemPrompt")
-        or buildDefaultSystemPrompt({"assistantName": assistant_name, "assistantDescription": assistant_description})
+        or build_default_system_prompt({"assistantName": assistant_name, "assistantDescription": assistant_description})
     )
     settings_sandbox = merged_settings.get("sandbox") if isinstance(merged_settings.get("sandbox"), dict) else {}
     options_sandbox = options.get("sandbox") if isinstance(options.get("sandbox"), dict) else {}
@@ -388,7 +388,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "providerProfileName": selected_profile["name"],
         "providerProfile": selected_profile,
         "providerCapabilities": clone(selected_profile.get("capabilities") or {}),
-        "providerProfiles": {name: resolveProviderProfile(name, record) for name, record in provider_profiles.items()},
+        "providerProfiles": {name: resolve_provider_profile(name, record) for name, record in provider_profiles.items()},
         "compactionProvider": compaction["provider"],
         "compactionEffort": compaction["effort"],
         "compactionProviderProfile": compaction_provider_profile,
@@ -406,7 +406,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "compactionVerificationModel": verification["model"],
         "compactionVerificationEffort": verification["effort"],
         "compactionVerificationProviderProfile": compaction_verification_provider_profile,
-        "effort": normalizeEffortLevel(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or getDefaultEffortForProvider(resolved_provider),
+        "effort": normalize_effort_level(options.get("effort") or os.environ.get("TESS_EFFORT_LEVEL") or os.environ.get("CLAUDE_CODE_EFFORT_LEVEL") or selected_profile.get("effortLevel") or merged_settings.get("effortLevel")) or get_default_effort_for_provider(resolved_provider),
         "assistantName": assistant_name,
         "assistantDescription": assistant_description,
         "systemPrompt": system_prompt,
@@ -425,7 +425,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "sessionPersistence": options.get("sessionPersistence", True),
         "jsonSchema": _parse_json_schema(options.get("jsonSchema")),
         "maxBudgetUsd": float(options["maxBudgetUsd"]) if options.get("maxBudgetUsd") else None,
-        "fallbackModel": normalizeModelName(options["fallbackModel"]) if options.get("fallbackModel") else None,
+        "fallbackModel": normalize_model_name(options["fallbackModel"]) if options.get("fallbackModel") else None,
         "debugEnabled": bool(options.get("debug") or options.get("debugFile")),
         "debugFilter": options.get("debug") if isinstance(options.get("debug"), str) else None,
         "verbose": bool(options.get("verbose")),

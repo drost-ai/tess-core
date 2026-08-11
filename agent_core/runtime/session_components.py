@@ -5,7 +5,7 @@ from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
 from .exception_groups import aggregate_runtime_failures
-from ..authority.executable_source_policy import selectMcpBootstrapServers
+from ..authority.executable_source_policy import select_mcp_bootstrap_servers
 
 
 async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[str, Any]:
@@ -48,7 +48,7 @@ async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[st
         plugin_mcp_servers = plugins.get("mcpServers") or []
         mcp_runtime = bootstrap_args.get("mcpRuntime")
         mcp_servers = bootstrap_args.get("mcpConfig") or config.get("mcpConfig") or []
-        selected_mcp_servers = selectMcpBootstrapServers(
+        selected_mcp_servers = select_mcp_bootstrap_servers(
             config.get("mcpConfigPolicy"), mcp_servers, plugin_mcp_servers
         )
         if mcp_runtime is None and selected_mcp_servers:

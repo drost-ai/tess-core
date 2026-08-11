@@ -17,27 +17,27 @@ DEFAULT_TUI_SCREEN_MODE = "auto"
 
 DEFAULT_IMAGE_INPUT_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"]
 def default_max_image_input_count() -> int:
-    from ._knobs import knobValue
+    from ._knobs import knob_value
 
-    return int(knobValue("images.max_count"))
+    return int(knob_value("images.max_count"))
 
 
 def default_max_image_input_bytes() -> int:
-    from ._knobs import knobValue
+    from ._knobs import knob_value
 
-    return int(knobValue("images.max_bytes"))
+    return int(knob_value("images.max_bytes"))
 
 
 def default_max_aggregate_image_input_bytes() -> int:
-    from ._knobs import knobValue
+    from ._knobs import knob_value
 
-    return int(knobValue("images.max_aggregate_bytes"))
+    return int(knob_value("images.max_aggregate_bytes"))
 
 
 def default_max_encoded_image_request_bytes() -> int:
-    from ._knobs import knobValue
+    from ._knobs import knob_value
 
-    return int(knobValue("images.max_encoded_request_bytes"))
+    return int(knob_value("images.max_encoded_request_bytes"))
 MAX_PROVIDER_IMAGE_INPUT_COUNT = 32
 MAX_PROVIDER_IMAGE_INPUT_BYTES = 20 * 1024 * 1024
 MAX_PROVIDER_AGGREGATE_IMAGE_INPUT_BYTES = 40 * 1024 * 1024
@@ -53,7 +53,7 @@ PROVIDER_DEFAULT_MODEL = {"anthropic": DEFAULT_MODEL, "openai": "gpt-5.4"}
 PROVIDER_DEFAULT_EFFORT = {"anthropic": "high", "openai": "xhigh"}
 
 # Knob-derived image limits are deliberately absent: profile resolution
-# fills them live, and baking them at import time (before configureKnobs)
+# fills them live, and baking them at import time (before configure_knobs)
 # shadowed user overrides with stale defaults.
 BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
     "openai": {

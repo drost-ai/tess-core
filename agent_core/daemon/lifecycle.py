@@ -301,25 +301,25 @@ async def _wait_for_running_daemon(instance_id: str, pid: int, timeout: float) -
 
 
 def _resolve_startup_timeout_seconds(args: dict[str, Any]) -> float:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
     if os.environ.get("AGENT_CORE_DAEMON_START_TIMEOUT_MS"):
         # The legacy env name IS the knob's canonical env override; when
         # set it keeps beating per-call arguments, as it always has.
-        return max(0.025, int(knobValue("daemon.start_timeout_ms")) / 1000)
+        return max(0.025, int(knob_value("daemon.start_timeout_ms")) / 1000)
     if args.get("startupTimeoutSeconds") is not None:
         return max(0.025, float(args.get("startupTimeoutSeconds") or 0))
     if args.get("startTimeoutMs") is not None:
         return max(0.025, float(args.get("startTimeoutMs") or 0) / 1000)
-    return max(0.025, int(knobValue("daemon.start_timeout_ms")) / 1000)
+    return max(0.025, int(knob_value("daemon.start_timeout_ms")) / 1000)
 
 
 def _daemon_state_is_still_booting(state: dict[str, Any] | None) -> bool:
     if not state or state.get("phase") == "running":
         return False
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    boot_grace_seconds = int(knobValue("daemon.boot_grace_ms")) / 1000
+    boot_grace_seconds = int(knob_value("daemon.boot_grace_ms")) / 1000
     try:
         import datetime
 
@@ -387,6 +387,6 @@ def _append_spawn_ledger(instance_id: str, pid: int) -> None:
 
 
 def _daemon_instance_wait_ms() -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("daemon.instance_lock_timeout_ms"))
+    return int(knob_value("daemon.instance_lock_timeout_ms"))

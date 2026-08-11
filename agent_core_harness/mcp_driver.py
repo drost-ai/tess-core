@@ -170,7 +170,7 @@ async def create_mcp_plugin_fixture(data: dict[str, Any], sandbox: ScenarioSandb
 
 async def bootstrap_mcp_plugin_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     await _close_runtime_only(state)
-    config = await core.resolveConfig(
+    config = await core.resolve_config(
         {
             "runtimeHome": str(sandbox.home),
             "permissionMode": data.get("permissionMode", "bypassPermissions"),

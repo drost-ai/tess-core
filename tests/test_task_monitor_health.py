@@ -48,7 +48,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
     def test_task_monitor_and_activity_descriptors_match_reference_shape(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             task_id = "monitor-task"
             session["metadata"]["taskIds"] = [task_id]
@@ -114,7 +114,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         runtime = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             task_id = "monitor-runtime-task"
@@ -144,7 +144,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         runtime = None
         original_send = monitors_module.send_openai_request
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             config["openaiToken"] = "test-token"
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"].append({"role": "user", "content": "Please monitor the build."})
@@ -207,7 +207,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             async def scenario():
-                config = await core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
+                config = await core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
                 session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
                 await core.save_session(session)
                 counter = workspace / "health-count.txt"
@@ -308,7 +308,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             thread.start()
 
             async def scenario():
-                config = await core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
+                config = await core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
                 session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
                 await core.save_session(session)
                 events = []

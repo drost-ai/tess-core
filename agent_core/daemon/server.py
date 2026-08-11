@@ -294,14 +294,14 @@ async def _watch_owner_runtime(
     never masquerade as a live owner. Owner death triggers the normal
     shutdown path, whose supervisor close escalates every owned worker
     through the shared TERM->KILL ladder."""
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
     from ..process.identity import _inspect_process_identity
 
     baseline = None
     with contextlib.suppress(Exception):
         baseline = await _inspect_process_identity(owner_pid)
     while not shutdown.is_set():
-        await asyncio.sleep(int(knobValue("daemon.owner_poll_ms")) / 1000)
+        await asyncio.sleep(int(knob_value("daemon.owner_poll_ms")) / 1000)
         owner_alive = _is_process_alive(owner_pid)
         if owner_alive and baseline is not None:
             try:
@@ -325,9 +325,9 @@ async def _watch_owner_runtime(
 async def _rotate_daemon_events_periodically(instance_id: str, shutdown: asyncio.Event) -> None:
     while not shutdown.is_set():
         try:
-            from ..config._knobs import knobValue
+            from ..config._knobs import knob_value
 
-            await asyncio.wait_for(shutdown.wait(), timeout=int(knobValue("daemon.events_rotate_check_ms")) / 1000)
+            await asyncio.wait_for(shutdown.wait(), timeout=int(knob_value("daemon.events_rotate_check_ms")) / 1000)
         except asyncio.TimeoutError:
             await rotate_daemon_events_if_oversized(instance_id)
 

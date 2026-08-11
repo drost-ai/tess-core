@@ -9,8 +9,8 @@ strictly against this registry — unknown names are fatal) and from
 process environment variables (``AGENT_CORE_SUBAGENTS_MAX_LIVE`` overrides
 ``subagents.max_live``). Precedence: default < config.yaml < environment.
 
-``configureKnobs`` is called by config resolution; modules read values via
-``knobValue`` so no tunable is a hardcoded module constant. The checked-in
+``configure_knobs`` is called by config resolution; modules read values via
+``knob_value`` so no tunable is a hardcoded module constant. The checked-in
 ``config.yaml.example`` is generated from this registry (lockstep test).
 
 Declarations live in ``_knob_registry.py``; this module keeps the
@@ -29,7 +29,7 @@ _ENV_PREFIX = "AGENT_CORE_"
 _configured: dict[str, Any] = {}
 
 
-def knobValue(name: str) -> Any:
+def knob_value(name: str) -> Any:
     knob = KNOB_REGISTRY.get(name)
     if knob is None:
         raise KeyError(f"Unknown knob {name!r}; declare it in KNOB_REGISTRY first.")
@@ -41,7 +41,7 @@ def knobValue(name: str) -> Any:
     return knob.default
 
 
-def configureKnobs(overrides: Any) -> None:
+def configure_knobs(overrides: Any) -> None:
     """Install config.yaml knob overrides (plus environment) process-wide."""
 
     flattened = _flatten(overrides or {})
@@ -62,14 +62,14 @@ def configureKnobs(overrides: Any) -> None:
     _configured.update(resolved)
 
 
-def resetConfiguredKnobs() -> None:
+def reset_configured_knobs() -> None:
     _configured.clear()
 
 
 _warned_legacy_env: set[str] = set()
 
 
-def warnLegacyEnvAlias(legacy_name: str, knob_name: str) -> None:
+def warn_legacy_env_alias(legacy_name: str, knob_name: str) -> None:
     """One-time stderr warning when a deprecated env alias is in use."""
 
     if legacy_name in _warned_legacy_env or not os.environ.get(legacy_name):
@@ -81,7 +81,7 @@ def warnLegacyEnvAlias(legacy_name: str, knob_name: str) -> None:
     )
 
 
-def renderKnobsExample() -> str:
+def render_knobs_example() -> str:
     lines = [
         "# Runtime configuration knobs — generated from agent_core/config/_knobs.py.",
         "# Copy wanted entries under the `knobs:` section of",

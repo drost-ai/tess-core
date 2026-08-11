@@ -16,7 +16,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
             subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
             subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             tools = {tool.name: tool for tool in core.create_builtin_tools()}
             cwd_updates = []
@@ -68,7 +68,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
         try:
             worktree = Path(root.name) / "raw-worktree"
             worktree.mkdir()
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = {"id": "raw-worktree-session", "cwd": str(workspace), "metadata": {}}
 
             class Controller:
@@ -101,7 +101,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
         try:
             worktree = Path(root.name) / "workspace-slice-5"
             worktree.mkdir()
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
 
             enter_snapshot = {
@@ -243,7 +243,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
     def test_notebook_edit_replace_insert_delete(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             notebook_path = workspace / "demo.ipynb"
             notebook_path.write_text(json.dumps({"cells": [{"id": "cell-1", "cell_type": "code", "source": ["print(1)"], "metadata": {}, "outputs": []}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}))

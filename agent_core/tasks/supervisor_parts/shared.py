@@ -31,6 +31,6 @@ _DEAD_WORKER_SUMMARY = (
 
 def _knob_ms(name: str) -> int:
     """Integer knob read; call-time import because config imports tasks."""
-    from ...config._knobs import knobValue
+    from ...config._knobs import knob_value
 
-    return int(knobValue(name))
+    return int(knob_value(name))

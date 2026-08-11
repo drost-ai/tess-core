@@ -1,6 +1,6 @@
 """Resolved config and settings contracts.
 
-Producers: ``agent_core/config/resolution.py`` (``resolveConfig``),
+Producers: ``agent_core/config/resolution.py`` (``resolve_config``),
 ``agent_core/config/shared.py`` (builtin agents and provider profiles),
 ``agent_core/storage/settings.py`` (persisted settings records).
 """
@@ -70,7 +70,7 @@ class ProviderProfile(TypedDict, total=False):
 
     Builtin profiles (config/shared.py BUILTIN_PROVIDER_PROFILES) carry
     the kind/apiMode/defaultModel/auth/description subset; the resolved and
-    normalized profile (config/providers.py resolveProviderProfile)
+    normalized profile (config/providers.py resolve_provider_profile)
     additionally always carries name/headers/supportsVision/capabilities/
     effortLevel/requestOptions/limits.
     """
@@ -163,9 +163,9 @@ class _ResolvedConfigRequired(TypedDict):
 
 
 class ResolvedConfig(_ResolvedConfigRequired, total=False):
-    """Output of resolveConfig (config/resolution.py).
+    """Output of resolve_config (config/resolution.py).
 
-    All keys below are emitted by resolveConfig today; they are optional here
+    All keys below are emitted by resolve_config today; they are optional here
     because callers construct partial config dicts in tests and subagent
     preparation paths.
     """

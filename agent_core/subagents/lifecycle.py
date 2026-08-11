@@ -4,10 +4,10 @@ import os
 import uuid
 from .._utils import maybe_await, now_iso, pretty_json
 from ..config import (
-    buildSystemPromptForAgent,
-    normalizeModelName,
-    resolveModelForAgent,
-    resolveProviderForModelSelection,
+    build_system_prompt_for_agent,
+    normalize_model_name,
+    resolve_model_for_agent,
+    resolve_provider_for_model_selection,
 )
 from ..storage import (
     create_empty_session,
@@ -37,9 +37,9 @@ from .spawn_utils import (
 from typing import Any
 from ..storage.message_origin import message_with_origin as _message_with_origin
 from ..authority.agent import (
-    captureAgentAuthority,
-    deriveChildAgentAuthority,
-    sandboxConfigForAgentAuthority,
+    capture_agent_authority,
+    derive_child_agent_authority,
+    sandbox_config_for_agent_authority,
 )
 from ..contracts.records import launch_output_file, launch_task_id
 
@@ -186,9 +186,9 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
     child_mode = inherit_parent_permission_mode(requested_mode, parent.get("permissionMode") or config.get("permissionMode") or "default")
     parent_provider = parent.get("provider") if parent.get("provider") is not None else config.get("provider")
     parent_model = parent.get("model") if parent.get("model") is not None else config.get("model")
-    child_model = normalizeModelName(model, parent_provider) if model else resolveModelForAgent(config, agent_type, parent_model)
-    child_provider = resolveProviderForModelSelection(parent_provider, child_model) or parent_provider
-    child_system = buildSystemPromptForAgent(config, agent_type) if agent_type else (parent.get("systemPrompt") if parent.get("systemPrompt") is not None else config.get("systemPrompt"))
+    child_model = normalize_model_name(model, parent_provider) if model else resolve_model_for_agent(config, agent_type, parent_model)
+    child_provider = resolve_provider_for_model_selection(parent_provider, child_model) or parent_provider
+    child_system = build_system_prompt_for_agent(config, agent_type) if agent_type else (parent.get("systemPrompt") if parent.get("systemPrompt") is not None else config.get("systemPrompt"))
     child_name = name or description.strip()
     runtime_contract = runtime_contract_for_agent(config, agent_type)
     runtime_contract_summary = summarize_subagent_runtime_contract(runtime_contract)
@@ -196,7 +196,7 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
     parent_tools = await maybe_await(get_tools()) if callable(get_tools) else context.get("tools")
     if parent_tools is None:
         parent_tools = [{"name": name} for name in config.get("tools") or []]
-    parent_authority = await captureAgentAuthority(
+    parent_authority = await capture_agent_authority(
         config=config,
         session=parent,
         tools=parent_tools,
@@ -204,7 +204,7 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
     parent.setdefault("metadata", {})["effectiveAgentAuthority"] = parent_authority
     launch_group_id = resolve_subagent_launch_group_id(args, parent, context)
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
-    derived_authority = deriveChildAgentAuthority(
+    derived_authority = derive_child_agent_authority(
         parent=parent_authority,
         requestedMode=requested_mode,
         contract=runtime_contract,
@@ -288,7 +288,7 @@ async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
             "tools": list(child_authority["enabledTools"]),
             "allowedTools": list(child_authority["enabledTools"]),
             "disallowedTools": [],
-            "sandbox": sandboxConfigForAgentAuthority(child_authority),
+            "sandbox": sandbox_config_for_agent_authority(child_authority),
         }
     )
     parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])

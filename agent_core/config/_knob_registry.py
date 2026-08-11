@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Knob declarations: one row per tunable, grouped by section.
 
-Machinery (knobValue/configureKnobs/coercion/example rendering) lives in
+Machinery (knob_value/configure_knobs/coercion/example rendering) lives in
 ``_knobs.py``. Whether a constant may become a knob at all is decided by
 ``KNOB_CLASSIFICATION.md`` — consult it before adding a row, and before
 adding a numeric constant anywhere else in the runtime.

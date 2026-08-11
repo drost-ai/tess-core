@@ -47,16 +47,16 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
         self.assertEqual(testing.build_anthropic_messages_payload({**request, "model": "claude-opus-4-8"})["max_tokens"], 4_321)
 
     def test_unmatched_profile_output_limit_falls_back_to_knob(self):
-        from agent_core.config._knobs import configureKnobs, resetConfiguredKnobs
+        from agent_core.config._knobs import configure_knobs, reset_configured_knobs
 
         try:
             limits = resolveProviderTokenLimits({"profileName": "custom", "kind": "openai", "model": "mystery-model"})
             self.assertEqual(limits["maxOutputTokens"], 16_384)
-            configureKnobs({"provider": {"max_output_tokens": 32_768}})
+            configure_knobs({"provider": {"max_output_tokens": 32_768}})
             limits = resolveProviderTokenLimits({"profileName": "custom", "kind": "openai", "model": "mystery-model"})
             self.assertEqual(limits["maxOutputTokens"], 32_768)
         finally:
-            resetConfiguredKnobs()
+            reset_configured_knobs()
 
     def test_profile_max_output_tokens_threads_from_settings_to_wire_payloads(self):
         root, home, workspace, previous = self.temp_context()
@@ -78,7 +78,7 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
                 encoding="utf-8",
             )
             (settings_dir / ".env").write_text("BIG_OUTPUT_TEST_KEY=sk-test\n", encoding="utf-8")
-            config = run(core.resolveConfig({}, str(workspace)))
+            config = run(core.resolve_config({}, str(workspace)))
             profile = config["providerProfile"]
             self.assertEqual(profile["maxOutputTokens"], 128_000)
 
@@ -153,7 +153,7 @@ class ModelLimitRulesTests(AgentCoreTestCase):
                 "    maxOutputTokens: 8000\n",
                 encoding="utf-8",
             )
-            run(core.resolveConfig({"provider": "openai"}, str(workspace)))
+            run(core.resolve_config({"provider": "openai"}, str(workspace)))
             from agent_core.providers.token_budget import resolve_provider_token_limits
 
             limits = resolve_provider_token_limits({"kind": "openai", "profileName": "p", "model": "my-local-model-v1"})

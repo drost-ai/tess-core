@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 
 class PublicApiTests(AgentCoreTestCase):
     def test_public_entrypoints(self):
-        self.assertTrue(callable(core.resolveConfig))
+        self.assertTrue(callable(core.resolve_config))
         self.assertTrue(callable(core.runAgentPrompt))
         self.assertTrue(callable(core.bootstrap_runtime))
         self.assertTrue(callable(core.create_empty_session))

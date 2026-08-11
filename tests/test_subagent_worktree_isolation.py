@@ -23,7 +23,7 @@ class SubagentWorktreeIsolationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             _init_repo(str(workspace))
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(parent))
 
@@ -56,7 +56,7 @@ class SubagentWorktreeIsolationTests(AgentCoreTestCase):
             # child_authority_escalation before the fix.
             child_config = dict(config)
             enforced = run(
-                core.enforceSessionAgentAuthority(
+                core.enforce_session_agent_authority(
                     session=child_session, config=child_config
                 )
             )

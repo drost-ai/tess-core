@@ -222,11 +222,11 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
         self.assertEqual(capabilities["maxEncodedImageRequestBytes"], 56 * MIB)
 
     def test_custom_compatible_profile_defaults_text_only_and_explicit_opt_in_resolves(self):
-        text_only = core.resolveProviderProfile(
+        text_only = core.resolve_provider_profile(
             "custom", {"kind": "openai", "baseUrl": "https://compatible.test/v1", "defaultModel": "GLM-5"}
         )
         self.assertFalse(text_only["capabilities"]["imageInput"])
-        enabled = core.resolveProviderProfile(
+        enabled = core.resolve_provider_profile(
             "custom-image",
             {
                 "kind": "openai", "baseUrl": "https://compatible.test/v1", "defaultModel": "GLM-5",

@@ -156,7 +156,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
             },
         ]
         await core.save_mcp_servers("user", str(self.project), records)
-        first = await core.resolveConfig({"settingSources": "user"}, str(self.project))
+        first = await core.resolve_config({"settingSources": "user"}, str(self.project))
         by_name = {record["name"]: record for record in first["mcpConfig"]}
         self.assertTrue(is_runtime_secret_ref(by_name["legacy-http"]["headers"]["Authorization"]))
         self.assertTrue(is_runtime_secret_ref(by_name["legacy-http"]["oauth"]["clientSecret"]))
@@ -166,7 +166,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         files = sorted((self.home / "private-secrets" / "records").iterdir())
         self.assertEqual(len(files), 3)
 
-        second = await core.resolveConfig({"settingSources": "user"}, str(self.project))
+        second = await core.resolve_config({"settingSources": "user"}, str(self.project))
         self.assertEqual(second["mcpConfig"], first["mcpConfig"])
         self.assertEqual(sorted(path.name for path in files), sorted(path.name for path in (self.home / "private-secrets" / "records").iterdir()))
         fragments = sorted((self.home / "settings" / "mcp").glob("*.json"))
@@ -176,7 +176,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
 
         await core.save_mcp_servers("project", str(self.project), records[:1])
         with self.assertRaisesRegex(RuntimeSecretError, "requires a runtime secret reference"):
-            await core.resolveConfig({"settingSources": "project"}, str(self.project))
+            await core.resolve_config({"settingSources": "project"}, str(self.project))
 
     async def test_legacy_migration_is_restart_idempotent(self) -> None:
         records = [{
@@ -211,7 +211,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(auth["anthropicAuthToken"], auth["authToken"])
         self.assertEqual(len(list((self.home / "private-secrets" / "records").iterdir())), 2)
 
-        config = await core.resolveConfig({"provider": "anthropic-console"}, str(self.project))
+        config = await core.resolve_config({"provider": "anthropic-console"}, str(self.project))
         self.assertTrue(is_runtime_secret_ref(config["apiKey"]))
         self.assertNotIn(api_key, json.dumps(config))
         self.assertNotIn(auth_token, json.dumps(config))
@@ -223,7 +223,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         previous = os.environ.get("OPENAI_API_KEY")
         os.environ["OPENAI_API_KEY"] = ""
         try:
-            config = await core.resolveConfig(
+            config = await core.resolve_config(
                 {"provider": "openai", "openaiApiMode": "chat_completions"},
                 str(self.project),
             )

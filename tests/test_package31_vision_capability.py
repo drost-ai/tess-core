@@ -16,7 +16,7 @@ class Package31VisionCapabilityTests(unittest.TestCase):
     """
 
     def test_anthropic_compatible_profile_honors_declared_vision_capability(self):
-        kimi = core.resolveProviderProfile(
+        kimi = core.resolve_provider_profile(
             "kimi",
             {
                 "kind": "anthropic",
@@ -37,7 +37,7 @@ class Package31VisionCapabilityTests(unittest.TestCase):
     def test_model_name_inference_still_applies_without_a_declaration(self):
         # Guards the fallback the declaration overrides: an undeclared compatible
         # profile on a non-Claude model stays text-only.
-        undeclared = core.resolveProviderProfile(
+        undeclared = core.resolve_provider_profile(
             "kimi-undeclared",
             {
                 "kind": "anthropic",

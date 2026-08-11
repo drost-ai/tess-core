@@ -100,7 +100,7 @@ async def _build_session(data: dict[str, Any], paths: dict[str, Any]) -> tuple[d
 
 
 async def _build_session_for(data: dict[str, Any], paths: dict[str, Any], *, default_session_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    config = await core.resolveConfig(
+    config = await core.resolve_config(
         {
             "provider": data.get("provider", "openai"),
             "model": data.get("model", "gpt-5.4"),

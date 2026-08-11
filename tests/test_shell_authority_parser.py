@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-from agent_core.authority.permission_rules import matchesBashRulePattern
+from agent_core.authority.permission_rules import matches_bash_rule_pattern
 from agent_core.tools.permissions import _matches_command_policy
 
 
@@ -55,30 +55,30 @@ class ShellAuthorityParserTests(unittest.TestCase):
         )
         for command in safe:
             with self.subTest(command=command):
-                result = core.classifyReadOnlyShellCommand(command)
+                result = core.classify_read_only_shell_command(command)
                 self.assertTrue(result["safe"])
                 self.assertEqual(result["revision"], core.SHELL_COMMAND_CLASSIFIER_REVISION)
         for command in unsafe:
             with self.subTest(command=command):
-                self.assertFalse(core.classifyReadOnlyShellCommand(command)["safe"])
+                self.assertFalse(core.classify_read_only_shell_command(command)["safe"])
 
     def test_quoted_metacharacters_are_literal_but_expansion_is_rejected(self):
         self.assertEqual(
-            core.parseSingleShellCommand("cat 'semi;colon' \"dollar-free\" escaped\\ space"),
+            core.parse_single_shell_command("cat 'semi;colon' \"dollar-free\" escaped\\ space"),
             {"ok": True, "argv": ["cat", "semi;colon", "dollar-free", "escaped space"]},
         )
-        self.assertFalse(core.parseSingleShellCommand('cat "$HOME"')["ok"])
-        self.assertTrue(core.parseSingleShellCommand("cat foo\\;bar")["ok"])
+        self.assertFalse(core.parse_single_shell_command('cat "$HOME"')["ok"])
+        self.assertTrue(core.parse_single_shell_command("cat foo\\;bar")["ok"])
 
     def test_allow_prefixes_and_auto_mode_reject_composed_programs(self):
-        self.assertTrue(matchesBashRulePattern("git status:*", "git status --short"))
-        self.assertFalse(matchesBashRulePattern("git status:*", "git status; touch pwned"))
+        self.assertTrue(matches_bash_rule_pattern("git status:*", "git status --short"))
+        self.assertFalse(matches_bash_rule_pattern("git status:*", "git status; touch pwned"))
         self.assertTrue(_matches_command_policy("git status --short", ["git status"]))
         self.assertFalse(_matches_command_policy("git status; touch pwned", ["git status"]))
 
     def test_deny_matching_pierces_env_prefixes_paths_and_composition(self):
         def deny(pattern: str, command: str) -> bool:
-            return matchesBashRulePattern(pattern, command, requireSingleCommand=False)
+            return matches_bash_rule_pattern(pattern, command, requireSingleCommand=False)
 
         self.assertTrue(deny("rm:*", "rm -rf /"))
         self.assertTrue(deny("rm:*", "FOO=1 rm -rf /"))

@@ -7,8 +7,8 @@ from agent_core.runtime.secrets import is_runtime_secret_ref
 
 class ConfigProfileTests(AgentCoreTestCase):
     def test_built_in_provider_profiles(self):
-        profiles = core.resolveProviderProfiles(None)
-        self.assertEqual(core.listProviderProfiles(profiles), ["anthropic-claude-code", "anthropic-console", "codex", "openai"])
+        profiles = core.resolve_provider_profiles(None)
+        self.assertEqual(core.list_provider_profiles(profiles), ["anthropic-claude-code", "anthropic-console", "codex", "openai"])
         self.assertEqual(profiles["codex"]["defaultModel"], "gpt-5.4")
 
     def test_resolve_config_custom_profile(self):
@@ -32,7 +32,7 @@ class ConfigProfileTests(AgentCoreTestCase):
                     }
                 )
             )
-            config = run(core.resolveConfig({}, str(workspace)))
+            config = run(core.resolve_config({}, str(workspace)))
             self.assertEqual(config["providerProfileName"], "deepinfra")
             self.assertEqual(config["provider"], "openai")
             self.assertEqual(config["openaiApiMode"], "chat_completions")
@@ -63,7 +63,7 @@ class ConfigProfileTests(AgentCoreTestCase):
                 ),
                 encoding="utf-8",
             )
-            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
             self.assertEqual(
                 config["webSearch"],
                 {
@@ -80,15 +80,15 @@ class ConfigProfileTests(AgentCoreTestCase):
     def test_system_prompt_precedence_options_file_product_builtin(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            config = run(core.resolve_config({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
             self.assertEqual(config["systemPrompt"], "product prompt")
 
             (home / "settings").mkdir()
             (home / "settings" / "system_prompt.md").write_text("file prompt\n", encoding="utf-8")
-            file_config = run(core.resolveConfig({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            file_config = run(core.resolve_config({"runtimeHome": str(home), "defaultSystemPrompt": "product prompt"}, str(workspace)))
             self.assertEqual(file_config["systemPrompt"], "file prompt")
 
-            explicit_config = run(core.resolveConfig({"runtimeHome": str(home), "systemPrompt": "explicit prompt", "defaultSystemPrompt": "product prompt"}, str(workspace)))
+            explicit_config = run(core.resolve_config({"runtimeHome": str(home), "systemPrompt": "explicit prompt", "defaultSystemPrompt": "product prompt"}, str(workspace)))
             self.assertEqual(explicit_config["systemPrompt"], "explicit prompt")
         finally:
             self.restore_home(root, previous)
@@ -102,8 +102,8 @@ class ConfigProfileTests(AgentCoreTestCase):
             )
             (home / "settings").mkdir()
             (home / "settings" / "config.yaml").write_text("systemPrompt: yaml prompt\n", encoding="utf-8")
-            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
-            self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
+            config = run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], core.build_default_system_prompt())
             self.assertIsNone(config["appendSystemPrompt"])
         finally:
             self.restore_home(root, previous)
@@ -141,7 +141,7 @@ class ConfigProfileTests(AgentCoreTestCase):
                     }
                 )
             )
-            config = run(core.resolveConfig({"provider": "deepseek"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "deepseek"}, str(workspace)))
             self.assertEqual(config["providerProfileName"], "deepseek")
             self.assertEqual(config["model"], "deepseek-v4-pro")
             self.assertEqual(config["openaiBaseUrl"], "https://api.deepseek.com")
@@ -186,7 +186,7 @@ class ConfigProfileTests(AgentCoreTestCase):
                     }
                 )
             )
-            config = run(core.resolveConfig({}, str(workspace)))
+            config = run(core.resolve_config({}, str(workspace)))
             profile = config["providerProfile"]
             self.assertEqual(profile["maxContextLength"], 32_000)
             self.assertEqual(profile["maxOutputTokens"], 4_096)
@@ -234,7 +234,7 @@ class ConfigProfileTests(AgentCoreTestCase):
                 encoding="utf-8",
             )
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "runtimeHome": str(home),
                         "compactionProvider": "openai",
@@ -281,7 +281,7 @@ class ConfigProfileTests(AgentCoreTestCase):
                     }
                 )
             )
-            config = run(core.resolveConfig({}, str(workspace)))
+            config = run(core.resolve_config({}, str(workspace)))
             self.assertEqual(config["providerProfileName"], "anthropic-oauth")
             self.assertEqual(config["model"], "claude-opus-4-7")
             self.assertEqual(config["effort"], "high")
@@ -295,7 +295,7 @@ class ConfigProfileTests(AgentCoreTestCase):
         try:
             os.environ.pop("ANTHROPIC_API_KEY", None)
             os.environ["ANTHROPIC_AUTH_TOKEN"] = "sk-ant-o-test-token"
-            token_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
+            token_config = run(core.resolve_config({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(token_config["providerProfileName"], "anthropic-claude-code")
             self.assertTrue(is_runtime_secret_ref(token_config["authToken"]))
             self.assertEqual(run(resolve_provider_config_secrets(token_config))["authToken"], "sk-ant-o-test-token")
@@ -303,14 +303,14 @@ class ConfigProfileTests(AgentCoreTestCase):
 
             os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
             os.environ["ANTHROPIC_API_KEY"] = "sk-ant-api-test-key"
-            key_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
+            key_config = run(core.resolve_config({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(key_config["providerProfileName"], "anthropic-console")
             self.assertTrue(is_runtime_secret_ref(key_config["apiKey"]))
             self.assertEqual(run(resolve_provider_config_secrets(key_config))["apiKey"], "sk-ant-api-test-key")
             self.assertIsNone(key_config["authToken"])
 
-            self.assertEqual(run(core.resolveConfig({"altScreen": False}, str(workspace)))["screenMode"], "inline")
-            self.assertEqual(run(core.resolveConfig({"noAltScreen": True}, str(workspace)))["screenMode"], "inline")
+            self.assertEqual(run(core.resolve_config({"altScreen": False}, str(workspace)))["screenMode"], "inline")
+            self.assertEqual(run(core.resolve_config({"noAltScreen": True}, str(workspace)))["screenMode"], "inline")
         finally:
             if prev_token is None:
                 os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
@@ -330,14 +330,14 @@ class ConfigProfileTests(AgentCoreTestCase):
             os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
             os.environ.pop("ANTHROPIC_API_KEY", None)
             (home / "auth.json").write_text(json.dumps({"provider": "claudeai", "apiKey": "sk-ant-o-stored-token"}))
-            token_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
+            token_config = run(core.resolve_config({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(token_config["providerProfileName"], "anthropic-claude-code")
             self.assertTrue(is_runtime_secret_ref(token_config["authToken"]))
             self.assertEqual(run(resolve_provider_config_secrets(token_config))["authToken"], "sk-ant-o-stored-token")
             self.assertIsNone(token_config["apiKey"])
 
             (home / "auth.json").write_text(json.dumps({"provider": "console", "apiKey": "sk-ant-api-stored-key"}))
-            key_config = run(core.resolveConfig({"provider": "anthropic"}, str(workspace)))
+            key_config = run(core.resolve_config({"provider": "anthropic"}, str(workspace)))
             self.assertEqual(key_config["providerProfileName"], "anthropic-console")
             self.assertTrue(is_runtime_secret_ref(key_config["apiKey"]))
             self.assertEqual(run(resolve_provider_config_secrets(key_config))["apiKey"], "sk-ant-api-stored-key")
@@ -361,7 +361,7 @@ class ConfigProfileTests(AgentCoreTestCase):
             codex_auth_path = home / "codex-auth.json"
             codex_auth_path.write_text(json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "codex-access-token"}}))
             (home / "settings.json").write_text(json.dumps({"openaiCodexAuthPath": str(codex_auth_path)}))
-            config = run(core.resolveConfig({"provider": "codex"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "codex"}, str(workspace)))
             self.assertEqual(config["providerProfileName"], "codex")
             self.assertEqual(config["openaiApiMode"], "codex")
             self.assertTrue(is_runtime_secret_ref(config["openaiToken"]))

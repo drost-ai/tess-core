@@ -8,8 +8,8 @@ import time
 from typing import Any, Iterable, Mapping
 from urllib.parse import urlsplit
 
-from .repository_trust import approveRepositoryContent, checkRepositoryApproval
-from .shell_command_policy import parseSingleShellCommand, splitShellCommandConstituents
+from .repository_trust import approve_repository_content, check_repository_approval
+from .shell_command_policy import parse_single_shell_command, split_shell_command_constituents
 from ..storage import file_or_json, get_project_root, load_settings
 
 
@@ -19,11 +19,11 @@ _RULES_CACHE_TTL_SECONDS = 5.0
 _rules_cache: dict[str, dict[str, Any]] = {}
 
 
-def normalizeShellCommand(command: str) -> str:
+def normalize_shell_command(command: str) -> str:
     return re.sub(r"\s+", " ", command).strip().lower()
 
 
-def parsePermissionRule(raw: str, effect: str, scope: str, approved: bool) -> dict[str, Any] | None:
+def parse_permission_rule(raw: str, effect: str, scope: str, approved: bool) -> dict[str, Any] | None:
     trimmed = raw.strip()
     if not trimmed:
         return None
@@ -71,7 +71,7 @@ def _glob_to_regex(glob: str) -> re.Pattern[str]:
     return re.compile(f"^{output}$")
 
 
-def matchesBashRulePattern(
+def matches_bash_rule_pattern(
     pattern: str,
     command: str | None,
     *,
@@ -80,9 +80,9 @@ def matchesBashRulePattern(
     if command is None:
         return False
     if requireSingleCommand:
-        parsed_command = parseSingleShellCommand(command)
+        parsed_command = parse_single_shell_command(command)
         raw_pattern = pattern[:-2] if pattern.endswith(":*") else pattern
-        parsed_pattern = parseSingleShellCommand(raw_pattern)
+        parsed_pattern = parse_single_shell_command(raw_pattern)
         if not parsed_command.get("ok") or not parsed_pattern.get("ok"):
             return False
         command_argv = [value.lower() for value in parsed_command["argv"]]
@@ -103,25 +103,25 @@ def matchesBashRulePattern(
 
 def _loose_bash_pattern_matches(pattern: str, normalized: str) -> bool:
     if pattern.endswith(":*"):
-        prefix = normalizeShellCommand(pattern[:-2])
+        prefix = normalize_shell_command(pattern[:-2])
         return bool(prefix and normalized.startswith(prefix))
-    return normalized == normalizeShellCommand(pattern)
+    return normalized == normalize_shell_command(pattern)
 
 
 def _deny_command_candidates(command: str) -> list[str]:
     """Every view a deny rule must see: the whole command, each constituent
     simple command (env-assignment prefixes stripped), and each constituent
     with its binary path collapsed to the basename."""
-    candidates = [normalizeShellCommand(command)]
-    for argv in splitShellCommandConstituents(command):
-        candidates.append(normalizeShellCommand(" ".join(argv)))
+    candidates = [normalize_shell_command(command)]
+    for argv in split_shell_command_constituents(command):
+        candidates.append(normalize_shell_command(" ".join(argv)))
         basename = os.path.basename(argv[0])
         if basename and basename != argv[0]:
-            candidates.append(normalizeShellCommand(" ".join([basename, *argv[1:]])))
+            candidates.append(normalize_shell_command(" ".join([basename, *argv[1:]])))
     return candidates
 
 
-def matchesPathRulePattern(pattern: str, candidatePath: str | None, projectRoot: str | None = None) -> bool:
+def matches_path_rule_pattern(pattern: str, candidatePath: str | None, projectRoot: str | None = None) -> bool:
     if not candidatePath:
         return False
     expanded = os.path.expanduser(pattern)
@@ -136,7 +136,7 @@ def matchesPathRulePattern(pattern: str, candidatePath: str | None, projectRoot:
     return bool(_glob_to_regex(expanded.replace(os.sep, "/")).fullmatch(relative.replace(os.sep, "/")))
 
 
-def matchesDomainRulePattern(domainPattern: str, url: str | None) -> bool:
+def matches_domain_rule_pattern(domainPattern: str, url: str | None) -> bool:
     if not url:
         return False
     try:
@@ -158,9 +158,9 @@ def _rule_matches(rule: Mapping[str, Any], call: Mapping[str, Any], project_root
     if not isinstance(pattern, str):
         return True
     if pattern.startswith("domain:"):
-        return matchesDomainRulePattern(pattern[len("domain:") :], call.get("url"))
+        return matches_domain_rule_pattern(pattern[len("domain:") :], call.get("url"))
     if rule.get("tool") == "Bash":
-        return matchesBashRulePattern(
+        return matches_bash_rule_pattern(
             pattern,
             call.get("command"),
             requireSingleCommand=rule.get("effect") == "allow",
@@ -170,10 +170,10 @@ def _rule_matches(rule: Mapping[str, Any], call: Mapping[str, Any], project_root
         # cannot be evaluated may narrow an allow (never match) but must not
         # weaken a deny/ask: those fire on the tool match alone.
         return rule.get("effect") != "allow"
-    return matchesPathRulePattern(pattern, call.get("path"), project_root)
+    return matches_path_rule_pattern(pattern, call.get("path"), project_root)
 
 
-def matchPermissionRule(
+def match_permission_rule(
     rules: Iterable[Mapping[str, Any]],
     call: Mapping[str, Any],
     *,
@@ -197,22 +197,22 @@ def _allow_list_hash(allow: list[str]) -> str:
     return hashlib.sha256(json.dumps(allow, separators=(",", ":")).encode()).hexdigest()
 
 
-async def approvePermissionRules(cwd: str, scope: str) -> None:
+async def approve_permission_rules(cwd: str, scope: str) -> None:
     if scope not in {"project", "local"}:
         raise ValueError("Permission-rule approval scope must be project or local")
     settings = await load_settings(scope, cwd)
     allow = ((settings.get("permissions") or {}).get("allow") or [])
-    await approveRepositoryContent(
+    await approve_repository_content(
         cwd=cwd,
         family="permission_allow",
         scope=scope,
         contentDigest=_allow_list_hash(allow),
     )
-    clearPermissionRulesCache()
+    clear_permission_rules_cache()
 
 
 async def _allow_list_approved(cwd: str, scope: str, allow: list[str]) -> bool:
-    return not allow or await checkRepositoryApproval(
+    return not allow or await check_repository_approval(
         cwd=cwd,
         family="permission_allow",
         scope=scope,
@@ -226,12 +226,12 @@ def _collect_rules(settings: Any, scope: str, allow_approved: bool, output: list
         return
     for effect, approved in (("deny", True), ("ask", True), ("allow", allow_approved)):
         for raw in permissions.get(effect) or []:
-            rule = parsePermissionRule(raw, effect, scope, approved) if isinstance(raw, str) else None
+            rule = parse_permission_rule(raw, effect, scope, approved) if isinstance(raw, str) else None
             if rule:
                 output.append(rule)
 
 
-async def loadPermissionRules(
+async def load_permission_rules(
     args: Mapping[str, Any] | None = None,
     *,
     cwd: str | None = None,
@@ -262,17 +262,17 @@ async def loadPermissionRules(
     return rules
 
 
-def clearPermissionRulesCache() -> None:
+def clear_permission_rules_cache() -> None:
     _rules_cache.clear()
 
 
-async def loadPermissionRulesCached(args: Mapping[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
+async def load_permission_rules_cached(args: Mapping[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
     values = {**(args or {}), **kwargs}
     key = f"{values.get('cwd')}|{','.join(values.get('sources') or [])}|{values.get('inlineSettings') or ''}"
     cached = _rules_cache.get(key)
     if cached and cached["expiresAt"] > time.monotonic():
         return cached["rules"]
-    rules = await loadPermissionRules(values)
+    rules = await load_permission_rules(values)
     _rules_cache[key] = {"rules": rules, "expiresAt": time.monotonic() + _RULES_CACHE_TTL_SECONDS}
     return rules
 
@@ -281,7 +281,7 @@ async def _find_dispatch_rule(effect: str, args: Mapping[str, Any]) -> dict[str,
     rules = (
         args.get("rules")
         if isinstance(args.get("rules"), list)
-        else await loadPermissionRulesCached(
+        else await load_permission_rules_cached(
             cwd=args["cwd"],
             sources=args.get("settingsSources"),
             inlineSettings=args.get("inlineSettings"),
@@ -300,7 +300,7 @@ async def _find_dispatch_rule(effect: str, args: Mapping[str, Any]) -> dict[str,
         "path": first_string(input_value.get("file_path"), input_value.get("notebook_path"), input_value.get("path")),
         "url": first_string(input_value.get("url")),
     }
-    return matchPermissionRule(
+    return match_permission_rule(
         rules,
         call,
         effects=(effect,),
@@ -308,11 +308,11 @@ async def _find_dispatch_rule(effect: str, args: Mapping[str, Any]) -> dict[str,
     )
 
 
-async def findDispatchDenyRule(args: Mapping[str, Any]) -> dict[str, Any] | None:
+async def find_dispatch_deny_rule(args: Mapping[str, Any]) -> dict[str, Any] | None:
     return await _find_dispatch_rule("deny", args)
 
 
-async def findDispatchAllowRule(args: Mapping[str, Any]) -> dict[str, Any] | None:
+async def find_dispatch_allow_rule(args: Mapping[str, Any]) -> dict[str, Any] | None:
     return await _find_dispatch_rule("allow", args)
 
 

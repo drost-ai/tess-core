@@ -30,7 +30,7 @@ from tests.support.agent_core_case import AgentCoreTestCase, core, run
 class Package31TaskStopTerminalTests(AgentCoreTestCase):
     def _session(self, home: Path, workspace: Path):
         config = run(
-            core.resolveConfig(
+            core.resolve_config(
                 {
                     "provider": "openai",
                     "runtimeHome": str(home),

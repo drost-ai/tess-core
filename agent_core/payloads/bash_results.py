@@ -2,9 +2,9 @@ from __future__ import annotations
 
 
 def _spool_max_bytes() -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("process.spool_max_bytes"))
+    return int(knob_value("process.spool_max_bytes"))
 
 from typing import Any
 

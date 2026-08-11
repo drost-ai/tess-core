@@ -4,7 +4,7 @@ if _typing.TYPE_CHECKING:
     from ..contracts.context import ToolContext
 import copy
 from .._utils import maybe_await, merge_usage
-from ..config import filterToolsByPolicy
+from ..config import filter_tools_by_policy
 from ..context.token_accounting import record_actual_token_usage
 from ..session.persistence import (
     persist_provider_recovery,
@@ -52,13 +52,13 @@ from .turn_session import (
     run_in_provider_turn_session as _run_in_provider_turn_session,
     run_with_transient_execution_session as _run_with_transient_execution_session,
 )
-from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
+from ..authority.agent import enforce_session_agent_authority, filter_tools_for_agent_authority
 from ..runtime.agent_bindings import assert_agent_runtime_bindings, materialize_agent_execution_runtime
-from ..authority.hooks import fireToolHooks as fireToolHooks
+from ..authority.hooks import fire_tool_hooks as fire_tool_hooks
 from ..payloads.image_budget import ImageBudgetError as _ImageBudgetError
 from ..payloads.image_budget import create_image_budget_reservation as _create_image_budget_reservation
 from ..storage.message_origin import user_request_message as _user_request_message
-from ..authority.permission_rules import findDispatchDenyRule
+from ..authority.permission_rules import find_dispatch_deny_rule
 from ..providers.prompt_cache_orchestration import record_prompt_cache_eviction_intent_at_finalization as _record_prompt_cache_eviction_intent_at_finalization
 from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths, run_with_runtime_paths
 from ..subagents.contract import filter_tools_for_subagent
@@ -94,7 +94,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         materialized = materialize_agent_execution_runtime(runtime_bindings)
     runtime = _runtime_with_sanitized_events(materialized)
     provider_override = args.get("providerOverride")
-    authority = await enforceSessionAgentAuthority(session=session, config=config)
+    authority = await enforce_session_agent_authority(session=session, config=config)
     repair = repair_session_transcript(session)
     if repair["repaired"]:
         await persist_session(session, config)
@@ -110,8 +110,8 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         # registry captured when the bindings were created.
         if isinstance(refreshed_tools, list):
             runtime["tools"] = refreshed_tools
-    tool_names = set(filterToolsByPolicy(config))
-    runtime_tools = filterToolsForAgentAuthority(
+    tool_names = set(filter_tools_by_policy(config))
+    runtime_tools = filter_tools_for_agent_authority(
         filter_tools_for_subagent(runtime.get("tools", []), runtime_contract),
         authority,
     )
@@ -353,7 +353,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             async def run_single(tool_use: dict[str, Any]) -> dict[str, Any]:
                 _throw_if_turn_cancelled(runtime)
                 tool = tools_by_name.get(tool_use["name"])
-                dispatch_deny = await findDispatchDenyRule(
+                dispatch_deny = await find_dispatch_deny_rule(
                     {
                         "cwd": session["cwd"],
                         "toolName": tool_use["name"],

@@ -8,7 +8,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
@@ -91,7 +91,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
             parent = core.create_empty_session(
                 cwd=str(workspace), provider="openai", model="gpt-5.4",
                 systemPrompt="parent", permissionMode="bypassPermissions",

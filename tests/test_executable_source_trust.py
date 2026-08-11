@@ -14,15 +14,15 @@ def _stdio_server(name: str) -> dict[str, Any]:
 
 class ExecutableSourceTrustTests(AgentCoreTestCase):
     def tearDown(self):
-        getattr(closure_module, "__setExecutableClosureTestHookForTests")(None)
+        getattr(closure_module, "_set_executable_closure_test_hook_for_tests")(None)
 
     def test_setting_sources_are_strict_ordered_and_deduplicated(self):
-        self.assertEqual(core.parseSettingSources(None), ["user", "project", "local"])
-        self.assertEqual(core.parseSettingSources("local,user,local"), ["local", "user"])
+        self.assertEqual(core.parse_setting_sources(None), ["user", "project", "local"])
+        self.assertEqual(core.parse_setting_sources("local,user,local"), ["local", "user"])
         with self.assertRaisesRegex(ValueError, "Unknown setting source"):
-            core.parseSettingSources("user,unknown")
+            core.parse_setting_sources("user,unknown")
         with self.assertRaisesRegex(ValueError, "at least one"):
-            core.parseSettingSources("")
+            core.parse_setting_sources("")
 
     def test_excluded_project_sources_cannot_trigger_mcp_or_plugin_execution(self):
         root, home, workspace, previous = self.temp_context()
@@ -46,13 +46,13 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
             )
 
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {"runtimeHome": str(home), "settingSources": "user"},
                     str(workspace),
                 )
             )
             self.assertEqual(config["mcpConfig"], [])
-            loaded = run(core.loadPluginRuntime(config))
+            loaded = run(core.load_plugin_runtime(config))
             self.assertEqual(loaded["plugins"], [])
             self.assertFalse(marker.exists())
         finally:
@@ -62,17 +62,17 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
         try:
             run(core.save_mcp_servers("project", str(workspace), [_stdio_server("approved")]))
             with self.assertRaises(core.ExecutableSourceTrustError):
-                run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
-            before = run(core.inspectMcpSourceTrust(cwd=str(workspace), scope="project"))
+                run(core.resolve_config({"settingSources": "project"}, str(workspace)))
+            before = run(core.inspect_mcp_source_trust(cwd=str(workspace), scope="project"))
             self.assertFalse(before["approved"])
-            run(core.approveMcpSource(cwd=str(workspace), scope="project"))
-            config = run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+            run(core.approve_mcp_source(cwd=str(workspace), scope="project"))
+            config = run(core.resolve_config({"settingSources": "project"}, str(workspace)))
             self.assertEqual([item["name"] for item in config["mcpConfig"]], ["approved"])
             self.assertEqual(config["mcpConfig"][0]["scope"], "project")
 
             run(core.save_mcp_servers("project", str(workspace), [_stdio_server("changed")]))
             with self.assertRaises(core.ExecutableSourceTrustError):
-                run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+                run(core.resolve_config({"settingSources": "project"}, str(workspace)))
         finally:
             self.restore_home(root, previous)
 
@@ -84,7 +84,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
             explicit = home / "explicit.json"
             explicit.write_text(json.dumps(_stdio_server("explicit")), encoding="utf-8")
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {"strictMcpConfig": True, "mcpConfig": [str(explicit)]},
                     str(workspace),
                 )
@@ -92,7 +92,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
             self.assertEqual([item["name"] for item in config["mcpConfig"]], ["explicit"])
             self.assertEqual(config["mcpConfigPolicy"], {"mode": "explicit_only"})
             self.assertEqual(
-                [item["name"] for item in core.selectMcpBootstrapServers(config["mcpConfigPolicy"], config["mcpConfig"], [_stdio_server("plugin")])],
+                [item["name"] for item in core.select_mcp_bootstrap_servers(config["mcpConfigPolicy"], config["mcpConfig"], [_stdio_server("plugin")])],
                 ["explicit"],
             )
         finally:
@@ -124,17 +124,17 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
                     [{"manifest": manifest, "enabled": True, "source": str(plugin)}],
                 )
             )
-            config = run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
+            config = run(core.resolve_config({"settingSources": "project"}, str(workspace)))
             with self.assertRaises(core.ExecutableSourceTrustError):
-                run(core.loadPluginRuntime(config))
-            run(core.approvePluginSource(cwd=str(workspace), scope="project"))
+                run(core.load_plugin_runtime(config))
+            run(core.approve_plugin_source(cwd=str(workspace), scope="project"))
 
             async def mutate_after_snapshot(phase: str):
                 if phase == "after_snapshot":
                     (plugin / "entry.py").write_text(source("mutated"), encoding="utf-8")
 
-            getattr(closure_module, "__setExecutableClosureTestHookForTests")(mutate_after_snapshot)
-            loaded = run(core.loadPluginRuntime(config))
+            getattr(closure_module, "_set_executable_closure_test_hook_for_tests")(mutate_after_snapshot)
+            loaded = run(core.load_plugin_runtime(config))
             self.assertEqual(marker.read_text(encoding="utf-8"), "approved")
             self.assertIn(os.path.join("trust", "snapshots"), loaded["plugins"][0]["source"])
         finally:
@@ -162,18 +162,18 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
             (legacy / "approved-hooks.json").write_text("{}", encoding="utf-8")
             (legacy / "approved-permissions.json").write_text("{}", encoding="utf-8")
 
-            rules = run(core.loadPermissionRules(cwd=str(workspace), sources=["local"]))
-            hooks = run(core.loadHooks(cwd=str(workspace), sources=["local"]))
+            rules = run(core.load_permission_rules(cwd=str(workspace), sources=["local"]))
+            hooks = run(core.load_hooks(cwd=str(workspace), sources=["local"]))
             self.assertFalse(next(rule for rule in rules if rule["effect"] == "allow")["approved"])
             self.assertFalse(hooks[0]["approved"])
 
-            run(core.approvePermissionRules(str(workspace), "local"))
-            run(core.approveHooks(str(workspace), "local"))
-            rules = run(core.loadPermissionRules(cwd=str(workspace), sources=["local"]))
-            hooks = run(core.loadHooks(cwd=str(workspace), sources=["local"]))
+            run(core.approve_permission_rules(str(workspace), "local"))
+            run(core.approve_hooks(str(workspace), "local"))
+            rules = run(core.load_permission_rules(cwd=str(workspace), sources=["local"]))
+            hooks = run(core.load_hooks(cwd=str(workspace), sources=["local"]))
             self.assertTrue(next(rule for rule in rules if rule["effect"] == "allow")["approved"])
             self.assertTrue(hooks[0]["approved"])
-            status = run(core.getRepositoryTrustStatus(str(workspace)))
+            status = run(core.get_repository_trust_status(str(workspace)))
             self.assertTrue(status["recordPath"].startswith(str(home)))
             self.assertEqual(os.stat(status["recordPath"]).st_mode & 0o777, 0o600)
         finally:

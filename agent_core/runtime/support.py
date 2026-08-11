@@ -7,7 +7,7 @@ import threading
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
-from ..config import getDefaultToolList
+from ..config import get_default_tool_list
 from .paths import RuntimePaths
 
 
@@ -102,7 +102,7 @@ def runtime_path_graph_id(paths: RuntimePaths) -> str:
 def augment_config_tools(config: dict[str, Any], runtimeToolNames: list[str]) -> None:
     tools = config.setdefault("tools", [])
     allowed = config.setdefault("allowedTools", [])
-    defaults = set(getDefaultToolList())
+    defaults = set(get_default_tool_list())
     default_allow = (
         len(tools) == len(defaults)
         and len(allowed) == len(defaults)
@@ -146,18 +146,18 @@ def daemon_snapshot_payload(status: Mapping[str, Any]) -> dict[str, Any]:
 def default_runtime_component_factories() -> dict[str, Any]:
     # Call-time imports: these factories pull in the full component graph,
     # which must not load when only the light support helpers are needed.
-    from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
-    from ..authority.plugins import loadPluginRuntime
+    from ..authority.agent import enforce_session_agent_authority, filter_tools_for_agent_authority
+    from ..authority.plugins import load_plugin_runtime
     from ..remote.bridge_runtime import createBridgeRuntime
     from ..mcp import createMcpRuntime
     from ..tools import create_builtin_tools
     from .workspace import create_workspace_controller
 
     return {
-        "enforceAuthority": enforceSessionAgentAuthority,
-        "filterAuthorityTools": filterToolsForAgentAuthority,
+        "enforceAuthority": enforce_session_agent_authority,
+        "filterAuthorityTools": filter_tools_for_agent_authority,
         "createWorkspace": create_workspace_controller,
-        "load_plugins": loadPluginRuntime,
+        "load_plugins": load_plugin_runtime,
         "createMcp": createMcpRuntime,
         "createBridge": createBridgeRuntime,
         "create_builtin_tools": create_builtin_tools,

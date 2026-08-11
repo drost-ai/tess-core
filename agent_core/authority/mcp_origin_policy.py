@@ -20,7 +20,7 @@ class McpResourceResponse:
         return self.body.decode("utf-8", errors="replace")
 
 
-class _NoRedirect(HTTPRedirectHandler):
+class _no_redirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
         return None
 
@@ -40,11 +40,11 @@ def _safe_http_url(value: str, field: str):
     return parsed, origin
 
 
-def canonicalMcpOrigin(value: str) -> str:
+def canonical_mcp_origin(value: str) -> str:
     return _safe_http_url(value, "configured MCP")[1]
 
 
-async def fetchMcpResourceWithBoundCredentials(
+async def fetch_mcp_resource_with_bound_credentials(
     args: Mapping[str, Any] | None = None,
     *,
     config: Mapping[str, Any] | None = None,
@@ -59,7 +59,7 @@ async def fetchMcpResourceWithBoundCredentials(
         raise ValueError("MCP resource fallback requires an HTTP or SSE server")
     if not isinstance(resource_uri, str):
         raise ValueError("Invalid MCP resource URL")
-    configured_origin = canonicalMcpOrigin(str(server.get("commandOrUrl")))
+    configured_origin = canonical_mcp_origin(str(server.get("commandOrUrl")))
     _, current_origin = _safe_http_url(resource_uri, "MCP resource")
     if current_origin != configured_origin:
         raise ValueError("MCP resource origin does not match the configured server")
@@ -83,7 +83,7 @@ async def fetchMcpResourceWithBoundCredentials(
 
 
 def _fetch_manual(url: str, headers: Mapping[str, str]) -> McpResourceResponse:
-    opener = build_opener(_NoRedirect())
+    opener = build_opener(_no_redirect())
     request = Request(url, headers=dict(headers), method="GET")
     try:
         with opener.open(request, timeout=30) as response:

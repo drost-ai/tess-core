@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..config import ensureProviderForModelSelection, normalizeEffortForModel
+from ..config import ensure_provider_for_model_selection, normalize_effort_for_model
 from ..providers.anthropic import send_anthropic_messages_request
 from ..providers.openai import send_openai_request
 from ..providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
@@ -18,11 +18,11 @@ async def _author_monitor_update(config: dict[str, Any], session: dict[str, Any]
 
 
 async def _author_monitor_update_with_provider(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
-    provider = ensureProviderForModelSelection(session.get("provider") or config.get("provider"), session.get("model") or config.get("model"), config.get("provider", "openai"))
+    provider = ensure_provider_for_model_selection(session.get("provider") or config.get("provider"), session.get("model") or config.get("model"), config.get("provider", "openai"))
     model = session.get("model") or config.get("model")
     request = {
         "model": model,
-        "effort": normalizeEffortForModel(provider, model, session.get("effort") or config.get("effort")) if model else None,
+        "effort": normalize_effort_for_model(provider, model, session.get("effort") or config.get("effort")) if model else None,
         "system": "\n".join(
             [
                 "You are continuing an existing agent session.",

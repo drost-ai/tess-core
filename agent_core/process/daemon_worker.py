@@ -21,10 +21,10 @@ def main() -> None:
     # so it must install the settings-folder knob overrides like any
     # config-resolving process would.
     from ..storage.settings import load_settings
-    from ..config._knobs import configureKnobs
+    from ..config._knobs import configure_knobs
 
     settings = asyncio.run(load_settings("user", args.cwd))
-    configureKnobs(settings.get("knobs"))
+    configure_knobs(settings.get("knobs"))
     asyncio.run(runTaskSupervisorDaemon(args.cwd, args.instance_id, ownerPid=args.owner_pid))
 
 

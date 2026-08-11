@@ -28,9 +28,9 @@ def _grace_ms(explicit: int | None, knob_name: str) -> int:
     if isinstance(explicit, int) and explicit > 0:
         return explicit
     # Call-time import: the config package imports process helpers at load.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue(knob_name))
+    return int(knob_value(knob_name))
 
 
 async def drain_owned_process(

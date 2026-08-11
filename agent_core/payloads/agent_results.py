@@ -21,12 +21,12 @@ def _comms_inline_budget(tool_name: str, requested: Any) -> dict[str, Any]:
     if requested is not None or tool_name not in COMMS_INLINE_TOOLS:
         return {"maxBytes": requested} if requested is not None else {}
     # Call-time import: the config package imports payloads at module load.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
     # skipStructuredShaping: inter-agent replies are JSON envelopes around
     # conversational text — the item summarizer must not re-truncate them
     # under the byte allowance.
-    return {"maxBytes": int(knobValue("comms.inline_result_bytes")), "allowRaise": True, "skipStructuredShaping": True}
+    return {"maxBytes": int(knob_value("comms.inline_result_bytes")), "allowRaise": True, "skipStructuredShaping": True}
 
 
 async def finalize_tool_dispatch_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

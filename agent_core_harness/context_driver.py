@@ -17,7 +17,7 @@ from .sandbox import ScenarioSandbox
 
 
 async def seed_context_session(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
-    config = await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": data.get("permissionMode", "bypassPermissions")}, str(sandbox.workspace))
+    config = await core.resolve_config({"runtimeHome": str(sandbox.home), "permissionMode": data.get("permissionMode", "bypassPermissions")}, str(sandbox.workspace))
     session = core.create_empty_session(
         cwd=str(sandbox.workspace),
         provider=config["provider"],
@@ -182,7 +182,7 @@ def assert_context_runtime_state(state: dict[str, Any], data: dict[str, Any]) ->
 
 async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, Any], *, cancel: bool) -> dict[str, Any]:
     original_measure = agent_context_module.measure_request_input_tokens
-    config = state.get("config") or await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": "bypassPermissions"}, str(sandbox.workspace))
+    config = state.get("config") or await core.resolve_config({"runtimeHome": str(sandbox.home), "permissionMode": "bypassPermissions"}, str(sandbox.workspace))
     session = core.create_empty_session(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
     session["messages"] = build_context_messages("plain", 22, "/tmp/workspace")
     provider_requests: list[dict[str, Any]] = []

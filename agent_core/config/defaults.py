@@ -15,48 +15,48 @@ from .shared import (
     VALID_EFFORT_LEVELS,
 )
 
-def getDefaultAssistantName() -> str:
+def get_default_assistant_name() -> str:
     return DEFAULT_ASSISTANT_NAME
 
-def getDefaultAssistantDescription() -> str:
+def get_default_assistant_description() -> str:
     return DEFAULT_ASSISTANT_DESCRIPTION
 
-def getDefaultModel() -> str:
+def get_default_model() -> str:
     return DEFAULT_MODEL
 
-def getDefaultProvider() -> str:
+def get_default_provider() -> str:
     return DEFAULT_PROVIDER
 
-def getDefaultModelForProvider(provider: str) -> str:
+def get_default_model_for_provider(provider: str) -> str:
     return PROVIDER_DEFAULT_MODEL[provider]
 
-def listProviders() -> list[str]:
+def list_providers() -> list[str]:
     return ["anthropic", "openai"]
 
-def listProviderProfiles(profiles: dict[str, Any] | None = None) -> list[str]:
+def list_provider_profiles(profiles: dict[str, Any] | None = None) -> list[str]:
     return sorted((profiles or BUILTIN_PROVIDER_PROFILES).keys())
 
-def listProviderProfilesForKind(kind: str, profiles: dict[str, Any] | None = None) -> list[str]:
+def list_provider_profiles_for_kind(kind: str, profiles: dict[str, Any] | None = None) -> list[str]:
     profiles = profiles or BUILTIN_PROVIDER_PROFILES
-    return [name for name in listProviderProfiles(profiles) if profiles.get(name, {}).get("kind") == kind]
+    return [name for name in list_provider_profiles(profiles) if profiles.get(name, {}).get("kind") == kind]
 
-def listModelsForProvider(provider: str) -> list[str]:
+def list_models_for_provider(provider: str) -> list[str]:
     return PROVIDER_MODELS[provider]
 
-def getDefaultEffort() -> str:
+def get_default_effort() -> str:
     return DEFAULT_EFFORT
 
-def getDefaultEffortForProvider(provider: str) -> str:
+def get_default_effort_for_provider(provider: str) -> str:
     return PROVIDER_DEFAULT_EFFORT[provider]
 
-def normalizeEffortLevel(input: str | None) -> str | None:
+def normalize_effort_level(input: str | None) -> str | None:
     normalized = input.strip().lower() if isinstance(input, str) else ""
     return normalized if normalized in VALID_EFFORT_LEVELS else None
 
-def listEffortLevels() -> list[str]:
+def list_effort_levels() -> list[str]:
     return list(VALID_EFFORT_LEVELS)
 
-def normalizeProviderName(input: str | None) -> str | None:
+def normalize_provider_name(input: str | None) -> str | None:
     normalized = input.strip().lower() if isinstance(input, str) else ""
     if normalized in ("anthropic", "claude"):
         return "anthropic"
@@ -64,11 +64,11 @@ def normalizeProviderName(input: str | None) -> str | None:
         return "openai"
     return None
 
-def normalizeProviderProfileName(input: str | None) -> str | None:
+def normalize_provider_profile_name(input: str | None) -> str | None:
     normalized = input.strip().lower() if isinstance(input, str) else ""
     return normalized or None
 
-def normalizeOpenAiApiModeSetting(input: str | None) -> str | None:
+def normalize_openai_api_mode_setting(input: str | None) -> str | None:
     normalized = input.strip().lower() if isinstance(input, str) else ""
     if not normalized:
         return None
@@ -82,7 +82,7 @@ def normalizeOpenAiApiModeSetting(input: str | None) -> str | None:
         return "chat_completions"
     return None
 
-def normalizeTuiScreenMode(input: str | None) -> str | None:
+def normalize_tui_screen_mode(input: str | None) -> str | None:
     normalized = input.strip().lower() if isinstance(input, str) else ""
     if normalized == "auto":
         return "auto"

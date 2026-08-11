@@ -310,7 +310,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
     def test_mcp_resource_cursors_resume_bounded_unicode_pages(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "anthropic", "runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"provider": "anthropic", "runtimeHome": str(home)}, str(workspace)))
             context = {"config": {**config, "providerKind": "anthropic"}, "sessionId": "mcp-pagination"}
             resources = [
                 {"server": "srv", "uri": f"fixture://{index}", "name": f"資源🙂-{index}"}
@@ -450,7 +450,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def _context(self, home, workspace, session_id):
-        config = run(core.resolveConfig({"provider": "anthropic", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+        config = run(core.resolve_config({"provider": "anthropic", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions", sessionId=session_id)
         return {"session": session, "config": {**config, "providerKind": "anthropic"}, "interactive": False, "cwd": str(workspace), "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "persist_session": lambda: None}
 

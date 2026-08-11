@@ -41,9 +41,9 @@ def _send_message_tool() -> ToolDefinition:
         reply_to = input.get("reply_to") if isinstance(input.get("reply_to"), str) and input.get("reply_to") else None
         expects_reply = bool(input.get("expects_reply"))
         # Call-time import: config package imports tools at module load.
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
-        timeout_ms = int(input.get("timeout_ms") or knobValue("comms.reply_timeout_ms"))
+        timeout_ms = int(input.get("timeout_ms") or knob_value("comms.reply_timeout_ms"))
         session = context["session"]
         metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
         own_task_id = metadata.get("subagentTaskId")
@@ -142,9 +142,9 @@ async def _await_reply(
     timeout_ms: int,
     context: ToolContext,
 ) -> dict[str, Any] | None:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    poll_seconds = int(knobValue("comms.reply_poll_ms")) / 1000
+    poll_seconds = int(knob_value("comms.reply_poll_ms")) / 1000
     deadline = asyncio.get_running_loop().time() + timeout_ms / 1000
     while asyncio.get_running_loop().time() < deadline:
         signal = context.get("abortSignal")

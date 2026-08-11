@@ -98,7 +98,7 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
 def start_daemon_watchdog(context: dict[str, Any]) -> Any:
     """Start the heartbeat ticker; returns a stop() callable."""
     # Call-time import: config wiring must not load at module import.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
     stop = threading.Event()
     runtime_paths = context.get("runtimePaths")
@@ -112,7 +112,7 @@ def start_daemon_watchdog(context: dict[str, Any]) -> Any:
     start_ticker(
         name=f"daemon-watchdog-{context['instanceId'][:12]}",
         stop=stop,
-        interval=int(knobValue("daemon.heartbeat_ms")) / 1000,
+        interval=int(knob_value("daemon.heartbeat_ms")) / 1000,
         run_once=tick,
         halted=stop.is_set,
     )

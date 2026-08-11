@@ -377,7 +377,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
         self.assertEqual(session["metadata"]["lastProviderFailure"], raised.exception.record)
 
     def test_provider_profile_round_trips_deadline_settings(self):
-        profile = core.resolveProviderProfile(
+        profile = core.resolve_provider_profile(
             "deadline-anthropic",
             {
                 "kind": "anthropic",

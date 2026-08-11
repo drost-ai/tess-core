@@ -118,9 +118,9 @@ async def read_last_daemon_event_cursor(instanceId: str) -> int:
 async def rotate_daemon_events_if_oversized(instanceId: str, capBytes: int | None = None) -> bool:
     if capBytes is None:
         # Call-time import: config resolution imports storage at load.
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
-        capBytes = int(knobValue("daemon.events_rotate_bytes"))
+        capBytes = int(knob_value("daemon.events_rotate_bytes"))
     file_path = daemon_events_path(instanceId)
     try:
         size = os.path.getsize(file_path)
@@ -141,9 +141,9 @@ async def _read_last_daemon_cursor_from_tail(file_path: str) -> int:
         size = os.path.getsize(file_path)
         if size <= 0:
             return 0
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
-        read_bytes = min(size, int(knobValue("daemon.events_tail_bytes")))
+        read_bytes = min(size, int(knob_value("daemon.events_tail_bytes")))
         with open(file_path, "rb") as handle:
             handle.seek(size - read_bytes)
             raw = handle.read(read_bytes).decode("utf-8", errors="replace")

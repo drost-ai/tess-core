@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from .._utils import pretty_json
 from ..acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
-from ..authority.permission_rules import findDispatchDenyRule
+from ..authority.permission_rules import find_dispatch_deny_rule
 from ..payloads.tools import shape_text_tool_result
 from ..payloads.utf8_bounds import slice_utf8_prefix
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
@@ -144,7 +144,7 @@ async def _authorize_web_fetch_hop(context: ToolContext, url: str, toolNames: tu
         )
     authority = _effective_agent_authority(context)
     for tool_name in toolNames:
-        deny = await findDispatchDenyRule(
+        deny = await find_dispatch_deny_rule(
             {
                 "cwd": context["session"]["cwd"],
                 "toolName": tool_name,

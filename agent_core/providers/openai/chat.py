@@ -38,7 +38,7 @@ from typing import Any
 
 async def send_openai_chat_completions_request(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     # Call-time import: the config package imports providers at module load.
-    from ...config._knobs import knobValue
+    from ...config._knobs import knob_value
 
     args = {**(args or {}), **kwargs}
     base_url = resolve_openai_base_url("chat_completions", args.get("baseUrl"))
@@ -65,8 +65,8 @@ async def send_openai_chat_completions_request(args: dict[str, Any] | None = Non
         reasoning_content = ""
         active_stream: Any = None
         runtime = args.get("runtime") or {}
-        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms"))
-        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms"))
+        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knob_value("provider.request_start_timeout_ms"))
+        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knob_value("provider.stream_idle_timeout_ms"))
 
         def incomplete_response(reason: str) -> Any:
             return create_provider_incomplete_response_error(

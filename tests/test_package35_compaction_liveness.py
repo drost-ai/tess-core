@@ -245,7 +245,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
         original_compact = agent_checkpoints_module.run_compaction
         try:
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "provider": "openai",
                         "runtimeHome": str(home),

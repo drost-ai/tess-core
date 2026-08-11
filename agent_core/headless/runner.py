@@ -10,7 +10,7 @@ from typing import Any, Sequence, TextIO
 
 from ..agent import runAgentPrompt
 from ..runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
-from ..config import resolveConfig
+from ..config import resolve_config
 from ..runtime.bootstrap import bootstrap_runtime
 from ..session.persistence import resolve_session
 from ..session.runtime import active_session_payload
@@ -41,7 +41,7 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
     if options.max_turns < 1:
         raise ValueError("--max-turns must be at least 1")
     prompt = _decode_prompt(options.prompt, options.input_format)
-    config = await resolveConfig(_config_options(options), options.cwd)
+    config = await resolve_config(_config_options(options), options.cwd)
     session_options = {"resume": options.session} if options.session else {}
     session = await resolve_session(session_options, config, {"cwd": options.cwd, "originalCwd": options.cwd})
     runtime = await bootstrap_runtime({"session": session, "config": config, "cwd": options.cwd})

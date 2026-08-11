@@ -16,7 +16,7 @@ payload_module = importlib.import_module("agent_core.tools.file_change_payloads"
 class Package30FileChangePayloadTests(AgentCoreTestCase):
     def _context(self, home: Path, workspace: Path):
         config = run(
-            core.resolveConfig(
+            core.resolve_config(
                 {
                     "provider": "openai",
                     "runtimeHome": str(home),

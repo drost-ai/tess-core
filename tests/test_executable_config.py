@@ -7,7 +7,7 @@ from tests.support.agent_core_case import *
 
 class ExecutableConfigTests(AgentCoreTestCase):
     def test_mcp_parser_normalizes_valid_legacy_records(self):
-        stdio = core.parseMcpServerConfig(
+        stdio = core.parse_mcp_server_config(
             {
                 "name": "local-tools",
                 "transport": "stdio",
@@ -20,7 +20,7 @@ class ExecutableConfigTests(AgentCoreTestCase):
         self.assertEqual(stdio["updatedAt"], core.LEGACY_UPDATED_AT)
         self.assertEqual(stdio["env"], {"MODE": "safe"})
 
-        http = core.parseMcpServerConfig(
+        http = core.parse_mcp_server_config(
             {
                 "name": "remote",
                 "transport": "http",
@@ -59,10 +59,10 @@ class ExecutableConfigTests(AgentCoreTestCase):
         for record in invalid:
             with self.subTest(record=record):
                 with self.assertRaises(core.ExecutableConfigValidationError):
-                    core.parseMcpServerConfig(record)
+                    core.parse_mcp_server_config(record)
 
         with self.assertRaises(core.ExecutableConfigValidationError) as mixed:
-            core.parseMcpServerConfigList(
+            core.parse_mcp_server_config_list(
                 [
                     {"name": "good", "transport": "stdio", "commandOrUrl": "node"},
                     {},
@@ -70,7 +70,7 @@ class ExecutableConfigTests(AgentCoreTestCase):
             )
         self.assertIn("[1].name", mixed.exception.field)
         with self.assertRaises(core.ExecutableConfigValidationError):
-            core.parseMcpServerConfigList(
+            core.parse_mcp_server_config_list(
                 [
                     {"name": "same", "transport": "stdio", "commandOrUrl": "node"},
                     {"name": "SAME", "transport": "stdio", "commandOrUrl": "node"},
@@ -81,13 +81,13 @@ class ExecutableConfigTests(AgentCoreTestCase):
         for manifest in ({}, {"id": "p", "version": "1", "entry": "../escape.py"}):
             with self.subTest(manifest=manifest):
                 with self.assertRaises(core.ExecutableConfigValidationError):
-                    core.parsePluginManifestV1(manifest)
+                    core.parse_plugin_manifest_v1(manifest)
         with self.assertRaises(core.ExecutableConfigValidationError):
-            core.parsePluginManifestV1(
+            core.parse_plugin_manifest_v1(
                 {"id": "p", "version": "1", "commands": [{"name": "run"}]}
             )
 
-        record = core.parseInstalledPluginRecord(
+        record = core.parse_installed_plugin_record(
             {
                 "manifest": {"id": "installed", "version": "1"},
                 "enabled": True,
@@ -116,7 +116,7 @@ class ExecutableConfigTests(AgentCoreTestCase):
             )
             with self.assertRaises(core.ExecutableConfigValidationError) as error:
                 run(
-                    core.resolveConfig(
+                    core.resolve_config(
                         {"strictMcpConfig": True, "mcpConfig": [str(invalid)]},
                         str(workspace),
                     )

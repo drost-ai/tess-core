@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 import agent_core._facade as core
-from agent_core.authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
+from agent_core.authority.mcp_origin_policy import fetch_mcp_resource_with_bound_credentials
 from agent_core.runtime.secrets import authorize_runtime_secret_write, store_runtime_secret
 
 
@@ -85,7 +85,7 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
         server = _Server(handler)
         try:
             header = await self.secret_header("Bearer same-origin-only")
-            response = await fetchMcpResourceWithBoundCredentials(
+            response = await fetch_mcp_resource_with_bound_credentials(
                 config=self.config(server.origin, header),
                 uri=f"{server.origin}/start",
             )
@@ -103,7 +103,7 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
         try:
             header = await self.secret_header("Bearer never-forward")
             with self.assertRaisesRegex(ValueError, "origin does not match"):
-                await fetchMcpResourceWithBoundCredentials(
+                await fetch_mcp_resource_with_bound_credentials(
                     config=self.config(configured.origin, header),
                     uri=f"{foreign.origin}/steal",
                 )
@@ -125,7 +125,7 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
         try:
             header = await self.secret_header("Bearer redirect-secret")
             with self.assertRaisesRegex(ValueError, "redirect left"):
-                await fetchMcpResourceWithBoundCredentials(
+                await fetch_mcp_resource_with_bound_credentials(
                     config=self.config(configured.origin, header),
                     uri=f"{configured.origin}/redirect",
                 )
@@ -147,15 +147,15 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
             header = await self.secret_header("Bearer bounded")
             config = self.config(server.origin, header)
             with self.assertRaisesRegex(ValueError, "Invalid MCP resource URL origin"):
-                await fetchMcpResourceWithBoundCredentials(
+                await fetch_mcp_resource_with_bound_credentials(
                     config=config,
                     uri=server.origin.replace("http://", "http://user:pass@") + "/resource",
                 )
             self.assertEqual(server.requests, [])
             with self.assertRaisesRegex(ValueError, "omitted Location"):
-                await fetchMcpResourceWithBoundCredentials(config=config, uri=f"{server.origin}/missing")
+                await fetch_mcp_resource_with_bound_credentials(config=config, uri=f"{server.origin}/missing")
             with self.assertRaisesRegex(ValueError, "redirect limit exceeded"):
-                await fetchMcpResourceWithBoundCredentials(
+                await fetch_mcp_resource_with_bound_credentials(
                     config=config,
                     uri=f"{server.origin}/loop",
                     maxRedirects=1,

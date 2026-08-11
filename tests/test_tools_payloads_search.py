@@ -34,7 +34,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             plan_dir.mkdir(parents=True)
             (plan_dir / "README.md").write_text("# Plan\n", encoding="utf-8")
             (plan_dir / "tier1.md").write_text("# Tier 1\n", encoding="utf-8")
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}
             tool = next(tool for tool in core.create_builtin_tools() if tool.name == "Glob")
@@ -56,7 +56,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
     def test_shell_and_task_output_manifests_persist_artifacts_match_reference(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({
+            config = run(core.resolve_config({
                 "provider": "openai",
                 "runtimeHome": str(home),
                 "permissionMode": "bypassPermissions",
@@ -130,7 +130,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
                 )
 
             web_module.fetch = ddg_fetch
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
             tool = next(tool for tool in core.create_builtin_tools() if tool.name == "WebSearch")
             result = run(tool.handler({"query": '\\"OpenAI\\" Chat Completions API', "allowed_domains": ["openai.com"]}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
@@ -211,7 +211,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
                 return ExaResponse()
 
             web_search_api_module.urlopen = exa_urlopen
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
             self.assertEqual(config["settings_env"]["EXA_API_KEY"], "test-exa-key")
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
             tool = next(tool for tool in core.create_builtin_tools() if tool.name == "WebSearch")

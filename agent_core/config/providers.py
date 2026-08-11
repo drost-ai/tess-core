@@ -13,10 +13,10 @@ from typing import Any
 from .._utils import clone
 from ..providers.openai import is_codex_base_url
 from .defaults import (
-    listProviderProfilesForKind,
-    normalizeEffortLevel,
-    normalizeProviderName,
-    normalizeProviderProfileName,
+    list_provider_profiles_for_kind,
+    normalize_effort_level,
+    normalize_provider_name,
+    normalize_provider_profile_name,
 )
 from .shared import (
     BUILTIN_PROVIDER_PROFILES,
@@ -36,7 +36,7 @@ from .shared import (
 
 from .credentials import _resolve_anthropic_credentials, _resolve_openai_credential
 
-def resolveOpenAiApiMode(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+def resolve_openai_api_mode(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     args = {**(args or {}), **kwargs}
     requested = args.get("requestedMode")
     if requested and requested != "auto":
@@ -47,20 +47,20 @@ def resolveOpenAiApiMode(args: dict[str, Any] | None = None, **kwargs: Any) -> s
         return "codex"
     return DEFAULT_OPENAI_API_MODE
 
-def resolveProviderProfiles(customProfiles: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+def resolve_provider_profiles(customProfiles: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     merged = clone(BUILTIN_PROVIDER_PROFILES)
     for raw_name, record in (customProfiles or {}).items():
-        name = normalizeProviderProfileName(raw_name)
+        name = normalize_provider_profile_name(raw_name)
         if name:
             merged[name] = _normalize_provider_profile_record(record)
     return merged
 
-def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def resolve_provider_profile(name: str, record: dict[str, Any], overrides: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     if kwargs:
         overrides = {**(overrides or {}), **kwargs}
     overrides = overrides or {}
     api_mode = (
-        resolveOpenAiApiMode(
+        resolve_openai_api_mode(
             {
                 "requestedMode": overrides.get("requestedOpenAiApiMode") or record.get("apiMode"),
                 "baseUrl": overrides.get("openaiBaseUrl") or record.get("baseUrl"),
@@ -121,7 +121,7 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         # (Migel, 2026-08-08); explicit effortLevel/effort keys win.
         "effortLevel": record.get("effortLevel") or record.get("effort") or record.get("reasoningEffort"),
         "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
-        "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
+        "reasoningEffort": normalize_effort_level(record.get("reasoningEffort")),
         "openAiChatReasoning": clone(record.get("openAiChatReasoning") or {}),
         "openAiChatReasoningSummary": _normalize_openai_reasoning_summary(record.get("openAiChatReasoningSummary")),
         "anthropicThinkingDisplay": _normalize_anthropic_thinking_display(record.get("anthropicThinkingDisplay")),
@@ -142,31 +142,31 @@ def resolveProviderProfile(name: str, record: dict[str, Any], overrides: dict[st
         "description": record.get("description"),
     }
 
-def resolveFallbackProviderProfileName(kind: str, profiles: dict[str, Any], currentName: str | None = None) -> str:
+def resolve_fallback_provider_profile_name(kind: str, profiles: dict[str, Any], currentName: str | None = None) -> str:
     if currentName and profiles.get(currentName, {}).get("kind") == kind:
         return currentName
     preferred = "anthropic-console" if kind == "anthropic" else "openai"
     if preferred in profiles:
         return preferred
-    matches = listProviderProfilesForKind(kind, profiles)
+    matches = list_provider_profiles_for_kind(kind, profiles)
     return matches[0] if matches else DEFAULT_PROVIDER_PROFILE_NAME
 
-def resolveSelectedProviderProfileName(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
+def resolve_selected_provider_profile_name(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
     args = {**(args or {}), **kwargs}
-    requested_profile_name = normalizeProviderProfileName(args.get("requestedName"))
+    requested_profile_name = normalize_provider_profile_name(args.get("requestedName"))
     profiles = args["profiles"]
     if requested_profile_name and requested_profile_name in profiles:
         return requested_profile_name
     if requested_profile_name in ("codex", "openai-codex"):
         return "codex"
-    requested_kind = normalizeProviderName(requested_profile_name)
-    inferred_kind = inferProviderForModel(args.get("requestedModel"))
+    requested_kind = normalize_provider_name(requested_profile_name)
+    inferred_kind = infer_provider_for_model(args.get("requestedModel"))
     effective_kind = requested_kind or inferred_kind or DEFAULT_PROVIDER
     if effective_kind == "anthropic":
         return _resolve_anthropic_alias_profile_name(args)
     return _resolve_openai_alias_profile_name(args)
 
-def inferProviderForModel(model: str | None) -> str | None:
+def infer_provider_for_model(model: str | None) -> str | None:
     normalized = model.strip().lower() if isinstance(model, str) else ""
     if normalized.startswith("claude-"):
         return "anthropic"
@@ -174,13 +174,13 @@ def inferProviderForModel(model: str | None) -> str | None:
         return "openai"
     return None
 
-def resolveProviderForModelSelection(provider: str | None, model: str | None) -> str | None:
-    return provider or inferProviderForModel(model)
+def resolve_provider_for_model_selection(provider: str | None, model: str | None) -> str | None:
+    return provider or infer_provider_for_model(model)
 
-def ensureProviderForModelSelection(provider: str | None, model: str | None, fallback: str = DEFAULT_PROVIDER) -> str:
-    return resolveProviderForModelSelection(inferProviderForModel(model) or provider, model) or fallback
+def ensure_provider_for_model_selection(provider: str | None, model: str | None, fallback: str = DEFAULT_PROVIDER) -> str:
+    return resolve_provider_for_model_selection(infer_provider_for_model(model) or provider, model) or fallback
 
-def modelSupportsEffort(provider: str, model: str) -> bool:
+def model_supports_effort(provider: str, model: str) -> bool:
     normalized = model.strip().lower()
     if provider == "anthropic":
         return (
@@ -193,7 +193,7 @@ def modelSupportsEffort(provider: str, model: str) -> bool:
         )
     return normalized.startswith("gpt-5.4") or normalized.startswith("gpt-5")
 
-def modelSupportsMaxEffort(provider: str, model: str) -> bool:
+def model_supports_max_effort(provider: str, model: str) -> bool:
     if provider != "anthropic":
         return False
     normalized = model.strip().lower()
@@ -206,7 +206,7 @@ def modelSupportsMaxEffort(provider: str, model: str) -> bool:
         or "sonnet-4-6" in normalized
     )
 
-def modelSupportsXhighEffort(provider: str, model: str) -> bool:
+def model_supports_xhigh_effort(provider: str, model: str) -> bool:
     normalized = model.strip().lower()
     if provider == "anthropic":
         # xhigh arrived with Opus 4.7; the 5-family carries the full ladder.
@@ -222,26 +222,26 @@ def modelSupportsXhighEffort(provider: str, model: str) -> bool:
     match = re.match(r"gpt-5\.(\d+)", normalized)
     return bool(match and int(match.group(1)) >= 4)
 
-def normalizeEffortForModel(provider: str, model: str, effort: str | None) -> str | None:
-    if not effort or not modelSupportsEffort(provider, model):
+def normalize_effort_for_model(provider: str, model: str, effort: str | None) -> str | None:
+    if not effort or not model_supports_effort(provider, model):
         return None
     if provider == "anthropic":
-        if effort == "xhigh" and not modelSupportsXhighEffort(provider, model):
+        if effort == "xhigh" and not model_supports_xhigh_effort(provider, model):
             return "high"
-        if effort == "max" and not modelSupportsMaxEffort(provider, model):
+        if effort == "max" and not model_supports_max_effort(provider, model):
             return "high"
         return effort
     if provider == "openai":
         if effort == "max":
-            return "xhigh" if modelSupportsXhighEffort(provider, model) else "high"
-        if effort == "xhigh" and not modelSupportsXhighEffort(provider, model):
+            return "xhigh" if model_supports_xhigh_effort(provider, model) else "high"
+        if effort == "xhigh" and not model_supports_xhigh_effort(provider, model):
             return "high"
         return effort
     return None
 
-def normalizeModelName(inputModel: str, providerHint: str | None = None) -> str:
+def normalize_model_name(inputModel: str, providerHint: str | None = None) -> str:
     raw = inputModel.strip()
-    provider = providerHint or inferProviderForModel(raw) or DEFAULT_PROVIDER
+    provider = providerHint or infer_provider_for_model(raw) or DEFAULT_PROVIDER
     if provider == "anthropic" and raw == "opus":
         return "claude-opus-4-6"
     if provider == "anthropic" and raw == "sonnet":
@@ -270,7 +270,7 @@ def _normalize_provider_profile_record(record: dict[str, Any]) -> dict[str, Any]
         "capabilities": _normalize_provider_capabilities(record.get("capabilities")),
         "effortLevel": (record.get("effortLevel") or record.get("effort") or record.get("reasoningEffort") or "").strip().lower() or None,
         "reasoningEffortEnabled": record.get("reasoningEffortEnabled"),
-        "reasoningEffort": normalizeEffortLevel(record.get("reasoningEffort")),
+        "reasoningEffort": normalize_effort_level(record.get("reasoningEffort")),
         "openAiChatReasoning": _normalize_object_record(record.get("openAiChatReasoning")),
         "openAiChatReasoningSummary": _normalize_openai_reasoning_summary(record.get("openAiChatReasoningSummary")),
         "anthropicThinkingDisplay": _normalize_anthropic_thinking_display(record.get("anthropicThinkingDisplay")),
@@ -394,9 +394,9 @@ def _default_image_input_capability(record: dict[str, Any]) -> bool:
     official = not base_url or bool(re.match(r"https://api\.openai\.com(?:/|$)", base_url))
     return official and model.startswith(("gpt-5", "gpt-4"))
 
-def resolveCompactionProviderProfileBinding(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
+def resolve_compaction_provider_profile_binding(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
     args = {**(args or {}), **kwargs}
-    profile_name = normalizeProviderProfileName(args.get("requestedProfileName"))
+    profile_name = normalize_provider_profile_name(args.get("requestedProfileName"))
     if not profile_name:
         return None
     provider_profiles = args.get("providerProfiles") or {}
@@ -404,7 +404,7 @@ def resolveCompactionProviderProfileBinding(args: dict[str, Any] | None = None, 
     if not record:
         available = ", ".join(sorted(provider_profiles))
         raise ValueError(f'Unknown compaction provider profile "{profile_name}". Available profiles: {available}')
-    profile = resolveProviderProfile(profile_name, record)
+    profile = resolve_provider_profile(profile_name, record)
     if profile.get("kind") == "openai":
         return {
             "profileName": profile_name,
@@ -458,10 +458,10 @@ def _resolve_anthropic_alias_profile_name(args: dict[str, Any]) -> str:
     preferred = "anthropic-claude-code" if prefer_auth_token else "anthropic-console"
     if preferred in args["profiles"]:
         return preferred
-    return resolveFallbackProviderProfileName("anthropic", args["profiles"])
+    return resolve_fallback_provider_profile_name("anthropic", args["profiles"])
 
 def _resolve_openai_alias_profile_name(args: dict[str, Any]) -> str:
-    mode = resolveOpenAiApiMode(
+    mode = resolve_openai_api_mode(
         {
             "requestedMode": args.get("requestedOpenAiApiMode"),
             "baseUrl": args.get("openaiBaseUrl"),
@@ -472,4 +472,4 @@ def _resolve_openai_alias_profile_name(args: dict[str, Any]) -> str:
     preferred = "codex" if mode == "codex" else "openai"
     if preferred in args["profiles"]:
         return preferred
-    return resolveFallbackProviderProfileName("openai", args["profiles"])
+    return resolve_fallback_provider_profile_name("openai", args["profiles"])

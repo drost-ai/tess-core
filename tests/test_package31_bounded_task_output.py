@@ -69,7 +69,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "provider": "openai",
                         "runtimeHome": str(home),

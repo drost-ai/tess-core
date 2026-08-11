@@ -7,7 +7,7 @@ from typing import Any
 
 from ..contracts.records import SessionRecord
 from .._utils import now_iso
-from ..config.prompts import buildEffectiveSystemPrompt
+from ..config.prompts import build_effective_system_prompt
 from ..storage.persistence_metrics import (
     begin_persistence_call as _begin_persistence_call,
     finish_persistence_call as _finish_persistence_call,
@@ -46,7 +46,7 @@ async def resolve_session(options: dict[str, Any], config: dict[str, Any], launc
         providerProfileName=config.get("providerProfileName"),
         model=config["model"],
         effort=config.get("effort"),
-        systemPrompt=buildEffectiveSystemPrompt(config),
+        systemPrompt=build_effective_system_prompt(config),
         permissionMode=config["permissionMode"],
         name=config.get("name"),
         assistantName=config.get("assistantName"),
@@ -406,7 +406,7 @@ def _fork_or_reuse_session(session: dict[str, Any], options: dict[str, Any], con
         name=options.get("name") or session.get("name"),
         model=config["model"],
         effort=config.get("effort"),
-        system_prompt=buildEffectiveSystemPrompt(config),
+        system_prompt=build_effective_system_prompt(config),
         permission_mode=config["permissionMode"],
         assistant_name=config.get("assistantName"),
         assistant_description=config.get("assistantDescription"),

@@ -7,7 +7,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
     def test_bridge_runtime_polls_inbox_and_records_received_event(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             remote = run(core.createRemoteSession({"session": session, "description": "Remote inbox QA", "channelServers": ["local"]}))
             bridge_events = []
@@ -63,7 +63,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
     def test_bridge_runtime_reconnects_and_replays_only_pending_inbox_after_restart(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             remote = run(core.createRemoteSession({"session": session, "description": "Remote restart QA", "channelServers": ["local"]}))
             initial_events = []
@@ -99,7 +99,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
     def test_bridge_runtime_records_poll_failure_diagnostics_and_retries_pending_message(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             remote = run(core.createRemoteSession({"session": session, "description": "Remote failure QA", "channelServers": ["local"]}))
             emitted = []
@@ -138,7 +138,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
     def test_bridge_tail_and_truncation_match_reference_shape(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             remote = run(core.createRemoteSession({"session": session, "description": "Remote diagnostics QA", "channelServers": ["local"]}))
             bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda *_: None}))
@@ -158,7 +158,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
     def test_remote_bridge_persistence_omits_undefined_optional_fields(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
 
             remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
@@ -225,7 +225,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
 
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],

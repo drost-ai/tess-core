@@ -9,7 +9,7 @@ from typing import Any
 
 from ...agent import runAgentPrompt
 from ...runtime.agent_bindings import create_agent_runtime_bindings
-from ...config import resolveConfig
+from ...config import resolve_config
 from ...runtime.generation import create_runtime_session_binding
 from ...storage import configure_runtime_home, load_session, save_session
 from ...tools import create_builtin_tools
@@ -22,7 +22,7 @@ async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
     session = await load_session(args["sessionId"])
     if not session:
         raise RuntimeError(f"Session not found: {args['sessionId']}")
-    config = await resolveConfig(_session_config_options(session, runtime_home), session["cwd"])
+    config = await resolve_config(_session_config_options(session, runtime_home), session["cwd"])
     _apply_session_overrides(config, session)
     events = []
 

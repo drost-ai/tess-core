@@ -51,7 +51,7 @@ async def send_openai_request(args: dict[str, Any] | None = None, **kwargs: Any)
     return await send_openai_responses_request({**args, "mode": mode})
 async def send_openai_responses_request(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     # Call-time import: the config package imports providers at module load.
-    from ...config._knobs import knobValue
+    from ...config._knobs import knob_value
 
     args = {**(args or {}), **kwargs}
     mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
@@ -82,8 +82,8 @@ async def send_openai_responses_request(args: dict[str, Any] | None = None, **kw
         # failed stream survives into the retry.
         state = ResponsesAttemptState()
         generation_lineage = {"logicalCallId": logical_call_id, "generation": attempt, "partial_output_mode": delivery.mode if delivery else None} if mode == "codex" else {}
-        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms"))
-        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms"))
+        request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knob_value("provider.request_start_timeout_ms"))
+        stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knob_value("provider.stream_idle_timeout_ms"))
         def incomplete_response(reason: str) -> Any:
             return create_provider_incomplete_response_error(
                 provider="openai",

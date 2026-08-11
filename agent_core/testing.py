@@ -6,9 +6,9 @@ Aggregated here so tests have one import point for cross-subsystem seams
 from __future__ import annotations
 
 from .authority.executable_closure import (
-    __setExecutableClosureTestHookForTests,
-    inspectExecutableClosure,
-    snapshotExecutableClosure,
+    _set_executable_closure_test_hook_for_tests,
+    inspect_executable_closure,
+    snapshot_executable_closure,
 )
 from .remote.bridge_recovery import __setBridgeRecoveryTestHookForTests
 from .context.compaction import (

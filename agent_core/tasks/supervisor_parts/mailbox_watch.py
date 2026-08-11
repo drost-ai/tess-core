@@ -141,10 +141,10 @@ def create_mailbox_watch_loop(
 
     async def watch_loop() -> None:
         # Call-time import: the config package imports tasks at module load.
-        from ...config._knobs import knobValue
+        from ...config._knobs import knob_value
 
         while True:
-            await asyncio.sleep(int(knobValue("daemon.mailbox_watch_ms")) / 1000)
+            await asyncio.sleep(int(knob_value("daemon.mailbox_watch_ms")) / 1000)
             try:
                 await sweep_once()
             except Exception as exc:

@@ -8,7 +8,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             task_id = "task-lost-after-restart"
             created_at = "2026-01-01T00:00:00Z"
             output_file = core.task_output_path(task_id)
@@ -75,7 +75,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             task_id = "subagent-recovered-task"
             agent_id = "subagent-recovered-agent"
             child_session_id = "subagent-recovered-session"
@@ -183,7 +183,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             completed_id = "terminal-main-after-restart"
             unknown_id = "unknown-pid-after-restart"
             failed_subagent_id = "failed-subagent-after-restart"
@@ -231,7 +231,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         supervisor = None
         proc = None
         try:
-            run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             task_id = "subagent-stop-task"
             agent_id = "subagent-stop-agent"
             child_session_id = "subagent-stop-session"
@@ -359,7 +359,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
     def test_task_stop_terminates_background_command(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
@@ -400,7 +400,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
     def test_task_stop_daemon_result_shape_matches_reference(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             stopper = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskStop")
 

@@ -280,7 +280,7 @@ class ContractSyncTests(unittest.TestCase):
         import os
         import tempfile
 
-        from agent_core.config import resolveConfig
+        from agent_core.config import resolve_config
         from agent_core.contracts import ResolvedConfig
 
         with tempfile.TemporaryDirectory(prefix="agent-core-contracts-") as root:
@@ -290,7 +290,7 @@ class ContractSyncTests(unittest.TestCase):
             previous = os.environ.get("AGENT_CORE_HOME")
             os.environ["AGENT_CORE_HOME"] = home
             try:
-                config = asyncio.run(resolveConfig({"runtimeHome": home}, workspace))
+                config = asyncio.run(resolve_config({"runtimeHome": home}, workspace))
             finally:
                 if previous is None:
                     os.environ.pop("AGENT_CORE_HOME", None)

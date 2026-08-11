@@ -9,7 +9,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
     def test_bootstrap_runtime_closes_owned_local_runtimes_in_reference_order(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["mcpConfig"] = [{"name": "fake", "transport": "stdio", "commandOrUrl": "fake"}]
             session = core.create_empty_session(
                 cwd=str(workspace),
@@ -70,7 +70,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
     def test_bootstrap_runtime_closes_daemon_before_owned_bridge_and_mcp(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["mcpConfig"] = [{"name": "fake", "transport": "stdio", "commandOrUrl": "fake"}]
             session = core.create_empty_session(
                 cwd=str(workspace),
@@ -142,7 +142,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
 
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
@@ -193,7 +193,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
     def test_bootstrap_runtime_daemon_mode_subscribes_and_rebinds_sessions(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             subscriptions = []
             unsubscriptions = []

@@ -7,12 +7,12 @@ import subprocess
 from typing import Any
 
 from ..storage import file_or_json, load_settings_by_sources
-from ..authority.executable_config import parseMcpServerConfigList
-from ..authority.executable_source_policy import loadSelectedMcpServers, parseSettingSources
+from ..authority.executable_config import parse_mcp_server_config_list
+from ..authority.executable_source_policy import load_selected_mcp_servers, parse_setting_sources
 from ..runtime.secrets import assert_no_literal_mcp_secrets
 
 def _parse_setting_sources(raw: str | None) -> list[str]:
-    return parseSettingSources(raw)
+    return parse_setting_sources(raw)
 
 async def _load_merged_settings(sources: list[str], cwd: str, inline_settings: str | None) -> dict[str, Any]:
     merged = await load_settings_by_sources(sources, cwd)  # type: ignore[arg-type]
@@ -72,11 +72,11 @@ def _parse_json_schema(raw: str | None) -> Any:
     return json.loads(raw) if raw else None
 
 async def _load_mcp_config(cwd: str, inputs: list[str] | None, sources: list[str], strict: bool = False) -> list[dict[str, Any]]:
-    existing = [] if strict else await loadSelectedMcpServers(cwd=cwd, sources=sources)
+    existing = [] if strict else await load_selected_mcp_servers(cwd=cwd, sources=sources)
     inline = []
     for item in inputs or []:
         parsed = file_or_json(item)
-        records = parseMcpServerConfigList(parsed, "explicitMcpConfig") if parsed else []
+        records = parse_mcp_server_config_list(parsed, "explicitMcpConfig") if parsed else []
         assert_no_literal_mcp_secrets(records, "explicit")
         inline.extend(records)
     return [{**item, "commandOrUrl": os.path.expanduser(item.get("commandOrUrl", ""))} for item in [*existing, *inline]]

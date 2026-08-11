@@ -156,7 +156,7 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
         return await run_tool_dispatch_parity(data)
     if data.get("action") != "runtime_state_smoke":
         raise ScenarioAssertionError(f"unsupported parity action: {data.get('action')}", category="harness")
-    config = await core.resolveConfig(
+    config = await core.resolve_config(
         {
             "provider": data.get("provider", "openai"),
             "model": data.get("model", "gpt-5.4"),
@@ -190,10 +190,10 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
         {
             "name": data.get("name") or data.get("action"),
             "capabilities": {
-                "defaultProvider": core.getDefaultProvider(),
-                "defaultModel": core.getDefaultModel(),
-                "providers": list(core.listProviders()),
-                "effortLevels": list(core.listEffortLevels()),
+                "defaultProvider": core.get_default_provider(),
+                "defaultModel": core.get_default_model(),
+                "providers": list(core.list_providers()),
+                "effortLevels": list(core.list_effort_levels()),
             },
             "config": _project_config(config),
             "session": _project_session(session),

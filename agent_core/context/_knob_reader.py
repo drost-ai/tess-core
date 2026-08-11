@@ -8,6 +8,6 @@ package imports context modules during load.
 
 
 def context_knob(name: str) -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue(name))
+    return int(knob_value(name))

@@ -14,7 +14,7 @@ class ToolPathConfinementTests(AgentCoreTestCase):
         options = {"provider": "openai", "runtimeHome": str(home), "permissionMode": mode}
         if add_dirs:
             options["addDir"] = list(add_dirs)
-        config = run(core.resolveConfig(options, str(workspace)))
+        config = run(core.resolve_config(options, str(workspace)))
         session = core.create_empty_session(
             cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"],
             model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=mode,

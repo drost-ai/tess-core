@@ -7,7 +7,7 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_tool_permission_modes_for_edits_and_interactive_switch(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             write = next(tool for tool in core.create_builtin_tools() if tool.name == "Write")
 
@@ -67,9 +67,9 @@ class ToolPermissionTests(AgentCoreTestCase):
 
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            authority = run(core.captureAgentAuthority(config=config, session=session, tools=core.create_builtin_tools()))
+            authority = run(core.capture_agent_authority(config=config, session=session, tools=core.create_builtin_tools()))
             session["metadata"]["effectiveAgentAuthority"] = authority
 
             seen_options: list[list[str]] = []
@@ -116,7 +116,7 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_permission_resolution_matrix_matches_reference_edges(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             context = {"session": session, "config": config, "interactive": False, "cwd": str(workspace)}
             run(core.save_auto_mode(str(workspace), {"allow": ["echo"], "deny": ["rm -rf"], "environment": {}}))
@@ -143,7 +143,7 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_auto_mode_shell_policy_allows_and_denies_commands(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "auto"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "auto"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
             run(core.save_auto_mode(str(workspace), {"allow": ["echo"], "deny": [sys.executable], "environment": {}}))
             bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
@@ -170,7 +170,7 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_child_session_inherits_interactive_parent_permission_mode(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             child = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child.setdefault("metadata", {})["parentSessionId"] = parent["id"]
@@ -189,7 +189,7 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_agent_tool_depth_limit_precedes_input_validation(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["metadata"]["depth"] = 2
             agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
@@ -202,7 +202,7 @@ class ToolPermissionTests(AgentCoreTestCase):
     def test_agent_nested_depth_boundary_and_cancellation_propagation(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
 
             async def fake_start(task_args):

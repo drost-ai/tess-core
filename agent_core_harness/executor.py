@@ -181,7 +181,7 @@ async def _execute_step(
     observations: dict[str, Any],
 ) -> list[str]:
     if step_type == "create_session":
-        config = await core.resolveConfig(
+        config = await core.resolve_config(
             {
                 "provider": data.get("provider", "openai"),
                 "model": data.get("model", "gpt-5.4"),
@@ -403,7 +403,7 @@ async def _execute_step(
 async def _run_python_action(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     action = data.get("action")
     if action == "resolve_config":
-        state["config"] = await core.resolveConfig({"runtimeHome": str(sandbox.home), **(data.get("options") or {})}, str(sandbox.workspace))
+        state["config"] = await core.resolve_config({"runtimeHome": str(sandbox.home), **(data.get("options") or {})}, str(sandbox.workspace))
         return ["config"]
     raise ScenarioAssertionError(f"Unknown run_python action: {action}", category="harness")
 

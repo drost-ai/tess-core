@@ -334,7 +334,7 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
 
         try:
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "provider": "openai",
                         "runtimeHome": str(home),

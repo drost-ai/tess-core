@@ -2,9 +2,9 @@ from __future__ import annotations
 from .._utils import drop_none_deep as _without_none
 
 def _knob(name: str):
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return knobValue(name)
+    return knob_value(name)
 
 
 from typing import Any

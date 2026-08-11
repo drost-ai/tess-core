@@ -41,7 +41,7 @@ _SIMPLE_OPTION_POLICIES: dict[str, dict[str, Any]] = {
 }
 
 
-def parseSingleShellCommand(command: Any) -> dict[str, Any]:
+def parse_single_shell_command(command: Any) -> dict[str, Any]:
     if not isinstance(command, str):
         return {"ok": False, "reason": "invalid_type"}
     argv: list[str] = []
@@ -120,7 +120,7 @@ def parseSingleShellCommand(command: Any) -> dict[str, Any]:
 _ENV_ASSIGNMENT_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
 
-def splitShellCommandConstituents(command: Any) -> list[list[str]]:
+def split_shell_command_constituents(command: Any) -> list[list[str]]:
     """Split a possibly-compound shell command into constituent argv lists.
 
     Quote-aware and deliberately conservative for deny matching: every list,
@@ -213,8 +213,8 @@ def _unsafe(argv: list[str] | None, reason: str) -> dict[str, Any]:
     return result
 
 
-def classifyReadOnlyShellCommand(command: Any) -> dict[str, Any]:
-    parsed = parseSingleShellCommand(command)
+def classify_read_only_shell_command(command: Any) -> dict[str, Any]:
+    parsed = parse_single_shell_command(command)
     if not parsed.get("ok"):
         return _unsafe(None, str(parsed.get("reason")))
     argv = parsed["argv"]

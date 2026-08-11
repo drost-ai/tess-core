@@ -9,7 +9,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
     def test_shell_daemon_client_fallback_for_tasks_and_agents(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             run(core.save_task_record({"id": "task-daemon-fallback", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Daemon fallback task", "updatedAt": "2026-01-01T00:00:00Z"}))
             run(core.save_child_agent({"agentId": "agent-daemon-fallback", "sessionId": "child-daemon-session", "parentSessionId": session["id"], "name": "Daemon worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "running", "taskId": "task-daemon-fallback", "startedAt": "2026-01-01T00:00:00Z"}))
@@ -43,7 +43,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
     def test_shell_remote_collaboration_transcript_diagnostics_and_debug_commands(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["messages"] = [
                 {"role": "user", "content": "render the transcript"},
@@ -119,7 +119,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
     def test_shell_background_and_remote_attach_match_reference_selection(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             target = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
             run(core.save_session(target))
@@ -220,7 +220,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
     def test_shell_agents_and_plans_match_reference_reports(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["agents"] = {"reviewer": {"description": "Strict review pass"}}
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             target = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")

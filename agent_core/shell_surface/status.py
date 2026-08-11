@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import os
 from ..config import (
-    ensureProviderForModelSelection,
-    getDefaultEffortForProvider,
-    getDefaultModelForProvider,
-    listModelsForProvider,
-    listProviderProfiles,
-    listProviders,
-    modelSupportsEffort,
-    normalizeEffortForModel,
-    normalizeEffortLevel,
-    normalizeModelName,
-    normalizeProviderName,
-    normalizeProviderProfileName,
-    resolveFallbackProviderProfileName,
-    resolveProviderForModelSelection,
+    ensure_provider_for_model_selection,
+    get_default_effort_for_provider,
+    get_default_model_for_provider,
+    list_models_for_provider,
+    list_provider_profiles,
+    list_providers,
+    model_supports_effort,
+    normalize_effort_for_model,
+    normalize_effort_level,
+    normalize_model_name,
+    normalize_provider_name,
+    normalize_provider_profile_name,
+    resolve_fallback_provider_profile_name,
+    resolve_provider_for_model_selection,
 )
 from ..storage import (
     get_default_auto_mode,
@@ -73,7 +73,7 @@ def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any])
     profiles = config.get("providerProfiles") or {}
     active = session.get("providerProfileName") or config.get("providerProfileName")
     sections = []
-    for name in listProviderProfiles(profiles):
+    for name in list_provider_profiles(profiles):
         profile = profiles.get(name, {})
         if not profile:
             continue
@@ -82,7 +82,7 @@ def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any])
         if kind == "openai":
             lines.append(f"  mode       {profile.get('apiMode') or 'responses'}")
             lines.append(f"  base url   {profile.get('baseUrl') or 'default'}")
-        lines.append(f"  model      {profile.get('defaultModel') or getDefaultModelForProvider(kind)}")
+        lines.append(f"  model      {profile.get('defaultModel') or get_default_model_for_provider(kind)}")
         auth = profile.get("auth") or {}
         auth_text = str(auth.get("kind") or "")
         if auth.get("envVar"):
@@ -160,7 +160,7 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
                 ]
             ),
         )
-    requested = normalizeProviderProfileName(arg_text)
+    requested = normalize_provider_profile_name(arg_text)
     profiles = config.get("providerProfiles") or {}
     if not requested or requested not in profiles:
         return _error(hooks, f"Unknown provider profile: {arg_text}")
@@ -177,8 +177,8 @@ async def _handle_provider(arg_text: str, session: dict[str, Any], config: dict[
         config["anthropicBaseUrl"] = profile.get("baseUrl")
         config.pop("openaiBaseUrl", None)
     if profile.get("defaultModel"):
-        session["model"] = config["model"] = normalizeModelName(profile["defaultModel"], profile.get("kind"))
-        session["effort"] = config["effort"] = normalizeEffortForModel(profile.get("kind"), session.get("model"), session.get("effort") or config.get("effort")) or getDefaultEffortForProvider(profile.get("kind"))
+        session["model"] = config["model"] = normalize_model_name(profile["defaultModel"], profile.get("kind"))
+        session["effort"] = config["effort"] = normalize_effort_for_model(profile.get("kind"), session.get("model"), session.get("effort") or config.get("effort")) or get_default_effort_for_provider(profile.get("kind"))
     await _persist_shell_settings(
         config,
         session,
@@ -203,16 +203,16 @@ async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str
             f"current   {session.get('model') or config.get('model')}",
             "",
         ]
-        for name in listProviders():
+        for name in list_providers():
             lines.append(f"{name}{'  (active)' if name == provider else ''}")
-            lines.append(f"  {', '.join(listModelsForProvider(name))}")
+            lines.append(f"  {', '.join(list_models_for_provider(name))}")
         lines.extend(["", "tip       /model openai:gpt-5.4 or /model anthropic:claude-opus-4-6"])
         return _info(hooks, "Model", "\n".join(lines))
     selection_provider, model = _parse_model_selection(arg_text, provider)
     switched_provider = selection_provider != provider
     session["provider"] = config["provider"] = config["providerKind"] = selection_provider
-    session["model"] = config["model"] = normalizeModelName(model, selection_provider)
-    profile_name = resolveFallbackProviderProfileName(
+    session["model"] = config["model"] = normalize_model_name(model, selection_provider)
+    profile_name = resolve_fallback_provider_profile_name(
         selection_provider,
         config.get("providerProfiles") or {},
         None if switched_provider else session.get("providerProfileName") or config.get("providerProfileName"),
@@ -227,8 +227,8 @@ async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str
     elif profile:
         config["anthropicBaseUrl"] = profile.get("baseUrl")
         config.pop("openaiBaseUrl", None)
-    next_effort = getDefaultEffortForProvider(selection_provider) if switched_provider else session.get("effort") or config.get("effort")
-    session["effort"] = config["effort"] = normalizeEffortForModel(selection_provider, session["model"], next_effort) or getDefaultEffortForProvider(selection_provider)
+    next_effort = get_default_effort_for_provider(selection_provider) if switched_provider else session.get("effort") or config.get("effort")
+    session["effort"] = config["effort"] = normalize_effort_for_model(selection_provider, session["model"], next_effort) or get_default_effort_for_provider(selection_provider)
     await _persist_shell_settings(
         config,
         session,
@@ -247,14 +247,14 @@ async def _handle_model(arg_text: str, session: dict[str, Any], config: dict[str
 async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
         return _info(hooks, "Effort", f"current  {session.get('effort') or config.get('effort')}\nlevels   low, medium, high, xhigh, max")
-    effort = normalizeEffortLevel(arg_text)
+    effort = normalize_effort_level(arg_text)
     if not effort:
         return _error(hooks, f"Unknown effort level: {arg_text}. Expected one of: low, medium, high, xhigh, max")
     provider = session.get("provider") or config.get("provider") or "anthropic"
     model = session.get("model") or config.get("model") or ""
-    if not modelSupportsEffort(provider, model):
+    if not model_supports_effort(provider, model):
         return _error(hooks, f"The active model does not support configurable reasoning effort: {model}")
-    normalized = normalizeEffortForModel(provider, model, effort)
+    normalized = normalize_effort_for_model(provider, model, effort)
     if not normalized:
         return _error(hooks, f"Effort {effort} is not supported for {provider}:{model}")
     session["effort"] = config["effort"] = normalized
@@ -329,7 +329,7 @@ def compactModelName(model: str) -> str:
 
 
 def normalizeModel(inputModel: str) -> str:
-    return normalizeModelName(inputModel)
+    return normalize_model_name(inputModel)
 
 
 def formatUsageSummary(usage: dict[str, Any] | None) -> str:
@@ -392,21 +392,21 @@ def _parse_command(raw: str) -> tuple[str, str]:
 
 def _parse_model_selection(value: str, fallback_provider: str) -> tuple[str, str]:
     raw = value.strip()
-    provider_only = normalizeProviderName(raw)
+    provider_only = normalize_provider_name(raw)
     if provider_only:
-        return provider_only, getDefaultModelForProvider(provider_only)
+        return provider_only, get_default_model_for_provider(provider_only)
     if ":" in raw:
         prefix, model = raw.split(":", 1)
         explicit_model = model.strip()
-        provider = resolveProviderForModelSelection(normalizeProviderName(prefix), explicit_model) or fallback_provider
-        return provider, explicit_model or getDefaultModelForProvider(provider)
-    provider = resolveProviderForModelSelection(None, raw) or fallback_provider
-    return provider, raw or getDefaultModelForProvider(provider)
+        provider = resolve_provider_for_model_selection(normalize_provider_name(prefix), explicit_model) or fallback_provider
+        return provider, explicit_model or get_default_model_for_provider(provider)
+    provider = resolve_provider_for_model_selection(None, raw) or fallback_provider
+    return provider, raw or get_default_model_for_provider(provider)
 
 
 def _sync_effective_provider(session: dict[str, Any], config: dict[str, Any]) -> None:
     model = session.get("model") or config.get("model")
-    effective_provider = ensureProviderForModelSelection(
+    effective_provider = ensure_provider_for_model_selection(
         session.get("provider") or config.get("provider"),
         model,
         config.get("provider") or "anthropic",
@@ -416,7 +416,7 @@ def _sync_effective_provider(session: dict[str, Any], config: dict[str, Any]) ->
     if effective_provider != config.get("provider"):
         config["provider"] = effective_provider
         config["providerKind"] = effective_provider
-    profile_name = resolveFallbackProviderProfileName(
+    profile_name = resolve_fallback_provider_profile_name(
         effective_provider,
         config.get("providerProfiles") or {},
         session.get("providerProfileName") or config.get("providerProfileName"),

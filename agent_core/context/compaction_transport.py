@@ -4,7 +4,7 @@ import asyncio
 import os
 from typing import Any
 
-from ..config import getDefaultEffortForProvider, getDefaultModelForProvider, normalizeEffortForModel, normalizeModelName
+from ..config import get_default_effort_for_provider, get_default_model_for_provider, normalize_effort_for_model, normalize_model_name
 from ..providers.errors import create_provider_failure_record, create_provider_request_error
 from ..providers.timeouts import resolveProviderTimeoutPolicy
 from ..providers.token_budget import resolveCompactionPolicy
@@ -118,8 +118,8 @@ def resolve_compaction_execution_plan(args: dict[str, Any] | None = None, **kwar
     config = args.get("config") or {}
     session = args.get("session") or {}
     session_provider = session.get("provider") or config.get("provider") or "openai"
-    session_model = session.get("model") or config.get("model") or getDefaultModelForProvider(session_provider)
-    session_effort = session.get("effort") or config.get("effort") or getDefaultEffortForProvider(session_provider)
+    session_model = session.get("model") or config.get("model") or get_default_model_for_provider(session_provider)
+    session_effort = session.get("effort") or config.get("effort") or get_default_effort_for_provider(session_provider)
     synthesis_effort = config.get("compactionEffort") or session_effort
     synthesis_profile = config.get("compactionProviderProfile")
     if synthesis_profile:
@@ -218,7 +218,7 @@ def resolve_compaction_profile(config: dict[str, Any], model: dict[str, Any]) ->
 
 def _build_selection(provider: str, model: str, effort: str, purpose: str, selectionSource: str, providerProfileName: str | None = None) -> dict[str, Any]:
     normalized = model.strip()
-    return {"provider": provider, "providerProfileName": providerProfileName, "model": normalized, "effort": normalizeEffortForModel(provider, normalized, effort), "selectionSource": selectionSource, "purpose": purpose}
+    return {"provider": provider, "providerProfileName": providerProfileName, "model": normalized, "effort": normalize_effort_for_model(provider, normalized, effort), "selectionSource": selectionSource, "purpose": purpose}
 
 
 def _build_selection_for_profile(
@@ -231,8 +231,8 @@ def _build_selection_for_profile(
 ) -> dict[str, Any]:
     profile = binding.get("profile") or {}
     provider = profile.get("kind")
-    model = normalizeModelName(model_override or profile.get("defaultModel") or getDefaultModelForProvider(provider), provider)
-    effort = effort_override or profile.get("reasoningEffort") or profile.get("effortLevel") or fallback_effort or getDefaultEffortForProvider(provider)
+    model = normalize_model_name(model_override or profile.get("defaultModel") or get_default_model_for_provider(provider), provider)
+    effort = effort_override or profile.get("reasoningEffort") or profile.get("effortLevel") or fallback_effort or get_default_effort_for_provider(provider)
     return _build_selection(provider=provider, providerProfileName=binding.get("profileName") or profile.get("name"), model=model, effort=effort, purpose=purpose, selectionSource="configured")
 
 
@@ -332,19 +332,19 @@ async def _run_compaction_request_with_timeout(provider: str, providerLabel: str
 
 
 def _resolve_compaction_timeout_ms(purpose: str | None) -> int:
-    from ..config._knobs import knobValue, warnLegacyEnvAlias
+    from ..config._knobs import knob_value, warn_legacy_env_alias
 
     # Deprecated TESS_* aliases still beat the knob layer like an env
     # override would; a one-time warning names the canonical knob env.
     env_name = "TESS_COMPACTION_SYNTHESIS_TIMEOUT_MS" if purpose == "synthesis" else "TESS_COMPACTION_VERIFICATION_TIMEOUT_MS"
     knob_name = "compaction.synthesis_timeout_ms" if purpose == "synthesis" else "compaction.verification_timeout_ms"
-    warnLegacyEnvAlias(env_name, knob_name)
+    warn_legacy_env_alias(env_name, knob_name)
     try:
         parsed = int(float(os.environ.get(env_name, "")))
     except Exception:
         parsed = 0
     if parsed > 0:
         return parsed
-    return int(knobValue(knob_name))
+    return int(knob_value(knob_name))
 
 

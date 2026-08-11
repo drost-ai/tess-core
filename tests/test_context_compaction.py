@@ -334,7 +334,7 @@ class ContextCompactionTests(AgentCoreTestCase):
         original_measure = agent_context_module.measure_request_input_tokens
         original_run_compaction = agent_checkpoints_module.run_compaction
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"] = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"old message {index}"} for index in range(30)]
             measure_calls = {"count": 0}
@@ -406,7 +406,7 @@ class ContextCompactionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         original_run_compaction = agent_checkpoints_module.run_compaction
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"] = [{"role": "user", "content": "x" * 810_000}]
             compaction_calls = []

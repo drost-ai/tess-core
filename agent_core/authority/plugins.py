@@ -10,17 +10,17 @@ import sys
 from typing import Any
 
 from .plugin_contracts import (
-    normalizePluginMcpServers,
-    parsePluginManifest,
-    summarizePluginCapabilities,
-    validatePluginCapabilityContract,
-    validatePluginManifest,
+    normalize_plugin_mcp_servers,
+    parse_plugin_manifest,
+    summarize_plugin_capabilities,
+    validate_plugin_capability_contract,
+    validate_plugin_manifest,
 )
-from .executable_source_policy import loadSelectedPluginRecords
+from .executable_source_policy import load_selected_plugin_records
 from ..storage import load_plugins, resolve_maybe_relative
 
 
-async def loadPluginRuntime(
+async def load_plugin_runtime(
     config: dict[str, Any], options: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     options = options or {}
@@ -78,7 +78,7 @@ async def _resolve_plugin_sources(
 
 async def _load_installed_plugins(cwd: str, sources: list[str] | None = None) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
-    for record in await loadSelectedPluginRecords(cwd=cwd, sources=sources):
+    for record in await load_selected_plugin_records(cwd=cwd, sources=sources):
         manifest = record.get("manifest") if isinstance(record.get("manifest"), dict) else {}
         plugin_id = manifest.get("id")
         if not plugin_id:
@@ -115,11 +115,11 @@ async def _resolve_plugin_path(plugin_path: str, cwd: str) -> dict[str, Any]:
             ]
         )
         with open(manifest_path, "r", encoding="utf-8") as handle:
-            manifest = parsePluginManifest(handle.read())
+            manifest = parse_plugin_manifest(handle.read())
         return {"id": manifest.get("id"), "manifest": manifest, "rootDir": resolved_path, "sourcePath": resolved_path}
 
     with open(resolved_path, "r", encoding="utf-8") as handle:
-        manifest = parsePluginManifest(handle.read())
+        manifest = parse_plugin_manifest(handle.read())
     return {
         "id": manifest.get("id"),
         "manifest": manifest,
@@ -130,7 +130,7 @@ async def _resolve_plugin_path(plugin_path: str, cwd: str) -> dict[str, Any]:
 
 async def _load_plugin(source: dict[str, Any], cwd: str) -> dict[str, Any]:
     manifest = source.get("manifest") if isinstance(source.get("manifest"), dict) else {}
-    manifest_diagnostics = validatePluginManifest(manifest)
+    manifest_diagnostics = validate_plugin_manifest(manifest)
     manifest_errors = [diagnostic for diagnostic in manifest_diagnostics if diagnostic.get("severity") == "error"]
     if manifest_errors:
         raise RuntimeError(" ".join(str(diagnostic.get("message")) for diagnostic in manifest_errors))
@@ -149,7 +149,7 @@ async def _load_plugin(source: dict[str, Any], cwd: str) -> dict[str, Any]:
     tools = _array_value(module_shape, "tools")
     commands = [*manifest_commands, *_array_value(module_shape, "commands")]
     mcp_servers = [*manifest_servers, *_normalize_mcp_servers(_array_value(module_shape, "mcpServers"))]
-    capabilities = summarizePluginCapabilities(
+    capabilities = summarize_plugin_capabilities(
         {
             "manifest": manifest,
             "toolCount": len(tools),
@@ -159,7 +159,7 @@ async def _load_plugin(source: dict[str, Any], cwd: str) -> dict[str, Any]:
     )
     diagnostics = [
         *manifest_diagnostics,
-        *validatePluginCapabilityContract({"manifest": manifest, "capabilitySummary": capabilities}),
+        *validate_plugin_capability_contract({"manifest": manifest, "capabilitySummary": capabilities}),
     ]
     return {
         "id": manifest.get("id"),
@@ -272,7 +272,7 @@ def _shell_spec(command: str) -> list[str]:
 
 
 def _normalize_mcp_servers(servers: list[Any]) -> list[dict[str, Any]]:
-    return normalizePluginMcpServers([server for server in servers if isinstance(server, dict)])
+    return normalize_plugin_mcp_servers([server for server in servers if isinstance(server, dict)])
 
 
 def _array_value(value: Any, key: str) -> list[Any]:

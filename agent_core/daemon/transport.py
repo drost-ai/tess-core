@@ -27,15 +27,15 @@ from .protocol import (
 
 
 def _close_grace_seconds() -> float:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("daemon.close_grace_ms")) / 1000
+    return int(knob_value("daemon.close_grace_ms")) / 1000
 
 
 def _dispatch_drain_seconds() -> float:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("daemon.dispatch_drain_ms")) / 1000
+    return int(knob_value("daemon.dispatch_drain_ms")) / 1000
 
 
 class DaemonAbortSignal:

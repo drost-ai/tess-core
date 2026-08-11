@@ -42,7 +42,7 @@ async def run_continuation_relief(data: dict[str, Any], paths: dict[str, Any]) -
 
 
 async def _build_fixture(data: dict[str, Any], paths: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-    config = await core.resolveConfig(
+    config = await core.resolve_config(
         {
             "provider": data.get("provider", "openai"),
             "model": data.get("model", "gpt-5.4"),

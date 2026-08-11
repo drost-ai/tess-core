@@ -18,7 +18,7 @@ async def _loadAnthropicCredentialFromRuntimeHome(
 
     selected_home = os.path.abspath(os.path.expanduser(runtime_home))
     async with core.scoped_runtime_home(selected_home):
-        config = await core.resolveConfig(
+        config = await core.resolve_config(
             {
                 "runtimeHome": selected_home,
                 "provider": provider_profile_name,

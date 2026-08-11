@@ -16,7 +16,7 @@ class SessionForkIsolationTests(AgentCoreTestCase):
     def test_fork_allowlist_creates_fresh_state_and_recoverable_archive(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
             parent = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],

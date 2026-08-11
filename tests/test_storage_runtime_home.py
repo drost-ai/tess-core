@@ -115,7 +115,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
 
             async def load_config():
                 async with core.scoped_runtime_home(str(scoped_home)):
-                    config = await core.resolveConfig({"provider": "openai", "permissionMode": "default"}, str(workspace))
+                    config = await core.resolve_config({"provider": "openai", "permissionMode": "default"}, str(workspace))
                     self.assertEqual(str(scoped_home), config["runtimeHome"])
                     self.assertEqual(str(scoped_home), core.get_state_root())
                 return config
@@ -202,7 +202,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
 
             async def load_config():
                 async with core.scoped_runtime_home(str(scoped_home)):
-                    await core.resolveConfig(
+                    await core.resolve_config(
                         {"provider": "openai", "permissionMode": "default", "runtimeHome": str(other_home)},
                         str(workspace),
                     )

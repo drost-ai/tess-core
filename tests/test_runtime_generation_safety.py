@@ -8,7 +8,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
 
         async def scenario():
-            config = await core.resolveConfig(
+            config = await core.resolve_config(
                 {
                     "provider": "openai",
                     "runtimeHome": str(home),
@@ -98,7 +98,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 path = Path(root.name) / name
                 path.mkdir()
                 workspaces[name] = path
-            config_a = await core.resolveConfig(
+            config_a = await core.resolve_config(
                 {
                     "provider": "openai",
                     "runtimeHome": str(home),

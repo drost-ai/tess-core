@@ -77,7 +77,7 @@ class BootstrapRefreshContractTests(AgentCoreTestCase):
         # change survived for exactly one turn.
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
             session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],

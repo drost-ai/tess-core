@@ -6,10 +6,10 @@ import re
 from typing import Any
 
 from ..contracts.config import PERMISSION_MODES
-from ..authority.agent import AgentAuthorityError, assertValidAgentAuthority
+from ..authority.agent import AgentAuthorityError, assert_valid_agent_authority
 from .._utils import maybe_await
-from ..authority.permission_rules import loadPermissionRulesCached, matchPermissionRule
-from ..authority.shell_command_policy import classifyReadOnlyShellCommand, parseSingleShellCommand
+from ..authority.permission_rules import load_permission_rules_cached, match_permission_rule
+from ..authority.shell_command_policy import classify_read_only_shell_command, parse_single_shell_command
 from ..storage import get_project_root, load_auto_mode
 
 
@@ -157,7 +157,7 @@ async def _get_effective_permission_mode(context: ToolContext) -> str:
     metadata = context["session"].get("metadata", {})
     authority = _pinned_child_authority(context["session"])
     if authority:
-        assertValidAgentAuthority(authority)
+        assert_valid_agent_authority(authority)
         if mode != authority["mode"]:
             context["session"]["permissionMode"] = authority["mode"]
             context["config"]["permissionMode"] = authority["mode"]
@@ -185,7 +185,7 @@ async def _resolve_tool_permission(
     authority = _pinned_child_authority(context.get("session", {}))
     rules = (authority or {}).get("permissionRules")
     if rules is None:
-        rules = await loadPermissionRulesCached(
+        rules = await load_permission_rules_cached(
             cwd=context["session"]["cwd"],
             sources=context.get("config", {}).get("settingsSources"),
             inlineSettings=context.get("config", {}).get("inlineSettings"),
@@ -194,7 +194,7 @@ async def _resolve_tool_permission(
     project_root = (authority or {}).get("permissionRuleProjectRoot") or get_project_root(context["session"]["cwd"])
 
     def matched(effect: str) -> dict[str, Any] | None:
-        return matchPermissionRule(rules, call, effects=(effect,), projectRoot=project_root)
+        return match_permission_rule(rules, call, effects=(effect,), projectRoot=project_root)
 
     deny_rule = matched("deny")
     if deny_rule:
@@ -261,15 +261,15 @@ def _parse_permission_mode_value(value: Any) -> str | None:
 
 
 def _is_safe_read_only_shell_command(command: str) -> bool:
-    return bool(classifyReadOnlyShellCommand(command).get("safe"))
+    return bool(classify_read_only_shell_command(command).get("safe"))
 
 
 def _matches_command_policy(command: str, patterns: list[str]) -> bool:
-    parsed = parseSingleShellCommand(command)
+    parsed = parse_single_shell_command(command)
     if not parsed.get("ok"):
         return False
     for pattern in patterns:
-        parsed_pattern = parseSingleShellCommand(pattern)
+        parsed_pattern = parse_single_shell_command(pattern)
         if not parsed_pattern.get("ok") or len(parsed_pattern["argv"]) > len(parsed["argv"]):
             continue
         if all(

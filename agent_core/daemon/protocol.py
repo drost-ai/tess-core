@@ -168,15 +168,15 @@ def daemonTokensEqual(actual: str, expected: str) -> bool:
 
 
 def resolveDaemonRpcTimeoutMs(override: int | None = None) -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return _resolve_timeout(override, None, int(knobValue("daemon.rpc_timeout_ms")), 25, 300_000)
+    return _resolve_timeout(override, None, int(knob_value("daemon.rpc_timeout_ms")), 25, 300_000)
 
 
 def resolveDaemonAuthTimeoutMs(override: int | None = None) -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return _resolve_timeout(override, None, int(knobValue("daemon.auth_timeout_ms")), 25, 30_000)
+    return _resolve_timeout(override, None, int(knob_value("daemon.auth_timeout_ms")), 25, 30_000)
 
 
 def boundedProtocolDiagnostic(value: str) -> str:

@@ -19,18 +19,18 @@ def _positive_int(value: Any) -> int | None:
 def resolve_subagent_concurrency_policy(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     source = env or os.environ
     if env is None:
-        from ..config._knobs import warnLegacyEnvAlias
+        from ..config._knobs import warn_legacy_env_alias
 
-        warnLegacyEnvAlias("TESS_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
-        warnLegacyEnvAlias("AGENT_CORE_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
+        warn_legacy_env_alias("TESS_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
+        warn_legacy_env_alias("AGENT_CORE_SUBAGENT_MAX_CONCURRENCY", "subagents.max_live")
     default_limit = _positive_int(source.get("TESS_SUBAGENT_MAX_CONCURRENCY")) or _positive_int(
         source.get("AGENT_CORE_SUBAGENT_MAX_CONCURRENCY")
     )
     if default_limit is None:
         # Call-time import: the config package imports subagents at module load.
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
-        default_limit = _positive_int(knobValue("subagents.max_live"))
+        default_limit = _positive_int(knob_value("subagents.max_live"))
     groups: dict[str, int] = {}
     raw_groups = source.get("TESS_SUBAGENT_CONCURRENCY_GROUP_LIMITS") or source.get(
         "AGENT_CORE_SUBAGENT_CONCURRENCY_GROUP_LIMITS"

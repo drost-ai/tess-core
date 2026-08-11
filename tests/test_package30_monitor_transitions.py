@@ -10,7 +10,7 @@ from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
 class Package30MonitorTransitionTests(AgentCoreTestCase):
     def _fixture(self, home: Path, workspace: Path, status: str, suffix: str = "1"):
-        config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+        config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
         stamp = "2026-07-12T22:01:39.608Z"
         monitor = {

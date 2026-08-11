@@ -76,9 +76,9 @@ def _parse_launch(raw: str | None) -> dict[str, Any]:
 
 
 def _wait_for_activation(expected_token: str) -> None:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    ready, _, _ = select.select([sys.stdin.buffer], [], [], int(knobValue("process.activation_timeout_ms")) / 1000)
+    ready, _, _ = select.select([sys.stdin.buffer], [], [], int(knob_value("process.activation_timeout_ms")) / 1000)
     if not ready:
         raise TimeoutError("Owned process runner activation timed out.")
     raw = sys.stdin.buffer.readline(256)

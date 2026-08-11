@@ -7,7 +7,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
     def test_background_task_supervisor_and_task_output(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
             base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
@@ -135,7 +135,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         unsubscribe = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-core-instance", "cwd": str(workspace)}))
@@ -169,7 +169,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         unsubscribe = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-core-instance", "cwd": str(workspace)}))
@@ -230,7 +230,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"].append({"role": "user", "content": "Coordinate the long lived work."})
             monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "bootstrap-monitor-task", "goal": "watch bootstrap families"})
@@ -316,7 +316,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         runtime = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             task_id = "runtime-task-family"
             output_file = core.task_output_path(task_id)
@@ -378,7 +378,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         runtime = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             run(core.save_task_record({"id": "stale-runtime-record", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "stale cache record", "updatedAt": "2026-01-01T00:00:09Z"}))
@@ -411,7 +411,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["updatedAt"] = "2026-01-01T00:00:05Z"
             session["messages"].append({"role": "user", "content": "Build the parity slice."})

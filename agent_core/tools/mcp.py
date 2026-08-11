@@ -6,7 +6,7 @@ from ..contracts.tools import ToolResult
 from typing import Any
 
 from .._utils import pretty_json
-from ..authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
+from ..authority.mcp_origin_policy import fetch_mcp_resource_with_bound_credentials
 from ..mcp.payloads import shapeMcpResourceList, shapeMcpResourceRead
 from ..payloads.tools import shape_text_tool_result
 from .cancellation import _throw_if_tool_cancelled
@@ -102,7 +102,7 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             return {"content": f"MCP server not found: {server}", "isError": True}
         if config.get("transport") in ("http", "sse"):
             _throw_if_tool_cancelled(context)
-            response = await fetchMcpResourceWithBoundCredentials(
+            response = await fetch_mcp_resource_with_bound_credentials(
                 config=config,
                 uri=uri,
                 signal=context.get("abortSignal"),

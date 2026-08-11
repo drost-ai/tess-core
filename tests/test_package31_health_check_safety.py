@@ -20,7 +20,7 @@ from agent_core.tasks.terminal_store import prepare_task_stop
 class Package31HealthCheckSafetyTests(AgentCoreTestCase):
     def _session(self, home: Path, workspace: Path, mode: str = "bypassPermissions"):
         config = run(
-            core.resolveConfig(
+            core.resolve_config(
                 {
                     "provider": "openai",
                     "runtimeHome": str(home),

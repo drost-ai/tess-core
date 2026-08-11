@@ -44,9 +44,9 @@ async def _reap_dead_daemon_instance_dirs() -> None:
         names = os.listdir(get_daemon_instances_dir())
     except FileNotFoundError:
         return
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    cutoff = time.time() - int(knobValue("daemon.instance_reap_ms")) / 1000
+    cutoff = time.time() - int(knob_value("daemon.instance_reap_ms")) / 1000
     for name in names:
         try:
             candidate = parse_daemon_instance_id(name)

@@ -7,20 +7,20 @@ live in other planes (source trust, executable config parsing, runtime secrets).
 from __future__ import annotations
 
 from ..authority.executable_config import (
-    parseInstalledPluginRecord,
-    parseMarketplaceManifest,
-    parseMcpServerConfig,
-    parseMcpServerConfigList,
-    parsePluginManifestV1,
+    parse_installed_plugin_record,
+    parse_marketplace_manifest,
+    parse_mcp_server_config,
+    parse_mcp_server_config_list,
+    parse_plugin_manifest_v1,
 )
 from ..authority.executable_source_policy import (
-    approveMcpSource,
-    approvePluginSource,
-    inspectMcpSourceTrust,
-    inspectPluginSourceTrust,
-    parseSettingSources,
+    approve_mcp_source,
+    approve_plugin_source,
+    inspect_mcp_source_trust,
+    inspect_plugin_source_trust,
+    parse_setting_sources,
 )
-from ..authority.repository_trust import getRepositoryTrustStatus, revokeRepositoryApproval
+from ..authority.repository_trust import get_repository_trust_status, revoke_repository_approval
 from ..runtime.secrets import authorize_runtime_secret_write, is_runtime_secret_ref, store_runtime_secret
 from .chrome import (
     buildChromeNativeHostManifest,

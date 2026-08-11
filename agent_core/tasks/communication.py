@@ -271,9 +271,9 @@ async def _bounded_message_content(content: str, session: Mapping[str, Any]) -> 
     carries the artifact id, so the recipient pages it with
     ReadToolArtifact."""
     # Call-time import: the config package imports tasks at module load.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    limit = int(knobValue("comms.inline_result_bytes"))
+    limit = int(knob_value("comms.inline_result_bytes"))
     encoded = content.encode("utf-8")
     if len(encoded) <= limit:
         return content

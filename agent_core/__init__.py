@@ -9,11 +9,13 @@ from __future__ import annotations
 
 from .agent import readOpenChildQuestions
 from .agent.loop import runAgentPrompt
-from .config.prompts import buildSystemPromptForAgent, resolveModelForAgent
-from .config.providers import resolveProviderProfile, resolveProviderProfiles
-from .config.resolution import resolveConfig
+from .config.prompts import build_system_prompt_for_agent, resolve_model_for_agent
+from .config.providers import resolve_provider_profile, resolve_provider_profiles
+from .config.resolution import resolve_config
 from .contracts.config import ResolvedConfig, RuntimeSecretRef
 from .contracts.context import AskQuestionDetail
+from .contracts.config import PermissionMode, RuntimeSecretPurpose, RuntimeSecretValue
+from .contracts.events import RuntimeEventEnvelope
 from .contracts.providers import AnthropicMessage, AnthropicUsage
 from .contracts.runtime_surface import BootstrappedRuntime
 from .contracts.session_records import SessionRecord
@@ -53,13 +55,17 @@ from .tools.definitions import ToolDefinition
 from .tools.registry import create_builtin_tools
 
 __all__ = [
+    "RuntimeSecretValue",
+    "RuntimeSecretPurpose",
+    "RuntimeEventEnvelope",
+    "PermissionMode",
     "AnthropicMessage",
     "AnthropicUsage",
     "BootstrappedRuntime",
     "active_session_payload",
     "AskQuestionDetail",
     "bootstrap_runtime",
-    "buildSystemPromptForAgent",
+    "build_system_prompt_for_agent",
     "ChildAgentRecord",
     "clear_auth",
     "configure_runtime_home",
@@ -102,11 +108,11 @@ __all__ = [
     "persist_session",
     "readOpenChildQuestions",
     "reset_configured_runtime_home",
-    "resolveConfig",
+    "resolve_config",
     "ResolvedConfig",
-    "resolveModelForAgent",
-    "resolveProviderProfile",
-    "resolveProviderProfiles",
+    "resolve_model_for_agent",
+    "resolve_provider_profile",
+    "resolve_provider_profiles",
     "resolve_session",
     "resolveTeleportSession",
     "runAgentPrompt",

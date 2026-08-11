@@ -426,10 +426,10 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
         return {"taskSnapshot": _task_snapshot(records), "monitorSnapshot": _monitor_snapshot(await list_session_monitors(session_id)), "collaborationSnapshot": await _collaboration_snapshot(session_id)}
 
     async def health_reconcile_loop() -> None:
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
         while True:
-            await asyncio.sleep(int(knobValue("daemon.health_tick_ms")) / 1000)
+            await asyncio.sleep(int(knob_value("daemon.health_tick_ms")) / 1000)
             try:
                 await health_check_controller["tick"]()
             except Exception as exc:
@@ -439,10 +439,10 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
                 )
 
     async def monitor_watch_loop() -> None:
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
         while True:
-            await asyncio.sleep(int(knobValue("tasks.monitor_tick_ms")) / 1000)
+            await asyncio.sleep(int(knob_value("tasks.monitor_tick_ms")) / 1000)
             try:
                 await _tick_daemon_monitors(emit)
             except Exception as exc:

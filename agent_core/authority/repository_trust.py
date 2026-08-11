@@ -28,7 +28,7 @@ def _normalize_canonical_path(value: str) -> str:
     return os.path.normcase(normalized) if os.name == "nt" else normalized
 
 
-async def resolveRepositoryIdentity(cwd: str) -> dict[str, Any]:
+async def resolve_repository_identity(cwd: str) -> dict[str, Any]:
     canonical_root = _normalize_canonical_path(os.path.realpath(get_project_root(cwd)))
     info = os.stat(canonical_root, follow_symlinks=False)
     if not stat.S_ISDIR(info.st_mode):
@@ -52,7 +52,7 @@ async def resolveRepositoryIdentity(cwd: str) -> dict[str, Any]:
     }
 
 
-def repositoryTrustRecordPath(identity: dict[str, Any]) -> str:
+def repository_trust_record_path(identity: dict[str, Any]) -> str:
     key = str(identity.get("repositoryKey") or "")
     if not _DIGEST_PATTERN.fullmatch(key):
         raise ValueError("Invalid repository identity key")
@@ -118,7 +118,7 @@ def _parse_record(value: Any, expected: dict[str, Any], path: str) -> dict[str, 
 
 
 def _read_record(identity: dict[str, Any]) -> dict[str, Any] | None:
-    path = repositoryTrustRecordPath(identity)
+    path = repository_trust_record_path(identity)
     try:
         info = os.lstat(path)
     except FileNotFoundError:
@@ -145,7 +145,7 @@ def _read_record(identity: dict[str, Any]) -> dict[str, Any] | None:
 
 def _write_record(record: dict[str, Any]) -> None:
     _ensure_private_directory()
-    path = repositoryTrustRecordPath(record["repository"])
+    path = repository_trust_record_path(record["repository"])
     temporary = f"{path}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(temporary, flags, 0o600)
@@ -165,25 +165,25 @@ def _write_record(record: dict[str, Any]) -> None:
         raise
 
 
-async def checkRepositoryApproval(args: dict[str, Any] | None = None, **kwargs: Any) -> bool:
+async def check_repository_approval(args: dict[str, Any] | None = None, **kwargs: Any) -> bool:
     args = {**(args or {}), **kwargs}
     family, scope = str(args.get("family")), str(args.get("scope"))
     digest = str(args.get("contentDigest") or "")
     _assert_family_scope(family, scope)
     _assert_digest(digest)
-    identity = await resolveRepositoryIdentity(str(args["cwd"]))
+    identity = await resolve_repository_identity(str(args["cwd"]))
     record = _read_record(identity)
     return ((record or {}).get("approvals", {}).get(family, {}).get(scope, {}).get("contentDigest") == digest)
 
 
-async def approveRepositoryContent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def approve_repository_content(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     family, scope = str(args.get("family")), str(args.get("scope"))
     digest = str(args.get("contentDigest") or "")
     _assert_family_scope(family, scope)
     _assert_digest(digest)
-    identity = await resolveRepositoryIdentity(str(args["cwd"]))
-    path = repositoryTrustRecordPath(identity)
+    identity = await resolve_repository_identity(str(args["cwd"]))
+    path = repository_trust_record_path(identity)
     _ensure_private_directory()
     async with file_lock(path):
         record = _read_record(identity) or {
@@ -196,15 +196,15 @@ async def approveRepositoryContent(args: dict[str, Any] | None = None, **kwargs:
             "approvedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
         _write_record(record)
-    return await getRepositoryTrustStatus(str(args["cwd"]))
+    return await get_repository_trust_status(str(args["cwd"]))
 
 
-async def revokeRepositoryApproval(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def revoke_repository_approval(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     family, scope = str(args.get("family")), str(args.get("scope"))
     _assert_family_scope(family, scope)
-    identity = await resolveRepositoryIdentity(str(args["cwd"]))
-    path = repositoryTrustRecordPath(identity)
+    identity = await resolve_repository_identity(str(args["cwd"]))
+    path = repository_trust_record_path(identity)
     _ensure_private_directory()
     async with file_lock(path):
         record = _read_record(identity)
@@ -214,16 +214,16 @@ async def revokeRepositoryApproval(args: dict[str, Any] | None = None, **kwargs:
             if not scopes:
                 del record["approvals"][family]
             _write_record(record)
-    return await getRepositoryTrustStatus(str(args["cwd"]))
+    return await get_repository_trust_status(str(args["cwd"]))
 
 
-async def getRepositoryTrustStatus(cwd: str) -> dict[str, Any]:
-    identity = await resolveRepositoryIdentity(cwd)
+async def get_repository_trust_status(cwd: str) -> dict[str, Any]:
+    identity = await resolve_repository_identity(cwd)
     record = _read_record(identity)
     legacy_root = get_local_state_dir(cwd)
     return {
         "repository": identity,
-        "recordPath": repositoryTrustRecordPath(identity),
+        "recordPath": repository_trust_record_path(identity),
         "approvals": (record or {}).get("approvals", {}),
         "legacyHints": {
             "hooks": os.path.lexists(os.path.join(legacy_root, "approved-hooks.json")),

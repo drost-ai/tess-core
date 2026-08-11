@@ -7,15 +7,15 @@ import os
 from typing import Any
 
 from .executable_closure import (
-    inspectExecutableClosure,
-    mapClosureRootToSnapshot,
-    snapshotExecutableClosure,
+    inspect_executable_closure,
+    map_closure_root_to_snapshot,
+    snapshot_executable_closure,
 )
-from .executable_config import parseInstalledPluginRecord, parseMcpServerConfigList
+from .executable_config import parse_installed_plugin_record, parse_mcp_server_config_list
 from .repository_trust import (
-    approveRepositoryContent,
-    checkRepositoryApproval,
-    resolveRepositoryIdentity,
+    approve_repository_content,
+    check_repository_approval,
+    resolve_repository_identity,
 )
 from ..storage.json_io import resolve_maybe_relative
 from ..runtime.secrets import assert_no_literal_mcp_secrets, migrate_legacy_mcp_server_secrets
@@ -37,7 +37,7 @@ class ExecutableSourceTrustError(PermissionError):
         self.scope = scope
 
 
-def parseSettingSources(raw: str | list[str] | tuple[str, ...] | None) -> list[str]:
+def parse_setting_sources(raw: str | list[str] | tuple[str, ...] | None) -> list[str]:
     if raw is None:
         return list(SETTING_SOURCES)
     parts = (
@@ -61,7 +61,7 @@ def _stable(value: Any) -> Any:
     return value
 
 
-def executableConfigDigest(value: Any) -> str:
+def executable_config_digest(value: Any) -> str:
     payload = json.dumps(
         {"version": 1, "value": _stable(value)},
         separators=(",", ":"),
@@ -70,7 +70,7 @@ def executableConfigDigest(value: Any) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def selectMcpBootstrapServers(
+def select_mcp_bootstrap_servers(
     policy: dict[str, Any] | None,
     explicitAndSelected: list[dict[str, Any]],
     pluginServers: list[dict[str, Any]],
@@ -87,7 +87,7 @@ def _normalized_mcp_records(scope: str, records: Any) -> list[dict[str, Any]]:
         raise ValueError(f"Invalid {scope} MCP configuration: expected an array")
     return [
         {**record, "scope": scope}
-        for record in parseMcpServerConfigList(records, f"{scope}.mcp")
+        for record in parse_mcp_server_config_list(records, f"{scope}.mcp")
     ]
 
 
@@ -103,7 +103,7 @@ async def _load_scoped_mcp_records(scope: str, cwd: str) -> list[dict[str, Any]]
 
 
 async def _mcp_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -> dict[str, Any]:
-    repository = await resolveRepositoryIdentity(cwd)
+    repository = await resolve_repository_identity(cwd)
     roots: list[str] = []
     bindings: list[dict[str, Any]] = []
     for record_index, record in enumerate(records):
@@ -139,20 +139,20 @@ async def _mcp_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -> d
             "cwd": cwd,
             "family": "mcp",
             "scope": scope,
-            "descriptorDigest": executableConfigDigest(records),
+            "descriptorDigest": executable_config_digest(records),
             "roots": roots,
         },
         "bindings": bindings,
     }
 
 
-async def inspectMcpSourceTrust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def inspect_mcp_source_trust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     cwd, scope = str(args["cwd"]), str(args["scope"])
     records = await _load_scoped_mcp_records(scope, cwd)
     closure = await _mcp_closure(cwd, scope, records)
-    inspection = await inspectExecutableClosure(closure["spec"])
-    approved = not records or await checkRepositoryApproval(
+    inspection = await inspect_executable_closure(closure["spec"])
+    approved = not records or await check_repository_approval(
         cwd=cwd,
         family="mcp",
         scope=scope,
@@ -166,10 +166,10 @@ async def inspectMcpSourceTrust(args: dict[str, Any] | None = None, **kwargs: An
     }
 
 
-async def approveMcpSource(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def approve_mcp_source(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    current = await inspectMcpSourceTrust(args)
-    await approveRepositoryContent(
+    current = await inspect_mcp_source_trust(args)
+    await approve_repository_content(
         cwd=args["cwd"],
         family="mcp",
         scope=args["scope"],
@@ -178,29 +178,29 @@ async def approveMcpSource(args: dict[str, Any] | None = None, **kwargs: Any) ->
     return {**current, "approved": True}
 
 
-async def loadSelectedMcpServers(
+async def load_selected_mcp_servers(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> list[dict[str, Any]]:
     args = {**(args or {}), **kwargs}
     cwd = str(args["cwd"])
     selected: list[dict[str, Any]] = []
-    for scope in parseSettingSources(args.get("sources")):
+    for scope in parse_setting_sources(args.get("sources")):
         records = await _load_scoped_mcp_records(scope, cwd)
         if scope != "user" and records:
             closure = await _mcp_closure(cwd, scope, records)
-            inspection = await inspectExecutableClosure(closure["spec"])
-            if not await checkRepositoryApproval(
+            inspection = await inspect_executable_closure(closure["spec"])
+            if not await check_repository_approval(
                 cwd=cwd,
                 family="mcp",
                 scope=scope,
                 contentDigest=inspection["digest"],
             ):
                 raise ExecutableSourceTrustError("mcp", scope)
-            snapshot = await snapshotExecutableClosure(
+            snapshot = await snapshot_executable_closure(
                 spec=closure["spec"], expectedDigest=inspection["digest"]
             )
             for binding in closure["bindings"]:
-                replacement = mapClosureRootToSnapshot(snapshot, binding["sourcePath"])
+                replacement = map_closure_root_to_snapshot(snapshot, binding["sourcePath"])
                 if replacement is None:
                     raise RuntimeError("Executable closure snapshot omitted an MCP path binding")
                 record = records[binding["recordIndex"]]
@@ -220,7 +220,7 @@ def _normalized_plugins(scope: str, records: Any) -> list[dict[str, Any]]:
         source = dict(value) if isinstance(value, dict) else value
         if isinstance(source, dict):
             source["scope"] = scope
-        result.append(parseInstalledPluginRecord(source, f"{scope}.plugins[{index}]"))
+        result.append(parse_installed_plugin_record(source, f"{scope}.plugins[{index}]"))
     return result
 
 
@@ -240,21 +240,21 @@ async def _plugin_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -
             "cwd": cwd,
             "family": "plugin",
             "scope": scope,
-            "descriptorDigest": executableConfigDigest([record for record in records if record.get("enabled")]),
+            "descriptorDigest": executable_config_digest([record for record in records if record.get("enabled")]),
             "roots": roots,
         },
         "sourcePaths": source_paths,
     }
 
 
-async def inspectPluginSourceTrust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def inspect_plugin_source_trust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     cwd, scope = str(args["cwd"]), str(args["scope"])
     records = _normalized_plugins(scope, await load_plugins(scope, cwd))
     enabled = [record for record in records if record.get("enabled")]
     closure = await _plugin_closure(cwd, scope, records)
-    inspection = await inspectExecutableClosure(closure["spec"])
-    approved = not enabled or await checkRepositoryApproval(
+    inspection = await inspect_executable_closure(closure["spec"])
+    approved = not enabled or await check_repository_approval(
         cwd=cwd,
         family="plugin",
         scope=scope,
@@ -268,10 +268,10 @@ async def inspectPluginSourceTrust(args: dict[str, Any] | None = None, **kwargs:
     }
 
 
-async def approvePluginSource(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def approve_plugin_source(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    current = await inspectPluginSourceTrust(args)
-    await approveRepositoryContent(
+    current = await inspect_plugin_source_trust(args)
+    await approve_repository_content(
         cwd=args["cwd"],
         family="plugin",
         scope=args["scope"],
@@ -280,28 +280,28 @@ async def approvePluginSource(args: dict[str, Any] | None = None, **kwargs: Any)
     return {**current, "approved": True}
 
 
-async def loadSelectedPluginRecords(
+async def load_selected_plugin_records(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> list[dict[str, Any]]:
     args = {**(args or {}), **kwargs}
     cwd = str(args["cwd"])
     result: list[dict[str, Any]] = []
-    for scope in parseSettingSources(args.get("sources")):
+    for scope in parse_setting_sources(args.get("sources")):
         records = _normalized_plugins(scope, await load_plugins(scope, cwd))
         enabled = [record for record in records if record.get("enabled")]
         if scope == "user" or not enabled:
             result.extend(records)
             continue
         closure = await _plugin_closure(cwd, scope, records)
-        inspection = await inspectExecutableClosure(closure["spec"])
-        if not await checkRepositoryApproval(
+        inspection = await inspect_executable_closure(closure["spec"])
+        if not await check_repository_approval(
             cwd=cwd,
             family="plugin",
             scope=scope,
             contentDigest=inspection["digest"],
         ):
             raise ExecutableSourceTrustError("plugin", scope)
-        snapshot = await snapshotExecutableClosure(
+        snapshot = await snapshot_executable_closure(
             spec=closure["spec"], expectedDigest=inspection["digest"]
         )
         for index, record in enumerate(records):
@@ -309,7 +309,7 @@ async def loadSelectedPluginRecords(
             if not record.get("enabled") or not canonical:
                 result.append(record)
                 continue
-            replacement = mapClosureRootToSnapshot(snapshot, canonical)
+            replacement = map_closure_root_to_snapshot(snapshot, canonical)
             if replacement is None:
                 raise RuntimeError("Executable closure snapshot omitted a plugin path binding")
             result.append({**record, "source": replacement})

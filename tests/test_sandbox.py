@@ -75,11 +75,11 @@ class SandboxTests(AgentCoreTestCase):
     def test_resolve_config_defaults_sandbox_off_and_accepts_overrides(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            default_config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
+            default_config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
             self.assertEqual(default_config["sandbox"], {"mode": "off"})
 
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "provider": "openai",
                         "runtimeHome": str(home),
@@ -190,7 +190,7 @@ class SandboxTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def _bash_fixture(self, home, workspace, sandbox):
-        config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions", "sandbox": sandbox}, str(workspace)))
+        config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions", "sandbox": sandbox}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
         bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
         return config, session, bash, []

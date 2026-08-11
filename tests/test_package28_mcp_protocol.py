@@ -191,7 +191,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
                 "close": lambda: None,
             }
             with tempfile.TemporaryDirectory(prefix="agent-core-p28-catalog-bootstrap-") as cwd:
-                config = await core.resolveConfig(
+                config = await core.resolve_config(
                     {"provider": "openai", "runtimeHome": cwd, "permissionMode": "bypassPermissions"},
                     cwd,
                 )

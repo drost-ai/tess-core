@@ -450,11 +450,11 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                     failures,
                 )
 
-        from ..config._knobs import knobValue
+        from ..config._knobs import knob_value
 
         await run_with_runtime_paths(
             paths,
-            lambda: lifecycle.close(cleanup=cleanup, fail_after_ms=int(knobValue("runtime.close_failure_ms"))),
+            lambda: lifecycle.close(cleanup=cleanup, fail_after_ms=int(knob_value("runtime.close_failure_ms"))),
         )
     runtime_api.update(
         {

@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from ..sandbox import prepareSandboxedArgv
-from ..authority.shell_command_policy import classifyReadOnlyShellCommand
+from ..authority.shell_command_policy import classify_read_only_shell_command
 from ..tools.permissions import _ensure_tool_permission, _get_effective_permission_mode
 
 
@@ -156,7 +156,7 @@ async def authorize_health_check_spec(
         wrapped = launch["argv"]
         prefix = wrapped[: -len(base_argv)] if len(wrapped) >= len(base_argv) and wrapped[-len(base_argv) :] == base_argv else []
         sandbox = _sandbox_snapshot(launch, prefix)
-        classification = classifyReadOnlyShellCommand(spec["command"])
+        classification = classify_read_only_shell_command(spec["command"])
         shell_policy = {
             "safe": bool(classification.get("safe")),
             "reason": str(classification.get("reason") or "unclassified"),

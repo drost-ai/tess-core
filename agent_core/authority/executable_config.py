@@ -188,7 +188,7 @@ def _canonical_http_url(value: Any, field: str) -> str:
     return urlunsplit((parsed.scheme.lower(), netloc, path, parsed.query, ""))
 
 
-def parseMcpServerConfig(value: Any, field: str = "mcp") -> dict[str, Any]:
+def parse_mcp_server_config(value: Any, field: str = "mcp") -> dict[str, Any]:
     source = _json_object(value, field)
     name = _identifier(source.get("name"), f"{field}.name")
     transport = source.get("transport")
@@ -234,9 +234,9 @@ def parseMcpServerConfig(value: Any, field: str = "mcp") -> dict[str, Any]:
     return result
 
 
-def parseMcpServerConfigList(value: Any, field: str = "mcp") -> list[dict[str, Any]]:
+def parse_mcp_server_config_list(value: Any, field: str = "mcp") -> list[dict[str, Any]]:
     values = value if isinstance(value, list) else [value]
-    result = [parseMcpServerConfig(entry, f"{field}[{index}]") for index, entry in enumerate(values)]
+    result = [parse_mcp_server_config(entry, f"{field}[{index}]") for index, entry in enumerate(values)]
     names: set[str] = set()
     for server in result:
         key = server["name"].lower()
@@ -289,7 +289,7 @@ def _commands(value: Any, field: str) -> list[dict[str, Any]] | None:
     return result
 
 
-def parsePluginManifestV1(value: Any, field: str = "plugin") -> dict[str, Any]:
+def parse_plugin_manifest_v1(value: Any, field: str = "plugin") -> dict[str, Any]:
     source = _json_object(value, field)
     plugin_id = _identifier(source.get("id", source.get("name")), f"{field}.id")
     version = _required_string(source.get("version"), f"{field}.version")
@@ -307,21 +307,21 @@ def parsePluginManifestV1(value: Any, field: str = "plugin") -> dict[str, Any]:
     if capabilities is not None:
         result["capabilities"] = capabilities
     if source.get("mcpServers") is not None:
-        result["mcpServers"] = parseMcpServerConfigList(source["mcpServers"], f"{field}.mcpServers")
+        result["mcpServers"] = parse_mcp_server_config_list(source["mcpServers"], f"{field}.mcpServers")
     commands = _commands(source.get("commands"), f"{field}.commands")
     if commands is not None:
         result["commands"] = commands
     return result
 
 
-def parseInstalledPluginRecord(value: Any, field: str = "installedPlugin") -> dict[str, Any]:
+def parse_installed_plugin_record(value: Any, field: str = "installedPlugin") -> dict[str, Any]:
     source = _object(value, field)
     if source.get("enabled") not in {True, False}:
         _fail(f"{field}.enabled", "expected a boolean")
     if source.get("scope") not in {"user", "project", "local"}:
         _fail(f"{field}.scope", "expected user, project, or local")
     return {
-        "manifest": parsePluginManifestV1(source.get("manifest"), f"{field}.manifest"),
+        "manifest": parse_plugin_manifest_v1(source.get("manifest"), f"{field}.manifest"),
         "enabled": source["enabled"],
         "scope": source["scope"],
         "installedAt": _updated_at(source.get("installedAt"), f"{field}.installedAt"),
@@ -329,12 +329,12 @@ def parseInstalledPluginRecord(value: Any, field: str = "installedPlugin") -> di
     }
 
 
-def parseMarketplaceManifest(value: Any, field: str = "marketplace") -> dict[str, Any]:
+def parse_marketplace_manifest(value: Any, field: str = "marketplace") -> dict[str, Any]:
     source = _json_object(value, field)
     plugins = source.get("plugins")
     if not isinstance(plugins, list):
         return _fail(f"{field}.plugins", "expected an array")
-    parsed = [parsePluginManifestV1(entry, f"{field}.plugins[{index}]") for index, entry in enumerate(plugins)]
+    parsed = [parse_plugin_manifest_v1(entry, f"{field}.plugins[{index}]") for index, entry in enumerate(plugins)]
     ids: set[str] = set()
     for plugin in parsed:
         key = plugin["id"].lower()

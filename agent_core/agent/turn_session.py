@@ -10,8 +10,8 @@ from ..runtime.agent_bindings import (
     materialize_agent_execution_runtime,
 )
 from ..config import (
-    ensureProviderForModelSelection,
-    resolveFallbackProviderProfileName,
+    ensure_provider_for_model_selection,
+    resolve_fallback_provider_profile_name,
 )
 from ..providers.turn_session import create_provider_turn_session
 from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths, run_with_runtime_paths
@@ -51,7 +51,7 @@ def resolve_effective_provider_turn_binding(
     session = args["session"]
     config = args["config"]
     active_model = args.get("modelOverride") or session["model"]
-    effective_provider = ensureProviderForModelSelection(
+    effective_provider = ensure_provider_for_model_selection(
         session.get("provider") or config["provider"],
         active_model,
         config["provider"],
@@ -61,7 +61,7 @@ def resolve_effective_provider_turn_binding(
         if isinstance(config.get("providerProfiles"), dict)
         else {}
     )
-    profile_name = resolveFallbackProviderProfileName(
+    profile_name = resolve_fallback_provider_profile_name(
         effective_provider,
         profiles,
         session.get("providerProfileName") or config.get("providerProfileName"),

@@ -10,9 +10,9 @@ blocked child always unblocks.
 from __future__ import annotations
 
 def _knob(name: str):
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return knobValue(name)
+    return knob_value(name)
 
 
 from typing import Any

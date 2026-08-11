@@ -48,7 +48,7 @@ from .async_request import (
 
 async def send_anthropic_messages_request(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     # Call-time import: the config package imports providers at module load.
-    from ...config._knobs import knobValue
+    from ...config._knobs import knob_value
 
     args = {**(args or {}), **kwargs}
     config = await resolve_provider_config_secrets(args["config"])
@@ -59,7 +59,7 @@ async def send_anthropic_messages_request(args: dict[str, Any] | None = None, **
     timeout_ms = int(
         args.get("streamIdleTimeoutMs" if stream else "jsonResponseTimeoutMs")
         or args.get("requestStartTimeoutMs")
-        or knobValue("provider.stream_idle_timeout_ms" if stream else "provider.json_response_timeout_ms")
+        or knob_value("provider.stream_idle_timeout_ms" if stream else "provider.json_response_timeout_ms")
     )
     envelope = build_anthropic_messages_envelope(request, config, {"stream": stream})
     last_failure = None

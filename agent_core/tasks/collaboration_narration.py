@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ..config import ensureProviderForModelSelection, normalizeEffortForModel
+from ..config import ensure_provider_for_model_selection, normalize_effort_for_model
 from ..providers.anthropic import send_anthropic_messages_request
 from ..providers.openai import send_openai_request
 from ..runtime.secret_provider import resolve_provider_config_secrets
@@ -23,14 +23,14 @@ async def author_collaboration_update_with_provider(args: dict[str, Any]) -> str
     config = args.get("config") or {}
     session = args.get("session") or {}
     worker = args.get("worker") or {}
-    provider = ensureProviderForModelSelection(
+    provider = ensure_provider_for_model_selection(
         session.get("provider") or config.get("provider"),
         session.get("model"),
         config.get("provider", "openai"),
     )
     request = {
         "model": session.get("model"),
-        "effort": normalizeEffortForModel(
+        "effort": normalize_effort_for_model(
             provider,
             session.get("model"),
             session.get("effort") or config.get("effort"),

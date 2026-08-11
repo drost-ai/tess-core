@@ -4,7 +4,7 @@ from tests.support.agent_core_case import *
 
 from tests.test_mcp_interop_quickwins import _stdio_error_config, _write_error_fixture
 
-from agent_core.authority.permission_rules import clearPermissionRulesCache
+from agent_core.authority.permission_rules import clear_permission_rules_cache
 from agent_core.tools.permissions import _resolve_tool_permission
 
 
@@ -12,7 +12,7 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
     def test_mcp_category_resolution_by_mode(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             context = {"session": session, "config": config, "interactive": False, "cwd": str(workspace)}
             cases = [
@@ -34,7 +34,7 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
     def test_mcp_rules_match_tool_and_server_prefix(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             cases = [
                 ({"allow": ["mcp__srv__tool"]}, "default", "allow", "rule:inline"),
@@ -56,7 +56,7 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
             ]
             for permissions, mode, decision, source in cases:
                 with self.subTest(permissions=permissions, mode=mode):
-                    clearPermissionRulesCache()
+                    clear_permission_rules_cache()
                     scoped_config = {**config, "inlineSettings": json.dumps({"permissions": permissions})}
                     context = {"session": session, "config": scoped_config, "interactive": False, "cwd": str(workspace)}
                     resolved = run(_resolve_tool_permission(context, "mcp__srv__tool", "mcp", mode, False, None))
@@ -80,7 +80,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
         return runtime, pid_tool
 
     def _context(self, workspace: Path, home: Path, mode: str, **overrides):
-        config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": mode}, str(workspace)))
+        config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": mode}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=mode)
         return {
             "session": session,
@@ -97,7 +97,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         runtime = None
         try:
-            clearPermissionRulesCache()
+            clear_permission_rules_cache()
             runtime, pid_tool = self._runtime_and_tool(workspace)
 
             # Default mode, non-interactive: blocked before the server runs.
@@ -145,7 +145,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
             )
 
             # A deny rule blocks even bypassPermissions.
-            clearPermissionRulesCache()
+            clear_permission_rules_cache()
             deny_context = self._context(workspace, home, "bypassPermissions")
             deny_context["config"] = {
                 **deny_context["config"],
@@ -155,7 +155,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
                 run(pid_tool.handler({}, deny_context))
             self.assertIn("mcp__errors", str(denied.exception))
         finally:
-            clearPermissionRulesCache()
+            clear_permission_rules_cache()
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)

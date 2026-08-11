@@ -10,6 +10,6 @@ from typing import Any
 
 
 def provider_knob(name: str) -> Any:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return knobValue(name)
+    return knob_value(name)

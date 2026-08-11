@@ -226,9 +226,9 @@ def derive_tool_payload_class(config: dict[str, Any]) -> str:
 def get_tool_payload_policy(config: dict[str, Any]) -> dict[str, int]:
     cls = derive_tool_payload_class(config)
     policy = dict(TOOL_PAYLOAD_POLICIES[cls])
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    text_bytes = int(knobValue(f"payloads.text_inline_bytes_{cls}"))
+    text_bytes = int(knob_value(f"payloads.text_inline_bytes_{cls}"))
     policy.update({
         "textInlineBytes": text_bytes,
         # Line caps are backstops; the byte budget is the binding
@@ -236,9 +236,9 @@ def get_tool_payload_policy(config: dict[str, Any]) -> dict[str, int]:
         "textInlineLines": max(1, text_bytes // 20),
         "textHeadLines": max(1, text_bytes // 80),
         "textTailLines": max(1, text_bytes // 40),
-        "readInlineBytes": int(knobValue(f"payloads.read_inline_bytes_{cls}")),
-        "globInlineBytes": int(knobValue(f"payloads.glob_inline_bytes_{cls}")),
-        "grepInlineBytes": int(knobValue(f"payloads.grep_inline_bytes_{cls}")),
+        "readInlineBytes": int(knob_value(f"payloads.read_inline_bytes_{cls}")),
+        "globInlineBytes": int(knob_value(f"payloads.glob_inline_bytes_{cls}")),
+        "grepInlineBytes": int(knob_value(f"payloads.grep_inline_bytes_{cls}")),
     })
     return policy
 

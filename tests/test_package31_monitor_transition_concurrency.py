@@ -7,7 +7,7 @@ from agent_core._utils import now_iso
 class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
     def _session(self, home: Path, workspace: Path):
         config = run(
-            core.resolveConfig(
+            core.resolve_config(
                 {
                     "provider": "openai",
                     "runtimeHome": str(home),

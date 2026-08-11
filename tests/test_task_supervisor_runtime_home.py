@@ -30,7 +30,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             )
             os.environ.pop("AGENT_CORE_TEST_MISSING_OPENAI_KEY", None)
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "provider": "openai-codex",
                         "settings": str(settings_path),
@@ -64,7 +64,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             child["metadata"]["agentId"] = "agent-runtime-home"
             child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
             child_authority = run(
-                core.captureAgentAuthority(
+                core.capture_agent_authority(
                     config=config,
                     session=child,
                     tools=core.create_builtin_tools(),

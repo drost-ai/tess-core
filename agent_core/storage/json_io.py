@@ -47,9 +47,9 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
 # successful mutation must never have raced through an unlocked fallback.
 def _storage_lock_timeout_ms() -> int:
     # Call-time import: config resolution imports storage at load.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("storage.lock_timeout_ms"))
+    return int(knob_value("storage.lock_timeout_ms"))
 
 _LOCK_OBSERVERS: list[Callable[[dict[str, Any]], Any]] = []
 

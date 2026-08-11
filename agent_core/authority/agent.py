@@ -6,9 +6,9 @@ import json
 import os
 from typing import Any
 
-from .executable_source_policy import executableConfigDigest, loadSelectedPluginRecords
-from .hooks import loadHooks
-from .permission_rules import loadPermissionRulesCached
+from .executable_source_policy import executable_config_digest, load_selected_plugin_records
+from .hooks import load_hooks
+from .permission_rules import load_permission_rules_cached
 from ..sandbox import resolveSandboxPolicy
 from ..storage import get_project_root
 
@@ -38,7 +38,7 @@ def _digest(value: Any) -> str:
     ).hexdigest()
 
 
-def fingerprintAgentAuthority(authority: dict[str, Any]) -> str:
+def fingerprint_agent_authority(authority: dict[str, Any]) -> str:
     without = {key: value for key, value in authority.items() if key != "fingerprint"}
     return _digest({"authority_version": 1, "authority": without})
 
@@ -47,14 +47,14 @@ def _prompt_policy(mode: str) -> str:
     return "policy_ask" if mode in {"default", "acceptEdits"} else "never_ask"
 
 
-def assertValidAgentAuthority(authority: Any) -> None:
+def assert_valid_agent_authority(authority: Any) -> None:
     if not isinstance(authority, dict) or authority.get("version") != 1 or not authority.get("fingerprint"):
         raise AgentAuthorityError(
             "child_authority_invalid",
             "record",
             "Child authority record is missing or uses an unsupported version.",
         )
-    if fingerprintAgentAuthority(authority) != authority["fingerprint"]:
+    if fingerprint_agent_authority(authority) != authority["fingerprint"]:
         raise AgentAuthorityError(
             "child_authority_invalid",
             "fingerprint",
@@ -74,7 +74,7 @@ def assertValidAgentAuthority(authority: Any) -> None:
         )
 
 
-async def canonicalizeAuthorityPath(candidate: str, label: str = "Authority path") -> str:
+async def canonicalize_authority_path(candidate: str, label: str = "Authority path") -> str:
     if not os.path.exists(candidate):
         raise AgentAuthorityError(
             "child_authority_invalid",
@@ -91,16 +91,16 @@ def _contained(root: str, candidate: str) -> bool:
         return False
 
 
-def isPathWithinAuthority(authority: dict[str, Any], candidate: str) -> bool:
+def is_path_within_authority(authority: dict[str, Any], candidate: str) -> bool:
     return any(_contained(root, candidate) for root in authority.get("readableRoots") or [])
 
 
-async def assertPathWithinAgentAuthority(
+async def assert_path_within_agent_authority(
     authority: dict[str, Any], candidate: str, label: str = "Child path"
 ) -> str:
-    assertValidAgentAuthority(authority)
-    canonical = await canonicalizeAuthorityPath(candidate, label)
-    if not isPathWithinAuthority(authority, canonical):
+    assert_valid_agent_authority(authority)
+    canonical = await canonicalize_authority_path(candidate, label)
+    if not is_path_within_authority(authority, canonical):
         raise AgentAuthorityError(
             "child_authority_escalation",
             "roots",
@@ -109,7 +109,7 @@ async def assertPathWithinAgentAuthority(
     return canonical
 
 
-def meetPermissionModes(left: str, right: str) -> str:
+def meet_permission_modes(left: str, right: str) -> str:
     if left not in _VALID_MODES or right not in _VALID_MODES:
         raise AgentAuthorityError("child_authority_invalid", "mode", "Unknown permission mode.")
     if left == right:
@@ -164,7 +164,7 @@ def _sandbox_authority(config: dict[str, Any], session: dict[str, Any], mode: st
     return authority, writable
 
 
-def sandboxConfigForAgentAuthority(authority: dict[str, Any]) -> dict[str, Any]:
+def sandbox_config_for_agent_authority(authority: dict[str, Any]) -> dict[str, Any]:
     """Return a Python sandbox config pinned to an effective authority."""
 
     sandbox = authority["sandbox"]
@@ -187,18 +187,18 @@ def _tool_name(tool: Any) -> str | None:
     return getattr(tool, "name", None) or (tool.get("name") if isinstance(tool, dict) else None)
 
 
-async def captureAgentAuthority(
+async def capture_agent_authority(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     config, session, tools = args["config"], args["session"], args.get("tools") or []
     existing = (session.get("metadata") or {}).get("effectiveAgentAuthority")
     if existing:
-        assertValidAgentAuthority(existing)
+        assert_valid_agent_authority(existing)
         return existing
     mode = session.get("permissionMode") or config.get("permissionMode") or "default"
     roots = [session["cwd"], *(config.get("allowedRoots") or [])]
-    readable = sorted({await canonicalizeAuthorityPath(root, "Agent root") for root in roots})
+    readable = sorted({await canonicalize_authority_path(root, "Agent root") for root in roots})
     sandbox, writable = _sandbox_authority(config, session, mode)
     configured = set(config.get("tools") or [])
     allowed = set(config.get("allowedTools") or [])
@@ -214,12 +214,12 @@ async def captureAgentAuthority(
         }
     )
     settings_sources = list(config.get("settingsSources") or ["user"])
-    permission_rules = await loadPermissionRulesCached(
+    permission_rules = await load_permission_rules_cached(
         cwd=session["cwd"],
         sources=settings_sources,
         inlineSettings=config.get("inlineSettings"),
     )
-    hooks = await loadHooks(cwd=session["cwd"], sources=settings_sources)
+    hooks = await load_hooks(cwd=session["cwd"], sources=settings_sources)
     plugin_dirs = sorted({os.path.abspath(path) for path in config.get("pluginDirs") or []})
     executable_sources = {
         "settingsSources": settings_sources,
@@ -229,12 +229,12 @@ async def captureAgentAuthority(
             else {}
         ),
         "mcpConfig": copy.deepcopy(config.get("mcpConfig") or []),
-        "mcpConfigDigest": executableConfigDigest(config.get("mcpConfig") or []),
+        "mcpConfigDigest": executable_config_digest(config.get("mcpConfig") or []),
         "mcpConfigPolicy": copy.deepcopy(config.get("mcpConfigPolicy") or {"mode": "merged"}),
         "pluginDirs": plugin_dirs,
-        "pluginDirsDigest": executableConfigDigest(plugin_dirs),
+        "pluginDirsDigest": executable_config_digest(plugin_dirs),
         "pluginRecords": copy.deepcopy(
-            await loadSelectedPluginRecords(cwd=session["cwd"], sources=settings_sources)
+            await load_selected_plugin_records(cwd=session["cwd"], sources=settings_sources)
         ),
     }
     authority = {
@@ -252,7 +252,7 @@ async def captureAgentAuthority(
         "maySpawnChildren": "Agent" in enabled,
         "fingerprint": "",
     }
-    authority["fingerprint"] = fingerprintAgentAuthority(authority)
+    authority["fingerprint"] = fingerprint_agent_authority(authority)
     return authority
 
 
@@ -264,8 +264,8 @@ def _includes_policy(entries: list[Any], candidate: Any) -> bool:
     )
 
 
-def isNoMorePermissive(child: dict[str, Any], parent: dict[str, Any]) -> bool:
-    if meetPermissionModes(child["mode"], parent["mode"]) != child["mode"]:
+def is_no_more_permissive(child: dict[str, Any], parent: dict[str, Any]) -> bool:
+    if meet_permission_modes(child["mode"], parent["mode"]) != child["mode"]:
         return False
     if any(tool not in parent.get("enabledTools", []) for tool in child.get("enabledTools", [])):
         return False
@@ -305,12 +305,12 @@ def isNoMorePermissive(child: dict[str, Any], parent: dict[str, Any]) -> bool:
     return _digest(child.get("executableSources")) == _digest(parent.get("executableSources"))
 
 
-def deriveChildAgentAuthority(
+def derive_child_agent_authority(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     parent = args["parent"]
-    assertValidAgentAuthority(parent)
+    assert_valid_agent_authority(parent)
     if not parent.get("maySpawnChildren") or "Agent" not in parent.get("enabledTools", []):
         raise AgentAuthorityError(
             "child_authority_escalation", "spawn", "Parent authority does not permit spawning child agents."
@@ -324,7 +324,7 @@ def deriveChildAgentAuthority(
             f"Child requested tools outside parent authority: {', '.join(unavailable)}",
         )
     requested_mode = args.get("requestedMode") or parent["mode"]
-    mode = meetPermissionModes(parent["mode"], requested_mode)
+    mode = meet_permission_modes(parent["mode"], requested_mode)
     reductions = []
     if mode != requested_mode:
         reductions.append(f"permission mode reduced from {requested_mode} to {mode}")
@@ -349,8 +349,8 @@ def deriveChildAgentAuthority(
         }
     )
     authority["sandbox"] = {**parent["sandbox"], "filesystem": filesystem}
-    authority["fingerprint"] = fingerprintAgentAuthority(authority)
-    if not isNoMorePermissive(authority, parent):
+    authority["fingerprint"] = fingerprint_agent_authority(authority)
+    if not is_no_more_permissive(authority, parent):
         raise AgentAuthorityError(
             "child_authority_invalid",
             "meet",
@@ -371,11 +371,11 @@ def deriveChildAgentAuthority(
         if authority["sandbox"]["filesystem"] != "read-only":
             authority["writableRoots"] = sorted({*authority["writableRoots"], *granted})
         authority["fingerprint"] = ""
-        authority["fingerprint"] = fingerprintAgentAuthority(authority)
+        authority["fingerprint"] = fingerprint_agent_authority(authority)
     return {"authority": authority, "reductions": reductions}
 
 
-async def enforceSessionAgentAuthority(
+async def enforce_session_agent_authority(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any] | None:
     args = {**(args or {}), **kwargs}
@@ -390,9 +390,9 @@ async def enforceSessionAgentAuthority(
                 "Legacy child session has no persisted effective authority; resume is blocked until a parent-authority intersection is recorded.",
             )
         return None
-    assertValidAgentAuthority(authority)
-    cwd = await canonicalizeAuthorityPath(session["cwd"], "Child working directory")
-    if not isPathWithinAuthority(authority, cwd):
+    assert_valid_agent_authority(authority)
+    cwd = await canonicalize_authority_path(session["cwd"], "Child working directory")
+    if not is_path_within_authority(authority, cwd):
         raise AgentAuthorityError(
             "child_authority_escalation", "roots", "Child working directory is outside persisted parent roots."
         )
@@ -404,7 +404,7 @@ async def enforceSessionAgentAuthority(
             "tools": list(authority["enabledTools"]),
             "allowedTools": list(authority["enabledTools"]),
             "disallowedTools": [],
-            "sandbox": sandboxConfigForAgentAuthority(authority),
+            "sandbox": sandbox_config_for_agent_authority(authority),
             "settingsSources": list(authority["executableSources"]["settingsSources"]),
             "mcpConfig": copy.deepcopy(authority["executableSources"]["mcpConfig"]),
             "mcpConfigPolicy": copy.deepcopy(authority["executableSources"]["mcpConfigPolicy"]),
@@ -417,7 +417,7 @@ async def enforceSessionAgentAuthority(
     return authority
 
 
-def assertMatchingPersistedChildAuthorities(
+def assert_matching_persisted_child_authorities(
     sessionAuthority: dict[str, Any] | None, recordAuthority: dict[str, Any] | None
 ) -> None:
     if not sessionAuthority or not recordAuthority:
@@ -426,8 +426,8 @@ def assertMatchingPersistedChildAuthorities(
             "record",
             "Background child launch requires matching persisted session and child-record authority.",
         )
-    assertValidAgentAuthority(sessionAuthority)
-    assertValidAgentAuthority(recordAuthority)
+    assert_valid_agent_authority(sessionAuthority)
+    assert_valid_agent_authority(recordAuthority)
     if sessionAuthority["fingerprint"] != recordAuthority["fingerprint"]:
         raise AgentAuthorityError(
             "child_authority_invalid",
@@ -436,7 +436,7 @@ def assertMatchingPersistedChildAuthorities(
         )
 
 
-def filterToolsForAgentAuthority(tools: list[Any], authority: dict[str, Any] | None) -> list[Any]:
+def filter_tools_for_agent_authority(tools: list[Any], authority: dict[str, Any] | None) -> list[Any]:
     if not authority:
         return tools
     allowed = set(authority["enabledTools"])

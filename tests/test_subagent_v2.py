@@ -7,7 +7,7 @@ class SubagentV2Tests(AgentCoreTestCase):
     def test_agent_runtime_contract_persists_and_validates_structured_foreground_result(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
             config["tools"] = ["Read", "Grep", "Agent"]
             config["agents"] = {
                 "researcher": {
@@ -86,7 +86,7 @@ class SubagentV2Tests(AgentCoreTestCase):
     def test_run_agent_prompt_filters_subagent_tools_before_dispatch(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             config["sessionPersistence"] = False
             config["tools"] = ["AllowedTool", "BlockedTool"]
             config["allowedTools"] = ["AllowedTool", "BlockedTool"]
@@ -144,7 +144,7 @@ class SubagentV2Tests(AgentCoreTestCase):
     def test_run_agent_prompt_enforces_subagent_max_tool_calls_after_allowed_call(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             config["sessionPersistence"] = False
             config["tools"] = ["AllowedTool"]
             config["allowedTools"] = ["AllowedTool"]
@@ -201,7 +201,7 @@ class SubagentV2Tests(AgentCoreTestCase):
     def test_task_mailbox_delivers_once_and_records_events(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["subagentTaskId"] = "task-mailbox"
             run(core.write_task_meta("task-mailbox", {"type": "subagent", "task_id": "task-mailbox", "session_id": session["id"], "status": "running", "startedAt": session["createdAt"], "outputFile": core.task_output_path("task-mailbox")}))
@@ -221,7 +221,7 @@ class SubagentV2Tests(AgentCoreTestCase):
         # not a claim that the final API contract is settled.
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.write_task_meta("task-contract-pin", {"type": "subagent", "task_id": "task-contract-pin", "session_id": session["id"], "status": "running", "startedAt": "2026-07-05T00:00:00Z", "outputFile": core.task_output_path("task-contract-pin")}))
             message = run(
@@ -288,7 +288,7 @@ class SubagentV2Tests(AgentCoreTestCase):
     def test_ask_user_question_creates_durable_child_question_when_allowed(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["subagentTaskId"] = "task-question"
             session["metadata"]["subagentRuntimeContract"] = {"communication": {"allowChildQuestions": True, "maxPendingQuestions": 1}}
@@ -329,7 +329,7 @@ class SubagentV2Tests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["parentSessionId"] = "parent-bg"
             session["metadata"]["subagentRuntimeContract"] = {

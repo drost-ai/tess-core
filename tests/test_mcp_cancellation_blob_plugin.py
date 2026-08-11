@@ -141,7 +141,7 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
                 ),
                 encoding="utf-8",
             )
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]}, str(workspace)))
             config["mcpConfig"] = [{"name": "shared", "transport": "http", "commandOrUrl": "http://127.0.0.1:1/broken", "updatedAt": "now"}]
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False}))

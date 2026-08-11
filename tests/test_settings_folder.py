@@ -97,13 +97,13 @@ class SettingsFolderTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_fragment_knobs_reach_knob_values_via_resolve_config(self):
-        from agent_core.config._knobs import knobValue
+        from agent_core.config._knobs import knob_value
 
         root, home, workspace, previous = self.temp_context()
         try:
             _write(home / "settings" / "config" / "subagents.yaml", "knobs:\n  subagents:\n    max_live: 3\n")
-            run(core.resolveConfig({"provider": "openai"}, str(workspace)))
-            self.assertEqual(knobValue("subagents.max_live"), 3)
+            run(core.resolve_config({"provider": "openai"}, str(workspace)))
+            self.assertEqual(knob_value("subagents.max_live"), 3)
         finally:
             self.restore_home(root, previous)
 
@@ -206,7 +206,7 @@ class SettingsFolderTests(AgentCoreTestCase):
                 "      envVar: FOLDER_TEST_KEY\n",
             )
             _write(home / "settings" / ".env", "FOLDER_TEST_KEY=sk-test\n")
-            config = run(core.resolveConfig({}, str(workspace)))
+            config = run(core.resolve_config({}, str(workspace)))
             self.assertEqual(config.get("providerProfileName"), "folder-openai")
             self.assertEqual(config.get("model"), "folder-model")
         finally:
@@ -217,7 +217,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / "system_prompt.md", "You are a folder-configured agent.\n\nBe terse.\n")
             _write(home / "settings" / "system_prompt_append.md", "Always answer in haiku.  \n\n")
-            config = run(core.resolveConfig({}, str(workspace)))
+            config = run(core.resolve_config({}, str(workspace)))
             self.assertEqual(config["systemPrompt"], "You are a folder-configured agent.\n\nBe terse.")
             self.assertEqual(config["appendSystemPrompt"], "Always answer in haiku.")
 
@@ -233,14 +233,14 @@ class SettingsFolderTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             _write(home / "settings" / "system_prompt_append.md", "Cite sources.\n")
-            config = run(core.resolveConfig({}, str(workspace)))
-            self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
+            config = run(core.resolve_config({}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], core.build_default_system_prompt())
             session = run(core.resolve_session({}, config))
-            self.assertEqual(session["systemPrompt"], f"{core.buildDefaultSystemPrompt()}\n\nCite sources.")
+            self.assertEqual(session["systemPrompt"], f"{core.build_default_system_prompt()}\n\nCite sources.")
 
             _write(home / "settings" / "system_prompt.md", "file prompt\n")
             overridden = run(
-                core.resolveConfig({"systemPrompt": "option prompt", "appendSystemPrompt": "option append"}, str(workspace))
+                core.resolve_config({"systemPrompt": "option prompt", "appendSystemPrompt": "option append"}, str(workspace))
             )
             self.assertEqual(overridden["systemPrompt"], "option prompt")
             self.assertEqual(overridden["appendSystemPrompt"], "option append")
@@ -255,8 +255,8 @@ class SettingsFolderTests(AgentCoreTestCase):
             settings = run(core.load_settings("user", str(workspace)))
             self.assertNotIn("systemPromptFile", settings)
             self.assertNotIn("systemPromptAppendFile", settings)
-            config = run(core.resolveConfig({}, str(workspace)))
-            self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
+            config = run(core.resolve_config({}, str(workspace)))
+            self.assertEqual(config["systemPrompt"], core.build_default_system_prompt())
             self.assertIsNone(config["appendSystemPrompt"])
         finally:
             self.restore_home(root, previous)
@@ -267,9 +267,9 @@ class SettingsFolderTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             _write(home / "settings" / "config.yaml", "permissionMode: bypassPermissions\n")
-            config = run(core.resolveConfig({"provider": "openai"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai"}, str(workspace)))
             self.assertEqual(config["permissionMode"], "bypassPermissions")
-            overridden = run(core.resolveConfig({"provider": "openai", "permissionMode": "default"}, str(workspace)))
+            overridden = run(core.resolve_config({"provider": "openai", "permissionMode": "default"}, str(workspace)))
             self.assertEqual(overridden["permissionMode"], "default")
         finally:
             self.restore_home(root, previous)

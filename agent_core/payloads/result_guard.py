@@ -26,9 +26,9 @@ ABSOLUTE_TOOL_RESULT_CEILING_BYTES = 512_000
 
 
 def non_artifact_tool_result_max_bytes() -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("payloads.non_artifact_tool_result_max_bytes"))
+    return int(knob_value("payloads.non_artifact_tool_result_max_bytes"))
 
 
 async def guard_tool_call_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -188,9 +188,9 @@ async def guard_tool_call_result(args: dict[str, Any] | None = None, **kwargs: A
 
 
 def get_tool_result_max_bytes(config: dict[str, Any]) -> int:
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue(f"payloads.result_final_bytes_{derive_tool_payload_class(config)}"))
+    return int(knob_value(f"payloads.result_final_bytes_{derive_tool_payload_class(config)}"))
 
 
 def serialized_content_bytes(content: str) -> int:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 def _knob(name: str):
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return knobValue(name)
+    return knob_value(name)
 
 
 import asyncio
@@ -13,8 +13,8 @@ import os
 import signal
 from typing import Any, Mapping
 
-from .permission_rules import matchPermissionRule, parsePermissionRule
-from .repository_trust import approveRepositoryContent, checkRepositoryApproval
+from .permission_rules import match_permission_rule, parse_permission_rule
+from .repository_trust import approve_repository_content, check_repository_approval
 from ..sandbox import prepareSandboxedArgv
 from ..storage import get_project_root, load_settings
 
@@ -46,11 +46,11 @@ def _hook_set_hash(definitions: Any) -> str:
     ).hexdigest()
 
 
-async def approveHooks(cwd: str, scope: str) -> None:
+async def approve_hooks(cwd: str, scope: str) -> None:
     if scope not in {"project", "local"}:
         raise ValueError("Hook approval scope must be project or local")
     settings = await load_settings(scope, cwd)
-    await approveRepositoryContent(
+    await approve_repository_content(
         cwd=cwd,
         family="hooks",
         scope=scope,
@@ -59,7 +59,7 @@ async def approveHooks(cwd: str, scope: str) -> None:
 
 
 async def _hook_set_approved(cwd: str, scope: str, hooks: Any) -> bool:
-    return not hooks or await checkRepositoryApproval(
+    return not hooks or await check_repository_approval(
         cwd=cwd,
         family="hooks",
         scope=scope,
@@ -67,7 +67,7 @@ async def _hook_set_approved(cwd: str, scope: str, hooks: Any) -> bool:
     )
 
 
-async def loadHooks(
+async def load_hooks(
     args: Mapping[str, Any] | None = None,
     *,
     cwd: str | None = None,
@@ -91,8 +91,8 @@ async def loadHooks(
     return loaded
 
 
-async def listUnapprovedHookScopes(args: Mapping[str, Any]) -> list[str]:
-    hooks = await loadHooks(args)
+async def list_unapproved_hook_scopes(args: Mapping[str, Any]) -> list[str]:
+    hooks = await load_hooks(args)
     return list(dict.fromkeys(hook["scope"] for hook in hooks if not hook["approved"]))
 
 
@@ -103,10 +103,10 @@ def _hook_matches(hook: Mapping[str, Any], tool_name: str, project_root: str, ca
     rules = [
         rule
         for token in str(matcher).split("|")
-        if (rule := parsePermissionRule(token.strip(), "allow", "inline", True))
+        if (rule := parse_permission_rule(token.strip(), "allow", "inline", True))
     ]
     return bool(
-        matchPermissionRule(
+        match_permission_rule(
             rules,
             {"toolName": tool_name, **dict(call)},
             effects=("allow",),
@@ -191,10 +191,10 @@ def _interpret_blocking(result: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-async def fireToolHooks(args: Mapping[str, Any]) -> dict[str, Any]:
+async def fire_tool_hooks(args: Mapping[str, Any]) -> dict[str, Any]:
     fire = args["fire"]
     authority = fire.get("authority") if isinstance(fire.get("authority"), Mapping) else None
-    hooks = list(authority.get("hooks") or []) if authority else await loadHooks(
+    hooks = list(authority.get("hooks") or []) if authority else await load_hooks(
         cwd=fire["cwd"],
         sources=(fire.get("config") or {}).get("settingsSources"),
     )

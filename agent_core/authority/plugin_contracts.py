@@ -4,18 +4,18 @@ import json
 from typing import Any
 
 from .._utils import now_iso
-from .executable_config import parseMcpServerConfigList, parsePluginManifestV1
+from .executable_config import parse_mcp_server_config_list, parse_plugin_manifest_v1
 
 
-def normalizePluginMcpServers(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return parseMcpServerConfigList(servers, "plugin.mcpServers")
+def normalize_plugin_mcp_servers(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return parse_mcp_server_config_list(servers, "plugin.mcpServers")
 
 
-def parsePluginManifest(content: str) -> dict[str, Any]:
-    return parsePluginManifestV1(content, "plugin")
+def parse_plugin_manifest(content: str) -> dict[str, Any]:
+    return parse_plugin_manifest_v1(content, "plugin")
 
 
-def validatePluginManifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def validate_plugin_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     diagnostics: list[dict[str, Any]] = []
     plugin_id = str(manifest.get("id") or "plugin")
     if not str(manifest.get("id") or "").strip():
@@ -50,7 +50,7 @@ def validatePluginManifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return diagnostics
 
 
-def summarizePluginCapabilities(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def summarize_plugin_capabilities(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     manifest = args.get("manifest") or {}
     capabilities = manifest.get("capabilities") or {}
@@ -69,7 +69,7 @@ def summarizePluginCapabilities(args: dict[str, Any] | None = None, **kwargs: An
     }
 
 
-def validatePluginCapabilityContract(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
+def validate_plugin_capability_contract(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
     args = {**(args or {}), **kwargs}
     manifest = args.get("manifest") or {}
     summary = args.get("capabilitySummary") or {}

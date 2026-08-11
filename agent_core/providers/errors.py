@@ -279,10 +279,10 @@ def fallback_eligible_provider_failure(error: Any) -> bool:
 
 def anthropic_retry_delay_ms(attempt: int, failure: Any = None) -> int:
     # Call-time imports: config and _core both import this module at load.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
     from ._core import provider_retry_delay_ms
 
-    ladder = tuple(knobValue("provider.anthropic_retry_delays_ms"))
+    ladder = tuple(knob_value("provider.anthropic_retry_delays_ms"))
     return provider_retry_delay_ms(attempt, ladder=ladder, failure=failure)
 
 

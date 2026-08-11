@@ -8,9 +8,9 @@ import sys
 from typing import Any
 
 from ...agent import runAgentPrompt
-from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
+from ...authority.agent import assert_matching_persisted_child_authorities, enforce_session_agent_authority
 from ...runtime.agent_bindings import create_agent_runtime_bindings
-from ...config import resolveConfig
+from ...config import resolve_config
 from ...storage import configure_runtime_home, load_child_agent, load_session, load_task_record, mutate_child_agent, mutate_task_meta, save_session, save_task_record, with_record_transaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ...subagents import finalize_background_subagent_failure_from_env, finalize_background_subagent_success_from_env
@@ -63,13 +63,13 @@ async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[st
     if not session:
         raise RuntimeError(f"Subagent session not found: {args['sessionId']}")
     child_record = await load_child_agent(args["agentId"])
-    assertMatchingPersistedChildAuthorities(
+    assert_matching_persisted_child_authorities(
         (session.get("metadata") or {}).get("effectiveAgentAuthority"),
         (child_record or {}).get("effectiveAgentAuthority"),
     )
-    config = await resolveConfig(_session_config_options(session, runtime_home), session["cwd"])
+    config = await resolve_config(_session_config_options(session, runtime_home), session["cwd"])
     _apply_session_overrides(config, session)
-    await enforceSessionAgentAuthority(session=session, config=config)
+    await enforce_session_agent_authority(session=session, config=config)
     runtime = create_agent_runtime_bindings({
         "emitEvent": _create_trace_emitter(args["taskId"]),
         "tools": create_builtin_tools(),
@@ -99,7 +99,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     own termination, so no terminal finalizer runs here.
     """
     # Call-time import: the config package imports tasks at module load.
-    from ...config._knobs import knobValue
+    from ...config._knobs import knob_value
 
     session, config, runtime = await _prepare_worker(args)
     task_id, agent_id = args["taskId"], args["agentId"]
@@ -110,7 +110,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     turn_index = 1
     print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "session_id": session["id"], "agent_id": agent_id, "task_id": task_id, "result": {"text": result.get("text"), "stopReason": result.get("stopReason")}}), flush=True)
     while True:
-        await asyncio.sleep(int(knobValue("subagents.resident_poll_ms")) / 1000)
+        await asyncio.sleep(int(knob_value("subagents.resident_poll_ms")) / 1000)
         queued = [
             message
             for message in await read_undelivered_task_messages(task_id, session["id"])

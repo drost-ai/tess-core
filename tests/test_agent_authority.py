@@ -44,19 +44,19 @@ def _seal_authority(root: str, **overrides):
         "fingerprint": "",
         **overrides,
     }
-    authority["fingerprint"] = core.fingerprintAgentAuthority(authority)
+    authority["fingerprint"] = core.fingerprint_agent_authority(authority)
     return authority
 
 
 class AgentAuthorityTests(AgentCoreTestCase):
     def test_permission_mode_meet_is_commutative_idempotent_and_bounded(self):
         for left in MODES:
-            self.assertEqual(core.meetPermissionModes(left, left), left)
+            self.assertEqual(core.meet_permission_modes(left, left), left)
             for right in MODES:
                 with self.subTest(left=left, right=right):
                     self.assertEqual(
-                        core.meetPermissionModes(left, right),
-                        core.meetPermissionModes(right, left),
+                        core.meet_permission_modes(left, right),
+                        core.meet_permission_modes(right, left),
                     )
                     prompt = "policy_ask" if left in {"default", "acceptEdits"} else "never_ask"
                     parent = _seal_authority(
@@ -72,14 +72,14 @@ class AgentAuthorityTests(AgentCoreTestCase):
                         },
                         writableRoots=[os.path.realpath(os.sep)],
                     )
-                    derived = core.deriveChildAgentAuthority(
+                    derived = core.derive_child_agent_authority(
                         parent=parent,
                         requestedMode=right,
                         permissionRuleProjectRoot=os.path.realpath(os.sep),
                     )["authority"]
-                    self.assertTrue(core.isNoMorePermissive(derived, parent))
+                    self.assertTrue(core.is_no_more_permissive(derived, parent))
                     self.assertEqual(derived["parentFingerprint"], parent["fingerprint"])
-                    core.assertValidAgentAuthority(derived)
+                    core.assert_valid_agent_authority(derived)
 
     def test_tool_escalation_and_constraint_removal_are_rejected(self):
         deny = {"effect": "deny", "tool": "Bash", "pattern": "git push:*", "scope": "user", "raw": "Bash(git push:*)", "approved": True}
@@ -92,7 +92,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
             hooks=[hook],
         )
         with self.assertRaises(core.AgentAuthorityError) as escalation:
-            core.deriveChildAgentAuthority(
+            core.derive_child_agent_authority(
                 parent=parent,
                 requestedMode="bypassPermissions",
                 contract={"tools": ["Read", "WebFetch"]},
@@ -100,7 +100,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
             )
         self.assertEqual(escalation.exception.axis, "tools")
 
-        child = core.deriveChildAgentAuthority(
+        child = core.derive_child_agent_authority(
             parent=parent,
             requestedMode="bypassPermissions",
             contract={"tools": ["Read"]},
@@ -120,7 +120,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
             else:
                 candidate["executableSources"]["pluginDirs"] = ["/untrusted"]
             with self.subTest(mutation=mutation):
-                self.assertFalse(core.isNoMorePermissive(candidate, parent))
+                self.assertFalse(core.is_no_more_permissive(candidate, parent))
 
     def test_canonical_roots_reject_sibling_and_symlink_escape(self):
         root, home, workspace, previous = self.temp_context()
@@ -133,17 +133,17 @@ class AgentAuthorityTests(AgentCoreTestCase):
             for candidate in (str(outside), str(escape)):
                 with self.subTest(candidate=candidate):
                     with self.assertRaises(core.AgentAuthorityError) as error:
-                        run(core.assertPathWithinAgentAuthority(authority, candidate))
+                        run(core.assert_path_within_agent_authority(authority, candidate))
                     self.assertEqual(error.exception.axis, "roots")
         finally:
             self.restore_home(root, previous)
     def test_fingerprint_detects_restart_time_tampering(self):
         authority = _seal_authority("/workspace")
-        core.assertValidAgentAuthority(copy.deepcopy(authority))
+        core.assert_valid_agent_authority(copy.deepcopy(authority))
         restored = copy.deepcopy(authority)
         restored["enabledTools"].append("WebFetch")
         with self.assertRaises(core.AgentAuthorityError) as error:
-            core.assertValidAgentAuthority(restored)
+            core.assert_valid_agent_authority(restored)
         self.assertEqual(error.exception.axis, "fingerprint")
 
     def test_capture_reloads_trusted_rules_hooks_and_pins_python_sandbox_shape(self):
@@ -167,7 +167,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
                 )
             )
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {
                         "runtimeHome": str(home),
                         "settingSources": "project",
@@ -199,7 +199,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
                 permissionMode="default",
             )
             authority = run(
-                core.captureAgentAuthority(
+                core.capture_agent_authority(
                     config=config,
                     session=session,
                     tools=[SimpleNamespace(name="Agent"), SimpleNamespace(name="Bash")],
@@ -217,7 +217,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
             session["metadata"]["effectiveAgentAuthority"] = authority
             changed_config = {**config, "sandbox": {"mode": "off", "allowNetwork": True}}
             enforced = run(
-                core.enforceSessionAgentAuthority(session=session, config=changed_config)
+                core.enforce_session_agent_authority(session=session, config=changed_config)
             )
             self.assertEqual(enforced["fingerprint"], authority["fingerprint"])
             self.assertEqual(changed_config["sandbox"]["mode"], "os-required")
@@ -231,7 +231,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
         # say so, or WebFetch bans itself while Bash curls freely.
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
             session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
@@ -241,12 +241,12 @@ class AgentAuthorityTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="default",
             )
-            authority = run(core.captureAgentAuthority(config=config, session=session, tools=[]))
+            authority = run(core.capture_agent_authority(config=config, session=session, tools=[]))
             self.assertEqual(authority["sandbox"]["mode"], "off")
             self.assertTrue(authority["sandbox"]["network"])
 
             sandboxed = {**config, "sandbox": {"mode": "os-required", "allowNetwork": False}}
-            restricted = run(core.captureAgentAuthority(config=sandboxed, session=session, tools=[]))
+            restricted = run(core.capture_agent_authority(config=sandboxed, session=session, tools=[]))
             self.assertEqual(restricted["sandbox"]["mode"], "os-required")
             self.assertFalse(restricted["sandbox"]["network"])
         finally:
@@ -255,7 +255,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
     def test_legacy_child_and_changed_execution_sources_fail_before_execution(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
+            config = run(core.resolve_config({"runtimeHome": str(home)}, str(workspace)))
             session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],

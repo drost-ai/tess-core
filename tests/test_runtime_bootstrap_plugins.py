@@ -9,7 +9,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
     def test_bootstrap_runtime_exposes_typed_event_and_turn_lifecycle_surface(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False}))
             self.assertEqual(boot["getState"]()["session"]["activeSessionId"], session["id"])
@@ -38,8 +38,8 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
     def test_bootstrap_runtime_composes_local_runtimes_bridge_and_dynamic_tools(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            default_tools = core.getDefaultToolList()
+            config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
+            default_tools = core.get_default_tool_list()
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
@@ -141,7 +141,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             )
 
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]},
                     str(workspace),
                 )
@@ -156,7 +156,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 permissionMode="default",
             )
 
-            plugin_runtime = run(core.loadPluginRuntime(config))
+            plugin_runtime = run(core.load_plugin_runtime(config))
             self.assertEqual(plugin_runtime["errors"], [])
             self.assertEqual([plugin["id"] for plugin in plugin_runtime["plugins"]], ["alpha"])
             self.assertEqual([tool.name for tool in plugin_runtime["tools"]], ["PluginEcho"])
@@ -245,15 +245,15 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                     ],
                 )
             )
-            run(core.approvePluginSource(cwd=str(workspace), scope="project"))
+            run(core.approve_plugin_source(cwd=str(workspace), scope="project"))
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(explicit_dir)]},
                     str(workspace),
                 )
             )
 
-            plugin_runtime = run(core.loadPluginRuntime(config))
+            plugin_runtime = run(core.load_plugin_runtime(config))
             self.assertEqual(plugin_runtime["errors"], [])
             self.assertEqual([plugin["id"] for plugin in plugin_runtime["plugins"]], ["ghost", "shared"])
             commands = [command["name"] for command in plugin_runtime["commands"]]
@@ -317,12 +317,12 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             )
 
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]},
                     str(workspace),
                 )
             )
-            default_tools = core.getDefaultToolList()
+            default_tools = core.get_default_tool_list()
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
             config["channels"] = ["local"]
@@ -376,14 +376,14 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 encoding="utf-8",
             )
             config = run(
-                core.resolveConfig(
+                core.resolve_config(
                     {"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]},
                     str(workspace),
                 )
             )
             config["mcpConfig"] = [{"name": "config-mcp", "transport": "http", "commandOrUrl": "http://config.invalid/rpc"}]
             config["channels"] = ["local", "remote"]
-            default_tools = core.getDefaultToolList()
+            default_tools = core.get_default_tool_list()
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
             session = core.create_empty_session(

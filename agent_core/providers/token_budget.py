@@ -46,9 +46,9 @@ def resolve_request_max_output_tokens(request: dict[str, Any]) -> int:
 
 def _fallback_max_output_tokens() -> int:
     # Call-time import: the config package imports this module at load.
-    from ..config._knobs import knobValue
+    from ..config._knobs import knob_value
 
-    return int(knobValue("provider.max_output_tokens"))
+    return int(knob_value("provider.max_output_tokens"))
 
 
 def resolve_compaction_policy(input: dict[str, Any] | None = None) -> dict[str, Any]:

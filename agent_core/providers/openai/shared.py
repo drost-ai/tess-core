@@ -9,11 +9,11 @@ OPENAI_ABORT_POLL_INTERVAL_MS = 50
 
 def openai_retry_delay_ms(attempt: int, failure: Any = None) -> int:
     # Call-time import: the config package imports providers at module load.
-    from ...config._knobs import knobValue
+    from ...config._knobs import knob_value
     from .._core import provider_retry_delay_ms
 
     return provider_retry_delay_ms(
         attempt,
-        ladder=tuple(knobValue("provider.openai_retry_delays_ms")),
+        ladder=tuple(knob_value("provider.openai_retry_delays_ms")),
         failure=failure,
     )
