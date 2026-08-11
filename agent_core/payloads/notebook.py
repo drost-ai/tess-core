@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import drop_none_deep as _without_none
 
 def _knob(name: str):
     from ..config._knobs import knobValue
@@ -244,13 +245,5 @@ def _limit(value: Any, fallback: int) -> int:
 
 def _finite_number(value: Any) -> int | float | None:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
-
-
-def _without_none(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _without_none(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [_without_none(item) for item in value]
-    return value
 
 

@@ -14,6 +14,20 @@ from typing import Any, Awaitable, Callable, Iterable
 MISSING = object()
 
 
+def drop_none_deep(value: Any) -> Any:
+    """Recursively rebuild dicts/lists with None-valued dict entries removed."""
+    if isinstance(value, dict):
+        return {key: drop_none_deep(item) for key, item in value.items() if item is not None}
+    if isinstance(value, list):
+        return [drop_none_deep(item) for item in value]
+    return value
+
+
+def drop_none(values: dict[str, Any]) -> dict[str, Any]:
+    """Shallow copy of a mapping with None-valued entries removed."""
+    return {key: value for key, value in values.items() if value is not None}
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 

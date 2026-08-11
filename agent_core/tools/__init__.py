@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from .agent import _agent_tool
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
-from .code_search import _exec_ripgrep_allowing_no_matches, _glob_tool, _grep_tool, _packaged_ripgrep_path, _resolve_ripgrep_binary
+from .code_search import _glob_tool, _grep_tool, _packaged_ripgrep_path, _resolve_ripgrep_binary
 from .definitions import ToolDefinition
 from .files import _edit_tool, _read_tool, _write_tool
 from .mcp import _list_mcp_resources_tool, _mcp_tool, _read_mcp_resource_tool

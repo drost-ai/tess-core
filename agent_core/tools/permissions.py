@@ -5,6 +5,7 @@ from ..contracts.context import ToolContext
 import re
 from typing import Any
 
+from ..contracts.config import PERMISSION_MODES
 from ..authority.agent import AgentAuthorityError, assertValidAgentAuthority
 from .._utils import maybe_await
 from ..authority.permission_rules import loadPermissionRulesCached, matchPermissionRule
@@ -12,7 +13,7 @@ from ..authority.shell_command_policy import classifyReadOnlyShellCommand, parse
 from ..storage import get_project_root, load_auto_mode
 
 
-PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"}
+
 
 
 def _pinned_child_authority(session: dict[str, Any]) -> dict[str, Any] | None:

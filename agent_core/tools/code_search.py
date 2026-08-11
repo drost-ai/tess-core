@@ -29,13 +29,13 @@ from .schemas import builtin_tool
 from .validation import _require_optional_number, _require_string
 
 
-def _glob_tool() -> ToolDefinition:
+def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         cwd = context.get("cwd") or context["session"]["cwd"]
         query = await _resolve_glob_search(_require_string(input.get("pattern"), "pattern"), input.get("path"), context)
         pattern = query["pattern"]
         search_path = query["searchPath"]
-        rg_path = await _facade_resolve_ripgrep_binary()
+        rg_path = await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)()
         if not rg_path:
             return {"content": "ripgrep is required for Glob and was not found.", "isError": True}
         if _is_filesystem_root(search_path):
@@ -57,7 +57,8 @@ def _glob_tool() -> ToolDefinition:
             _normalize_positive_limit(_require_optional_number(input.get("limit")), policy["globInlineItems"]),
             policy["globInlineItems"],
         )
-        acquisition = await _facade_run_streaming_search(
+        acquisition = await _run_search(
+            search,
             binary=rg_path,
             argv=args,
             cwd=cwd,
@@ -90,12 +91,12 @@ def _glob_tool() -> ToolDefinition:
     return builtin_tool("Glob", handler)
 
 
-def _grep_tool() -> ToolDefinition:
+def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         pattern = _require_string(input.get("pattern"), "pattern")
         cwd = context.get("cwd") or context["session"]["cwd"]
         search_path = await _authorize_path(_require_string(input.get("path"), "path"), context, "Grep") if input.get("path") else cwd
-        rg_path = await _facade_resolve_ripgrep_binary()
+        rg_path = await ((search or {}).get("resolveBinary") or _resolve_ripgrep_binary)()
         if not rg_path:
             return {"content": "ripgrep is required for Grep and was not found.", "isError": True}
         output_mode = input.get("output_mode") if isinstance(input.get("output_mode"), str) else "files_with_matches"
@@ -148,7 +149,8 @@ def _grep_tool() -> ToolDefinition:
             policy["grepInlineMatches"] if requested_head_limit == 0 else _normalize_positive_limit(requested_head_limit, policy["grepInlineMatches"]),
             policy["grepInlineMatches"],
         )
-        acquisition = await _facade_run_streaming_search(
+        acquisition = await _run_search(
+            search,
             binary=rg_path,
             argv=args,
             cwd=cwd,
@@ -188,14 +190,6 @@ async def _resolve_ripgrep_binary() -> str | None:
     return shutil.which("rg")
 
 
-async def _facade_resolve_ripgrep_binary() -> str | None:
-    facade = sys.modules.get("agent_core.tools")
-    current = getattr(facade, "_resolve_ripgrep_binary", None)
-    if callable(current) and current is not _resolve_ripgrep_binary:
-        return await current()
-    return await _resolve_ripgrep_binary()
-
-
 def _packaged_ripgrep_path() -> str | None:
     machine = platform.machine().lower()
     arch = "arm64" if machine in ("arm64", "aarch64") else "x64" if machine in ("x86_64", "amd64") else machine
@@ -214,31 +208,17 @@ def _packaged_ripgrep_path() -> str | None:
     return str(repo_root / "package" / "vendor" / "ripgrep" / key / binary)
 
 
-async def _exec_ripgrep_allowing_no_matches(rg_path: str, args: list[str], *, cwd: str) -> tuple[str, str]:
-    def run() -> subprocess.CompletedProcess[str]:
-        return subprocess.run([rg_path, *args], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+async def _run_search(search: dict[str, Any] | None, **kwargs: Any) -> dict[str, Any]:
+    """Run a streaming ripgrep search, honoring an injected executor.
 
-    result = await asyncio.to_thread(run)
-    if result.returncode in (0, 1):
-        return result.stdout, result.stderr
-    raise RuntimeError(result.stderr.strip() or result.stdout.strip() or f"ripgrep failed with exit code {result.returncode}")
-
-
-async def _facade_exec_ripgrep_allowing_no_matches(rg_path: str, args: list[str], *, cwd: str) -> tuple[str, str]:
-    facade = sys.modules.get("agent_core.tools")
-    current = getattr(facade, "_exec_ripgrep_allowing_no_matches", None)
-    if callable(current) and current is not _exec_ripgrep_allowing_no_matches:
-        return await current(rg_path, args, cwd=cwd)
-    return await _exec_ripgrep_allowing_no_matches(rg_path, args, cwd=cwd)
-
-
-async def _facade_run_streaming_search(**kwargs: Any) -> dict[str, Any]:
-    facade = sys.modules.get("agent_core.tools")
-    current = getattr(facade, "_exec_ripgrep_allowing_no_matches", None)
-    if callable(current) and current is not _exec_ripgrep_allowing_no_matches:
-        stdout, stderr = await current(kwargs["binary"], kwargs["argv"], cwd=kwargs["cwd"])
-        return await buildStreamingSearchFromOutput(stdout=stdout, stderr=stderr, **kwargs)
-    return await runStreamingSearch(**kwargs)
+    Tests inject execSearch via createBuiltinTools(options={"search": ...});
+    its output feeds the same streaming-result builder the real search uses.
+    """
+    exec_search = (search or {}).get("execSearch")
+    if exec_search is None:
+        return await runStreamingSearch(**kwargs)
+    stdout, stderr = await exec_search(kwargs["binary"], kwargs["argv"], cwd=kwargs["cwd"])
+    return await buildStreamingSearchFromOutput(stdout=stdout, stderr=stderr, **kwargs)
 
 
 def _build_search_process_failure(tool_name: str, result: dict[str, Any]) -> ToolResult | None:

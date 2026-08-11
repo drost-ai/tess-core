@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import drop_none_deep as _without_none_values
 
 from .._utils import signal_aborted as _signal_aborted
 
@@ -33,14 +34,6 @@ async def _create_subagent_worktree(context: dict[str, Any], agent_id: str, chil
 
 def _output(context: dict[str, Any], event: str, data: dict[str, Any]) -> None:
     context.get("outputJson", lambda *_: None)(event, _without_none_values(data))
-
-
-def _without_none_values(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _without_none_values(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [_without_none_values(item) for item in value]
-    return value
 
 
 def _dedupe(values: list[Any]) -> list[str]:

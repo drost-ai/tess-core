@@ -341,5 +341,3 @@ def _without_none(value: Any) -> Any:
     return value
 
 
-shape_mcp_resource_list = shapeMcpResourceList
-shape_mcp_resource_read = shapeMcpResourceRead

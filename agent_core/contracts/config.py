@@ -7,11 +7,14 @@ Producers: ``agent_core/config/resolution.py`` (``resolveConfig``),
 
 from __future__ import annotations
 
-from typing import Any, Literal, TypedDict, Union
+from typing import Any, Literal, TypedDict, Union, get_args
 
 
-# Mirrors PERMISSION_MODES in tools/permissions.py (sync-tested).
 PermissionMode = Literal["default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"]
+
+# The one runtime value set for PermissionMode: deriving it from the Literal
+# means the type and the set cannot drift, and every former copy imports it.
+PERMISSION_MODES: frozenset[str] = frozenset(get_args(PermissionMode))
 
 ProviderKind = Literal["anthropic", "openai"]
 

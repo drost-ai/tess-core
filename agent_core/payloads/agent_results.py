@@ -145,46 +145,6 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
     return {**guarded, "blocks": blocks}
 
 
-def createToolResultFinalizer(args: dict[str, Any] | None = None, **kwargs: Any) -> Callable[..., Any]:
-    values = {**(args or {}), **kwargs}
-
-    async def finish(
-        tool_use: dict[str, Any],
-        outcome: dict[str, Any],
-        *,
-        tool_name: str | None = None,
-        rejected: bool = False,
-        side_effects_may_have_occurred: bool = False,
-        max_bytes: int | None = None,
-        require_artifact: bool = False,
-        never_artifact: bool = False,
-    ) -> dict[str, Any]:
-        completed = await finalizeToolDispatchResult(
-            config=values["config"],
-            sessionId=values["sessionId"],
-            assistantMessageIndex=values.get("assistantMessageIndex"),
-            toolUse=tool_use,
-            toolName=tool_name,
-            outcome=outcome,
-            sideEffectsMayHaveOccurred=side_effects_may_have_occurred,
-            maxBytes=max_bytes,
-            requireArtifact=require_artifact,
-            neverArtifact=never_artifact,
-            rejected=rejected,
-            emit=values.get("emit"),
-        )
-        block = completed["blocks"][0]
-        if len(completed["blocks"]) > 1:
-            block["_additionalBlocks"] = completed["blocks"][1:]
-        if completed["result"].get("pause") == "approval":
-            block["_pauseMessage"] = (
-                completed["result"].get("content") or ""
-            ).strip() or "Approval required before continuing."
-        return block
-
-    return finish
-
-
 def _cardinality_fields(cardinality: dict[str, Any] | None) -> dict[str, Any]:
     if not cardinality:
         return {}

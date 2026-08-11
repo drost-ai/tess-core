@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import drop_none as _without_none_values
 
 import json
 import re
@@ -40,17 +41,3 @@ def _unwrap_json_rpc_response(response: dict[str, Any]) -> Any:
     if "result" in response:
         return response.get("result")
     return None
-
-
-def _without_none_values(values: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in values.items() if value is not None}
-
-
-
-
-
-
-
-
-
-

@@ -121,8 +121,6 @@ class ToolControlFlowTests(AgentCoreTestCase):
     def test_monitor_health_check_mcp_resource_and_ripgrep_tool_edges(self):
         root, home, workspace, previous = self.temp_context()
         original_fetch = web_module.fetch
-        original_resolve_rg = tools_module._resolve_ripgrep_binary
-        original_exec_rg = tools_module._exec_ripgrep_allowing_no_matches
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
@@ -217,9 +215,9 @@ class ToolControlFlowTests(AgentCoreTestCase):
             async def missing_rg():
                 return None
 
-            tools_module._resolve_ripgrep_binary = missing_rg
-            self.assertTrue(run(tools["Glob"].handler({"pattern": "*.py"}, context))["isError"])
-            self.assertTrue(run(tools["Grep"].handler({"pattern": "needle"}, context))["isError"])
+            missing_tools = {tool.name: tool for tool in core.createBuiltinTools({"search": {"resolveBinary": missing_rg}})}
+            self.assertTrue(run(missing_tools["Glob"].handler({"pattern": "*.py"}, context))["isError"])
+            self.assertTrue(run(missing_tools["Grep"].handler({"pattern": "needle"}, context))["isError"])
 
             rg_calls = []
 
@@ -230,8 +228,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 rg_calls.append((path, args, cwd))
                 return "src/a.py\nnode_modules/ignored.js\n", ""
 
-            tools_module._resolve_ripgrep_binary = fake_rg
-            tools_module._exec_ripgrep_allowing_no_matches = fake_exec_rg
+            tools = {tool.name: tool for tool in core.createBuiltinTools({"search": {"resolveBinary": fake_rg, "execSearch": fake_exec_rg}})}
             glob_payload = json.loads(run(tools["Glob"].handler({"pattern": "*.py"}, context))["content"])
             self.assertEqual(glob_payload["matches"], ["src/a.py"])
             self.assertEqual(rg_calls[-1][1][0:5], ["--files", "--sort", "path", "-g", "*.py"])
@@ -242,6 +239,4 @@ class ToolControlFlowTests(AgentCoreTestCase):
             self.assertIn("-C", rg_calls[-1][1])
         finally:
             web_module.fetch = original_fetch
-            tools_module._resolve_ripgrep_binary = original_resolve_rg
-            tools_module._exec_ripgrep_allowing_no_matches = original_exec_rg
             self.restore_home(root, previous)

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import drop_none_deep
 
 from ..contracts.records import (
     ChildAgentRecord,
@@ -62,11 +63,7 @@ async def _load_by_path(path: str) -> dict[str, Any] | None:
     return await read_json_file(path, None)
 
 def omit_none_fields(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: omit_none_fields(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [omit_none_fields(item) for item in value]
-    return value
+    return drop_none_deep(value)
 
 
 _CHILD_AGENT_STATUS_RANK = {

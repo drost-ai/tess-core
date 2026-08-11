@@ -78,7 +78,6 @@ from .tool_hooks import (
 )
 from .tool_result_budget import (
     ToolResultBatchBudget,
-    ToolResultTurnBudget,
 )
 from .turn_session import (
     resolve_effective_provider_turn_binding,
@@ -97,7 +96,6 @@ __all__ = [
     "SerialQueue",
     "ToolDispatchOutcome",
     "ToolResultBatchBudget",
-    "ToolResultTurnBudget",
     "addEmptyResponseContinuationNudge",
     "appendToolResultBatch",
     "applyProviderTokenBudget",

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import drop_none_deep as _without_none
 
 import os
 from typing import Any
@@ -125,13 +126,5 @@ def _build_common_payload(
         },
     }
     return _without_none(payload)
-
-
-def _without_none(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _without_none(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [_without_none(item) for item in value]
-    return value
 
 

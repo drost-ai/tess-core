@@ -9,7 +9,6 @@ from .auth import (
     McpOAuthRuntime,
     canonical_origin,
     createMcpOAuthRuntime,
-    create_mcp_oauth_runtime,
 )
 from .auth_loopback import LoopbackListener
 from .clients import JsonRpcClient
@@ -31,8 +30,6 @@ from .payloads import (
     MAX_MCP_CONTENTS,
     shapeMcpResourceList,
     shapeMcpResourceRead,
-    shape_mcp_resource_list,
-    shape_mcp_resource_read,
 )
 from .runtime import createMcpRuntime
 from .sse_decoder import (
@@ -96,7 +93,6 @@ __all__ = [
     "createFileMcpTokenStore",
     "createMcpOAuthRuntime",
     "createMcpRuntime",
-    "create_mcp_oauth_runtime",
     "iterateMcpBody",
     "mcpTokenStoreKey",
     "parseSseEvents",
@@ -106,8 +102,6 @@ __all__ = [
     "resolve_negotiated_protocol",
     "shapeMcpResourceList",
     "shapeMcpResourceRead",
-    "shape_mcp_resource_list",
-    "shape_mcp_resource_read",
     "token_store_delete",
     "token_store_get",
     "token_store_set",

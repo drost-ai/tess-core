@@ -262,6 +262,8 @@ class ContractSyncTests(unittest.TestCase):
     def test_permission_modes_match_runtime(self) -> None:
         from agent_core.contracts.config import PermissionMode
         from agent_core.tools.permissions import PERMISSION_MODES
+        from agent_core.shell_surface.shared import PERMISSION_MODE_ORDER
+        self.assertEqual(set(PERMISSION_MODE_ORDER), set(PERMISSION_MODES))
 
         self.assertEqual(self._literal_values(PermissionMode), set(PERMISSION_MODES))
 

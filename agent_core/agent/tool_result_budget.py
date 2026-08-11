@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..payloads.agent_results import createToolResultFinalizer
+from ..payloads.agent_results import finalizeToolDispatchResult
 from ..providers.token_budget import resolve_interactive_context_policy
 from ..payloads.result_guard import (
     MIN_EFFECTIVE_TOOL_RESULT_BYTES,
@@ -34,32 +34,43 @@ class ToolResultBatchBudget:
         resultCount: int,
         emit: Callable[..., Any],
     ) -> tuple[Callable[..., Any], int | None]:
-        base = createToolResultFinalizer(
-            config=config,
-            sessionId=sessionId,
-            assistantMessageIndex=assistantMessageIndex,
-            emit=emit,
-        )
         effective_limit = self.perResultLimit(resultCount)
 
         async def finish(
             tool_use: dict[str, Any],
             outcome: dict[str, Any],
-            **kwargs: Any,
+            *,
+            tool_name: str | None = None,
+            rejected: bool = False,
+            side_effects_may_have_occurred: bool = False,
         ) -> dict[str, Any]:
             artifact_page = tool_use.get("name") == "ReadToolArtifact"
-            return await base(
-                tool_use,
-                outcome,
-                max_bytes=(
+            completed = await finalizeToolDispatchResult(
+                config=config,
+                sessionId=sessionId,
+                assistantMessageIndex=assistantMessageIndex,
+                toolUse=tool_use,
+                toolName=tool_name,
+                outcome=outcome,
+                sideEffectsMayHaveOccurred=side_effects_may_have_occurred,
+                maxBytes=(
                     non_artifact_tool_result_max_bytes()
                     if artifact_page
                     else effective_limit
                 ),
-                require_artifact=effective_limit is not None and not artifact_page,
-                never_artifact=artifact_page,
-                **kwargs,
+                requireArtifact=effective_limit is not None and not artifact_page,
+                neverArtifact=artifact_page,
+                rejected=rejected,
+                emit=emit,
             )
+            block = completed["blocks"][0]
+            if len(completed["blocks"]) > 1:
+                block["_additionalBlocks"] = completed["blocks"][1:]
+            if completed["result"].get("pause") == "approval":
+                block["_pauseMessage"] = (
+                    completed["result"].get("content") or ""
+                ).strip() or "Approval required before continuing."
+            return block
 
         return finish, effective_limit
 
@@ -99,8 +110,3 @@ class ToolResultBatchBudget:
             "artifact_page_reserved_bytes": reserved_used,
             "source": self.source,
         }
-
-
-# Compatibility alias for consumers of the earlier class name.
-# The alias has batch-local, stateless semantics.
-ToolResultTurnBudget = ToolResultBatchBudget

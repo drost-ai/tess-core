@@ -360,7 +360,6 @@ def createMcpOAuthRuntime(
     )
 
 
-create_mcp_oauth_runtime = createMcpOAuthRuntime
 
 
 def canonical_origin(raw: str) -> str:

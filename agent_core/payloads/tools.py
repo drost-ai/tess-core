@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import drop_none_deep as _without_none_values
 
 import os
 import re
@@ -136,14 +137,6 @@ def _count_lines(value: str) -> int:
 
 def splitToolTextLines(value: str) -> list[str]:
     return re.split(r"\r?\n", value)
-
-
-def _without_none_values(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _without_none_values(item) for key, item in value.items() if item is not None}
-    if isinstance(value, list):
-        return [_without_none_values(item) for item in value]
-    return value
 
 
 def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:

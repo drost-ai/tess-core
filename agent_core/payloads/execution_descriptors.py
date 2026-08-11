@@ -1,11 +1,8 @@
 from __future__ import annotations
+from .._utils import drop_none as _without_none
 
 import re
 from typing import Any
-
-
-def _without_none(value: dict[str, Any]) -> dict[str, Any]:
-    return {key: item for key, item in value.items() if item is not None}
 
 
 def summarizeOutputManifest(text: str, filePath: str | None = None, maxExcerptChars: int = 1200) -> dict[str, Any]:

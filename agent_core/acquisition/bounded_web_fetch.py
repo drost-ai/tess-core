@@ -440,4 +440,3 @@ def _aborted(signal_value: Any) -> bool:
     return bool(getattr(signal_value, "aborted", False))
 
 
-bounded_web_fetch = boundedWebFetch
