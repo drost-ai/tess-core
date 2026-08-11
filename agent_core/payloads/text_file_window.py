@@ -170,6 +170,11 @@ def _read_text_file_window_sync(args: dict[str, Any]) -> dict[str, Any]:
             chunk = handle.read(DEFAULT_STREAM_CHUNK_BYTES)
             if not chunk:
                 reached_eof = True
+                # The zero-byte line after a trailing newline IS finished and
+                # counted: the TS peer counts it, the Read parity packs pin
+                # it, and joining it back is what keeps content byte-faithful
+                # to the file. (It deliberately disagrees with the search
+                # sampler's line accounting.)
                 finish_line(True, position)
                 break
             position += len(chunk)

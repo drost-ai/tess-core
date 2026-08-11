@@ -57,7 +57,7 @@ _LOCK_OBSERVERS: list[Callable[[dict[str, Any]], Any]] = []
 # many short-lived loops, and an asyncio.Lock cannot cross loops. Cross-loop
 # (and cross-process) exclusion is the OS flock's job.
 _IN_PROCESS_LOCKS: "_weakref.WeakKeyDictionary[Any, dict[str, Any]]" = _weakref.WeakKeyDictionary()
-_HELD_TRANSACTION_LOCKS: _contextvars.ContextVar[frozenset[str]] = _contextvars.ContextVar(
+_HELD_TRANSACTION_LOCKS: _contextvars.ContextVar[frozenset[tuple[str, int]]] = _contextvars.ContextVar(
     "agent_core_held_transaction_locks",
     default=frozenset(),
 )
@@ -249,12 +249,16 @@ async def with_record_transaction(
     timeoutMs: int | None = None,
 ):
     lock_path = transaction_lock_path(namespace, key)
+    # Reentrancy is per-task: a task spawned while the parent holds the lock
+    # inherits the parent's context copy, and must not treat the parent's
+    # holdings as its own — that would run it unlocked alongside the parent.
+    holder = (lock_path, id(asyncio.current_task()))
     held = _HELD_TRANSACTION_LOCKS.get()
-    if lock_path in held:
+    if holder in held:
         yield
         return
     async with file_lock(lock_path, timeoutMs=timeoutMs):
-        token = _HELD_TRANSACTION_LOCKS.set(held | {lock_path})
+        token = _HELD_TRANSACTION_LOCKS.set(held | {holder})
         try:
             yield
         finally:

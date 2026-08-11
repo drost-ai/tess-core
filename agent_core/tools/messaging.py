@@ -76,16 +76,7 @@ def _send_message_tool() -> ToolDefinition:
                     "metadata": {"messageId": record["messageId"]},
                 },
             )
-            reply = None
-            try:
-                reply = await _await_reply(own_task_id, "to_child", record["messageId"], timeout_ms, context)
-            except asyncio.CancelledError:
-                # The claim was taken but this tool result will never commit;
-                # requeue so the answer is not lost to the cancellation.
-                if isinstance(reply, dict) and reply.get("messageId"):
-                    with contextlib.suppress(Exception):
-                        await requeue_task_message(own_task_id, str(reply["messageId"]))
-                raise
+            reply = await _await_reply(own_task_id, "to_child", record["messageId"], timeout_ms, context)
             if reply is None:
                 await skip_task_question(own_task_id, record["messageId"], "unanswered:child_timeout")
             await _restore_running_status(own_task_id)

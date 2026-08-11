@@ -41,7 +41,7 @@ def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str
 
 def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[str, Any]:
     state = copy.deepcopy(initialState or createInitialRuntimeState())
-    subscribers: list[Callable[[dict[str, Any]], None]] = []
+    subscribers: list[Callable[[], None]] = []
 
     def get_state():
         return copy.deepcopy(state)

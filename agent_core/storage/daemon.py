@@ -4,7 +4,9 @@ from .._utils import note_swallowed
 import contextlib as _contextlib
 
 import asyncio
+import hashlib
 import json
+import re
 import os
 import uuid
 from typing import Any
@@ -66,8 +68,18 @@ async def list_live_daemon_states() -> list[dict[str, Any]]:
     return states
 
 
+def _daemon_events_lock_namespace(instance_id: str) -> str:
+    """Lock namespaces admit [a-z][a-z0-9._-]{0,63}; instance ids admit
+    uppercase, underscores, and 64 chars. Hash anything that will not fit."""
+    candidate = f"daemon-events-{instance_id}"
+    if re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", candidate):
+        return candidate
+    digest = hashlib.sha256(instance_id.encode("utf-8")).hexdigest()[:24]
+    return f"daemon-events-{digest}"
+
+
 async def append_daemon_event(instanceId: str, record: dict[str, Any]) -> None:
-    async with with_record_transaction(f"daemon-events-{parse_daemon_instance_id(instanceId)}", get_state_root()):
+    async with with_record_transaction(_daemon_events_lock_namespace(parse_daemon_instance_id(instanceId)), get_state_root()):
         next_record = dict(record)
         if not isinstance(next_record.get("cursor"), int):
             next_record["cursor"] = await read_last_daemon_event_cursor(instanceId) + 1
@@ -81,12 +93,21 @@ async def append_daemon_event(instanceId: str, record: dict[str, Any]) -> None:
 async def load_daemon_events(instanceId: str) -> list[dict[str, Any]]:
     try:
         with open(daemon_events_path(instanceId), "r", encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
+            lines = [line for line in handle if line.strip()]
     except FileNotFoundError:
         return []
     except Exception as error:
         note_swallowed(f"daemon events log unreadable for {instanceId}", error)
         return []
+    events: list[dict[str, Any]] = []
+    for line in lines:
+        try:
+            events.append(json.loads(line))
+        except Exception as error:
+            # One torn line (non-atomic append) must not erase the replay
+            # stream the daemon event log exists to provide.
+            note_swallowed(f"daemon events line skipped for {instanceId}", error)
+    return events
 
 async def read_last_daemon_event_cursor(instanceId: str) -> int:
     live = await _read_last_daemon_cursor_from_tail(daemon_events_path(instanceId))

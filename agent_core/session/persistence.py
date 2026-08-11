@@ -117,6 +117,7 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     if isinstance(interrupted, dict):
         metadata["lastAssistantInterruptedPreview"] = copy.deepcopy(interrupted)
     snapshot = _copy_session_for_persist(session)
+    repairSessionTranscript(snapshot)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
     persisted_at = now_iso()
@@ -138,6 +139,7 @@ async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
     snapshot = _copy_session_for_persist(session)
+    repairSessionTranscript(snapshot)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
     await append_session_transcript_log_entries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])

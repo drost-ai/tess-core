@@ -330,6 +330,8 @@ def _bash_tool() -> ToolDefinition:
 
 def _normalize_bash_timeout(command: str, value: Any) -> int:
     raw = 120000 if value is None else float(value)
+    if raw <= 0:
+        raw = 120000
     timeout = raw * 1000 if 0 < raw <= 600 else raw
     if re.search(r"\b(?:npm|pnpm|yarn|bun)\s+install\b", command) and timeout < 300000:
         timeout = 300000

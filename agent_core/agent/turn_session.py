@@ -102,8 +102,8 @@ def resolve_effective_provider_turn_binding(
         ),
     }
     if effective_provider == "openai":
-        effective_config["openaiApiMode"] = profile.get("apiMode") or config.get(
-            "openaiApiMode"
+        effective_config["openaiApiMode"] = profile.get("apiMode") or (
+            config.get("openaiApiMode") if current_profile_matches else None
         )
         effective_config["openaiBaseUrl"] = profile.get("baseUrl") or (
             config.get("openaiBaseUrl") if current_profile_matches else None
