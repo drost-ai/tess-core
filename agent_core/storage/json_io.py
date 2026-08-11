@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import note_swallowed
 
 import contextlib as _contextlib
 import contextvars as _contextvars
@@ -454,47 +455,3 @@ def file_or_json(value: str | None) -> Any:
 def resolve_maybe_relative(baseDir: str, candidate: str) -> str:
     expanded = expand_home(candidate)
     return os.path.abspath(expanded if os.path.isabs(expanded) else os.path.join(baseDir, expanded))
-
-async def load_auth() -> dict[str, Any] | None:
-    auth = await read_json_file(os.path.join(get_state_root(), "auth.json"), None)
-    if not auth:
-        return None
-    from ..runtime.secret_provider import migrateLegacyStoredAuthSecrets
-
-    migration = await migrateLegacyStoredAuthSecrets(auth)
-    if migration["changed"]:
-        await write_json_file(os.path.join(get_state_root(), "auth.json"), migration["auth"])
-    return migration["auth"]
-
-async def load_codex_auth_token(authPath: str) -> str | None:
-    return await _run_storage_io(_load_codex_auth_token_sync, authPath)
-
-
-def _load_codex_auth_token_sync(auth_path: str) -> str | None:
-    try:
-        with open(auth_path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-        api_key = str(payload.get("OPENAI_API_KEY") or "").strip()
-        if api_key:
-            return api_key
-        token = str((payload.get("tokens") or {}).get("access_token") or "").strip()
-        return token or None
-    except Exception:
-        return None
-
-async def save_auth(auth: dict[str, Any]) -> None:
-    from ..runtime.secret_provider import migrateLegacyStoredAuthSecrets
-
-    normalized = await migrateLegacyStoredAuthSecrets(auth)
-    await write_json_file(os.path.join(get_state_root(), "auth.json"), normalized["auth"])
-
-async def clear_auth() -> None:
-    await _run_storage_io(_clear_auth_sync, os.path.join(get_state_root(), "auth.json"))
-
-
-def _clear_auth_sync(auth_path: str) -> None:
-    try:
-        os.remove(auth_path)
-    except FileNotFoundError:
-        pass
-

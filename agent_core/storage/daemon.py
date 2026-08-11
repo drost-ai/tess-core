@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import note_swallowed
 
 import contextlib as _contextlib
 
@@ -81,7 +82,10 @@ async def load_daemon_events(instanceId: str) -> list[dict[str, Any]]:
     try:
         with open(daemon_events_path(instanceId), "r", encoding="utf-8") as handle:
             return [json.loads(line) for line in handle if line.strip()]
-    except Exception:
+    except FileNotFoundError:
+        return []
+    except Exception as error:
+        note_swallowed(f"daemon events log unreadable for {instanceId}", error)
         return []
 
 async def read_last_daemon_event_cursor(instanceId: str) -> int:
@@ -122,7 +126,10 @@ async def _read_last_daemon_cursor_from_tail(file_path: str) -> int:
         with open(file_path, "rb") as handle:
             handle.seek(size - read_bytes)
             raw = handle.read(read_bytes).decode("utf-8", errors="replace")
-    except Exception:
+    except FileNotFoundError:
+        return 0
+    except Exception as error:
+        note_swallowed(f"daemon events tail unreadable for {instanceId}", error)
         return 0
     for line in reversed([line.strip() for line in raw.split("\n") if line.strip()]):
         try:

@@ -14,6 +14,18 @@ from typing import Any, Awaitable, Callable, Iterable
 MISSING = object()
 
 
+def note_swallowed(context: str, error: BaseException) -> None:
+    """One-line stderr note for a deliberately swallowed error.
+
+    For swallows that keep the runtime alive but would otherwise bury
+    evidence of corruption or IO faults: the operation still degrades
+    gracefully, and the fault stays diagnosable.
+    """
+    import sys
+
+    print(f"[agent-core] {context}: {error!r}", file=sys.stderr)
+
+
 def drop_none_deep(value: Any) -> Any:
     """Recursively rebuild dicts/lists with None-valued dict entries removed."""
     if isinstance(value, dict):
