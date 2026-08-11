@@ -24,6 +24,7 @@ from typing import Any
 _INDENT_STEP = 2
 
 _PLAIN_KEY_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]*$")
+_MAX_NESTING_DEPTH = 64
 _INT_RE = re.compile(r"^[+-]?[0-9]+$")
 _FLOAT_RE = re.compile(r"^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)(?:[eE][+-]?[0-9]+)?$")
 _NULL_TOKENS = {"null", "Null", "NULL", "~", ""}
@@ -70,6 +71,7 @@ def parse_yaml_subset(text: str, *, source: str = "<yaml>") -> Any:
 
 class _Parser:
     def __init__(self, text: str, source: str) -> None:
+        self.depth = 0
         self.source = source
         self.raw_lines = text.split("\n")
         self.lines = self._collect_lines()
@@ -147,12 +149,21 @@ class _Parser:
 
     def _parse_node(self, indent: int) -> Any:
         line = self.lines[self.pos]
-        if line.content == "-" or line.content.startswith("- "):
-            return self._parse_sequence(indent)
-        if self._split_key(line) is not None:
-            return self._parse_mapping(indent)
-        self.pos += 1
-        return self._parse_scalar(line.content, line.number)
+        if self.depth >= _MAX_NESTING_DEPTH:
+            self._fail(
+                f"nesting exceeds the supported depth of {_MAX_NESTING_DEPTH} levels",
+                line.number,
+            )
+        self.depth += 1
+        try:
+            if line.content == "-" or line.content.startswith("- "):
+                return self._parse_sequence(indent)
+            if self._split_key(line) is not None:
+                return self._parse_mapping(indent)
+            self.pos += 1
+            return self._parse_scalar(line.content, line.number)
+        finally:
+            self.depth -= 1
 
     def _parse_mapping(self, indent: int) -> dict[str, Any]:
         mapping: dict[str, Any] = {}
@@ -350,6 +361,14 @@ class _Parser:
         if token in _FALSE_TOKENS:
             return False
         if _INT_RE.match(token):
+            digits = token.lstrip("+-")
+            if len(digits) > 1 and digits.startswith("0"):
+                # YAML 1.1 reads 0755 as octal 493; YAML 1.2 reads a string;
+                # this subset's premise is one meaning across parsers.
+                self._fail(
+                    f"integers with leading zeros are ambiguous across YAML parsers: {token!r}",
+                    number,
+                )
             return int(token)
         if _FLOAT_RE.match(token):
             return float(token)

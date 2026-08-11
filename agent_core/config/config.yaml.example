@@ -273,14 +273,10 @@ knobs:
   subagents:
     # Milliseconds a subagent continuation lease stays valid before it may be re-claimed. [1000..3600000]
     continuation_lease_ms: 30000
-    # Milliseconds a legacy continuation claim is honored before recovery may steal it. [1000..3600000]
-    legacy_claim_grace_ms: 30000
     # Maximum nesting depth for subagents spawning subagents. [1..10]
     max_depth: 2
     # Maximum live subagent processes per runtime instance; at capacity the Agent tool returns the live-children roster instead of spawning. [1..64]
     max_live: 8
-    # Default recovery attempts for an interrupted subagent continuation; policy overrides win. [0..20]
-    max_recovery_attempts: 3
     # Milliseconds between a resident subagent's mailbox polls while idle between turns. [100..60000]
     resident_poll_ms: 1000
   tasks:

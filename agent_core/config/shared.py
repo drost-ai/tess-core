@@ -52,6 +52,9 @@ PROVIDER_MODELS = {
 PROVIDER_DEFAULT_MODEL = {"anthropic": DEFAULT_MODEL, "openai": "gpt-5.4"}
 PROVIDER_DEFAULT_EFFORT = {"anthropic": "high", "openai": "xhigh"}
 
+# Knob-derived image limits are deliberately absent: profile resolution
+# fills them live, and baking them at import time (before configureKnobs)
+# shadowed user overrides with stale defaults.
 BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
     "openai": {
         "kind": "openai",
@@ -62,10 +65,6 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "capabilities": {
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": default_max_image_input_count(),
-            "maxImageBytes": default_max_image_input_bytes(),
-            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
-            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
     "codex": {
@@ -80,10 +79,6 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
             "openaiTurnState": True,
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": default_max_image_input_count(),
-            "maxImageBytes": default_max_image_input_bytes(),
-            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
-            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
     "anthropic-console": {
@@ -94,10 +89,6 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "capabilities": {
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": default_max_image_input_count(),
-            "maxImageBytes": default_max_image_input_bytes(),
-            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
-            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
     "anthropic-claude-code": {
@@ -108,10 +99,6 @@ BUILTIN_PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         "capabilities": {
             "imageInput": True,
             "imageMimeTypes": DEFAULT_IMAGE_INPUT_MIME_TYPES,
-            "maxImageCount": default_max_image_input_count(),
-            "maxImageBytes": default_max_image_input_bytes(),
-            "maxAggregateImageBytes": default_max_aggregate_image_input_bytes(),
-            "maxEncodedImageRequestBytes": default_max_encoded_image_request_bytes(),
         },
     },
 }

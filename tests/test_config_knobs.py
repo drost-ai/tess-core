@@ -96,6 +96,19 @@ class KnobWiringTests(unittest.TestCase):
             if name.startswith("AGENT_CORE_PROVIDER_"):
                 del os.environ[name]
 
+    def test_image_capability_knobs_reach_resolved_builtin_profiles(self):
+        from agent_core.config.providers import resolveProviderProfile
+        from agent_core.config.shared import BUILTIN_PROVIDER_PROFILES
+
+        configureKnobs({"images": {"max_count": 3}})
+        try:
+            resolved = resolveProviderProfile("openai", BUILTIN_PROVIDER_PROFILES["openai"])
+            # Baked import-time values used to shadow this override.
+            self.assertEqual(resolved["capabilities"]["maxImageCount"], 3)
+            self.assertNotIn("maxImageCount", BUILTIN_PROVIDER_PROFILES["openai"]["capabilities"])
+        finally:
+            resetConfiguredKnobs()
+
     def test_openai_retry_ladder_reads_knob_with_jitter(self):
         delay = openai_module.shared.providerRetryDelayMs
         self.assertTrue(1_000 <= delay(1) <= 1_119, delay(1))

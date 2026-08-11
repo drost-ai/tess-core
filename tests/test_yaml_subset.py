@@ -261,5 +261,20 @@ class YamlSubsetRejectTests(unittest.TestCase):
         self.assert_rejects("  a: 1\n", "column 0", 1)
 
 
+    def test_rejects_leading_zero_integers_as_cross_parser_ambiguous(self):
+        self.assert_rejects("mode: 0755\n", "leading zeros", 1)
+        self.assert_rejects("mode: -0755\n", "leading zeros", 1)
+        self.assertEqual(parse_yaml_subset("n: 0\nm: -12\nz: 0.5\n"), {"n": 0, "m": -12, "z": 0.5})
+
+    def test_depth_guard_rejects_pathological_nesting_loudly(self):
+        deep = "a:\n" + "\n".join("  " * (level + 1) + "k:" for level in range(200))
+        with self.assertRaises(YamlSubsetError) as guard:
+            parse_yaml_subset(deep, source="deep")
+        self.assertIn("nesting exceeds the supported depth", str(guard.exception))
+        # Sixty-three levels stay within the subset.
+        fine = "a:\n" + "\n".join("  " * (level + 1) + "k:" for level in range(60))
+        self.assertIsInstance(parse_yaml_subset(fine), dict)
+
+
 if __name__ == "__main__":
     unittest.main()
