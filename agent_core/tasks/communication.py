@@ -17,7 +17,7 @@ from ..storage import (
 )
 from ..storage.json_io import mutateJsonLines, readJsonLines
 from ..session.persistence import persistSession
-from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
 
 
 def task_mailbox_path(task_id: str) -> str:

@@ -9,7 +9,7 @@ from .parsing import (
 )
 from .tokens import truncate
 from typing import Any
-from ...session.message_origin import (
+from ...storage.message_origin import (
     isGenuineUserRequest as _is_genuine_user_request,
     isRuntimeSyntheticMessage as _is_runtime_synthetic_message,
 )

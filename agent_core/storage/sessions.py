@@ -4,13 +4,13 @@ import copy
 import time
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
-from ..session.message_origin import isGenuineUserRequest as _is_genuine_user_request
+from .message_origin import isGenuineUserRequest as _is_genuine_user_request
 from .persistence_metrics import (
     persistenceObserversActive as _persistence_observers_active,
     recordPersistenceIo as _record_persistence_io,
 )
 from ..runtime.identifiers import RuntimeIdentifierError
-from ..session.message_history import (
+from .message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
@@ -22,7 +22,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from .json_io import _in_process_lock, readJsonFile, readJsonFileTolerant, withRecordTransaction, writeJsonFile
+from .json_io import inProcessLock, readJsonFile, readJsonFileTolerant, withRecordTransaction, writeJsonFile
 from .paths import (
     compactionCheckpointPath,
     compactionManifestPath,
@@ -59,7 +59,7 @@ async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) 
     # The former synchronous body also serialized same-process callers by
     # blocking the event loop. Preserve that ordering explicitly now that the
     # append runs on a worker.
-    async with _in_process_lock(f"{path}#transcript-append"):
+    async with inProcessLock(f"{path}#transcript-append"):
         await _run_storage_io(_append_session_transcript_log_entries_sync, path, entries)
     return path
 

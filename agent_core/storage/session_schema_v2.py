@@ -6,9 +6,9 @@ import uuid
 from typing import Any, Callable
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media
-from ..session.message_origin import isGenuineUserRequest as _is_genuine_user_request
+from .message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ..runtime.identifiers import parseSessionId
-from ..session.message_history import (
+from .message_history import (
     createSessionMessageList as _create_session_message_list,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
@@ -115,7 +115,7 @@ async def hydratePersistedSession(
         reason = "body_tail_ignored"
     _set_session_persistence_checkpoint(
         record,
-        _normalize_revision(record.get("revision")),
+        normalizeSessionRevision(record.get("revision")),
         len(record.get("messages") or []),
         body_commit_id,
     )
@@ -145,7 +145,7 @@ def hydrateSessionHeadFromBodyBytes(
     record = _hydrate_head(head, body["messages"][:count])
     _set_session_persistence_checkpoint(
         record,
-        _normalize_revision(record.get("revision")),
+        normalizeSessionRevision(record.get("revision")),
         len(record.get("messages") or []),
         body_commit_id,
     )
@@ -431,7 +431,7 @@ def _hydrate_head(head: dict[str, Any], messages: list[dict[str, Any]]) -> dict[
     return dict(items)
 
 
-def _normalize_revision(value: Any) -> int:
+def normalizeSessionRevision(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 

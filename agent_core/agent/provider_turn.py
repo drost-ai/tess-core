@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from .._utils import maybe_await, merge_usage
-from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..providers.prompt_cache_orchestration import (
     attachPreparedPromptCacheContext,
     commitProviderPromptCacheObservation,

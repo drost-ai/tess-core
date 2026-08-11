@@ -12,7 +12,7 @@ from ..storage.persistence_metrics import (
     finishPersistenceCall as _finish_persistence_call,
 )
 from .fork import createForkArchiveHeader, createForkedSession
-from .message_history import (
+from ..storage.message_history import (
     SessionMessageList,
     createSessionMessageList as _create_session_message_list,
     sessionPersistenceCheckpoint as _session_persistence_checkpoint,
@@ -27,6 +27,7 @@ from ..storage import (
     loadSession,
     mutateSessionHeadDeltaTransaction,
     mutateSessionRecordTransaction,
+    normalizeSessionRevision,
 )
 from ..runtime.workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
@@ -156,18 +157,14 @@ _CONCURRENT_SESSION_SCALAR_FIELDS = (
 )
 
 
-def _valid_revision(value: Any) -> int:
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
-
-
 def _merge_concurrent_operational_state(
     desired: dict[str, Any],
     latest: dict[str, Any] | None,
 ) -> dict[str, Any]:
     if latest is None:
         return copy.deepcopy(desired)
-    desired_revision = _valid_revision(desired.get("revision"))
-    latest_revision = _valid_revision(latest.get("revision"))
+    desired_revision = normalizeSessionRevision(desired.get("revision"))
+    latest_revision = normalizeSessionRevision(latest.get("revision"))
     merged = copy.deepcopy(desired)
     if "revision" in latest:
         merged["revision"] = latest["revision"]
@@ -282,7 +279,7 @@ def _adopt_repaired_checkpoint(
     ):
         return
     live.set_checkpoint(
-        _valid_revision(committed.get("revision")), covered, committed["bodyCommitId"]
+        normalizeSessionRevision(committed.get("revision")), covered, committed["bodyCommitId"]
     )
 
 

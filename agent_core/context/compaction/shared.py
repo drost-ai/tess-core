@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...session.message_origin import CONTINUATION_BRIDGE_MESSAGE
+from ...storage.message_origin import CONTINUATION_BRIDGE_MESSAGE
 
 from typing import Any
 

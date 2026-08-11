@@ -17,7 +17,7 @@ def _knob(name: str):
 
 from typing import Any
 
-from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..tasks.communication import answer_task_question, read_task_questions
 from ..storage import readTaskMeta
 

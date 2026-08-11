@@ -35,7 +35,7 @@ from .spawn_utils import (
     _without_none_values,
 )
 from typing import Any
-from ..session.message_origin import messageWithOrigin as _message_with_origin
+from ..storage.message_origin import messageWithOrigin as _message_with_origin
 from ..authority.agent import (
     captureAgentAuthority,
     deriveChildAgentAuthority,

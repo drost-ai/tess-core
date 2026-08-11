@@ -3,7 +3,7 @@ from __future__ import annotations
 from ...daemon.events import _event_matches_session
 
 from ..._utils import now_iso
-from ...session.persisted_record_scanner import (
+from ...storage.persisted_record_scanner import (
     getPersistedRecordIssue,
     listPersistedRecordIssues,
 )

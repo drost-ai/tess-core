@@ -63,7 +63,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_truncated_copy_confines_lineage_to_the_unpersisted_tail(self):
-        from agent_core.session.message_history import SessionMessageList
+        from agent_core.storage.message_history import SessionMessageList
 
         source = SessionMessageList(
             [{"role": "user", "content": f"m{index}"} for index in range(4)]

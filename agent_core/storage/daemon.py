@@ -20,8 +20,8 @@ from .paths import (
     getStateRoot,
     parseDaemonInstanceId,
 )
-from ..session.persisted_record_scanner import readPersistedJsonRecord
-from ..session.persisted_record_validation import isDaemonStateRecord
+from .persisted_record_scanner import readPersistedJsonRecord
+from .persisted_record_validation import isDaemonStateRecord
 
 
 async def saveDaemonState(instanceId: str, record: dict[str, Any]) -> None:

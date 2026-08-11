@@ -92,7 +92,7 @@ def _notify_lock_observers(payload: dict[str, Any]) -> None:
             pass
 
 
-def _in_process_lock(path: str) -> asyncio.Lock:
+def inProcessLock(path: str) -> asyncio.Lock:
     loop = asyncio.get_running_loop()
     locks = _IN_PROCESS_LOCKS.get(loop)
     if locks is None:
@@ -145,7 +145,7 @@ async def fileLock(filePath: str, *, timeoutMs: int | None = None):
     if timeoutMs is None:
         timeoutMs = _storage_lock_timeout_ms()
     deadline = _time.monotonic() + max(0, int(timeoutMs)) / 1000.0
-    in_process = _in_process_lock(path)
+    in_process = inProcessLock(path)
     in_process_acquired = False
     os_handle = None
     try:

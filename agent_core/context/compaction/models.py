@@ -19,7 +19,7 @@ from .shared import (
 from .utils import collapseWhitespace, estimateMessageTokens, truncate
 from typing import Any
 from .artifacts import mergeCompactionUsageIntoSession
-from ...session.message_origin import isGenuineUserRequest as _is_genuine_user_request
+from ...storage.message_origin import isGenuineUserRequest as _is_genuine_user_request
 from ...providers._knob_reader import provider_knob
 from ...providers.token_budget import resolveCompactionRequestOutputTokens
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage

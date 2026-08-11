@@ -8,7 +8,7 @@ from .shared import (
 )
 from .utils import collapseWhitespace, estimateTextTokens, truncate
 from typing import Any
-from ...session.message_origin import isRuntimeSyntheticMessage as _is_runtime_synthetic_message
+from ...storage.message_origin import isRuntimeSyntheticMessage as _is_runtime_synthetic_message
 
 
 def buildCompactionEvidence(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

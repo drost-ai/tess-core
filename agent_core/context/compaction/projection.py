@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ...session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ...storage.message_origin import syntheticUserMessage as _synthetic_user_message
 from ...session.tool_boundaries import adjustStartToToolBoundary as _adjust_start_to_tool_boundary
 from ...storage import getSessionCompactionsDir
 from .documents import loadWorkingContextArtifact

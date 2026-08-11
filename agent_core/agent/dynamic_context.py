@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from ..session.message_origin import (
+from ..storage.message_origin import (
     isGenuineUserRequest as _is_genuine_user_request,
     syntheticUserMessage as _synthetic_user_message,
 )

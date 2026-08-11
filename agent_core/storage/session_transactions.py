@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..runtime.identifiers import parseSessionId
-from ..session.message_history import (
+from .message_history import (
     SessionMessageList,
     setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
 )
@@ -16,16 +16,13 @@ from .session_schema_v2 import (
     commitSessionV2Delta,
     hydratePersistedSession,
     isSessionHeadV2,
+    normalizeSessionRevision,
     sessionLiveHeadFromV2,
 )
 
 
 class SessionRecordNotFoundError(RuntimeError):
     pass
-
-
-def normalizeSessionRevision(value: Any) -> int:
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
 async def mutateSessionRecordTransaction(

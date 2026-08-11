@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .._utils import now_iso
-from ..session.message_origin import syntheticUserMessage
+from ..storage.message_origin import syntheticUserMessage
 
 
 PROGRESS_LEDGER_SCHEMA_VERSION = 1

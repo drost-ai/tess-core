@@ -7,7 +7,7 @@ from .shared import (
 )
 from .utils import estimateMessageTokens
 from typing import Any
-from ...session.message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
+from ...storage.message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
 from ...session.tool_boundaries import (
     assistantToolUsesAreCompleted,
     messageHasToolResults,

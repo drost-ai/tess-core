@@ -23,7 +23,7 @@ from .tokens import (
     truncate,
 )
 from typing import Any
-from ...session.message_origin import (
+from ...storage.message_origin import (
     isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
     syntheticUserMessage as _synthetic_user_message,
 )

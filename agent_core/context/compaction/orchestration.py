@@ -42,7 +42,7 @@ from .utils import estimateMessageTokens, estimateTextTokens
 from typing import Any
 from ..compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
-from ...session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ...storage.message_origin import syntheticUserMessage as _synthetic_user_message
 from ...providers._knob_reader import provider_knob as _provider_knob
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 

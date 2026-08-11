@@ -15,8 +15,8 @@ from ..runtime.identifiers import (
     tryParseMonitorId,
     tryParseTaskId,
 )
-from ..session.persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
-from ..session.persisted_record_validation import (
+from .persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
+from .persisted_record_validation import (
     isChildAgentRecord,
     isHealthCheckTaskRecord,
     isMonitorRecord,
@@ -64,11 +64,11 @@ async def _save_by_path(path: str, record: dict[str, Any]) -> None:
 async def _load_by_path(path: str) -> dict[str, Any] | None:
     return await readJsonFile(path, None)
 
-def _omit_none_fields(value: Any) -> Any:
+def omitNoneFields(value: Any) -> Any:
     if isinstance(value, dict):
-        return {key: _omit_none_fields(item) for key, item in value.items() if item is not None}
+        return {key: omitNoneFields(item) for key, item in value.items() if item is not None}
     if isinstance(value, list):
-        return [_omit_none_fields(item) for item in value]
+        return [omitNoneFields(item) for item in value]
     return value
 
 
@@ -156,7 +156,7 @@ async def saveChildAgent(record: ChildAgentRecord) -> None:
     path = childAgentPath(agent_id)
     async with withRecordTransaction("agent-record", agent_id):
         current = await _load_by_path(path)
-        await writeJsonFile(path, _omit_none_fields(_merge_child_agent_for_full_save(current, record)))
+        await writeJsonFile(path, omitNoneFields(_merge_child_agent_for_full_save(current, record)))
 
 
 async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:
@@ -177,7 +177,7 @@ async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:
             updated = current
         if updated is None:
             return None
-        await writeJsonFile(path, _omit_none_fields(updated))
+        await writeJsonFile(path, omitNoneFields(updated))
         return updated
 
 async def loadChildAgent(agentId: str) -> ChildAgentRecord | None:
@@ -239,7 +239,7 @@ async def readTaskMeta(taskId: str) -> TaskMeta | None:
 async def saveTaskRecord(record: TaskRecord) -> None:
     task_id = parseTaskId(record["id"])
     async with withRecordTransaction("task-lifecycle", task_id):
-        await writeJsonFile(taskRecordPath(task_id), _omit_none_fields(record))
+        await writeJsonFile(taskRecordPath(task_id), omitNoneFields(record))
 
 async def loadTaskRecord(taskId: str) -> TaskRecord | None:
     task_id = parseTaskId(taskId)

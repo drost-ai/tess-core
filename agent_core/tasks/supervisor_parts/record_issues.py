@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...session.persisted_record_scanner import listPersistedRecordIssues
+from ...storage.persisted_record_scanner import listPersistedRecordIssues
 from ...storage import getStateRoot
 from typing import Any, Callable
 

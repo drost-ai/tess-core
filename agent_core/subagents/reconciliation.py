@@ -10,7 +10,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
 from ..storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
 from ..storage.io_executor import runStorageIo as _run_storage_io
 

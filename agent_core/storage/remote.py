@@ -7,9 +7,9 @@ from typing import Any
 
 from .json_io import withRecordTransaction, writeJsonFile
 from .paths import getStateRoot
-from .records import _omit_none_fields
-from ..session.persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
-from ..session.persisted_record_validation import isBridgeRecord, isRemoteSessionRecord
+from .records import omitNoneFields
+from .persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
+from .persisted_record_validation import isBridgeRecord, isRemoteSessionRecord
 from ..runtime.identifiers import (
     parseBridgeId,
     parseRemoteSessionId,
@@ -38,7 +38,7 @@ def remoteSessionPath(remoteSessionId: str) -> str:
     )
 
 async def saveRemoteSession(record: dict[str, Any]) -> None:
-    await writeJsonFile(remoteSessionPath(record["id"]), _omit_none_fields(record))
+    await writeJsonFile(remoteSessionPath(record["id"]), omitNoneFields(record))
 
 async def loadRemoteSession(remoteSessionId: str) -> dict[str, Any] | None:
     remote_id = parseRemoteSessionId(remoteSessionId)
@@ -77,7 +77,7 @@ def bridgeRecoveryPath(sessionId: str) -> str:
 
 async def saveBridge(record: dict[str, Any]) -> None:
     _assert_serialized_bound(record, "bridge record", 512 * 1024)
-    await writeJsonFile(bridgePath(record["id"]), _omit_none_fields(record))
+    await writeJsonFile(bridgePath(record["id"]), omitNoneFields(record))
 
 async def loadBridge(bridgeId: str) -> dict[str, Any] | None:
     bridge_id = parseBridgeId(bridgeId)
@@ -126,7 +126,7 @@ async def appendBridgeInboxMessage(message: dict[str, Any]) -> None:
         existing = await loadBridgeInbox(bridge_id)
         same_id = next((entry for entry in existing if entry.get("id") == message["id"]), None)
         if same_id is not None:
-            if same_id == _omit_none_fields(message):
+            if same_id == omitNoneFields(message):
                 return
             raise BridgeStorageError(
                 f"Bridge inbox message id {message['id']} conflicts with its persisted record."
@@ -139,7 +139,7 @@ async def appendBridgeInboxMessage(message: dict[str, Any]) -> None:
             )
         if len(existing) >= BRIDGE_LOG_MAX_ENTRIES:
             raise BridgeStorageError(f"Bridge inbox exceeds {BRIDGE_LOG_MAX_ENTRIES} entries.")
-        value = _omit_none_fields([*existing, message])
+        value = omitNoneFields([*existing, message])
         _assert_serialized_bound(value, "bridge inbox", BRIDGE_STORAGE_MAX_BYTES)
         await writeJsonFile(bridgeInboxPath(bridge_id), value)
 
@@ -152,7 +152,7 @@ async def replaceBridgeInbox(bridgeId: str, messages: list[dict[str, Any]]) -> N
     keys = [message.get("idempotencyKey") for message in messages if message.get("idempotencyKey")]
     if len(keys) != len(set(keys)):
         raise BridgeStorageError("Bridge inbox contains duplicate idempotency keys.")
-    value = _omit_none_fields(messages)
+    value = omitNoneFields(messages)
     _assert_serialized_bound(value, "bridge inbox", BRIDGE_STORAGE_MAX_BYTES)
     await writeJsonFile(bridgeInboxPath(bridge_id), value)
 
@@ -173,14 +173,14 @@ async def appendBridgeEvent(record: dict[str, Any]) -> None:
         existing = await loadBridgeEvents(bridge_id)
         same_id = next((entry for entry in existing if entry.get("id") == record["id"]), None)
         if same_id is not None:
-            if same_id == _omit_none_fields(record):
+            if same_id == omitNoneFields(record):
                 return
             raise BridgeStorageError(
                 f"Bridge event id {record['id']} conflicts with its persisted record."
             )
         if len(existing) >= BRIDGE_LOG_MAX_ENTRIES:
             raise BridgeStorageError(f"Bridge event log exceeds {BRIDGE_LOG_MAX_ENTRIES} entries.")
-        value = _omit_none_fields([*existing, record])
+        value = omitNoneFields([*existing, record])
         _assert_serialized_bound(value, "bridge event log", BRIDGE_STORAGE_MAX_BYTES)
         await writeJsonFile(bridgeEventsPath(bridge_id), value)
 
@@ -203,7 +203,7 @@ async def saveBridgeDeliveryLedger(ledger: dict[str, Any]) -> None:
     bridge_id = parseBridgeId(ledger["bridgeId"])
     if not _is_bridge_delivery_ledger(ledger, bridge_id):
         raise BridgeStorageError("Bridge delivery ledger is invalid.")
-    value = _omit_none_fields(ledger)
+    value = omitNoneFields(ledger)
     _assert_serialized_bound(value, "bridge delivery ledger", BRIDGE_STORAGE_MAX_BYTES)
     await writeJsonFile(bridgeLedgerPath(bridge_id), value)
 
@@ -226,7 +226,7 @@ async def saveBridgeRecoveryRecord(sessionId: str, value: dict[str, Any]) -> Non
     session_id = parseSessionId(sessionId)
     if not _is_bridge_recovery_record(value, session_id):
         raise BridgeStorageError("Bridge recovery journal is invalid.")
-    compact = _omit_none_fields(value)
+    compact = omitNoneFields(value)
     _assert_serialized_bound(compact, "bridge recovery journal", BRIDGE_STORAGE_MAX_BYTES)
     await writeJsonFile(bridgeRecoveryPath(session_id), compact)
 
@@ -236,7 +236,7 @@ def _append_unique_coordination_record(existing: Any, record: dict[str, Any]) ->
     record_id = record.get("id")
     if record_id and any(isinstance(item, dict) and item.get("id") == record_id for item in records):
         return {"value": records, "changed": False}
-    return {"value": _omit_none_fields([*records, record]), "changed": True}
+    return {"value": omitNoneFields([*records, record]), "changed": True}
 
 
 async def _load_bridge_array(

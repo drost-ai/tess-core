@@ -6,7 +6,7 @@ import copy
 import re
 from typing import Any
 
-from ..session.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
 
 STRICT_TOOL_PROTOCOL_PROVIDERS = {"anthropic", "openai"}
 _IMAGE_PLACEHOLDER_RE = re.compile(r"^<image:(?P<mime>[^:>]+)(?::(?P<path>.*?))?:current-turn-only>$")
