@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 from .._utils import now_iso
 from ..remote import (
-    formatBridgeTail,
-    formatRemoteSessionCandidate,
-    sendBridgeMessage,
-    updateRemoteSession,
+    format_bridge_tail,
+    format_remote_session_candidate,
+    send_bridge_message,
+    update_remote_session,
 )
-from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
+from ..daemon import ensure_task_supervisor_daemon, stop_task_supervisor_daemon
 from ..storage import (
     list_bridges,
     list_child_agents,
@@ -20,7 +20,7 @@ from ..storage import (
     load_remote_session,
     load_session,
 )
-from .agents import _is_active_child_agent, _is_related_child_agent, formatChildAgentRecord
+from .agents import _is_active_child_agent, _is_related_child_agent, format_child_agent_record
 from .tasks import _request_runtime_instance_id
 from .common import (
     _call,
@@ -33,16 +33,16 @@ from .common import (
     _persist,
     _short_id,
     _split_subcommand,
-    squashWhitespace,
-    truncateAscii,
+    squash_whitespace,
+    truncate_ascii,
 )
-from .common import formatMonitorRecord
-from .tasks import formatTaskInspectReport
+from .common import format_monitor_record
+from .tasks import format_task_inspect_report
 from typing import Any
-from ..remote import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
+from ..remote import close_current_bridge_generation as _closeCurrentBridgeGeneration
 
 
-async def buildDaemonReport(instanceId: str | None) -> str:
+async def build_daemon_report(instanceId: str | None) -> str:
     if not instanceId:
         return "Daemon not running (no runtime instance)."
     daemon = await load_daemon_state(instanceId)
@@ -60,11 +60,11 @@ async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[st
         if callable(restart_fn):
             await _maybe_await(restart_fn())
         elif instance_id:
-            await stopTaskSupervisorDaemon({"instanceId": instance_id})
-            await ensureTaskSupervisorDaemon({"instanceId": instance_id, "cwd": session.get("cwd") or config.get("cwd") or os.getcwd()})
+            await stop_task_supervisor_daemon({"instanceId": instance_id})
+            await ensure_task_supervisor_daemon({"instanceId": instance_id, "cwd": session.get("cwd") or config.get("cwd") or os.getcwd()})
         else:
             return _error(hooks, "Daemon restart requires a bound runtime instance.")
-    return _info(hooks, "Daemon", await buildDaemonReport(instance_id))
+    return _info(hooks, "Daemon", await build_daemon_report(instance_id))
 
 
 async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
@@ -73,24 +73,24 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
     bridge = await load_bridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
     if not arg_text:
         if remote or bridge:
-            return _info(hooks, "Remote", buildRemoteReport(session, remote, bridge))
+            return _info(hooks, "Remote", build_remote_report(session, remote, bridge))
         fallback = _call_value(hooks, "getRemoteReport")
-        return _info(hooks, "Remote", str(fallback) if fallback is not None else buildRemoteFallbackReport(session))
+        return _info(hooks, "Remote", str(fallback) if fallback is not None else build_remote_fallback_report(session))
 
     subcommand, query = _split_subcommand(arg_text)
     if subcommand == "list":
-        return _info(hooks, "Remote", await buildRemoteListReport())
+        return _info(hooks, "Remote", await build_remote_list_report())
     if subcommand in {"inspect", "show"}:
         selection = await _resolve_remote_record(query, session, remote)
         if not selection:
             return _error(hooks, f"No remote session matched: {query or 'current'}")
         linked_bridge = await load_bridge(selection.get("bridgeId")) if selection.get("bridgeId") else bridge
-        return _info(hooks, "Remote", formatRemoteSessionRecord(selection, linked_bridge))
+        return _info(hooks, "Remote", format_remote_session_record(selection, linked_bridge))
     if subcommand in {"tail", "events"}:
         selected_bridge = await _resolve_bridge_record(query, session, bridge)
         if not selected_bridge:
             return _error(hooks, f"No bridge matched: {query or 'current'}")
-        return _info(hooks, "Bridge", await formatBridgeTail(selected_bridge["id"]))
+        return _info(hooks, "Bridge", await format_bridge_tail(selected_bridge["id"]))
     if subcommand in {"queue", "send", "message"}:
         if not query:
             return _error(hooks, "Usage: /remote queue TEXT")
@@ -100,7 +100,7 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
         if not selected_bridge:
             return _error(hooks, "No active bridge is available for this session.")
         try:
-            message = await sendBridgeMessage({"bridgeId": selected_bridge["id"], "text": query, "source": "local"})
+            message = await send_bridge_message({"bridgeId": selected_bridge["id"], "text": query, "source": "local"})
         except Exception as exc:
             return _error(hooks, str(exc))
         return _info(hooks, "Bridge", f"Queued {message.get('id')} for bridge {_short_id(selected_bridge['id'])}")
@@ -142,7 +142,7 @@ async def _handle_background(arg_text: str, session: dict[str, Any], hooks: dict
     bridge = await load_bridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
 
     if not arg_text:
-        return _info(hooks, "Background", buildBackgroundReport(session, agents, monitors, tasks, remote, bridge))
+        return _info(hooks, "Background", build_background_report(session, agents, monitors, tasks, remote, bridge))
 
     subcommand, query = _split_subcommand(arg_text)
     if not subcommand or not query:
@@ -170,14 +170,14 @@ async def _handle_background(arg_text: str, session: dict[str, Any], hooks: dict
     return _handled(f"resuming {target_session_id}")
 
 
-def buildRemoteReport(
+def build_remote_report(
     session: dict[str, Any],
     remote: dict[str, Any] | None = None,
     bridge: dict[str, Any] | None = None,
 ) -> str:
-    sections = [buildRemoteFallbackReport(session)]
+    sections = [build_remote_fallback_report(session)]
     if remote:
-        sections.append(formatRemoteSessionRecord(remote, bridge))
+        sections.append(format_remote_session_record(remote, bridge))
     if bridge and not remote:
         sections.append(
             "\n".join(
@@ -192,7 +192,7 @@ def buildRemoteReport(
     return "\n\n".join(sections)
 
 
-def buildRemoteFallbackReport(session: dict[str, Any]) -> str:
+def build_remote_fallback_report(session: dict[str, Any]) -> str:
     metadata = session.get("metadata", {})
     lines = [
         f"session        {session.get('id')}",
@@ -209,11 +209,11 @@ def buildRemoteFallbackReport(session: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-async def buildRemoteListReport() -> str:
+async def build_remote_list_report() -> str:
     remotes = await list_remote_sessions()
     if not remotes:
         return "No remote sessions recorded."
-    return "\n".join(formatRemoteSessionCandidate(record) for record in remotes[:12])
+    return "\n".join(format_remote_session_candidate(record) for record in remotes[:12])
 
 
 async def _resolve_remote_record(
@@ -270,7 +270,7 @@ async def _close_remote_records(remote: dict[str, Any] | None, bridge: dict[str,
     if bridge:
         await _closeCurrentBridgeGeneration(bridge)
     if remote and not bridge:
-        await updateRemoteSession(
+        await update_remote_session(
             remote["id"],
             {
                 "status": "idle",
@@ -283,7 +283,7 @@ async def _close_remote_records(remote: dict[str, Any] | None, bridge: dict[str,
         )
 
 
-def buildBackgroundReport(
+def build_background_report(
     session: dict[str, Any],
     agents: list[dict[str, Any]],
     monitors: list[dict[str, Any]],
@@ -303,13 +303,13 @@ def buildBackgroundReport(
     ]
     sections = ["\n".join(lines)]
     if active_tasks:
-        sections.append("\n".join(["Tasks:", *[f"- {_format_background_line(formatTaskInspectReport(record))}" for record in active_tasks[:8]]]))
+        sections.append("\n".join(["Tasks:", *[f"- {_format_background_line(format_task_inspect_report(record))}" for record in active_tasks[:8]]]))
     if active_agents:
-        sections.append("\n".join(["Workers:", *[f"- {_format_background_line(formatChildAgentRecord(record))}" for record in active_agents[:8]]]))
+        sections.append("\n".join(["Workers:", *[f"- {_format_background_line(format_child_agent_record(record))}" for record in active_agents[:8]]]))
     if monitors:
-        sections.append("\n".join(["Monitors:", *[f"- {_format_background_line(formatMonitorRecord(record))}" for record in monitors[:6]]]))
+        sections.append("\n".join(["Monitors:", *[f"- {_format_background_line(format_monitor_record(record))}" for record in monitors[:6]]]))
     if remote:
-        sections.append("\n".join(["Remote:", *[f"- {line}" for line in formatRemoteSessionRecord(remote, bridge).splitlines()]]))
+        sections.append("\n".join(["Remote:", *[f"- {line}" for line in format_remote_session_record(remote, bridge).splitlines()]]))
     sections.append("tip            /background inspect <id> or /background attach <id>")
     return "\n\n".join(sections)
 
@@ -356,12 +356,12 @@ def _resolve_background_selection(
 
 def _format_background_selection(selection: dict[str, Any]) -> str:
     if selection.get("kind") == "task":
-        return formatTaskInspectReport(selection["record"])
+        return format_task_inspect_report(selection["record"])
     if selection.get("kind") == "agent":
-        return formatChildAgentRecord(selection["record"])
+        return format_child_agent_record(selection["record"])
     if selection.get("kind") == "monitor":
-        return formatMonitorRecord(selection["record"])
-    return formatRemoteSessionRecord(selection["record"], selection.get("bridge"))
+        return format_monitor_record(selection["record"])
+    return format_remote_session_record(selection["record"], selection.get("bridge"))
 
 
 def _background_attach_target(selection: dict[str, Any]) -> str | None:
@@ -419,7 +419,7 @@ def _background_remote_tokens(record: dict[str, Any], bridge: dict[str, Any] | N
     )
 
 
-def formatRemoteSessionRecord(record: dict[str, Any], bridge: dict[str, Any] | None = None) -> str:
+def format_remote_session_record(record: dict[str, Any], bridge: dict[str, Any] | None = None) -> str:
     lines = [
         f"{_short_id(record.get('id', ''))}  {record.get('status')}  {record.get('title')}",
         f"session      {_short_id(record.get('sessionId', ''))}",
@@ -431,7 +431,7 @@ def formatRemoteSessionRecord(record: dict[str, Any], bridge: dict[str, Any] | N
     if record.get("lastEventName"):
         lines.append(f"last event   {record.get('lastEventName')}")
     if record.get("lastEventSummary"):
-        lines.append(f"summary      {truncateAscii(squashWhitespace(record.get('lastEventSummary')), 180)}")
+        lines.append(f"summary      {truncate_ascii(squash_whitespace(record.get('lastEventSummary')), 180)}")
     if record.get("unreadBridgeMessages"):
         lines.append(f"queued       {record.get('unreadBridgeMessages')}")
     if bridge:

@@ -7,7 +7,7 @@ from typing import Any
 
 from .._utils import now_iso
 from .agents import _is_related_child_agent
-from ..platform_support import collectDoctorReport
+from ..platform_support import collect_doctor_report
 from ..storage import (
     compaction_checkpoint_path,
     compaction_manifest_path,
@@ -27,8 +27,8 @@ from ..storage import (
 )
 
 
-async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def create_debug_bundle(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session_id = args.get("sessionId") or args.get("session_id") or (args.get("session") or {}).get("id")
     if not session_id:
         raise RuntimeError("sessionId is required.")
@@ -51,7 +51,7 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
     bridge = await load_bridge(session.get("metadata", {}).get("bridgeId")) if session.get("metadata", {}).get("bridgeId") else None
     bridge_inbox = await load_bridge_inbox(bridge["id"]) if bridge else []
     bridge_events = await load_bridge_events(bridge["id"]) if bridge else []
-    doctor = await collectDoctorReport(session.get("cwd") or cwd)
+    doctor = await collect_doctor_report(session.get("cwd") or cwd)
     compaction_manifest = await load_compaction_manifest(session["id"])
     task_ids = _unique_strings(
         [

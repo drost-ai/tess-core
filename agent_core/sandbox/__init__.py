@@ -50,7 +50,7 @@ class BubblewrapSandboxBackend(SandboxBackend):
         return wrapped
 
 
-def normalizeSandboxConfig(value: Any = None, cwd: str | None = None) -> dict[str, Any]:
+def normalize_sandbox_config(value: Any = None, cwd: str | None = None) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
     mode = _normalize_mode(raw.get("mode"))
     config: dict[str, Any] = {"mode": mode}
@@ -67,7 +67,7 @@ def normalizeSandboxConfig(value: Any = None, cwd: str | None = None) -> dict[st
     return config
 
 
-def resolveSandboxPolicy(
+def resolve_sandbox_policy(
     config: dict[str, Any] | None = None,
     *,
     session: dict[str, Any] | None = None,
@@ -90,7 +90,7 @@ def resolveSandboxPolicy(
     }
 
 
-def resolveSandboxBackend(
+def resolve_sandbox_backend(
     config: dict[str, Any] | None = None,
     *,
     platform: str | None = None,
@@ -112,7 +112,7 @@ def resolveSandboxBackend(
     return SandboxBackend("none", "none", "no supported sandbox backend is available")
 
 
-def prepareSandboxedArgv(
+def prepare_sandboxed_argv(
     argv: list[str],
     *,
     config: dict[str, Any] | None = None,
@@ -121,9 +121,9 @@ def prepareSandboxedArgv(
     extraWritableRoots: list[str] | tuple[str, ...] | None = None,
     emit: Callable[[str, dict[str, Any]], Any] | None = None,
 ) -> dict[str, Any]:
-    policy = resolveSandboxPolicy(config, session=session, cwd=cwd, extraWritableRoots=extraWritableRoots)
+    policy = resolve_sandbox_policy(config, session=session, cwd=cwd, extraWritableRoots=extraWritableRoots)
     mode = policy["mode"]
-    backend = resolveSandboxBackend({"sandbox": policy})
+    backend = resolve_sandbox_backend({"sandbox": policy})
     if mode == "off":
         return {"argv": list(argv), "policy": policy, "backend": _backend_record(backend)}
     if mode == "os-required" and backend.enforcement != "os":
@@ -248,8 +248,8 @@ __all__ = [
     "SandboxPolicy",
     "SandboxUnavailableError",
     "SeatbeltSandboxBackend",
-    "normalizeSandboxConfig",
-    "prepareSandboxedArgv",
-    "resolveSandboxBackend",
-    "resolveSandboxPolicy",
+    "normalize_sandbox_config",
+    "prepare_sandboxed_argv",
+    "resolve_sandbox_backend",
+    "resolve_sandbox_policy",
 ]

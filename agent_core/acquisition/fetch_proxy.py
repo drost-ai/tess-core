@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 
-def resolveEnvironmentProxyForUrl(url: str, env: dict[str, str] | None = None) -> str | None:
+def resolve_environment_proxy_for_url(url: str, env: dict[str, str] | None = None) -> str | None:
     env = env or {}
     scheme = urlparse(url).scheme.lower()
     if scheme == "https":

@@ -5,26 +5,26 @@ from typing import Any
 
 from ..runtime.workspace import capture_workspace_snapshot, summarize_workspace_capabilities
 from ..storage import get_project_root, get_state_root, list_live_daemon_states, load_auth, load_mcp_servers, load_plugins
-from .chrome import detectChromeCompanionStatus
-from .ide import detectIdeTargets
-from .install import inspectInstallState
-from .session_hygiene import buildSessionHygieneReport
-from .tmux import detectTmuxAvailability
+from .chrome import detect_chrome_companion_status
+from .ide import detect_ide_targets
+from .install import inspect_install_state
+from .session_hygiene import build_session_hygiene_report
+from .tmux import detect_tmux_availability
 
-async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def collect_doctor_report(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     state_root = get_state_root()
     project_root = get_project_root(cwd)
     auth = await load_auth()
-    install = await inspectInstallState(args)
-    tmux = await detectTmuxAvailability(args)
-    ide_targets = await detectIdeTargets(args)
-    chrome = await detectChromeCompanionStatus({**args, "includeNativeHostManifest": True})
+    install = await inspect_install_state(args)
+    tmux = await detect_tmux_availability(args)
+    ide_targets = await detect_ide_targets(args)
+    chrome = await detect_chrome_companion_status({**args, "includeNativeHostManifest": True})
     live_daemons = await list_live_daemon_states()
     daemon = live_daemons[0] if live_daemons else None
     workspace = await capture_workspace_snapshot(cwd)
     capabilities = summarize_workspace_capabilities(workspace)
-    session_hygiene = await buildSessionHygieneReport()
+    session_hygiene = await build_session_hygiene_report()
     mcp_records = []
     plugin_records = []
     for scope in ("user", "project", "local"):
@@ -59,7 +59,7 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
                 f"{session_hygiene.get('staleMarkerSessionCount', 0)} stale marker sessions, and "
                 f"{session_hygiene.get('damagedTimestampCount', 0)} proven timestamp repair candidates."
             ),
-            "Run repairSessionTimestamps() for an exact dry-run; stop the daemon before explicitly applying repairs.",
+            "Run repair_session_timestamps() for an exact dry-run; stop the daemon before explicitly applying repairs.",
             session_hygiene,
         ),
         _doctor_check("git", "pass" if capabilities.get("hasGit") else "warn", "A git project root is available." if capabilities.get("hasGit") else "This directory is not inside a git repository.", "Run inside a git repository for worktree and PR-aware flows.", {"projectRoot": project_root}),

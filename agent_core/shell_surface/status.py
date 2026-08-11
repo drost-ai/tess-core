@@ -37,7 +37,7 @@ from typing import Any
 from ..payloads.todo_policy import summarize_todo_state as _summarize_todo_state
 
 
-def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
+def build_status_report(session: dict[str, Any], config: dict[str, Any]) -> str:
     metadata = session.get("metadata", {})
     provider = session.get("provider") or config.get("provider")
     compaction_state = metadata.get("compactionState") or {}
@@ -57,11 +57,11 @@ def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
             f"messages     {len(session.get('messages') or [])}",
             f"todos        {len(session.get('todos') or [])}",
             f"monitors     {len(metadata.get('monitorIds') or [])}",
-            f"usage        {formatUsageSummary(metadata.get('usage'))}",
+            f"usage        {format_usage_summary(metadata.get('usage'))}",
             f"compactions  {metadata.get('compactions', 0)}",
             f"working ctx  {compaction_state.get('workingContextTokenEstimate', 'n/a')}",
             f"ctx source   {token_measurement.get('source', 'n/a')}",
-            f"preflight    {formatPreflightTokenSummary(session)}",
+            f"preflight    {format_preflight_token_summary(session)}",
             f"compacted to {compaction_state.get('compactedThroughMessageIndex', 'n/a')}",
             f"archived     {full_log.get('archivedMessageCount', 0)}",
             f"archive log  {full_log.get('path', 'n/a')}",
@@ -69,7 +69,7 @@ def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:
     )
 
 
-def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any]) -> str:
+def build_provider_profiles_report(session: dict[str, Any], config: dict[str, Any]) -> str:
     profiles = config.get("providerProfiles") or {}
     active = session.get("providerProfileName") or config.get("providerProfileName")
     sections = []
@@ -105,7 +105,7 @@ def buildProviderProfilesReport(session: dict[str, Any], config: dict[str, Any])
     return "\n\n".join(sections) if sections else "No provider profiles configured."
 
 
-async def buildPermissionsReport(session: dict[str, Any], config: dict[str, Any]) -> str:
+async def build_permissions_report(session: dict[str, Any], config: dict[str, Any]) -> str:
     current = session.get("permissionMode") or config.get("permissionMode") or "default"
     metadata = session.get("metadata") or {}
     parent_session_id = metadata.get("parentSessionId") or metadata.get("leaderSessionId")
@@ -266,7 +266,7 @@ async def _handle_effort(arg_text: str, session: dict[str, Any], config: dict[st
 
 async def _handle_permissions(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if not arg_text:
-        return _info(hooks, "Permissions", await buildPermissionsReport(session, config))
+        return _info(hooks, "Permissions", await build_permissions_report(session, config))
     if arg_text.split(None, 1)[0] in {"policy", "allow", "deny", "reset"}:
         return await _handle_auto_mode_policy(arg_text, session, config, hooks)
     if arg_text not in PERMISSION_MODES:
@@ -284,12 +284,12 @@ async def _handle_auto_mode_policy(arg_text: str, session: dict[str, Any], confi
     command = parts[0]
     policy = await load_auto_mode(cwd)
     if command == "policy":
-        return _info(hooks, "Permissions", formatAutoModePolicy(policy))
+        return _info(hooks, "Permissions", format_auto_mode_policy(policy))
     if command == "reset":
         policy = get_default_auto_mode()
         await save_auto_mode(cwd, policy)
         await _persist(hooks)
-        return _info(hooks, "Permissions", "Auto-mode policy reset.\n\n" + formatAutoModePolicy(policy))
+        return _info(hooks, "Permissions", "Auto-mode policy reset.\n\n" + format_auto_mode_policy(policy))
     if len(parts) < 3 or parts[1] not in {"add", "remove"}:
         return _error(hooks, "Usage: /permissions [policy|allow add TEXT|allow remove TEXT|deny add TEXT|deny remove TEXT|reset]")
     bucket = command
@@ -306,10 +306,10 @@ async def _handle_auto_mode_policy(arg_text: str, session: dict[str, Any], confi
     await save_auto_mode(cwd, policy)
     await _persist(hooks)
     verb = "Added" if action == "add" else "Removed"
-    return _info(hooks, "Permissions", f"{verb} auto-mode {bucket} entry: {value}\n\n{formatAutoModePolicy(policy)}")
+    return _info(hooks, "Permissions", f"{verb} auto-mode {bucket} entry: {value}\n\n{format_auto_mode_policy(policy)}")
 
 
-def formatAutoModePolicy(policy: dict[str, Any]) -> str:
+def format_auto_mode_policy(policy: dict[str, Any]) -> str:
     allow = policy.get("allow") or []
     deny = policy.get("deny") or []
     environment = policy.get("environment") or {}
@@ -324,15 +324,15 @@ def formatAutoModePolicy(policy: dict[str, Any]) -> str:
     )
 
 
-def compactModelName(model: str) -> str:
+def compact_model_name(model: str) -> str:
     return model.replace("claude-", "").replace("-2025-08-07", "")
 
 
-def normalizeModel(inputModel: str) -> str:
+def normalize_model(inputModel: str) -> str:
     return normalize_model_name(inputModel)
 
 
-def formatUsageSummary(usage: dict[str, Any] | None) -> str:
+def format_usage_summary(usage: dict[str, Any] | None) -> str:
     if not usage:
         return "no tracked usage"
     summary = f"{usage.get('inputTokens', 0)} in · {usage.get('outputTokens', 0)} out · {usage.get('toolCalls', 0)} tools · {usage.get('turns', 0)} turns"
@@ -341,7 +341,7 @@ def formatUsageSummary(usage: dict[str, Any] | None) -> str:
     return summary
 
 
-def formatUsageBreakdown(usage: dict[str, Any] | None) -> str:
+def format_usage_breakdown(usage: dict[str, Any] | None) -> str:
     if not usage:
         return "No tracked usage for this session yet."
     lines = [
@@ -359,7 +359,7 @@ def formatUsageBreakdown(usage: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 
-def formatPreflightTokenSummary(session: dict[str, Any]) -> str:
+def format_preflight_token_summary(session: dict[str, Any]) -> str:
     measurement = ((session.get("metadata") or {}).get("tokenTracking") or {}).get("lastPreflight")
     if not isinstance(measurement, dict):
         return "n/a"
@@ -367,7 +367,7 @@ def formatPreflightTokenSummary(session: dict[str, Any]) -> str:
     return f"{measurement.get('inputTokens')}{margin} via {measurement.get('source')}"
 
 
-def buildTodosReport(session: dict[str, Any]) -> str:
+def build_todos_report(session: dict[str, Any]) -> str:
     summary = _summarize_todo_state(session.get("todos") or [])
     if summary["originalItemCount"] == 0:
         return "No todos."

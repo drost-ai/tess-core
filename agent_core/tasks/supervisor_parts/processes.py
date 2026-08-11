@@ -20,7 +20,7 @@ from .shared import SupervisorRegistries
 from pathlib import Path
 from typing import Any, Callable
 from ..terminal_store import commit_task_process_completion, save_projected_task_record
-from ...sandbox import prepareSandboxedArgv
+from ...sandbox import prepare_sandboxed_argv
 
 
 def _prepare_shell_argv(
@@ -40,7 +40,7 @@ def _prepare_shell_argv(
         if sandbox_events is not None:
             sandbox_events.append({"event": event, "data": data})
 
-    launch = prepareSandboxedArgv(
+    launch = prepare_sandboxed_argv(
         argv,
         config={"sandbox": sandbox_config, "runtimeHome": runtime_home},
         cwd=cwd,

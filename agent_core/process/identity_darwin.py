@@ -9,7 +9,7 @@ from typing import Any
 _MAX_PROCARGS_BYTES = 1024 * 1024
 
 
-class _ProcBsdInfo(ctypes.Structure):
+class _proc_bsd_info(ctypes.Structure):
     _fields_ = [
         ("pbi_flags", ctypes.c_uint32),
         ("pbi_status", ctypes.c_uint32),
@@ -50,7 +50,7 @@ def inspect_darwin_process(pid: int, *, max_command_bytes: int) -> dict[str, Any
     libproc.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
     libproc.proc_pidpath.restype = ctypes.c_int
 
-    info = _ProcBsdInfo()
+    info = _proc_bsd_info()
     returned = libproc.proc_pidinfo(
         pid,
         3,  # PROC_PIDTBSDINFO

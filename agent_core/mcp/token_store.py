@@ -15,7 +15,7 @@ from .._utils import maybe_await
 from ..storage import get_state_root
 
 
-def mcpTokenStoreKey(config: dict[str, Any]) -> str:
+def mcp_token_store_key(config: dict[str, Any]) -> str:
     return f"{config.get('name', '')}\0{_canonical_url(str(config.get('commandOrUrl') or ''))}"
 
 
@@ -101,7 +101,7 @@ class FileMcpTokenStore:
         return self.root / f"{digest}.json"
 
 
-def createFileMcpTokenStore(root: str | os.PathLike[str] | None = None) -> FileMcpTokenStore:
+def create_file_mcp_token_store(root: str | os.PathLike[str] | None = None) -> FileMcpTokenStore:
     return FileMcpTokenStore(root)
 
 

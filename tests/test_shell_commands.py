@@ -6,11 +6,11 @@ from tests.support.agent_core_case import *
 class ShellCommandTests(AgentCoreTestCase):
     def test_dispatcher_covers_exactly_the_registered_builtins(self):
         from agent_core.shell_surface.dispatcher import _HANDLERS
-        from agent_core.shell_surface.registry import listSlashCommands
+        from agent_core.shell_surface.registry import list_slash_commands
 
         listed = {
             command["name"]
-            for command in listSlashCommands(
+            for command in list_slash_commands(
                 {"includeStatusline": True, "includeTheme": True, "includeMouse": True, "includeScreen": True}
             )
         }
@@ -53,7 +53,7 @@ class ShellCommandTests(AgentCoreTestCase):
                 return "plugin status"
 
             runtime_commands = [{"name": "hello", "usage": "/hello", "description": "Say hello", "handler": hello_handler}, {"name": "status", "usage": "/status", "description": "Should not override builtin", "handler": status_override}]
-            commands = core.listSlashCommands({"includeTheme": True, "runtimeCommands": runtime_commands})
+            commands = core.list_slash_commands({"includeTheme": True, "runtimeCommands": runtime_commands})
             names = [command["name"] for command in commands]
             self.assertIn("provider", names)
             self.assertIn("tasks", names)
@@ -65,7 +65,7 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertIn("collaboration", names)
             self.assertEqual(next(command for command in commands if command["name"] == "daemon")["usage"], "/daemon [restart]")
 
-            help_result = run(core.handleSlashCommand({"command": "/help", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))
+            help_result = run(core.handle_slash_command({"command": "/help", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))
             self.assertEqual(help_result["outcome"], "handled")
             self.assertIn("/provider [name]", help_result["message"])
             self.assertIn("/agents inspect ID", help_result["message"])
@@ -74,17 +74,17 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertIn("/hello", help_result["message"])
             self.assertIn("/transcript", help_result["message"])
 
-            self.assertEqual(run(core.handleSlashCommand({"command": "plain text"}))["outcome"], "pass")
-            unknown = run(core.handleSlashCommand({"command": "/unknown", "session": session, "config": config, "hooks": hooks}))
+            self.assertEqual(run(core.handle_slash_command({"command": "plain text"}))["outcome"], "pass")
+            unknown = run(core.handle_slash_command({"command": "/unknown", "session": session, "config": config, "hooks": hooks}))
             self.assertTrue(unknown["isError"])
             self.assertIn("Unknown slash command: /unknown", errors[-1])
-            self.assertEqual(run(core.handleSlashCommand({"command": "/hello plugin args", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))["message"], "hello from plugin")
+            self.assertEqual(run(core.handle_slash_command({"command": "/hello plugin args", "session": session, "config": config, "hooks": hooks, "runtimeCommands": runtime_commands}))["message"], "hello from plugin")
             self.assertEqual(runtime_seen["hello"]["argText"], "plugin args")
             self.assertEqual(runtime_seen["hello"]["args"], "plugin args")
-            run(core.handleSlashCommand({"command": "/clear", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/clear", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(counters["clear"], 1)
 
-            status = run(core.handleSlashCommand({"command": "/status", "session": session, "config": config, "hooks": hooks}))
+            status = run(core.handle_slash_command({"command": "/status", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("session", status["message"])
             self.assertIn("working ctx  4200", status["message"])
             self.assertIn("ctx source   openai_responses_estimate", status["message"])
@@ -94,73 +94,73 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertIn(f"archive log  {workspace / 'archive.jsonl'}", status["message"])
             self.assertNotIn("status_override", runtime_seen)
             self.assertEqual(infos[-1][0], "Status")
-            providers_report = run(core.handleSlashCommand({"command": "/providers", "session": session, "config": config, "hooks": hooks}))
+            providers_report = run(core.handle_slash_command({"command": "/providers", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("openai  (active)", providers_report["message"])
             self.assertIn("mode       responses", providers_report["message"])
             self.assertIn("auth       openai_api_key via OPENAI_API_KEY", providers_report["message"])
             self.assertIn("about      Official OpenAI Responses API", providers_report["message"])
 
-            run(core.handleSlashCommand({"command": "/model claude-opus-4-6", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/model claude-opus-4-6", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(session["provider"], "anthropic")
             self.assertEqual(config["providerProfileName"], "anthropic-console")
-            run(core.handleSlashCommand({"command": "/model openai:gpt-4.1", "session": session, "config": config, "hooks": hooks}))
-            unsupported_effort = run(core.handleSlashCommand({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/model openai:gpt-4.1", "session": session, "config": config, "hooks": hooks}))
+            unsupported_effort = run(core.handle_slash_command({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
             self.assertTrue(unsupported_effort["isError"])
             self.assertIn("does not support configurable reasoning effort", errors[-1])
-            run(core.handleSlashCommand({"command": "/model openai:gpt", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/model openai:gpt", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(session["provider"], "openai")
             self.assertEqual(session["model"], "gpt-5.4")
-            run(core.handleSlashCommand({"command": "/effort xhigh", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/effort xhigh", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(session["effort"], "xhigh")
-            permissions_report = run(core.handleSlashCommand({"command": "/permissions", "session": session, "config": config, "hooks": hooks}))
+            permissions_report = run(core.handle_slash_command({"command": "/permissions", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("modes    acceptEdits, bypassPermissions, default, dontAsk, auto", permissions_report["message"])
-            run(core.handleSlashCommand({"command": "/permissions auto", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/permissions auto", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(session["permissionMode"], "auto")
             self.assertGreaterEqual(counters["persist"], 3)
             self.assertGreaterEqual(counters["refresh"], 3)
 
-            policy = run(core.handleSlashCommand({"command": "/permissions policy", "session": session, "config": config, "hooks": hooks}))
+            policy = run(core.handle_slash_command({"command": "/permissions policy", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("auto allow", policy["message"])
-            run(core.handleSlashCommand({"command": "/permissions allow add python -m pytest", "session": session, "config": config, "hooks": hooks}))
-            run(core.handleSlashCommand({"command": "/permissions deny add rm -rf build", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/permissions allow add python -m pytest", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/permissions deny add rm -rf build", "session": session, "config": config, "hooks": hooks}))
             auto_mode = run(core.load_auto_mode(str(workspace)))
             self.assertIn("python -m pytest", auto_mode["allow"])
             self.assertIn("rm -rf build", auto_mode["deny"])
-            run(core.handleSlashCommand({"command": "/permissions allow remove python -m pytest", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/permissions allow remove python -m pytest", "session": session, "config": config, "hooks": hooks}))
             self.assertNotIn("python -m pytest", run(core.load_auto_mode(str(workspace)))["allow"])
-            run(core.handleSlashCommand({"command": "/permissions reset", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/permissions reset", "session": session, "config": config, "hooks": hooks}))
             self.assertNotIn("rm -rf build", run(core.load_auto_mode(str(workspace)))["deny"])
 
-            provider_result = run(core.handleSlashCommand({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
+            provider_result = run(core.handle_slash_command({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("anthropic-console", provider_result["message"])
             self.assertEqual(session["provider"], "anthropic")
             self.assertEqual(config["providerProfileName"], "anthropic-console")
-            bad_provider = run(core.handleSlashCommand({"command": "/provider missing-profile", "session": session, "config": config, "hooks": hooks}))
+            bad_provider = run(core.handle_slash_command({"command": "/provider missing-profile", "session": session, "config": config, "hooks": hooks}))
             self.assertTrue(bad_provider["isError"])
             self.assertIn("Unknown provider profile", errors[-1])
 
-            todos = run(core.handleSlashCommand({"command": "/todos", "session": session, "config": config, "hooks": hooks}))
+            todos = run(core.handle_slash_command({"command": "/todos", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("ship shell slice", todos["message"])
-            usage = run(core.handleSlashCommand({"command": "/cost", "session": session, "config": config, "hooks": hooks}))
+            usage = run(core.handle_slash_command({"command": "/cost", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("input tokens", usage["message"])
 
             run(core.save_child_agent({"agentId": "agent-shell", "sessionId": "child-shell", "parentSessionId": session["id"], "name": "Shell worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "backgrounded", "startedAt": "2026-01-01T00:00:00Z", "lastSummary": "working"}))
             session["metadata"]["childAgentIds"] = ["agent-shell"]
-            agents = run(core.handleSlashCommand({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
+            agents = run(core.handle_slash_command({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("agent-shell", agents["message"])
 
             run(core.save_task_record({"id": "task-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Shell task", "updatedAt": "2026-01-01T00:00:00Z"}))
-            tasks = run(core.handleSlashCommand({"command": "/tasks", "session": session, "config": config, "hooks": hooks}))
+            tasks = run(core.handle_slash_command({"command": "/tasks", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("task-shell", tasks["message"])
-            inspected = run(core.handleSlashCommand({"command": "/tasks inspect task-shell", "session": session, "config": config, "hooks": hooks}))
+            inspected = run(core.handle_slash_command({"command": "/tasks inspect task-shell", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("kind         background_command", inspected["message"])
             self.assertIn("surface      inspectable", inspected["message"])
 
             run(core.save_daemon_state("shell-instance", {"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
-            daemon = run(core.handleSlashCommand({"command": "/daemon", "session": session, "config": config, "hooks": hooks, "runtimeInstanceId": "shell-instance"}))
+            daemon = run(core.handle_slash_command({"command": "/daemon", "session": session, "config": config, "hooks": hooks, "runtimeInstanceId": "shell-instance"}))
             self.assertIn("running", daemon["message"])
 
-            exit_result = run(core.handleSlashCommand({"command": "/quit", "session": session, "config": config, "hooks": hooks}))
+            exit_result = run(core.handle_slash_command({"command": "/quit", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(exit_result["outcome"], "exit")
         finally:
             self.restore_home(root, previous)
@@ -206,50 +206,50 @@ class ShellCommandTests(AgentCoreTestCase):
                 "setScreenMode": lambda mode: tui_state.__setitem__("screen", mode),
             }
 
-            memory = run(core.handleSlashCommand({"command": "/memory set Prefer shell parity tests", "session": session, "config": config, "hooks": hooks}))
+            memory = run(core.handle_slash_command({"command": "/memory set Prefer shell parity tests", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Replaced project memory", memory["message"])
-            run(core.handleSlashCommand({"command": "/memory append Keep handlers deterministic", "session": session, "config": config, "hooks": hooks}))
-            memory_show = run(core.handleSlashCommand({"command": "/memory", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/memory append Keep handlers deterministic", "session": session, "config": config, "hooks": hooks}))
+            memory_show = run(core.handle_slash_command({"command": "/memory", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Prefer shell parity tests", memory_show["message"])
             self.assertTrue(any(record["id"] == "manual-project-memory" for record in run(core.load_project_memory_records(str(workspace)))))
 
             monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-shell-monitor", "goal": "Watch shell parity"})
             run(core.save_monitor(monitor))
-            monitors = run(core.handleSlashCommand({"command": "/monitors", "session": session, "config": config, "hooks": hooks}))
+            monitors = run(core.handle_slash_command({"command": "/monitors", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Watch shell parity", monitors["message"])
-            run(core.handleSlashCommand({"command": f"/monitor stop {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": f"/monitor stop {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(run(core.load_monitor(monitor["id"]))["status"], "stopped")
-            run(core.handleSlashCommand({"command": f"/monitor resume {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": f"/monitor resume {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(run(core.load_monitor(monitor["id"]))["status"], "active")
 
             other = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
             other["messages"] = [{"role": "user", "content": "resume target session"}]
             run(core.save_session(other))
-            resume_list = run(core.handleSlashCommand({"command": "/resume", "session": session, "config": config, "hooks": hooks}))
+            resume_list = run(core.handle_slash_command({"command": "/resume", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("resume target session", resume_list["message"])
-            run(core.handleSlashCommand({"command": f"/resume {other['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": f"/resume {other['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(resumed, [other["id"]])
 
-            compact = run(core.handleSlashCommand({"command": "/compact", "session": session, "config": config, "hooks": hooks}))
+            compact = run(core.handle_slash_command({"command": "/compact", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Checkpoint not created", compact["message"])
             self.assertEqual(compaction_calls[0]["trigger"], "manual")
             self.assertTrue(any(event == "compaction.started" for event, _ in events))
             self.assertTrue(any(event == "compaction.skipped" for event, _ in events))
 
-            review = run(core.handleSlashCommand({"command": "/review providers", "session": session, "config": config, "hooks": hooks}))
+            review = run(core.handle_slash_command({"command": "/review providers", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(review["message"], "review queued")
             self.assertEqual(prompts[0]["agentName"], "reviewer")
             self.assertIn("providers", prompts[0]["prompt"])
 
-            extensions = run(core.handleSlashCommand({"command": "/extensions", "session": session, "config": config, "hooks": hooks}))
+            extensions = run(core.handle_slash_command({"command": "/extensions", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("mcp: ok", extensions["message"])
-            run(core.handleSlashCommand({"command": "/statusline off", "session": session, "config": config, "hooks": hooks}))
-            run(core.handleSlashCommand({"command": "/theme next", "session": session, "config": config, "hooks": hooks}))
-            mouse_status = run(core.handleSlashCommand({"command": "/mouse", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/statusline off", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/theme next", "session": session, "config": config, "hooks": hooks}))
+            mouse_status = run(core.handle_slash_command({"command": "/mouse", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Native terminal selection is enabled", mouse_status["message"])
-            mouse_toggle = run(core.handleSlashCommand({"command": "/mouse toggle", "session": session, "config": config, "hooks": hooks}))
+            mouse_toggle = run(core.handle_slash_command({"command": "/mouse toggle", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Mouse capture on", mouse_toggle["message"])
-            run(core.handleSlashCommand({"command": "/screen inline", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/screen inline", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(tui_state["statusline"], False)
             self.assertEqual(tui_state["theme"], "copper")
             self.assertEqual(tui_state["mouse"], "capture")
@@ -288,20 +288,20 @@ class ShellCommandTests(AgentCoreTestCase):
                 "restart": lambda: daemon_actions.append("restart"),
             }
 
-            log = run(core.handleSlashCommand({"command": "/tasks log mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            log = run(core.handle_slash_command({"command": "/tasks log mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertIn("log for task-shell-mutate", log["message"])
-            stop = run(core.handleSlashCommand({"command": "/tasks stop task-shell", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            stop = run(core.handle_slash_command({"command": "/tasks stop task-shell", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertIn("Stopped task-shell-mutate", stop["message"])
-            retry = run(core.handleSlashCommand({"command": "/tasks retry mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            retry = run(core.handle_slash_command({"command": "/tasks retry mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertIn("new task     task-shell-retry", retry["message"])
-            run(core.handleSlashCommand({"command": "/tasks attach mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            run(core.handle_slash_command({"command": "/tasks attach mutate", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertEqual(stopped, ["task-shell-mutate"])
             self.assertEqual(retried, ["task-shell-mutate"])
             self.assertEqual(resumed, [target["id"]])
             self.assertEqual(counters["persist"], 1)
 
-            stopped_daemon = run(core.handleSlashCommand({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller, "runtimeInstanceId": "shell-instance"}))
-            restarted_daemon = run(core.handleSlashCommand({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller, "runtimeInstanceId": "shell-instance"}))
+            stopped_daemon = run(core.handle_slash_command({"command": "/daemon stop", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller, "runtimeInstanceId": "shell-instance"}))
+            restarted_daemon = run(core.handle_slash_command({"command": "/daemon restart", "session": session, "config": config, "hooks": hooks, "daemonController": daemon_controller, "runtimeInstanceId": "shell-instance"}))
             self.assertEqual(stopped_daemon["message"], "Daemon not running.")
             self.assertEqual(restarted_daemon["message"], "Daemon not running.")
             self.assertEqual(daemon_actions, ["restart"])
@@ -314,7 +314,7 @@ class ShellCommandTests(AgentCoreTestCase):
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             hooks = {"persist": lambda: None, "refresh": lambda: None}
-            availability = core.getSlashCommandAvailability({"mode": "bare", "hooks": hooks})
+            availability = core.get_slash_command_availability({"mode": "bare", "hooks": hooks})
             review = next(command for command in availability if command["name"] == "review")
             theme = next(command for command in availability if command["name"] == "theme")
             self.assertFalse(review["available"])
@@ -322,10 +322,10 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertFalse(theme["available"])
             self.assertEqual(theme["reason"], "full-screen TUI required")
 
-            run(core.handleSlashCommand({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
-            run(core.handleSlashCommand({"command": "/model openai:gpt-5.4-mini", "session": session, "config": config, "hooks": hooks}))
-            run(core.handleSlashCommand({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
-            run(core.handleSlashCommand({"command": "/permissions acceptEdits", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/model openai:gpt-5.4-mini", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/permissions acceptEdits", "session": session, "config": config, "hooks": hooks}))
             settings = run(core.load_settings("project", str(workspace)))
             self.assertEqual(settings["provider"], "openai")
             self.assertEqual(settings["model"], "gpt-5.4-mini")
@@ -336,7 +336,7 @@ class ShellCommandTests(AgentCoreTestCase):
             run(core.save_session(parent))
             child = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
             child["metadata"]["parentSessionId"] = parent["id"]
-            report = run(core.handleSlashCommand({"command": "/permissions", "session": child, "config": config, "hooks": hooks}))
+            report = run(core.handle_slash_command({"command": "/permissions", "session": child, "config": config, "hooks": hooks}))
             self.assertIn("current  default", report["message"])
             self.assertIn(f"inherited bypassPermissions from {parent['id'][:12]}", report["message"])
             self.assertIn("effective bypassPermissions", report["message"])

@@ -14,7 +14,7 @@ from ..context.compaction_state import refresh_compaction_state_from_manifest as
 from ..context.compaction_transport import resolve_compaction_execution_plan as _resolve_compaction_execution_plan
 
 
-async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] | None:
+async def maybe_auto_checkpoint_raw_session(args: dict[str, Any]) -> dict[str, Any] | None:
     session = args["session"]
     config = args["config"]
     runtime = args["runtime"]
@@ -53,7 +53,7 @@ async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] 
     )
 
 
-async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None:
+async def maybe_auto_compact_session(args: dict[str, Any]) -> dict[str, Any] | None:
     session = args["session"]
     compaction_policy = resolveCompactionPolicy(args["config"].get("providerProfile") or {})
     await _refresh_compaction_state_from_manifest(session)

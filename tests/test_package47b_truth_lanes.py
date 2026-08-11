@@ -77,7 +77,7 @@ class Package47BFaultMatrixTests(AgentCoreTestCase):
         self.assertTrue(
             all(
                 evaluation["evidence"]["session"]["settledThrough"]
-                == "runAgentPrompt"
+                == "run_agent_prompt"
                 and evaluation["actual"]["eventSequence"]
                 for family in report["families"]
                 for evaluation in family["evaluations"]

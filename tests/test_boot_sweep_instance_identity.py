@@ -36,7 +36,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
                 start_new_session=True,
             )
             process_identity = run(
-                core.captureOwnedProcessIdentity(pid=proc.pid, expectedArgv=child_argv)
+                core.capture_owned_process_identity(pid=proc.pid, expectedArgv=child_argv)
             )
             created_at = "2026-01-01T00:00:00Z"
             run(

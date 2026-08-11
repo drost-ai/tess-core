@@ -32,30 +32,30 @@ class DaemonSecurityError(RuntimeError):
         self.targetPath = targetPath
 
 
-def daemonAuthTokenPath(instanceId: str) -> str:
+def daemon_auth_token_path(instanceId: str) -> str:
     return os.path.join(daemon_instance_dir(instanceId), "instance-token")
 
 
-def generateDaemonAuthMaterial() -> dict[str, str]:
+def generate_daemon_auth_material() -> dict[str, str]:
     token = secrets.token_urlsafe(32)
-    return {"token": token, "tokenId": daemonTokenId(token)}
+    return {"token": token, "tokenId": daemon_token_id(token)}
 
 
-async def publishDaemonAuthMaterial(instanceId: str, auth: dict[str, str]) -> None:
+async def publish_daemon_auth_material(instanceId: str, auth: dict[str, str]) -> None:
     token = auth.get("token")
     token_id = auth.get("tokenId")
     if (
         not isinstance(token, str)
         or not _TOKEN_PATTERN.fullmatch(token)
         or not isinstance(token_id, str)
-        or token_id != daemonTokenId(token)
+        or token_id != daemon_token_id(token)
     ):
         raise DaemonSecurityError(
             "daemon.auth_material_invalid",
             "Refusing to publish malformed daemon auth material.",
-            daemonAuthTokenPath(instanceId),
+            daemon_auth_token_path(instanceId),
         )
-    target = daemonAuthTokenPath(instanceId)
+    target = daemon_auth_token_path(instanceId)
     temp = f"{target}.{os.getpid()}.{uuid.uuid4()}.tmp"
     published = False
     try:
@@ -75,24 +75,24 @@ async def publishDaemonAuthMaterial(instanceId: str, auth: dict[str, str]) -> No
             os.unlink(temp)
         if published:
             with contextlib.suppress(Exception):
-                await removeDaemonAuthMaterialIfOwned(instanceId, token_id)
+                await remove_daemon_auth_material_if_owned(instanceId, token_id)
         raise
 
 
-async def createDaemonAuthMaterial(instanceId: str) -> dict[str, str]:
-    auth = generateDaemonAuthMaterial()
-    await publishDaemonAuthMaterial(instanceId, auth)
+async def create_daemon_auth_material(instanceId: str) -> dict[str, str]:
+    auth = generate_daemon_auth_material()
+    await publish_daemon_auth_material(instanceId, auth)
     return auth
 
 
-async def readDaemonAuthMaterial(instanceId: str, state: dict[str, Any]) -> dict[str, str]:
+async def read_daemon_auth_material(instanceId: str, state: dict[str, Any]) -> dict[str, str]:
     if state.get("protocolVersion") != DAEMON_PROTOCOL_VERSION or not isinstance(state.get("authTokenId"), str):
         raise DaemonSecurityError(
             "daemon.auth_material_invalid",
             "The daemon state uses an unauthenticated or unsupported protocol version.",
             daemon_state_path(instanceId),
         )
-    target = daemonAuthTokenPath(instanceId)
+    target = daemon_auth_token_path(instanceId)
     info = _verify_owned_regular_file(target, require_private=True)
     if info.st_size > MAX_DAEMON_TOKEN_BYTES:
         raise DaemonSecurityError(
@@ -102,7 +102,7 @@ async def readDaemonAuthMaterial(instanceId: str, state: dict[str, Any]) -> dict
         )
     with open(target, "r", encoding="utf-8") as handle:
         token = handle.read(MAX_DAEMON_TOKEN_BYTES + 1).strip()
-    token_id = daemonTokenId(token)
+    token_id = daemon_token_id(token)
     if not _TOKEN_PATTERN.fullmatch(token) or token_id != state["authTokenId"]:
         raise DaemonSecurityError(
             "daemon.auth_material_invalid",
@@ -112,7 +112,7 @@ async def readDaemonAuthMaterial(instanceId: str, state: dict[str, Any]) -> dict
     return {"token": token, "tokenId": token_id}
 
 
-def verifyOwnedDaemonSocket(socketPath: str) -> os.stat_result | None:
+def verify_owned_daemon_socket(socketPath: str) -> os.stat_result | None:
     try:
         info = os.lstat(socketPath)
     except FileNotFoundError:
@@ -125,7 +125,7 @@ def verifyOwnedDaemonSocket(socketPath: str) -> os.stat_result | None:
     return info
 
 
-async def isDaemonSocketListenerActive(socketPath: str) -> bool:
+async def is_daemon_socket_listener_active(socketPath: str) -> bool:
     try:
         info = os.lstat(socketPath)
     except FileNotFoundError:
@@ -150,17 +150,17 @@ async def isDaemonSocketListenerActive(socketPath: str) -> bool:
     return await asyncio.to_thread(probe)
 
 
-async def removeInactiveOwnedDaemonSocket(socketPath: str) -> None:
-    before = verifyOwnedDaemonSocket(socketPath)
+async def remove_inactive_owned_daemon_socket(socketPath: str) -> None:
+    before = verify_owned_daemon_socket(socketPath)
     if not before:
         return
-    if await isDaemonSocketListenerActive(socketPath):
+    if await is_daemon_socket_listener_active(socketPath):
         raise DaemonSecurityError(
             "daemon.security_live_migration",
             "Refusing to remove a daemon socket that still accepts connections.",
             socketPath,
         )
-    after = verifyOwnedDaemonSocket(socketPath)
+    after = verify_owned_daemon_socket(socketPath)
     if not after:
         return
     if not _same_identity(before, after):
@@ -168,8 +168,8 @@ async def removeInactiveOwnedDaemonSocket(socketPath: str) -> None:
     os.unlink(socketPath)
 
 
-async def removeDaemonAuthMaterialIfOwned(instanceId: str, tokenId: str) -> None:
-    target = daemonAuthTokenPath(instanceId)
+async def remove_daemon_auth_material_if_owned(instanceId: str, tokenId: str) -> None:
+    target = daemon_auth_token_path(instanceId)
     try:
         info = _verify_owned_regular_file(target, require_private=True)
     except FileNotFoundError:
@@ -178,12 +178,12 @@ async def removeDaemonAuthMaterialIfOwned(instanceId: str, tokenId: str) -> None
         return
     with open(target, "r", encoding="utf-8") as handle:
         token = handle.read(MAX_DAEMON_TOKEN_BYTES + 1).strip()
-    if daemonTokenId(token) == tokenId:
+    if daemon_token_id(token) == tokenId:
         os.unlink(target)
 
 
-async def removeOwnedDaemonAuthMaterial(instanceId: str) -> None:
-    target = daemonAuthTokenPath(instanceId)
+async def remove_owned_daemon_auth_material(instanceId: str) -> None:
+    target = daemon_auth_token_path(instanceId)
     try:
         before = _verify_owned_regular_file(target, require_private=True)
     except FileNotFoundError:
@@ -194,7 +194,7 @@ async def removeOwnedDaemonAuthMaterial(instanceId: str) -> None:
     os.unlink(target)
 
 
-def daemonTokenId(token: str) -> str:
+def daemon_token_id(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

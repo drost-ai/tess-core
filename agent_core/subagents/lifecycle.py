@@ -44,8 +44,8 @@ from ..authority.agent import (
 from ..contracts.records import launch_output_file, launch_task_id
 
 
-async def start_background_subagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def start_background_subagent(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     context = args["context"]
     supervisor = context.get("daemon") or context.get("taskSupervisor")
     if not supervisor:

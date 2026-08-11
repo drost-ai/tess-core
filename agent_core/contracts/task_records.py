@@ -96,12 +96,12 @@ class SubagentRuntimeContract(TypedDict, total=False):
     concurrencyGroup: str
 
 
-class _TaskLaunchResultRequired(TypedDict):
+class _task_launch_result_required(TypedDict):
     taskId: str
     task_id: str
 
 
-class TaskLaunchResult(_TaskLaunchResultRequired, total=False):
+class TaskLaunchResult(_task_launch_result_required, total=False):
     """Return value of the supervisor's start* launchers."""
 
     outputFile: str
@@ -124,14 +124,14 @@ def task_meta_id(meta: Mapping[str, Any]) -> str | None:
     return meta.get("taskId") or meta.get("task_id") or meta.get("id") or None
 
 
-class _TaskMetaRequired(TypedDict):
+class _task_meta_required(TypedDict):
     type: TaskMetaType
     status: str
     startedAt: str | None
     outputFile: str
 
 
-class TaskMeta(_TaskMetaRequired, total=False):
+class TaskMeta(_task_meta_required, total=False):
     """Task meta as persisted at ``tasks/{taskId}/meta.json``."""
 
     taskId: str
@@ -203,7 +203,7 @@ class TaskMeta(_TaskMetaRequired, total=False):
     launchReservation: TaskLaunchReservation
 
 
-class _TaskRecordRequired(TypedDict):
+class _task_record_required(TypedDict):
     id: str
     sessionId: str | None
     sourceId: str | None
@@ -217,7 +217,7 @@ class _TaskRecordRequired(TypedDict):
     restorable: bool
 
 
-class TaskRecord(_TaskRecordRequired, total=False):
+class TaskRecord(_task_record_required, total=False):
     """Task record projection at ``task-records/{taskId}.json``."""
 
     summary: str | None
@@ -242,7 +242,7 @@ class TaskRecord(_TaskRecordRequired, total=False):
     launchReservation: TaskLaunchReservation
 
 
-class _ChildAgentRecordRequired(TypedDict):
+class _child_agent_record_required(TypedDict):
     agentId: str
     sessionId: str
     parentSessionId: str
@@ -252,7 +252,7 @@ class _ChildAgentRecordRequired(TypedDict):
     startedAt: str
 
 
-class ChildAgentRecord(_ChildAgentRecordRequired, total=False):
+class ChildAgentRecord(_child_agent_record_required, total=False):
     """Child-agent record at ``agents/{agentId}.json``."""
 
     parentToolUseId: str

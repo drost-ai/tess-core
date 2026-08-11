@@ -7,11 +7,11 @@ from tests.support.agent_core_case import *
 from tests.test_package31_mcp_transport import _Response
 
 from agent_core.mcp.http_body import (
-    _BoundedHeaderReader,
+    _bounded_header_reader,
     _close_http_response,
     _parse_declared_length,
-    iterateMcpBody,
-    validateMcpResponseHeaders,
+    iterate_mcp_body,
+    validate_mcp_response_headers,
 )
 from agent_core.mcp.http_transport import HttpMcpClient
 from agent_core.mcp.auth import McpOAuthRuntime
@@ -23,13 +23,13 @@ from agent_core.mcp.transport_policy import (
     MCP_NOTIFICATION_QUEUE_MAX,
     MCP_PENDING_REQUEST_MAX,
     McpTransportError,
-    resolveMcpTransportPolicy,
+    resolve_mcp_transport_policy,
 )
 
 
 class Package31McpHttpTransportTests(AgentCoreTestCase):
     def test_http_header_acquisition_and_declared_length_are_bounded(self):
-        reader = _BoundedHeaderReader(
+        reader = _bounded_header_reader(
             io.BytesIO(
                 b"HTTP/1.1 200 OK\r\n"
                 + b"x: "
@@ -46,21 +46,21 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
         self.assertEqual(raised.exception.code, "invalid_framing")
 
     def test_http_headers_compressed_decoded_idle_and_content_limits(self):
-        policy = resolveMcpTransportPolicy({"bodyIdleTimeoutMs": 25})
+        policy = resolve_mcp_transport_policy({"bodyIdleTimeoutMs": 25})
         with self.assertRaises(McpTransportError) as raised:
-            validateMcpResponseHeaders(
+            validate_mcp_response_headers(
                 _Response(headers={"x-large": "x" * MCP_HEADER_MAX_BYTES})
             )
         self.assertEqual(raised.exception.code, "header_limit")
         with self.assertRaises(McpTransportError) as raised:
-            validateMcpResponseHeaders(
+            validate_mcp_response_headers(
                 _Response(headers={"content-length": str(MCP_FRAME_MAX_BYTES + 1)})
             )
         self.assertEqual(raised.exception.code, "frame_limit")
         compressed = gzip.compress(b"a" * (MCP_DECODED_BODY_MAX_BYTES + 1))
         with self.assertRaises(McpTransportError) as raised:
             list(
-                iterateMcpBody(
+                iterate_mcp_body(
                     _Response(
                         [compressed],
                         {
@@ -73,7 +73,7 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
             )
         self.assertEqual(raised.exception.code, "decoded_limit")
         with self.assertRaises(McpTransportError) as raised:
-            list(iterateMcpBody(_Response(error=socket.timeout()), policy))
+            list(iterate_mcp_body(_Response(error=socket.timeout()), policy))
         self.assertEqual(raised.exception.code, "body_idle_timeout")
 
     def test_continuous_http_body_uses_incremental_reader(self):
@@ -95,9 +95,9 @@ class Package31McpHttpTransportTests(AgentCoreTestCase):
 
         response = StreamingResponse()
         chunks = list(
-            iterateMcpBody(
+            iterate_mcp_body(
                 response,
-                resolveMcpTransportPolicy(),
+                resolve_mcp_transport_policy(),
                 continuous=True,
             )
         )

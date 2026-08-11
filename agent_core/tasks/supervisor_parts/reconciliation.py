@@ -4,8 +4,8 @@ import asyncio
 from ..._utils import maybe_await, now_iso
 from ...process.identity import (
     ProcessIdentityError,
-    processIdentityFromRecord,
-    verifyOwnedProcessIdentity,
+    process_identity_from_record,
+    verify_owned_process_identity,
 )
 from ...storage import (
     list_live_daemon_states,
@@ -342,8 +342,8 @@ async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta
             "status": status,
         }
     try:
-        identity = processIdentityFromRecord(record, meta)
-        verified = await verifyOwnedProcessIdentity(identity)
+        identity = process_identity_from_record(record, meta)
+        verified = await verify_owned_process_identity(identity)
     except ProcessIdentityError as exc:
         state = "failed" if exc.code == "process.not_found" else "unknown"
         return {
@@ -366,8 +366,8 @@ async def _classify_persisted_process(task_id: str, record: dict[str, Any], meta
 
 async def _identity_verifies_alive(record: dict[str, Any], meta: dict[str, Any]) -> bool:
     try:
-        identity = processIdentityFromRecord(record, meta)
-        await verifyOwnedProcessIdentity(identity)
+        identity = process_identity_from_record(record, meta)
+        await verify_owned_process_identity(identity)
         return True
     except ProcessIdentityError:
         return False

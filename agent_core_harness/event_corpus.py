@@ -65,7 +65,7 @@ def _contracts() -> list[dict[str, Any]]:
         _contract(
             "preflight-admission",
             captured["preflight"],
-            "isolated:runAgentPrompt/preflight",
+            "isolated:run_agent_prompt/preflight",
         ),
         _contract(
             "partial-output",
@@ -80,12 +80,12 @@ def _contracts() -> list[dict[str, Any]]:
         _contract(
             "no-progress-ledger",
             captured["no_progress"],
-            "isolated:runAgentPrompt/no-progress",
+            "isolated:run_agent_prompt/no-progress",
         ),
         _contract(
             "result-budgets",
             captured["result_budget"],
-            "isolated:runAgentPrompt/result-budget",
+            "isolated:run_agent_prompt/result-budget",
         ),
         _contract(
             "turn-sessions",
@@ -217,7 +217,7 @@ async def _capture_agent_loop_scenario(kind: str) -> list[dict[str, Any]]:
                     "emitEvent": lambda event, data: raw_events.append((event, data)),
                 },
             )
-            await core.runAgentPrompt(
+            await core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=runtime,

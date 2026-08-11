@@ -39,15 +39,15 @@ def create_task_communication_api(emit: Callable[[str, dict[str, Any], str | Non
         if meta:
             await maybe_await(emit("task.updated", _task_event_payload(meta), meta.get("parent_session_id") or meta.get("sessionId")))
 
-    async def send_task_message(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
-        task_args = {**(task_args or {}), **task_kwargs}
+    async def send_task_message(task_args: dict[str, Any] | None = None) -> dict[str, Any]:
+        task_args = dict(task_args or {})
         task_id = _require_string(task_args.get("taskId") or task_args.get("task_id"), "taskId")
         message = await _send_task_message(task_id, task_args)
         await emit_task_update(task_id)
         return message
 
-    async def answer_task_question(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any] | None:
-        task_args = {**(task_args or {}), **task_kwargs}
+    async def answer_task_question(task_args: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        task_args = dict(task_args or {})
         task_id = _require_string(task_args.get("taskId") or task_args.get("task_id"), "taskId")
         question_id = _require_string(task_args.get("questionId") or task_args.get("question_id"), "questionId")
         answer = _require_string(task_args.get("answer"), "answer")
@@ -55,8 +55,8 @@ def create_task_communication_api(emit: Callable[[str, dict[str, Any], str | Non
         await emit_task_update(task_id)
         return result
 
-    async def skip_task_question(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any] | None:
-        task_args = {**(task_args or {}), **task_kwargs}
+    async def skip_task_question(task_args: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        task_args = dict(task_args or {})
         task_id = _require_string(task_args.get("taskId") or task_args.get("task_id"), "taskId")
         question_id = _require_string(task_args.get("questionId") or task_args.get("question_id"), "questionId")
         result = await _skip_task_question(task_id, question_id, task_args.get("reason"))

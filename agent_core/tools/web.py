@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from .._utils import pretty_json
-from ..acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
+from ..acquisition.bounded_web_fetch import WebFetchPolicyError, bounded_web_fetch
 from ..authority.permission_rules import find_dispatch_deny_rule
 from ..payloads.tools import shape_text_tool_result
 from ..payloads.utf8_bounds import slice_utf8_prefix
@@ -46,7 +46,7 @@ class FetchResponse:
 async def fetch(url: str, *, headers: dict[str, str] | None = None, signal: Any = None, authorizeHop: Any = None) -> FetchResponse:
     if _signal_aborted(signal):
         raise _create_tool_abort_error()
-    result = await boundedWebFetch(url=url, headers=headers or {}, abortSignal=signal, authorizeHop=authorizeHop)
+    result = await bounded_web_fetch(url=url, headers=headers or {}, abortSignal=signal, authorizeHop=authorizeHop)
     if _signal_aborted(signal):
         raise _create_tool_abort_error()
     return FetchResponse(int(result.get("statusCode") or 0), result["body"], acquisition=result)
@@ -58,7 +58,7 @@ def _web_fetch_tool() -> ToolDefinition:
         prompt = _require_string(input.get("prompt"), "prompt")
         _throw_if_tool_cancelled(context)
         try:
-            fetched = await boundedWebFetch(
+            fetched = await bounded_web_fetch(
                 url=url,
                 abortSignal=context.get("abortSignal"),
                 authorizeHop=lambda hop: _authorize_web_fetch_hop(context, hop),

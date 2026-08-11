@@ -32,13 +32,13 @@ ProcessIdentityObserver = Callable[[int], Awaitable[ObservedProcessIdentity] | O
 _process_identity_observer_for_tests: ProcessIdentityObserver | None = None
 
 
-def __setProcessIdentityObserverForTests(observer: ProcessIdentityObserver | None) -> None:
+def _set_process_identity_observer_for_tests(observer: ProcessIdentityObserver | None) -> None:
     """Internal deterministic test seam; not part of the public package API."""
     global _process_identity_observer_for_tests
     _process_identity_observer_for_tests = observer
 
 
-async def captureOwnedProcessIdentity(
+async def capture_owned_process_identity(
     args: Mapping[str, Any] | None = None,
     *,
     pid: int | None = None,
@@ -61,11 +61,11 @@ async def captureOwnedProcessIdentity(
         "schemaVersion": 1,
         **observed,
         "spawnedAt": values.get("spawnedAt", spawnedAt) or _now_iso(),
-        "expectedCommandDigest": digestExpectedCommand(argv),
+        "expectedCommandDigest": digest_expected_command(argv),
     }
 
 
-async def captureProcessBirthMarker(pid: int | None = None) -> dict[str, Any]:
+async def capture_process_birth_marker(pid: int | None = None) -> dict[str, Any]:
     observed = await _inspect_process_identity(_require_pid(os.getpid() if pid is None else pid))
     return {
         "schemaVersion": 1,
@@ -75,7 +75,7 @@ async def captureProcessBirthMarker(pid: int | None = None) -> dict[str, Any]:
     }
 
 
-async def verifyProcessBirthMarker(value: Any) -> Literal["live", "dead", "unknown"]:
+async def verify_process_birth_marker(value: Any) -> Literal["live", "dead", "unknown"]:
     if not isinstance(value, dict):
         return "unknown"
     pid = value.get("pid")
@@ -101,8 +101,8 @@ async def verifyProcessBirthMarker(value: Any) -> Literal["live", "dead", "unkno
     )
 
 
-async def verifyOwnedProcessIdentity(value: Any) -> dict[str, Any]:
-    persisted = parseOwnedProcessIdentity(value)
+async def verify_owned_process_identity(value: Any) -> dict[str, Any]:
+    persisted = parse_owned_process_identity(value)
     observed = await _inspect_process_identity(persisted["pid"])
     mismatches: list[str] = []
     if persisted["platform"] != observed["platform"]:
@@ -128,8 +128,8 @@ async def verifyOwnedProcessIdentity(value: Any) -> dict[str, Any]:
     return persisted
 
 
-async def signalOwnedProcess(value: Any, signal: int | signal_module.Signals = signal_module.SIGTERM) -> dict[str, Any]:
-    persisted = await verifyOwnedProcessIdentity(value)
+async def signal_owned_process(value: Any, signal: int | signal_module.Signals = signal_module.SIGTERM) -> dict[str, Any]:
+    persisted = await verify_owned_process_identity(value)
     if sys.platform == "win32":
         os.kill(persisted["pid"], int(signal))
     else:
@@ -137,7 +137,7 @@ async def signalOwnedProcess(value: Any, signal: int | signal_module.Signals = s
     return persisted
 
 
-def parseOwnedProcessIdentity(value: Any) -> dict[str, Any]:
+def parse_owned_process_identity(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise _invalid_identity(
             "identity is missing; legacy live tasks must finish naturally or be migrated before stop/restart"
@@ -169,7 +169,7 @@ def parseOwnedProcessIdentity(value: Any) -> dict[str, Any]:
     }
 
 
-def processIdentityFromRecord(
+def process_identity_from_record(
     record: Mapping[str, Any] | None,
     meta: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
@@ -178,9 +178,9 @@ def processIdentityFromRecord(
     if from_record is None and isinstance(record_metadata, Mapping):
         from_record = record_metadata.get("processIdentity")
     from_meta = meta.get("processIdentity") if isinstance(meta, Mapping) else None
-    identity = parseOwnedProcessIdentity(from_record if from_record is not None else from_meta)
+    identity = parse_owned_process_identity(from_record if from_record is not None else from_meta)
     if from_record is not None and from_meta is not None:
-        other = parseOwnedProcessIdentity(from_meta)
+        other = parse_owned_process_identity(from_meta)
         if identity != other:
             raise ProcessIdentityError(
                 "process.identity_mismatch",
@@ -190,7 +190,7 @@ def processIdentityFromRecord(
     return identity
 
 
-def digestExpectedCommand(argv: list[str]) -> str:
+def digest_expected_command(argv: list[str]) -> str:
     encoded = json.dumps(argv, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 

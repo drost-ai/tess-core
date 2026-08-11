@@ -182,7 +182,7 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.assertEqual(state["compaction"]["lastDetail"], "daemon replay")
             self.assertEqual(state["compaction"]["lastReinjectionSummary"], "carry forward")
 
-            bridge = run(core.createBridgeRuntime({"session": session, "emit": lambda *_: None, "startPolling": False}))
+            bridge = run(core.create_bridge_runtime({"session": session, "emit": lambda *_: None, "startPolling": False}))
             run(bridge["recordEvent"]("context_relief.applied", relief_data))
             bridge_events = run(core.load_bridge_events(bridge["bridge"]["id"]))
             self.assertEqual(bridge_events[-1]["data"]["modes"], [])
@@ -232,7 +232,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                 return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
 
             agent_context_module.measure_request_input_tokens = fake_measure
-            result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}), prompt="continue", providerOverride={"send": send}))
+            result = run(core.run_agent_prompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "recovered")
             self.assertEqual(len(provider_requests), 2)
@@ -290,7 +290,7 @@ class ContextContinuationTests(AgentCoreTestCase):
 
             agent_context_module.measure_request_input_tokens = fake_measure
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "abortSignal": signal}),

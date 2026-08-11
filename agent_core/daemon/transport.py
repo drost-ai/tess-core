@@ -14,15 +14,15 @@ from .protocol import (
     DAEMON_PROTOCOL_VERSION,
     DaemonLineDecoder,
     DaemonProtocolError,
-    boundedProtocolDiagnostic,
-    daemonTokensEqual,
-    encodeDaemonFrame,
-    isDaemonAuthRequest,
-    isDaemonAuthResponse,
-    parseDaemonFrame,
-    parseDaemonRequest,
-    resolveDaemonAuthTimeoutMs,
-    resolveDaemonRpcTimeoutMs,
+    bounded_protocol_diagnostic,
+    daemon_tokens_equal,
+    encode_daemon_frame,
+    is_daemon_auth_request,
+    is_daemon_auth_response,
+    parse_daemon_frame,
+    parse_daemon_request,
+    resolve_daemon_auth_timeout_ms,
+    resolve_daemon_rpc_timeout_ms,
 )
 
 
@@ -97,7 +97,7 @@ class DaemonServerPeer:
             for frame in self.decoder.push(chunk):
                 if not frame:
                     continue
-                value = parseDaemonFrame(frame)
+                value = parse_daemon_frame(frame)
                 if not self.authenticated:
                     await self._authenticate(value)
                 else:
@@ -121,7 +121,7 @@ class DaemonServerPeer:
                 "daemon.version_mismatch",
                 "Legacy daemon client rejected.",
             )
-        if not isDaemonAuthRequest(value) or not daemonTokensEqual(value["token"], self.owner.token):
+        if not is_daemon_auth_request(value) or not daemon_tokens_equal(value["token"], self.owner.token):
             raise DaemonProtocolError("daemon.auth_failed", "Daemon authentication failed.")
         self.authenticated = True
         await self._write_frame(
@@ -147,10 +147,10 @@ class DaemonServerPeer:
                 return
             for frame in self.decoder.push(chunk):
                 if frame:
-                    await self._accept_request(parseDaemonFrame(frame))
+                    await self._accept_request(parse_daemon_frame(frame))
 
     async def _accept_request(self, value: Any) -> None:
-        request = parseDaemonRequest(value)
+        request = parse_daemon_request(value)
         request_id = request["id"]
         if (
             request_id in self.seen_ids
@@ -224,7 +224,7 @@ class DaemonServerPeer:
             response = {
                 "id": request_id,
                 "ok": False,
-                "error": boundedProtocolDiagnostic(str(error)),
+                "error": bounded_protocol_diagnostic(str(error)),
             }
         finally:
             if self.active.pop(request_id, None) is not None:
@@ -275,7 +275,7 @@ class DaemonServerPeer:
             return False
 
     async def _write_frame(self, value: Any) -> None:
-        frame = encodeDaemonFrame(value, DAEMON_MAX_RESPONSE_FRAME_BYTES)
+        frame = encode_daemon_frame(value, DAEMON_MAX_RESPONSE_FRAME_BYTES)
         async with self.write_lock:
             if self.closed or self.writer.is_closing():
                 raise RuntimeError("Daemon peer is closed.")
@@ -320,8 +320,8 @@ class AuthenticatedDaemonServer:
         self.token = token
         self.epoch = epoch
         self.dispatch = dispatch
-        self.auth_timeout_ms = resolveDaemonAuthTimeoutMs(authTimeoutMs)
-        self.rpc_timeout_ms = resolveDaemonRpcTimeoutMs(rpcTimeoutMs)
+        self.auth_timeout_ms = resolve_daemon_auth_timeout_ms(authTimeoutMs)
+        self.rpc_timeout_ms = resolve_daemon_rpc_timeout_ms(rpcTimeoutMs)
         self.on_authenticated = onAuthenticated
         self.on_disconnect = onDisconnect
         self.accepting = accepting
@@ -375,19 +375,19 @@ class AuthenticatedDaemonServer:
         task.add_done_callback(self._discard_cleanup_task)
 
 
-def createAuthenticatedDaemonServer(
+def create_authenticated_daemon_server(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> AuthenticatedDaemonServer:
     return AuthenticatedDaemonServer(**{**(args or {}), **kwargs})
 
 
-async def openAuthenticatedDaemonConnection(
+async def open_authenticated_daemon_connection(
     socketPath: str,
     token: str,
     expectedEpoch: str,
 ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    timeout = resolveDaemonAuthTimeoutMs() / 1000
+    timeout = resolve_daemon_auth_timeout_ms() / 1000
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_unix_connection(socketPath),
@@ -400,7 +400,7 @@ async def openAuthenticatedDaemonConnection(
         ) from error
     try:
         writer.write(
-            encodeDaemonFrame(
+            encode_daemon_frame(
                 {
                     "type": "auth",
                     "protocolVersion": DAEMON_PROTOCOL_VERSION,
@@ -411,8 +411,8 @@ async def openAuthenticatedDaemonConnection(
         )
         await writer.drain()
         decoder = DaemonLineDecoder(DAEMON_MAX_RESPONSE_FRAME_BYTES)
-        response = await readOneDaemonFrame(reader, decoder, timeout)
-        if decoder.bufferedBytes or not isDaemonAuthResponse(response):
+        response = await read_one_daemon_frame(reader, decoder, timeout)
+        if decoder.bufferedBytes or not is_daemon_auth_response(response):
             raise DaemonProtocolError(
                 "daemon.auth_failed",
                 "Daemon rejected the authenticated protocol handshake.",
@@ -434,7 +434,7 @@ async def openAuthenticatedDaemonConnection(
         raise
 
 
-async def readOneDaemonFrame(
+async def read_one_daemon_frame(
     reader: asyncio.StreamReader,
     decoder: DaemonLineDecoder,
     timeoutSeconds: float,
@@ -452,7 +452,7 @@ async def readOneDaemonFrame(
                     "daemon.frame_malformed",
                     "Daemon returned more than one frame where one was expected.",
                 )
-            return parseDaemonFrame(frames[0])
+            return parse_daemon_frame(frames[0])
 
     return await asyncio.wait_for(read(), timeout=timeoutSeconds)
 

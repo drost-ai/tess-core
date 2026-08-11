@@ -238,7 +238,7 @@ class LogicalTurnProgressLedger:
         }
 
 
-def noProgressEventData(
+def no_progress_event_data(
     *,
     session_id: str,
     logical_turn_id: str,
@@ -253,7 +253,7 @@ def noProgressEventData(
     }
 
 
-def noProgressTurnResult(
+def no_progress_turn_result(
     *,
     receipt: dict[str, Any],
     text: str,
@@ -273,7 +273,7 @@ def noProgressTurnResult(
     }
 
 
-def appendToolResultBatch(
+def append_tool_result_batch(
     *,
     session: dict[str, Any],
     ledger: LogicalTurnProgressLedger,

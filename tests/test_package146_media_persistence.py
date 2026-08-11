@@ -313,7 +313,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
                 async with core.scoped_runtime_home(str(root)):
                     await core.ensure_base_layout(str(root))
                     await core.persist_session(session, config, touch=False)
-                    await core.runAgentPrompt(
+                    await core.run_agent_prompt(
                         session=session,
                         config=config,
                         runtime=bind_test_runtime(session),
@@ -370,7 +370,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
                 async with core.scoped_runtime_home(str(root)):
                     await core.ensure_base_layout(str(root))
                     await core.persist_session(session, config, touch=False)
-                    await core.runAgentPrompt(
+                    await core.run_agent_prompt(
                         session=session,
                         config=config,
                         runtime=bind_test_runtime(

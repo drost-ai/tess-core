@@ -42,8 +42,8 @@ def create_task_execution_descriptor(record: dict[str, Any], output: str = "", a
     )
 
 
-def create_workspace_execution_descriptor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def create_workspace_execution_descriptor(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     workspace = args.get("workspace") if isinstance(args.get("workspace"), dict) else args
     action = args.get("action") or "refresh"
     branch = args.get("branch") or workspace.get("gitBranch")

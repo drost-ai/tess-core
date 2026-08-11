@@ -10,11 +10,11 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import get_state_root
-from .commands import _parse_json_object, _runner_which, quoteShellArg
+from .commands import _parse_json_object, _runner_which, quote_shell_arg
 from .shared import DEFAULT_CHROME_EXTENSION_ORIGIN, DEFAULT_CHROME_NATIVE_HOST_NAME
 
-async def resolveChromeCompanionServer(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    status = await detectChromeCompanionStatus(args, **kwargs)
+async def resolve_chrome_companion_server(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    status = await detect_chrome_companion_status(args, **kwargs)
     enabled = bool(status.get("supported"))
     server = (
         {
@@ -29,21 +29,21 @@ async def resolveChromeCompanionServer(args: dict[str, Any] | None = None, **kwa
     )
     return {"available": bool(status.get("supported") and status.get("browserBinary")), "enabled": enabled, "status": status, "server": server}
 
-async def detectChromeCompanionStatus(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def detect_chrome_companion_status(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     runner = args.get("runner") or {}
     system = args.get("platform") or sys.platform
     browser = await _find_chrome_binary(runner, system)
     supported = system.startswith("darwin") or system.startswith("linux") or system.startswith("win")
     status = {"enabled": bool(browser), "supported": supported, "browserBinary": browser, "nativeHostModeSupported": supported, "platform": system}
     if args.get("includeNativeHostManifest"):
-        native_host = await inspectChromeNativeHostManifest({**args, "platform": system})
+        native_host = await inspect_chrome_native_host_manifest({**args, "platform": system})
         status["nativeHostManifest"] = native_host
         status["nativeHostInstalled"] = native_host.get("installed")
     return status
 
-def getChromeNativeHostManifestPath(args: dict[str, Any] | None = None, **kwargs: Any) -> str | None:
-    args = {**(args or {}), **kwargs}
+def get_chrome_native_host_manifest_path(args: dict[str, Any] | None = None) -> str | None:
+    args = dict(args or {})
     if args.get("manifestPath"):
         return str(args["manifestPath"])
     system = args.get("platform") or sys.platform
@@ -59,8 +59,8 @@ def getChromeNativeHostManifestPath(args: dict[str, Any] | None = None, **kwargs
         return str(base / "Google" / "Chrome" / "NativeMessagingHosts" / f"{host_name}.json") if base else None
     return None
 
-async def buildChromeNativeHostManifest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def build_chrome_native_host_manifest(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     host_path = args.get("nativeHostPath") or await _chrome_native_host_wrapper_path(args)
     origins = args.get("allowedOrigins") or args.get("allowed_origins") or [DEFAULT_CHROME_EXTENSION_ORIGIN]
     return {
@@ -71,12 +71,12 @@ async def buildChromeNativeHostManifest(args: dict[str, Any] | None = None, **kw
         "allowed_origins": [str(origin) for origin in origins if str(origin).strip()],
     }
 
-async def inspectChromeNativeHostManifest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def inspect_chrome_native_host_manifest(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     system = args.get("platform") or sys.platform
     supported = system.startswith("darwin") or system.startswith("linux") or system.startswith("win")
-    manifest_path = getChromeNativeHostManifestPath(args)
-    expected = await buildChromeNativeHostManifest(args)
+    manifest_path = get_chrome_native_host_manifest_path(args)
+    expected = await build_chrome_native_host_manifest(args)
     manifest = None
     issues: list[str] = []
     if not supported:
@@ -117,9 +117,9 @@ async def inspectChromeNativeHostManifest(args: dict[str, Any] | None = None, **
         "platform": system,
     }
 
-async def installChromeNativeHostManifest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
-    status = await inspectChromeNativeHostManifest(args)
+async def install_chrome_native_host_manifest(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
+    status = await inspect_chrome_native_host_manifest(args)
     if not status.get("supported") or not status.get("manifestPath"):
         return {**status, "status": "skipped", "reason": "; ".join(status.get("issues") or ["Native-host manifests are not supported."])}
     manifest = status["expectedManifest"]
@@ -132,10 +132,10 @@ async def installChromeNativeHostManifest(args: dict[str, Any] | None = None, **
     with open(status["manifestPath"], "w", encoding="utf-8") as handle:
         json.dump(manifest, handle, indent=2)
         handle.write("\n")
-    installed = await inspectChromeNativeHostManifest({**args, "nativeHostPath": host_path})
+    installed = await inspect_chrome_native_host_manifest({**args, "nativeHostPath": host_path})
     return {**installed, "status": "installed" if installed.get("installed") else "degraded", "manifest": manifest}
 
-async def runChromeCompanionMcpServer(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
+async def run_chrome_companion_mcp_server(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
     input_stream = input_stream or sys.stdin.buffer
     output_stream = output_stream or sys.stdout.buffer
     buffer = b""
@@ -149,11 +149,11 @@ async def runChromeCompanionMcpServer(input_stream: Any | None = None, output_st
             if not parsed:
                 break
             payload, buffer = parsed
-            response = await handleChromeCompanionRpcPayload(payload)
+            response = await handle_chrome_companion_rpc_payload(payload)
             if response is not None:
                 _write_rpc_message(output_stream, response)
 
-async def runChromeNativeHost(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
+async def run_chrome_native_host(input_stream: Any | None = None, output_stream: Any | None = None) -> None:
     input_stream = input_stream or sys.stdin.buffer
     output_stream = output_stream or sys.stdout.buffer
     while True:
@@ -165,10 +165,10 @@ async def runChromeNativeHost(input_stream: Any | None = None, output_stream: An
         if payload_bytes is None:
             return
         payload = _parse_json_object(payload_bytes.decode("utf-8")) or {}
-        response = {"type": "pong", "version": "0.1.0"} if payload.get("type") == "ping" else {"type": "status", "status": await detectChromeCompanionStatus()}
+        response = {"type": "pong", "version": "0.1.0"} if payload.get("type") == "ping" else {"type": "status", "status": await detect_chrome_companion_status()}
         _write_native_host_message(output_stream, response)
 
-async def handleChromeCompanionRpcPayload(payload: str) -> dict[str, Any] | None:
+async def handle_chrome_companion_rpc_payload(payload: str) -> dict[str, Any] | None:
     value = _parse_json_object(payload)
     if not value:
         return None
@@ -187,7 +187,7 @@ async def handleChromeCompanionRpcPayload(payload: str) -> dict[str, Any] | None
         name = params.get("name") if isinstance(params.get("name"), str) else ""
         if name != "chrome_status":
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": f"Unknown tool: {name}"}}
-        return {"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": json.dumps(await detectChromeCompanionStatus(), indent=2)}]}}
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": json.dumps(await detect_chrome_companion_status(), indent=2)}]}}
     if method == "resources/list":
         return {"jsonrpc": "2.0", "id": request_id, "result": {"resources": [{"uri": "tess://chrome/status", "name": "chrome_status", "mimeType": "application/json", "description": "Current local Chrome companion status."}]}}
     if method == "resources/read":
@@ -195,7 +195,7 @@ async def handleChromeCompanionRpcPayload(payload: str) -> dict[str, Any] | None
         uri = params.get("uri") if isinstance(params.get("uri"), str) else ""
         if uri != "tess://chrome/status":
             return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32602, "message": f"Unknown resource: {uri}"}}
-        return {"jsonrpc": "2.0", "id": request_id, "result": {"contents": [{"uri": uri, "mimeType": "application/json", "text": json.dumps(await detectChromeCompanionStatus(), indent=2)}]}}
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"contents": [{"uri": uri, "mimeType": "application/json", "text": json.dumps(await detect_chrome_companion_status(), indent=2)}]}}
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method not implemented: {method}"}}
 
 async def _chrome_native_host_wrapper_path(args: dict[str, Any]) -> str:
@@ -209,7 +209,7 @@ async def _write_chrome_native_host_wrapper(host_path: str) -> None:
     if host_path.endswith(".cmd"):
         body = f'@echo off\r\n"{sys.executable}" -m agent_core.platform_support.chrome_companion native %*\r\n'
     else:
-        body = f'#!/bin/sh\nexec {quoteShellArg(sys.executable)} -m agent_core.platform_support.chrome_companion native "$@"\n'
+        body = f'#!/bin/sh\nexec {quote_shell_arg(sys.executable)} -m agent_core.platform_support.chrome_companion native "$@"\n'
     with open(host_path, "w", encoding="utf-8", newline="" if host_path.endswith(".cmd") else None) as handle:
         handle.write(body)
     if not host_path.endswith(".cmd"):

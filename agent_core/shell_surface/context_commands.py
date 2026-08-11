@@ -32,16 +32,16 @@ from .common import (
     _session_matches,
     _split_subcommand,
 )
-from .common import formatMonitorRecord
+from .common import format_monitor_record
 from .diagnostics import _handle_debug, format_session_candidate
 from typing import Any
 
 
-async def buildMonitorsReport(session: dict[str, Any]) -> str:
+async def build_monitors_report(session: dict[str, Any]) -> str:
     monitors = await list_session_monitors(session.get("id"))
     if not monitors:
         return "No background monitors are active for this session."
-    return "\n\n".join(formatMonitorRecord(monitor) for monitor in monitors[:12])
+    return "\n\n".join(format_monitor_record(monitor) for monitor in monitors[:12])
 
 
 async def _handle_memory(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
@@ -170,7 +170,7 @@ async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str
 async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     subcommand, payload = _split_subcommand(arg_text)
     if subcommand in {"status", "artifacts", "state"}:
-        return _info(hooks, "Compact", await buildCompactionStatusReport(session))
+        return _info(hooks, "Compact", await build_compaction_status_report(session))
     if subcommand == "debug":
         return await _handle_debug(payload, session, config, hooks, title="Compact Debug")
     if subcommand and subcommand not in {"run", "force"}:
@@ -306,7 +306,7 @@ async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[s
     )
 
 
-async def buildCompactionStatusReport(session: dict[str, Any]) -> str:
+async def build_compaction_status_report(session: dict[str, Any]) -> str:
     metadata = session.get("metadata") or {}
     state = metadata.get("compactionState") or {}
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}

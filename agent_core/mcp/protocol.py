@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from .transport_shared import _reject_json_constant
-from .sse_decoder import parseSseEvents
+from .sse_decoder import parse_sse_events
 
 
 def _runtime_tool_name(server: str, tool: str) -> str:

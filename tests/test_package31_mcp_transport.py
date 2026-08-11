@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.mcp.sse_decoder import McpSseDecoder, parseSseEvents
+from agent_core.mcp.sse_decoder import McpSseDecoder, parse_sse_events
 from agent_core.mcp.stdio_decoder import McpStdioFrameDecoder
 from agent_core.mcp.stdio_transport import StdioMcpClient
 from agent_core.mcp.transport_policy import (
@@ -238,7 +238,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
         )
         self.assertEqual(json.loads(events[0]["data"])["id"], 1)
         with self.assertRaises(McpTransportError) as raised:
-            parseSseEvents(f"data: {'x' * MCP_SSE_EVENT_MAX_BYTES}\n\n")
+            parse_sse_events(f"data: {'x' * MCP_SSE_EVENT_MAX_BYTES}\n\n")
         self.assertEqual(raised.exception.code, "event_limit")
 
     def test_notification_queue_is_bounded_and_preserves_catalog_signal(self):
@@ -262,7 +262,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
             server = _write_stdio_fixture(workspace)
             started = time.monotonic()
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd=str(workspace),
                     servers=[
                         _stdio_config("silent", "silent", server, startupTimeoutMs=120),
@@ -284,7 +284,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
 
             for mode in ("silent_tools", "silent_resources"):
                 runtime = run(
-                    core.createMcpRuntime(
+                    core.create_mcp_runtime(
                         cwd=str(workspace),
                         servers=[
                             _stdio_config(
@@ -319,7 +319,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
             ):
                 with self.subTest(mode=mode):
                     runtime = run(
-                        core.createMcpRuntime(
+                        core.create_mcp_runtime(
                             cwd=str(workspace),
                             servers=[_stdio_config(mode, mode, server)],
                         )
@@ -341,7 +341,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
         try:
             server = _write_stdio_fixture(workspace)
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd=str(workspace),
                     servers=[
                         _stdio_config(
@@ -359,7 +359,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
             run(runtime["close"]())
 
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd=str(workspace),
                     servers=[_stdio_config("exit", "exit_call", server)],
                 )
@@ -372,7 +372,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
             run(runtime["close"]())
 
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd=str(workspace),
                     servers=[_stdio_config("stubborn", "stubborn", server)],
                 )
@@ -429,7 +429,7 @@ class Package31McpTransportTests(AgentCoreTestCase):
         try:
             server = _write_stdio_fixture(workspace)
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd=str(workspace),
                     servers=[
                         _stdio_config(

@@ -13,11 +13,11 @@ from typing import Any
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
 from agent_core.daemon.security import (
-    daemonTokenId,
-    readDaemonAuthMaterial,
-    verifyOwnedDaemonSocket,
+    daemon_token_id,
+    read_daemon_auth_material,
+    verify_owned_daemon_socket,
 )
-from agent_core.daemon.security_tree import verifyPrivateDaemonRuntime
+from agent_core.daemon.security_tree import verify_private_daemon_runtime
 
 
 P02_INSTANCE = "p02-test-instance"
@@ -70,7 +70,7 @@ def _ensure_daemon_worker(
         start_barrier.wait(timeout=20)
 
         async def ensure() -> dict[str, Any]:
-            client = await core.ensureTaskSupervisorDaemon(
+            client = await core.ensure_task_supervisor_daemon(
                 {
                     "instanceId": P02_INSTANCE,
                     "cwd": workspace,
@@ -110,7 +110,7 @@ def _reattach_daemon_worker(
     async def attach() -> tuple[dict[str, Any], dict[str, Any]]:
         nonlocal failure_phase
         start_barrier.wait(timeout=20)
-        first = await core.ensureTaskSupervisorDaemon(
+        first = await core.ensure_task_supervisor_daemon(
             {
                 "instanceId": P02_INSTANCE,
                 "cwd": workspace,
@@ -131,7 +131,7 @@ def _reattach_daemon_worker(
             await first["close"]()
 
         recovery_barrier.wait(timeout=20)
-        second = await core.ensureTaskSupervisorDaemon(
+        second = await core.ensure_task_supervisor_daemon(
             {
                 "instanceId": P02_INSTANCE,
                 "cwd": workspace,
@@ -251,7 +251,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
                     )
                 finally:
                     self._stop_workers(workers)
-                    run(core.stopTaskSupervisorDaemon({"instanceId": P02_INSTANCE}))
+                    run(core.stop_task_supervisor_daemon({"instanceId": P02_INSTANCE}))
                     self.restore_home(root, previous)
 
     def test_ready_leader_crash_reauthenticates_both_attached_followers(self):
@@ -316,7 +316,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
         finally:
             crash_released.set()
             self._stop_workers(workers)
-            run(core.stopTaskSupervisorDaemon({"instanceId": P02_INSTANCE}))
+            run(core.stop_task_supervisor_daemon({"instanceId": P02_INSTANCE}))
             self.restore_home(root, previous)
 
     def _assert_single_authenticated_winner(
@@ -337,16 +337,16 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
         state = states[0]
         self.assertEqual(state["phase"], "running")
         self.assertTrue(_is_alive(state["pid"]))
-        run(verifyPrivateDaemonRuntime(P02_INSTANCE))
-        socket_identity = verifyOwnedDaemonSocket(state["socketPath"])
+        run(verify_private_daemon_runtime(P02_INSTANCE))
+        socket_identity = verify_owned_daemon_socket(state["socketPath"])
         self.assertIsNotNone(socket_identity)
-        auth = run(readDaemonAuthMaterial(P02_INSTANCE, state))
-        self.assertEqual(daemonTokenId(auth["token"]), state["authTokenId"])
+        auth = run(read_daemon_auth_material(P02_INSTANCE, state))
+        self.assertEqual(daemon_token_id(auth["token"]), state["authTokenId"])
         ledger = Path(home, "daemon", "instances", P02_INSTANCE, "spawn-ledger.jsonl")
         spawned = [json.loads(line)["pid"] for line in ledger.read_text().splitlines()]
         live_spawned = {pid for pid in spawned if _is_alive(pid)}
         self.assertEqual(live_spawned, {state["pid"]})
-        client = run(core.connectTaskSupervisorDaemonClient({"instanceId": P02_INSTANCE}))
+        client = run(core.connect_task_supervisor_daemon_client({"instanceId": P02_INSTANCE}))
         self.assertIsNotNone(client)
         try:
             connected = run(client["getStatus"]())

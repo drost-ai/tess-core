@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from .clients import JsonRpcClient, _McpHttpUnauthorized
+from .clients import JsonRpcClient, _mcp_http_unauthorized
 from .http_body import _open_mcp_http, _validate_outgoing_headers
-from .http_exchange import _HttpExchange
-from .http_stream import _HttpServerPushMixin
+from .http_exchange import _http_exchange
+from .http_stream import _http_server_push_mixin
 import asyncio
 import contextlib
 import json
@@ -18,21 +18,21 @@ from .http_body import (
     _content_type,
     _first_header,
     _is_json_content_type,
-    iterateMcpBody,
-    readMcpBodyText,
-    validateMcpResponseHeaders,
+    iterate_mcp_body,
+    read_mcp_body_text,
+    validate_mcp_response_headers,
 )
 from .transport_policy import (
     MCP_FRAME_MAX_BYTES,
     MCP_PENDING_REQUEST_MAX,
     McpTransportError,
-    resolveMcpTransportPolicy,
+    resolve_mcp_transport_policy,
 )
 from .transport_shared import BoundedNotificationQueue, _decode_json_rpc_payload
 from .sse_decoder import McpSseDecoder
 
 
-class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
+class HttpMcpClient(_http_server_push_mixin, JsonRpcClient):
     def __init__(
         self,
         config: dict[str, Any],
@@ -41,12 +41,12 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
         auth: Any = None,
     ) -> None:
         super().__init__(config, cwd, on_notification, auth)
-        self.policy = resolveMcpTransportPolicy(config)
+        self.policy = resolve_mcp_transport_policy(config)
         self.notifications = BoundedNotificationQueue(on_notification)
         self.state = "open"
         self.state_lock = threading.Lock()
         self.exchange_condition = threading.Condition()
-        self.exchanges: set[_HttpExchange] = set()
+        self.exchanges: set[_http_exchange] = set()
         self.stream_threads: set[threading.Thread] = set()
         self.stream_stop = threading.Event()
         self.close_done = threading.Event()
@@ -73,7 +73,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
                     auth_headers,
                     exchange,
                 )
-            except _McpHttpUnauthorized as error:
+            except _mcp_http_unauthorized as error:
                 if not self.auth:
                     raise RuntimeError(
                         f"HTTP 401 from MCP server {self.config.get('name')}"
@@ -180,7 +180,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
         self,
         request: dict[str, Any],
         auth_headers: dict[str, str] | None,
-        exchange: _HttpExchange,
+        exchange: _http_exchange,
     ) -> dict[str, Any]:
         try:
             body = json.dumps(
@@ -224,7 +224,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
                     "www-authenticate",
                 )
                 _close_http_response(response)
-                raise _McpHttpUnauthorized(challenge)
+                raise _mcp_http_unauthorized(challenge)
             if status == 404 and self.session_id:
                 # Spec: 404 with a session id means the session expired; the
                 # client must re-initialize. Failing the connection routes the
@@ -253,7 +253,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
         method: str,
         headers: dict[str, str],
         body: bytes | None,
-        exchange: _HttpExchange,
+        exchange: _http_exchange,
     ) -> Any:
         _validate_outgoing_headers(headers)
         request = Request(url, data=body, headers=headers, method=method)
@@ -269,7 +269,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
             if error.code == 401:
                 challenge = error.headers.get("WWW-Authenticate") if error.headers else None
                 _close_http_response(error)
-                raise _McpHttpUnauthorized(challenge) from None
+                raise _mcp_http_unauthorized(challenge) from None
             if error.code == 404 and self.session_id:
                 self.session_id = None
                 _close_http_response(error)
@@ -284,7 +284,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
         except McpTransportError:
             raise
         exchange.bind(response)
-        validateMcpResponseHeaders(response)
+        validate_mcp_response_headers(response)
         return response
 
     def _parse_rpc_response(self, response: Any, request_id: int | None) -> dict[str, Any]:
@@ -298,7 +298,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
             matched: dict[str, Any] | None = None
             # continuous: servers may hold the POST stream open (keepalives)
             # after the response event, so read incrementally and return on match.
-            for chunk in iterateMcpBody(response, self.policy, continuous=True):
+            for chunk in iterate_mcp_body(response, self.policy, continuous=True):
                 try:
                     for event in decoder.push(chunk):
                         matched = self._consume_rpc_sse_event(event, request_id) or matched
@@ -323,7 +323,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
                 "invalid_content_type",
                 f"Unexpected MCP content type: {content_type or 'missing'}.",
             )
-        text = readMcpBodyText(response, self.policy)
+        text = read_mcp_body_text(response, self.policy)
         if not text.strip():
             return {"jsonrpc": "2.0", "id": request_id, "result": {}}
         message = _decode_json_rpc_payload(text, "HTTP body")
@@ -361,7 +361,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
             return None
         return message if message.get("id") == request_id else None
 
-    async def _run_sync(self, exchange: _HttpExchange, function: Callable[..., Any], *args: Any) -> Any:
+    async def _run_sync(self, exchange: _http_exchange, function: Callable[..., Any], *args: Any) -> Any:
         exchange.start_worker()
 
         def invoke() -> Any:
@@ -379,8 +379,8 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
 
         return await asyncio.to_thread(invoke)
 
-    def _admit_exchange(self, operation: str) -> _HttpExchange:
-        exchange = _HttpExchange(self)
+    def _admit_exchange(self, operation: str) -> _http_exchange:
+        exchange = _http_exchange(self)
         with self.state_lock:
             if self.state != "open":
                 raise McpTransportError(
@@ -396,7 +396,7 @@ class HttpMcpClient(_HttpServerPushMixin, JsonRpcClient):
                 self.exchanges.add(exchange)
         return exchange
 
-    def _finish_exchange(self, exchange: _HttpExchange) -> None:
+    def _finish_exchange(self, exchange: _http_exchange) -> None:
         with self.exchange_condition:
             self.exchanges.discard(exchange)
             self.exchange_condition.notify_all()

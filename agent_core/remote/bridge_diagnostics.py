@@ -8,7 +8,7 @@ from ..storage import list_bridges, load_bridge, load_bridge_events, load_bridge
 from .sessions import _truncate_remote_summary
 
 
-async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:
+async def format_bridge_tail(bridgeId: str, limit: int = 20) -> str:
     events = await load_bridge_events(bridgeId)
     if not events:
         return "No bridge events recorded."
@@ -23,7 +23,7 @@ async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:
     return "\n".join(lines)
 
 
-async def getBridgeDiagnostics(bridgeId: str, limit: int = 20) -> dict[str, Any]:
+async def get_bridge_diagnostics(bridgeId: str, limit: int = 20) -> dict[str, Any]:
     bridge = await load_bridge(bridgeId)
     events = await load_bridge_events(bridgeId)
     inbox = await load_bridge_inbox(bridgeId)
@@ -41,7 +41,7 @@ async def getBridgeDiagnostics(bridgeId: str, limit: int = 20) -> dict[str, Any]
     }
 
 
-async def listActiveBridgeRows() -> list[str]:
+async def list_active_bridge_rows() -> list[str]:
     rows = []
     for bridge in await list_bridges():
         if bridge.get("status") != "active":
@@ -52,4 +52,4 @@ async def listActiveBridgeRows() -> list[str]:
     return rows
 
 
-__all__ = ["formatBridgeTail", "getBridgeDiagnostics", "listActiveBridgeRows"]
+__all__ = ["format_bridge_tail", "get_bridge_diagnostics", "list_active_bridge_rows"]

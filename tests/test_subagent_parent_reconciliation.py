@@ -49,7 +49,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                 }
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     {
                         "session": parent,
                         "config": config,

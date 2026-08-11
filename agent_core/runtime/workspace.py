@@ -176,13 +176,13 @@ def _apply_workspace_snapshot_to_session(session: dict[str, Any], snapshot: dict
 
 
 async def _detect_workspace_integrations(session: dict[str, Any]) -> dict[str, Any]:
-    from ..platform_support import detectChromeCompanionStatus, detectIdeTargets, detectTmuxAvailability
+    from ..platform_support import detect_chrome_companion_status, detect_ide_targets, detect_tmux_availability
 
     metadata = session.setdefault("metadata", {})
     tmux, ide_targets, chrome = await asyncio.gather(
-        detectTmuxAvailability(),
-        detectIdeTargets(),
-        detectChromeCompanionStatus(),
+        detect_tmux_availability(),
+        detect_ide_targets(),
+        detect_chrome_companion_status(),
     )
     return {
         "tmux": {

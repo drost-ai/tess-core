@@ -16,8 +16,8 @@ from ..token_budget import resolve_request_max_output_tokens as _resolve_max_out
 from typing import Any
 from urllib.parse import urlparse
 
-def build_responses_create_params(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def build_responses_create_params(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     request = args["request"]
     is_codex = bool(args.get("isCodexBackend"))
     params: dict[str, Any] = {

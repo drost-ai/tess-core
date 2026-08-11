@@ -19,7 +19,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
             )
             run(core.save_session(session))
             task_id = "task-interrupted-launch"
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId=task_id,
                 sessionId=session["id"],
                 kind="background_command",
@@ -84,7 +84,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon({"instanceId": "launch-recon-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "launch-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_interrupted_subagent_repairs_parent_and_child_session_links(self):
@@ -105,7 +105,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
             run(core.save_session(parent))
             run(core.save_session(child))
             task_id = "task-interrupted-subagent"
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId=task_id,
                 sessionId=parent["id"],
                 kind="subagent",
@@ -162,5 +162,5 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon({"instanceId": "launch-recon-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "launch-recon-instance"}))
             self.restore_home(root, previous)

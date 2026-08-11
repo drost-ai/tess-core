@@ -113,7 +113,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
                     "content": [{"type": "text", "text": "done"}],
                 }
 
-            run(core.runAgentPrompt(
+            run(core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=bind_test_runtime(session, {
@@ -151,7 +151,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
                 raise AssertionError("provider must not run")
 
             with self.assertRaises(ImageBudgetError) as caught:
-                run(core.runAgentPrompt(
+                run(core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(session, {
@@ -208,7 +208,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
                 }
 
             try:
-                run(core.runAgentPrompt(
+                run(core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(session, {

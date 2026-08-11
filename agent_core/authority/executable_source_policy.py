@@ -247,8 +247,8 @@ async def _plugin_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -
     }
 
 
-async def inspect_plugin_source_trust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def inspect_plugin_source_trust(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     cwd, scope = str(args["cwd"]), str(args["scope"])
     records = _normalized_plugins(scope, await load_plugins(scope, cwd))
     enabled = [record for record in records if record.get("enabled")]

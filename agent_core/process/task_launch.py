@@ -10,7 +10,7 @@ from typing import Any, Awaitable, Callable, Mapping
 from ..contracts.task_records import TaskLaunchReservation
 
 from .._utils import now_iso
-from .identity import ProcessIdentityError, captureOwnedProcessIdentity, signalOwnedProcess
+from .identity import ProcessIdentityError, capture_owned_process_identity, signal_owned_process
 from ..runtime.identifiers import parse_session_id, parse_task_id
 
 
@@ -22,7 +22,7 @@ class ReservedProcessLaunch:
     completedBeforeAttach: dict[str, Any] | None = None
 
 
-def createTaskLaunchReservation(
+def create_task_launch_reservation(
     args: Mapping[str, Any] | None = None,
     *,
     taskId: str | None = None,
@@ -47,12 +47,12 @@ def createTaskLaunchReservation(
     }
 
 
-def attachTaskLaunchReservation(reservation: Mapping[str, Any], now: str | None = None) -> TaskLaunchReservation:
+def attach_task_launch_reservation(reservation: Mapping[str, Any], now: str | None = None) -> TaskLaunchReservation:
     _assert_starting_reservation(reservation)
     return {**reservation, "state": "attached", "attachedAt": now or now_iso()}
 
 
-def failTaskLaunchReservation(
+def fail_task_launch_reservation(
     reservation: Mapping[str, Any],
     error: Any,
     now: str | None = None,
@@ -65,7 +65,7 @@ def failTaskLaunchReservation(
     }
 
 
-async def launchReservedProcess(
+async def launch_reserved_process(
     *,
     reservation: Mapping[str, Any],
     expectedArgv: list[str],
@@ -87,7 +87,7 @@ async def launchReservedProcess(
     completion = asyncio.create_task(_wait_for_process(child))
     identity: dict[str, Any] | None = None
     try:
-        capture = captureIdentity or captureOwnedProcessIdentity
+        capture = captureIdentity or capture_owned_process_identity
         identity = await capture(
             {
                 "pid": child.pid,
@@ -107,7 +107,7 @@ async def launchReservedProcess(
 
         if identity is not None:
             try:
-                await signalOwnedProcess(identity, signal.SIGTERM)
+                await signal_owned_process(identity, signal.SIGTERM)
             except Exception:
                 pass
         elif child.poll() is None:

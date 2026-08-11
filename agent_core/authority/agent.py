@@ -9,7 +9,7 @@ from typing import Any
 from .executable_source_policy import executable_config_digest, load_selected_plugin_records
 from .hooks import load_hooks
 from .permission_rules import load_permission_rules_cached
-from ..sandbox import resolveSandboxPolicy
+from ..sandbox import resolve_sandbox_policy
 from ..storage import get_project_root
 
 
@@ -141,7 +141,7 @@ def _sandbox_authority(config: dict[str, Any], session: dict[str, Any], mode: st
     off by replaying TypeScript-shaped keys that Python ignores.
     """
 
-    policy = resolveSandboxPolicy(config, session=session, cwd=session["cwd"])
+    policy = resolve_sandbox_policy(config, session=session, cwd=session["cwd"])
     filesystem = _default_filesystem(mode)
     if filesystem == "read-only":
         writable: list[str] = []

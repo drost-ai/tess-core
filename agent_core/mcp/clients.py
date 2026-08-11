@@ -74,7 +74,7 @@ class JsonRpcClient:
         raise NotImplementedError
 
 
-class _McpHttpUnauthorized(RuntimeError):
+class _mcp_http_unauthorized(RuntimeError):
     def __init__(self, www_authenticate: str | None):
         super().__init__("MCP HTTP request requires authorization.")
         self.www_authenticate = www_authenticate

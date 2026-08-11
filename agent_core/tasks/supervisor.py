@@ -7,7 +7,7 @@ import sys
 import threading
 import uuid
 from .._utils import maybe_await
-from ..process.task_launch import createTaskLaunchReservation
+from ..process.task_launch import create_task_launch_reservation
 from ..process._termination import terminate_popen_group
 from ..storage.paths import ensure_base_layout
 from ..storage.records import (
@@ -51,8 +51,8 @@ from .health_check_runtime import create_health_check_controller, drain_orphaned
 from .task_stop_coordination import create_task_stop_coordinator
 
 
-async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def create_task_supervisor(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     cwd = args.get("cwd") or os.getcwd()
     on_event: Callable[[dict[str, Any]], Any] = args.get("onEvent") or (lambda _event: None)
     await ensure_base_layout(cwd)
@@ -90,8 +90,8 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
         track=_track_health_task,
     )
 
-    async def start_background_command(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
-        task_args = {**(task_args or {}), **task_kwargs}
+    async def start_background_command(task_args: dict[str, Any] | None = None) -> dict[str, str]:
+        task_args = dict(task_args or {})
         session_id = _require_string(task_args.get("sessionId") or task_args.get("session_id"), "sessionId")
         command = _require_string(task_args.get("command"), "command")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
@@ -110,7 +110,7 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
             output_file=output_file,
             sandbox_events=sandbox_events,
         )
-        reservation = createTaskLaunchReservation(taskId=task_id, sessionId=session_id, kind="background_command")
+        reservation = create_task_launch_reservation(taskId=task_id, sessionId=session_id, kind="background_command")
         meta = {
             "type": "background_command",
             "taskId": task_id,
@@ -159,8 +159,8 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
             await emit(sandbox_event["event"], sandbox_event["data"], session_id)
         return result
 
-    async def start_main_session_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
-        task_args = {**(task_args or {}), **task_kwargs}
+    async def start_main_session_task(task_args: dict[str, Any] | None = None) -> dict[str, str]:
+        task_args = dict(task_args or {})
         session_id = _require_string(task_args.get("sessionId") or task_args.get("session_id"), "sessionId")
         prompt = _require_string(task_args.get("prompt"), "prompt")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
@@ -171,7 +171,7 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
         task_id = str(uuid.uuid4())
         output_file = task_output_path(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        reservation = createTaskLaunchReservation(taskId=task_id, sessionId=session_id, kind="main_session")
+        reservation = create_task_launch_reservation(taskId=task_id, sessionId=session_id, kind="main_session")
         def _append_main_session_task(record_session: dict[str, Any]) -> dict[str, Any]:
             metadata = record_session.setdefault("metadata", {})
             metadata["taskIds"] = _dedupe([*(metadata.get("taskIds") or []), task_id])
@@ -349,8 +349,8 @@ async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: A
         await _annotate_retry_lineage(task_id, launch_task_id(retried), source)
         return retried
 
-    async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, str]:
-        task_args = {**(task_args or {}), **task_kwargs}
+    async def start_health_check(task_args: dict[str, Any] | None = None) -> dict[str, str]:
+        task_args = dict(task_args or {})
         if not all(
             key in task_args
             for key in ("sessionId", "spec", "specDigest", "executionPolicy")

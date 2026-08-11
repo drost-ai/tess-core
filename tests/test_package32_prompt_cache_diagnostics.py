@@ -14,7 +14,7 @@ from agent_core.providers.prompt_cache_diagnostics import (
     hash_prompt_cache_value,
     normalize_prompt_cache_provider_reason,
 )
-from agent_core.shell_surface.status import formatUsageBreakdown, formatUsageSummary
+from agent_core.shell_surface.status import format_usage_breakdown, format_usage_summary
 from agent_core.providers.usage_costs import (
     cache_creation_usage_detail,
     create_usage_totals,
@@ -201,11 +201,11 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
         merge_usage_into_session(session, aggregate)
         totals = session["metadata"]["usage"]
         self.assertTrue(totals["cacheCreationTtlDetailComplete"])
-        self.assertIn("written: 5m 100, 1h 200", formatUsageSummary(totals))
-        self.assertIn("cache written by TTL", formatUsageBreakdown(totals))
+        self.assertIn("written: 5m 100, 1h 200", format_usage_summary(totals))
+        self.assertIn("cache written by TTL", format_usage_breakdown(totals))
         merge_usage_into_session(session, {"cache_creation_input_tokens": 1})
         self.assertFalse(totals["cacheCreationTtlDetailComplete"])
-        self.assertNotIn("written: 5m", formatUsageSummary(totals))
+        self.assertNotIn("written: 5m", format_usage_summary(totals))
         legacy = {
             "metadata": {
                 "usage": {

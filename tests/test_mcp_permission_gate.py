@@ -70,7 +70,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
     def _runtime_and_tool(self, workspace: Path):
         fixture = _write_error_fixture(workspace)
         runtime = run(
-            core.createMcpRuntime(
+            core.create_mcp_runtime(
                 {"cwd": str(workspace), "servers": [_stdio_error_config(fixture)]}
             )
         )

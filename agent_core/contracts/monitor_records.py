@@ -8,7 +8,7 @@ from typing import Literal, TypedDict
 MonitorStatus = Literal["active", "muted", "completed", "failed", "stopped"]
 
 
-class _MonitorRecordRequired(TypedDict):
+class _monitor_record_required(TypedDict):
     id: str
     sessionId: str
     taskId: str
@@ -22,7 +22,7 @@ class _MonitorRecordRequired(TypedDict):
     lastObservedOutputSize: int
 
 
-class MonitorRecord(_MonitorRecordRequired, total=False):
+class MonitorRecord(_monitor_record_required, total=False):
     """Monitor record at ``monitors/{monitorId}.json``."""
 
     summaryStyle: str | None

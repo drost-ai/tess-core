@@ -36,7 +36,7 @@ async def seed_collaboration_fixture(data: dict[str, Any], sandbox: ScenarioSand
 async def create_remote_bridge(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, _config = await ensure_session_config(data, sandbox, state)
     alias = str(data.get("alias") or "main")
-    remote = await core.createRemoteSession({"id": data.get("remoteId") or f"remote-{alias}", "session": session, "description": data.get("description") or f"Remote {alias}", "channelServers": data.get("channelServers", ["local"])})
+    remote = await core.create_remote_session({"id": data.get("remoteId") or f"remote-{alias}", "session": session, "description": data.get("description") or f"Remote {alias}", "channelServers": data.get("channelServers", ["local"])})
     if data.get("attachSession", True):
         metadata = session.setdefault("metadata", {})
         metadata["remoteControlEnabled"] = True
@@ -53,7 +53,7 @@ async def create_remote_bridge(data: dict[str, Any], sandbox: ScenarioSandbox, s
 
 async def queue_bridge_message(data: dict[str, Any], _sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     alias = str(data.get("alias") or "main")
-    message = await core.sendBridgeMessage({"bridgeId": _bridge_id(state, alias), "text": data.get("text") or "continue", "source": data.get("source", "remote")})
+    message = await core.send_bridge_message({"bridgeId": _bridge_id(state, alias), "text": data.get("text") or "continue", "source": data.get("source", "remote")})
     state.setdefault("bridge_message_aliases", {})[str(data.get("messageAlias") or "last")] = message["id"]
     state.setdefault("remote_driver_results", []).append({"driver": "queue_bridge_message", "status": "passed", "alias": alias, "message": _json_safe(message)})
     await _refresh_remote_state(state)
@@ -110,9 +110,9 @@ async def reconnect_bridge(data: dict[str, Any], sandbox: ScenarioSandbox, state
 async def collect_bridge_diagnostics(data: dict[str, Any], _sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     alias = str(data.get("alias") or "main")
     bridge_id = _bridge_id(state, alias)
-    diagnostics = await core.getBridgeDiagnostics(bridge_id)
-    tail = await core.formatBridgeTail(bridge_id)
-    rows = [_stable_bridge_row(row) for row in await core.listActiveBridgeRows()]
+    diagnostics = await core.get_bridge_diagnostics(bridge_id)
+    tail = await core.format_bridge_tail(bridge_id)
+    rows = [_stable_bridge_row(row) for row in await core.list_active_bridge_rows()]
     record = {"driver": "collect_bridge_diagnostics", "status": "passed", "alias": alias, "diagnostics": _json_safe(diagnostics), "tail": tail, "activeRows": rows}
     state.setdefault("bridge_diagnostics", []).append(record)
     state.setdefault("remote_driver_results", []).append({"driver": "collect_bridge_diagnostics", "status": "passed", "alias": alias, "eventCount": len(diagnostics.get("events") or [])})
@@ -269,7 +269,7 @@ async def _create_bridge_runtime(alias: str, data: dict[str, Any], session: dict
         payload["bridgeId"] = data.get("bridgeId")
     else:
         payload["id"] = data.get("bridgeId") or data.get("id") or f"bridge-{alias}"
-    return await core.createBridgeRuntime(payload)
+    return await core.create_bridge_runtime(payload)
 
 
 def _child_records(session_id: str) -> list[dict[str, Any]]:

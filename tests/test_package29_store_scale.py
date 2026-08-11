@@ -75,7 +75,7 @@ class Package29StoreScaleTests(AgentCoreTestCase):
 
             tracemalloc.start()
             started = time.perf_counter()
-            report = run(core.buildSessionHygieneReport())
+            report = run(core.build_session_hygiene_report())
             report_elapsed = time.perf_counter() - started
             _current, peak = tracemalloc.get_traced_memory()
             tracemalloc.stop()

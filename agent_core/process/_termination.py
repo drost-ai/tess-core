@@ -17,8 +17,8 @@ from typing import Any
 
 from .identity import (
     ProcessIdentityError,
-    signalOwnedProcess,
-    verifyOwnedProcessIdentity,
+    signal_owned_process,
+    verify_owned_process_identity,
 )
 
 _POLL_INTERVAL_SECONDS = 0.02
@@ -44,7 +44,7 @@ async def drain_owned_process(
     if the pid vanished mid-signal, or ``process.drain_timeout`` if the
     process survived SIGKILL."""
     try:
-        await signalOwnedProcess(identity, signal.SIGTERM)
+        await signal_owned_process(identity, signal.SIGTERM)
     except ProcessIdentityError as exc:
         return exc.code
     except OSError:
@@ -53,7 +53,7 @@ async def drain_owned_process(
     if outcome is not None:
         return outcome
     try:
-        await signalOwnedProcess(identity, signal.SIGKILL)
+        await signal_owned_process(identity, signal.SIGKILL)
     except ProcessIdentityError as exc:
         return exc.code
     except OSError:
@@ -68,7 +68,7 @@ async def _await_identity_death(identity: dict[str, Any], grace_ms: int) -> str 
     for _ in range(max(1, int(grace_ms / 1000 / _POLL_INTERVAL_SECONDS))):
         await asyncio.sleep(_POLL_INTERVAL_SECONDS)
         try:
-            await verifyOwnedProcessIdentity(identity)
+            await verify_owned_process_identity(identity)
         except ProcessIdentityError as exc:
             return exc.code
     return None

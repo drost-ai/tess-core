@@ -4,46 +4,46 @@ The facade re-exports exactly the public names its submodules define.
 """
 from __future__ import annotations
 
-from .bridge_admission import admitBridgeMessage, sendBridgeMessage
-from .bridge_diagnostics import formatBridgeTail, getBridgeDiagnostics, listActiveBridgeRows
-from .bridge_generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
+from .bridge_admission import admit_bridge_message, send_bridge_message
+from .bridge_diagnostics import format_bridge_tail, get_bridge_diagnostics, list_active_bridge_rows
+from .bridge_generation import close_current_bridge_generation, is_current_bridge_generation
 from .bridge_recovery import (
     BridgeRecoveryBlockedError,
-    activateBridgeGeneration,
-    inspectBridgeRecovery,
-    resolveBridgeRecovery,
+    activate_bridge_generation,
+    inspect_bridge_recovery,
+    resolve_bridge_recovery,
 )
 from .bridge_runtime import (
     BridgeRuntimeController,
     LifecycleClosedError,
-    createBridgeRuntime,
-    createBridgeRuntimeController,
+    create_bridge_runtime,
+    create_bridge_runtime_controller,
 )
 from .sessions import (
-    createRemoteSession,
-    findMatchingRemoteSessions,
-    formatRemoteSessionCandidate,
-    updateRemoteSession,
+    create_remote_session,
+    find_matching_remote_sessions,
+    format_remote_session_candidate,
+    update_remote_session,
 )
 
 __all__ = [
     "BridgeRecoveryBlockedError",
     "BridgeRuntimeController",
     "LifecycleClosedError",
-    "activateBridgeGeneration",
-    "admitBridgeMessage",
-    "closeCurrentBridgeGeneration",
-    "createBridgeRuntime",
-    "createBridgeRuntimeController",
-    "createRemoteSession",
-    "findMatchingRemoteSessions",
-    "formatBridgeTail",
-    "formatRemoteSessionCandidate",
-    "getBridgeDiagnostics",
-    "inspectBridgeRecovery",
-    "isCurrentBridgeGeneration",
-    "listActiveBridgeRows",
-    "resolveBridgeRecovery",
-    "sendBridgeMessage",
-    "updateRemoteSession",
+    "activate_bridge_generation",
+    "admit_bridge_message",
+    "close_current_bridge_generation",
+    "create_bridge_runtime",
+    "create_bridge_runtime_controller",
+    "create_remote_session",
+    "find_matching_remote_sessions",
+    "format_bridge_tail",
+    "format_remote_session_candidate",
+    "get_bridge_diagnostics",
+    "inspect_bridge_recovery",
+    "is_current_bridge_generation",
+    "list_active_bridge_rows",
+    "resolve_bridge_recovery",
+    "send_bridge_message",
+    "update_remote_session",
 ]

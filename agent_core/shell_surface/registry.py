@@ -92,8 +92,8 @@ _HOOK_REQUIREMENTS: dict[str, tuple[str, str]] = {
 }
 
 
-def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
-    args = {**(args or {}), **kwargs}
+def list_slash_commands(args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    args = dict(args or {})
     commands = [
         entry for entry in _COMMANDS
         if entry[0] not in _TOGGLE_HOOKS or args.get(f"include{entry[0].capitalize()}")
@@ -108,11 +108,11 @@ def listSlashCommands(args: dict[str, Any] | None = None, **kwargs: Any) -> list
     return [{"name": name, "usage": usage, "description": description} for name, usage, description in commands]
 
 
-def getSlashCommandAvailability(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
-    args = {**(args or {}), **kwargs}
+def get_slash_command_availability(args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    args = dict(args or {})
     hooks = args.get("hooks") or {}
     mode = str(args.get("mode") or ("bare" if args.get("bare") else "tui")).lower()
-    commands = listSlashCommands(
+    commands = list_slash_commands(
         {
             "includeStatusline": True,
             "includeTheme": True,
@@ -137,15 +137,15 @@ def getSlashCommandAvailability(args: dict[str, Any] | None = None, **kwargs: An
     return availability
 
 
-def buildSlashHelp(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    args = {**(args or {}), **kwargs}
+def build_slash_help(args: dict[str, Any] | None = None) -> str:
+    args = dict(args or {})
     hooks = args.get("hooks") or {}
     include_flags = {
         f"include{name.capitalize()}": bool(all(hooks.get(hook) for hook in hook_names))
         for name, hook_names in _TOGGLE_HOOKS.items()
     }
     lines = []
-    for command in listSlashCommands({**include_flags, "runtimeCommands": args.get("runtimeCommands") or []}):
+    for command in list_slash_commands({**include_flags, "runtimeCommands": args.get("runtimeCommands") or []}):
         lines.append(f"{command['usage']:<22} {command['description']}")
         for usage, description in _SUBHELP.get(command["name"], ()):
             lines.append(f"{usage:<22} {description}")

@@ -85,7 +85,7 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
             budget = computeProviderTokenBudget({"profile": profile, "estimatedInputTokens": 50_000})
             self.assertEqual(budget["effectiveMaxOutputTokens"], 128_000)
 
-            request = core.applyProviderTokenBudget(
+            request = core.apply_provider_token_budget(
                 {"model": "big-model", "system": "s", "messages": [{"role": "user", "content": "hi"}], "tools": []},
                 budget,
                 config,

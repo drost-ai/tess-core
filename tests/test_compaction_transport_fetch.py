@@ -5,9 +5,9 @@ from tests.support.agent_core_case import *
 
 class CompactionModelFetchTests(AgentCoreTestCase):
     def test_fetch_proxy_and_compaction_model_defaults(self):
-        self.assertEqual(core.resolveEnvironmentProxyForUrl("https://api.openai.com/v1/responses", {"HTTPS_PROXY": "https-proxy", "HTTP_PROXY": "http-proxy"}), "https-proxy")
-        self.assertEqual(core.resolveEnvironmentProxyForUrl("https://api.openai.com/v1/responses", {"HTTP_PROXY": "http-proxy"}), "http-proxy")
-        self.assertIsNone(core.resolveEnvironmentProxyForUrl("file:///tmp/a", {"HTTPS_PROXY": "https-proxy"}))
+        self.assertEqual(core.resolve_environment_proxy_for_url("https://api.openai.com/v1/responses", {"HTTPS_PROXY": "https-proxy", "HTTP_PROXY": "http-proxy"}), "https-proxy")
+        self.assertEqual(core.resolve_environment_proxy_for_url("https://api.openai.com/v1/responses", {"HTTP_PROXY": "http-proxy"}), "http-proxy")
+        self.assertIsNone(core.resolve_environment_proxy_for_url("file:///tmp/a", {"HTTPS_PROXY": "https-proxy"}))
 
         session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", providerProfileName="openai", model="gpt-5.4", effort="xhigh", systemPrompt="s", permissionMode="default")
         plan = testing.resolve_compaction_execution_plan({"config": {}, "session": session})

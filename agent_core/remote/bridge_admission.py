@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .bridge_generation import requireBridgeLedger as _require_ledger
+from .bridge_generation import require_bridge_ledger as _require_ledger
 
 import hashlib
 import uuid
@@ -24,13 +24,13 @@ MAX_BRIDGE_MESSAGE_BYTES = 256 * 1024
 MAX_IDEMPOTENCY_KEY_BYTES = 4 * 1024
 
 
-async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def send_bridge_message(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Admit one generation-bound, idempotent bridge message."""
 
-    return await admitBridgeMessage({**(args or {}), **kwargs})
+    return await admit_bridge_message(dict(args or {}))
 
 
-async def admitBridgeMessage(args: dict[str, Any]) -> dict[str, Any]:
+async def admit_bridge_message(args: dict[str, Any]) -> dict[str, Any]:
     _assert_input(args)
     initial = await load_bridge(args["bridgeId"])
     if not initial:
@@ -188,4 +188,4 @@ def _truncate(value, limit=96):
     return value if len(value) <= limit else f"{value[:limit - 1]}…"
 
 
-__all__ = ["admitBridgeMessage", "sendBridgeMessage"]
+__all__ = ["admit_bridge_message", "send_bridge_message"]

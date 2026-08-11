@@ -8,8 +8,8 @@ from .._utils import now_iso
 from ..storage import load_remote_session, save_remote_session
 
 
-async def createRemoteSession(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def create_remote_session(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session = args.get("session") or {}
     now = now_iso()
     metadata = session.get("metadata", {}) if isinstance(session, dict) else {}
@@ -37,7 +37,7 @@ async def createRemoteSession(args: dict[str, Any] | None = None, **kwargs: Any)
     return record
 
 
-async def updateRemoteSession(remoteSessionId: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+async def update_remote_session(remoteSessionId: str, updates: dict[str, Any]) -> dict[str, Any] | None:
     record = await load_remote_session(remoteSessionId)
     if not record:
         return None
@@ -47,7 +47,7 @@ async def updateRemoteSession(remoteSessionId: str, updates: dict[str, Any]) -> 
     return record
 
 
-def findMatchingRemoteSessions(sessions: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+def find_matching_remote_sessions(sessions: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
     q = query.strip().lower()
     if not q:
         return sessions
@@ -55,7 +55,7 @@ def findMatchingRemoteSessions(sessions: list[dict[str, Any]], query: str) -> li
     return [session for session, _score in sorted((entry for entry in scored if entry[1] > 0), key=lambda entry: (entry[1], entry[0].get("updatedAt", "")), reverse=True)]
 
 
-def formatRemoteSessionCandidate(remote: dict[str, Any]) -> str:
+def format_remote_session_candidate(remote: dict[str, Any]) -> str:
     workspace = remote.get("workspaceName") if remote.get("workspaceName") is not None else os.path.basename(remote.get("cwd") or "")
     return "  ".join([remote.get("id", "")[:8], str(workspace).ljust(18), str(remote.get("gitBranch") or "").ljust(18), str(remote.get("status", "")).ljust(10), _truncate_remote_summary(str(remote.get("title") or "")).ljust(34), str(remote.get("updatedAt", ""))[:19].replace("T", " ")])
 
@@ -108,8 +108,8 @@ def _score_remote_session(remote: dict[str, Any], query: str) -> int:
 
 
 __all__ = [
-    "createRemoteSession",
-    "findMatchingRemoteSessions",
-    "formatRemoteSessionCandidate",
-    "updateRemoteSession",
+    "create_remote_session",
+    "find_matching_remote_sessions",
+    "format_remote_session_candidate",
+    "update_remote_session",
 ]

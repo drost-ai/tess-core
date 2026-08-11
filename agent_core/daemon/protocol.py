@@ -18,7 +18,7 @@ _MAX_PROTOCOL_DIAGNOSTIC_BYTES = 512
 
 class DaemonProtocolError(RuntimeError):
     def __init__(self, code: str, message: str):
-        super().__init__(boundedProtocolDiagnostic(message))
+        super().__init__(bounded_protocol_diagnostic(message))
         self.name = "DaemonProtocolError"
         self.code = code
 
@@ -66,7 +66,7 @@ class DaemonLineDecoder:
         self._buffer.extend(chunk)
 
 
-def encodeDaemonFrame(value: Any, maxFrameBytes: int) -> bytes:
+def encode_daemon_frame(value: Any, maxFrameBytes: int) -> bytes:
     try:
         payload = json.dumps(
             value,
@@ -87,7 +87,7 @@ def encodeDaemonFrame(value: Any, maxFrameBytes: int) -> bytes:
     return payload + b"\n"
 
 
-def parseDaemonFrame(frame: bytes | bytearray | memoryview) -> Any:
+def parse_daemon_frame(frame: bytes | bytearray | memoryview) -> Any:
     try:
         text = bytes(frame).decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
@@ -104,7 +104,7 @@ def parseDaemonFrame(frame: bytes | bytearray | memoryview) -> Any:
         ) from error
 
 
-def parseDaemonRequest(value: Any) -> dict[str, Any]:
+def parse_daemon_request(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise DaemonProtocolError("daemon.frame_malformed", "Daemon request is not an object.")
     request_id = value.get("id")
@@ -128,7 +128,7 @@ def parseDaemonRequest(value: Any) -> dict[str, Any]:
     return {"id": request_id, "method": method, "params": params or {}}
 
 
-def isDaemonAuthRequest(value: Any) -> bool:
+def is_daemon_auth_request(value: Any) -> bool:
     return (
         isinstance(value, dict)
         and value.get("type") == "auth"
@@ -137,7 +137,7 @@ def isDaemonAuthRequest(value: Any) -> bool:
     )
 
 
-def isDaemonAuthResponse(value: Any) -> bool:
+def is_daemon_auth_response(value: Any) -> bool:
     return (
         isinstance(value, dict)
         and value.get("type") == "auth_ok"
@@ -146,7 +146,7 @@ def isDaemonAuthResponse(value: Any) -> bool:
     )
 
 
-def isDaemonResponse(value: Any) -> bool:
+def is_daemon_response(value: Any) -> bool:
     return (
         isinstance(value, dict)
         and isinstance(value.get("id"), str)
@@ -155,7 +155,7 @@ def isDaemonResponse(value: Any) -> bool:
     )
 
 
-def isDaemonEventMessage(value: Any) -> bool:
+def is_daemon_event_message(value: Any) -> bool:
     return (
         isinstance(value, dict)
         and value.get("type") == "event"
@@ -163,23 +163,23 @@ def isDaemonEventMessage(value: Any) -> bool:
     )
 
 
-def daemonTokensEqual(actual: str, expected: str) -> bool:
+def daemon_tokens_equal(actual: str, expected: str) -> bool:
     return hmac.compare_digest(actual.encode("utf-8"), expected.encode("utf-8"))
 
 
-def resolveDaemonRpcTimeoutMs(override: int | None = None) -> int:
+def resolve_daemon_rpc_timeout_ms(override: int | None = None) -> int:
     from ..config._knobs import knob_value
 
     return _resolve_timeout(override, None, int(knob_value("daemon.rpc_timeout_ms")), 25, 300_000)
 
 
-def resolveDaemonAuthTimeoutMs(override: int | None = None) -> int:
+def resolve_daemon_auth_timeout_ms(override: int | None = None) -> int:
     from ..config._knobs import knob_value
 
     return _resolve_timeout(override, None, int(knob_value("daemon.auth_timeout_ms")), 25, 30_000)
 
 
-def boundedProtocolDiagnostic(value: str) -> str:
+def bounded_protocol_diagnostic(value: str) -> str:
     normalized = " ".join(str(value).replace("\t", " ").splitlines()).strip()
     raw = normalized.encode("utf-8")
     if len(raw) <= _MAX_PROTOCOL_DIAGNOSTIC_BYTES:

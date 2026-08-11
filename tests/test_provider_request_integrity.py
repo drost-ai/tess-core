@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.agent.request_integrity import normalizeProviderRequestMessages
+from agent_core.agent.request_integrity import normalize_provider_request_messages
 
 def _tool_use(call_id: str, name: str = "Read") -> dict:
     return {"role": "assistant", "content": [{"type": "tool_use", "id": call_id, "name": name, "input": {}}]}
@@ -14,7 +14,7 @@ def _tool_result(call_id: str, content: str = "tool output") -> dict:
 
 class ProviderRequestIntegrityTests(AgentCoreTestCase):
     def test_orphaned_tool_result_at_request_start_is_textified(self):
-        normalized = normalizeProviderRequestMessages(
+        normalized = normalize_provider_request_messages(
             "anthropic",
             [
                 _tool_result("toolu_missing", "report body"),
@@ -31,7 +31,7 @@ class ProviderRequestIntegrityTests(AgentCoreTestCase):
         self.assertNotIsInstance(messages[0]["content"], list)
 
     def test_missing_tool_result_gets_synthetic_result_before_next_user(self):
-        normalized = normalizeProviderRequestMessages(
+        normalized = normalize_provider_request_messages(
             "anthropic",
             [
                 _tool_use("call_1"),
@@ -56,7 +56,7 @@ class ProviderRequestIntegrityTests(AgentCoreTestCase):
             {"role": "assistant", "content": [{"type": "text", "text": "done"}]},
         ]
 
-        normalized = normalizeProviderRequestMessages("anthropic", source)
+        normalized = normalize_provider_request_messages("anthropic", source)
 
         self.assertFalse(normalized["repair"]["changed"])
         self.assertEqual(normalized["messages"], source)
@@ -71,7 +71,7 @@ class ProviderRequestIntegrityTests(AgentCoreTestCase):
         self.assertNotEqual(fallback, 0)
         sliced = messages[fallback + 1 :]
 
-        normalized = normalizeProviderRequestMessages("anthropic", sliced)
+        normalized = normalize_provider_request_messages("anthropic", sliced)
 
         self.assertTrue(normalized["repair"]["changed"])
         self.assertEqual(normalized["messages"][0]["role"], "user")

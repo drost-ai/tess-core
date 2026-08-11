@@ -20,7 +20,7 @@ def normalize_agent_prompt(value: Any) -> tuple[str | list[dict[str, Any]] | Non
     return blocks, text
 
 
-def extractAssistantText(message: dict[str, Any]) -> str:
+def extract_assistant_text(message: dict[str, Any]) -> str:
     content = message.get("content")
     if isinstance(content, str):
         return content

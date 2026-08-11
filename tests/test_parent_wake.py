@@ -234,8 +234,8 @@ class WakeControllerTests(AgentCoreTestCase):
             captured.update(values)
             return {"stopReason": "end_turn", "text": ""}
 
-        with mock.patch.object(continuity_module, "runAgentPrompt", fake_run):
-            result = run(core.runParentContinuityTurn({"session": {"id": "s"}, "config": {}, "runtime": {}}))
+        with mock.patch.object(continuity_module, "run_agent_prompt", fake_run):
+            result = run(core.run_parent_continuity_turn({"session": {"id": "s"}, "config": {}, "runtime": {}}))
         self.assertEqual(result["stopReason"], "end_turn")
         self.assertEqual(captured["prompt"], "")
         self.assertEqual(captured["session"], {"id": "s"})

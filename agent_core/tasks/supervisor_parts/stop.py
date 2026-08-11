@@ -4,7 +4,7 @@ import contextlib
 import signal
 from ..._utils import maybe_await, now_iso
 from ...process._termination import drain_owned_process
-from ...process.identity import signalOwnedProcess
+from ...process.identity import signal_owned_process
 from ...storage import read_task_meta
 from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
@@ -72,7 +72,7 @@ def _create_task_stopper(
                             # left TERM-immune children running forever.
                             await drain_owned_process(identity)
                         else:
-                            await signalOwnedProcess(identity, signum)
+                            await signal_owned_process(identity, signum)
                     except Exception:
                         with contextlib.suppress(Exception):
                             await clear_prepared_task_stop(task_id, transition_id)

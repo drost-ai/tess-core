@@ -360,13 +360,13 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
                 ),
                 mock.patch.object(
                     context_module,
-                    "maybeAutoCompactSession",
+                    "maybe_auto_compact_session",
                     skip_compaction,
                 ),
                 self.assertRaises(core.ProviderRequestError) as raised,
             ):
                 run(
-                    core.runAgentPrompt(
+                    core.run_agent_prompt(
                         session=session,
                         config=config,
                         runtime=bind_test_runtime(

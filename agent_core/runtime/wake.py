@@ -3,8 +3,8 @@
 Gated by the runtime's turn-in-flight flag — while a turn runs, the agent
 loop's boundary drain batches everything queued, so the controller does
 nothing. When idle, it invokes the embedder-provided resume callback once
-per burst; the resume runs a continuity turn (runParentContinuityTurn /
-runAgentPrompt with an empty prompt) that drains the mailbox into the
+per burst; the resume runs a continuity turn (run_parent_continuity_turn /
+run_agent_prompt with an empty prompt) that drains the mailbox into the
 transcript and lets the model react.
 
 The mailbox watch is LEVEL-TRIGGERED: a still-queued message is

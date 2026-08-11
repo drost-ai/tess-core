@@ -33,7 +33,7 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         self.assertIsNone(policy["inlineToolResultTurnBytes"])
         self.assertEqual(policy["reliefSource"], "deprecated_ignored")
         self.assertEqual(policy["inlineToolResultBatchBytes"], 24_000)
-        report = core.buildProviderProfilesReport(
+        report = core.build_provider_profiles_report(
             {"providerProfileName": "codex"},
             {
                 "providerProfiles": {

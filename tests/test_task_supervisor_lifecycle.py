@@ -115,7 +115,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "sup-life-instance"}))
             self.restore_home(root, previous)
 
     def test_task_supervisor_stop_process_finalizes_through_exit_watcher(self):
@@ -151,7 +151,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "sup-life-instance"}))
             self.restore_home(root, previous)
 
     def test_daemon_socket_path_falls_back_for_deep_runtime_home(self):
@@ -199,7 +199,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             Path(socket_path).write_text("stale", encoding="utf-8")
             run(core.save_daemon_state("sup-life-instance", {"pid": 999999999, "socketPath": socket_path, "status": "running"}))
             with self.assertRaises(DaemonSecurityError) as raised:
-                run(core.connectTaskSupervisorDaemonClient({"instanceId": "sup-life-instance"}))
+                run(core.connect_task_supervisor_daemon_client({"instanceId": "sup-life-instance"}))
             self.assertEqual(raised.exception.code, "daemon.security_unsafe")
             self.assertEqual(Path(socket_path).read_text(encoding="utf-8"), "stale")
             self.assertIsNotNone(run(core.load_daemon_state("sup-life-instance")))
@@ -225,7 +225,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 start_new_session=True,
             )
             process_identity = run(
-                core.captureOwnedProcessIdentity(pid=proc.pid, expectedArgv=child_argv)
+                core.capture_owned_process_identity(pid=proc.pid, expectedArgv=child_argv)
             )
             created_at = "2026-01-01T00:00:00Z"
             meta = {
@@ -274,7 +274,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                     }
                 )
             )
-            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-life-instance", "cwd": str(workspace)}))
+            client = run(core.ensure_task_supervisor_daemon({"instanceId": "sup-life-instance", "cwd": str(workspace)}))
             record = None
             for _ in range(100):
                 record = run(client["inspectTask"](task_id))
@@ -298,7 +298,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                     proc.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-life-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "sup-life-instance"}))
             self.restore_home(root, previous)
 
     def test_termination_ladder_escalates_to_kill_for_term_immune_children(self):
@@ -393,7 +393,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             run(core.save_session(session))
             owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
             os.environ["AGENT_CORE_DAEMON_OWNER_POLL_MS"] = "200"
-            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid}))
+            client = run(core.ensure_task_supervisor_daemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid}))
             daemon_pid = run(core.load_daemon_state("owner-watch-instance"))["pid"]
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(120)')}"
             started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "contained worker"}))
@@ -428,7 +428,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             os.environ.pop("AGENT_CORE_DAEMON_OWNER_POLL_MS", None)
             if owner and owner.poll() is None:
                 owner.kill()
-            run(core.stopTaskSupervisorDaemon({"instanceId": "owner-watch-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "owner-watch-instance"}))
             self.restore_home(root, previous)
 
     def test_runtime_watchdog_replaces_killed_daemon_with_one_fresh_instance(self):
@@ -436,7 +436,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
 
         root, home, workspace, previous = self.temp_context()
         try:
-            client = run(core.ensureTaskSupervisorDaemon({"instanceId": "watchdog-instance", "cwd": str(workspace)}))
+            client = run(core.ensure_task_supervisor_daemon({"instanceId": "watchdog-instance", "cwd": str(workspace)}))
             old_state = run(core.load_daemon_state("watchdog-instance"))
             run(client["close"]())
             emitted = []
@@ -465,14 +465,14 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertEqual(len(swapped), 1)
             run(swapped[0]["close"]())
         finally:
-            run(core.stopTaskSupervisorDaemon({"instanceId": "watchdog-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "watchdog-instance"}))
             self.restore_home(root, previous)
 
     def test_two_runtime_instances_coexist_with_disjoint_daemons(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            first = run(core.ensureTaskSupervisorDaemon({"instanceId": "coexist-a", "cwd": str(workspace)}))
-            second = run(core.ensureTaskSupervisorDaemon({"instanceId": "coexist-b", "cwd": str(workspace)}))
+            first = run(core.ensure_task_supervisor_daemon({"instanceId": "coexist-a", "cwd": str(workspace)}))
+            second = run(core.ensure_task_supervisor_daemon({"instanceId": "coexist-b", "cwd": str(workspace)}))
             state_a = run(core.load_daemon_state("coexist-a"))
             state_b = run(core.load_daemon_state("coexist-b"))
             self.assertEqual(state_a["instanceId"], "coexist-a")
@@ -482,15 +482,15 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             run(first["close"]())
             run(second["close"]())
 
-            run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-a"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "coexist-a"}))
             self.assertIsNone(run(core.load_daemon_state("coexist-a")))
             surviving = run(core.load_daemon_state("coexist-b"))
             self.assertIsNotNone(surviving)
             self.assertEqual(surviving["pid"], state_b["pid"])
-            client_b = run(core.connectTaskSupervisorDaemonClient({"instanceId": "coexist-b"}))
+            client_b = run(core.connect_task_supervisor_daemon_client({"instanceId": "coexist-b"}))
             self.assertIsNotNone(client_b)
             run(client_b["close"]())
         finally:
-            run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-a"}))
-            run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-b"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "coexist-a"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "coexist-b"}))
             self.restore_home(root, previous)

@@ -32,7 +32,7 @@ class DaemonWatchdogDeadManTests(AgentCoreTestCase):
                     {"instanceId": "watchdog-wedged", "pid": os.getpid(), "status": "running"},
                 )
             )
-            with mock.patch.object(daemon_module, "ensureTaskSupervisorDaemon", new=fake_ensure):
+            with mock.patch.object(daemon_module, "ensure_task_supervisor_daemon", new=fake_ensure):
                 outcome = run(
                     check_daemon_once(
                         {
@@ -73,7 +73,7 @@ class DaemonWatchdogDeadManTests(AgentCoreTestCase):
             async def fail_ensure(args):
                 raise AssertionError("healthy daemon must not be replaced")
 
-            with mock.patch.object(daemon_module, "ensureTaskSupervisorDaemon", new=fail_ensure):
+            with mock.patch.object(daemon_module, "ensure_task_supervisor_daemon", new=fail_ensure):
                 outcome = run(
                     check_daemon_once(
                         {

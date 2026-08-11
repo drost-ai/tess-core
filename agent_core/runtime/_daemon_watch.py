@@ -4,7 +4,7 @@ A heartbeat ticker checks the daemon's state-file pid AND that its socket
 still accepts connections — a bare pid check reads a wedged listener or a
 recycled pid as healthy forever. When the daemon is
 gone (crash, SIGKILL), the runtime replaces it with exactly ONE fresh
-instance — ensureTaskSupervisorDaemon's per-instance lock guarantees
+instance — ensure_task_supervisor_daemon's per-instance lock guarantees
 single-spawn and kills a wedged predecessor with identity verification.
 The fresh daemon never re-adopts workers and never respawns subagents;
 orphan handling is the boot reconciliation sweep's job. The parent is
@@ -27,13 +27,13 @@ async def _daemon_socket_accepting(instance_id: str, state: dict[str, Any] | Non
     health additionally requires the instance's socket to accept. One short
     retry absorbs a transiently busy listener; a probe that raises (unsafe
     socket path) counts as inactive so the restart path surfaces the error."""
-    from ..daemon import isDaemonSocketListenerActive
+    from ..daemon import is_daemon_socket_listener_active
     from ..storage import daemon_socket_path
 
     socket_path = (state or {}).get("socketPath") or daemon_socket_path(instance_id)
     for attempt in range(2):
         try:
-            if await isDaemonSocketListenerActive(socket_path):
+            if await is_daemon_socket_listener_active(socket_path):
                 return True
         except Exception:
             return False
@@ -73,10 +73,10 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
             "reason": "socket_inactive" if pid_alive else "process_dead",
         },
     )
-    from ..daemon import ensureTaskSupervisorDaemon
+    from ..daemon import ensure_task_supervisor_daemon
 
     try:
-        client = await ensureTaskSupervisorDaemon({"instanceId": instance_id, "cwd": context.get("cwd")})
+        client = await ensure_task_supervisor_daemon({"instanceId": instance_id, "cwd": context.get("cwd")})
     except Exception as error:
         emit("daemon.restart_failed", {"instance_id": instance_id, "reason": str(error)[:2_048]})
         return "restart_failed"

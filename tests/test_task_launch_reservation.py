@@ -25,10 +25,10 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
     def test_reservation_is_durable_before_spawn_and_identity_attaches_before_return(self):
         async def scenario():
             trace = []
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId="task-reserved", sessionId="session-owner", kind="background_command"
             )
-            launched = await core.launchReservedProcess(
+            launched = await core.launch_reserved_process(
                 reservation=reservation,
                 expectedArgv=["/bin/sh", "-c", "sleep 30"],
                 reserve=lambda: _append_async(trace, "reserved"),
@@ -40,7 +40,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                 self.assertEqual(trace[:2], ["reserved", "spawned"])
                 self.assertTrue(trace[2].startswith("attached:"))
                 self.assertIsNotNone(launched.identity)
-                await core.signalOwnedProcess(launched.identity)
+                await core.signal_owned_process(launched.identity)
                 await launched.completion
             finally:
                 if launched.child.poll() is None:
@@ -52,7 +52,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
     def test_attach_failure_drains_owned_process_and_marks_failed(self):
         async def scenario():
             state = {"failed": False, "child": None}
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId="task-rollback", sessionId="session-owner", kind="background_command"
             )
 
@@ -74,7 +74,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                 state["failed"] = True
 
             with self.assertRaisesRegex(RuntimeError, "attach persistence"):
-                await core.launchReservedProcess(
+                await core.launch_reserved_process(
                     reservation=reservation,
                     expectedArgv=["/bin/sh", "-c", "sleep 30"],
                     reserve=lambda: _append_async([], "reserved"),
@@ -90,7 +90,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
     def test_fast_exit_before_identity_attachment_is_failed_and_recoverable(self):
         async def scenario():
             trace = []
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId="task-fast-exit", sessionId="session-owner", kind="background_command"
             )
 
@@ -98,7 +98,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                 await asyncio.sleep(0.1)
                 raise core.ProcessIdentityError("process.not_found", "process exited")
 
-            launched = await core.launchReservedProcess(
+            launched = await core.launch_reserved_process(
                 reservation=reservation,
                 expectedArgv=[sys.executable, "-c", "raise SystemExit(0)"],
                 reserve=lambda: _append_async(trace, "reserved"),
@@ -138,7 +138,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
             session["metadata"]["taskIds"] = []
             await core.save_session(session)
             first, second = "task-p01-first", "task-p01-second"
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId=first, sessionId=session["id"], kind="background_command"
             )
             attach_reached = asyncio.Event()
@@ -188,12 +188,12 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                         **current,
                         "status": "backgrounded",
                         "processIdentity": identity,
-                        "launchReservation": core.attachTaskLaunchReservation(reservation),
+                        "launchReservation": core.attach_task_launch_reservation(reservation),
                     }
                 )
 
             launch = asyncio.create_task(
-                core.launchReservedProcess(
+                core.launch_reserved_process(
                     reservation=reservation,
                     expectedArgv=["/bin/sh", "-c", "sleep 30"],
                     reserve=reserve,
@@ -222,7 +222,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                 self.assertEqual(attached["processIdentity"], launched.identity)
             finally:
                 if launched.identity:
-                    await core.signalOwnedProcess(launched.identity, signal.SIGTERM)
+                    await core.signal_owned_process(launched.identity, signal.SIGTERM)
                 await _wait_dead(child_holder["child"].pid)
 
         try:

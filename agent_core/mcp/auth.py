@@ -22,8 +22,8 @@ from .auth_http import (
     _well_known,
 )
 from .auth_loopback import LoopbackListener
-from .token_store import mcpTokenStoreKey, token_store_get, token_store_set
-from .transport_policy import resolveMcpTransportPolicy
+from .token_store import mcp_token_store_key, token_store_get, token_store_set
+from .transport_policy import resolve_mcp_transport_policy
 
 
 class McpAuthorizationRequiredError(RuntimeError):
@@ -54,10 +54,10 @@ class McpOAuthRuntime:
         self.store = store
         self.on_runtime_event = on_runtime_event
         self.authorization_callback = authorization_callback
-        self.key = mcpTokenStoreKey(config)
+        self.key = mcp_token_store_key(config)
         self.resource_origin = canonical_origin(str(config.get("commandOrUrl") or ""))
         self.resource_uri = _canonical_resource_uri(str(config.get("commandOrUrl") or ""))
-        self.timeout = resolveMcpTransportPolicy(config)["requestTimeoutMs"] / 1000
+        self.timeout = resolve_mcp_transport_policy(config)["requestTimeoutMs"] / 1000
         self._refresh_task: asyncio.Task[dict[str, Any]] | None = None
         self._last_authorization_url: str | None = None
         self._last_continuation_id: str | None = None
@@ -345,7 +345,7 @@ class McpOAuthRuntime:
             raise RuntimeError(f"MCP OAuth runtime is closed: {self.config.get('name')}")
 
 
-def createMcpOAuthRuntime(
+def create_mcp_oauth_runtime(
     *,
     config: dict[str, Any],
     store: Any,

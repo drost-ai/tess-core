@@ -199,8 +199,8 @@ async def approve_repository_content(args: dict[str, Any] | None = None, **kwarg
     return await get_repository_trust_status(str(args["cwd"]))
 
 
-async def revoke_repository_approval(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def revoke_repository_approval(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     family, scope = str(args.get("family")), str(args.get("scope"))
     _assert_family_scope(family, scope)
     identity = await resolve_repository_identity(str(args["cwd"]))

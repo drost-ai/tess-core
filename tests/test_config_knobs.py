@@ -172,19 +172,19 @@ class DaemonKnobWiringTests(unittest.TestCase):
                 del os.environ[name]
 
     def test_daemon_rpc_and_auth_timeouts_read_knobs_and_legacy_env(self):
-        from agent_core.daemon.protocol import resolveDaemonAuthTimeoutMs, resolveDaemonRpcTimeoutMs
+        from agent_core.daemon.protocol import resolve_daemon_auth_timeout_ms, resolve_daemon_rpc_timeout_ms
 
-        self.assertEqual(resolveDaemonRpcTimeoutMs(), 30_000)
-        self.assertEqual(resolveDaemonAuthTimeoutMs(), 2_000)
+        self.assertEqual(resolve_daemon_rpc_timeout_ms(), 30_000)
+        self.assertEqual(resolve_daemon_auth_timeout_ms(), 2_000)
         configure_knobs({"daemon": {"rpc_timeout_ms": 12_000, "auth_timeout_ms": 900}})
-        self.assertEqual(resolveDaemonRpcTimeoutMs(), 12_000)
-        self.assertEqual(resolveDaemonAuthTimeoutMs(), 900)
-        self.assertEqual(resolveDaemonRpcTimeoutMs(7_000), 7_000)  # per-call override still wins
+        self.assertEqual(resolve_daemon_rpc_timeout_ms(), 12_000)
+        self.assertEqual(resolve_daemon_auth_timeout_ms(), 900)
+        self.assertEqual(resolve_daemon_rpc_timeout_ms(7_000), 7_000)  # per-call override still wins
         reset_configured_knobs()
         # The legacy env names ARE the canonical knob env overrides and
         # apply even without configure_knobs (bare library use).
         os.environ["AGENT_CORE_DAEMON_RPC_TIMEOUT_MS"] = "5000"
-        self.assertEqual(resolveDaemonRpcTimeoutMs(), 5_000)
+        self.assertEqual(resolve_daemon_rpc_timeout_ms(), 5_000)
 
     def test_daemon_startup_and_instance_lock_timeouts_read_knobs(self):
         from agent_core.daemon.lifecycle import _daemon_instance_wait_ms, _resolve_startup_timeout_seconds

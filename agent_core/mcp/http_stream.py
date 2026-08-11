@@ -6,14 +6,14 @@ import json
 import threading
 from typing import Any
 
-from .http_body import _close_http_response, _content_type, iterateMcpBody
-from .http_exchange import _HttpExchange
+from .http_body import _close_http_response, _content_type, iterate_mcp_body
+from .http_exchange import _http_exchange
 from .sse_decoder import McpSseDecoder
 from .transport_policy import McpTransportError
 from .transport_shared import _decode_json_rpc_payload, _server_request_reply
 
 
-class _HttpServerPushMixin:
+class _http_server_push_mixin:
     async def _start_optional_notification_stream(self) -> None:
         if not self.on_notification:
             return
@@ -35,7 +35,7 @@ class _HttpServerPushMixin:
         ready: threading.Event | None,
         error_ref: dict[str, BaseException] | None,
     ) -> None:
-        exchange: _HttpExchange | None = None
+        exchange: _http_exchange | None = None
         try:
             exchange = self._admit_exchange("notification stream")
             headers = {
@@ -51,7 +51,7 @@ class _HttpServerPushMixin:
                     )
                 decoder = McpSseDecoder()
                 endpoint_seen = False
-                for chunk in iterateMcpBody(response, self.policy, continuous=True):
+                for chunk in iterate_mcp_body(response, self.policy, continuous=True):
                     if self.stream_stop.is_set():
                         break
                     for event in decoder.push(chunk):
@@ -140,7 +140,7 @@ class _HttpServerPushMixin:
             exchange.release()
 
     def _delete_session_sync(self, auth_headers: dict[str, str]) -> None:
-        exchange = _HttpExchange(self)
+        exchange = _http_exchange(self)
         try:
             headers = {
                 **self._http_headers({"accept": "application/json"}),

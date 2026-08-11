@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from ..platform_support import collectDoctorReport
+from ..platform_support import collect_doctor_report
 from ..session.transcript import build_transcript_snapshot
 from ..storage import (
     list_child_agents,
@@ -19,11 +19,11 @@ from .common import (
     _info,
     _persist,
     _short_id,
-    squashWhitespace,
-    truncateAscii,
+    squash_whitespace,
+    truncate_ascii,
 )
-from .debug_bundle import createDebugBundle
-from .remote_background import _is_active_task_record, buildBackgroundReport
+from .debug_bundle import create_debug_bundle
+from .remote_background import _is_active_task_record, build_background_report
 from .shared import AVAILABLE_TUI_THEMES
 from typing import Any
 
@@ -36,7 +36,7 @@ async def _handle_transcript(arg_text: str, session: dict[str, Any], hooks: dict
             limit = max(1, int(arg_text))
         except ValueError:
             return _error(hooks, "Usage: /transcript [limit]")
-    return _info(hooks, "Transcript", formatTranscriptEntries(build_transcript_snapshot(session, limit)))
+    return _info(hooks, "Transcript", format_transcript_entries(build_transcript_snapshot(session, limit)))
 
 
 async def _handle_debug(
@@ -50,7 +50,7 @@ async def _handle_debug(
         return _error(hooks, "A persisted session id is required to create a debug bundle.")
     await _persist(hooks)
     try:
-        report = await createDebugBundle(
+        report = await create_debug_bundle(
             {
                 "sessionId": session["id"],
                 "cwd": session.get("cwd") or config.get("cwd") or os.getcwd(),
@@ -60,23 +60,23 @@ async def _handle_debug(
         )
     except Exception as exc:
         return _error(hooks, str(exc))
-    return _info(hooks, title, formatDebugBundleReport(report))
+    return _info(hooks, title, format_debug_bundle_report(report))
 
 
 async def _handle_diagnostics(arg_text: str, session: dict[str, Any], config: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if arg_text.strip():
         return _error(hooks, "Usage: /diagnostics")
-    report = await collectDoctorReport(session.get("cwd") or config.get("cwd") or os.getcwd())
-    return _info(hooks, "Diagnostics", formatDiagnosticsReport(report))
+    report = await collect_doctor_report(session.get("cwd") or config.get("cwd") or os.getcwd())
+    return _info(hooks, "Diagnostics", format_diagnostics_report(report))
 
 
 async def _handle_collaboration(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     if arg_text.strip():
         return _error(hooks, "Usage: /collaboration")
-    return _info(hooks, "Collaboration", await buildCollaborationStatusReport(session))
+    return _info(hooks, "Collaboration", await build_collaboration_status_report(session))
 
 
-def formatTranscriptEntries(entries: list[dict[str, Any]]) -> str:
+def format_transcript_entries(entries: list[dict[str, Any]]) -> str:
     if not entries:
         return "No transcript entries for this session."
     sections = []
@@ -94,7 +94,7 @@ def formatTranscriptEntries(entries: list[dict[str, Any]]) -> str:
     return "\n\n".join(sections)
 
 
-def formatDebugBundleReport(report: dict[str, Any]) -> str:
+def format_debug_bundle_report(report: dict[str, Any]) -> str:
     summary = report.get("summary") or {}
     return "\n".join(
         [
@@ -115,7 +115,7 @@ def formatDebugBundleReport(report: dict[str, Any]) -> str:
     )
 
 
-def formatDiagnosticsReport(report: dict[str, Any]) -> str:
+def format_diagnostics_report(report: dict[str, Any]) -> str:
     checks = report.get("checks") or []
     lines = [
         f"healthy       {'yes' if report.get('healthy') else 'no'}",
@@ -132,7 +132,7 @@ def formatDiagnosticsReport(report: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip()
 
 
-async def buildCollaborationStatusReport(session: dict[str, Any]) -> str:
+async def build_collaboration_status_report(session: dict[str, Any]) -> str:
     agents = [record for record in await list_child_agents() if _is_related_child_agent(session, record)]
     monitors = await list_session_monitors(session.get("id"))
     tasks = await list_session_task_records(session.get("id"))
@@ -154,7 +154,7 @@ async def buildCollaborationStatusReport(session: dict[str, Any]) -> str:
                 f"bridge         {_short_id(bridge.get('id', '')) + ' ' + str(bridge.get('status')) if bridge else 'none'}",
             ]
         ),
-        buildBackgroundReport(session, agents, monitors, [task for task in tasks if task.get("kind") in {"background_command", "main_session"}], remote, bridge),
+        build_background_report(session, agents, monitors, [task for task in tasks if task.get("kind") in {"background_command", "main_session"}], remote, bridge),
     ]
     return "\n\n".join(section for section in sections if section)
 
@@ -163,7 +163,7 @@ async def _handle_review(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]
     run_prompt = hooks.get("runPrompt") if isinstance(hooks, dict) else None
     if not callable(run_prompt):
         return _error(hooks, "/review is only available in an interactive runtime.")
-    result = run_prompt({"prompt": buildReviewPrompt(arg_text), "agentName": "reviewer"})
+    result = run_prompt({"prompt": build_review_prompt(arg_text), "agentName": "reviewer"})
     if hasattr(result, "__await__"):
         result = await result
     return _handled((result or {}).get("text") if isinstance(result, dict) else result or "")
@@ -245,10 +245,10 @@ def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
 
 def format_session_candidate(session: dict[str, Any]) -> str:
     name = session.get("name") or _first_user_text(session) or "untitled"
-    return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncateAscii(squashWhitespace(name), 90)}"
+    return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncate_ascii(squash_whitespace(name), 90)}"
 
 
-def buildReviewPrompt(arg_text: str) -> str:
+def build_review_prompt(arg_text: str) -> str:
     base = [
         "Review the current workspace and implementation context like a strict code reviewer.",
         "Focus on bugs, regressions, risky assumptions, behavioral mismatches, and missing tests.",

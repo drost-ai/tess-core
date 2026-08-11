@@ -37,8 +37,8 @@ def estimate_todo_and_plan_tokens(session: dict[str, Any]) -> int:
 
 
 
-def classify_context_pressure(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def classify_context_pressure(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session = args.get("session") or {}
     messages = args.get("messages") or []
     system_context = args.get("systemContext") or ""

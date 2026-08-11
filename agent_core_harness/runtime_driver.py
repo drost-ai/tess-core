@@ -37,7 +37,7 @@ async def run_agent(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[
     runtime = await ensure_runtime(data, sandbox, state)
     provider = ScriptedAgentProvider(data.get("providerResponses") or data.get("responses") or [])
     try:
-        result = await core.runAgentPrompt(
+        result = await core.run_agent_prompt(
             {
                 "session": session,
                 "config": config,
@@ -107,7 +107,7 @@ async def run_subprocess(data: dict[str, Any], sandbox: ScenarioSandbox, state: 
 async def run_slash_command(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, config = await ensure_session_config(data, sandbox, state)
     hooks = SlashHooks(state)
-    result = await core.handleSlashCommand({"command": data.get("command", ""), "session": session, "config": config, "hooks": hooks.as_dict()})
+    result = await core.handle_slash_command({"command": data.get("command", ""), "session": session, "config": config, "hooks": hooks.as_dict()})
     record = {"driver": "run_slash_command", "status": "failed" if result.get("isError") else "passed", "command": data.get("command", ""), "result": _json_safe(result), "hooks": hooks.snapshot()}
     if record["status"] == "failed" and not data.get("expectFailure"):
         raise ScenarioAssertionError(f"slash command failed: {data.get('command')}", category="driver")

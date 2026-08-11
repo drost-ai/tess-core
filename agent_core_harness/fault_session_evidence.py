@@ -70,7 +70,7 @@ async def verifyFaultSessionIntegrity(
     raised: BaseException | None = None
     result: dict[str, Any] | None = None
     try:
-        result = await core.runAgentPrompt(
+        result = await core.run_agent_prompt(
             session=session,
             config=config,
             runtime=runtime,
@@ -108,7 +108,7 @@ async def verifyFaultSessionIntegrity(
         raise RuntimeError(f"Fault-matrix cancellation repair missing for {cell['id']}")
     label = _integrity_label(cell, actual)
     evidence = {
-        "settledThrough": "runAgentPrompt",
+        "settledThrough": "run_agent_prompt",
         "persisted": True,
         "repairApplied": repair["repaired"],
         "messageCount": len(restored.get("messages") or []),

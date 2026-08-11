@@ -17,7 +17,7 @@ from .transport_policy import (
 )
 
 
-def validateMcpResponseHeaders(response: Any) -> None:
+def validate_mcp_response_headers(response: Any) -> None:
     headers = getattr(response, "headers", None)
     if _measure_headers(headers) > MCP_HEADER_MAX_BYTES:
         _close_http_response(response)
@@ -42,7 +42,7 @@ def validateMcpResponseHeaders(response: Any) -> None:
             )
 
 
-def readMcpBodyBytes(
+def read_mcp_body_bytes(
     response: Any,
     policy: dict[str, int],
     *,
@@ -50,14 +50,14 @@ def readMcpBodyBytes(
 ) -> bytes:
     chunks: list[bytes] = []
     total = 0
-    for chunk in iterateMcpBody(response, policy, continuous=continuous):
+    for chunk in iterate_mcp_body(response, policy, continuous=continuous):
         chunks.append(chunk)
         total += len(chunk)
     return b"".join(chunks)
 
 
-def readMcpBodyText(response: Any, policy: dict[str, int]) -> str:
-    raw = readMcpBodyBytes(response, policy)
+def read_mcp_body_text(response: Any, policy: dict[str, int]) -> str:
+    raw = read_mcp_body_bytes(response, policy)
     try:
         return raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
@@ -67,7 +67,7 @@ def readMcpBodyText(response: Any, policy: dict[str, int]) -> str:
         ) from error
 
 
-def iterateMcpBody(
+def iterate_mcp_body(
     response: Any,
     policy: dict[str, int],
     *,
@@ -298,7 +298,7 @@ def _close_http_response(response: Any) -> None:
             connection_closer()
 
 
-class _NoMcpRedirect(HTTPRedirectHandler):
+class _no_mcp_redirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
@@ -315,7 +315,7 @@ def _validate_outgoing_headers(headers: dict[str, str]) -> None:
         )
 
 
-class _BoundedHeaderReader:
+class _bounded_header_reader:
     def __init__(self, stream: Any) -> None:
         self.stream = stream
         self.first_line = True
@@ -340,10 +340,10 @@ class _BoundedHeaderReader:
         return getattr(self.stream, name)
 
 
-class _BoundedHTTPResponse(HTTPResponse):
+class _bounded_httpresponse(HTTPResponse):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.fp = _BoundedHeaderReader(self.fp)
+        self.fp = _bounded_header_reader(self.fp)
 
 
 MCP_REDIRECT_MAX_HOPS = 5
@@ -383,7 +383,7 @@ def _open_mcp_http(
             timeout=min(connect_timeout, headers_timeout or connect_timeout),
         )
     if exchange is None:
-        return build_opener(_NoMcpRedirect()).open(request, timeout=connect_timeout)
+        return build_opener(_no_mcp_redirect()).open(request, timeout=connect_timeout)
     origin = _url_origin(_parse_mcp_url(request.full_url))
     url = request.full_url
     for _hop in range(MCP_REDIRECT_MAX_HOPS + 1):
@@ -422,7 +422,7 @@ def _open_direct(
     parsed = _parse_mcp_url(url)
     connection_type = HTTPSConnection if parsed.scheme == "https" else HTTPConnection
     connection = connection_type(parsed.hostname, parsed.port, timeout=connect_timeout)
-    connection.response_class = _BoundedHTTPResponse
+    connection.response_class = _bounded_httpresponse
     exchange.bind(connection)
     try:
         try:

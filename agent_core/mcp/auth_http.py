@@ -14,11 +14,11 @@ from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
-class _OAuthNotFound(Exception):
+class _oauth_not_found(Exception):
     pass
 
 
-class _NoOAuthRedirect(HTTPRedirectHandler):
+class _no_oauth_redirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
@@ -52,12 +52,12 @@ async def _fetch_json(
         _assert_oauth_url(url)
         request = Request(url, data=body, headers=headers or {"accept": "application/json"}, method=method)
         try:
-            with build_opener(_NoOAuthRedirect()).open(request, timeout=timeout) as response:
+            with build_opener(_no_oauth_redirect()).open(request, timeout=timeout) as response:
                 raw = response.read(1_048_577)
         except HTTPError as exc:
             if exc.code == 404:
                 exc.close()
-                raise _OAuthNotFound() from None
+                raise _oauth_not_found() from None
             if 300 <= exc.code < 400:
                 exc.close()
                 raise RuntimeError("MCP OAuth endpoint attempted a redirect, which is not allowed.") from None
@@ -77,7 +77,7 @@ async def _fetch_json_optional(url: str, *, timeout: float) -> dict[str, Any] | 
     try:
         value = await _fetch_json(url, timeout=timeout)
         return value if isinstance(value, dict) else None
-    except _OAuthNotFound:
+    except _oauth_not_found:
         return None
 
 

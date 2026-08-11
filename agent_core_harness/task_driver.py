@@ -27,7 +27,7 @@ HARNESS_DAEMON_INSTANCE = "harness-daemon-instance"
 
 async def ensure_daemon(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     await ensure_session_config(data, sandbox, state)
-    client = await core.ensureTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE, "cwd": str(sandbox.workspace)})
+    client = await core.ensure_task_supervisor_daemon({"instanceId": HARNESS_DAEMON_INSTANCE, "cwd": str(sandbox.workspace)})
     state["daemon_client"] = client
     state.setdefault("task_driver_results", []).append({"driver": "ensure_daemon", "status": "passed", "state": _json_safe(client.get("getState", lambda: {})())})
     await refresh_task_state(sandbox, state)
@@ -161,7 +161,7 @@ async def seed_recovery_task(data: dict[str, Any], sandbox: ScenarioSandbox, sta
     sandbox.process_registry.append({"process": proc, "kind": "recovery_task", "taskId": task_id})
     state.setdefault("owned_processes", []).append(proc)
     created = data.get("createdAt") or "2026-01-01T00:00:00Z"
-    identity = await core.captureOwnedProcessIdentity({"pid": proc.pid, "expectedArgv": argv, "spawnedAt": created})
+    identity = await core.capture_owned_process_identity({"pid": proc.pid, "expectedArgv": argv, "spawnedAt": created})
     meta = {"type": data.get("type", "background_command"), "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": data.get("command", "sleep"), "cwd": str(sandbox.workspace), "startedAt": created, "updatedAt": created, "status": "running", "outputFile": output_file, "pid": proc.pid, "processIdentity": identity, "detailStatus": data.get("detailStatus", "running"), "owner": "daemon", "supervisorId": data.get("supervisorId", "previous-supervisor")}
     await core.write_task_meta(task_id, meta)
     await core.save_task_record({"id": task_id, "sessionId": session["id"], "sourceId": task_id, "kind": "background_command", "status": "running", "title": data.get("title", "recovery task"), "summary": "Background command is running.", "createdAt": created, "updatedAt": created, "startedAt": created, "cwd": str(sandbox.workspace), "command": meta["command"], "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "detailStatus": meta["detailStatus"], "retrieveOnly": True, "owner": "daemon", "supervisorId": meta["supervisorId"], "processIdentity": identity, "metadata": {"pid": proc.pid, "processIdentity": identity}})
@@ -173,7 +173,7 @@ async def seed_recovery_task(data: dict[str, Any], sandbox: ScenarioSandbox, sta
 
 async def restart_daemon(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     await _unsubscribe_all(state)
-    await core.stopTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE})
+    await core.stop_task_supervisor_daemon({"instanceId": HARNESS_DAEMON_INSTANCE})
     state.pop("daemon_client", None)
     return await ensure_daemon(data, sandbox, state)
 
@@ -282,7 +282,7 @@ def assert_bootstrap(state: dict[str, Any], data: dict[str, Any]) -> None:
 
 
 async def refresh_task_state(sandbox: ScenarioSandbox, state: dict[str, Any]) -> None:
-    state["daemon_state"] = _json_safe(await core.getTaskSupervisorDaemonState({"instanceId": HARNESS_DAEMON_INSTANCE}))
+    state["daemon_state"] = _json_safe(await core.get_task_supervisor_daemon_state({"instanceId": HARNESS_DAEMON_INSTANCE}))
     state["persisted_daemon_events"] = _json_safe(await core.load_daemon_events(HARNESS_DAEMON_INSTANCE))
     state["task_records"] = _json_safe(await core.list_task_records())
     state["health_checks"] = _json_safe(await core.list_health_check_tasks())
@@ -296,7 +296,7 @@ async def refresh_task_state(sandbox: ScenarioSandbox, state: dict[str, Any]) ->
 
 async def close_task_driver(state: dict[str, Any]) -> None:
     await _unsubscribe_all(state)
-    await core.stopTaskSupervisorDaemon({"instanceId": HARNESS_DAEMON_INSTANCE})
+    await core.stop_task_supervisor_daemon({"instanceId": HARNESS_DAEMON_INSTANCE})
     for proc in list(state.get("owned_processes") or []):
         if proc.poll() is None:
             proc.terminate()

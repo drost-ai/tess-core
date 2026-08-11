@@ -12,7 +12,7 @@ STRICT_TOOL_PROTOCOL_PROVIDERS = {"anthropic", "openai"}
 _IMAGE_PLACEHOLDER_RE = re.compile(r"^<image:(?P<mime>[^:>]+)(?::(?P<path>.*?))?:current-turn-only>$")
 
 
-def normalizeProviderRequestMessages(provider: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
+def normalize_provider_request_messages(provider: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
     """Return provider-safe request messages without mutating the canonical session.
 
     Anthropic and OpenAI both require tool results to directly answer the

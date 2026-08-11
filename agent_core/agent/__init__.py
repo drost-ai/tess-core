@@ -5,63 +5,63 @@ The facade re-exports exactly the public names its submodules define.
 from __future__ import annotations
 
 from .checkpoints import (
-    maybeAutoCheckpointRawSession,
-    maybeAutoCompactSession,
+    maybe_auto_checkpoint_raw_session,
+    maybe_auto_compact_session,
 )
 from .context import (
-    emitContinuationRelief,
-    isContextWindowFailure,
-    prepareProviderRequest,
-    recordContinuationRelief,
+    emit_continuation_relief,
+    is_context_window_failure,
+    prepare_provider_request,
+    record_continuation_relief,
 )
 from .context_budget import (
-    applyProviderTokenBudget,
-    assessContextHeadroom,
-    enforceContextHeadroom,
-    headroomEventPayload,
+    apply_provider_token_budget,
+    assess_context_headroom,
+    enforce_context_headroom,
+    headroom_event_payload,
 )
 from .dynamic_context import (
-    dynamicContextBelongsInMessages,
-    injectSystemContextIntoMessages,
+    dynamic_context_belongs_in_messages,
+    inject_system_context_into_messages,
 )
-from .continuity import readOpenChildQuestions, runParentContinuityTurn
-from .loop import runAgentPrompt
+from .continuity import readOpenChildQuestions, run_parent_continuity_turn
+from .loop import run_agent_prompt
 from .progress import (
     LogicalTurnProgressLedger,
     MAX_RECORDED_ARTIFACTS,
     MAX_RECORDED_FINGERPRINTS,
     MAX_REPEATED_CYCLE_BATCHES,
     PROGRESS_LEDGER_SCHEMA_VERSION,
-    appendToolResultBatch,
-    noProgressEventData,
-    noProgressTurnResult,
+    append_tool_result_batch,
+    no_progress_event_data,
+    no_progress_turn_result,
 )
 from .prompt_content import (
-    extractAssistantText,
+    extract_assistant_text,
     normalize_agent_prompt,
 )
 from .provider_turn import (
-    addEmptyResponseContinuationNudge,
-    completeEmptyProviderResponse,
-    isEmptyAssistantResponse,
-    recordEmptyResponseUsage,
-    requestProviderResponse,
+    add_empty_response_continuation_nudge,
+    complete_empty_provider_response,
+    is_empty_assistant_response,
+    record_empty_response_usage,
+    request_provider_response,
 )
 from .request_integrity import (
     STRICT_TOOL_PROTOCOL_PROVIDERS,
-    normalizeProviderRequestMessages,
+    normalize_provider_request_messages,
 )
 from .shared import (
     IMAGE_INPUT_UNSUPPORTED_MESSAGE,
-    modelSupportsImageInputs,
-    requestHasImageInputs,
-    unsupportedImageInputResponse,
+    model_supports_image_inputs,
+    request_has_image_inputs,
+    unsupported_image_input_response,
 )
 from .stable_boundary import (
     finish_stable_boundary,
     run_stable_boundary_hook,
 )
-from .tool_context import buildToolContext
+from .tool_context import build_tool_context
 from .tool_dispatch import (
     SerialQueue,
     ToolDispatchOutcome,
@@ -96,41 +96,41 @@ __all__ = [
     "SerialQueue",
     "ToolDispatchOutcome",
     "ToolResultBatchBudget",
-    "addEmptyResponseContinuationNudge",
-    "appendToolResultBatch",
-    "applyProviderTokenBudget",
+    "add_empty_response_continuation_nudge",
+    "append_tool_result_batch",
+    "apply_provider_token_budget",
     "approval_skip_result",
-    "assessContextHeadroom",
-    "buildToolContext",
+    "assess_context_headroom",
+    "build_tool_context",
     "build_tool_hook_context",
-    "completeEmptyProviderResponse",
+    "complete_empty_provider_response",
     "create_serial_queue",
-    "dynamicContextBelongsInMessages",
-    "emitContinuationRelief",
-    "enforceContextHeadroom",
-    "extractAssistantText",
+    "dynamic_context_belongs_in_messages",
+    "emit_continuation_relief",
+    "enforce_context_headroom",
+    "extract_assistant_text",
     "finish_stable_boundary",
-    "headroomEventPayload",
-    "injectSystemContextIntoMessages",
+    "headroom_event_payload",
+    "inject_system_context_into_messages",
     "invalid_tool_input_message",
-    "isContextWindowFailure",
-    "isEmptyAssistantResponse",
-    "maybeAutoCheckpointRawSession",
-    "maybeAutoCompactSession",
-    "modelSupportsImageInputs",
-    "noProgressEventData",
-    "noProgressTurnResult",
-    "normalizeProviderRequestMessages",
+    "is_context_window_failure",
+    "is_empty_assistant_response",
+    "maybe_auto_checkpoint_raw_session",
+    "maybe_auto_compact_session",
+    "model_supports_image_inputs",
+    "no_progress_event_data",
+    "no_progress_turn_result",
+    "normalize_provider_request_messages",
     "normalize_agent_prompt",
-    "prepareProviderRequest",
-    "recordContinuationRelief",
-    "recordEmptyResponseUsage",
-    "requestHasImageInputs",
-    "requestProviderResponse",
+    "prepare_provider_request",
+    "record_continuation_relief",
+    "record_empty_response_usage",
+    "request_has_image_inputs",
+    "request_provider_response",
     "resolve_effective_provider_turn_binding",
     "resolve_tool_concurrency",
-    "runAgentPrompt",
-    "runParentContinuityTurn",
+    "run_agent_prompt",
+    "run_parent_continuity_turn",
     "readOpenChildQuestions",
     "run_in_provider_turn_session",
     "run_post_tool_hook",
@@ -138,5 +138,5 @@ __all__ = [
     "run_stable_boundary_hook",
     "run_tool_dispatch_batch",
     "run_with_transient_execution_session",
-    "unsupportedImageInputResponse",
+    "unsupported_image_input_response",
 ]

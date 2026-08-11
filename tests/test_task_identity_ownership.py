@@ -41,7 +41,7 @@ REJECTED = (
 
 class TaskIdentityOwnershipTests(AgentCoreTestCase):
     def tearDown(self):
-        getattr(process_identity_module, "__setProcessIdentityObserverForTests")(None)
+        getattr(process_identity_module, "_set_process_identity_observer_for_tests")(None)
 
     def test_runtime_ids_accept_opaque_ids_and_reject_path_bearing_forms(self):
         parsers = (
@@ -232,10 +232,10 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             "observedCommandDigest": "a" * 64,
             "platform": sys.platform,
         }
-        getattr(process_identity_module, "__setProcessIdentityObserverForTests")(lambda _pid: observed)
+        getattr(process_identity_module, "_set_process_identity_observer_for_tests")(lambda _pid: observed)
         with mock.patch.object(process_identity_module.os, "killpg") as kill_group:
             with self.assertRaises(core.ProcessIdentityError) as error:
-                run(core.signalOwnedProcess(persisted, signal.SIGTERM))
+                run(core.signal_owned_process(persisted, signal.SIGTERM))
             self.assertEqual(error.exception.code, "process.identity_mismatch")
             kill_group.assert_not_called()
 
@@ -255,7 +255,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             for child, marker in zip(children, ("first-command", "second-command")):
                 identities.append(
                     run(
-                        core.captureOwnedProcessIdentity(
+                        core.capture_owned_process_identity(
                             pid=child.pid,
                             expectedArgv=[
                                 sys.executable,
@@ -274,7 +274,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             for index, child in enumerate(children):
                 if child.poll() is None:
                     if index < len(identities):
-                        run(core.signalOwnedProcess(identities[index], signal.SIGTERM))
+                        run(core.signal_owned_process(identities[index], signal.SIGTERM))
                     else:
                         child.terminate()
             for child in children:
@@ -294,11 +294,11 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
         }
         reordered = {key: identity[key] for key in reversed(tuple(identity))}
         self.assertEqual(
-            core.processIdentityFromRecord({"processIdentity": identity}, {"processIdentity": reordered}),
+            core.process_identity_from_record({"processIdentity": identity}, {"processIdentity": reordered}),
             identity,
         )
         changed = copy.deepcopy(identity)
         changed["startToken"] = "test:other"
         with self.assertRaises(core.ProcessIdentityError) as error:
-            core.processIdentityFromRecord({"processIdentity": identity}, {"processIdentity": changed})
+            core.process_identity_from_record({"processIdentity": identity}, {"processIdentity": changed})
         self.assertEqual(error.exception.code, "process.identity_mismatch")

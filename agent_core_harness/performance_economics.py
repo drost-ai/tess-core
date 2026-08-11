@@ -67,7 +67,7 @@ async def runPersistenceEconomicsAsync(
         "schemaVersion": REPORT_SCHEMA,
         "benchmark": PERSISTENCE_ECONOMICS_BENCHMARK,
         "measurementPolicy": {
-            "representative": "two real runAgentPrompt turns: provider failure, then recovery and successful commit; every storage_io event is counted",
+            "representative": "two real run_agent_prompt turns: provider failure, then recovery and successful commit; every storage_io event is counted",
             "comparison": "same session and runner: legacy full-record write, authority-free hydrated v2 fallback, and the production append-watermark path; recovery measures the persisted head/body loader without transcript reconciliation",
             "schemaStatus": "production session schema v2",
         },
@@ -144,7 +144,7 @@ async def _measure_representative_persistence_iteration() -> dict[str, Any]:
             started = time.perf_counter_ns()
             try:
                 try:
-                    await core.runAgentPrompt(
+                    await core.run_agent_prompt(
                         session=session,
                         config=config,
                         runtime=runtime,
@@ -155,7 +155,7 @@ async def _measure_representative_persistence_iteration() -> dict[str, Any]:
                     pass
                 else:
                     raise RuntimeError("Representative failure turn unexpectedly succeeded")
-                await core.runAgentPrompt(
+                await core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=runtime,

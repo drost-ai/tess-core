@@ -13,9 +13,9 @@ import agent_core.tools.processes as processes_module
 class SandboxTests(AgentCoreTestCase):
     def test_backend_selection_and_wrapper_shapes(self):
         config = {"sandbox": {"mode": "auto"}}
-        darwin = core.resolveSandboxBackend(config, platform="darwin", which=lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None)
-        linux = core.resolveSandboxBackend(config, platform="linux", which=lambda name: "/usr/bin/bwrap" if name == "bwrap" else None)
-        missing = core.resolveSandboxBackend(config, platform="linux", which=lambda _name: None)
+        darwin = core.resolve_sandbox_backend(config, platform="darwin", which=lambda name: "/usr/bin/sandbox-exec" if name == "sandbox-exec" else None)
+        linux = core.resolve_sandbox_backend(config, platform="linux", which=lambda name: "/usr/bin/bwrap" if name == "bwrap" else None)
+        missing = core.resolve_sandbox_backend(config, platform="linux", which=lambda _name: None)
 
         self.assertEqual(darwin.name, "seatbelt")
         self.assertEqual(linux.name, "bubblewrap")
@@ -32,14 +32,14 @@ class SandboxTests(AgentCoreTestCase):
         self.assertEqual(bubblewrap[-4:], ["--", "sh", "-lc", "echo ok"])
 
     def test_landlock_shim_is_gone_and_os_required_never_degrades(self):
-        landlock = core.resolveSandboxBackend(
+        landlock = core.resolve_sandbox_backend(
             {"sandbox": {"mode": "auto", "backend": "landlock"}}, platform="linux", which=lambda _name: None
         )
         self.assertEqual(landlock.enforcement, "none")
         self.assertIn("removed", landlock.reason)
 
         with self.assertRaises(core.SandboxUnavailableError):
-            core.prepareSandboxedArgv(
+            core.prepare_sandboxed_argv(
                 ["sh", "-lc", "echo never"],
                 config={"sandbox": {"mode": "os-required", "backend": "landlock"}},
                 cwd=os.getcwd(),
@@ -54,15 +54,15 @@ class SandboxTests(AgentCoreTestCase):
             def wrap(self, argv, policy):
                 return ["advisory-wrapper", *argv]
 
-        with mock.patch.object(sandbox_module, "resolveSandboxBackend", return_value=AdvisoryBackend()):
+        with mock.patch.object(sandbox_module, "resolve_sandbox_backend", return_value=AdvisoryBackend()):
             with self.assertRaises(core.SandboxUnavailableError):
-                core.prepareSandboxedArgv(
+                core.prepare_sandboxed_argv(
                     ["sh", "-lc", "echo never"],
                     config={"sandbox": {"mode": "os-required"}},
                     cwd=os.getcwd(),
                 )
             events = []
-            advisory = core.prepareSandboxedArgv(
+            advisory = core.prepare_sandboxed_argv(
                 ["sh", "-lc", "echo ok"],
                 config={"sandbox": {"mode": "auto"}},
                 cwd=os.getcwd(),
@@ -127,7 +127,7 @@ class SandboxTests(AgentCoreTestCase):
         outside = workspace.parent / "outside.txt"
         try:
             events = []
-            launch = core.prepareSandboxedArgv(
+            launch = core.prepare_sandboxed_argv(
                 ["/bin/sh", "-c", f"touch inside.txt; touch {outside}"],
                 config={"sandbox": {"mode": "os-required", "backend": "seatbelt"}, "runtimeHome": str(home)},
                 cwd=str(workspace),

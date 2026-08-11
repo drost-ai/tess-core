@@ -13,8 +13,8 @@ def build_effective_system_prompt(config: dict[str, Any]) -> str:
         return config["systemPrompt"]
     return f"{config['systemPrompt']}\n\n{config['appendSystemPrompt']}"
 
-def build_default_system_prompt(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    args = {**(args or {}), **kwargs}
+def build_default_system_prompt(args: dict[str, Any] | None = None) -> str:
+    args = dict(args or {})
     assistant_name = (args.get("assistantName") or DEFAULT_ASSISTANT_NAME).strip()
     assistant_description = (args.get("assistantDescription") or DEFAULT_ASSISTANT_DESCRIPTION).strip()
     return "\n".join(

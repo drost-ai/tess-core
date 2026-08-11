@@ -72,7 +72,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         runtime.update(runtime_overrides or {})
         with mock.patch.object(context_module, "measure_request_input_tokens", fake_measure):
             return run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(session, runtime),

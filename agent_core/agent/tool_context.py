@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable
 from ..contracts.context import ToolContext
 
 
-def buildToolContext(
+def build_tool_context(
     *,
     session: dict[str, Any],
     config: dict[str, Any],

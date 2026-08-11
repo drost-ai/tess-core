@@ -8,13 +8,13 @@ import weakref
 from typing import Any, Callable
 
 from .._utils import now_iso, pretty_json
-from .auth import McpAuthorizationRequiredError, createMcpOAuthRuntime
+from .auth import McpAuthorizationRequiredError, create_mcp_oauth_runtime
 from .clients import JsonRpcClient
 from .http_transport import HttpMcpClient
 from .protocol import McpProtocolError, _runtime_tool_name, _without_none_values
 from .sse_transport import SseMcpClient
 from .stdio_transport import StdioMcpClient
-from .transport_policy import McpTransportError, resolveMcpTransportPolicy
+from .transport_policy import McpTransportError, resolve_mcp_transport_policy
 
 
 def _dedupe_servers(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -54,7 +54,7 @@ def _create_state(
         "reconnectBackoffUntil": 0.0,
     }
     if config.get("transport") != "stdio" and token_store is not None:
-        state["oauth"] = createMcpOAuthRuntime(
+        state["oauth"] = create_mcp_oauth_runtime(
             config=config,
             store=token_store,
             on_runtime_event=on_event,
@@ -78,7 +78,7 @@ async def _connect_state(state: dict[str, Any], cwd: str, on_event: Callable[...
             await client.initialize()
             return await _refresh_tools(state), await _refresh_resources(state)
 
-        startup_timeout_ms = resolveMcpTransportPolicy(state["config"])[
+        startup_timeout_ms = resolve_mcp_transport_policy(state["config"])[
             "startupTimeoutMs"
         ]
         try:

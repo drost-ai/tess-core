@@ -7,7 +7,7 @@ from typing import Any
 
 from .._utils import pretty_json
 from ..authority.mcp_origin_policy import fetch_mcp_resource_with_bound_credentials
-from ..mcp.payloads import shapeMcpResourceList, shapeMcpResourceRead
+from ..mcp.payloads import shape_mcp_resource_list, shape_mcp_resource_read
 from ..payloads.tools import shape_text_tool_result
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
@@ -60,7 +60,7 @@ def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
             _throw_if_tool_cancelled(context)
             resources = await runtime["listResources"](server)
             _throw_if_tool_cancelled(context)
-            payload = await shapeMcpResourceList(
+            payload = await shape_mcp_resource_list(
                 resources=resources if isinstance(resources, list) else [],
                 server=server,
                 context=payload_context,
@@ -69,7 +69,7 @@ def _list_mcp_resources_tool(runtime: Any) -> ToolDefinition:
             return {"content": pretty_json(payload)}
         configs = context["config"].get("mcpConfig", [])
         resources = [{"server": item.get("name"), "name": item.get("name"), "uri": item.get("commandOrUrl"), "description": f"{item.get('transport')} server (not connected)"} for item in configs if not server or item.get("name") == server]
-        payload = await shapeMcpResourceList(
+        payload = await shape_mcp_resource_list(
             resources=resources,
             server=server,
             context=payload_context,
@@ -89,7 +89,7 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             _throw_if_tool_cancelled(context)
             resource = await runtime["readResource"](server, uri)
             _throw_if_tool_cancelled(context)
-            payload = await shapeMcpResourceRead(
+            payload = await shape_mcp_resource_read(
                 server=server,
                 uri=uri,
                 value=resource,
@@ -109,7 +109,7 @@ def _read_mcp_resource_tool(runtime: Any) -> ToolDefinition:
             )
             _throw_if_tool_cancelled(context)
             text = await response.text()
-            payload = await shapeMcpResourceRead(
+            payload = await shape_mcp_resource_read(
                 server=server,
                 uri=uri,
                 value={"contents": [{"uri": uri, "mimeType": _header_value(response.headers, "content-type"), "text": text}]},

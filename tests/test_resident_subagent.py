@@ -64,7 +64,7 @@ class TraceEmitterTests(AgentCoreTestCase):
 
         async def exercise():
             with mock.patch.object(runner_module, "_prepare_worker", fake_prepare), \
-                    mock.patch.object(runner_module, "runAgentPrompt", fake_prompt), \
+                    mock.patch.object(runner_module, "run_agent_prompt", fake_prompt), \
                     mock.patch.object(runner_module, "save_session", fake_save), \
                     mock.patch.object(runner_module, "_mark_resident_status", fake_mark), \
                     mock.patch.object(runner_module, "_publish_resident_turn_result", fake_publish):

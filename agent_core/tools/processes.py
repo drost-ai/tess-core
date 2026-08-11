@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ..sandbox import prepareSandboxedArgv
+from ..sandbox import prepare_sandboxed_argv
 from ..storage import get_state_root
 from .cancellation import _create_tool_abort_error, _signal_aborted
 
@@ -76,7 +76,7 @@ def _prepare_sandboxed_argv(
     *,
     extra_writable_roots: list[str | None] | None = None,
 ) -> list[str]:
-    launch = prepareSandboxedArgv(
+    launch = prepare_sandboxed_argv(
         argv,
         config=context.get("config") or {},
         session=context.get("session"),

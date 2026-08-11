@@ -15,8 +15,8 @@ def _empty_snapshot() -> dict[str, Any]:
     return {"total": 0, "active": 0, "backgrounded": 0, "awaitingInput": 0, "failed": 0, "labels": [], "tasks": []}
 
 
-async def create_task_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def create_task_runtime(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session_ref = args.get("session") or {}
     config_ref = args.get("config") or {}
     emit: Callable[[str, dict[str, Any]], Any] = args.get("emit") or (lambda *_: None)

@@ -4,7 +4,7 @@ import argparse
 import asyncio
 import os
 
-from ..daemon import runTaskSupervisorDaemon
+from ..daemon import run_task_supervisor_daemon
 from ..storage import configure_runtime_home
 
 
@@ -25,7 +25,7 @@ def main() -> None:
 
     settings = asyncio.run(load_settings("user", args.cwd))
     configure_knobs(settings.get("knobs"))
-    asyncio.run(runTaskSupervisorDaemon(args.cwd, args.instance_id, ownerPid=args.owner_pid))
+    asyncio.run(run_task_supervisor_daemon(args.cwd, args.instance_id, ownerPid=args.owner_pid))
 
 
 if __name__ == "__main__":

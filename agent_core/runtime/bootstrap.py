@@ -5,7 +5,7 @@ from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
 from ..tasks.collaboration import create_collaboration_runtime
-from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
+from ..daemon import ensure_task_supervisor_daemon, stop_task_supervisor_daemon
 from ._daemon_watch import start_daemon_watchdog as _start_daemon_watchdog
 from .exception_groups import aggregate_runtime_failures as _aggregate_runtime_failures
 from .lifecycle_barrier import create_lifecycle_barrier
@@ -144,7 +144,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             dispatch_bound(active_binding, event, data)
 
         if daemon is None and args.get("daemonEnabled", True) is not False:
-            daemon = await ensureTaskSupervisorDaemon({"instanceId": runtime_instance_id, "cwd": args.get("cwd") or config.get("cwd") or component_session.get("cwd")})
+            daemon = await ensure_task_supervisor_daemon({"instanceId": runtime_instance_id, "cwd": args.get("cwd") or config.get("cwd") or component_session.get("cwd")})
             owned_daemon = True
         if session and not daemon:
             if monitor_runtime is None:
@@ -434,7 +434,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             daemon_unsubscribe = None
             failures = await _close_many(
                 [
-                    (lambda: stopTaskSupervisorDaemon({"instanceId": runtime_instance_id})) if owned_daemon else _get_method(daemon, "close"),
+                    (lambda: stop_task_supervisor_daemon({"instanceId": runtime_instance_id})) if owned_daemon else _get_method(daemon, "close"),
                     collaboration_runtime.get("close") if owned_collaboration and collaboration_runtime else None,
                     task_runtime.get("close") if owned_task and task_runtime else None,
                     monitor_runtime.get("close") if owned_monitor and monitor_runtime else None,

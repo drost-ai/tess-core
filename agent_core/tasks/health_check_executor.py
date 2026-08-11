@@ -10,8 +10,8 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from ..process.bash_lifecycle import runInlineShellCommand
-from ..acquisition.bounded_web_fetch import boundedWebFetch
+from ..process.bash_lifecycle import run_inline_shell_command
+from ..acquisition.bounded_web_fetch import bounded_web_fetch
 from ..payloads.utf8_bounds import slice_utf8_prefix
 from .health_check_policy import (
     assert_health_check_execution_policy,
@@ -90,7 +90,7 @@ async def _execute_command(
         raise RuntimeError("Command health check is missing its normalized command policy.")
     prefix = (policy.get("sandbox") or {}).get("argvPrefix") or []
     argv = [*prefix, shell, "-lc", record["command"]]
-    run = await runInlineShellCommand(
+    run = await run_inline_shell_command(
         shell=shell,
         command=record["command"],
         argv=argv,
@@ -150,7 +150,7 @@ async def _execute_http(record: dict[str, Any], signal: Any) -> dict[str, Any]:
         if not (policy.get("sandbox") or {}).get("network") or origin not in allowed:
             raise RuntimeError("Health-check redirect exceeds its approved network authority.")
 
-    response = await boundedWebFetch(
+    response = await bounded_web_fetch(
         url=record["url"],
         abortSignal=signal,
         compressedMaxBytes=record["bodyLimitBytes"],

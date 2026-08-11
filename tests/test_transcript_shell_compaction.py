@@ -78,7 +78,7 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
         }
 
         infos = []
-        result = run(core.handleSlashCommand({"command": "/bug", "session": session, "config": {}, "hooks": {"info": lambda title, message: infos.append((title, message))}}))
+        result = run(core.handle_slash_command({"command": "/bug", "session": session, "config": {}, "hooks": {"info": lambda title, message: infos.append((title, message))}}))
         self.assertEqual(result["title"], "Feedback")
         self.assertIn("https://github.com/drost-ai/tess-core/issues", result["message"])
         self.assertEqual(infos[-1][0], "Feedback")
@@ -123,7 +123,7 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
             }
 
         result = run(
-            core.handleSlashCommand(
+            core.handle_slash_command(
                 {
                     "command": "/compact",
                     "session": session,

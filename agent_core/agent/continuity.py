@@ -10,12 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from ._question_gate import read_open_child_questions
-from .loop import runAgentPrompt
+from .loop import run_agent_prompt
 
 
-async def runParentContinuityTurn(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_parent_continuity_turn(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs, "prompt": ""}
-    return await runAgentPrompt(values)
+    return await run_agent_prompt(values)
 
 
 readOpenChildQuestions = read_open_child_questions

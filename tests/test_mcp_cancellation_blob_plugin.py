@@ -54,7 +54,7 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
                 ),
                 encoding="utf-8",
             )
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "slow", "transport": "stdio", "commandOrUrl": sys.executable, "args": [str(server)], "updatedAt": "now", "requestTimeoutSeconds": 2}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "slow", "transport": "stdio", "commandOrUrl": sys.executable, "args": [str(server)], "updatedAt": "now", "requestTimeoutSeconds": 2}]}))
 
             async def cancel_then_retry():
                 with self.assertRaises(asyncio.TimeoutError):

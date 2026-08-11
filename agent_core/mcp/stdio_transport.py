@@ -23,7 +23,7 @@ from .transport_policy import (
     MCP_PENDING_REQUEST_MAX,
     MCP_STDERR_TAIL_MAX_BYTES,
     McpTransportError,
-    resolveMcpTransportPolicy,
+    resolve_mcp_transport_policy,
 )
 from .transport_shared import (
     BoundedNotificationQueue,
@@ -42,7 +42,7 @@ class StdioMcpClient(JsonRpcClient):
         on_notification: Callable[[dict[str, Any]], Any] | None = None,
     ) -> None:
         super().__init__(config, cwd, on_notification)
-        self.policy = resolveMcpTransportPolicy(config)
+        self.policy = resolve_mcp_transport_policy(config)
         self.proc: subprocess.Popen[bytes] | None = None
         self.pending: dict[int, queue.Queue[dict[str, Any] | BaseException]] = {}
         self.pending_lock = threading.Lock()

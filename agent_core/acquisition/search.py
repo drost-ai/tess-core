@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from ..process.output import (
     SUBPROCESS_RING_MAX_BYTES,
-    createSubprocessOutputCollector,
+    create_subprocess_output_collector,
 )
 from ..payloads.utf8_bounds import normalize_utf8_string, slice_utf8_prefix, utf8_byte_length
 
@@ -23,7 +23,7 @@ SEARCH_RECORD_MAX_BYTES = 1024 * 1024
 SEARCH_READ_CHUNK_BYTES = 64 * 1024
 
 
-class _BoundedLineSampler:
+class _bounded_line_sampler:
     def __init__(
         self,
         *,
@@ -140,8 +140,8 @@ def _fit_record(record: str, source_bytes: int, max_bytes: int) -> tuple[str, bo
     return f"{slice_utf8_prefix(record, max_bytes - marker_bytes)}{marker}", True
 
 
-async def runStreamingSearch(**kwargs: Any) -> dict[str, Any]:
-    collector = await createSubprocessOutputCollector(
+async def run_streaming_search(**kwargs: Any) -> dict[str, Any]:
+    collector = await create_subprocess_output_collector(
         sessionId=kwargs.get("sessionId"),
         toolName=kwargs["toolName"],
         family=kwargs["family"],
@@ -224,10 +224,10 @@ async def runStreamingSearch(**kwargs: Any) -> dict[str, Any]:
     }
 
 
-async def buildStreamingSearchFromOutput(
+async def build_streaming_search_from_output(
     *, stdout: str, stderr: str, **kwargs: Any
 ) -> dict[str, Any]:
-    collector = await createSubprocessOutputCollector(
+    collector = await create_subprocess_output_collector(
         sessionId=kwargs.get("sessionId"),
         toolName=kwargs["toolName"],
         family=kwargs["family"],
@@ -254,8 +254,8 @@ async def buildStreamingSearchFromOutput(
     }
 
 
-def _make_sampler(kwargs: dict[str, Any]) -> _BoundedLineSampler:
-    return _BoundedLineSampler(
+def _make_sampler(kwargs: dict[str, Any]) -> _bounded_line_sampler:
+    return _bounded_line_sampler(
         offset=max(0, int(kwargs.get("offset", 0))),
         max_items=_positive(kwargs.get("sampleItems"), 1),
         max_sample_bytes=_positive(kwargs.get("sampleBytes"), 1),
@@ -270,7 +270,7 @@ async def _read_stream(
     reader: asyncio.StreamReader | None,
     kind: str,
     collector: Any,
-    sampler: _BoundedLineSampler | None,
+    sampler: _bounded_line_sampler | None,
 ) -> None:
     if reader is None:
         return

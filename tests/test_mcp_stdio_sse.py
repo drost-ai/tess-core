@@ -50,7 +50,7 @@ class McpStdioSseTests(AgentCoreTestCase):
                     '''
                 )
             )
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "fake", "transport": "stdio", "commandOrUrl": sys.executable, "args": [str(server)], "updatedAt": "now"}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "fake", "transport": "stdio", "commandOrUrl": sys.executable, "args": [str(server)], "updatedAt": "now"}]}))
             self.assertEqual(runtime["listTools"]()[0]["runtimeName"], "mcp__fake__echo")
             raw_tool = next(tool for tool in runtime["listTools"]() if tool["name"] == "raw")
             self.assertEqual(raw_tool["inputSchema"]["properties"]["value"]["type"], "string")
@@ -144,7 +144,7 @@ class McpStdioSseTests(AgentCoreTestCase):
             events = []
             url = f"http://127.0.0.1:{server.server_address[1]}/sse"
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     {
                         "cwd": str(workspace),
                         "servers": [{"name": "sse", "transport": "sse", "commandOrUrl": url, "updatedAt": "now"}],

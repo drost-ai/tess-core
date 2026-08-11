@@ -5,7 +5,7 @@ from typing import Any
 from ..providers.errors import create_provider_failure_record, create_provider_request_error
 
 
-def assessContextHeadroom(
+def assess_context_headroom(
     *,
     measurement: dict[str, Any],
     policy: dict[str, Any],
@@ -53,7 +53,7 @@ def assessContextHeadroom(
     }
 
 
-def enforceContextHeadroom(
+def enforce_context_headroom(
     *,
     config: dict[str, Any],
     assessment: dict[str, Any],
@@ -83,7 +83,7 @@ def enforceContextHeadroom(
     )
 
 
-def applyProviderTokenBudget(
+def apply_provider_token_budget(
     request: dict[str, Any],
     budget: dict[str, Any],
     config: dict[str, Any],
@@ -115,7 +115,7 @@ def applyProviderTokenBudget(
     return {**request, "maxOutputTokens": budget.get("effectiveMaxOutputTokens")}
 
 
-def headroomEventPayload(
+def headroom_event_payload(
     session_id: str,
     assessment: dict[str, Any],
 ) -> dict[str, Any]:

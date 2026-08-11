@@ -6,7 +6,7 @@ from ..runtime.secret_provider import (
     normalize_provider_headers,
     normalize_runtime_secret_value,
 )
-from ..sandbox import normalizeSandboxConfig
+from ..sandbox import normalize_sandbox_config
 
 import os
 from typing import Any
@@ -365,7 +365,7 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
     )
     settings_sandbox = merged_settings.get("sandbox") if isinstance(merged_settings.get("sandbox"), dict) else {}
     options_sandbox = options.get("sandbox") if isinstance(options.get("sandbox"), dict) else {}
-    sandbox_config = normalizeSandboxConfig({**settings_sandbox, **options_sandbox}, cwd)
+    sandbox_config = normalize_sandbox_config({**settings_sandbox, **options_sandbox}, cwd)
     settings_subagents = merged_settings.get("subagents") if isinstance(merged_settings.get("subagents"), dict) else {}
     options_subagents = options.get("subagents") if isinstance(options.get("subagents"), dict) else {}
     subagents_config = {**settings_subagents, **options_subagents}

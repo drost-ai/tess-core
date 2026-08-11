@@ -19,7 +19,7 @@ from .records import _build_task_record
 from .utils import _dedupe
 from ...subagents.capacity import check_subagent_capacity, resolve_subagent_concurrency_policy
 from ..communication import append_task_event
-from ...process.task_launch import createTaskLaunchReservation
+from ...process.task_launch import create_task_launch_reservation
 
 
 def _create_subagent_task_starter(
@@ -78,7 +78,7 @@ def _create_subagent_task_starter(
         task_id = str(uuid.uuid4())
         output_file = task_output_path(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        reservation = createTaskLaunchReservation(
+        reservation = create_task_launch_reservation(
             taskId=task_id,
             sessionId=parent_session_id,
             kind="subagent",

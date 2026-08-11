@@ -14,11 +14,11 @@ from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
 from .processes import _spawn_owned_argv, _watch_process_thread
-from ...process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
+from ...process.owned_launch import activate_owned_process_runner, create_owned_process_activation
 from ...process.task_launch import (
-    attachTaskLaunchReservation,
-    failTaskLaunchReservation,
-    launchReservedProcess,
+    attach_task_launch_reservation,
+    fail_task_launch_reservation,
+    launch_reserved_process,
 )
 
 
@@ -43,7 +43,7 @@ def _create_process_task_launcher(
         attach_extra: Callable[[dict[str, Any]], Any] | None = None,
     ) -> dict[str, str]:
         reservation = meta["launchReservation"]
-        activation = createOwnedProcessActivation(child_argv)
+        activation = create_owned_process_activation(child_argv)
         owned_argv = activation["argv"]
 
         async def reserve() -> None:
@@ -55,7 +55,7 @@ def _create_process_task_launcher(
                     raise RuntimeError(f"Session not found during task reservation: {target_session_id}")
 
         async def attach(identity: dict[str, Any]) -> None:
-            attached = attachTaskLaunchReservation(reservation)
+            attached = attach_task_launch_reservation(reservation)
             attached_meta = {
                 **meta,
                 "pid": identity["pid"],
@@ -80,10 +80,10 @@ def _create_process_task_launcher(
             )
             if attach_extra is not None:
                 await maybe_await(attach_extra(identity))
-            activateOwnedProcessRunner(proc_holder["process"], activation["activationToken"])
+            activate_owned_process_runner(proc_holder["process"], activation["activationToken"])
 
         async def fail(error: Any) -> None:
-            failed = failTaskLaunchReservation(reservation, error)
+            failed = fail_task_launch_reservation(reservation, error)
             reason = failed.get("failureReason") or "Task launch failed."
             await write_task_meta(
                 task_id,
@@ -116,7 +116,7 @@ def _create_process_task_launcher(
             proc_holder["process"] = process
             return process
 
-        launched = await launchReservedProcess(
+        launched = await launch_reserved_process(
             reservation=reservation,
             expectedArgv=owned_argv,
             reserve=reserve,

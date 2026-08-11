@@ -15,7 +15,7 @@ from typing import Any, Mapping
 
 from .permission_rules import match_permission_rule, parse_permission_rule
 from .repository_trust import approve_repository_content, check_repository_approval
-from ..sandbox import prepareSandboxedArgv
+from ..sandbox import prepare_sandboxed_argv
 from ..storage import get_project_root, load_settings
 
 
@@ -118,7 +118,7 @@ def _hook_matches(hook: Mapping[str, Any], tool_name: str, project_root: str, ca
 async def _run_hook(hook: Mapping[str, Any], payload: Mapping[str, Any], fire: Mapping[str, Any]) -> dict[str, Any]:
     shell = os.environ.get("SHELL") or ("cmd.exe" if os.name == "nt" else "/bin/sh")
     argv = [shell, "/c" if os.name == "nt" else "-lc", str(hook["command"])]
-    prepared = prepareSandboxedArgv(
+    prepared = prepare_sandboxed_argv(
         argv,
         config=fire.get("config") or {},
         session={"cwd": fire["cwd"]},

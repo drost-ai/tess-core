@@ -13,7 +13,7 @@ from .context_commands import (
     _handle_memory,
     _handle_monitor,
     _handle_resume,
-    buildMonitorsReport,
+    build_monitors_report,
 )
 from .diagnostics import (
     _handle_collaboration,
@@ -26,7 +26,7 @@ from .diagnostics import (
     _handle_theme,
     _handle_transcript,
 )
-from .registry import buildSlashHelp
+from .registry import build_slash_help
 from .remote_background import _handle_background, _handle_daemon, _handle_remote
 from .status import (
     _find_runtime_command,
@@ -36,10 +36,10 @@ from .status import (
     _handle_provider,
     _parse_command,
     _sync_effective_provider,
-    buildProviderProfilesReport,
-    buildStatusReport,
-    buildTodosReport,
-    formatUsageBreakdown,
+    build_provider_profiles_report,
+    build_status_report,
+    build_todos_report,
+    format_usage_breakdown,
 )
 from .tasks import _handle_tasks
 from typing import Any, Callable
@@ -51,7 +51,7 @@ def _clear(ctx: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _monitors(ctx: dict[str, Any]) -> dict[str, Any]:
-    return _info(ctx["hooks"], "Monitors", await buildMonitorsReport(ctx["session"]))
+    return _info(ctx["hooks"], "Monitors", await build_monitors_report(ctx["session"]))
 
 
 # One handler per builtin command listed in registry._COMMANDS (a test keeps
@@ -59,20 +59,20 @@ async def _monitors(ctx: dict[str, Any]) -> dict[str, Any]:
 # returns a result dict or an awaitable of one; builtins shadow runtime
 # commands of the same name.
 _HANDLERS: dict[str, Callable[[dict[str, Any]], Any]] = {
-    "help": lambda c: _info(c["hooks"], "Commands", buildSlashHelp({"hooks": c["hooks"], "runtimeCommands": c["runtimeCommands"]})),
+    "help": lambda c: _info(c["hooks"], "Commands", build_slash_help({"hooks": c["hooks"], "runtimeCommands": c["runtimeCommands"]})),
     "exit": lambda c: {"outcome": "exit"},
     "quit": lambda c: {"outcome": "exit"},
     "clear": _clear,
-    "status": lambda c: _info(c["hooks"], "Status", buildStatusReport(c["session"], c["config"])),
-    "providers": lambda c: _info(c["hooks"], "Providers", buildProviderProfilesReport(c["session"], c["config"])),
+    "status": lambda c: _info(c["hooks"], "Status", build_status_report(c["session"], c["config"])),
+    "providers": lambda c: _info(c["hooks"], "Providers", build_provider_profiles_report(c["session"], c["config"])),
     "provider": lambda c: _handle_provider(c["argText"], c["session"], c["config"], c["hooks"]),
     "model": lambda c: _handle_model(c["argText"], c["session"], c["config"], c["hooks"]),
     "effort": lambda c: _handle_effort(c["argText"], c["session"], c["config"], c["hooks"]),
     "permissions": lambda c: _handle_permissions(c["argText"], c["session"], c["config"], c["hooks"]),
-    "todos": lambda c: _info(c["hooks"], "Todos", buildTodosReport(c["session"])),
+    "todos": lambda c: _info(c["hooks"], "Todos", build_todos_report(c["session"])),
     "memory": lambda c: _handle_memory(c["argText"], c["session"], c["hooks"]),
     "extensions": lambda c: _handle_extensions(c["hooks"]),
-    "cost": lambda c: _info(c["hooks"], "Usage", formatUsageBreakdown(c["session"].get("metadata", {}).get("usage"))),
+    "cost": lambda c: _info(c["hooks"], "Usage", format_usage_breakdown(c["session"].get("metadata", {}).get("usage"))),
     "tasks": lambda c: _handle_tasks(c["argText"], c["session"], c["hooks"], c["request"]),
     "agents": lambda c: _handle_agents(c["argText"], c["session"], c["config"], c["hooks"], c["request"]),
     "background": lambda c: _handle_background(c["argText"], c["session"], c["hooks"]),
@@ -95,7 +95,7 @@ _HANDLERS: dict[str, Callable[[dict[str, Any]], Any]] = {
 }
 
 
-async def handleSlashCommand(args: dict[str, Any] | str | None = None, **kwargs: Any) -> dict[str, Any]:
+async def handle_slash_command(args: dict[str, Any] | str | None = None, **kwargs: Any) -> dict[str, Any]:
     if isinstance(args, str):
         args = {"command": args, **kwargs}
     else:

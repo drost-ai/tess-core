@@ -7,7 +7,7 @@ import os
 import sys
 from typing import Any
 
-from ...agent import runAgentPrompt
+from ...agent import run_agent_prompt
 from ...runtime.agent_bindings import create_agent_runtime_bindings
 from ...config import resolve_config
 from ...runtime.generation import create_runtime_session_binding
@@ -37,7 +37,7 @@ async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
         "sessionBinding": create_runtime_session_binding(session["id"], 1, 1),
         "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
     })
-    result = await runAgentPrompt({"session": session, "config": config, "prompt": args["prompt"], "runtime": runtime})
+    result = await run_agent_prompt({"session": session, "config": config, "prompt": args["prompt"], "runtime": runtime})
     await save_session(session)
     return {
         "ok": True,

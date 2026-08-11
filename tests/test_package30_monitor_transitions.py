@@ -105,12 +105,12 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
                 "persist": lambda: calls.__setitem__("persist", calls["persist"] + 1),
                 "refresh": lambda: calls.__setitem__("refresh", calls["refresh"] + 1),
             }
-            run(core.handleSlashCommand({"command": f"/monitor stop {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": f"/monitor stop {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)
             self.assertEqual(calls, {"persist": 0, "refresh": 0})
             self.assertIn("already completed", infos[-1][1])
 
-            run(core.handleSlashCommand({"command": f"/monitor resume {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": f"/monitor resume {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)
             self.assertEqual(calls, {"persist": 0, "refresh": 0})
             self.assertIn("cannot be resumed", infos[-1][1])

@@ -15,7 +15,7 @@ class SessionPersistenceCheckpoint:
     bodyCommitId: str | None
 
 
-class _TrackedDict(dict):
+class _tracked_dict(dict):
     def __init__(self, values: Mapping[str, Any], dirty: _DirtyCallback):
         self._dirty = dirty
         dict.__init__(self, values)
@@ -23,7 +23,7 @@ class _TrackedDict(dict):
     def _materialize(self, key: Any) -> Any:
         value = dict.__getitem__(self, key)
         if isinstance(value, (dict, list)) and not isinstance(
-            value, (_TrackedDict, _TrackedList)
+            value, (_tracked_dict, _tracked_list)
         ):
             value = _track_nested(value, self._dirty)
             dict.__setitem__(self, key, value)
@@ -95,7 +95,7 @@ class _TrackedDict(dict):
         return result
 
 
-class _TrackedList(list):
+class _tracked_list(list):
     def __init__(self, values: Iterable[Any], dirty: _DirtyCallback):
         self._dirty = dirty
         list.__init__(self, values)
@@ -103,7 +103,7 @@ class _TrackedList(list):
     def _materialize(self, index: int) -> Any:
         value = list.__getitem__(self, index)
         if isinstance(value, (dict, list)) and not isinstance(
-            value, (_TrackedDict, _TrackedList)
+            value, (_tracked_dict, _tracked_list)
         ):
             value = _track_nested(value, self._dirty)
             list.__setitem__(self, index, value)
@@ -279,7 +279,7 @@ class SessionMessageList(list):
             self,
             [
                 copy.deepcopy(value)
-                if isinstance(value, (_TrackedDict, _TrackedList))
+                if isinstance(value, (_tracked_dict, _tracked_list))
                 else value
                 for value in values
             ],
@@ -287,8 +287,8 @@ class SessionMessageList(list):
 
     def _materialize(self, index: int) -> Any:
         value = list.__getitem__(self, index)
-        if isinstance(value, dict) and not isinstance(value, _TrackedDict):
-            value = _TrackedDict(value, self._callback(index))
+        if isinstance(value, dict) and not isinstance(value, _tracked_dict):
+            value = _tracked_dict(value, self._callback(index))
             list.__setitem__(self, index, value)
         return value
 
@@ -434,9 +434,9 @@ def replace_session_messages_with_persisted_canonical(
 
 def _track_nested(value: Any, dirty: _DirtyCallback) -> Any:
     if isinstance(value, dict):
-        return _TrackedDict(value, dirty)
+        return _tracked_dict(value, dirty)
     if isinstance(value, list):
-        return _TrackedList(value, dirty)
+        return _tracked_list(value, dirty)
     return value
 
 

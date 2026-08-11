@@ -14,7 +14,7 @@ from ..storage.message_history import create_session_message_list as _create_ses
 
 
 @_dataclass(frozen=True)
-class _SessionRollbackRecord:
+class _session_rollback_record:
     messageWatermark: int
     messageSource: list[dict[str, Any]]
     frozenMessages: tuple[dict[str, Any], ...]
@@ -23,8 +23,8 @@ class _SessionRollbackRecord:
 
 def _capture_session_rollback(
     session: dict[str, Any],
-    previous: _SessionRollbackRecord | None = None,
-) -> _SessionRollbackRecord:
+    previous: _session_rollback_record | None = None,
+) -> _session_rollback_record:
     """Capture an owned rollback authority with incremental message copying.
 
     The first boundary of a turn owns a deep copy of the current history.
@@ -47,7 +47,7 @@ def _capture_session_rollback(
         if can_extend and previous is not None
         else tuple(copy.deepcopy(messages))
     )
-    return _SessionRollbackRecord(
+    return _session_rollback_record(
         messageWatermark=len(messages),
         messageSource=messages,
         frozenMessages=frozen_messages,
@@ -55,7 +55,7 @@ def _capture_session_rollback(
     )
 
 
-def _materialize_rollback_snapshot(record: _SessionRollbackRecord) -> dict[str, Any]:
+def _materialize_rollback_snapshot(record: _session_rollback_record) -> dict[str, Any]:
     if len(record.frozenMessages) != record.messageWatermark:
         raise RuntimeError("Rollback message authority does not match its stable watermark.")
     snapshot = copy.deepcopy(record.head)
@@ -99,9 +99,9 @@ def _signal_reason(signal: Any) -> Any:
 
 def _restore_session_state(
     session: dict[str, Any],
-    snapshot: dict[str, Any] | _SessionRollbackRecord,
+    snapshot: dict[str, Any] | _session_rollback_record,
 ) -> None:
-    if isinstance(snapshot, _SessionRollbackRecord):
+    if isinstance(snapshot, _session_rollback_record):
         snapshot = _materialize_rollback_snapshot(snapshot)
     preserved_permission_mode = session.get("permissionMode")
     live_metadata = session.get("metadata") or {}

@@ -7,7 +7,7 @@ import os
 import sys
 from typing import Any
 
-from ...agent import runAgentPrompt
+from ...agent import run_agent_prompt
 from ...authority.agent import assert_matching_persisted_child_authorities, enforce_session_agent_authority
 from ...runtime.agent_bindings import create_agent_runtime_bindings
 from ...config import resolve_config
@@ -83,7 +83,7 @@ async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[st
 
 async def _execute_background_subagent(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     session, config, runtime = await _prepare_worker(args)
-    result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
+    result = await run_agent_prompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
     payload = {"ok": True, "session_id": session["id"], "agent_id": args["agentId"], "task_id": args["taskId"], "result": {"text": result.get("text"), "stopReason": result.get("stopReason"), "toolCount": result.get("toolCount"), "usage": result.get("usage")}}
     return session, result, payload
 
@@ -104,7 +104,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     session, config, runtime = await _prepare_worker(args)
     task_id, agent_id = args["taskId"], args["agentId"]
     await _mark_resident_status(task_id, agent_id, "running", None)
-    result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
+    result = await run_agent_prompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
     await save_session(session)
     await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=[])
     turn_index = 1
@@ -123,7 +123,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
         try:
             # The turn's boundary drain claims and injects the queued
             # messages; an empty prompt makes them the turn's substance.
-            result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
+            result = await run_agent_prompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
         except Exception as exc:  # stay resident: the parent decides what happens next
             await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": f"[turn failed] {exc}", "metadata": _reply_metadata(trigger_ids)})
             await _mark_resident_status(task_id, agent_id, "awaiting_input", "resident_idle")

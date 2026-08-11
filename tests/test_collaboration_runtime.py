@@ -49,12 +49,12 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                     },
                 )
             )
-            remote = run(core.createRemoteSession({"session": session, "description": "Remote QA", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Remote QA", "channelServers": ["local"]}))
             session["metadata"]["remoteSessionId"] = remote["id"]
             bridge_events = []
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: bridge_events.append((event, data))}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: bridge_events.append((event, data))}))
             session["metadata"]["bridgeId"] = bridge_runtime["bridge"]["id"]
-            message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please review", "source": "remote"}))
+            message = run(core.send_bridge_message({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please review", "source": "remote"}))
             self.assertEqual(message["source"], "remote")
             bridge = run(core.load_bridge(bridge_runtime["bridge"]["id"]))
             self.assertEqual(bridge["pendingMessages"], 1)
@@ -62,7 +62,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             remote_after_message = run(core.load_remote_session(remote["id"]))
             self.assertEqual(remote_after_message["status"], "awaiting_input")
             self.assertEqual(remote_after_message["unreadBridgeMessages"], 1)
-            self.assertIn("bridge.message.queued", run(core.formatBridgeTail(bridge["id"])))
+            self.assertIn("bridge.message.queued", run(core.format_bridge_tail(bridge["id"])))
 
             events = []
             runtime = run(core.create_collaboration_runtime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data))}))
@@ -245,8 +245,8 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="bypassPermissions",
             )
-            remote = run(core.createRemoteSession({"session": session_b, "description": "Set-session remote", "channelServers": ["local"]}))
-            remote = run(core.updateRemoteSession(remote["id"], {"status": "active", "lastEventSummary": "Remote attached"}))
+            remote = run(core.create_remote_session({"session": session_b, "description": "Set-session remote", "channelServers": ["local"]}))
+            remote = run(core.update_remote_session(remote["id"], {"status": "active", "lastEventSummary": "Remote attached"}))
             session_b["metadata"]["remoteSessionId"] = remote["id"]
 
             events = []

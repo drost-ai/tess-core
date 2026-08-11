@@ -14,15 +14,15 @@ from .protocol import (
     DAEMON_PROTOCOL_VERSION,
     DaemonLineDecoder,
     DaemonProtocolError,
-    encodeDaemonFrame,
-    isDaemonAuthResponse,
-    isDaemonEventMessage,
-    isDaemonResponse,
-    parseDaemonFrame,
-    resolveDaemonAuthTimeoutMs,
-    resolveDaemonRpcTimeoutMs,
+    encode_daemon_frame,
+    is_daemon_auth_response,
+    is_daemon_event_message,
+    is_daemon_response,
+    parse_daemon_frame,
+    resolve_daemon_auth_timeout_ms,
+    resolve_daemon_rpc_timeout_ms,
 )
-from .transport import openAuthenticatedDaemonConnection, readOneDaemonFrame
+from .transport import open_authenticated_daemon_connection, read_one_daemon_frame
 
 
 def _create_daemon_client(
@@ -50,7 +50,7 @@ def _create_daemon_client(
             pending_count += 1
         writer: asyncio.StreamWriter | None = None
         try:
-            reader, writer = await openAuthenticatedDaemonConnection(
+            reader, writer = await open_authenticated_daemon_connection(
                 socket_path,
                 auth["token"],
                 state["epoch"],
@@ -60,16 +60,16 @@ def _create_daemon_client(
                     raise RuntimeError("Daemon connection is closed")
                 active_writers[request_id] = writer
             writer.write(
-                encodeDaemonFrame(
+                encode_daemon_frame(
                     {"id": request_id, "method": method, "params": params or {}},
                     DAEMON_MAX_REQUEST_FRAME_BYTES,
                 )
             )
             await writer.drain()
             decoder = DaemonLineDecoder(DAEMON_MAX_RESPONSE_FRAME_BYTES)
-            timeout_ms = resolveDaemonRpcTimeoutMs()
+            timeout_ms = resolve_daemon_rpc_timeout_ms()
             try:
-                response = await readOneDaemonFrame(
+                response = await read_one_daemon_frame(
                     reader,
                     decoder,
                     timeout_ms / 1000,
@@ -79,7 +79,7 @@ def _create_daemon_client(
                     "daemon.request_timeout",
                     f"Daemon RPC '{method}' timed out after {timeout_ms}ms.",
                 ) from error
-            if not isDaemonResponse(response) or response.get("id") != request_id:
+            if not is_daemon_response(response) or response.get("id") != request_id:
                 raise DaemonProtocolError(
                     "daemon.frame_malformed",
                     "Daemon returned an invalid response envelope.",
@@ -96,17 +96,17 @@ def _create_daemon_client(
                 with contextlib.suppress(Exception):
                     await writer.wait_closed()
 
-    async def start_background_command(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
-        return await request("startBackgroundCommand", {**(task_args or {}), **task_kwargs})
+    async def start_background_command(task_args: dict[str, Any] | None = None) -> dict[str, Any]:
+        return await request("startBackgroundCommand", dict(task_args or {}))
 
-    async def start_main_session_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
-        return await request("startMainSessionTask", {**(task_args or {}), **task_kwargs})
+    async def start_main_session_task(task_args: dict[str, Any] | None = None) -> dict[str, Any]:
+        return await request("startMainSessionTask", dict(task_args or {}))
 
-    async def start_subagent_task(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
-        return await request("startSubagentTask", {**(task_args or {}), **task_kwargs})
+    async def start_subagent_task(task_args: dict[str, Any] | None = None) -> dict[str, Any]:
+        return await request("startSubagentTask", dict(task_args or {}))
 
-    async def start_health_check(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
-        return await request("startHealthCheck", {**(task_args or {}), **task_kwargs})
+    async def start_health_check(task_args: dict[str, Any] | None = None) -> dict[str, Any]:
+        return await request("startHealthCheck", dict(task_args or {}))
 
     async def list_tasks(session_id: str | None = None) -> list[dict[str, Any]]:
         return await request("listTasks", {"sessionId": session_id})
@@ -153,7 +153,7 @@ def _create_daemon_client(
             daemon=True,
         )
         thread.start()
-        ready = ready_event.wait(timeout=(resolveDaemonAuthTimeoutMs() / 1000) + 1)
+        ready = ready_event.wait(timeout=(resolve_daemon_auth_timeout_ms() / 1000) + 1)
         if not ready:
             stop_event.set()
             sock = socket_ref.get("socket")
@@ -266,16 +266,16 @@ def _subscription_worker(
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         socket_ref["socket"] = sock
-        sock.settimeout(resolveDaemonAuthTimeoutMs() / 1000)
+        sock.settimeout(resolve_daemon_auth_timeout_ms() / 1000)
         sock.connect(socket_path)
         sock.sendall(
-            encodeDaemonFrame(
+            encode_daemon_frame(
                 {"type": "auth", "protocolVersion": DAEMON_PROTOCOL_VERSION, "token": token},
                 DAEMON_MAX_REQUEST_FRAME_BYTES,
             )
         )
         auth_response = _recv_one_sync(sock, decoder, stop_event)
-        if not isDaemonAuthResponse(auth_response) or auth_response.get("epoch") != epoch:
+        if not is_daemon_auth_response(auth_response) or auth_response.get("epoch") != epoch:
             raise DaemonProtocolError("daemon.auth_failed", "Daemon authentication failed.")
         params: dict[str, Any] = {}
         if session_id:
@@ -284,7 +284,7 @@ def _subscription_worker(
             params["afterCursor"] = after_cursor
         request_id = str(uuid.uuid4())
         sock.sendall(
-            encodeDaemonFrame(
+            encode_daemon_frame(
                 {"id": request_id, "method": "subscribe", "params": params},
                 DAEMON_MAX_REQUEST_FRAME_BYTES,
             )
@@ -304,9 +304,9 @@ def _subscription_worker(
             for frame in decoder.push(chunk):
                 if not frame:
                     continue
-                payload = parseDaemonFrame(frame)
+                payload = parse_daemon_frame(frame)
                 if not saw_ack:
-                    if not isDaemonResponse(payload) or payload.get("id") != request_id or not payload.get("ok"):
+                    if not is_daemon_response(payload) or payload.get("id") != request_id or not payload.get("ok"):
                         raise DaemonProtocolError(
                             "daemon.frame_malformed",
                             "Daemon returned an invalid subscription response.",
@@ -314,7 +314,7 @@ def _subscription_worker(
                     saw_ack = True
                     ready_event.set()
                     continue
-                if isDaemonEventMessage(payload):
+                if is_daemon_event_message(payload):
                     _invoke_subscription_listener(listener, payload["record"])
     except Exception as error:
         error_ref["error"] = error
@@ -343,7 +343,7 @@ def _recv_one_sync(
                     "daemon.frame_malformed",
                     "Daemon sent data beyond its authentication response.",
                 )
-            return parseDaemonFrame(frames[0])
+            return parse_daemon_frame(frames[0])
     raise RuntimeError("Daemon subscription stopped during authentication.")
 
 

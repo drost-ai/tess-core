@@ -25,7 +25,7 @@ class BridgeRecoveryAnalysisError(RuntimeError):
     code = "bridge.recovery_source_unavailable"
 
 
-async def analyzeBridgeRecovery(
+async def analyze_bridge_recovery(
     sessionId: str,
     recoveryRevision: int,
     *,
@@ -435,7 +435,7 @@ def _is_timestamp(value: Any) -> bool:
         return False
 
 
-async def verifyBridgeRecoverySourceFiles(sources: list[dict[str, Any]]) -> None:
+async def verify_bridge_recovery_source_files(sources: list[dict[str, Any]]) -> None:
     for source in sources:
         path = Path(source["path"])
         try:
@@ -448,6 +448,6 @@ async def verifyBridgeRecoverySourceFiles(sources: list[dict[str, Any]]) -> None
 
 
 __all__ = [
-    "BridgeRecoveryAnalysisError", "analyzeBridgeRecovery",
-    "verifyBridgeRecoverySourceFiles",
+    "BridgeRecoveryAnalysisError", "analyze_bridge_recovery",
+    "verify_bridge_recovery_source_files",
 ]

@@ -27,7 +27,7 @@ class McpTransportError(RuntimeError):
         self.code = code
 
 
-def resolveMcpTransportPolicy(config: dict[str, Any] | None = None) -> dict[str, int]:
+def resolve_mcp_transport_policy(config: dict[str, Any] | None = None) -> dict[str, int]:
     values = config or {}
     return {
         "startupTimeoutMs": _positive_timeout(

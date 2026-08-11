@@ -43,8 +43,8 @@ from ...providers._knob_reader import provider_knob as _provider_knob
 from ...providers.usage_costs import merge_provider_usage as _merge_provider_usage
 
 
-async def run_compaction(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_compaction(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session = args["session"]
     config = args.get("config") or {}
     runtime = args.get("runtime") or {}

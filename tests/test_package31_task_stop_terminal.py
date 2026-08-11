@@ -169,7 +169,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                     *(supervisor["stopTask"](task_id) for _ in range(50))
                 )
 
-            with mock.patch.object(supervisor_stop_module, "signalOwnedProcess", signal_stub), mock.patch.object(process_termination_module, "signalOwnedProcess", signal_stub):
+            with mock.patch.object(supervisor_stop_module, "signal_owned_process", signal_stub), mock.patch.object(process_termination_module, "signal_owned_process", signal_stub):
                 results = run(stop_many())
             self.assertEqual(sum(bool(result and result["changed"]) for result in results), 1)
             self.assertTrue(all(result and result["status"] == "stopped" for result in results))
@@ -469,7 +469,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 "agent_core.tools.tasks._ensure_tool_permission",
                 new=mock.AsyncMock(),
             ) as permission, mock.patch(
-                "agent_core.tools.tasks.signalOwnedProcess",
+                "agent_core.tools.tasks.signal_owned_process",
                 new=mock.AsyncMock(),
             ) as signal_process:
                 payload = json.loads(run(tool.handler({"task_id": task_id}, context))["content"])

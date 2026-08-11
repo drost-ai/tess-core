@@ -13,8 +13,8 @@ from pathlib import Path
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
 from agent_core.process.owned_launch import (
-    activateOwnedProcessRunner,
-    createOwnedProcessActivation,
+    activate_owned_process_runner,
+    create_owned_process_activation,
 )
 
 
@@ -42,7 +42,7 @@ def _crashing_launch_worker(
 
     async def scenario() -> None:
         await core.ensure_base_layout(workspace)
-        reservation = core.createTaskLaunchReservation(
+        reservation = core.create_task_launch_reservation(
             taskId=task_id,
             sessionId=session_id,
             kind="background_command",
@@ -83,7 +83,7 @@ def _crashing_launch_worker(
             "owner": "daemon",
             "launchReservation": reservation,
         }
-        activation = createOwnedProcessActivation(
+        activation = create_owned_process_activation(
             [sys.executable, "-c", "import time; time.sleep(30)"]
         )
         holder: dict[str, subprocess.Popen[bytes]] = {}
@@ -121,7 +121,7 @@ def _crashing_launch_worker(
             return process
 
         async def capture(args):
-            identity = await core.captureOwnedProcessIdentity(args)
+            identity = await core.capture_owned_process_identity(args)
             (state_path / f"{task_id}.identity.json").write_text(
                 json.dumps(identity, sort_keys=True),
                 encoding="utf-8",
@@ -131,7 +131,7 @@ def _crashing_launch_worker(
             return identity
 
         async def attach(identity: dict) -> None:
-            attached = core.attachTaskLaunchReservation(reservation)
+            attached = core.attach_task_launch_reservation(reservation)
             await core.write_task_meta(
                 task_id,
                 {
@@ -157,7 +157,7 @@ def _crashing_launch_worker(
             )
             if boundary == "after_attach":
                 os._exit(_CRASH_EXIT)
-            activateOwnedProcessRunner(
+            activate_owned_process_runner(
                 holder["process"],
                 activation["activationToken"],
             )
@@ -165,7 +165,7 @@ def _crashing_launch_worker(
                 os._exit(_CRASH_EXIT)
 
         async def fail(error: object) -> None:
-            failed = core.failTaskLaunchReservation(reservation, error)
+            failed = core.fail_task_launch_reservation(reservation, error)
             await core.write_task_meta(
                 task_id,
                 {
@@ -190,7 +190,7 @@ def _crashing_launch_worker(
                 }
             )
 
-        await core.launchReservedProcess(
+        await core.launch_reserved_process(
             reservation=reservation,
             expectedArgv=activation["argv"],
             reserve=reserve,
@@ -275,14 +275,14 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
                 start_new_session=True,
             )
             sentinel_identity = run(
-                core.captureOwnedProcessIdentity(
+                core.capture_owned_process_identity(
                     pid=sentinel.pid,
                     expectedArgv=[sys.executable, "-c", "import time; time.sleep(30)"],
                 )
             )
             stale_identity = {**sentinel_identity, "startToken": f"{sentinel_identity['startToken']}:stale"}
             sentinel_task = "p01-reused-pid-sentinel"
-            sentinel_reservation = core.createTaskLaunchReservation(
+            sentinel_reservation = core.create_task_launch_reservation(
                 taskId=sentinel_task,
                 sessionId=session["id"],
                 kind="background_command",
@@ -373,7 +373,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
                 run(supervisor["close"]())
             if sentinel_identity is not None and sentinel is not None and sentinel.poll() is None:
                 try:
-                    run(core.signalOwnedProcess(sentinel_identity, signal.SIGTERM))
+                    run(core.signal_owned_process(sentinel_identity, signal.SIGTERM))
                 except Exception:
                     sentinel.terminate()
                 sentinel.wait(timeout=5)

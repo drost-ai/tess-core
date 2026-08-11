@@ -10,15 +10,15 @@ from .common import (
     _persist,
     _short_id,
     _split_subcommand,
-    squashWhitespace,
-    truncateAscii,
+    squash_whitespace,
+    truncate_ascii,
 )
-from .status import compactModelName
+from .status import compact_model_name
 from .tasks import _close_task_supervisor_if_needed, _resolve_task_supervisor
 from typing import Any
 
 
-async def buildAgentsReport(session: dict[str, Any], arg_text: str = "") -> str:
+async def build_agents_report(session: dict[str, Any], arg_text: str = "") -> str:
     return await _build_agents_report(session, {}, arg_text)
 
 
@@ -41,7 +41,7 @@ async def _handle_agents(
         if not record:
             return _error(hooks, f"No child agent matched: {query}")
         if subcommand == "inspect":
-            return _info(hooks, "Agent", formatChildAgentRecord(record))
+            return _info(hooks, "Agent", format_child_agent_record(record))
         if subcommand == "attach":
             request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
             if not callable(request_resume):
@@ -120,7 +120,7 @@ async def _build_agents_report(session: dict[str, Any], config: dict[str, Any], 
         if normalized in {"running", "active"}:
             return "No active child agents for this session."
         return f"No child agents matched: {arg_text}"
-    return "\n\n".join(formatChildAgentRecord(record) for record in visible[:12])
+    return "\n\n".join(format_child_agent_record(record) for record in visible[:12])
 
 
 def _format_configured_agents(agents: dict[str, Any]) -> str:
@@ -159,14 +159,14 @@ def _matches_agent_query(record: dict[str, Any], query: str) -> bool:
     )
 
 
-def formatChildAgentRecord(record: dict[str, Any]) -> str:
+def format_child_agent_record(record: dict[str, Any]) -> str:
     label = record.get("name") or record.get("agentType") or record.get("agentId")
     mode = "bg" if record.get("runInBackground") else "fg"
     worktree = " worktree" if record.get("isolation") == "worktree" else ""
     detail = [
         str(record.get("status")),
         f"{mode}{worktree}",
-        compactModelName(str(record.get("model") or "")),
+        compact_model_name(str(record.get("model") or "")),
         str(record.get("startedAt") or "")[:19].replace("T", " "),
     ]
     lines = [
@@ -200,7 +200,7 @@ def formatChildAgentRecord(record: dict[str, Any]) -> str:
     ]:
         value = record.get(key)
         if value:
-            lines.append(f"{label_name:<12} {truncateAscii(squashWhitespace(value), limit)}")
+            lines.append(f"{label_name:<12} {truncate_ascii(squash_whitespace(value), limit)}")
     if record.get("retryable") is not None or record.get("stoppable") is not None:
         lines.append(
             f"controls     retry {'yes' if record.get('retryable') else 'no'} - stop {'yes' if record.get('stoppable') else 'no'}"

@@ -8,7 +8,7 @@ from typing import Any
 from .http_body import _close_http_response
 from .transport_policy import McpTransportError
 
-class _HttpExchange:
+class _http_exchange:
     def __init__(self, owner: "HttpMcpClient") -> None:
         self.owner = owner
         self.lock = threading.Lock()

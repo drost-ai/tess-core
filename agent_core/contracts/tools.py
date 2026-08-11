@@ -11,11 +11,11 @@ from __future__ import annotations
 from typing import Any, Literal, TypedDict
 
 
-class _ToolResultRequired(TypedDict):
+class _tool_result_required(TypedDict):
     content: str
 
 
-class ToolResult(_ToolResultRequired, total=False):
+class ToolResult(_tool_result_required, total=False):
     """The envelope every tool handler returns to the agent loop."""
 
     isError: bool
@@ -39,7 +39,7 @@ PayloadStrategy = Literal[
 ]
 
 
-class _ToolArtifactRefRequired(TypedDict):
+class _tool_artifact_ref_required(TypedDict):
     artifactId: str
     toolName: str
     sessionId: str
@@ -50,7 +50,7 @@ class _ToolArtifactRefRequired(TypedDict):
     createdAt: str
 
 
-class ToolArtifactRef(_ToolArtifactRefRequired, total=False):
+class ToolArtifactRef(_tool_artifact_ref_required, total=False):
     """Persisted artifact reference for large tool outputs (payloads/tools.py)."""
 
     taskId: str
@@ -58,7 +58,7 @@ class ToolArtifactRef(_ToolArtifactRefRequired, total=False):
     contentType: str
 
 
-class _ToolPayloadManifestRequired(TypedDict):
+class _tool_payload_manifest_required(TypedDict):
     strategy: str
     truncated: bool
     originalBytes: int
@@ -67,7 +67,7 @@ class _ToolPayloadManifestRequired(TypedDict):
     returnedLines: int
 
 
-class ToolPayloadManifest(_ToolPayloadManifestRequired, total=False):
+class ToolPayloadManifest(_tool_payload_manifest_required, total=False):
     """Manifest describing how a large tool output was excerpted."""
 
     artifact: ToolArtifactRef
@@ -93,14 +93,14 @@ class ActivityDescriptor(TypedDict, total=False):
     metadata: dict[str, Any]
 
 
-class _ExecutionDescriptorRequired(TypedDict):
+class _execution_descriptor_required(TypedDict):
     id: str
     kind: str        # "task" | "tool" | "workspace"
     title: str
     status: str
 
 
-class ExecutionDescriptor(_ExecutionDescriptorRequired, total=False):
+class ExecutionDescriptor(_execution_descriptor_required, total=False):
     """Execution descriptor attached under a tool result's ``meta.execution``."""
 
     cwd: str

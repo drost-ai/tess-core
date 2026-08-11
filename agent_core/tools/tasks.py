@@ -26,7 +26,7 @@ from ..tasks.monitor_transactions import (
     start_monitor_once,
 )
 from ..tasks.monitors import create_monitor_record, default_monitor_check_interval_ms, default_monitor_heartbeat_interval_ms
-from ..process.identity import processIdentityFromRecord, signalOwnedProcess
+from ..process.identity import process_identity_from_record, signal_owned_process
 from ..tasks.terminal_store import clear_prepared_task_stop, commit_prepared_task_stop, prepare_task_stop
 from ..storage import list_session_monitors, load_monitor, read_task_meta, save_monitor, task_output_path
 from ..tasks.ownership import require_model_owned_monitor, require_model_owned_task
@@ -185,7 +185,7 @@ def _task_stop_tool() -> ToolDefinition:
             return {"content": pretty_json(_task_stop_content(task_id, stopped))}
         owned = await require_model_owned_task(context, task_id, "stop")
         meta = owned["meta"]
-        identity = processIdentityFromRecord(owned.get("record"), meta)
+        identity = process_identity_from_record(owned.get("record"), meta)
         await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id} (pid {identity['pid']})")
         prepared = await prepare_task_stop(task_id, "SIGTERM", "tool")
         if not prepared:
@@ -199,7 +199,7 @@ def _task_stop_tool() -> ToolDefinition:
                 f"Task stop preparation did not capture an owned process: {task_id}"
             )
         try:
-            await signalOwnedProcess(prepared_identity, signal.SIGTERM)
+            await signal_owned_process(prepared_identity, signal.SIGTERM)
         except Exception:
             with contextlib.suppress(Exception):
                 await clear_prepared_task_stop(task_id, transition_id)

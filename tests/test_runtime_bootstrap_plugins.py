@@ -43,7 +43,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            remote = run(core.createRemoteSession({"session": session, "description": "Bridge parity", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Bridge parity", "channelServers": ["local"]}))
             session["metadata"]["remoteControlEnabled"] = True
             session["metadata"]["remoteSessionId"] = remote["id"]
             dynamic_tool = SimpleNamespace(name="RemoteEcho")
@@ -174,7 +174,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             hooks = {"info": lambda title, message: infos.append((title, message)), "error": errors.append}
             with mock.patch.dict(os.environ, {"HOME": str(home)}):
                 shell_result = run(
-                    core.handleSlashCommand(
+                    core.handle_slash_command(
                         {
                             "command": "/hello world",
                             "session": session,
@@ -189,7 +189,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             self.assertEqual(infos[-1], ("Plugin alpha", f"cmd:world:{session['id']}"))
 
             entry_result = run(
-                core.handleSlashCommand(
+                core.handle_slash_command(
                     {
                         "command": "/entrycmd payload",
                         "session": session,
@@ -341,7 +341,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 captured.update(args)
                 return {"createToolDefinitions": lambda: [SimpleNamespace(name="McpFromPlugin")], "close": lambda: None}
 
-            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp):
+            with mock.patch.object(mcp_module, "create_mcp_runtime", fake_mcp):
                 boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False}))
                 tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
                 command_names = [command["name"] for command in boot["slashCommands"]]
@@ -395,7 +395,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="default",
             )
-            remote = run(core.createRemoteSession({"session": session, "description": "Daemon bridge", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Daemon bridge", "channelServers": ["local"]}))
             session["metadata"]["remoteControlEnabled"] = True
             session["metadata"]["remoteSessionId"] = remote["id"]
             session["metadata"]["bridgeId"] = "bridge-daemon-compose"
@@ -446,9 +446,9 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 "close": lambda: close_order.append("daemon"),
             }
 
-            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+            with mock.patch.object(mcp_module, "create_mcp_runtime", fake_mcp), mock.patch.object(
                 bridge_runtime_module,
-                "createBridgeRuntime",
+                "create_bridge_runtime",
                 fake_bridge,
             ):
                 boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))

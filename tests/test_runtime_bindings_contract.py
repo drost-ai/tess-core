@@ -89,7 +89,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
                 with self.subTest(label=label):
                     with self.assertRaises(core.RuntimeBindingsCompatibilityError) as raised:
                         run(
-                            core.runAgentPrompt(
+                            core.run_agent_prompt(
                                 session=session,
                                 config=config,
                                 runtime=runtime,
@@ -146,7 +146,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
                 }
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime={**bindings},

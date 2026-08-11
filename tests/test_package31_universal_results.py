@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.process.bash_lifecycle import _process_group_live, runInlineShellCommand
+from agent_core.process.bash_lifecycle import _process_group_live, run_inline_shell_command
 from agent_core.payloads.bash_results import build_bash_result_payload
-from agent_core.process.output import createSubprocessOutputCollector
+from agent_core.process.output import create_subprocess_output_collector
 from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guard_tool_call_result,
@@ -154,7 +154,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                 }
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(
@@ -209,7 +209,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                 async def fail_metadata(_path, _value):
                     raise RuntimeError("unbounded secret storage path must not escape")
 
-                collector = await createSubprocessOutputCollector(
+                collector = await create_subprocess_output_collector(
                     sessionId="artifact-fault-session",
                     toolName="Bash",
                     family="bash",
@@ -217,7 +217,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                     maxRingBytes=2 * 1024,
                     metadataWriter=fail_metadata,
                 )
-                captured = await runInlineShellCommand(
+                captured = await run_inline_shell_command(
                     shell="/bin/sh",
                     command="printf 'once\\n' >> marker.txt; head -c 131072 /dev/zero | tr '\\0' x",
                     cwd=str(workspace),
@@ -259,7 +259,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             spool_limit = 32 * 1024
             ring_limit = 2 * 1024
             captured = run(
-                runInlineShellCommand(
+                run_inline_shell_command(
                     shell="/bin/sh",
                     command=(
                         "printf 'once\\n' >> marker.txt; "

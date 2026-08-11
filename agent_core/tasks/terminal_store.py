@@ -4,7 +4,7 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..process.identity import ProcessIdentityError, processIdentityFromRecord
+from ..process.identity import ProcessIdentityError, process_identity_from_record
 from ..storage import (
     load_health_check_task,
     load_task_record,
@@ -72,7 +72,7 @@ async def prepare_task_stop(
             }
         identity_error: str | None = None
         try:
-            identity = processIdentityFromRecord(record, meta)
+            identity = process_identity_from_record(record, meta)
         except ProcessIdentityError as exc:
             # No owned process is durably attached (launch window, or a
             # legacy record). Raising here left the task unstoppable until

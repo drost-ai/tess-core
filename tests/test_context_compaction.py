@@ -384,7 +384,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                 return SimpleNamespace()
             agent_context_module.measure_request_input_tokens = fake_measure
             agent_checkpoints_module.run_compaction = fake_run_compaction
-            result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}), prompt="continue", providerOverride={"send": send}))
+            result = run(core.run_agent_prompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "done")
             self.assertEqual(len(compaction_calls), 1)
@@ -440,7 +440,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                 }
 
             agent_checkpoints_module.run_compaction = fake_run_compaction
-            result = run(agent_context_module.maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}}))
+            result = run(agent_context_module.maybe_auto_checkpoint_raw_session({"session": session, "config": config, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}}))
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(len(compaction_calls), 1)

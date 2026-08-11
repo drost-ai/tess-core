@@ -15,7 +15,7 @@ from typing import Any
 
 from .._utils import pretty_json
 from ..payloads.cursor import fingerprint_payload_source, resolve_payload_cursor
-from ..acquisition.search import buildStreamingSearchFromOutput, runStreamingSearch
+from ..acquisition.search import build_streaming_search_from_output, run_streaming_search
 from ..payloads.search_results import build_streaming_glob_payload, build_streaming_grep_payload
 from ..payloads.tools import (
     apply_default_glob_excludes,
@@ -216,9 +216,9 @@ async def _run_search(search: dict[str, Any] | None, **kwargs: Any) -> dict[str,
     """
     exec_search = (search or {}).get("execSearch")
     if exec_search is None:
-        return await runStreamingSearch(**kwargs)
+        return await run_streaming_search(**kwargs)
     stdout, stderr = await exec_search(kwargs["binary"], kwargs["argv"], cwd=kwargs["cwd"])
-    return await buildStreamingSearchFromOutput(stdout=stdout, stderr=stderr, **kwargs)
+    return await build_streaming_search_from_output(stdout=stdout, stderr=stderr, **kwargs)
 
 
 def _build_search_process_failure(tool_name: str, result: dict[str, Any]) -> ToolResult | None:

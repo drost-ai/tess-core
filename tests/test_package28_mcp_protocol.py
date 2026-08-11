@@ -135,7 +135,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
                 )
 
             with mock.patch.object(mcp_module.runtime, "_connect_state", connect):
-                runtime = await core.createMcpRuntime(
+                runtime = await core.create_mcp_runtime(
                     cwd="/tmp",
                     servers=[{"name": "fake", "transport": "http", "commandOrUrl": "https://example.test/mcp"}],
                     onRuntimeEvent=lambda event, data: events.append((event, data)),

@@ -133,7 +133,7 @@ class Package43AgentLoopSafetyTests(AgentCoreTestCase):
                 )
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=_config(cwd),
                     runtime=bind_test_runtime(

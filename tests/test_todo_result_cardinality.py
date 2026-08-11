@@ -10,7 +10,7 @@ import pytest
 
 import agent_core._facade as core
 from agent_core.payloads.agent_results import finalize_tool_dispatch_result
-from agent_core.shell_surface.status import buildTodosReport
+from agent_core.shell_surface.status import build_todos_report
 from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
     guard_tool_call_result,
@@ -252,7 +252,7 @@ def test_legacy_todo_display_is_bounded_without_mutation(tmp_path):
         for index in range(140)
     ]
     before = copy.deepcopy(session["todos"])
-    report = buildTodosReport(session)
+    report = build_todos_report(session)
     assert "120 omitted (20 of 140 shown)" in report
     assert len(report.encode("utf-8")) < 50_000
     assert session["todos"] == before

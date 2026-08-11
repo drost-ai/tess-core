@@ -165,7 +165,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
 
             with self.assertRaises(core.ProviderRequestError) as raised:
                 run(
-                    core.runAgentPrompt(
+                    core.run_agent_prompt(
                         session=session,
                         config=config,
                         prompt="hello",
@@ -310,7 +310,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             started = time.monotonic()
             with self.assertRaises(core.ProviderRequestError) as raised:
                 run(
-                    core.runAgentPrompt(
+                    core.run_agent_prompt(
                         session=session,
                         config=config,
                         prompt="hello",
@@ -354,7 +354,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
 
             with self.assertRaises(core.ProviderRequestError) as raised:
                 run(
-                    core.runAgentPrompt(
+                    core.run_agent_prompt(
                         session=session,
                         config=config,
                         prompt="hello",

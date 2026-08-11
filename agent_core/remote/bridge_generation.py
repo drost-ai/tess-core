@@ -17,7 +17,7 @@ from ..storage.remote import (
 )
 
 
-async def isCurrentBridgeGeneration(bridge):
+async def is_current_bridge_generation(bridge):
     current = await load_bridge(bridge["id"])
     session = await load_session_record_shallow(bridge["sessionId"])
     remote = await load_remote_session(bridge["remoteSessionId"]) if bridge.get("remoteSessionId") else None
@@ -30,7 +30,7 @@ async def isCurrentBridgeGeneration(bridge):
     )
 
 
-async def closeCurrentBridgeGeneration(bridge, eventName="bridge.closed"):
+async def close_current_bridge_generation(bridge, eventName="bridge.closed"):
     async with with_record_transaction("bridge-session", bridge["sessionId"]):
         current = await load_bridge(bridge["id"])
         if not current or current.get("generation") != bridge.get("generation"):
@@ -81,10 +81,10 @@ def _terminal_remote(status):
     return status in {"completed", "cancelled", "failed", "closed"}
 
 
-__all__ = ["closeCurrentBridgeGeneration", "isCurrentBridgeGeneration"]
+__all__ = ["close_current_bridge_generation", "is_current_bridge_generation"]
 
 
-async def requireBridgeLedger(bridge):
+async def require_bridge_ledger(bridge):
     ledger = await load_bridge_delivery_ledger(bridge["id"])
     if not ledger or ledger.get("sessionId") != bridge["sessionId"] or ledger.get("generation") != bridge.get("generation"):
         raise RuntimeError("Active bridge delivery ledger is missing or generation-mismatched.")

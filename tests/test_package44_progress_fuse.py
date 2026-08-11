@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import patch
 
 import agent_core._facade as core
-from agent_core.agent.progress import LogicalTurnProgressLedger, appendToolResultBatch
+from agent_core.agent.progress import LogicalTurnProgressLedger, append_tool_result_batch
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 
@@ -51,7 +51,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
             }
 
         result = run(
-            core.runAgentPrompt(
+            core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=bind_test_runtime(session, {"tools": [tool]}),
@@ -175,7 +175,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
                 SimpleNamespace(monotonic=lambda: next(clock)),
             ):
                 result = run(
-                    core.runAgentPrompt(
+                    core.run_agent_prompt(
                         session=session,
                         config=config,
                         runtime=bind_test_runtime(session, {"tools": [tool]}),
@@ -304,7 +304,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
             "tool_use_id": "art-1",
             "content": '{"type":"tool_artifact_page","artifactId":"artifact-1","nextOffsetBytes":100,"complete":false}',
         }
-        outcome = appendToolResultBatch(
+        outcome = append_tool_result_batch(
             session=session,
             ledger=ledger,
             logical_turn_id="turn-image-alignment",
@@ -392,7 +392,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
                 raise AssertionError("recovered terminal must not dispatch")
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=restored,
                     config=config,
                     runtime=bind_test_runtime(

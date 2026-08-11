@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .commands import _runner_exec, _runner_which, _safe_realpath, newestMtimeInTree
+from .commands import _runner_exec, _runner_which, _safe_realpath, newest_mtime_in_tree
 from .shared import REPO_ROOT
 
-async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def inspect_install_state(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     runner = args.get("runner") or {}
     repo_root = Path(args.get("repoRoot") or REPO_ROOT)
     pyproject = repo_root / "pyproject.toml"
@@ -44,14 +44,14 @@ async def inspectInstallState(args: dict[str, Any] | None = None, **kwargs: Any)
         "python": True,
     }
 
-async def runRepoInstall(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_repo_install(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     runner = args.get("runner") or {}
     repo_root = str(Path(args.get("repoRoot") or REPO_ROOT))
     target = args.get("target") or "latest"
     if target not in {"latest", "stable", "0.1.0"}:
         raise RuntimeError(f'This repo-backed install flow does not support target "{target}". Use "latest" or "stable".')
-    state = await inspectInstallState(args)
+    state = await inspect_install_state(args)
     steps: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
     python_command = args.get("python") or sys.executable
@@ -63,13 +63,13 @@ async def runRepoInstall(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         actions.append({"type": "exec", "command": python_command, "args": command_args, "cwd": repo_root})
     else:
         steps.append({"step": "link", "status": "skipped", "detail": "`agent-core` is already linked to this checkout."})
-    return {"ok": True, "installState": await inspectInstallState(args), "steps": steps, "actions": actions}
+    return {"ok": True, "installState": await inspect_install_state(args), "steps": steps, "actions": actions}
 
-async def runRepoUpdate(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_repo_update(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     runner = args.get("runner") or {}
     repo_root = str(Path(args.get("repoRoot") or REPO_ROOT))
-    state_before = await inspectInstallState(args)
+    state_before = await inspect_install_state(args)
     steps = []
     upstream_status = "skipped"
     upstream_detail = "No upstream git update was attempted."
@@ -93,16 +93,16 @@ async def runRepoUpdate(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             upstream_detail = "No git upstream is configured for this checkout."
     else:
         upstream_detail = "This checkout is not a git repo with an available git binary."
-    install = await runRepoInstall({**args, "force": False, "target": "latest"})
+    install = await run_repo_install({**args, "force": False, "target": "latest"})
     steps.extend(install.get("steps") or [])
-    state_after = await inspectInstallState(args)
+    state_after = await inspect_install_state(args)
     return {"ok": True, "installStateBefore": state_before, "installStateAfter": state_after, "steps": steps, "upstreamStatus": upstream_status, "upstreamDetail": upstream_detail, "actions": []}
 
 async def _is_dist_stale(source_path: Path, dist_path: Path) -> bool:
-    dist_mtime = await newestMtimeInTree(str(dist_path))
+    dist_mtime = await newest_mtime_in_tree(str(dist_path))
     if not dist_mtime:
         return True
-    source_mtime = await newestMtimeInTree(str(source_path))
+    source_mtime = await newest_mtime_in_tree(str(source_path))
     if not source_mtime:
         return False
     return source_mtime > dist_mtime

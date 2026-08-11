@@ -45,7 +45,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         runtime = None
         try:
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "http", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "http", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
             with self.assertRaises(Exception):
                 run(runtime["callTool"]("http", "echo", {"value": "fail"}))
             status = runtime["listServerStatus"]()[0]
@@ -114,7 +114,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         runtime = None
         try:
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
             tool = runtime["listTools"]()[0]
             self.assertEqual(tool["inputSchema"]["properties"]["value"]["type"], "number")
             self.assertEqual(run(runtime["callTool"]("edge", "zero", {"value": 0}))["content"], "0")
@@ -180,7 +180,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         runtime = None
         try:
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "generated", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "generated", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
             generated_tool = runtime["createToolDefinitions"]()[0]
             # bypassPermissions: this test exercises abort semantics, not the
             # mcp__* permission gate (covered in test_mcp_permission_gate.py).
@@ -261,7 +261,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         runtime = None
         try:
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
             status = runtime["listServerStatus"]()[0]
             self.assertEqual(status["serverCapabilities"], {"tools": {"listChanged": True}, "resources": {"listChanged": True}})
             for variant, message in [
@@ -339,7 +339,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         runtime = None
         try:
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "sse-edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "sse-edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}]}))
             with self.assertRaisesRegex(RuntimeError, "No matching SSE JSON-RPC response was received"):
                 run(runtime["callTool"]("sse-edge", "run", {}))
             status = runtime["listServerStatus"]()[0]
@@ -408,7 +408,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         try:
             url = f"http://127.0.0.1:{server.server_address[1]}/rpc"
             events = []
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}], "registeredChannels": ["edge"], "sessionId": "session-1", "onRuntimeEvent": lambda event, data: events.append((event, data))}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}], "registeredChannels": ["edge"], "sessionId": "session-1", "onRuntimeEvent": lambda event, data: events.append((event, data))}))
             status = runtime["listServerStatus"]()[0]
             self.assertTrue(status["connected"])
             self.assertEqual(status["tools"], 0)
@@ -417,7 +417,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
             run(runtime["close"]())
             mode["tools"] = "server_error"
             events = []
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}], "onRuntimeEvent": lambda event, data: events.append((event, data))}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [{"name": "edge", "transport": "http", "commandOrUrl": url, "updatedAt": "now"}], "onRuntimeEvent": lambda event, data: events.append((event, data))}))
             status = runtime["listServerStatus"]()[0]
             self.assertFalse(status["connected"])
             self.assertEqual(status["state"], "disconnected")
@@ -433,7 +433,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         events = []
         try:
-            runtime = run(core.createMcpRuntime({"cwd": str(workspace), "servers": [], "registeredChannels": ["missing"], "sessionId": "session-1", "onRuntimeEvent": lambda event, data: events.append((event, data))}))
+            runtime = run(core.create_mcp_runtime({"cwd": str(workspace), "servers": [], "registeredChannels": ["missing"], "sessionId": "session-1", "onRuntimeEvent": lambda event, data: events.append((event, data))}))
             self.assertTrue(any(event == "mcp.channel_registration_failed" and data["server"] == "missing" for event, data in events))
             run(runtime["close"]())
         finally:

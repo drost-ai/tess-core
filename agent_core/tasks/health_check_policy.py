@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
-from ..sandbox import prepareSandboxedArgv
+from ..sandbox import prepare_sandboxed_argv
 from ..authority.shell_command_policy import classify_read_only_shell_command
 from ..tools.permissions import _ensure_tool_permission, _get_effective_permission_mode
 
@@ -146,7 +146,7 @@ async def authorize_health_check_spec(
     if spec["mode"] == "command":
         shell_path = os.path.realpath(os.environ.get("SHELL") or ("cmd.exe" if os.name == "nt" else "/bin/sh"))
         base_argv = [shell_path, "-lc", spec["command"]]
-        launch = prepareSandboxedArgv(
+        launch = prepare_sandboxed_argv(
             base_argv,
             config=context.get("config") or {},
             session=context.get("session"),

@@ -141,7 +141,7 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             task_id, agent_id = "task-recycled", "agent-recycled"
             child_argv = [sys.executable, "-c", "import time; time.sleep(30)"]
             victim = subprocess.Popen(child_argv, start_new_session=True)
-            identity = run(core.captureOwnedProcessIdentity(pid=victim.pid, expectedArgv=child_argv))
+            identity = run(core.capture_owned_process_identity(pid=victim.pid, expectedArgv=child_argv))
             victim.kill()
             victim.wait()
             meta = _dead_worker_fixture(str(workspace), task_id, agent_id)

@@ -139,16 +139,16 @@ def resolve_compaction_output_tokens(input: dict[str, Any] | None = None) -> int
     return int(resolve_compaction_policy(input).get("compactionOutputTokens") or _fallback_max_output_tokens())
 
 
-def resolve_compaction_request_output_tokens(args: dict[str, Any] | None = None, **kwargs: Any) -> int:
-    args = {**(args or {}), **kwargs}
+def resolve_compaction_request_output_tokens(args: dict[str, Any] | None = None) -> int:
+    args = dict(args or {})
     policy = resolve_compaction_policy(args.get("profile") or {})
     source_estimate = normalize_positive_integer(args.get("sourceTokenEstimate")) or 0
     preservation_target = math.ceil(source_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
     return min(policy["maxOutputTokens"], max(policy["compactionOutputTokens"], preservation_target))
 
 
-def resolve_provider_profile_token_limits(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, int]:
-    args = {**(args or {}), **kwargs}
+def resolve_provider_profile_token_limits(args: dict[str, Any] | None = None) -> dict[str, int]:
+    args = dict(args or {})
     profile = args.get("profile") or {}
     return resolve_provider_token_limits(
         {
@@ -171,8 +171,8 @@ def resolve_context_token_limit(profile: dict[str, Any] | None = None) -> int:
     return normalize_positive_integer(profile.get("maxContextLength")) or int(provider_knob("provider.max_context_length"))
 
 
-def compute_provider_token_budget(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def compute_provider_token_budget(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     limits = resolve_provider_token_limits(args.get("profile") or {})
     estimated_input_tokens = max(0, math.floor(float(args.get("estimatedInputTokens") or 0)))
     safety_margin = max(

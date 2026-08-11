@@ -9,7 +9,7 @@ from agent_core.mcp.auth import (
     _assert_oauth_url,
     _canonical_resource_uri,
 )
-from agent_core.mcp.token_store import FileMcpTokenStore, mcpTokenStoreKey
+from agent_core.mcp.token_store import FileMcpTokenStore, mcp_token_store_key
 
 
 class _AuthServer:
@@ -140,7 +140,7 @@ class OAuthDiscoveryHardeningTests(AgentCoreTestCase):
             exchange = server.token_requests[-1]
             self.assertEqual(exchange["grant_type"], "authorization_code")
             self.assertEqual(exchange["resource"], f"{server.origin}/mcp")
-            record = run(store.get(mcpTokenStoreKey(runtime.config)))
+            record = run(store.get(mcp_token_store_key(runtime.config)))
             self.assertEqual(record["accessToken"], "token-1")
         finally:
             server.close()

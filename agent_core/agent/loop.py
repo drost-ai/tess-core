@@ -33,9 +33,9 @@ from ..providers.usage_costs import (
 )
 from typing import Any
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit
-from .provider_turn import completeEmptyProviderResponse as _complete_empty_provider_response, requestProviderResponse as _request_provider_response
-from .prompt_content import extractAssistantText as extractAssistantText, normalize_agent_prompt as _normalize_agent_prompt
-from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, appendToolResultBatch as _append_tool_result_batch, noProgressEventData as _no_progress_event_data, noProgressTurnResult as _no_progress_turn_result
+from .provider_turn import complete_empty_provider_response as _complete_empty_provider_response, request_provider_response as _request_provider_response
+from .prompt_content import extract_assistant_text as extract_assistant_text, normalize_agent_prompt as _normalize_agent_prompt
+from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, append_tool_result_batch as _append_tool_result_batch, no_progress_event_data as _no_progress_event_data, no_progress_turn_result as _no_progress_turn_result
 from .stable_boundary import finish_stable_boundary as _finish_stable_boundary
 from ..storage.message_history import replace_session_messages_with_persisted_canonical as _replace_session_messages_with_persisted_canonical
 from .tool_hooks import build_tool_hook_context as _build_tool_hook_context
@@ -45,7 +45,7 @@ from .tool_dispatch import create_serial_queue as _create_serial_queue
 from .tool_dispatch import resolve_tool_concurrency as _resolve_tool_concurrency
 from .tool_dispatch import run_tool_dispatch_batch as _run_tool_dispatch_batch
 from .tool_dispatch import invalid_tool_input_message as _invalid_tool_input_message
-from .tool_context import buildToolContext as _build_tool_context
+from .tool_context import build_tool_context as _build_tool_context
 from .tool_result_budget import ToolResultBatchBudget as _ToolResultBatchBudget
 from .turn_session import (
     resolve_effective_provider_turn_binding as _resolve_effective_provider_turn_binding,
@@ -71,18 +71,18 @@ from ..payloads.attachments import (
     resolve_runtime_provider_capabilities as _resolve_runtime_provider_capabilities,
     strip_in_memory_image_data as _strip_in_memory_image_data,
 )
-async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_agent_prompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
 
     async def run_in_scope(scoped_args: dict[str, Any]) -> dict[str, Any]:
         return await _run_in_provider_turn_session(
             _resolve_effective_provider_turn_binding(scoped_args),
-            _runAgentPromptWithProviderSession,
+            _run_agent_prompt_with_provider_session,
             is_cancelled=_is_turn_cancelled,
         )
 
     return await _run_with_transient_execution_session(values, run_in_scope)
-async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, Any]:
+async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
     paths = get_active_runtime_paths()

@@ -140,7 +140,7 @@ class McpResourceListingIsolationTests(AgentCoreTestCase):
             fixture = _write_slow_start_fixture(workspace)
             pid_log = workspace / "pids.log"
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     {
                         "cwd": str(workspace),
                         "servers": [

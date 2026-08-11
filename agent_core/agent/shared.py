@@ -7,7 +7,7 @@ from typing import Any
 IMAGE_INPUT_UNSUPPORTED_MESSAGE = "This model does not support image inputs."
 
 
-def requestHasImageInputs(request: dict[str, Any]) -> bool:
+def request_has_image_inputs(request: dict[str, Any]) -> bool:
     for message in request.get("messages") or []:
         content = message.get("content") if isinstance(message, dict) else None
         if _content_has_image_input(content):
@@ -15,7 +15,7 @@ def requestHasImageInputs(request: dict[str, Any]) -> bool:
     return False
 
 
-def modelSupportsImageInputs(config: dict[str, Any], model: str) -> bool:
+def model_supports_image_inputs(config: dict[str, Any], model: str) -> bool:
     profile = config.get("providerProfile") or {}
     explicit = _explicit_vision_support(profile)
     if explicit is not None:
@@ -33,7 +33,7 @@ def modelSupportsImageInputs(config: dict[str, Any], model: str) -> bool:
     return _model_name_advertises_vision(normalized_model)
 
 
-def unsupportedImageInputResponse(model: str) -> dict[str, Any]:
+def unsupported_image_input_response(model: str) -> dict[str, Any]:
     return {
         "content": [{"type": "text", "text": IMAGE_INPUT_UNSUPPORTED_MESSAGE}],
         "usage": {"input_tokens": 0, "output_tokens": 0},

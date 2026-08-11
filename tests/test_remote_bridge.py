@@ -9,10 +9,10 @@ class RemoteBridgeTests(AgentCoreTestCase):
         try:
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            remote = run(core.createRemoteSession({"session": session, "description": "Remote inbox QA", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Remote inbox QA", "channelServers": ["local"]}))
             bridge_events = []
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: bridge_events.append((event, data))}))
-            message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please replay", "source": "remote"}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: bridge_events.append((event, data))}))
+            message = run(core.send_bridge_message({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please replay", "source": "remote"}))
 
             delivered = run(bridge_runtime["pollInbox"]())
             self.assertEqual([item["id"] for item in delivered], [message["id"]])
@@ -37,7 +37,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
             self.assertEqual(remote_after_receive["status"], "awaiting_input")
             self.assertEqual(remote_after_receive["bridgeStatus"], "active")
             self.assertIn("Bridge message: please replay", remote_after_receive["lastEventSummary"])
-            self.assertIn("bridge.message.received", run(core.formatBridgeTail(bridge["id"])))
+            self.assertIn("bridge.message.received", run(core.format_bridge_tail(bridge["id"])))
 
             run(bridge_runtime["recordEvent"]("session.completed", {"summary": "finished"}))
             completed_remote = run(core.load_remote_session(remote["id"]))
@@ -65,14 +65,14 @@ class RemoteBridgeTests(AgentCoreTestCase):
         try:
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            remote = run(core.createRemoteSession({"session": session, "description": "Remote restart QA", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Remote restart QA", "channelServers": ["local"]}))
             initial_events = []
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: initial_events.append((event, data))}))
-            first = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "already delivered", "source": "remote"}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: initial_events.append((event, data))}))
+            first = run(core.send_bridge_message({"bridgeId": bridge_runtime["bridge"]["id"], "text": "already delivered", "source": "remote"}))
             run(bridge_runtime["pollInbox"]())
-            second = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "deliver after restart", "source": "remote"}))
+            second = run(core.send_bridge_message({"bridgeId": bridge_runtime["bridge"]["id"], "text": "deliver after restart", "source": "remote"}))
             replay_events = []
-            restarted = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: replay_events.append((event, data))}))
+            restarted = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda event, data: replay_events.append((event, data))}))
             self.assertEqual(replay_events[0][0], "bridge.started")
             self.assertNotEqual(restarted["bridge"]["id"], bridge_runtime["bridge"]["id"])
             self.assertEqual(restarted["generation"], bridge_runtime["generation"] + 1)
@@ -91,7 +91,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
             self.assertEqual(diagnostics["messageCount"], 1)
             self.assertTrue(any(event["event"] == "bridge.started" for event in diagnostics["events"]))
             with self.assertRaisesRegex(RuntimeError, "Bridge not found for reconnect"):
-                run(core.createBridgeRuntime({"session": session, "bridgeId": "missing-bridge", "startPolling": False, "emit": lambda *_: None}))
+                run(core.create_bridge_runtime({"session": session, "bridgeId": "missing-bridge", "startPolling": False, "emit": lambda *_: None}))
             run(restarted["close"]())
         finally:
             self.restore_home(root, previous)
@@ -101,7 +101,7 @@ class RemoteBridgeTests(AgentCoreTestCase):
         try:
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            remote = run(core.createRemoteSession({"session": session, "description": "Remote failure QA", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Remote failure QA", "channelServers": ["local"]}))
             emitted = []
             fail = {"enabled": True}
 
@@ -110,8 +110,8 @@ class RemoteBridgeTests(AgentCoreTestCase):
                 if event == "bridge.message" and fail["enabled"]:
                     raise RuntimeError("emit failed")
 
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": emit}))
-            message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "retry me", "source": "remote"}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": emit}))
+            message = run(core.send_bridge_message({"bridgeId": bridge_runtime["bridge"]["id"], "text": "retry me", "source": "remote"}))
             with self.assertRaisesRegex(RuntimeError, "emit failed"):
                 run(bridge_runtime["pollInbox"]())
             failed_bridge = run(core.load_bridge(bridge_runtime["bridge"]["id"]))
@@ -140,14 +140,14 @@ class RemoteBridgeTests(AgentCoreTestCase):
         try:
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            remote = run(core.createRemoteSession({"session": session, "description": "Remote diagnostics QA", "channelServers": ["local"]}))
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda *_: None}))
+            remote = run(core.create_remote_session({"session": session, "description": "Remote diagnostics QA", "channelServers": ["local"]}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "qa", "startPolling": False, "emit": lambda *_: None}))
             run(bridge_runtime["recordEvent"]("bridge.diagnostic", {"summary": "diagnostic", "count": 2}))
-            tail = run(core.formatBridgeTail(bridge_runtime["bridge"]["id"]))
+            tail = run(core.format_bridge_tail(bridge_runtime["bridge"]["id"]))
             self.assertIn('bridge.diagnostic  {"summary":"diagnostic","count":2}', tail)
 
             long_text = "x" * 120
-            run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": long_text, "source": "remote"}))
+            run(core.send_bridge_message({"bridgeId": bridge_runtime["bridge"]["id"], "text": long_text, "source": "remote"}))
             remote_after_queue = run(core.load_remote_session(remote["id"]))
             self.assertTrue(remote_after_queue["lastEventSummary"].endswith("\u2026"))
             self.assertEqual(len(remote_after_queue["lastEventSummary"]), 96)
@@ -161,23 +161,23 @@ class RemoteBridgeTests(AgentCoreTestCase):
             config = run(core.resolve_config({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
 
-            remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
+            remote = run(core.create_remote_session({"session": session, "channelServers": []}))
             persisted_remote = run(core.load_remote_session(remote["id"]))
             for key in ("description", "workspaceName", "gitRoot", "gitBranch", "prNumber", "prUrl"):
                 self.assertNotIn(key, persisted_remote)
 
             session["metadata"]["originalCwd"] = str(workspace.parent)
             session["metadata"]["workspaceName"] = "typed-workspace"
-            metadata_remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
+            metadata_remote = run(core.create_remote_session({"session": session, "channelServers": []}))
             persisted_metadata_remote = run(core.load_remote_session(metadata_remote["id"]))
             self.assertEqual(persisted_metadata_remote["originalCwd"], str(workspace.parent))
             self.assertEqual(persisted_metadata_remote["workspaceName"], "typed-workspace")
             self.assertEqual(persisted_metadata_remote["title"], "typed-workspace")
 
-            raw_remote = run(core.createRemoteSession({"session": {"id": "raw-remote", "cwd": str(workspace), "metadata": {}}, "channelServers": []}))
+            raw_remote = run(core.create_remote_session({"session": {"id": "raw-remote", "cwd": str(workspace), "metadata": {}}, "channelServers": []}))
             persisted_raw_remote = run(core.load_remote_session(raw_remote["id"]))
             self.assertNotIn("originalCwd", persisted_raw_remote)
-            empty_name_remote = run(core.createRemoteSession({"session": {"id": "empty-name", "cwd": str(workspace), "name": "", "metadata": {"workspaceName": "fallback-name"}}, "channelServers": []}))
+            empty_name_remote = run(core.create_remote_session({"session": {"id": "empty-name", "cwd": str(workspace), "name": "", "metadata": {"workspaceName": "fallback-name"}}, "channelServers": []}))
             self.assertEqual(run(core.load_remote_session(empty_name_remote["id"]))["title"], "")
             empty_workspace = {
                 "id": "remote-empty-workspace",
@@ -190,10 +190,10 @@ class RemoteBridgeTests(AgentCoreTestCase):
                 "workspaceName": "",
                 "channelServers": [],
             }
-            self.assertEqual(core.formatRemoteSessionCandidate(empty_workspace)[10:28], " " * 18)
+            self.assertEqual(core.format_remote_session_candidate(empty_workspace)[10:28], " " * 18)
 
             events = []
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "startPolling": False, "emit": lambda event, data: events.append((event, data))}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "startPolling": False, "emit": lambda event, data: events.append((event, data))}))
             bridge_id = bridge_runtime["bridge"]["id"]
             persisted_bridge = run(core.load_bridge(bridge_id))
             self.assertNotIn("remoteSessionId", persisted_bridge)
@@ -203,14 +203,14 @@ class RemoteBridgeTests(AgentCoreTestCase):
             self.assertNotIn("remote_session_id", started_events[0]["data"])
             self.assertNotIn("name", started_events[0]["data"])
 
-            message = run(core.sendBridgeMessage({"bridgeId": bridge_id, "text": "local handoff"}))
+            message = run(core.send_bridge_message({"bridgeId": bridge_id, "text": "local handoff"}))
             inbox = run(core.load_bridge_inbox(bridge_id))
             self.assertEqual(inbox[0]["id"], message["id"])
             self.assertNotIn("remoteSessionId", inbox[0])
-            default_source = run(core.sendBridgeMessage({"bridgeId": bridge_id, "text": "default source", "source": None}))
+            default_source = run(core.send_bridge_message({"bridgeId": bridge_id, "text": "default source", "source": None}))
             self.assertEqual(default_source["source"], "bridge")
-            empty_name_bridge = run(core.createBridgeRuntime({"session": session, "name": "", "startPolling": False, "emit": lambda *_: None}))
-            bridge_rows = run(core.listActiveBridgeRows())
+            empty_name_bridge = run(core.create_bridge_runtime({"session": session, "name": "", "startPolling": False, "emit": lambda *_: None}))
+            bridge_rows = run(core.list_active_bridge_rows())
             empty_name_row = next(row for row in bridge_rows if row.startswith(empty_name_bridge["bridge"]["id"][:8]))
             self.assertEqual(empty_name_row[10:28], " " * 18)
             run(empty_name_bridge["close"]())
@@ -235,8 +235,8 @@ class RemoteBridgeTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="bypassPermissions",
             )
-            alpha = run(core.createRemoteSession({"session": session, "description": "Alpha remote", "channelServers": ["local"]}))
-            beta = run(core.createRemoteSession({"session": session, "description": "Beta remote", "channelServers": ["local"]}))
+            alpha = run(core.create_remote_session({"session": session, "description": "Alpha remote", "channelServers": ["local"]}))
+            beta = run(core.create_remote_session({"session": session, "description": "Beta remote", "channelServers": ["local"]}))
             alpha["updatedAt"] = "2026-01-01T00:00:01Z"
             beta["updatedAt"] = "2026-01-01T00:00:02Z"
             run(core.save_remote_session(alpha))
@@ -247,27 +247,27 @@ class RemoteBridgeTests(AgentCoreTestCase):
                 "builtins.input",
                 return_value="2",
             ):
-                selected = run(core.resolveTeleportSession({"teleport": True, "options": {}}))
+                selected = run(core.resolve_teleport_session({"teleport": True, "options": {}}))
             self.assertEqual(selected["remote"]["id"], alpha["id"])
             self.assertEqual(selected["sessionId"], alpha["sessionId"])
             self.assertIn("Select a remote session to resume:", stdout.getvalue())
-            self.assertIn(core.formatRemoteSessionCandidate(beta), stdout.getvalue())
+            self.assertIn(core.format_remote_session_candidate(beta), stdout.getvalue())
 
             with mock.patch.object(sys, "stdin", TtyBuffer()), mock.patch.object(sys, "stdout", TtyBuffer()), mock.patch(
                 "builtins.input",
                 return_value="Beta",
             ):
-                selected_by_query = run(core.resolveTeleportSession({"teleport": "remote", "options": {}}))
+                selected_by_query = run(core.resolve_teleport_session({"teleport": "remote", "options": {}}))
             self.assertEqual(selected_by_query["remote"]["id"], beta["id"])
 
             with mock.patch.object(sys, "stdin", TtyBuffer()), mock.patch.object(sys, "stdout", TtyBuffer()), mock.patch(
                 "builtins.input",
                 return_value="1.0",
             ):
-                selected_by_float_index = run(core.resolveTeleportSession({"teleport": True, "options": {}}))
+                selected_by_float_index = run(core.resolve_teleport_session({"teleport": True, "options": {}}))
             self.assertEqual(selected_by_float_index["remote"]["id"], beta["id"])
 
             with self.assertRaisesRegex(RuntimeError, 'Multiple remote sessions matched "remote"'):
-                run(core.resolveTeleportSession({"teleport": "remote", "options": {"print": True}}))
+                run(core.resolve_teleport_session({"teleport": "remote", "options": {"print": True}}))
         finally:
             self.restore_home(root, previous)

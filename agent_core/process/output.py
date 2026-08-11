@@ -22,7 +22,7 @@ SUBPROCESS_RING_MAX_BYTES = 128 * 1024
 StreamKind = Literal["stdout", "stderr"]
 
 
-class _HeadTailRing:
+class _head_tail_ring:
     def __init__(self, max_bytes: int):
         self.max_bytes = max(1, max_bytes)
         marker_reserve = min(96, self.max_bytes // 4)
@@ -89,7 +89,7 @@ class SubprocessOutputCollector:
         self.max_ring_bytes = _positive(max_ring_bytes, SUBPROCESS_RING_MAX_BYTES)
         self.metadata_writer = metadata_writer or write_json_file
         per_stream = max(1, self.max_ring_bytes // 2)
-        self.rings = {"stdout": _HeadTailRing(per_stream), "stderr": _HeadTailRing(per_stream)}
+        self.rings = {"stdout": _head_tail_ring(per_stream), "stderr": _head_tail_ring(per_stream)}
         self.bytes = {"stdout": 0, "stderr": 0}
         self.lines = {"stdout": 0, "stderr": 0}
         self.spool_bytes = {"stdout": 0, "stderr": 0}
@@ -229,7 +229,7 @@ class SubprocessOutputCollector:
         self.handles.clear()
 
 
-async def createSubprocessOutputCollector(**kwargs: Any) -> SubprocessOutputCollector:
+async def create_subprocess_output_collector(**kwargs: Any) -> SubprocessOutputCollector:
     translated = {
         "session_id": kwargs.get("sessionId"),
         "tool_name": kwargs["toolName"],

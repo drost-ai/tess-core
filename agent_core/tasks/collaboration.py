@@ -36,8 +36,8 @@ async def author_collaboration_update(args: dict[str, Any]) -> str:
     return await _collaboration_narration.author_collaboration_update(args)
 
 
-async def create_collaboration_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def create_collaboration_runtime(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session_ref = args["session"]
     config_ref = args.get("config") or {}
     runtime_binding = args.get("runtimeBinding") or create_runtime_session_binding(

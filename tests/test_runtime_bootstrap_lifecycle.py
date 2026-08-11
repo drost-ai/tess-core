@@ -51,9 +51,9 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
             async def fake_collaboration(_args):
                 return {"close": close_for("collaboration"), "setForegroundBusy": lambda _busy: None, "setSession": lambda *_args: None}
 
-            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+            with mock.patch.object(mcp_module, "create_mcp_runtime", fake_mcp), mock.patch.object(
                 bridge_runtime_module,
-                "createBridgeRuntime",
+                "create_bridge_runtime",
                 fake_bridge,
             ), mock.patch.object(runtime_module, "create_monitor_runtime", fake_monitors), mock.patch.object(
                 runtime_module,
@@ -117,9 +117,9 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 "close": close_for("daemon"),
             }
 
-            with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
+            with mock.patch.object(mcp_module, "create_mcp_runtime", fake_mcp), mock.patch.object(
                 bridge_runtime_module,
-                "createBridgeRuntime",
+                "create_bridge_runtime",
                 fake_bridge,
             ):
                 boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True}))

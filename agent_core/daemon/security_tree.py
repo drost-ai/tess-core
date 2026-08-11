@@ -29,7 +29,7 @@ from .security import (
     PRIVATE_FILE_MODE,
     _assert_owned,
     _unsafe,
-    isDaemonSocketListenerActive,
+    is_daemon_socket_listener_active,
 )
 
 PRIVATE_DIRECTORY_MODE = 0o700
@@ -38,7 +38,7 @@ MAX_DAEMON_TREE_DEPTH = 8
 MAX_DAEMON_STATE_BYTES = 2 * 1024 * 1024
 
 
-async def prepareDaemonRuntimeSecurity(
+async def prepare_daemon_runtime_security(
     options: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> None:
@@ -78,7 +78,7 @@ async def _prepare_under_lock(settings: dict[str, Any]) -> None:
                 f"Refusing to migrate daemon permissions while pid {pid} is live. Stop the old daemon first.",
                 instance_dir,
             )
-        if await isDaemonSocketListenerActive(external_socket):
+        if await is_daemon_socket_listener_active(external_socket):
             raise DaemonSecurityError(
                 "daemon.security_live_migration",
                 "Refusing to migrate daemon permissions while the existing socket still accepts connections.",
@@ -88,7 +88,7 @@ async def _prepare_under_lock(settings: dict[str, Any]) -> None:
     _verify_private_tree(instance_dir, external_socket, instance_id)
 
 
-async def verifyPrivateDaemonRuntime(instanceId: str) -> None:
+async def verify_private_daemon_runtime(instanceId: str) -> None:
     instance_id = parse_daemon_instance_id(instanceId)
     home = get_state_root()
     await _verify_canonical_ancestors(home)

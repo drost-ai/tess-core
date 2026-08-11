@@ -4,7 +4,7 @@ from typing import Any
 
 from .._utils import now_iso
 
-def applyPlatformIntegrationMetadata(
+def apply_platform_integration_metadata(
     session: dict[str, Any],
     args: dict[str, Any] | None = None,
     **kwargs: Any,

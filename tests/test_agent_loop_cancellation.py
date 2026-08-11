@@ -41,7 +41,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 signal.reason = error
                 raise error
 
-            result = run(core.runAgentPrompt(
+            result = run(core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=bind_test_runtime(session, {"abortSignal": signal, "tools": []}),
@@ -111,7 +111,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 signal.reason = error
                 raise error
 
-            result = run(core.runAgentPrompt(
+            result = run(core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=bind_test_runtime(session, {"abortSignal": signal, "tools": []}),
@@ -179,7 +179,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 raise error
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(

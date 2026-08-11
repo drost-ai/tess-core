@@ -5,10 +5,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .commands import _runner_exec, _runner_exec_text, _runner_which, buildShellCommand
+from .commands import _runner_exec, _runner_exec_text, _runner_which, build_shell_command
 
-async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def maybe_exec_into_tmux(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     options = args.get("options") or {}
     launch = args.get("launch") or {}
     env = args.get("env") or os.environ
@@ -25,7 +25,7 @@ async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -
     session_name = _sanitize_tmux_name(f"tess-{Path(launch['worktreePath']).name}") or "tess"
     window_name = _sanitize_tmux_name(Path(launch["worktreePath"]).name) or "tess"
     child_argv = _strip_tmux_launch_flags(args.get("argv") or [])
-    command = buildShellCommand(
+    command = build_shell_command(
         sys.executable,
         ["-m", "agent_core.process.daemon_worker", *child_argv],
         {
@@ -44,8 +44,8 @@ async def maybeExecIntoTmux(args: dict[str, Any] | None = None, **kwargs: Any) -
     event = {"event": event_name, "data": {"mode": tmux_mode, "tmux_session_name": session_name, "tmux_window_name": window_name, "cwd": launch.get("cwd") or os.getcwd()}}
     return {"handled": True, "event": event}
 
-async def detectTmuxAvailability(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def detect_tmux_availability(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     runner = args.get("runner") or {}
     binary = await _runner_which(runner, "tmux")
     if not binary:
@@ -56,7 +56,7 @@ async def detectTmuxAvailability(args: dict[str, Any] | None = None, **kwargs: A
         version = None
     return {"available": True, "binaryPath": binary, "version": version}
 
-def resolveTmuxLaunchContextFromEnv(env: dict[str, str] | None = None) -> dict[str, Any] | None:
+def resolve_tmux_launch_context_from_env(env: dict[str, str] | None = None) -> dict[str, Any] | None:
     env = env or os.environ
     cwd = env.get("TESS_LAUNCH_CWD")
     original = env.get("TESS_LAUNCH_ORIGINAL_CWD")

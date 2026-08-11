@@ -25,10 +25,10 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                     "close": lambda: calls.append(("close",)),
                 }
 
-            with mock.patch.object(shell_surface_tasks_module, "connectTaskSupervisorDaemonClient", fake_connect):
-                log = run(core.handleSlashCommand({"command": "/tasks log fallback", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
-                stop = run(core.handleSlashCommand({"command": "/tasks stop fallback", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
-                retry = run(core.handleSlashCommand({"command": "/agents retry daemon", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
+            with mock.patch.object(shell_surface_tasks_module, "connect_task_supervisor_daemon_client", fake_connect):
+                log = run(core.handle_slash_command({"command": "/tasks log fallback", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
+                stop = run(core.handle_slash_command({"command": "/tasks stop fallback", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
+                retry = run(core.handle_slash_command({"command": "/agents retry daemon", "session": session, "config": config, "hooks": {}, "runtimeInstanceId": "shell-instance"}))
             self.assertIn("daemon output task-daemon-fallback", log["message"])
             self.assertIn("[truncated to recent output]", log["message"])
             self.assertIn("Stopped task-daemon-fallback", stop["message"])
@@ -69,8 +69,8 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             run(core.save_session(session))
             run(core.save_compaction_manifest({"sessionId": session["id"], "latestGeneration": 2, "status": "ready"}))
             run(core.save_compaction_checkpoint({"sessionId": session["id"], "generation": 2, "state": "ok"}))
-            remote = run(core.createRemoteSession({"session": session, "description": "Shell remote", "channelServers": ["local"]}))
-            bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "shell-bridge", "startPolling": False}))
+            remote = run(core.create_remote_session({"session": session, "description": "Shell remote", "channelServers": ["local"]}))
+            bridge_runtime = run(core.create_bridge_runtime({"session": session, "remoteSessionId": remote["id"], "name": "shell-bridge", "startPolling": False}))
             bridge = bridge_runtime["bridge"]
             session["metadata"]["remoteSessionId"] = remote["id"]
             session["metadata"]["bridgeId"] = bridge["id"]
@@ -80,35 +80,35 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             run(core.save_child_agent({"agentId": "agent-collab-shell", "sessionId": "child-collab-shell", "parentSessionId": session["id"], "name": "Collab worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "awaiting_input", "startedAt": "2026-01-01T00:00:00Z"}))
             session["metadata"]["childAgentIds"] = ["agent-collab-shell"]
 
-            transcript = run(core.handleSlashCommand({"command": "/transcript", "session": session, "config": config, "hooks": {}}))
+            transcript = run(core.handle_slash_command({"command": "/transcript", "session": session, "config": config, "hooks": {}}))
             self.assertIn("render the transcript", transcript["message"])
             self.assertIn("tool         Bash", transcript["message"])
             self.assertIn("tests passed", transcript["message"])
-            compact_status = run(core.handleSlashCommand({"command": "/compact status", "session": session, "config": config, "hooks": {}}))
+            compact_status = run(core.handle_slash_command({"command": "/compact status", "session": session, "config": config, "hooks": {}}))
             self.assertIn("latest gen     2", compact_status["message"])
             self.assertIn(str(workspace / "summary.md"), compact_status["message"])
-            remote_list = run(core.handleSlashCommand({"command": "/remote list", "session": session, "config": config, "hooks": {}}))
+            remote_list = run(core.handle_slash_command({"command": "/remote list", "session": session, "config": config, "hooks": {}}))
             self.assertIn(remote["id"][:8], remote_list["message"])
-            remote_inspect = run(core.handleSlashCommand({"command": f"/remote inspect {remote['id'][:8]}", "session": session, "config": config, "hooks": {}}))
+            remote_inspect = run(core.handle_slash_command({"command": f"/remote inspect {remote['id'][:8]}", "session": session, "config": config, "hooks": {}}))
             self.assertIn("Shell remote", remote_inspect["message"])
-            queued = run(core.handleSlashCommand({"command": "/remote queue Continue from bridge", "session": session, "config": config, "hooks": {}}))
+            queued = run(core.handle_slash_command({"command": "/remote queue Continue from bridge", "session": session, "config": config, "hooks": {}}))
             self.assertIn("Queued", queued["message"])
-            tail = run(core.handleSlashCommand({"command": f"/remote tail {bridge['id'][:8]}", "session": session, "config": config, "hooks": {}}))
+            tail = run(core.handle_slash_command({"command": f"/remote tail {bridge['id'][:8]}", "session": session, "config": config, "hooks": {}}))
             self.assertIn("bridge.message.queued", tail["message"])
-            collaboration = run(core.handleSlashCommand({"command": "/collaboration", "session": session, "config": config, "hooks": {}}))
+            collaboration = run(core.handle_slash_command({"command": "/collaboration", "session": session, "config": config, "hooks": {}}))
             self.assertIn("awaiting       1", collaboration["message"])
             self.assertIn("bridge", collaboration["message"])
-            diagnostics = run(core.handleSlashCommand({"command": "/diagnostics", "session": session, "config": config, "hooks": {}}))
+            diagnostics = run(core.handle_slash_command({"command": "/diagnostics", "session": session, "config": config, "hooks": {}}))
             self.assertIn("healthy", diagnostics["message"])
             self.assertIn("extensions", diagnostics["message"])
             debug_dir = workspace / "debug-bundle"
-            debug = run(core.handleSlashCommand({"command": f"/debug {debug_dir}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
+            debug = run(core.handle_slash_command({"command": f"/debug {debug_dir}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
             self.assertIn(str(debug_dir), debug["message"])
             self.assertTrue((debug_dir / "manifest.json").exists())
             self.assertTrue((debug_dir / "remote" / "bridge.events.json").exists())
-            compact_debug = run(core.handleSlashCommand({"command": f"/compact debug {workspace / 'compact-debug'}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
+            compact_debug = run(core.handle_slash_command({"command": f"/compact debug {workspace / 'compact-debug'}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
             self.assertIn("compaction    yes", compact_debug["message"])
-            closed = run(core.handleSlashCommand({"command": f"/remote close {remote['id'][:8]}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
+            closed = run(core.handle_slash_command({"command": f"/remote close {remote['id'][:8]}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
             self.assertIn("Closed", closed["message"])
             self.assertEqual(run(core.load_bridge(bridge["id"]))["status"], "closed")
             self.assertEqual(run(core.load_remote_session(remote["id"]))["bridgeStatus"], "closed")
@@ -163,9 +163,9 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             session["metadata"]["childAgentIds"] = ["agent-bg-shell"]
             monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-bg-shell", "goal": "Watch shell background"})
             run(core.save_monitor(monitor))
-            remote = run(core.createRemoteSession({"session": session, "description": "Remote Shell", "channelServers": ["local"]}))
+            remote = run(core.create_remote_session({"session": session, "description": "Remote Shell", "channelServers": ["local"]}))
             remote = run(
-                core.updateRemoteSession(
+                core.update_remote_session(
                     remote["id"],
                     {
                         "status": "awaiting_input",
@@ -188,30 +188,30 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 "requestResume": lambda next_session: resumed.append(next_session["id"]),
             }
 
-            background = run(core.handleSlashCommand({"command": "/background", "session": session, "config": config, "hooks": hooks}))
+            background = run(core.handle_slash_command({"command": "/background", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("tasks          1/1", background["message"])
             self.assertIn("workers        1/1", background["message"])
             self.assertIn("monitors       1/1", background["message"])
             self.assertIn("Remote:", background["message"])
             self.assertIn("tip            /background inspect <id> or /background attach <id>", background["message"])
 
-            inspected_task = run(core.handleSlashCommand({"command": "/background inspect task-bg", "session": session, "config": config, "hooks": hooks}))
+            inspected_task = run(core.handle_slash_command({"command": "/background inspect task-bg", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("id           task-bg-shell", inspected_task["message"])
             self.assertIn("attach       /tasks attach task-bg-shell", inspected_task["message"])
-            inspected_agent = run(core.handleSlashCommand({"command": "/background inspect agent-bg", "session": session, "config": config, "hooks": hooks}))
+            inspected_agent = run(core.handle_slash_command({"command": "/background inspect agent-bg", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Shell worker", inspected_agent["message"])
-            inspected_monitor = run(core.handleSlashCommand({"command": f"/background inspect {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            inspected_monitor = run(core.handle_slash_command({"command": f"/background inspect {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Watch shell background", inspected_monitor["message"])
 
-            run(core.handleSlashCommand({"command": "/background attach task-bg-shell", "session": session, "config": config, "hooks": hooks}))
-            run(core.handleSlashCommand({"command": f"/remote attach {remote['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": "/background attach task-bg-shell", "session": session, "config": config, "hooks": hooks}))
+            run(core.handle_slash_command({"command": f"/remote attach {remote['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
             self.assertEqual(resumed, [target["id"], target["id"]])
             self.assertEqual(counters["persist"], 2)
-            remote_report = run(core.handleSlashCommand({"command": "/remote", "session": session, "config": config, "hooks": hooks}))
+            remote_report = run(core.handle_slash_command({"command": "/remote", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Remote Shell", remote_report["message"])
             self.assertIn("foreground", remote_report["message"])
 
-            monitor_attach = run(core.handleSlashCommand({"command": f"/background attach {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
+            monitor_attach = run(core.handle_slash_command({"command": f"/background attach {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
             self.assertTrue(monitor_attach["isError"])
             self.assertIn("No attachable session", errors[-1])
         finally:
@@ -260,20 +260,20 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 "retryTask": lambda task_id: retried.append(task_id) or {"taskId": "task-agent-retry", "outputFile": str(workspace / "agent.log")},
             }
 
-            agents_summary = run(core.handleSlashCommand({"command": "/agents", "session": session, "config": config, "hooks": hooks}))
+            agents_summary = run(core.handle_slash_command({"command": "/agents", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("reviewer", agents_summary["message"])
             self.assertIn("Strict review pass", agents_summary["message"])
             self.assertIn("child runs   1", agents_summary["message"])
             self.assertIn("awaiting     1", agents_summary["message"])
-            agents_running = run(core.handleSlashCommand({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
+            agents_running = run(core.handle_slash_command({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Plan worker", agents_running["message"])
             self.assertIn("awaiting_input", agents_running["message"])
-            inspected = run(core.handleSlashCommand({"command": "/agents inspect plan-shell", "session": session, "config": config, "hooks": hooks}))
+            inspected = run(core.handle_slash_command({"command": "/agents inspect plan-shell", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("waiting      Review the proposed migration plan.", inspected["message"])
 
-            run(core.handleSlashCommand({"command": "/agents attach agent-plan", "session": session, "config": config, "hooks": hooks}))
-            stop = run(core.handleSlashCommand({"command": "/agents stop agent-plan", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
-            retry = run(core.handleSlashCommand({"command": "/agents retry agent-plan", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            run(core.handle_slash_command({"command": "/agents attach agent-plan", "session": session, "config": config, "hooks": hooks}))
+            stop = run(core.handle_slash_command({"command": "/agents stop agent-plan", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
+            retry = run(core.handle_slash_command({"command": "/agents retry agent-plan", "session": session, "config": config, "hooks": hooks, "taskSupervisor": supervisor}))
             self.assertEqual(resumed, [target["id"]])
             self.assertEqual(stopped, ["task-agent-plan"])
             self.assertEqual(retried, ["task-agent-plan"])

@@ -38,23 +38,23 @@ from .protocol import DAEMON_PROTOCOL_VERSION
 from .requests import _handle_daemon_request, _normalise_daemon_method
 from .security import (
     DaemonSecurityError,
-    daemonAuthTokenPath,
-    generateDaemonAuthMaterial,
-    publishDaemonAuthMaterial,
-    removeDaemonAuthMaterialIfOwned,
-    verifyOwnedDaemonSocket,
+    daemon_auth_token_path,
+    generate_daemon_auth_material,
+    publish_daemon_auth_material,
+    remove_daemon_auth_material_if_owned,
+    verify_owned_daemon_socket,
 )
-from .security_tree import prepareDaemonRuntimeSecurity
+from .security_tree import prepare_daemon_runtime_security
 from .transport import (
     AuthenticatedDaemonServer,
     DaemonAbortSignal,
     DaemonServerPeer,
-    createAuthenticatedDaemonServer,
+    create_authenticated_daemon_server,
 )
 
 
-async def runTaskSupervisorDaemon(cwd: str, instanceId: str, ownerPid: int | None = None) -> None:
-    await prepareDaemonRuntimeSecurity({"instanceId": instanceId, "requireStoppedForMigration": True})
+async def run_task_supervisor_daemon(cwd: str, instanceId: str, ownerPid: int | None = None) -> None:
+    await prepare_daemon_runtime_security({"instanceId": instanceId, "requireStoppedForMigration": True})
     wait_ms = _daemon_instance_wait_ms()
     async with with_record_transaction(
         f"daemon-instance-{instanceId}",
@@ -77,7 +77,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
     daemon_epoch = str(uuid.uuid4())
     daemon_started_at = now_iso()
     daemon_phase = "starting"
-    auth = generateDaemonAuthMaterial()
+    auth = generate_daemon_auth_material()
     subscribers: dict[str, dict[str, Any]] = {}
     shutdown = asyncio.Event()
     supervisor: dict[str, Any] | None = None
@@ -184,7 +184,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
             loop.add_signal_handler(signum, shutdown.set)
             installed_signals.append(signum)
     try:
-        transport = createAuthenticatedDaemonServer(
+        transport = create_authenticated_daemon_server(
             token=auth["token"],
             epoch=daemon_epoch,
             dispatch=dispatch,
@@ -195,9 +195,9 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
         _inject_daemon_boot_fault("pre_bind", instance_id)
         await transport.listen(socket_path)
         os.chmod(socket_path, 0o600)
-        verifyOwnedDaemonSocket(socket_path)
+        verify_owned_daemon_socket(socket_path)
         _inject_daemon_boot_fault("post_bind", instance_id)
-        await publishDaemonAuthMaterial(instance_id, auth)
+        await publish_daemon_auth_material(instance_id, auth)
         await write_daemon_state("starting")
         _inject_daemon_boot_fault("post_publish", instance_id)
         await _record_daemon_lifecycle_event(
@@ -262,13 +262,13 @@ async def _clear_owned_daemon_instance(
     state = await load_daemon_state(instance_id)
     if state and (state.get("epoch") != epoch or state.get("pid") != pid):
         return
-    socket_info = verifyOwnedDaemonSocket(socket_path)
+    socket_info = verify_owned_daemon_socket(socket_path)
     for target in (daemon_pid_path(instance_id), daemon_state_path(instance_id)):
         with contextlib.suppress(FileNotFoundError):
             os.unlink(target)
-    await removeDaemonAuthMaterialIfOwned(instance_id, token_id)
+    await remove_daemon_auth_material_if_owned(instance_id, token_id)
     if socket_info:
-        current = verifyOwnedDaemonSocket(socket_path)
+        current = verify_owned_daemon_socket(socket_path)
         if current and (
             current.st_dev != socket_info.st_dev or current.st_ino != socket_info.st_ino
         ):
@@ -350,7 +350,7 @@ def _inject_daemon_boot_fault(stage: str, instance_id: str) -> None:
                     {
                         "stage": stage,
                         "socketExists": os.path.lexists(daemon_socket_path(instance_id)),
-                        "tokenExists": os.path.lexists(daemonAuthTokenPath(instance_id)),
+                        "tokenExists": os.path.lexists(daemon_auth_token_path(instance_id)),
                         "stateExists": os.path.lexists(daemon_state_path(instance_id)),
                         "statePhase": state.get("phase") if state else None,
                     },

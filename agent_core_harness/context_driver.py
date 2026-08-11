@@ -211,7 +211,7 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
 
     try:
         agent_context_module.measure_request_input_tokens = fake_measure
-        result = await core.runAgentPrompt(
+        result = await core.run_agent_prompt(
             session=session,
             config=config,
             runtime=bind_agent_runtime(

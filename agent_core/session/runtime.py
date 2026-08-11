@@ -64,9 +64,9 @@ def create_session_runtime_controller(
             )
         emit("session.activated", payload)
 
-    def start_turn(turn: dict[str, Any] | None = None, **turn_kwargs: Any) -> None:
+    def start_turn(turn: dict[str, Any] | None = None) -> None:
         nonlocal turn_in_flight
-        turn = {**(turn or {}), **turn_kwargs}
+        turn = dict(turn or {})
         turn_in_flight = True
         emit(
             "turn.started",
@@ -81,9 +81,9 @@ def create_session_runtime_controller(
     def set_turn_cancelling() -> None:
         emit("turn.cancelling", {"session_id": active_session.get("id")})
 
-    def finish_turn(turn: dict[str, Any] | None = None, **turn_kwargs: Any) -> None:
+    def finish_turn(turn: dict[str, Any] | None = None) -> None:
         nonlocal turn_in_flight
-        turn = {**(turn or {}), **turn_kwargs}
+        turn = dict(turn or {})
         turn_in_flight = False
         kind = turn.get("kind") or "completed"
         emit(

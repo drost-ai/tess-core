@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.agent.provider_turn import isEmptyAssistantResponse
+from agent_core.agent.provider_turn import is_empty_assistant_response
 from agent_core.providers.openai.params import is_codex_base_url
 from agent_core.providers.openai.transport import _infer_openai_responses_mode
 from agent_core_harness.fake_providers.server import (
@@ -357,7 +357,7 @@ class RefusalSurfacingTests(unittest.TestCase):
             response["content"],
             [{"type": "text", "text": "I can't help with that request."}],
         )
-        self.assertFalse(isEmptyAssistantResponse(response))
+        self.assertFalse(is_empty_assistant_response(response))
 
     def test_chat_refusal_delta_surfaces_with_refusal_stop_reason(self):
         script = {
@@ -402,7 +402,7 @@ class RefusalSurfacingTests(unittest.TestCase):
         self.assertEqual(
             response["content"], [{"type": "text", "text": "I can't do that."}]
         )
-        self.assertFalse(isEmptyAssistantResponse(response))
+        self.assertFalse(is_empty_assistant_response(response))
 
 
 class CodexDefaultTrapTests(unittest.TestCase):

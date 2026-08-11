@@ -101,7 +101,7 @@ class McpSseDecoder:
         return None
 
 
-def parseSseEvents(value: bytes | str) -> list[dict[str, str]]:
+def parse_sse_events(value: bytes | str) -> list[dict[str, str]]:
     decoder = McpSseDecoder()
     raw = value.encode("utf-8") if isinstance(value, str) else value
     return decoder.push(raw, final=True)

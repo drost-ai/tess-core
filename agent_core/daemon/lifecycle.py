@@ -28,12 +28,12 @@ from .protocol import DaemonProtocolError
 from .._utils import is_process_alive as _is_process_alive
 from .security import (
     DaemonSecurityError,
-    readDaemonAuthMaterial,
-    removeDaemonAuthMaterialIfOwned,
-    removeInactiveOwnedDaemonSocket,
-    removeOwnedDaemonAuthMaterial,
+    read_daemon_auth_material,
+    remove_daemon_auth_material_if_owned,
+    remove_inactive_owned_daemon_socket,
+    remove_owned_daemon_auth_material,
 )
-from .security_tree import prepareDaemonRuntimeSecurity, verifyPrivateDaemonRuntime
+from .security_tree import prepare_daemon_runtime_security, verify_private_daemon_runtime
 from ._instance_gc import (
     _reap_daemon_tmp_artifacts,
     _reap_dead_daemon_instance_dirs,
@@ -56,7 +56,7 @@ def _required_instance_id(values: dict[str, Any]) -> str:
     return parse_daemon_instance_id(instance_id)
 
 
-async def connectTaskSupervisorDaemonClient(
+async def connect_task_supervisor_daemon_client(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | None:
@@ -77,8 +77,8 @@ async def connectTaskSupervisorDaemonClient(
             "daemon.auth_failed",
             "Daemon state names an unexpected socket path.",
         )
-    await verifyPrivateDaemonRuntime(instance_id)
-    auth = await readDaemonAuthMaterial(instance_id, state)
+    await verify_private_daemon_runtime(instance_id)
+    auth = await read_daemon_auth_material(instance_id, state)
     client = _create_daemon_client(socket_path, state, auth)
     try:
         await client["_request"]("getState", {})
@@ -91,7 +91,7 @@ async def connectTaskSupervisorDaemonClient(
         return None
 
 
-async def ensureTaskSupervisorDaemon(
+async def ensure_task_supervisor_daemon(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -99,7 +99,7 @@ async def ensureTaskSupervisorDaemon(
     instance_id = _required_instance_id(values)
     cwd = values.get("cwd") or os.getcwd()
     owner_pid = values.get("ownerPid") if isinstance(values.get("ownerPid"), int) else os.getpid()
-    await prepareDaemonRuntimeSecurity({"instanceId": instance_id, "requireStoppedForMigration": True})
+    await prepare_daemon_runtime_security({"instanceId": instance_id, "requireStoppedForMigration": True})
     await ensure_base_layout(cwd)
     await _reap_dead_daemon_instance_dirs()
     budget = _resolve_startup_timeout_seconds(values)
@@ -120,7 +120,7 @@ async def _ensure_daemon_under_lock(
     budget: float,
     owner_pid: int,
 ) -> dict[str, Any]:
-    existing_client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
+    existing_client = await connect_task_supervisor_daemon_client({"instanceId": instance_id})
     if existing_client is not None:
         return existing_client
     state = await load_daemon_state(instance_id)
@@ -152,7 +152,7 @@ async def _ensure_daemon_under_lock(
                     f"Task supervisor daemon exited during startup with code {process.returncode}."
                 )
                 break
-            client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
+            client = await connect_task_supervisor_daemon_client({"instanceId": instance_id})
             if client is not None:
                 return client
         if process.poll() is None:
@@ -168,7 +168,7 @@ async def _ensure_daemon_under_lock(
     )
 
 
-async def stopTaskSupervisorDaemon(
+async def stop_task_supervisor_daemon(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> None:
@@ -182,7 +182,7 @@ async def stopTaskSupervisorDaemon(
             and supervisor.get("_daemonClient")
             and not supervisor.get("_isClosed", lambda: False)()
         )
-        else await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
+        else await connect_task_supervisor_daemon_client({"instanceId": instance_id})
     )
     if client and client.get("_daemonClient"):
         with contextlib.suppress(Exception):
@@ -210,14 +210,14 @@ async def stopTaskSupervisorDaemon(
     await _cleanup_stale_daemon_artifacts(instance_id)
 
 
-async def getTaskSupervisorDaemonState(
+async def get_task_supervisor_daemon_state(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | None:
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
     state = await load_daemon_state(instance_id)
-    client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
+    client = await connect_task_supervisor_daemon_client({"instanceId": instance_id})
     if state and client:
         with contextlib.suppress(Exception):
             state = {**state, "supervisor": await client["_request"]("getState", {})}
@@ -278,12 +278,12 @@ async def _cleanup_stale_daemon_artifacts(instance_id: str) -> None:
             return
         socket_path = daemon_socket_path(instance_id)
         with contextlib.suppress(FileNotFoundError):
-            await removeInactiveOwnedDaemonSocket(socket_path)
+            await remove_inactive_owned_daemon_socket(socket_path)
         token_id = (state or {}).get("authTokenId")
         if isinstance(token_id, str):
-            await removeDaemonAuthMaterialIfOwned(instance_id, token_id)
+            await remove_daemon_auth_material_if_owned(instance_id, token_id)
         else:
-            await removeOwnedDaemonAuthMaterial(instance_id)
+            await remove_owned_daemon_auth_material(instance_id)
         await clear_daemon_state(instance_id)
         await _reap_daemon_tmp_artifacts(instance_id)
 
@@ -293,7 +293,7 @@ async def _wait_for_running_daemon(instance_id: str, pid: int, timeout: float) -
     while asyncio.get_running_loop().time() < deadline:
         if not _is_process_alive(pid):
             return None
-        client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
+        client = await connect_task_supervisor_daemon_client({"instanceId": instance_id})
         if client is not None:
             return client
         await asyncio.sleep(0.05)

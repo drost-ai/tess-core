@@ -5,8 +5,8 @@ from typing import Any
 
 from .commands import _runner_spawn_detached, _runner_which
 
-async def detectIdeTargets(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
-    args = {**(args or {}), **kwargs}
+async def detect_ide_targets(args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    args = dict(args or {})
     runner = args.get("runner") or {}
     env = args.get("env") or os.environ
     targets: dict[str, dict[str, Any]] = {}
@@ -23,9 +23,9 @@ async def detectIdeTargets(args: dict[str, Any] | None = None, **kwargs: Any) ->
                 break
     return list(targets.values())
 
-async def maybeAutoConnectIde(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def maybe_auto_connect_ide(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    targets = await detectIdeTargets(args)
+    targets = await detect_ide_targets(args)
     if not targets:
         return {"status": "skipped", "reason": "No supported IDE targets were detected."}
     if len(targets) > 1:

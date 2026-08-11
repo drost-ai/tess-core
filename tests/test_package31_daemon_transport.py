@@ -13,12 +13,12 @@ from agent_core.daemon.protocol import (
     DAEMON_PROTOCOL_VERSION,
     DaemonLineDecoder,
     DaemonProtocolError,
-    encodeDaemonFrame,
+    encode_daemon_frame,
 )
 from agent_core.daemon.transport import (
     DaemonServerPeer,
-    createAuthenticatedDaemonServer,
-    readOneDaemonFrame,
+    create_authenticated_daemon_server,
+    read_one_daemon_frame,
 )
 
 daemon_client_module = importlib.import_module("agent_core.daemon.client")
@@ -40,7 +40,7 @@ async def _start_peer(
     client_socket.setblocking(False)
     server_reader, server_writer = await asyncio.open_connection(sock=server_socket)
     client_reader, client_writer = await asyncio.open_connection(sock=client_socket)
-    owner = createAuthenticatedDaemonServer(
+    owner = create_authenticated_daemon_server(
         token=_TOKEN,
         epoch=_EPOCH,
         dispatch=dispatch,
@@ -56,14 +56,14 @@ async def _start_peer(
 
 async def _authenticate(reader, writer, *, token=_TOKEN):
     decoder = DaemonLineDecoder(DAEMON_MAX_RESPONSE_FRAME_BYTES)
-    frame = encodeDaemonFrame(
+    frame = encode_daemon_frame(
         {"type": "auth", "protocolVersion": DAEMON_PROTOCOL_VERSION, "token": token},
         DAEMON_MAX_REQUEST_FRAME_BYTES,
     )
     for offset in range(0, len(frame), 3):
         writer.write(frame[offset : offset + 3])
         await writer.drain()
-    response = await readOneDaemonFrame(reader, decoder, 1)
+    response = await read_one_daemon_frame(reader, decoder, 1)
     return decoder, response
 
 
@@ -87,9 +87,9 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
 
             owner, _peer, peer_task, reader, writer = await _start_peer(dispatch)
             decoder = DaemonLineDecoder(DAEMON_MAX_RESPONSE_FRAME_BYTES)
-            writer.write(encodeDaemonFrame({"id": "legacy", "method": "daemon.status"}, 1_024))
+            writer.write(encode_daemon_frame({"id": "legacy", "method": "daemon.status"}, 1_024))
             await writer.drain()
-            response = await readOneDaemonFrame(reader, decoder, 1)
+            response = await read_one_daemon_frame(reader, decoder, 1)
             self.assertEqual(
                 response,
                 {
@@ -103,7 +103,7 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
 
             owner, _peer, peer_task, reader, writer = await _start_peer(dispatch)
             writer.write(
-                encodeDaemonFrame(
+                encode_daemon_frame(
                     {"type": "auth", "protocolVersion": 2, "token": "z" * 43},
                     1_024,
                 )
@@ -127,16 +127,16 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
             decoder, auth = await _authenticate(reader, writer)
             self.assertEqual(auth["type"], "auth_ok")
             self.assertEqual(auth["epoch"], _EPOCH)
-            request = encodeDaemonFrame({"id": "valid", "method": "daemon.status"}, 1_024)
+            request = encode_daemon_frame({"id": "valid", "method": "daemon.status"}, 1_024)
             writer.write(request[:5])
             writer.write(request[5:])
             await writer.drain()
-            response = await readOneDaemonFrame(reader, decoder, 1)
+            response = await read_one_daemon_frame(reader, decoder, 1)
             self.assertEqual(
                 response,
                 {"id": "valid", "ok": True, "result": {"method": "daemon.status"}},
             )
-            duplicate = encodeDaemonFrame({"id": "reused", "method": "daemon.status"}, 1_024)
+            duplicate = encode_daemon_frame({"id": "reused", "method": "daemon.status"}, 1_024)
             writer.write(duplicate + duplicate)
             await writer.drain()
             self.assertEqual(await asyncio.wait_for(reader.read(), timeout=1), b"")
@@ -214,17 +214,17 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
                 rpc_timeout_ms=40,
             )
             decoder, _auth = await _authenticate(reader, writer)
-            writer.write(encodeDaemonFrame({"id": "slow", "method": "daemon.status"}, 1_024))
+            writer.write(encode_daemon_frame({"id": "slow", "method": "daemon.status"}, 1_024))
             await writer.drain()
-            response = await readOneDaemonFrame(reader, decoder, 1)
+            response = await read_one_daemon_frame(reader, decoder, 1)
             self.assertEqual(response["id"], "slow")
             self.assertFalse(response["ok"])
             self.assertEqual(response["error"], "Daemon RPC timed out.")
             self.assertEqual(aborts, 1)
             mode = "oversize"
-            writer.write(encodeDaemonFrame({"id": "large", "method": "daemon.status"}, 1_024))
+            writer.write(encode_daemon_frame({"id": "large", "method": "daemon.status"}, 1_024))
             await writer.drain()
-            response = await readOneDaemonFrame(reader, decoder, 1)
+            response = await read_one_daemon_frame(reader, decoder, 1)
             self.assertEqual(response["id"], "large")
             self.assertFalse(response["ok"])
             self.assertEqual(response["error"], "Daemon response exceeded the 2 MiB frame limit.")
@@ -250,7 +250,7 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
             )
             decoder, _auth = await _authenticate(reader, writer)
             frames = b"".join(
-                encodeDaemonFrame(
+                encode_daemon_frame(
                     {"id": f"request-{index}", "method": "daemon.status"},
                     1_024,
                 )
@@ -262,7 +262,7 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
             while dispatches < DAEMON_MAX_PENDING_PER_CLIENT and time.monotonic() < deadline:
                 await asyncio.sleep(0.005)
             self.assertEqual(dispatches, DAEMON_MAX_PENDING_PER_CLIENT)
-            overflow = await readOneDaemonFrame(reader, decoder, 1)
+            overflow = await read_one_daemon_frame(reader, decoder, 1)
             self.assertEqual(
                 overflow,
                 {
@@ -294,9 +294,9 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
             owner, _peer, peer_task, reader, writer = await _start_peer(dispatch)
             owner.active_global = DAEMON_MAX_PENDING_GLOBAL
             decoder, _auth = await _authenticate(reader, writer)
-            writer.write(encodeDaemonFrame({"id": "overflow", "method": "daemon.status"}, 1_024))
+            writer.write(encode_daemon_frame({"id": "overflow", "method": "daemon.status"}, 1_024))
             await writer.drain()
-            response = await readOneDaemonFrame(reader, decoder, 1)
+            response = await read_one_daemon_frame(reader, decoder, 1)
             self.assertEqual(response["error"], "Daemon RPC pending-request limit reached.")
             self.assertEqual(dispatches, 0)
             owner.active_global = 0
@@ -346,10 +346,10 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
                 await reader.closed.wait()
                 raise RuntimeError("Daemon connection closed")
 
-            original_open = daemon_client_module.openAuthenticatedDaemonConnection
-            original_read = daemon_client_module.readOneDaemonFrame
-            daemon_client_module.openAuthenticatedDaemonConnection = fake_open
-            daemon_client_module.readOneDaemonFrame = fake_read
+            original_open = daemon_client_module.open_authenticated_daemon_connection
+            original_read = daemon_client_module.read_one_daemon_frame
+            daemon_client_module.open_authenticated_daemon_connection = fake_open
+            daemon_client_module.read_one_daemon_frame = fake_read
             try:
                 client = daemon_client_module._create_daemon_client(
                     "/private/unused.sock",
@@ -375,8 +375,8 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
                 with self.assertRaisesRegex(RuntimeError, "closed"):
                     await client["_request"]("daemon.status", {})
             finally:
-                daemon_client_module.openAuthenticatedDaemonConnection = original_open
-                daemon_client_module.readOneDaemonFrame = original_read
+                daemon_client_module.open_authenticated_daemon_connection = original_open
+                daemon_client_module.read_one_daemon_frame = original_read
 
         run(scenario())
 
@@ -415,11 +415,11 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
                 return {"id": request_ids[-1], "ok": True, "result": "recovered"}
 
             request_ids = []
-            original_open = daemon_client_module.openAuthenticatedDaemonConnection
-            original_read = daemon_client_module.readOneDaemonFrame
+            original_open = daemon_client_module.open_authenticated_daemon_connection
+            original_read = daemon_client_module.read_one_daemon_frame
             original_uuid = daemon_client_module.uuid.uuid4
-            daemon_client_module.openAuthenticatedDaemonConnection = fake_open
-            daemon_client_module.readOneDaemonFrame = fake_read
+            daemon_client_module.open_authenticated_daemon_connection = fake_open
+            daemon_client_module.read_one_daemon_frame = fake_read
             daemon_client_module.uuid.uuid4 = lambda: request_ids.append(f"id-{len(request_ids)}") or request_ids[-1]
             try:
                 client = daemon_client_module._create_daemon_client(
@@ -434,8 +434,8 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
                 self.assertEqual([writer.close_count for writer in writers], [1, 1])
                 await client["close"]()
             finally:
-                daemon_client_module.openAuthenticatedDaemonConnection = original_open
-                daemon_client_module.readOneDaemonFrame = original_read
+                daemon_client_module.open_authenticated_daemon_connection = original_open
+                daemon_client_module.read_one_daemon_frame = original_read
                 daemon_client_module.uuid.uuid4 = original_uuid
 
         run(scenario())
@@ -448,9 +448,9 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
             ready_event.set()
 
         original_worker = daemon_client_module._subscription_worker
-        original_timeout = daemon_client_module.resolveDaemonAuthTimeoutMs
+        original_timeout = daemon_client_module.resolve_daemon_auth_timeout_ms
         daemon_client_module._subscription_worker = stalled_worker
-        daemon_client_module.resolveDaemonAuthTimeoutMs = lambda *_args: -1_000
+        daemon_client_module.resolve_daemon_auth_timeout_ms = lambda *_args: -1_000
         try:
             client = daemon_client_module._create_daemon_client(
                 "/private/unused.sock",
@@ -463,7 +463,7 @@ class Package31DaemonTransportTests(AgentCoreTestCase):
             run(client["close"]())
         finally:
             daemon_client_module._subscription_worker = original_worker
-            daemon_client_module.resolveDaemonAuthTimeoutMs = original_timeout
+            daemon_client_module.resolve_daemon_auth_timeout_ms = original_timeout
 
 
 if __name__ == "__main__":

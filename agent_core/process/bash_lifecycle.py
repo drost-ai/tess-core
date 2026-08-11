@@ -12,9 +12,9 @@ import os
 import signal
 from typing import Any
 
-from .owned_launch import createOwnedProcessActivation
-from .identity import captureOwnedProcessIdentity
-from .output import createSubprocessOutputCollector
+from .owned_launch import create_owned_process_activation
+from .identity import capture_owned_process_identity
+from .output import create_subprocess_output_collector
 
 
 
@@ -30,15 +30,15 @@ BACKGROUND_DESCENDANT_DIAGNOSTIC = (
 _READ_CHUNK_BYTES = 64 * 1024
 
 
-async def runInlineShellCommand(
+async def run_inline_shell_command(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
     command = str(values["command"])
     argv = list(values.get("argv") or [values["shell"], "-lc", command])
-    activation = createOwnedProcessActivation(argv) if values.get("onProcessIdentity") else None
+    activation = create_owned_process_activation(argv) if values.get("onProcessIdentity") else None
     launched_argv = activation["argv"] if activation else argv
-    collector = values.get("outputCollector") or await createSubprocessOutputCollector(
+    collector = values.get("outputCollector") or await create_subprocess_output_collector(
         sessionId=values.get("sessionId"),
         toolName=values.get("toolName") or "Bash",
         family="bash",
@@ -62,7 +62,7 @@ async def runInlineShellCommand(
     process_identity = None
     if activation:
         try:
-            process_identity = await captureOwnedProcessIdentity(
+            process_identity = await capture_owned_process_identity(
                 pid=process.pid,
                 expectedArgv=launched_argv,
             )

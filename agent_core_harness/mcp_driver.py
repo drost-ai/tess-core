@@ -39,7 +39,7 @@ async def create_mcp_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, sta
     token_store = None
     if data.get("memoryTokenStore"):
         token_store = state.setdefault("mcp_token_store", MemoryMcpTokenStore())
-    runtime = await core.createMcpRuntime(
+    runtime = await core.create_mcp_runtime(
         {
             "cwd": str(sandbox.workspace),
             "servers": _selected_server_configs(data, state),

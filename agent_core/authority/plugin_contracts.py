@@ -50,8 +50,8 @@ def validate_plugin_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return diagnostics
 
 
-def summarize_plugin_capabilities(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def summarize_plugin_capabilities(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     manifest = args.get("manifest") or {}
     capabilities = manifest.get("capabilities") or {}
     declared = {
@@ -69,8 +69,8 @@ def summarize_plugin_capabilities(args: dict[str, Any] | None = None, **kwargs: 
     }
 
 
-def validate_plugin_capability_contract(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
-    args = {**(args or {}), **kwargs}
+def validate_plugin_capability_contract(args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    args = dict(args or {})
     manifest = args.get("manifest") or {}
     summary = args.get("capabilitySummary") or {}
     contract = manifest.get("capabilities")

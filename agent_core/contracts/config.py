@@ -150,7 +150,7 @@ class SettingsRecord(TypedDict, total=False):
     hooks: dict[str, list[dict[str, Any]]]
 
 
-class _ResolvedConfigRequired(TypedDict):
+class _resolved_config_required(TypedDict):
     cwd: str
     runtimeHome: str
     allowedRoots: list[str]
@@ -162,7 +162,7 @@ class _ResolvedConfigRequired(TypedDict):
     permissionMode: PermissionMode
 
 
-class ResolvedConfig(_ResolvedConfigRequired, total=False):
+class ResolvedConfig(_resolved_config_required, total=False):
     """Output of resolve_config (config/resolution.py).
 
     All keys below are emitted by resolve_config today; they are optional here

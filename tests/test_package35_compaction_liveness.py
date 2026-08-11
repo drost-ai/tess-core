@@ -4,7 +4,7 @@ from tests.support.agent_core_case import *
 import agent_core.agent.checkpoints as agent_checkpoints_module
 import agent_core.agent.context as agent_context_module
 
-from agent_core.agent.context_budget import assessContextHeadroom
+from agent_core.agent.context_budget import assess_context_headroom
 from agent_core.providers.activity import ProviderActivityEmitter
 from agent_core.providers.token_budget import resolveCompactionPolicy
 
@@ -299,7 +299,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             agent_checkpoints_module.run_compaction = compact
             with self.assertRaises(core.ProviderRequestError) as raised:
                 run(
-                    core.runAgentPrompt(
+                    core.run_agent_prompt(
                         session=session,
                         config=config,
                         runtime=bind_test_runtime(session),
@@ -323,7 +323,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                 "compactionThresholdTokens": 200_000,
             }
         )
-        assessment = assessContextHeadroom(
+        assessment = assess_context_headroom(
             measurement={
                 "inputTokens": 160_000,
                 "source": "fixture",

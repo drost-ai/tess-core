@@ -203,7 +203,7 @@ async def recover_mcp_headless_auth(
     control = _control(state, alias)
     control["accepted_tokens"].add(token)
     await store.set(
-        core.mcpTokenStoreKey(config),
+        core.mcp_token_store_key(config),
         {"accessToken": token, "tokenType": "Bearer", "resource": _origin(config["commandOrUrl"])},
     )
     result = await runtime["callTool"](config["name"], str(data.get("tool") or "read"), {})

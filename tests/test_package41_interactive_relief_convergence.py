@@ -296,7 +296,7 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
                 }
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(

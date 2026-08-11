@@ -113,8 +113,8 @@ def _resolve_openai_client_factory(
     )
 
 
-def resolve_compaction_execution_plan(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def resolve_compaction_execution_plan(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     config = args.get("config") or {}
     session = args.get("session") or {}
     session_provider = session.get("provider") or config.get("provider") or "openai"
@@ -152,14 +152,14 @@ def resolve_compaction_execution_plan(args: dict[str, Any] | None = None, **kwar
     return {"synthesis": synthesis, "verification": verification}
 
 
-def resolve_compaction_model_candidates(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
-    args = {**(args or {}), **kwargs}
+def resolve_compaction_model_candidates(args: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    args = dict(args or {})
     plan = resolve_compaction_execution_plan(args)
     return [plan["verification"] if args.get("purpose") == "verification" else plan["synthesis"]]
 
 
-def resolve_compaction_token_policy(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def resolve_compaction_token_policy(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     config = args.get("config") or {}
     model = args.get("model") or {}
     resolved = resolve_compaction_profile(config, model)

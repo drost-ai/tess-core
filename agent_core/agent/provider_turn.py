@@ -17,12 +17,12 @@ from ..session.persistence import persist_session
 from ..context.token_accounting import record_actual_token_usage
 from ..providers.usage_costs import estimate_usage_cost_usd, merge_usage_into_session, round_usd
 from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled, _safe_emit
-from .context import isContextWindowFailure, prepareProviderRequest
+from .context import is_context_window_failure, prepare_provider_request
 from .providers import _create_provider, _record_provider_failure_if_needed
 from .shared import (
-    modelSupportsImageInputs,
-    requestHasImageInputs,
-    unsupportedImageInputResponse,
+    model_supports_image_inputs,
+    request_has_image_inputs,
+    unsupported_image_input_response,
 )
 
 
@@ -37,7 +37,7 @@ _EMPTY_RESPONSE_NUDGE = "\n".join(
 )
 
 
-async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
+async def request_provider_response(args: dict[str, Any]) -> dict[str, Any]:
     config, runtime, session = args["config"], args["runtime"], args["session"]
     deadlines = createTurnDeadlineContext(
         config=config,
@@ -88,7 +88,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
             attempt=reactive_attempt + 1,
         )
         prepared = await deadlines.race(
-            prepareProviderRequest(
+            prepare_provider_request(
                 {
                     "session": session,
                     "config": config,
@@ -123,10 +123,10 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                 _throw_if_turn_cancelled(runtime)
                 request = prepared["request"]
                 if prepared.get("unsupportedImageInputs") or (
-                    requestHasImageInputs(request)
-                    and not modelSupportsImageInputs(config, args["activeModel"])
+                    request_has_image_inputs(request)
+                    and not model_supports_image_inputs(config, args["activeModel"])
                 ):
-                    response = unsupportedImageInputResponse(args["activeModel"])
+                    response = unsupported_image_input_response(args["activeModel"])
                 else:
                     emit_provider_activity(
                         deadline_runtime,
@@ -140,7 +140,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                 if _is_turn_abort_error(error, runtime.get("abortSignal")):
                     raise
                 attempt = int(prepared.get("reactiveAttempt") or 0)
-                if attempt < 2 and isContextWindowFailure(error):
+                if attempt < 2 and is_context_window_failure(error):
                     emit_provider_activity(
                         deadline_runtime,
                         "retry_wait",
@@ -156,9 +156,9 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         _throw_if_turn_cancelled(runtime)
         empty_attempts = 0
         empty_cost = 0.0
-        while isEmptyAssistantResponse(response) and empty_attempts < 1:
+        while is_empty_assistant_response(response) and empty_attempts < 1:
             empty_attempts += 1
-            empty_cost += recordEmptyResponseUsage(
+            empty_cost += record_empty_response_usage(
                 response=response,
                 session=session,
                 totalUsage=args["totalUsage"],
@@ -167,7 +167,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                 retrying=True,
             )
             reactive_attempt = max(int(prepared.get("reactiveAttempt") or 0) + 1, 1)
-            prepared = addEmptyResponseContinuationNudge(await prepare(reactive_attempt))
+            prepared = add_empty_response_continuation_nudge(await prepare(reactive_attempt))
             prepared, response = await dispatch(prepared)
             _throw_if_turn_cancelled(runtime)
         result = {
@@ -191,7 +191,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         deadlines.dispose()
 
 
-def isEmptyAssistantResponse(response: dict[str, Any]) -> bool:
+def is_empty_assistant_response(response: dict[str, Any]) -> bool:
     content = response.get("content") if isinstance(response.get("content"), list) else []
     if any(isinstance(block, dict) and block.get("type") == "tool_use" for block in content):
         return False
@@ -203,7 +203,7 @@ def isEmptyAssistantResponse(response: dict[str, Any]) -> bool:
     return all(not text.strip() for text in texts)
 
 
-def addEmptyResponseContinuationNudge(prepared: dict[str, Any]) -> dict[str, Any]:
+def add_empty_response_continuation_nudge(prepared: dict[str, Any]) -> dict[str, Any]:
     next_prepared = copy.deepcopy(prepared)
     messages = next_prepared["request"].setdefault("messages", [])
     messages.append(
@@ -215,7 +215,7 @@ def addEmptyResponseContinuationNudge(prepared: dict[str, Any]) -> dict[str, Any
     return next_prepared
 
 
-def recordEmptyResponseUsage(args: dict[str, Any] | None = None, **kwargs: Any) -> float:
+def record_empty_response_usage(args: dict[str, Any] | None = None, **kwargs: Any) -> float:
     values = {**(args or {}), **kwargs}
     response, session = values["response"], values["session"]
     usage = response.get("usage") or {}
@@ -237,11 +237,11 @@ def recordEmptyResponseUsage(args: dict[str, Any] | None = None, **kwargs: Any) 
     return estimate_usage_cost_usd(usage, response.get("model") or "")
 
 
-async def completeEmptyProviderResponse(args: dict[str, Any]) -> dict[str, Any] | None:
+async def complete_empty_provider_response(args: dict[str, Any]) -> dict[str, Any] | None:
     response = args["response"]
-    if not isEmptyAssistantResponse(response):
+    if not is_empty_assistant_response(response):
         return None
-    cost = float(args.get("estimatedCostUsd") or 0) + recordEmptyResponseUsage(
+    cost = float(args.get("estimatedCostUsd") or 0) + record_empty_response_usage(
         response=response,
         session=args["session"],
         totalUsage=args["totalUsage"],

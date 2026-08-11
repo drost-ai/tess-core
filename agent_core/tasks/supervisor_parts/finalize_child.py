@@ -19,8 +19,8 @@ from typing import Any, Callable
 from ..._utils import is_process_alive, maybe_await, now_iso
 from ...process.identity import (
     ProcessIdentityError,
-    processIdentityFromRecord,
-    verifyOwnedProcessIdentity,
+    process_identity_from_record,
+    verify_owned_process_identity,
 )
 from ...storage import (
     load_task_record,
@@ -75,11 +75,11 @@ async def worker_verified_dead(record_like: dict[str, Any]) -> bool:
     if not is_process_alive(pid):
         return True
     try:
-        identity = processIdentityFromRecord(record_like, record_like)
+        identity = process_identity_from_record(record_like, record_like)
     except ProcessIdentityError:
         return False
     try:
-        await verifyOwnedProcessIdentity(identity)
+        await verify_owned_process_identity(identity)
         return False
     except ProcessIdentityError as exc:
         return exc.code in {

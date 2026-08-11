@@ -7,7 +7,7 @@ import socket
 
 import agent_core.tools.web as web_module
 from agent_core.payloads.bounded_io import AcquisitionLimitError, read_response_text_bounded_sync
-from agent_core.acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
+from agent_core.acquisition.bounded_web_fetch import WebFetchPolicyError, bounded_web_fetch
 
 
 @contextlib.contextmanager
@@ -55,7 +55,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             side_effect=timed_out_dial,
         ):
             result = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url="https://connect-timeout.invalid",
                     connectTimeoutMs=30,
                     headersTimeoutMs=500,
@@ -83,7 +83,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
                 ("http://192.168.0.10/", "private_address"),
             ):
                 with self.subTest(url=url):
-                    result = run(boundedWebFetch(url=url, totalTimeoutMs=2_000))
+                    result = run(bounded_web_fetch(url=url, totalTimeoutMs=2_000))
                     self.assertEqual(result["outcome"], "refused")
                     self.assertEqual(result["reason"], reason)
                     self.assertEqual(result["body"], "")
@@ -96,7 +96,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             request.wfile.write(b"local ok")
 
         with _serve(handler) as base:
-            admitted = run(boundedWebFetch(url=base))
+            admitted = run(bounded_web_fetch(url=base))
             self.assertEqual(admitted["outcome"], "ok")
             self.assertEqual(admitted["body"], "local ok")
 
@@ -104,13 +104,13 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             os.environ,
             {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "169.254.169.254,169.254.0.0/16,metadata.google.internal"},
         ):
-            metadata = run(boundedWebFetch(url="http://169.254.169.254/"))
+            metadata = run(bounded_web_fetch(url="http://169.254.169.254/"))
             self.assertEqual(metadata["outcome"], "refused")
             self.assertEqual(metadata["reason"], "metadata_address")
-            hostname = run(boundedWebFetch(url="http://metadata.google.internal/"))
+            hostname = run(bounded_web_fetch(url="http://metadata.google.internal/"))
             self.assertEqual(hostname["outcome"], "refused")
             self.assertEqual(hostname["reason"], "metadata_address")
-            link_local = run(boundedWebFetch(url="http://169.254.7.7/"))
+            link_local = run(bounded_web_fetch(url="http://169.254.7.7/"))
             self.assertEqual(link_local["outcome"], "refused")
             self.assertEqual(link_local["reason"], "link_local_address")
 
@@ -121,7 +121,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             request.end_headers()
 
         with _serve(handler) as base:
-            result = run(boundedWebFetch(url=f"{base}/start"))
+            result = run(bounded_web_fetch(url=f"{base}/start"))
             self.assertEqual(result["outcome"], "refused")
             self.assertEqual(result["reason"], "metadata_address")
             self.assertEqual(len(result["redirects"]), 1)
@@ -147,7 +147,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             ):
                 with mock.patch.dict(os.environ):
                     os.environ.pop("AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
-                    hidden = run(boundedWebFetch(url=f"http://rebind.test:{port}/"))
+                    hidden = run(bounded_web_fetch(url=f"http://rebind.test:{port}/"))
                 self.assertEqual(hidden["outcome"], "refused")
                 self.assertEqual(hidden["reason"], "private_address")
 
@@ -156,7 +156,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
                     {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "rebind.test"},
                 ):
                     resolutions.clear()
-                    admitted = run(boundedWebFetch(url=f"http://rebind.test:{port}/"))
+                    admitted = run(bounded_web_fetch(url=f"http://rebind.test:{port}/"))
                 self.assertEqual(admitted["outcome"], "ok")
                 self.assertEqual(admitted["body"], "pinned")
                 # One resolution serves both the policy check and the dial;
@@ -220,7 +220,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
 
         with _serve(handler) as base:
             decoded = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url=base,
                     compressedMaxBytes=512 * 1024,
                     decodedMaxBytes=32 * 1024,
@@ -232,7 +232,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             self.assertGreater(decoded["decodedBytes"], 32 * 1024)
 
             declared = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url=f"{base}/declared",
                     compressedMaxBytes=64 * 1024,
                     decodedMaxBytes=512 * 1024,
@@ -243,7 +243,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             self.assertEqual(declared["compressedBytes"], 0)
 
             expanded = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url=f"{base}/gzip",
                     compressedMaxBytes=64 * 1024,
                     decodedMaxBytes=32 * 1024,
@@ -282,9 +282,9 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
                     raise WebFetchPolicyError("target denied")
 
             with self.assertRaisesRegex(WebFetchPolicyError, "target denied"):
-                run(boundedWebFetch(url=f"{base}/start", authorizeHop=authorize))
+                run(bounded_web_fetch(url=f"{base}/start", authorizeHop=authorize))
             self.assertEqual(len(hops), 2)
-            loop = run(boundedWebFetch(url=f"{base}/loop/0", maxRedirects=2))
+            loop = run(bounded_web_fetch(url=f"{base}/loop/0", maxRedirects=2))
             self.assertEqual(loop["outcome"], "refused")
             self.assertEqual(loop["reason"], "redirect_limit")
             self.assertEqual(len(loop["redirects"]), 2)
@@ -323,7 +323,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
 
         with _serve(handler) as base:
             headers = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url=f"{base}/slow-headers", headersTimeoutMs=30, totalTimeoutMs=1_000
                 )
             )
@@ -332,7 +332,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             self.assertEqual(headers["timeoutPhase"], "headers")
 
             idle = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url=f"{base}/idle", bodyIdleTimeoutMs=30, totalTimeoutMs=1_000
                 )
             )
@@ -342,7 +342,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             self.assertEqual(idle["body"], "partial")
 
             total = run(
-                boundedWebFetch(
+                bounded_web_fetch(
                     url=f"{base}/stream", bodyIdleTimeoutMs=500, totalTimeoutMs=50
                 )
             )
@@ -351,7 +351,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             self.assertEqual(total["timeoutPhase"], "total")
             self.assertIn("still-streaming", total["body"])
 
-            oversized = run(boundedWebFetch(url=f"{base}/headers", maxHeaderBytes=512))
+            oversized = run(bounded_web_fetch(url=f"{base}/headers", maxHeaderBytes=512))
             self.assertEqual(oversized["outcome"], "refused")
             self.assertEqual(oversized["reason"], "header_limit")
 
@@ -365,7 +365,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
         async def authorize(_url):
             return None
 
-        with mock.patch.object(web_module, "boundedWebFetch", fake_bounded):
+        with mock.patch.object(web_module, "bounded_web_fetch", fake_bounded):
             run(web_module.fetch("https://example.test/", authorizeHop=authorize))
         self.assertIs(captured["authorizeHop"], authorize)
 

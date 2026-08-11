@@ -124,7 +124,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 }
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     {
                         "session": session,
                         "config": config,
@@ -176,7 +176,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 }
 
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     {
                         "session": session,
                         "config": config,

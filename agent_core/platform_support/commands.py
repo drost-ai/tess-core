@@ -8,37 +8,37 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-async def pathExists(targetPath: str) -> bool:
+async def path_exists(targetPath: str) -> bool:
     return os.path.exists(targetPath)
 
-async def execText(command: str, args: list[str] | None = None, cwd: str | None = None) -> str:
+async def exec_text(command: str, args: list[str] | None = None, cwd: str | None = None) -> str:
     result = subprocess.run([command, *(args or [])], cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     return result.stdout.strip()
 
-async def findCommandInPath(command: str) -> str | None:
+async def find_command_in_path(command: str) -> str | None:
     return shutil.which(command)
 
-def getNpmCommand() -> str:
+def get_npm_command() -> str:
     return "npm.cmd" if os.name == "nt" else "npm"
 
-def quoteShellArg(value: str) -> str:
+def quote_shell_arg(value: str) -> str:
     if re.match(r"^[A-Za-z0-9_./:@%+=,-]+$", value):
         return value
     return "'" + value.replace("'", "'\"'\"'") + "'"
 
-def buildShellCommand(command: str, args: list[str] | None = None, env: dict[str, str] | None = None) -> str:
+def build_shell_command(command: str, args: list[str] | None = None, env: dict[str, str] | None = None) -> str:
     prefix = ""
     if env:
         env_items = [(key, value) for key, value in env.items() if isinstance(value, str) and value]
-        prefix = (" ".join(f"{key}={quoteShellArg(value)}" for key, value in env_items) + " ") if env_items else ""
-    return prefix + " ".join([quoteShellArg(command), *[quoteShellArg(arg) for arg in (args or [])]])
+        prefix = (" ".join(f"{key}={quote_shell_arg(value)}" for key, value in env_items) + " ") if env_items else ""
+    return prefix + " ".join([quote_shell_arg(command), *[quote_shell_arg(arg) for arg in (args or [])]])
 
-async def spawnDetached(command: str, args: list[str] | None = None, cwd: str | None = None) -> None:
+async def spawn_detached(command: str, args: list[str] | None = None, cwd: str | None = None) -> None:
     proc = subprocess.Popen([command, *(args or [])], cwd=cwd, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     proc.poll()
     return None
 
-async def newestMtimeInTree(rootPath: str) -> float | None:
+async def newest_mtime_in_tree(rootPath: str) -> float | None:
     if not os.path.exists(rootPath):
         return None
     newest = None
@@ -68,10 +68,10 @@ async def _runner_exec(runner: dict[str, Any], command: str, args: list[str], cw
         if hasattr(result, "__await__"):
             result = await result
         return result or ""
-    return await execText(command, args, cwd)
+    return await exec_text(command, args, cwd)
 
 async def _runner_exec_text(runner: dict[str, Any], command: str, args: list[str]) -> str:
-    fn = runner.get("execText") if isinstance(runner, dict) else None
+    fn = runner.get("exec_text") if isinstance(runner, dict) else None
     if callable(fn):
         result = fn(command, args)
         if hasattr(result, "__await__"):
@@ -80,13 +80,13 @@ async def _runner_exec_text(runner: dict[str, Any], command: str, args: list[str
     return await _runner_exec(runner, command, args)
 
 async def _runner_spawn_detached(runner: dict[str, Any], command: str, args: list[str], cwd: str | None = None) -> int:
-    fn = runner.get("spawnDetached") if isinstance(runner, dict) else None
+    fn = runner.get("spawn_detached") if isinstance(runner, dict) else None
     if callable(fn):
         result = fn(command, args, cwd)
         if hasattr(result, "__await__"):
             result = await result
         return int(result or 0)
-    return await spawnDetached(command, args, cwd)
+    return await spawn_detached(command, args, cwd)
 
 def _safe_realpath(path: str | Path | None) -> str | None:
     if not path:

@@ -148,8 +148,8 @@ def default_runtime_component_factories() -> dict[str, Any]:
     # which must not load when only the light support helpers are needed.
     from ..authority.agent import enforce_session_agent_authority, filter_tools_for_agent_authority
     from ..authority.plugins import load_plugin_runtime
-    from ..remote.bridge_runtime import createBridgeRuntime
-    from ..mcp import createMcpRuntime
+    from ..remote.bridge_runtime import create_bridge_runtime
+    from ..mcp import create_mcp_runtime
     from ..tools import create_builtin_tools
     from .workspace import create_workspace_controller
 
@@ -158,8 +158,8 @@ def default_runtime_component_factories() -> dict[str, Any]:
         "filterAuthorityTools": filter_tools_for_agent_authority,
         "createWorkspace": create_workspace_controller,
         "load_plugins": load_plugin_runtime,
-        "createMcp": createMcpRuntime,
-        "createBridge": createBridgeRuntime,
+        "createMcp": create_mcp_runtime,
+        "createBridge": create_bridge_runtime,
         "create_builtin_tools": create_builtin_tools,
         "augment_config_tools": augment_config_tools,
     }

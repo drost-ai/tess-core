@@ -11,8 +11,8 @@ from typing import Any
 from ...storage.message_origin import is_runtime_synthetic_message as _is_runtime_synthetic_message
 
 
-def build_compaction_evidence(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def build_compaction_evidence(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     source_messages = args.get("sourceMessages") or []
     source_start = int(args.get("sourceStart") or 0)
     cwd = args.get("cwd") or os.getcwd()

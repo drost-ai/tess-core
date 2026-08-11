@@ -17,14 +17,14 @@ from ..providers.token_budget import computeProviderTokenBudget, resolveCompacti
 from ..session.persistence import persist_session
 from .._utils import now_iso as _now
 from ..runtime.events.emit import safe_emit as _safe_emit
-from .shared import modelSupportsImageInputs, requestHasImageInputs
+from .shared import model_supports_image_inputs, request_has_image_inputs
 from typing import Any
-from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
+from .checkpoints import maybe_auto_checkpoint_raw_session, maybe_auto_compact_session
 from .context_budget import (
-    applyProviderTokenBudget as _apply_provider_token_budget,
-    assessContextHeadroom as _assess_context_headroom,
-    enforceContextHeadroom as _enforce_context_headroom,
-    headroomEventPayload as _headroom_event_payload,
+    apply_provider_token_budget as _apply_provider_token_budget,
+    assess_context_headroom as _assess_context_headroom,
+    enforce_context_headroom as _enforce_context_headroom,
+    headroom_event_payload as _headroom_event_payload,
 )
 from ..context.request_preflight import (
     build_request_preflight as _build_request_preflight,
@@ -33,15 +33,15 @@ from ..context.request_preflight import (
 )
 # Retained as a compatibility export from this module; dynamic_context owns use.
 
-from .request_integrity import normalizeProviderRequestMessages as _normalize_provider_request_messages
+from .request_integrity import normalize_provider_request_messages as _normalize_provider_request_messages
 from .dynamic_context import (
-    dynamicContextBelongsInMessages as _dynamic_context_belongs_in_messages,
-    injectSystemContextIntoMessages as _inject_system_context_into_messages,
+    dynamic_context_belongs_in_messages as _dynamic_context_belongs_in_messages,
+    inject_system_context_into_messages as _inject_system_context_into_messages,
 )
 from ..payloads.image_budget import assert_image_context_capacity as _assert_image_context_capacity
 from ..payloads.attachments import filter_images_for_provider_capabilities as _filter_images_for_provider_capabilities
 
-async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
+async def prepare_provider_request(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
     runtime = args["runtime"]
@@ -52,7 +52,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
     last_compaction_outcome: dict[str, Any] | None = None
 
-    raw_checkpoint_outcome = await maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": runtime})
+    raw_checkpoint_outcome = await maybe_auto_checkpoint_raw_session({"session": session, "config": config, "runtime": runtime})
     durable_compaction_applied = bool(raw_checkpoint_outcome and raw_checkpoint_outcome.get("status") == "completed")
 
     while True:
@@ -70,15 +70,15 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         # this ahead of its measurement/compaction decision. Moving it after
         # the decision reads cleaner but changes the event stream (verified
         # against agent-provider.ts and the context-management golden).
-        emitContinuationRelief(runtime, session, request_context)
-        recordContinuationRelief(session, request_context)
+        emit_continuation_relief(runtime, session, request_context)
+        record_continuation_relief(session, request_context)
         system = base_system_prompt
         system_context = request_context.get("systemContext")
         if system_context and not _dynamic_context_belongs_in_messages(config):
             system = f"{system}\n\n{request_context['systemContext']}"
         unsupported_image_inputs = (
-            requestHasImageInputs({"messages": request_context.get("messages") or []})
-            and not modelSupportsImageInputs(config, active_model)
+            request_has_image_inputs({"messages": request_context.get("messages") or []})
+            and not model_supports_image_inputs(config, active_model)
         )
         request_context = _normalize_request_context_messages(
             _admit_request_images(
@@ -111,7 +111,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
         )
         compacted = None
         if not durable_compaction_applied:
-            compacted = await maybeAutoCompactSession(
+            compacted = await maybe_auto_compact_session(
                 {
                     "session": session,
                     "config": config,
@@ -250,7 +250,7 @@ def _normalize_request_context_messages(
         "protocolRepair": repair,
     }
 
-def emitContinuationRelief(runtime: dict[str, Any], session: dict[str, Any] | str, continuity: dict[str, Any]) -> None:
+def emit_continuation_relief(runtime: dict[str, Any], session: dict[str, Any] | str, continuity: dict[str, Any]) -> None:
     session_id = session.get("id") if isinstance(session, dict) else session
     metadata = session.get("metadata") if isinstance(session, dict) else {}
     durable_checkpoint_available = bool((metadata or {}).get("compactionState"))
@@ -299,7 +299,7 @@ def emitContinuationRelief(runtime: dict[str, Any], session: dict[str, Any] | st
             },
         )
 
-def recordContinuationRelief(session: dict[str, Any], continuity: dict[str, Any]) -> None:
+def record_continuation_relief(session: dict[str, Any], continuity: dict[str, Any]) -> None:
     relief = continuity.get("relief") or {}
     metadata = session.setdefault("metadata", {})
     previous_restore = metadata.get("runtimeRestore") if isinstance(metadata.get("runtimeRestore"), dict) else {}
@@ -342,7 +342,7 @@ def recordContinuationRelief(session: dict[str, Any], continuity: dict[str, Any]
         metadata["compactionState"]["lastReliefDetail"] = relief.get("detail")
         metadata["compactionState"]["lastReinjectionSummary"] = relief.get("reinjectionSummary")
 
-def isContextWindowFailure(error: BaseException) -> bool:
+def is_context_window_failure(error: BaseException) -> bool:
     if not is_provider_request_error(error):
         return False
     record = getattr(error, "record", {})

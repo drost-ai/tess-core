@@ -181,10 +181,10 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
         with (
             mock.patch.object(context_module, "build_continuation_context", fake_context),
             mock.patch.object(context_module, "measure_request_input_tokens", fake_measure),
-            mock.patch.object(context_module, "maybeAutoCompactSession", no_compaction),
+            mock.patch.object(context_module, "maybe_auto_compact_session", no_compaction),
         ):
             prepared = run(
-                context_module.prepareProviderRequest(
+                context_module.prepare_provider_request(
                     {
                         "session": session,
                         "config": config,
@@ -240,10 +240,10 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
         with (
             mock.patch.object(context_module, "build_continuation_context", fake_context),
             mock.patch.object(context_module, "measure_request_input_tokens", fake_measure),
-            mock.patch.object(context_module, "maybeAutoCompactSession", no_compaction),
+            mock.patch.object(context_module, "maybe_auto_compact_session", no_compaction),
         ):
             prepared = run(
-                context_module.prepareProviderRequest(
+                context_module.prepare_provider_request(
                     {
                         "session": session,
                         "config": config,

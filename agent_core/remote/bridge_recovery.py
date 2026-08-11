@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .bridge_generation import requireBridgeLedger as _require_ledger
+from .bridge_generation import require_bridge_ledger as _require_ledger
 
 import copy
 import hashlib
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .._utils import now_iso
-from .bridge_recovery_analysis import analyzeBridgeRecovery
+from .bridge_recovery_analysis import analyze_bridge_recovery
 from ..runtime.identifiers import parse_bridge_id, parse_session_id
 from ..storage import (
     get_state_root,
@@ -49,12 +49,12 @@ class BridgeRecoveryBlockedError(RuntimeError):
         super().__init__(f"Bridge recovery is blocked for session {inspection['sessionId']}: {reasons}.")
 
 
-def __setBridgeRecoveryTestHookForTests(hook) -> None:
+def _set_bridge_recovery_test_hook_for_tests(hook) -> None:
     global _recovery_test_hook
     _recovery_test_hook = hook
 
 
-async def inspectBridgeRecovery(sessionId: str) -> dict[str, Any]:
+async def inspect_bridge_recovery(sessionId: str) -> dict[str, Any]:
     session_id = parse_session_id(sessionId)
     async with with_record_transaction("bridge-session", session_id):
         journal = await _resume_pending(session_id)
@@ -66,7 +66,7 @@ async def inspectBridgeRecovery(sessionId: str) -> dict[str, Any]:
         return inspection
 
 
-async def resolveBridgeRecovery(
+async def resolve_bridge_recovery(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -100,7 +100,7 @@ async def resolveBridgeRecovery(
         return applied["result"]
 
 
-async def activateBridgeGeneration(args: dict[str, Any]) -> dict[str, Any]:
+async def activate_bridge_generation(args: dict[str, Any]) -> dict[str, Any]:
     session_id = parse_session_id(args["sessionId"])
     async with with_record_transaction("bridge-session", session_id):
         existing = await _resume_pending(session_id)
@@ -133,7 +133,7 @@ async def _resume_pending(session_id: str) -> dict[str, Any] | None:
 
 async def _analyze_with_journal(session_id: str, journal: dict[str, Any] | None):
     ignored = journal.get("sourceBridgeIds", []) if journal and journal.get("phase") == "committed" else []
-    analysis = await analyzeBridgeRecovery(
+    analysis = await analyze_bridge_recovery(
         session_id,
         int((journal or {}).get("revision") or 1),
         logicallySupersededBridgeIds=ignored,
@@ -258,7 +258,7 @@ async def _apply_journal(journal):
             })
         await _persist_phase(journal, "inbox_written")
     if journal["phase"] == "inbox_written":
-        current = await analyzeBridgeRecovery(
+        current = await analyze_bridge_recovery(
             journal["sessionId"], journal["revision"],
             excludedBridgeIds=[journal["destinationBridgeId"]] if journal.get("destinationBridgeId") else [],
         )
@@ -478,6 +478,6 @@ def _assert_resolvable(reasons):
 
 
 __all__ = [
-    "BridgeRecoveryBlockedError", "activateBridgeGeneration",
-    "inspectBridgeRecovery", "resolveBridgeRecovery",
+    "BridgeRecoveryBlockedError", "activate_bridge_generation",
+    "inspect_bridge_recovery", "resolve_bridge_recovery",
 ]

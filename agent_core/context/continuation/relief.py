@@ -65,8 +65,8 @@ def apply_lightweight_context_relief(messages: list[dict[str, Any]], session: di
     }
 
 
-def apply_context_relief_modes(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def apply_context_relief_modes(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     messages = args["messages"]
     session = args["session"]
     retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}

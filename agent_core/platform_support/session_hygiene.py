@@ -41,8 +41,8 @@ _MAX_SAMPLES = 100
 _MAX_STORE_ENTRIES = 100_000
 
 
-async def buildSessionHygieneReport(options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    options = {**(options or {}), **kwargs}
+async def build_session_hygiene_report(options: dict[str, Any] | None = None) -> dict[str, Any]:
+    options = dict(options or {})
     sample_limit = max(1, min(int(options.get("sampleLimit") or _MAX_SAMPLES), _MAX_SAMPLES))
     directory = os.path.join(get_state_root(), "sessions")
     report: dict[str, Any] = {
@@ -153,8 +153,8 @@ async def buildSessionHygieneReport(options: dict[str, Any] | None = None, **kwa
     return report
 
 
-async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    options = {**(options or {}), **kwargs}
+async def repair_session_timestamps(options: dict[str, Any] | None = None) -> dict[str, Any]:
+    options = dict(options or {})
     apply = options.get("apply") is True
     if apply and options.get("allowWithDaemonRunning") is not True:
         live_daemons = await list_live_daemon_states()

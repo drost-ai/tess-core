@@ -18,7 +18,7 @@ from ..payloads.utf8_bounds import slice_utf8_prefix, slice_utf8_window, utf8_by
 MAX_MCP_CONTENTS = 12
 
 
-async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
+async def shape_mcp_resource_list(**args: Any) -> dict[str, Any]:
     inline_bytes = _inline_budget(args.get("context"))
     limit = min(_limit(args.get("requestedLimit"), int(_knob("mcp.max_resource_page"))), int(_knob("mcp.max_resource_page")))
     resources = sorted(args.get("resources", []), key=_resource_sort_key)
@@ -113,7 +113,7 @@ async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
     )
 
 
-async def shapeMcpResourceRead(**args: Any) -> dict[str, Any]:
+async def shape_mcp_resource_read(**args: Any) -> dict[str, Any]:
     inline_bytes = _inline_budget(args.get("context"))
     result = args.get("value") if isinstance(args.get("value"), dict) else {}
     contents = result.get("contents") if isinstance(result.get("contents"), list) else []

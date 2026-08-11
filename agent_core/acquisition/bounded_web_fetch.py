@@ -32,13 +32,13 @@ class WebFetchPolicyError(RuntimeError):
     pass
 
 
-class _AddressPolicyRefusal(Exception):
+class _address_policy_refusal(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
 
 
-async def boundedWebFetch(
+async def bounded_web_fetch(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
@@ -204,7 +204,7 @@ def _request_hop(
             response, connection, status, content_type, decoder,
             compressed_limit, decoded_limit, body_idle_timeout_ms, deadline,
         )
-    except _AddressPolicyRefusal as refusal:
+    except _address_policy_refusal as refusal:
         return {"kind": "refused", "reason": refusal.reason}
     except http.client.LineTooLong:
         return {"kind": "refused", "reason": "header_limit"}
@@ -334,7 +334,7 @@ def _connect_policy_checked(hostname: str, port: int, timeout: float) -> socket.
     DNS answer cannot slip between the policy check and the connection."""
     host = hostname.strip().lower().rstrip(".")
     if host in _METADATA_HOSTNAMES:
-        raise _AddressPolicyRefusal("metadata_address")
+        raise _address_policy_refusal("metadata_address")
     resolved = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
     addresses = []
     for _family, _sock_type, _proto, _canonical, sockaddr in resolved:
@@ -344,7 +344,7 @@ def _connect_policy_checked(hostname: str, port: int, timeout: float) -> socket.
             continue
     blocked = _address_block_reason(host, addresses)
     if blocked:
-        raise _AddressPolicyRefusal(blocked)
+        raise _address_policy_refusal(blocked)
     last_error: OSError | None = None
     for family, sock_type, proto, _canonical, sockaddr in resolved:
         connected = socket.socket(family, sock_type, proto)

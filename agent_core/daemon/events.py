@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from .._utils import now_iso
 from ..storage import append_daemon_event, load_daemon_events
-from .protocol import DAEMON_MAX_RESPONSE_FRAME_BYTES, encodeDaemonFrame
+from .protocol import DAEMON_MAX_RESPONSE_FRAME_BYTES, encode_daemon_frame
 
 async def _publish_daemon_event(subscribers: dict[str, dict[str, Any]], payload: dict[str, Any]) -> None:
     stale: list[str] = []
@@ -36,7 +36,7 @@ async def _write_daemon_event(target: Any, record: dict[str, Any]) -> None:
         if not await sender(payload):
             raise RuntimeError("Daemon peer rejected an event frame.")
         return
-    target.write(encodeDaemonFrame(payload, DAEMON_MAX_RESPONSE_FRAME_BYTES))
+    target.write(encode_daemon_frame(payload, DAEMON_MAX_RESPONSE_FRAME_BYTES))
     await target.drain()
 
 async def _replay_daemon_events(instance_id: str, target: Any, session_id: str | None, after_cursor: int) -> None:

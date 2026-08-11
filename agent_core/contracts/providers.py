@@ -14,12 +14,12 @@ from __future__ import annotations
 from typing import Any, Literal, TypedDict, Union
 
 
-class _ProviderRequestRequired(TypedDict):
+class _provider_request_required(TypedDict):
     model: str
     messages: list[dict[str, Any]]
 
 
-class ProviderRequest(_ProviderRequestRequired, total=False):
+class ProviderRequest(_provider_request_required, total=False):
     """The normalized request dict passed to send*Request entry points."""
 
     system: str
@@ -34,14 +34,14 @@ class TextBlock(TypedDict):
     text: str
 
 
-class _ToolUseBlockRequired(TypedDict):
+class _tool_use_block_required(TypedDict):
     type: Literal["tool_use"]
     id: str
     name: str
     input: dict[str, Any]
 
 
-class ToolUseBlock(_ToolUseBlockRequired, total=False):
+class ToolUseBlock(_tool_use_block_required, total=False):
     pass
 
 
@@ -77,13 +77,13 @@ class ProviderUsage(TypedDict, total=False):
 AnthropicUsage = ProviderUsage
 
 
-class _ProviderResponseRequired(TypedDict):
+class _provider_response_required(TypedDict):
     content: list[dict[str, Any]]  # NormalizedBlock items
     usage: ProviderUsage
     model: str
 
 
-class ProviderResponse(_ProviderResponseRequired, total=False):
+class ProviderResponse(_provider_response_required, total=False):
     stopReason: str | None
     provider_metadata: dict[str, Any]  # OpenAI reasoning metadata
     promptCache: dict[str, Any]  # Internal cache observation; never serialized to provider.
@@ -103,7 +103,7 @@ ProviderFailureCategory = Literal[
 ]
 
 
-class _ProviderFailureRequired(TypedDict):
+class _provider_failure_required(TypedDict):
     provider: str
     providerLabel: str
     phase: str
@@ -122,7 +122,7 @@ class _ProviderFailureRequired(TypedDict):
     streamEventType: str | None
 
 
-class ProviderFailureRecord(_ProviderFailureRequired, total=False):
+class ProviderFailureRecord(_provider_failure_required, total=False):
     """Bounded failure evidence; recovery lineage fields are present when known."""
 
     requestId: str | None

@@ -42,8 +42,8 @@ def build_compaction_attempt_strategies(modelCandidates: list[dict[str, Any]], o
     return attempts
 
 
-async def run_model_backed_compaction_synthesis_with_fallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_model_backed_compaction_synthesis_with_fallback(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     candidates = resolve_compaction_model_candidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "synthesis"})
     source_token_estimate = estimate_message_tokens(args["sourceMessages"])
     attempts = build_compaction_attempt_strategies(
@@ -91,8 +91,8 @@ async def run_model_backed_compaction_synthesis_with_fallback(args: dict[str, An
     raise last_error or RuntimeError("Compaction synthesis failed.")
 
 
-async def run_model_backed_compaction_synthesis(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_model_backed_compaction_synthesis(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session = args["session"]
     model = args["model"]
     evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
@@ -162,8 +162,8 @@ async def run_model_backed_compaction_synthesis(args: dict[str, Any] | None = No
     )
 
 
-async def run_compaction_checkpoint_verification_with_fallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_compaction_checkpoint_verification_with_fallback(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     candidates = resolve_compaction_model_candidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "verification"})
     source_token_estimate = estimate_message_tokens(args["sourceMessages"])
     attempts = build_compaction_attempt_strategies(
@@ -185,8 +185,8 @@ async def run_compaction_checkpoint_verification_with_fallback(args: dict[str, A
     raise last_error or RuntimeError("Compaction verification failed.")
 
 
-async def run_compaction_checkpoint_verification(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def run_compaction_checkpoint_verification(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session = args["session"]
     model = args["model"]
     evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))

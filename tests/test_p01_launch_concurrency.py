@@ -13,7 +13,7 @@ from tests.test_p01_spawn_before_persist_probe import (
 class P01LaunchConcurrencyTests(AgentCoreTestCase):
     def test_reservation_spawn_and_session_failure_boundaries_do_not_orphan(self):
         trace: list[str] = []
-        reservation = core.createTaskLaunchReservation(
+        reservation = core.create_task_launch_reservation(
             taskId="p01-reserve-failure",
             sessionId="p01-boundary-session",
             kind="background_command",
@@ -31,7 +31,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "reservation write failure"):
             run(
-                core.launchReservedProcess(
+                core.launch_reserved_process(
                     reservation=reservation,
                     expectedArgv=[sys.executable, "-c", "pass"],
                     reserve=reserve_failure,
@@ -43,7 +43,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
         self.assertEqual(trace, ["reserve"])
 
         trace.clear()
-        reservation = core.createTaskLaunchReservation(
+        reservation = core.create_task_launch_reservation(
             taskId="p01-spawn-failure",
             sessionId="p01-boundary-session",
             kind="background_command",
@@ -55,7 +55,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
 
         with self.assertRaisesRegex(OSError, "spawn failure"):
             run(
-                core.launchReservedProcess(
+                core.launch_reserved_process(
                     reservation=reservation,
                     expectedArgv=[sys.executable, "-c", "pass"],
                     reserve=lambda: _append_async(trace, "reserve"),
@@ -79,7 +79,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
             )
             run(core.save_session(session))
             task_id = "p01-session-mutation-failure"
-            reservation = core.createTaskLaunchReservation(
+            reservation = core.create_task_launch_reservation(
                 taskId=task_id,
                 sessionId=session["id"],
                 kind="background_command",
@@ -99,7 +99,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
 
             with self.assertRaisesRegex(RuntimeError, "session mutation failure"):
                 run(
-                    core.launchReservedProcess(
+                    core.launch_reserved_process(
                         reservation=reservation,
                         expectedArgv=[sys.executable, "-c", "pass"],
                         reserve=partial_reserve,

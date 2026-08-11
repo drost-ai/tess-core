@@ -106,7 +106,7 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
                 handler=echo_handler,
             )
             result = run(
-                core.runAgentPrompt(
+                core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(

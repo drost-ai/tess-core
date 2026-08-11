@@ -68,7 +68,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-recon-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "sup-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_reconcile_recovers_completed_subagent_metadata_after_restart(self):
@@ -176,7 +176,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         finally:
             if supervisor:
                 run(supervisor["close"]())
-            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-recon-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "sup-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_task_supervisor_reconciles_terminal_unknown_and_failed_subagent_states(self):
@@ -243,7 +243,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             child_argv = [sys.executable, "-c", "import time; time.sleep(10)"]
             proc = subprocess.Popen(child_argv, **kwargs)
             process_identity = run(
-                core.captureOwnedProcessIdentity(pid=proc.pid, expectedArgv=child_argv)
+                core.capture_owned_process_identity(pid=proc.pid, expectedArgv=child_argv)
             )
             run(
                 core.save_child_agent(
@@ -394,7 +394,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             self.assertEqual(events[-1][0], "task.stopped")
             self.assertEqual(events[-1][1]["summary"], "Task stopped by deliberate request.")
         finally:
-            run(core.stopTaskSupervisorDaemon({"instanceId": "sup-recon-instance"}))
+            run(core.stop_task_supervisor_daemon({"instanceId": "sup-recon-instance"}))
             self.restore_home(root, previous)
 
     def test_task_stop_daemon_result_shape_matches_reference(self):

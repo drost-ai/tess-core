@@ -388,7 +388,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
                     "tools": core.create_builtin_tools(),
                 },
             )
-            result = run(core.runAgentPrompt(
+            result = run(core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=runtime,
@@ -431,7 +431,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
                     "content": [{"type": "text", "text": "done"}],
                 }
 
-            run(core.runAgentPrompt(
+            run(core.run_agent_prompt(
                 session=session,
                 config=config,
                 runtime=bind_test_runtime(session, {
@@ -482,7 +482,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
                 raise AssertionError("aggregate rejection must occur before provider dispatch")
 
             with self.assertRaises(ImageBudgetError):
-                run(core.runAgentPrompt(
+                run(core.run_agent_prompt(
                     session=session,
                     config=config,
                     runtime=bind_test_runtime(session, {

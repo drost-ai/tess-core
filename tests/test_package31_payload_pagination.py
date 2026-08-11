@@ -9,8 +9,8 @@ from agent_core.payloads.cursor import (
     fingerprint_payload_source,
     resolve_payload_cursor,
 )
-from agent_core.mcp.payloads import shapeMcpResourceList, shapeMcpResourceRead
-from agent_core.acquisition.search import runStreamingSearch
+from agent_core.mcp.payloads import shape_mcp_resource_list, shape_mcp_resource_read
+from agent_core.acquisition.search import run_streaming_search
 from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
 from agent_core.payloads.utf8_bounds import slice_utf8_window, utf8_byte_length
 
@@ -319,7 +319,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
             listed = []
             current = {"resources": resources, "context": context, "offset": 0, "requestedLimit": 2}
             for _ in range(10):
-                page = run(shapeMcpResourceList(**current))
+                page = run(shape_mcp_resource_list(**current))
                 listed.extend(resource["uri"] for resource in page["resources"])
                 if "nextCursor" not in page:
                     break
@@ -334,7 +334,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
             text = "漢🙂e\u0301" * 4_000
             value = {"contents": [{"uri": "fixture://huge", "mimeType": "text/plain", "text": text}]}
             page = run(
-                shapeMcpResourceRead(
+                shape_mcp_resource_read(
                     server="srv",
                     uri="fixture://huge",
                     value=value,
@@ -348,7 +348,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
             pages = 1
             while "nextCursor" in page and pages < 30:
                 page = run(
-                    shapeMcpResourceRead(
+                    shape_mcp_resource_read(
                         server="srv",
                         uri="fixture://huge",
                         value=value,
@@ -365,7 +365,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
             self.assertEqual(reconstructed, text)
             self.assertEqual(first_next_offset, 1)
             legacy = run(
-                shapeMcpResourceRead(
+                shape_mcp_resource_read(
                     server="srv",
                     uri="fixture://huge",
                     value=value,
@@ -399,7 +399,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
             self.assertLessEqual(serialized_content_bytes(json.dumps(payload, ensure_ascii=False)), TOOL_RESULT_FINAL_BYTES["large"])
 
             result = run(
-                runStreamingSearch(
+                run_streaming_search(
                     binary=sys.executable,
                     argv=["-c", "import sys; sys.stdout.write(('needle-' + 'z'*1000 + '\\n')*2000)"],
                     cwd=str(workspace),
@@ -428,7 +428,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             result = run(
-                runStreamingSearch(
+                run_streaming_search(
                     binary=sys.executable,
                     argv=["-c", "import sys; sys.stdout.write(('needle-' + 'y'*1000 + '\\n')*11000)"],
                     cwd=str(workspace),

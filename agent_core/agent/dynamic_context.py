@@ -10,17 +10,17 @@ from ..storage.message_origin import (
 from ..providers.prompt_cache import resolve_prompt_cache_policy
 
 
-def dynamicContextBelongsInMessages(config: dict[str, Any]) -> bool:
+def dynamic_context_belongs_in_messages(config: dict[str, Any]) -> bool:
     return bool(resolve_prompt_cache_policy(config=config).get("enabled"))
 
 
-def injectSystemContextIntoMessages(
+def inject_system_context_into_messages(
     request_context: dict[str, Any],
     system_context: Any,
     *,
     config: dict[str, Any],
 ) -> dict[str, Any]:
-    if not system_context or not dynamicContextBelongsInMessages(config):
+    if not system_context or not dynamic_context_belongs_in_messages(config):
         return request_context
     messages = copy.deepcopy(request_context.get("messages") or [])
     if not messages:

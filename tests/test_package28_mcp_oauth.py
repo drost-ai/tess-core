@@ -215,7 +215,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
                 return {"code": AUTH_CODE}
 
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd="/tmp",
                     servers=[config],
                     mcpTokenStore=store,
@@ -228,7 +228,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
             self.assertEqual(fixture.exchange_count, 1)
             self.assertEqual(fixture.registration_count, 0)
             self.assertTrue(all(header == "2025-06-18" for header in fixture.protocol_headers))
-            key = core.mcpTokenStoreKey(config)
+            key = core.mcp_token_store_key(config)
             self.assertEqual(store.records[key]["refreshToken"], REFRESH_ONE)
 
             # Force two concurrent 401s. Both calls share one refresh and see
@@ -279,7 +279,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
                 "oauth": {"clientId": "headless-client"},
             }
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd="/tmp",
                     servers=[config],
                     mcpTokenStore=store,
@@ -293,7 +293,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
             with self.assertRaisesRegex(RuntimeError, "requires authorization"):
                 run(runtime["callTool"]("headless", "read", {}))
 
-            key = core.mcpTokenStoreKey(config)
+            key = core.mcp_token_store_key(config)
             fixture.accepted_tokens.add("headless-injected-token")
             run(
                 store.set(
@@ -335,7 +335,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
                 return AUTH_CODE
 
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd="/tmp",
                     servers=[config],
                     mcpTokenStore=store,
@@ -343,9 +343,9 @@ class Package28McpOAuthTests(AgentCoreTestCase):
                 )
             )
             self.assertEqual(fixture.registration_count, 1)
-            key = core.mcpTokenStoreKey(config)
+            key = core.mcp_token_store_key(config)
             self.assertEqual(store.records[key]["clientId"], "dynamic-client")
-            auth = core.createMcpOAuthRuntime(config=config, store=store)
+            auth = core.create_mcp_oauth_runtime(config=config, store=store)
             self.assertIn("Authorization", run(auth.authorize_headers(f"{fixture.origin}/mcp")))
             self.assertEqual(run(auth.authorize_headers("https://attacker.example/mcp")), {})
             run(auth.close())
@@ -359,7 +359,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
         runtime = None
         try:
             runtime = run(
-                core.createMcpRuntime(
+                core.create_mcp_runtime(
                     cwd="/tmp",
                     servers=[
                         {
@@ -383,7 +383,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
     def test_file_token_store_permissions_atomicity_and_injected_store_exclusivity(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-p28-token-store-") as root:
             store_dir = Path(root) / "tokens"
-            store = core.createFileMcpTokenStore(store_dir)
+            store = core.create_file_mcp_token_store(store_dir)
             key = "server\0https://example.test/mcp"
             record = {"accessToken": ACCESS_ONE, "refreshToken": REFRESH_ONE}
             run(store.set(key, record))
@@ -403,7 +403,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
             try:
                 injected = MemoryTokenStore()
                 runtime = run(
-                    core.createMcpRuntime(
+                    core.create_mcp_runtime(
                         cwd="/tmp",
                         servers=[
                             {
@@ -433,7 +433,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
             }
             store = MemoryTokenStore()
             await store.set(
-                core.mcpTokenStoreKey(config),
+                core.mcp_token_store_key(config),
                 {
                     "accessToken": ACCESS_ONE,
                     "refreshToken": REFRESH_ONE,
@@ -441,7 +441,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
                     "resource": "https://example.test",
                 },
             )
-            auth = core.createMcpOAuthRuntime(config=config, store=store)
+            auth = core.create_mcp_oauth_runtime(config=config, store=store)
             started = asyncio.Event()
             cleaned = asyncio.Event()
 

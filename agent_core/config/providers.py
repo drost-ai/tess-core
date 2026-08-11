@@ -36,8 +36,8 @@ from .shared import (
 
 from .credentials import _resolve_anthropic_credentials, _resolve_openai_credential
 
-def resolve_openai_api_mode(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    args = {**(args or {}), **kwargs}
+def resolve_openai_api_mode(args: dict[str, Any] | None = None) -> str:
+    args = dict(args or {})
     requested = args.get("requestedMode")
     if requested and requested != "auto":
         return requested
@@ -151,8 +151,8 @@ def resolve_fallback_provider_profile_name(kind: str, profiles: dict[str, Any], 
     matches = list_provider_profiles_for_kind(kind, profiles)
     return matches[0] if matches else DEFAULT_PROVIDER_PROFILE_NAME
 
-def resolve_selected_provider_profile_name(args: dict[str, Any] | None = None, **kwargs: Any) -> str:
-    args = {**(args or {}), **kwargs}
+def resolve_selected_provider_profile_name(args: dict[str, Any] | None = None) -> str:
+    args = dict(args or {})
     requested_profile_name = normalize_provider_profile_name(args.get("requestedName"))
     profiles = args["profiles"]
     if requested_profile_name and requested_profile_name in profiles:
@@ -394,8 +394,8 @@ def _default_image_input_capability(record: dict[str, Any]) -> bool:
     official = not base_url or bool(re.match(r"https://api\.openai\.com(?:/|$)", base_url))
     return official and model.startswith(("gpt-5", "gpt-4"))
 
-def resolve_compaction_provider_profile_binding(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any] | None:
-    args = {**(args or {}), **kwargs}
+def resolve_compaction_provider_profile_binding(args: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    args = dict(args or {})
     profile_name = normalize_provider_profile_name(args.get("requestedProfileName"))
     if not profile_name:
         return None

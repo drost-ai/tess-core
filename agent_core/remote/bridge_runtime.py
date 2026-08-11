@@ -6,7 +6,7 @@ def _knob(name: str):
     return knob_value(name)
 
 
-from .bridge_generation import requireBridgeLedger as _require_ledger
+from .bridge_generation import require_bridge_ledger as _require_ledger
 
 import asyncio
 import hashlib
@@ -16,9 +16,9 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from .bridge_admission import admitBridgeMessage
-from .bridge_generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
-from .bridge_recovery import activateBridgeGeneration
+from .bridge_admission import admit_bridge_message
+from .bridge_generation import close_current_bridge_generation, is_current_bridge_generation
+from .bridge_recovery import activate_bridge_generation
 from ..runtime.paths import get_active_runtime_paths
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ..storage import (
@@ -75,14 +75,14 @@ class BridgeRuntimeController:
         })
         try:
             await self._record_event("bridge.started", payload)
-            if not await isCurrentBridgeGeneration(self.bridge):
+            if not await is_current_bridge_generation(self.bridge):
                 raise RuntimeError("Bridge generation was superseded during construction.")
             await self._emit_external(
                 "bridge.started", payload,
                 f"bridge-started:{self.bridge['id']}:{self.generation}",
                 "Bridge start notification deadline exceeded.",
             )
-            if not await isCurrentBridgeGeneration(self.bridge):
+            if not await is_current_bridge_generation(self.bridge):
                 raise RuntimeError("Bridge generation was superseded during construction.")
             if self._args.get("startPolling", True):
                 self._poll_thread = start_ticker(
@@ -97,13 +97,13 @@ class BridgeRuntimeController:
             self._closed = True
             self._stop.set()
             self._abort_emit("Bridge construction failed.")
-            await closeCurrentBridgeGeneration(self.bridge, "bridge.construction_failed")
+            await close_current_bridge_generation(self.bridge, "bridge.construction_failed")
             await self._wait_emit_settlement(1.0)
             raise
 
     def surface(self):
         async def send(text: str, **kwargs):
-            return await admitBridgeMessage({
+            return await admit_bridge_message({
                 "bridgeId": self.bridge["id"], "generation": self.generation,
                 "text": text, **kwargs,
             })
@@ -123,7 +123,7 @@ class BridgeRuntimeController:
 
     async def _record_event(self, event, data):
         async with with_record_transaction("bridge-session", self.bridge["sessionId"]):
-            if self._closed or not await isCurrentBridgeGeneration(self.bridge):
+            if self._closed or not await is_current_bridge_generation(self.bridge):
                 return
             timestamp = now_iso()
             await append_bridge_event(_omit_none({
@@ -164,14 +164,14 @@ class BridgeRuntimeController:
     async def _poll_locked(self):
         delivered = []
         async with with_record_transaction("bridge-session", self.bridge["sessionId"]):
-            if self._closed or not await isCurrentBridgeGeneration(self.bridge):
+            if self._closed or not await is_current_bridge_generation(self.bridge):
                 return delivered
             async with with_record_transaction("bridge-delivery", self.bridge["id"]):
                 inbox = await load_bridge_inbox(self.bridge["id"])
                 events = await load_bridge_events(self.bridge["id"])
                 ledger = await _require_ledger(self.bridge)
                 while ledger["cursor"] < len(inbox):
-                    if self._closed or not await isCurrentBridgeGeneration(self.bridge):
+                    if self._closed or not await is_current_bridge_generation(self.bridge):
                         return delivered
                     message = inbox[ledger["cursor"]]
                     if message.get("generation") != self.generation:
@@ -207,7 +207,7 @@ class BridgeRuntimeController:
                         await self._emit_external(
                             "bridge.message", payload, key, "Bridge poll deadline exceeded."
                         )
-                    if self._closed or not await isCurrentBridgeGeneration(self.bridge):
+                    if self._closed or not await is_current_bridge_generation(self.bridge):
                         return delivered
                     delivered_at = receipt["createdAt"] if receipt else now_iso()
                     if not receipt:
@@ -252,7 +252,7 @@ class BridgeRuntimeController:
         if self._poll_active:
             self._closing = False
             raise RuntimeError("Bridge close did not drain its active poll before the deadline.")
-        await closeCurrentBridgeGeneration(self.bridge)
+        await close_current_bridge_generation(self.bridge)
         if not await self._wait_emit_settlement(min(self._deadline(), 1.0)):
             self._closing = False
             error = RuntimeError(f"Bridge {self.bridge['id']} external emit did not settle during close.")
@@ -359,7 +359,7 @@ class BridgeRuntimeController:
         return max(0.001, float(self._args.get("pollDeadlineMs", (int(_knob("collab.bridge_poll_deadline_ms")) / 1000) * 1000)) / 1000)
 
 
-async def createBridgeRuntimeController(args):
+async def create_bridge_runtime_controller(args):
     session = args.get("session") or {}
     if not await load_session_record_shallow(session.get("id")):
         await save_session(session)
@@ -367,7 +367,7 @@ async def createBridgeRuntimeController(args):
     if requested and not await load_bridge(requested):
         raise RuntimeError(f"Bridge not found for reconnect: {requested}")
     paths = args.get("runtimePaths") or get_active_runtime_paths()
-    activated = await activateBridgeGeneration({
+    activated = await activate_bridge_generation({
         "sessionId": session["id"], "cwd": args.get("cwd") or session["cwd"],
         "remoteSessionId": args.get("remoteSessionId"), "name": args.get("name"),
         "reuseActive": args.get("reuseActive", False),
@@ -379,10 +379,10 @@ async def createBridgeRuntimeController(args):
     return await controller.start()
 
 
-async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def create_bridge_runtime(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Create the selected, durable bridge generation for a session."""
 
-    return await createBridgeRuntimeController({**(args or {}), **kwargs})
+    return await create_bridge_runtime_controller(dict(args or {}))
 
 
 
@@ -462,6 +462,6 @@ def _omit_none(value):
 
 
 __all__ = [
-    "BridgeRuntimeController", "LifecycleClosedError", "closeCurrentBridgeGeneration",
-    "createBridgeRuntime", "createBridgeRuntimeController", "isCurrentBridgeGeneration",
+    "BridgeRuntimeController", "LifecycleClosedError", "close_current_bridge_generation",
+    "create_bridge_runtime", "create_bridge_runtime_controller", "is_current_bridge_generation",
 ]

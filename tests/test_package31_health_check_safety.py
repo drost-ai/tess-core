@@ -182,7 +182,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
 
     def test_command_policy_redacts_environment_and_executor_reuses_authority(self):
         root, home, workspace, previous = self.temp_context()
-        original = executor.runInlineShellCommand
+        original = executor.run_inline_shell_command
         secret = os.environ.get("HEALTH_CHECK_TEST_SECRET")
         try:
             os.environ["HEALTH_CHECK_TEST_SECRET"] = "never-persist"
@@ -206,7 +206,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                     "stderrBytes": 0,
                 }
 
-            executor.runInlineShellCommand = fake_run
+            executor.run_inline_shell_command = fake_run
             record = build_authorized_health_check_record(
                 request=self._request(session, spec, policy), taskId="health-command-policy"
             )
@@ -218,7 +218,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             self.assertEqual(captured["env"], policy["environment"])
             self.assertEqual(captured["argv"][-3:], [policy["shellPath"], "-lc", spec["command"]])
         finally:
-            executor.runInlineShellCommand = original
+            executor.run_inline_shell_command = original
             if secret is None:
                 os.environ.pop("HEALTH_CHECK_TEST_SECRET", None)
             else:
@@ -227,7 +227,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
 
     def test_http_bounds_and_redirect_authority_are_forwarded(self):
         root, home, workspace, previous = self.temp_context()
-        original = executor.boundedWebFetch
+        original = executor.bounded_web_fetch
         try:
             config, session = self._session(home, workspace)
             spec = run(
@@ -261,7 +261,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                     "decodedBytes": 5,
                 }
 
-            executor.boundedWebFetch = fake_fetch
+            executor.bounded_web_fetch = fake_fetch
             record = build_authorized_health_check_record(
                 request=self._request(session, spec, policy), taskId="health-http-policy"
             )
@@ -272,7 +272,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             self.assertEqual(captured["totalTimeoutMs"], 1200)
             self.assertEqual(captured["maxRedirects"], 3)
         finally:
-            executor.boundedWebFetch = original
+            executor.bounded_web_fetch = original
             self.restore_home(root, previous)
 
     def test_stop_generation_drops_late_attempt_result(self):

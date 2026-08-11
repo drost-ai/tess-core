@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Sequence, TextIO
 
-from ..agent import runAgentPrompt
+from ..agent import run_agent_prompt
 from ..runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
 from ..config import resolve_config
 from ..runtime.bootstrap import bootstrap_runtime
@@ -75,7 +75,7 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
     exit_code = 0
     try:
         runtime["startTurn"]({"prompt": prompt, "model": session.get("model") or config.get("model")})
-        result = await runAgentPrompt(
+        result = await run_agent_prompt(
             {
                 "session": session,
                 "config": config,

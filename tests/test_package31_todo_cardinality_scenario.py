@@ -4,7 +4,7 @@ import copy
 
 from tests.support.agent_core_case import *
 
-from agent_core.shell_surface.status import buildTodosReport
+from agent_core.shell_surface.status import build_todos_report
 from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
 
 
@@ -61,7 +61,7 @@ class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
                     for index in range(60)
                 ]
                 before = copy.deepcopy(session["todos"])
-                report = buildTodosReport(session)
+                report = build_todos_report(session)
                 self.assertIn("40 omitted (20 of 60 shown)", report)
                 self.assertLess(len(report.encode("utf-8")), 50_000)
                 self.assertEqual(session["todos"], before)

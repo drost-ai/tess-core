@@ -10,8 +10,8 @@ from typing import Any
 from ..compaction.projection import _build_compaction_system_prompt_projection
 
 
-async def build_continuation_context(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def build_continuation_context(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session = args["session"]
     prompt = args.get("prompt", "")
     aggressive = bool(args.get("aggressive", False))

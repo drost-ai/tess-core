@@ -8,7 +8,7 @@ import uuid
 from typing import Any
 
 
-def createOwnedProcessRunnerArgv(
+def create_owned_process_runner_argv(
     childArgv: list[str],
     *,
     activationToken: str | None = None,
@@ -24,15 +24,15 @@ def createOwnedProcessRunnerArgv(
     ]
 
 
-def createOwnedProcessActivation(childArgv: list[str]) -> dict[str, Any]:
+def create_owned_process_activation(childArgv: list[str]) -> dict[str, Any]:
     token = uuid.uuid4().hex
     return {
         "activationToken": token,
-        "argv": createOwnedProcessRunnerArgv(childArgv, activationToken=token),
+        "argv": create_owned_process_runner_argv(childArgv, activationToken=token),
     }
 
 
-def activateOwnedProcessRunner(child: subprocess.Popen[Any], activationToken: str) -> None:
+def activate_owned_process_runner(child: subprocess.Popen[Any], activationToken: str) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_-]{32,128}", activationToken):
         raise ValueError("Owned process runner activation token is invalid.")
     if child.stdin is None or child.poll() is not None:

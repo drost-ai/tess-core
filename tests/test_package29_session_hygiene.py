@@ -88,7 +88,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
         try:
             fixture = self._mixed_fixture(home, workspace)
             before = self._snapshot_files(home)
-            report = run(core.buildSessionHygieneReport({"sampleLimit": 20}))
+            report = run(core.build_session_hygiene_report({"sampleLimit": 20}))
             after = self._snapshot_files(home)
             self.assertEqual(after, before)
             self.assertEqual(report["sessionCount"], 6)
@@ -110,7 +110,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
             self.assertIn("manual.lock", report["lockFiles"])
             self.assertLessEqual(len(report["markerSessionIds"]), report["sampleLimit"])
 
-            doctor = run(core.collectDoctorReport(str(workspace), {"repoRoot": str(workspace)}))
+            doctor = run(core.collect_doctor_report(str(workspace), {"repoRoot": str(workspace)}))
             hygiene = next(check for check in doctor["checks"] if check["id"] == "session_hygiene")
             self.assertEqual(hygiene["status"], "warn")
             self.assertEqual(hygiene["details"]["damagedTimestampCount"], 1)
@@ -127,13 +127,13 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
             before_mtime = target.stat().st_mtime_ns
             before = json.loads(before_raw)
 
-            dry = run(core.repairSessionTimestamps())
+            dry = run(core.repair_session_timestamps())
             self.assertFalse(dry["applied"])
             self.assertEqual([item["sessionId"] for item in dry["planned"]], [damaged["id"]])
             self.assertEqual(target.read_bytes(), before_raw)
             self.assertEqual(target.stat().st_mtime_ns, before_mtime)
 
-            applied = run(core.repairSessionTimestamps({"apply": True}))
+            applied = run(core.repair_session_timestamps({"apply": True}))
             self.assertTrue(applied["applied"])
             self.assertEqual(len(applied["appliedRepairs"]), 1)
             self.assertNotEqual(applied["appliedRepairs"][0]["beforeHash"], applied["appliedRepairs"][0]["afterHash"])
@@ -148,7 +148,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
                 return value
 
             self.assertEqual(normalize(repaired), normalize(before))
-            second = run(core.repairSessionTimestamps({"apply": True}))
+            second = run(core.repair_session_timestamps({"apply": True}))
             self.assertEqual(second["planned"], [])
             self.assertEqual(second["appliedRepairs"], [])
         finally:
@@ -162,11 +162,11 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
             self._write_stamped(damaged, _BAD)
             target = Path(core.session_path(damaged["id"]))
             run(core.save_daemon_state("hygiene-instance", {"pid": os.getpid(), "phase": "running", "startedAt": now_iso()}))
-            refused = run(core.repairSessionTimestamps({"apply": True}))
+            refused = run(core.repair_session_timestamps({"apply": True}))
             self.assertTrue(refused["refusedDaemonRunning"])
             self.assertFalse(refused["applied"])
             self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["updatedAt"], _BAD)
-            self.assertEqual(len(run(core.repairSessionTimestamps())["planned"]), 1)
+            self.assertEqual(len(run(core.repair_session_timestamps())["planned"]), 1)
             run(core.clear_daemon_state("hygiene-instance"))
 
             changed = False
@@ -180,7 +180,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
                     target.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
 
             hygiene_module.asyncio.sleep = mutate_at_boundary
-            raced = run(core.repairSessionTimestamps({"apply": True}))
+            raced = run(core.repair_session_timestamps({"apply": True}))
             self.assertEqual(raced["appliedRepairs"], [])
             self.assertEqual(raced["invalidated"], [{"sessionId": damaged["id"], "reason": "record_changed"}])
             after = json.loads(target.read_text(encoding="utf-8"))

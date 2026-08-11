@@ -21,7 +21,7 @@ from .state import (
     _require_connected,
     _server_status,
 )
-from .token_store import createFileMcpTokenStore
+from .token_store import create_file_mcp_token_store
 from ..runtime.secrets import resolve_mcp_server_config_secrets
 
 
@@ -50,11 +50,11 @@ async def _ensure_mcp_tool_permission(context: Any, tool: dict[str, Any], tool_a
     )
 
 
-async def createMcpRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def create_mcp_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     cwd = args.get("cwd") or os.getcwd()
     on_event = args.get("onRuntimeEvent") or (lambda *_: None)
-    token_store = args.get("tokenStore") or args.get("mcpTokenStore") or createFileMcpTokenStore()
+    token_store = args.get("tokenStore") or args.get("mcpTokenStore") or create_file_mcp_token_store()
     authorization_callback = args.get("authorizationCallback") or args.get("mcpAuthorizationCallback")
     resolved_servers = await asyncio.gather(*(
         resolve_mcp_server_config_secrets(config)

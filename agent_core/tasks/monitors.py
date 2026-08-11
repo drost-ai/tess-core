@@ -34,8 +34,8 @@ from ..storage import list_session_monitors, mutate_task_meta, read_task_meta, s
 
 
 
-async def create_monitor_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+async def create_monitor_runtime(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(args or {})
     session_ref = args.get("session") or {}
     config_ref = args.get("config") or {}
     emit: Callable[[str, dict[str, Any]], Any] = args.get("emit") or (lambda *_: None)

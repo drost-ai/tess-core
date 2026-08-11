@@ -30,22 +30,22 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
             permissionMode="bypassPermissions",
         )
         run(core.save_session(session))
-        remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
+        remote = run(core.create_remote_session({"session": session, "channelServers": []}))
         return session, remote
 
     def test_replacement_copies_pending_and_stale_close_cannot_close_winner(self):
         root, _home, workspace, previous = self.temp_context()
         try:
             session, remote = self._session_remote(workspace)
-            first = run(core.createBridgeRuntime({
+            first = run(core.create_bridge_runtime({
                 "session": session, "remoteSessionId": remote["id"],
                 "startPolling": False, "emit": lambda *_args: None,
             }))
-            queued = run(core.sendBridgeMessage({
+            queued = run(core.send_bridge_message({
                 "bridgeId": first["bridge"]["id"], "generation": first["generation"],
                 "idempotencyKey": "survive-replacement", "text": "pending",
             }))
-            second = run(core.createBridgeRuntime({
+            second = run(core.create_bridge_runtime({
                 "session": session, "remoteSessionId": remote["id"],
                 "startPolling": False, "emit": lambda *_args: None,
             }))
@@ -58,7 +58,7 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
             run(first["close"]())
             self.assertEqual(run(core.load_bridge(second["bridge"]["id"]))["status"], "active")
             with self.assertRaisesRegex(RuntimeError, "not the active session generation"):
-                run(core.sendBridgeMessage({"bridgeId": first["bridge"]["id"], "text": "stale"}))
+                run(core.send_bridge_message({"bridgeId": first["bridge"]["id"], "text": "stale"}))
             run(second["close"]())
             self.assertEqual(run(core.load_bridge(second["bridge"]["id"]))["status"], "closed")
         finally:
@@ -77,12 +77,12 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                     release.wait(2)
 
             async def race():
-                first = asyncio.create_task(core.createBridgeRuntime({
+                first = asyncio.create_task(core.create_bridge_runtime({
                     "session": session, "remoteSessionId": remote["id"],
                     "emit": delayed, "startPolling": False,
                 }))
                 self.assertTrue(await asyncio.to_thread(entered.wait, 1))
-                winner = await core.createBridgeRuntime({
+                winner = await core.create_bridge_runtime({
                     "session": session, "remoteSessionId": remote["id"],
                     "emit": lambda *_args: None, "startPolling": False,
                 })
@@ -119,11 +119,11 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                 release.wait(2)
                 calls["active"] -= 1
 
-            runtime = run(core.createBridgeRuntime({
+            runtime = run(core.create_bridge_runtime({
                 "session": session, "remoteSessionId": remote["id"], "emit": emit,
                 "pollIntervalMs": 5, "pollDeadlineMs": 25,
             }))
-            run(core.sendBridgeMessage({"bridgeId": runtime["bridge"]["id"], "text": "late"}))
+            run(core.send_bridge_message({"bridgeId": runtime["bridge"]["id"], "text": "late"}))
             self.assertTrue(entered.wait(1))
             run(asyncio.sleep(0.08))
             self.assertEqual((calls["messages"], calls["maximum"], calls["failures"]), (1, 1, 0))
@@ -149,7 +149,7 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session, remote = self._session_remote(workspace)
-            activated = run(bridge_recovery.activateBridgeGeneration({
+            activated = run(bridge_recovery.activate_bridge_generation({
                 "sessionId": session["id"], "cwd": str(workspace),
                 "remoteSessionId": remote["id"],
             }))
@@ -157,13 +157,13 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
 
             async def admit_many():
                 shared = await asyncio.gather(*[
-                    core.sendBridgeMessage({
+                    core.send_bridge_message({
                         "bridgeId": bridge["id"], "idempotencyKey": "shared",
                         "text": "same",
                     }) for _ in range(20)
                 ])
                 await asyncio.gather(*[
-                    core.sendBridgeMessage({
+                    core.send_bridge_message({
                         "bridgeId": bridge["id"], "idempotencyKey": f"distinct-{index}",
                         "text": str(index),
                     }) for index in range(20)
@@ -189,7 +189,7 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                 },
             }))
             deliveries = []
-            runtime = run(core.createBridgeRuntime({
+            runtime = run(core.create_bridge_runtime({
                 "session": run(core.load_session(session["id"])), "remoteSessionId": remote["id"],
                 "reuseActive": True, "startPolling": False,
                 "emit": lambda event, data: deliveries.append((event, data)),
@@ -223,21 +223,21 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                 bridge_id: Path(bridge_inbox_path(bridge_id)).read_bytes()
                 for bridge_id in ("legacy-a", "legacy-b")
             }
-            inspection = run(core.inspectBridgeRecovery(session["id"]))
+            inspection = run(core.inspect_bridge_recovery(session["id"]))
             self.assertIn("multiple_active_without_authority", inspection["blockedReasons"])
             self.assertIn("delivery_unconfirmed", inspection["blockedReasons"])
             with self.assertRaises(core.BridgeRecoveryBlockedError):
-                run(bridge_recovery.activateBridgeGeneration({
+                run(bridge_recovery.activate_bridge_generation({
                     "sessionId": session["id"], "cwd": str(workspace),
                 }))
             with self.assertRaisesRegex(RuntimeError, "exactly one decision"):
-                run(core.resolveBridgeRecovery({
+                run(core.resolve_bridge_recovery({
                     "sessionId": session["id"],
                     "expectedRecoveryRevision": inspection["recoveryRevision"],
                     "recoveryDigest": inspection["recoveryDigest"],
                     "selectedLegacyBridgeId": "legacy-a", "deliveryDecisions": {},
                 }))
-            resolution = run(core.resolveBridgeRecovery({
+            resolution = run(core.resolve_bridge_recovery({
                 "sessionId": session["id"],
                 "expectedRecoveryRevision": inspection["recoveryRevision"],
                 "recoveryDigest": inspection["recoveryDigest"],
@@ -266,14 +266,14 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                     injected["value"] = True
                     raise RuntimeError("simulated crash")
 
-            set_hook = getattr(bridge_recovery, "__setBridgeRecoveryTestHookForTests")
+            set_hook = getattr(bridge_recovery, "_set_bridge_recovery_test_hook_for_tests")
             set_hook(hook)
             with self.assertRaisesRegex(RuntimeError, "simulated crash"):
-                run(bridge_recovery.activateBridgeGeneration({
+                run(bridge_recovery.activate_bridge_generation({
                     "sessionId": session["id"], "cwd": str(workspace),
                 }))
             set_hook(None)
-            self.assertEqual(run(core.inspectBridgeRecovery(session["id"]))["blockedReasons"], [])
+            self.assertEqual(run(core.inspect_bridge_recovery(session["id"]))["blockedReasons"], [])
             current = run(core.load_session(session["id"]))
             self.assertEqual(run(core.load_bridge(current["metadata"]["bridgeId"]))["status"], "active")
 
@@ -282,9 +282,9 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
             journal["immutableSourceFiles"][0]["path"] = "/etc/passwd"
             journal_path.write_text(json.dumps(journal) + "\n")
             with self.assertRaisesRegex(RuntimeError, "recovery journal.+unavailable"):
-                run(core.inspectBridgeRecovery(session["id"]))
+                run(core.inspect_bridge_recovery(session["id"]))
         finally:
-            getattr(bridge_recovery, "__setBridgeRecoveryTestHookForTests")(None)
+            getattr(bridge_recovery, "_set_bridge_recovery_test_hook_for_tests")(None)
             self.restore_home(root, previous)
 
 
