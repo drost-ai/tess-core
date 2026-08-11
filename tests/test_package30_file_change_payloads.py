@@ -43,7 +43,7 @@ class Package30FileChangePayloadTests(AgentCoreTestCase):
             "cwd": str(workspace),
             "persist_session": lambda: None,
         }
-        return config, session, context, {tool.name: tool for tool in core.createBuiltinTools()}
+        return config, session, context, {tool.name: tool for tool in core.create_builtin_tools()}
 
     @staticmethod
     def _diff_counts(diff: str) -> tuple[int, int, int]:

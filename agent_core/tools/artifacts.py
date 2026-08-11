@@ -17,7 +17,7 @@ from ..runtime.identifiers import parse_artifact_id
 from ..storage import tool_artifact_data_path, tool_artifact_meta_path
 from ..payloads.result_guard import (
     non_artifact_tool_result_max_bytes,
-    serializedContentBytes,
+    serialized_content_bytes,
 )
 from .definitions import ToolDefinition
 from .schemas import builtin_tool
@@ -122,7 +122,7 @@ def _read_tool_artifact() -> ToolDefinition:
             page=page,
         )
         while (
-            serializedContentBytes(json.dumps(payload, ensure_ascii=False))
+            serialized_content_bytes(json.dumps(payload, ensure_ascii=False))
             > non_artifact_tool_result_max_bytes()
             and page["returnedBytes"] > MIN_ARTIFACT_PAGE_BYTES
         ):
@@ -143,7 +143,7 @@ def _read_tool_artifact() -> ToolDefinition:
                 page=page,
             )
         serialized = json.dumps(payload, indent=2, ensure_ascii=False)
-        if serializedContentBytes(serialized) > non_artifact_tool_result_max_bytes():
+        if serialized_content_bytes(serialized) > non_artifact_tool_result_max_bytes():
             return _error_result(
                 "artifact_page_encoding_too_large",
                 "The requested artifact page could not be represented safely.",

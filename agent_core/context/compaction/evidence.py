@@ -6,7 +6,7 @@ from .parsing import as_record, parse_maybe_json
 from .shared import (
     compaction_knob,
 )
-from .utils import collapse_whitespace, estimateTextTokens, truncate
+from .utils import collapse_whitespace, estimate_text_tokens, truncate
 from typing import Any
 from ...storage.message_origin import is_runtime_synthetic_message as _is_runtime_synthetic_message
 
@@ -23,7 +23,7 @@ def build_compaction_evidence(args: dict[str, Any] | None = None, **kwargs: Any)
         entries.extend(build_evidence_entries_for_message(message, source_start + offset, tool_uses, cwd))
     rendered = [entry["full"] for entry in entries]
     transcript = "\n\n".join(rendered)
-    token_estimate = estimateTextTokens(transcript)
+    token_estimate = estimate_text_tokens(transcript)
     included_entry_count = len(entries)
     omitted_entry_count = 0
     truncated = False
@@ -35,7 +35,7 @@ def build_compaction_evidence(args: dict[str, Any] | None = None, **kwargs: Any)
             continue
         rendered[index] = entry["compact"]
         transcript = "\n\n".join(rendered)
-        token_estimate = estimateTextTokens(transcript)
+        token_estimate = estimate_text_tokens(transcript)
         truncated = True
 
     while rendered and token_estimate > token_budget:
@@ -43,7 +43,7 @@ def build_compaction_evidence(args: dict[str, Any] | None = None, **kwargs: Any)
         omitted_entry_count += 1
         included_entry_count -= 1
         transcript = "\n\n".join(rendered)
-        token_estimate = estimateTextTokens(transcript)
+        token_estimate = estimate_text_tokens(transcript)
         truncated = True
 
     if omitted_entry_count:
@@ -53,7 +53,7 @@ def build_compaction_evidence(args: dict[str, Any] | None = None, **kwargs: Any)
                 "\n\n".join(rendered),
             ]
         ).strip()
-        token_estimate = estimateTextTokens(transcript)
+        token_estimate = estimate_text_tokens(transcript)
 
     return {
         "transcript": transcript,

@@ -52,7 +52,7 @@ def _resolve_openai_credential(args: dict[str, Any]) -> Any:
     if profile.get("kind") != "openai":
         return None
     env_var = profile.get("auth", {}).get("envVar") or "OPENAI_API_KEY"
-    env_token = _resolve_provider_credential_env_value(env_var, args["settingsEnv"])
+    env_token = _resolve_provider_credential_env_value(env_var, args["settings_env"])
     kind = profile.get("auth", {}).get("kind")
     if kind == "custom_bearer":
         return env_token
@@ -68,7 +68,7 @@ def _resolve_anthropic_credentials(args: dict[str, Any]) -> dict[str, Any]:
         return {}
     env_var = profile.get("auth", {}).get("envVar")
     if profile.get("auth", {}).get("kind") == "anthropic_auth_token":
-        token = _resolve_provider_credential_env_value(env_var, args["settingsEnv"]) or args.get("explicitAuthToken") or (args.get("storedAuthToken") if env_var in ("ANTHROPIC_AUTH_TOKEN", None) else None)
+        token = _resolve_provider_credential_env_value(env_var, args["settings_env"]) or args.get("explicitAuthToken") or (args.get("storedAuthToken") if env_var in ("ANTHROPIC_AUTH_TOKEN", None) else None)
         return {"authToken": token}
-    api_key = _resolve_provider_credential_env_value(env_var, args["settingsEnv"]) or args.get("explicitApiKey") or (args.get("storedApiKey") if env_var in ("ANTHROPIC_API_KEY", None) else None)
+    api_key = _resolve_provider_credential_env_value(env_var, args["settings_env"]) or args.get("explicitApiKey") or (args.get("storedApiKey") if env_var in ("ANTHROPIC_API_KEY", None) else None)
     return {"apiKey": api_key}

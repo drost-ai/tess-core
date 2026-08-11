@@ -24,7 +24,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 "listTools": lambda: [{"server": "fake", "name": "echo", "runtimeName": "mcp__fake__echo", "description": "Echo"}],
                 "callTool": call_tool,
             }
-            mcp = next(tool for tool in core.createBuiltinTools({"mcpRuntime": runtime}) if tool.name == "Mcp")
+            mcp = next(tool for tool in core.create_builtin_tools({"mcpRuntime": runtime}) if tool.name == "Mcp")
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             payload = json.loads(run(mcp.handler({"server": "fake", "name": "echo", "arguments": {"value": "x"}}, context))["content"])
@@ -37,12 +37,12 @@ class ToolControlFlowTests(AgentCoreTestCase):
     def test_tool_cancellation_guards_web_question_and_mcp_paths(self):
         root, home, workspace, previous = self.temp_context()
         original_fetch = web_module.fetch
-        original_search = tools_module.searchWeb
+        original_search = tools_module.search_web
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["mcpConfig"] = [{"name": "edge", "transport": "http", "commandOrUrl": "https://mcp.example.test"}]
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
             calls = []
 
             async def fetch_should_not_run(*args, **kwargs):
@@ -54,7 +54,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 return []
 
             web_module.fetch = fetch_should_not_run
-            tools_module.searchWeb = search_should_not_run
+            tools_module.search_web = search_should_not_run
             context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda *_: calls.append(("question", (), {})) or "Blue", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "abortSignal": {"aborted": True}}
 
             for tool_name, payload in (
@@ -70,7 +70,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
             self.assertEqual(calls, [])
         finally:
             web_module.fetch = original_fetch
-            tools_module.searchWeb = original_search
+            tools_module.search_web = original_search
             self.restore_home(root, previous)
 
     def test_runtime_mcp_resource_tools_honor_late_abort_signals(self):
@@ -104,7 +104,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 "listTools": lambda: [],
                 "listServerStatus": lambda: [],
             }
-            tools = {tool.name: tool for tool in core.createBuiltinTools({"mcpRuntime": runtime})}
+            tools = {tool.name: tool for tool in core.create_builtin_tools({"mcpRuntime": runtime})}
             base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             with self.assertRaises(RuntimeError) as list_ctx:
@@ -124,7 +124,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
             events = []
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
 
@@ -215,7 +215,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
             async def missing_rg():
                 return None
 
-            missing_tools = {tool.name: tool for tool in core.createBuiltinTools({"search": {"resolveBinary": missing_rg}})}
+            missing_tools = {tool.name: tool for tool in core.create_builtin_tools({"search": {"resolveBinary": missing_rg}})}
             self.assertTrue(run(missing_tools["Glob"].handler({"pattern": "*.py"}, context))["isError"])
             self.assertTrue(run(missing_tools["Grep"].handler({"pattern": "needle"}, context))["isError"])
 
@@ -228,7 +228,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 rg_calls.append((path, args, cwd))
                 return "src/a.py\nnode_modules/ignored.js\n", ""
 
-            tools = {tool.name: tool for tool in core.createBuiltinTools({"search": {"resolveBinary": fake_rg, "execSearch": fake_exec_rg}})}
+            tools = {tool.name: tool for tool in core.create_builtin_tools({"search": {"resolveBinary": fake_rg, "execSearch": fake_exec_rg}})}
             glob_payload = json.loads(run(tools["Glob"].handler({"pattern": "*.py"}, context))["content"])
             self.assertEqual(glob_payload["matches"], ["src/a.py"])
             self.assertEqual(rg_calls[-1][1][0:5], ["--files", "--sort", "path", "-g", "*.py"])

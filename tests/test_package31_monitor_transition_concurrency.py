@@ -179,7 +179,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
                     },
                 )
             )
-            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
             events = []
 
             def context():

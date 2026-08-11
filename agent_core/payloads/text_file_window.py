@@ -4,13 +4,13 @@ import asyncio
 import os
 from typing import Any
 
-from .utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
+from .utf8_bounds import normalize_utf8_string, slice_utf8_prefix, utf8_byte_length
 
 
 DEFAULT_STREAM_CHUNK_BYTES = 64 * 1024
 
 
-async def readTextFileWindow(**kwargs: Any) -> dict[str, Any]:
+async def read_text_file_window(**kwargs: Any) -> dict[str, Any]:
     return await asyncio.to_thread(_read_text_file_window_sync, kwargs)
 
 
@@ -82,14 +82,14 @@ def _read_text_file_window_sync(args: dict[str, Any]) -> dict[str, Any]:
             applied = start_byte_offset if current_line == start_line else 0
             separator_bytes = 1 if selected else 0
             available = max(0, max_bytes - selected_bytes - separator_bytes)
-            fitted = sliceUtf8Prefix(raw, available)
-            fitted_bytes = utf8ByteLength(fitted)
+            fitted = slice_utf8_prefix(raw, available)
+            fitted_bytes = utf8_byte_length(fitted)
             skipped_bytes = 0
             if fitted_bytes > 0:
                 selected.append(fitted)
                 selected_bytes += separator_bytes + fitted_bytes
             elif not selected and raw:
-                skipped_bytes = utf8ByteLength(next(iter(raw), ""))
+                skipped_bytes = utf8_byte_length(next(iter(raw), ""))
             next_byte_offset = applied + fitted_bytes + skipped_bytes
             next_position = {
                 "recordOffset": current_line - 1,
@@ -120,7 +120,7 @@ def _read_text_file_window_sync(args: dict[str, Any]) -> dict[str, Any]:
             applied = start_byte_offset if current_line == start_line else 0
             if expected_record_bytes - applied <= available or stored_line_bytes <= available:
                 return
-            raw = normalizeUtf8String(b"".join(stored_parts).decode("utf-8", errors="replace"))
+            raw = normalize_utf8_string(b"".join(stored_parts).decode("utf-8", errors="replace"))
             stop_inside_line(raw, expected_record_bytes)
 
         def finish_line(at_eof: bool, next_line_start: int) -> None:
@@ -142,7 +142,7 @@ def _read_text_file_window_sync(args: dict[str, Any]) -> dict[str, Any]:
             had_cr = stored.endswith(b"\r")
             if had_cr:
                 stored = stored[:-1]
-            raw = normalizeUtf8String(stored.decode("utf-8", errors="replace"))
+            raw = normalize_utf8_string(stored.decode("utf-8", errors="replace"))
             original_line_bytes = current_line_bytes - 1 if current_line_bytes > 0 and had_cr else current_line_bytes
             applied = start_byte_offset if current_line == start_line else 0
             if applied > original_line_bytes:
@@ -151,8 +151,8 @@ def _read_text_file_window_sync(args: dict[str, Any]) -> dict[str, Any]:
                 )
             separator_bytes = 1 if selected else 0
             available = max(0, max_bytes - selected_bytes - separator_bytes)
-            fitted = sliceUtf8Prefix(raw, available)
-            fitted_bytes = utf8ByteLength(fitted)
+            fitted = slice_utf8_prefix(raw, available)
+            fitted_bytes = utf8_byte_length(fitted)
             if fitted_bytes < original_line_bytes - applied:
                 stop_inside_line(raw, original_line_bytes)
                 return
@@ -225,7 +225,7 @@ def _read_text_file_window_sync(args: dict[str, Any]) -> dict[str, Any]:
             "totalLinesKnown": total_lines_known,
             "sourceBytes": before["size"],
             "scannedBytes": scanned_bytes,
-            "returnedBytes": utf8ByteLength(content),
+            "returnedBytes": utf8_byte_length(content),
             "truncated": bool(next_position or oversized_line),
             **({"oversizedLine": oversized_line} if oversized_line else {}),
             "changedDuringRead": bool(

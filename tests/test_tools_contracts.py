@@ -6,23 +6,23 @@ from tests.support.agent_core_case import *
 class ToolContractTests(AgentCoreTestCase):
     def test_builtin_tool_contract_snapshot_matches_reference_fixture(self):
         expected = load_builtin_tool_contract_fixture()
-        snapshot = core.createBuiltinToolContractSnapshot()
+        snapshot = core.create_builtin_tool_contract_snapshot()
         self.assertEqual(snapshot, expected)
-        self.assertEqual([item["name"] for item in snapshot], [tool.name for tool in core.createBuiltinTools()])
+        self.assertEqual([item["name"] for item in snapshot], [tool.name for tool in core.create_builtin_tools()])
 
     def test_builtin_tool_schemas_are_cloned_per_definition(self):
-        first_read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+        first_read = next(tool for tool in core.create_builtin_tools() if tool.name == "Read")
         first_read.inputSchema["properties"]["file_path"]["type"] = "mutated"
-        second_read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+        second_read = next(tool for tool in core.create_builtin_tools() if tool.name == "Read")
         self.assertEqual(second_read.inputSchema["properties"]["file_path"]["type"], "string")
         self.assertEqual(core.BUILTIN_TOOL_INPUT_SCHEMAS["Read"]["properties"]["file_path"]["type"], "string")
 
     def test_builtin_tool_schemas_are_provider_strict(self):
-        for tool in core.createBuiltinTools():
+        for tool in core.create_builtin_tools():
             self.assertIs(tool.inputSchema.get("additionalProperties"), False, tool.name)
-        grep = next(tool for tool in core.createBuiltinTools() if tool.name == "Grep")
+        grep = next(tool for tool in core.create_builtin_tools() if tool.name == "Grep")
         self.assertEqual(grep.inputSchema["properties"]["output_mode"]["enum"], ["files_with_matches", "content", "count"])
-        agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+        agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
         self.assertEqual(agent.inputSchema["properties"]["isolation"]["enum"], ["shared", "worktree", "none"])
 
     def test_builtin_tool_behavior_parity_for_questions_status_config_todo_and_mcp(self):
@@ -34,7 +34,7 @@ class ToolContractTests(AgentCoreTestCase):
             events = []
             prompts = []
             context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda question, options: prompts.append((question, options)) or "Blue", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
-            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
 
             blocked = run(tools["AskUserQuestion"].handler({"questions": [{"question": "Pick?", "options": [{"label": "Blue"}]}]}, {**context, "interactive": False}))
             self.assertTrue(blocked["isError"])
@@ -72,7 +72,7 @@ class ToolContractTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             text_file = workspace / "lines.txt"
             text_file.write_text("one\ntwo\n", encoding="utf-8")
-            read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+            read = next(tool for tool in core.create_builtin_tools() if tool.name == "Read")
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             payload = json.loads(run(read.handler({"file_path": str(text_file)}, context))["content"])
@@ -83,7 +83,7 @@ class ToolContractTests(AgentCoreTestCase):
             self.assertNotIn("artifact", file_payload)
             self.assertNotIn("nextOffset", file_payload)
 
-            shaped = run(core.shapeTextToolResult(config=config, sessionId=session["id"], toolName="Bash", family="bash", text="alpha\n"))
+            shaped = run(core.shape_text_tool_result(config=config, sessionId=session["id"], toolName="Bash", family="bash", text="alpha\n"))
             self.assertEqual(shaped["view"]["originalLines"], 2)
             self.assertEqual(shaped["view"]["returnedLines"], 2)
             self.assertNotIn("artifact", shaped["view"])
@@ -95,7 +95,7 @@ class ToolContractTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             created = json.loads(run(tools["Write"].handler({"file_path": "diff.txt", "content": "one\ntwo\nthree\nfour\nfive\n"}, context))["content"])

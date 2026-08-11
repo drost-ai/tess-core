@@ -3,8 +3,8 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 import agent_core.payloads.bounded_io as bounded_io_module
-from agent_core.payloads.bounded_io import readFilePrefixBounded, readFileTailBounded
-from agent_core.payloads.utf8_bounds import utf8ByteLength
+from agent_core.payloads.bounded_io import read_file_prefix_bounded, read_file_tail_bounded
+from agent_core.payloads.utf8_bounds import utf8_byte_length
 
 
 class _ObservedFile:
@@ -43,12 +43,12 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
                 return _ObservedFile(builtin_open(*args, **kwargs), read_sizes)
 
             with mock.patch.object(bounded_io_module, "open", observed_open, create=True):
-                result = run(readFileTailBounded(filePath=str(path), maxBytes=limit))
+                result = run(read_file_tail_bounded(filePath=str(path), maxBytes=limit))
 
             self.assertTrue(result["truncated"])
             self.assertEqual(result["originalBytes"], len(raw))
             self.assertLessEqual(result["returnedBytes"], limit)
-            self.assertEqual(result["returnedBytes"], utf8ByteLength(result["text"]))
+            self.assertEqual(result["returnedBytes"], utf8_byte_length(result["text"]))
             self.assertTrue(result["text"].endswith("最后🙂terminal\n"))
             self.assertTrue(read_sizes)
             self.assertNotIn(-1, read_sizes)
@@ -57,7 +57,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
 
             read_sizes.clear()
             with mock.patch.object(bounded_io_module, "open", observed_open, create=True):
-                prefix = run(readFilePrefixBounded(filePath=str(path), maxBytes=limit))
+                prefix = run(read_file_prefix_bounded(filePath=str(path), maxBytes=limit))
             self.assertTrue(prefix["truncated"])
             self.assertEqual(prefix["originalBytes"], len(raw))
             self.assertLessEqual(prefix["returnedBytes"], limit)
@@ -114,7 +114,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
 
             supervisor_result = run(core.read_task_output(task_id, tail_bytes=4096))
             self.assertTrue(supervisor_result["truncated"])
-            self.assertLessEqual(utf8ByteLength(supervisor_result["output"]), 4096)
+            self.assertLessEqual(utf8_byte_length(supervisor_result["output"]), 4096)
             self.assertTrue(supervisor_result["output"].endswith("最后🙂terminal\n"))
 
             context = {
@@ -126,7 +126,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
                 "cwd": str(workspace),
                 "persist_session": lambda: None,
             }
-            task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
+            task_output = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskOutput")
             result = run(task_output.handler({"task_id": task_id, "block": False}, context))
             payload = json.loads(result["content"])
             manifest = payload["output_manifest"]
@@ -140,7 +140,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
                 {"type": "task_output_file", "filePath": output_path, "taskId": task_id},
             )
             self.assertNotIn("artifact", manifest)
-            self.assertLessEqual(utf8ByteLength(payload["output"]), 8000)
+            self.assertLessEqual(utf8_byte_length(payload["output"]), 8000)
             self.assertTrue(payload["output"].endswith("最后🙂terminal"))
             self.assertEqual(Path(manifest["recovery"]["filePath"]).stat().st_size, len(raw))
         finally:

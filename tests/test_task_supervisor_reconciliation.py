@@ -361,7 +361,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+            bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
             events = []
             result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}))
@@ -372,7 +372,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                     break
                 time.sleep(0.05)
             self.assertEqual(events[0][1]["summary"], f"Run shell command in background\n{command}")
-            stopper = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskStop")
+            stopper = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskStop")
             stopped = run(stopper.handler({"task_id": task_id}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace)}))
             self.assertFalse(stopped.get("isError"))
             stopped_payload = json.loads(stopped["content"])
@@ -402,7 +402,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            stopper = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskStop")
+            stopper = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskStop")
 
             async def stop_missing(_task_id):
                 return False

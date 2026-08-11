@@ -7,7 +7,7 @@ from typing import Any
 
 from .._utils import maybe_await, pretty_json
 from ..tasks.communication import create_task_question, read_task_questions
-from ..payloads.todo_policy import requireTodoItems, serializeTodoStateSummary, updateActiveTaskFromTodos
+from ..payloads.todo_policy import require_todo_items, serialize_todo_state_summary, update_active_task_from_todos
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import builtin_tool
@@ -16,11 +16,11 @@ from .validation import _require_string
 
 def _todo_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        todos = requireTodoItems(input.get("todos"))
+        todos = require_todo_items(input.get("todos"))
         context["session"]["todos"] = todos
-        updateActiveTaskFromTodos(context["session"], todos)
+        update_active_task_from_todos(context["session"], todos)
         await maybe_await(context.get("persist_session", lambda: None)())
-        return {"content": serializeTodoStateSummary(todos)}
+        return {"content": serialize_todo_state_summary(todos)}
 
     return builtin_tool("TodoWrite", handler)
 
@@ -130,10 +130,10 @@ def _config_tool() -> ToolDefinition:
 
 
 def _normalize_todo_item(value: Any) -> dict[str, str]:
-    return requireTodoItems([value])[0]
+    return require_todo_items([value])[0]
 
 
 def _derive_todo_active_form(content: str) -> str:
-    from ..payloads.todo_policy import deriveTodoActiveForm
+    from ..payloads.todo_policy import derive_todo_active_form
 
-    return deriveTodoActiveForm(content)
+    return derive_todo_active_form(content)

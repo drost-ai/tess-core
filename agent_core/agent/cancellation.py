@@ -9,7 +9,7 @@ from dataclasses import dataclass as _dataclass
 import copy
 from typing import Any
 from ..context.compaction_state import is_compaction_state_newer as _is_compaction_state_newer
-from ..payloads.attachments import stripInMemoryImageData as _strip_in_memory_image_data
+from ..payloads.attachments import strip_in_memory_image_data as _strip_in_memory_image_data
 from ..storage.message_history import create_session_message_list as _create_session_message_list
 
 

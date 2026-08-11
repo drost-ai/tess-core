@@ -8,11 +8,11 @@ def _spool_max_bytes() -> int:
 
 from typing import Any
 
-from .tools import shapeTextToolResult
-from .utf8_bounds import sliceUtf8Prefix
+from .tools import shape_text_tool_result
+from .utf8_bounds import slice_utf8_prefix
 
 
-async def buildBashResultPayload(
+async def build_bash_result_payload(
     args: dict[str, Any] | None = None, **kwargs: Any
 ) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
@@ -29,8 +29,8 @@ async def buildBashResultPayload(
     )
     common = {
         "type": "bash_result",
-        "command": sliceUtf8Prefix(values["command"], 2_048),
-        "cwd": sliceUtf8Prefix(values["cwd"], 1_024),
+        "command": slice_utf8_prefix(values["command"], 2_048),
+        "cwd": slice_utf8_prefix(values["cwd"], 1_024),
         "exitCode": run.get("exitCode"),
         "exitSignal": run.get("exitSignal"),
         "stdout": stdout["text"],
@@ -102,7 +102,7 @@ async def buildBashResultPayload(
 async def _shape_captured_stream(values: dict[str, Any], kind: str) -> dict[str, Any]:
     run = values["run"]
     byte_count = run[f"{kind}Bytes"]
-    return await shapeTextToolResult(
+    return await shape_text_tool_result(
         config=values["config"],
         sessionId=values["sessionId"],
         toolName="Bash",

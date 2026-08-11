@@ -9,7 +9,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
+            write = next(tool for tool in core.create_builtin_tools() if tool.name == "Write")
 
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
             with self.assertRaises(PermissionError):
@@ -69,7 +69,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            authority = run(core.captureAgentAuthority(config=config, session=session, tools=core.createBuiltinTools()))
+            authority = run(core.captureAgentAuthority(config=config, session=session, tools=core.create_builtin_tools()))
             session["metadata"]["effectiveAgentAuthority"] = authority
 
             seen_options: list[list[str]] = []
@@ -146,7 +146,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "auto"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
             run(core.save_auto_mode(str(workspace), {"allow": ["echo"], "deny": [sys.executable], "environment": {}}))
-            bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+            bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
             events = []
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
 
@@ -175,7 +175,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             child = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child.setdefault("metadata", {})["parentSessionId"] = parent["id"]
             run(core.save_session(parent))
-            write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
+            write = next(tool for tool in core.create_builtin_tools() if tool.name == "Write")
             persisted = {"count": 0}
             context = {"session": child, "config": config, "interactive": True, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
             with self.assertRaises(core.AgentAuthorityError) as error:
@@ -192,7 +192,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["metadata"]["depth"] = 2
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
             result = run(agent.handler({}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}))
             self.assertTrue(result["isError"])
             self.assertEqual(result["content"], "Delegation depth limit reached.")
@@ -203,7 +203,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
 
             async def fake_start(task_args):
                 return {"taskId": f"depth-task-{task_args['agentId'][:8]}", "outputFile": str(workspace / "out.log")}

@@ -129,7 +129,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 return {"taskId": "health-authorized"}
 
             tool = next(
-                item for item in core.createBuiltinTools() if item.name == "TaskHealthCheckStart"
+                item for item in core.create_builtin_tools() if item.name == "TaskHealthCheckStart"
             )
             context = self._context(config, session, {"startHealthCheck": start})
             result = run(

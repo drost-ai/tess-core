@@ -70,7 +70,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                     },
                 )
             )
-            monitor = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskMonitorStart")
+            monitor = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskMonitorStart")
             created = run(monitor.handler({"task_id": task_id, "goal": "watch server", "summary_style": "brief", "check_interval_ms": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}))
             payload = json.loads(created["content"])
             self.assertEqual(payload["task_id"], task_id)
@@ -85,7 +85,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertEqual(core.default_monitor_heartbeat_interval_ms(math.inf), 60000)
             self.assertEqual(core.default_monitor_check_interval_ms(True), 5000)
 
-            plugin_descriptors = core.createPluginActivityDescriptors(
+            plugin_descriptors = core.create_plugin_activity_descriptors(
                 [
                     {"id": "alpha", "diagnostics": [], "tools": [1, 2], "commands": [1], "mcpServers": [], "source": "local", "capabilities": {"tools": True}},
                     {"id": "beta", "diagnostics": [{"severity": "warning"}], "tools": [], "commands": [], "mcpServers": [1]},
@@ -97,7 +97,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertEqual(plugin_descriptors[1]["status"], "warn")
             self.assertEqual(plugin_descriptors[2]["status"], "error")
 
-            mcp_descriptors = core.createMcpActivityDescriptors(
+            mcp_descriptors = core.create_mcp_activity_descriptors(
                 [
                     {"name": "stdio", "connected": True, "state": "connected", "tools": 2, "resources": 1, "transport": "stdio"},
                     {"name": "sse", "connected": False, "state": "degraded", "tools": [], "resources": [], "error": "lost"},

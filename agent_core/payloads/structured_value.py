@@ -4,13 +4,13 @@ import json
 import math
 from typing import Any
 
-from .utf8_bounds import sliceUtf8Prefix, utf8ByteLength
+from .utf8_bounds import slice_utf8_prefix, utf8_byte_length
 
 
 TRUNCATED_MARKER = "[truncated]"
 
 
-def summarizeStructuredValue(source: Any, limits: dict[str, Any] | None = None) -> dict[str, Any]:
+def summarize_structured_value(source: Any, limits: dict[str, Any] | None = None) -> dict[str, Any]:
     limits = limits or {}
     policy = {
         "maxDepth": _normalize_limit(limits.get("maxDepth"), 5),
@@ -42,14 +42,14 @@ def summarizeStructuredValue(source: Any, limits: dict[str, Any] | None = None) 
             return value
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             normalized: Any = value if not isinstance(value, float) or math.isfinite(value) else str(value)
-            _consume(state, utf8ByteLength(str(normalized)))
+            _consume(state, utf8_byte_length(str(normalized)))
             return normalized
         if isinstance(value, str):
             max_bytes = min(policy["maxStringBytes"], max(0, state["remainingBytes"]))
-            fitted = sliceUtf8Prefix(value, max_bytes)
+            fitted = slice_utf8_prefix(value, max_bytes)
             if fitted != value:
                 state["truncated"] = True
-            _consume(state, utf8ByteLength(fitted) + 2)
+            _consume(state, utf8_byte_length(fitted) + 2)
             return fitted
         if depth >= policy["maxDepth"]:
             state["truncated"] = True
@@ -93,9 +93,9 @@ def summarizeStructuredValue(source: Any, limits: dict[str, Any] | None = None) 
                 break
             key = _unique_summary_key(
                 output_dict,
-                sliceUtf8Prefix(str(raw_key), min(256, state["remainingBytes"])),
+                slice_utf8_prefix(str(raw_key), min(256, state["remainingBytes"])),
             )
-            _consume(state, utf8ByteLength(key) + 3)
+            _consume(state, utf8_byte_length(key) + 3)
             state["returnedItems"] += 1
             processed += 1
             try:
@@ -110,7 +110,7 @@ def summarizeStructuredValue(source: Any, limits: dict[str, Any] | None = None) 
 
     value = visit(source, 0)
     serialized = _safe_stringify(value)
-    if utf8ByteLength(serialized) > policy["maxBytes"]:
+    if utf8_byte_length(serialized) > policy["maxBytes"]:
         state["truncated"] = True
         value = _fit_serialized_summary(serialized, policy["maxBytes"])
         serialized = _safe_stringify(value)
@@ -120,7 +120,7 @@ def summarizeStructuredValue(source: Any, limits: dict[str, Any] | None = None) 
         "visitedItems": state["visitedItems"],
         "returnedItems": state["returnedItems"],
         "omittedItems": state["omittedItems"],
-        "returnedBytes": utf8ByteLength(serialized),
+        "returnedBytes": utf8_byte_length(serialized),
     }
 
 
@@ -136,12 +136,12 @@ def _unique_summary_key(output: dict[str, Any], preferred: str) -> str:
 
 def _fit_serialized_summary(source: str, max_bytes: int) -> dict[str, Any]:
     low = 0
-    high = min(utf8ByteLength(source), max_bytes)
+    high = min(utf8_byte_length(source), max_bytes)
     best: dict[str, Any] = {"truncated": True}
     while low <= high:
         midpoint = (low + high) // 2
-        candidate = {"summary": sliceUtf8Prefix(source, midpoint), "truncated": True}
-        if utf8ByteLength(_safe_stringify(candidate)) <= max_bytes:
+        candidate = {"summary": slice_utf8_prefix(source, midpoint), "truncated": True}
+        if utf8_byte_length(_safe_stringify(candidate)) <= max_bytes:
             best = candidate
             low = midpoint + 1
         else:

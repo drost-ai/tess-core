@@ -150,7 +150,7 @@ def default_runtime_component_factories() -> dict[str, Any]:
     from ..authority.plugins import loadPluginRuntime
     from ..remote.bridge_runtime import createBridgeRuntime
     from ..mcp import createMcpRuntime
-    from ..tools import createBuiltinTools
+    from ..tools import create_builtin_tools
     from .workspace import create_workspace_controller
 
     return {
@@ -160,6 +160,6 @@ def default_runtime_component_factories() -> dict[str, Any]:
         "load_plugins": loadPluginRuntime,
         "createMcp": createMcpRuntime,
         "createBridge": createBridgeRuntime,
-        "createBuiltinTools": createBuiltinTools,
+        "create_builtin_tools": create_builtin_tools,
         "augment_config_tools": augment_config_tools,
     }

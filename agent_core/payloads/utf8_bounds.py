@@ -7,14 +7,14 @@ from typing import Any
 REPLACEMENT_CHARACTER = "\ufffd"
 
 
-def utf8ByteLength(value: str) -> int:
-    return len(normalizeUtf8String(value).encode("utf-8"))
+def utf8_byte_length(value: str) -> int:
+    return len(normalize_utf8_string(value).encode("utf-8"))
 
 
-def normalizeUtf8String(value: str) -> str:
+def normalize_utf8_string(value: str) -> str:
     if not isinstance(value, str):
         raise TypeError("Expected a string")
-    if not hasLoneUtf16Surrogate(value):
+    if not has_lone_utf16_surrogate(value):
         return value
     return "".join(
         REPLACEMENT_CHARACTER if 0xD800 <= ord(chunk) <= 0xDFFF else chunk
@@ -22,13 +22,13 @@ def normalizeUtf8String(value: str) -> str:
     )
 
 
-def sliceUtf8Prefix(value: str, maxBytes: int | float) -> str:
+def slice_utf8_prefix(value: str, maxBytes: int | float) -> str:
     limit = _normalize_limit(maxBytes)
     if limit == 0:
         return ""
     output: list[str] = []
     used = 0
-    for chunk in normalizeUtf8String(value):
+    for chunk in normalize_utf8_string(value):
         size = len(chunk.encode("utf-8"))
         if used + size > limit:
             break
@@ -37,13 +37,13 @@ def sliceUtf8Prefix(value: str, maxBytes: int | float) -> str:
     return "".join(output)
 
 
-def sliceUtf8Suffix(value: str, maxBytes: int | float) -> str:
+def slice_utf8_suffix(value: str, maxBytes: int | float) -> str:
     limit = _normalize_limit(maxBytes)
     if limit == 0:
         return ""
     output: list[str] = []
     used = 0
-    for chunk in reversed(normalizeUtf8String(value)):
+    for chunk in reversed(normalize_utf8_string(value)):
         size = len(chunk.encode("utf-8"))
         if used + size > limit:
             break
@@ -53,9 +53,9 @@ def sliceUtf8Suffix(value: str, maxBytes: int | float) -> str:
     return "".join(output)
 
 
-def sliceUtf8Window(value: str, startByteOffset: int, maxBytes: int | float) -> dict[str, Any]:
-    normalized = normalizeUtf8String(value)
-    source_bytes = utf8ByteLength(normalized)
+def slice_utf8_window(value: str, startByteOffset: int, maxBytes: int | float) -> dict[str, Any]:
+    normalized = normalize_utf8_string(value)
+    source_bytes = utf8_byte_length(normalized)
     start = _normalize_byte_offset(startByteOffset)
     if start > source_bytes:
         raise ValueError(f"UTF-8 byte offset {start} exceeds source size {source_bytes}.")
@@ -92,36 +92,36 @@ def sliceUtf8Window(value: str, startByteOffset: int, maxBytes: int | float) -> 
     return result
 
 
-def truncateUtf8(value: str, maxBytes: int | float, marker: str = "…") -> dict[str, Any]:
-    normalized = normalizeUtf8String(value)
+def truncate_utf8(value: str, maxBytes: int | float, marker: str = "…") -> dict[str, Any]:
+    normalized = normalize_utf8_string(value)
     limit = _normalize_limit(maxBytes)
-    if utf8ByteLength(normalized) <= limit:
+    if utf8_byte_length(normalized) <= limit:
         return {"value": normalized, "truncated": normalized != value}
-    fitted_marker = sliceUtf8Prefix(normalizeUtf8String(marker), limit)
-    prefix = sliceUtf8Prefix(normalized, max(0, limit - utf8ByteLength(fitted_marker)))
+    fitted_marker = slice_utf8_prefix(normalize_utf8_string(marker), limit)
+    prefix = slice_utf8_prefix(normalized, max(0, limit - utf8_byte_length(fitted_marker)))
     return {"value": f"{prefix}{fitted_marker}", "truncated": True}
 
 
-def buildUtf8HeadTailSample(value: str, maxBytes: int | float) -> str:
-    normalized = normalizeUtf8String(value)
+def build_utf8_head_tail_sample(value: str, maxBytes: int | float) -> str:
+    normalized = normalize_utf8_string(value)
     limit = _normalize_limit(maxBytes)
-    if utf8ByteLength(normalized) <= limit:
+    if utf8_byte_length(normalized) <= limit:
         return normalized
-    separator = sliceUtf8Prefix("\n…[truncated]…\n", limit)
-    content_budget = max(0, limit - utf8ByteLength(separator))
+    separator = slice_utf8_prefix("\n…[truncated]…\n", limit)
+    content_budget = max(0, limit - utf8_byte_length(separator))
     head_budget = math.floor(content_budget * 0.45)
-    return f"{sliceUtf8Prefix(normalized, head_budget)}{separator}{sliceUtf8Suffix(normalized, content_budget - head_budget)}"
+    return f"{slice_utf8_prefix(normalized, head_budget)}{separator}{slice_utf8_suffix(normalized, content_budget - head_budget)}"
 
 
-def hasLoneUtf16Surrogate(value: str) -> bool:
+def has_lone_utf16_surrogate(value: str) -> bool:
     return any(0xD800 <= ord(chunk) <= 0xDFFF for chunk in value)
 
 
-def assertUtf8ByteLimit(value: str, maxBytes: int | float, label: str) -> None:
+def assert_utf8_byte_limit(value: str, maxBytes: int | float, label: str) -> None:
     raw_bytes = len(value.encode("utf-8", errors="replace"))
     if raw_bytes > _normalize_limit(maxBytes):
         raise ValueError(f"{label} is {raw_bytes} UTF-8 bytes; limit is {_normalize_limit(maxBytes)}.")
-    if hasLoneUtf16Surrogate(value):
+    if has_lone_utf16_surrogate(value):
         raise ValueError(f"{label} contains a lone UTF-16 surrogate.")
 
 

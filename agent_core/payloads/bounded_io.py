@@ -7,10 +7,10 @@ import stat
 from typing import Any, BinaryIO
 
 from .utf8_bounds import (
-    normalizeUtf8String,
-    sliceUtf8Prefix,
-    sliceUtf8Suffix,
-    utf8ByteLength,
+    normalize_utf8_string,
+    slice_utf8_prefix,
+    slice_utf8_suffix,
+    utf8_byte_length,
 )
 
 
@@ -78,14 +78,14 @@ def _read_file_tail_bounded_sync(file_path: str, max_bytes: int | float) -> dict
         start = max(0, source_bytes - bytes_to_read)
         handle.seek(start)
         raw = _read_exact_at_most(handle, bytes_to_read)
-        decoded = normalizeUtf8String(raw.decode("utf-8", errors="replace"))
-        text = sliceUtf8Suffix(decoded, limit)
+        decoded = normalize_utf8_string(raw.decode("utf-8", errors="replace"))
+        text = slice_utf8_suffix(decoded, limit)
         after_snapshot = _file_snapshot(os.fstat(handle.fileno()))
         return {
             "text": text,
             "originalBytes": source_bytes,
-            "returnedBytes": utf8ByteLength(text),
-            "truncated": start > 0 or utf8ByteLength(decoded) > limit,
+            "returnedBytes": utf8_byte_length(text),
+            "truncated": start > 0 or utf8_byte_length(decoded) > limit,
             "changed": path_snapshot != before_snapshot or before_snapshot != after_snapshot,
         }
 
@@ -102,18 +102,18 @@ def _read_file_prefix_bounded_sync(file_path: str, max_bytes: int | float) -> di
         source_bytes = int(opened_stat.st_size)
         raw = _read_exact_at_most(handle, min(source_bytes, limit + 4))
         after_snapshot = _file_snapshot(os.fstat(handle.fileno()))
-        decoded = normalizeUtf8String(raw.decode("utf-8", errors="replace"))
-        text = sliceUtf8Prefix(decoded, limit)
+        decoded = normalize_utf8_string(raw.decode("utf-8", errors="replace"))
+        text = slice_utf8_prefix(decoded, limit)
         return {
             "text": text,
             "originalBytes": source_bytes,
-            "returnedBytes": utf8ByteLength(text),
+            "returnedBytes": utf8_byte_length(text),
             "truncated": source_bytes > limit,
             "changed": path_snapshot != before_snapshot or before_snapshot != after_snapshot,
         }
 
 
-async def readFilePrefixBounded(
+async def read_file_prefix_bounded(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -125,7 +125,7 @@ async def readFilePrefixBounded(
     return await asyncio.to_thread(_read_file_prefix_bounded_sync, file_path, max_bytes)
 
 
-async def readFileTailBounded(
+async def read_file_tail_bounded(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -137,7 +137,7 @@ async def readFileTailBounded(
     return await asyncio.to_thread(_read_file_tail_bounded_sync, file_path, max_bytes)
 
 
-def readResponseTextBoundedSync(
+def read_response_text_bounded_sync(
     response: Any,
     *,
     maxBytes: int = GENERIC_ONE_SHOT_MAX_BYTES,
@@ -164,7 +164,7 @@ def readResponseTextBoundedSync(
         chunks.append(chunk)
     raw = b"".join(chunks)
     return {
-        "text": normalizeUtf8String(raw.decode("utf-8", errors="replace")),
+        "text": normalize_utf8_string(raw.decode("utf-8", errors="replace")),
         "bytes": measured,
         "truncated": False,
     }

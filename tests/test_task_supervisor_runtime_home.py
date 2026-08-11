@@ -67,7 +67,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                 core.captureAgentAuthority(
                     config=config,
                     session=child,
-                    tools=core.createBuiltinTools(),
+                    tools=core.create_builtin_tools(),
                 )
             )
             child["metadata"]["effectiveAgentAuthority"] = child_authority

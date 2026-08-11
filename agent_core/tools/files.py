@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from .._utils import maybe_await, pretty_json
-from ..payloads.notebook import shapeNotebookPayload
-from ..payloads.cursor import encodePayloadCursor, fingerprintPayloadSource, resolvePayloadCursor
-from ..payloads.text_file_window import readTextFileWindow
+from ..payloads.notebook import shape_notebook_payload
+from ..payloads.cursor import encode_payload_cursor, fingerprint_payload_source, resolve_payload_cursor
+from ..payloads.text_file_window import read_text_file_window
 from ..payloads.attachments import (
-    createImageToolResultAttachment,
-    imageAttachmentEligibility,
-    resolveRuntimeProviderCapabilities,
+    create_image_tool_result_attachment,
+    image_attachment_eligibility,
+    resolve_runtime_provider_capabilities,
 )
-from ..payloads.tools import getToolPayloadPolicy, splitToolTextLines
+from ..payloads.tools import get_tool_payload_policy, split_tool_text_lines
 from .definitions import ToolDefinition
 from .file_change_payloads import (
     build_edit_file_change_payload,
@@ -37,8 +37,8 @@ def _read_tool() -> ToolDefinition:
         stat = _inspect_regular_file(file_path)
         if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
             mime_type = mimetypes.guess_type(file_path)[0] or "image/jpeg"
-            capabilities = resolveRuntimeProviderCapabilities(context["config"])
-            eligibility = imageAttachmentEligibility(
+            capabilities = resolve_runtime_provider_capabilities(context["config"])
+            eligibility = image_attachment_eligibility(
                 capabilities=capabilities, mimeType=mime_type, byteLength=stat.st_size
             )
             reservation = None
@@ -68,7 +68,7 @@ def _read_tool() -> ToolDefinition:
             attachment = None
             if acquired and not changed:
                 try:
-                    attachment = createImageToolResultAttachment(
+                    attachment = create_image_tool_result_attachment(
                         filePath=file_path, mimeType=mime_type, buffer=acquired["buffer"]
                     )
                 except Exception:
@@ -140,7 +140,7 @@ def _read_tool() -> ToolDefinition:
             after_stat = os.stat(file_path)
             notebook = json.loads(data.decode("utf-8"))
             snapshot = _file_snapshot(before_stat)
-            source_fingerprint = fingerprintPayloadSource(
+            source_fingerprint = fingerprint_payload_source(
                 [
                     "read_notebook",
                     file_path,
@@ -150,7 +150,7 @@ def _read_tool() -> ToolDefinition:
                     str(snapshot["mtimeNs"]),
                 ]
             )
-            cursor = resolvePayloadCursor(
+            cursor = resolve_payload_cursor(
                 family="read_notebook",
                 sourceFingerprint=source_fingerprint,
                 cursor=input.get("cursor"),
@@ -167,7 +167,7 @@ def _read_tool() -> ToolDefinition:
                 )
             ):
                 raise ValueError("Notebook cursors must point to a cell boundary.")
-            payload = await shapeNotebookPayload(
+            payload = await shape_notebook_payload(
                 config=context["config"],
                 sessionId=context["session"]["id"],
                 filePath=file_path,
@@ -196,7 +196,7 @@ def _read_tool() -> ToolDefinition:
                 )
             }
         snapshot = _file_snapshot(stat)
-        source_fingerprint = fingerprintPayloadSource(
+        source_fingerprint = fingerprint_payload_source(
             [
                 "read_text",
                 file_path,
@@ -206,7 +206,7 @@ def _read_tool() -> ToolDefinition:
                 str(snapshot["mtimeNs"]),
             ]
         )
-        cursor = resolvePayloadCursor(
+        cursor = resolve_payload_cursor(
             family="read_text",
             sourceFingerprint=source_fingerprint,
             cursor=input.get("cursor"),
@@ -215,9 +215,9 @@ def _read_tool() -> ToolDefinition:
         )
         if cursor.get("snapshotFingerprint") is not None:
             raise ValueError("Read text cursors cannot carry a search snapshot fingerprint.")
-        policy = getToolPayloadPolicy(context["config"])
+        policy = get_tool_payload_policy(context["config"])
         requested_limit = input.get("limit")
-        window = await readTextFileWindow(
+        window = await read_text_file_window(
             filePath=file_path,
             offset=cursor["recordOffset"] + 1,
             byteOffset=cursor.get("byteOffset"),
@@ -231,7 +231,7 @@ def _read_tool() -> ToolDefinition:
         )
         next_position = window.get("nextPosition")
         next_cursor = (
-            encodePayloadCursor(
+            encode_payload_cursor(
                 family="read_text",
                 sourceFingerprint=source_fingerprint,
                 position=next_position,

@@ -5,7 +5,7 @@ from ...storage import read_task_meta, task_output_path
 from .records import _task_event_payload
 from .utils import _require_string
 from typing import Any, Callable
-from ...payloads.bounded_io import readFileTailBounded as _read_file_tail_bounded
+from ...payloads.bounded_io import read_file_tail_bounded as _read_file_tail_bounded
 from ..communication import (
     answer_task_question as _answer_task_question,
     read_task_events as _read_task_events,

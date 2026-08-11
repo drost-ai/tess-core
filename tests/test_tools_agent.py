@@ -13,7 +13,7 @@ class ToolAgentTests(AgentCoreTestCase):
             config["agents"] = {"researcher": {"prompt": "Research only.", "model": "gpt-mini"}}
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
             parent["systemPrompt"] = "Parent session prompt."
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
             self.assertEqual(agent.inputSchema["required"], ["description", "prompt"])
             self.assertIn("subagent_type", agent.inputSchema["properties"])
             self.assertNotIn("run_in_background", agent.inputSchema["properties"])
@@ -92,7 +92,7 @@ class ToolAgentTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(parent))
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
             with self.assertRaises(RuntimeError) as raised:
                 run(
                     agent.handler(
@@ -154,7 +154,7 @@ class ToolAgentTests(AgentCoreTestCase):
             run(core.save_session(parent))
             supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             events = []
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
             result = run(
                 agent.handler(
                     {"description": "Run async", "prompt": "Work in the background", "name": "Async worker"},
@@ -210,7 +210,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 core.captureAgentAuthority(
                     config=config,
                     session=child,
-                    tools=core.createBuiltinTools(),
+                    tools=core.create_builtin_tools(),
                 )
             )
             child["metadata"]["effectiveAgentAuthority"] = child_authority
@@ -374,7 +374,7 @@ class NonBlockingSpawnTests(AgentCoreTestCase):
 
             started_at = time.monotonic()
             result = run(
-                next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
+                next(tool for tool in core.create_builtin_tools() if tool.name == "Agent").handler(
                     {"description": "No wait", "prompt": "go"},
                     {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
                 )
@@ -408,7 +408,7 @@ class NonBlockingSpawnTests(AgentCoreTestCase):
                 }
 
             result = run(
-                next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
+                next(tool for tool in core.create_builtin_tools() if tool.name == "Agent").handler(
                     {"description": "Refused", "prompt": "go"},
                     {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": {"startSubagentTask": refuse_start}},
                 )

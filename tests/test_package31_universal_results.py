@@ -3,14 +3,14 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 from agent_core.process.bash_lifecycle import _process_group_live, runInlineShellCommand
-from agent_core.payloads.bash_results import buildBashResultPayload
+from agent_core.payloads.bash_results import build_bash_result_payload
 from agent_core.process.output import createSubprocessOutputCollector
 from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
-    guardToolCallResult,
-    serializedContentBytes,
+    guard_tool_call_result,
+    serialized_content_bytes,
 )
-from agent_core.payloads.utf8_bounds import hasLoneUtf16Surrogate, utf8ByteLength
+from agent_core.payloads.utf8_bounds import has_lone_utf16_surrogate, utf8_byte_length
 
 
 _SMALL_CONFIG = {
@@ -62,12 +62,12 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             )
             prompt = core.render_retrieved_memory_prompt(selected)
             self.assertIsNotNone(prompt)
-            self.assertLessEqual(utf8ByteLength(prompt), 1_600)
+            self.assertLessEqual(utf8_byte_length(prompt), 1_600)
             self.assertLessEqual(selected["tokenEstimate"], 1_600)
             self.assertLessEqual(selected["byteEstimate"], 1_600)
             self.assertEqual(selected["truncatedRecordIds"], ["oversized-memory"])
             self.assertIn("truncated; source=adversarial source", prompt)
-            self.assertFalse(hasLoneUtf16Surrogate(prompt))
+            self.assertFalse(has_lone_utf16_surrogate(prompt))
 
             too_small = run(
                 core.retrieve_relevant_durable_memory(
@@ -181,7 +181,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertEqual(len(blocks), 2)
             self.assertTrue(
                 all(
-                    serializedContentBytes(block["content"]) <= TOOL_RESULT_FINAL_BYTES["large"]
+                    serialized_content_bytes(block["content"]) <= TOOL_RESULT_FINAL_BYTES["large"]
                     for block in blocks
                 )
             )
@@ -192,7 +192,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertEqual(len(completed), 2)
             self.assertTrue(
                 all(
-                    serializedContentBytes(item["output"]) <= TOOL_RESULT_FINAL_BYTES["large"]
+                    serialized_content_bytes(item["output"]) <= TOOL_RESULT_FINAL_BYTES["large"]
                     for item in completed
                 )
             )
@@ -225,7 +225,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                     timeoutMs=5_000,
                     outputCollector=collector,
                 )
-                shaped = await buildBashResultPayload(
+                shaped = await build_bash_result_payload(
                     config=_SMALL_CONFIG,
                     sessionId="artifact-fault-session",
                     command="mutating command",
@@ -245,7 +245,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertRegex(shaped["payload"]["note"], r"completed; output view persistence failed")
             self.assertNotIn("secret storage path", json.dumps(shaped["payload"]))
             content = json.dumps(shaped["payload"], ensure_ascii=False, indent=2)
-            self.assertLessEqual(serializedContentBytes(content), TOOL_RESULT_FINAL_BYTES["small"])
+            self.assertLessEqual(serialized_content_bytes(content), TOOL_RESULT_FINAL_BYTES["small"])
             self.assertEqual((workspace / "marker.txt").read_text(encoding="utf-8"), "once\n")
         finally:
             self.restore_home(root, previous)
@@ -278,7 +278,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                 )
             )
             shaped = run(
-                buildBashResultPayload(
+                build_bash_result_payload(
                     config=_SMALL_CONFIG,
                     sessionId="output-limit-session",
                     command="mutating high-output command",
@@ -298,7 +298,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertTrue(shaped["payload"]["outputTruncated"])
             self.assertEqual(shaped["payload"]["limitBytes"], spool_limit)
             content = json.dumps(shaped["payload"], ensure_ascii=False, indent=2)
-            self.assertLessEqual(serializedContentBytes(content), TOOL_RESULT_FINAL_BYTES["small"])
+            self.assertLessEqual(serialized_content_bytes(content), TOOL_RESULT_FINAL_BYTES["small"])
             self.assertEqual((workspace / "marker.txt").read_text(encoding="utf-8"), "once\n")
             pid = int((workspace / "producer.pid").read_text(encoding="utf-8"))
             self.assertFalse(_process_group_live(pid))
@@ -327,13 +327,13 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                     "sessionId": value["sessionId"],
                     "family": value["family"],
                     "filePath": f"/tmp/artifact-{payload_class}.txt",
-                    "bytes": utf8ByteLength(value["content"]),
+                    "bytes": utf8_byte_length(value["content"]),
                     "lines": 1,
                     "contentType": value["contentType"],
                     "createdAt": "2026-07-17T00:00:00Z",
                 }
 
-            guarded = await guardToolCallResult(
+            guarded = await guard_tool_call_result(
                 config=config,
                 sessionId=f"session-{payload_class}",
                 toolName="custom_output",
@@ -345,10 +345,10 @@ class Package31UniversalResultTests(AgentCoreTestCase):
         for payload_class, config in cases:
             guarded, artifact_input = run(exercise(payload_class, config))
             self.assertLessEqual(
-                serializedContentBytes(guarded["result"]["content"]),
+                serialized_content_bytes(guarded["result"]["content"]),
                 TOOL_RESULT_FINAL_BYTES[payload_class],
             )
-            self.assertFalse(hasLoneUtf16Surrogate(guarded["result"]["content"]))
+            self.assertFalse(has_lone_utf16_surrogate(guarded["result"]["content"]))
             self.assertFalse(guarded["result"].get("isError"))
             self.assertTrue(guarded["truncated"])
             self.assertEqual(artifact_input["content"], raw.replace("\ud800", "�"))
@@ -357,7 +357,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             async def fail(_value):
                 raise RuntimeError("unbounded /secret/path must not escape")
 
-            return await guardToolCallResult(
+            return await guard_tool_call_result(
                 config=_SMALL_CONFIG,
                 sessionId="side-effect-session",
                 toolName="mutating_custom_tool",

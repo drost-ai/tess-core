@@ -5,15 +5,15 @@ import json
 import re
 from typing import Any, Callable
 
-from .structured_policy import analyzeStructuredResult, buildStructuredResultSummary
+from .structured_policy import analyze_structured_result, build_structured_result_summary
 from .tools import _persist_artifact as _persist_tool_output_artifact
-from .tools import deriveToolPayloadClass
+from .tools import derive_tool_payload_class
 from .utf8_bounds import (
-    assertUtf8ByteLimit,
-    buildUtf8HeadTailSample,
-    normalizeUtf8String,
-    sliceUtf8Prefix,
-    utf8ByteLength,
+    assert_utf8_byte_limit,
+    build_utf8_head_tail_sample,
+    normalize_utf8_string,
+    slice_utf8_prefix,
+    utf8_byte_length,
 )
 
 
@@ -31,9 +31,9 @@ def non_artifact_tool_result_max_bytes() -> int:
     return int(knobValue("payloads.non_artifact_tool_result_max_bytes"))
 
 
-async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def guard_tool_call_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
-    configured_limit_bytes = getToolResultMaxBytes(values["config"])
+    configured_limit_bytes = get_tool_result_max_bytes(values["config"])
     requested_limit_bytes = values.get("maxBytes")
     never_artifact = bool(values.get("neverArtifact"))
     limit_bytes = configured_limit_bytes
@@ -62,10 +62,10 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
         except (TypeError, ValueError, OverflowError):
             raise ValueError("maxBytes must be a positive integer") from None
     normalized = _normalize_outcome(values["outcome"], limit_bytes)
-    original_bytes = serializedContentBytes(normalized["content"])
+    original_bytes = serialized_content_bytes(normalized["content"])
     diagnostics = list(normalized["diagnostics"])
     structured = (
-        analyzeStructuredResult(normalized["content"])
+        analyze_structured_result(normalized["content"])
         if original_bytes <= limit_bytes and not never_artifact and not values.get("skipStructuredShaping")
         else None
     )
@@ -80,14 +80,14 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
                     limit_bytes,
                     diagnostics,
                 )
-            shaped = buildStructuredResultSummary(
+            shaped = build_structured_result_summary(
                 analysis=structured,
                 maxBytes=limit_bytes,
                 artifact=artifact,
                 artifactUnavailable=artifact_unavailable,
             )
-            final_bytes = serializedContentBytes(shaped["content"])
-            assertToolResultContentLimit(shaped["content"], limit_bytes)
+            final_bytes = serialized_content_bytes(shaped["content"])
+            assert_tool_result_content_limit(shaped["content"], limit_bytes)
             diagnostics.append(_diagnostic(
                 "structured_cardinality_truncated", original_bytes, final_bytes,
                 limit_bytes, artifact,
@@ -107,7 +107,7 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
                 "cardinality": shaped["cardinality"],
                 "diagnostics": diagnostics,
             }
-        assertToolResultContentLimit(normalized["content"], limit_bytes)
+        assert_tool_result_content_limit(normalized["content"], limit_bytes)
         result = {
             "result": normalized["result"],
             "originalBytes": original_bytes,
@@ -141,7 +141,7 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
         )
     envelope: dict[str, Any] = {
         "type": "tool_error" if normalized["result"].get("isError") else "tool_result_truncated",
-        "tool": boundedToolIdentity(values["toolName"]),
+        "tool": bounded_tool_identity(values["toolName"]),
         "status": "error" if normalized["result"].get("isError") else "completed",
         "originalBytes": original_bytes,
         "outputTruncated": True,
@@ -152,7 +152,7 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
     if artifact:
         envelope["artifact"] = {
             "artifactId": artifact["artifactId"],
-            "filePath": sliceUtf8Prefix(artifact["filePath"], MAX_ARTIFACT_PATH_BYTES),
+            "filePath": slice_utf8_prefix(artifact["filePath"], MAX_ARTIFACT_PATH_BYTES),
             "bytes": artifact["bytes"],
             "contentType": artifact["contentType"],
             "readWith": "ReadToolArtifact",
@@ -164,8 +164,8 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
             "Tool completed; the full output view could not be persisted. The inline view is bounded."
         )
     content = _fit_envelope_with_excerpt(envelope, normalized["content"], limit_bytes)
-    final_bytes = serializedContentBytes(content)
-    assertToolResultContentLimit(content, limit_bytes)
+    final_bytes = serialized_content_bytes(content)
+    assert_tool_result_content_limit(content, limit_bytes)
     diagnostics.append(_diagnostic(
         "artifact_unavailable" if artifact_unavailable else "content_truncated",
         original_bytes,
@@ -187,22 +187,22 @@ async def guardToolCallResult(args: dict[str, Any] | None = None, **kwargs: Any)
     return result
 
 
-def getToolResultMaxBytes(config: dict[str, Any]) -> int:
+def get_tool_result_max_bytes(config: dict[str, Any]) -> int:
     from ..config._knobs import knobValue
 
-    return int(knobValue(f"payloads.result_final_bytes_{deriveToolPayloadClass(config)}"))
+    return int(knobValue(f"payloads.result_final_bytes_{derive_tool_payload_class(config)}"))
 
 
-def serializedContentBytes(content: str) -> int:
-    return utf8ByteLength(_json_stringify(content))
+def serialized_content_bytes(content: str) -> int:
+    return utf8_byte_length(_json_stringify(content))
 
 
-def assertToolResultContentLimit(content: str, maxBytes: int) -> None:
-    assertUtf8ByteLimit(_json_stringify(content), maxBytes, "Serialized tool-result content")
+def assert_tool_result_content_limit(content: str, maxBytes: int) -> None:
+    assert_utf8_byte_limit(_json_stringify(content), maxBytes, "Serialized tool-result content")
 
 
-def boundedToolIdentity(value: str) -> str:
-    return sliceUtf8Prefix(normalizeUtf8String(value), MAX_TOOL_IDENTITY_BYTES)
+def bounded_tool_identity(value: str) -> str:
+    return slice_utf8_prefix(normalize_utf8_string(value), MAX_TOOL_IDENTITY_BYTES)
 
 
 def _required_artifact_failure(
@@ -216,7 +216,7 @@ def _required_artifact_failure(
         {
             "type": "tool_error",
             "code": "artifact_persistence_failed",
-            "tool": boundedToolIdentity(values["toolName"]),
+            "tool": bounded_tool_identity(values["toolName"]),
             "status": "completed_but_output_unavailable",
             "originalBytes": original_bytes,
             "outputTruncated": True,
@@ -231,7 +231,7 @@ def _required_artifact_failure(
         "complete output. The result is withheld rather than silently losing data.",
         limit_bytes,
     )
-    final_bytes = serializedContentBytes(content)
+    final_bytes = serialized_content_bytes(content)
     return {
         "result": {
             **normalized["result"],
@@ -274,7 +274,7 @@ def _non_artifact_overflow(
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    final_bytes = serializedContentBytes(content)
+    final_bytes = serialized_content_bytes(content)
     return {
         "result": {"content": content, "isError": True},
         "originalBytes": original_bytes,
@@ -303,7 +303,7 @@ async def _try_artifact(
     writer: Callable[..., Any] = values.get("artifactWriter") or _persist_tool_output_artifact
     artifact_input = {
         "sessionId": values["sessionId"],
-        "toolName": boundedToolIdentity(values["toolName"]),
+        "toolName": bounded_tool_identity(values["toolName"]),
         "family": "generic",
         "content": content,
         "contentType": content_type,
@@ -326,7 +326,7 @@ def _normalize_outcome(outcome: dict[str, Any], limit_bytes: int) -> dict[str, A
             "diagnostics": [{
                 "kind": "error_normalized",
                 "originalBytes": _safe_error_bytes(outcome.get("error")),
-                "finalBytes": serializedContentBytes(content),
+                "finalBytes": serialized_content_bytes(content),
                 "limitBytes": limit_bytes,
             }],
         }
@@ -347,10 +347,10 @@ def _normalize_outcome(outcome: dict[str, Any], limit_bytes: int) -> dict[str, A
                 "content": content,
                 "diagnostics": [{
                     "kind": "invalid_result", "originalBytes": 0,
-                    "finalBytes": serializedContentBytes(content), "limitBytes": limit_bytes,
+                    "finalBytes": serialized_content_bytes(content), "limitBytes": limit_bytes,
                 }],
             }
-        content = normalizeUtf8String(candidate["content"])
+        content = normalize_utf8_string(candidate["content"])
         result: dict[str, Any] = {"content": content}
         if candidate.get("isError") is True:
             result["isError"] = True
@@ -370,14 +370,14 @@ def _normalize_outcome(outcome: dict[str, Any], limit_bytes: int) -> dict[str, A
             "content": content,
             "diagnostics": [{
                 "kind": "invalid_result", "originalBytes": _safe_error_bytes(error),
-                "finalBytes": serializedContentBytes(content), "limitBytes": limit_bytes,
+                "finalBytes": serialized_content_bytes(content), "limitBytes": limit_bytes,
             }],
         }
 
 
 def _build_error_content(code: str, error: Any, max_bytes: int) -> str:
-    raw = sliceUtf8Prefix(_safe_error_message(error), MAX_ERROR_MESSAGE_BYTES * 2)
-    message = sliceUtf8Prefix(
+    raw = slice_utf8_prefix(_safe_error_message(error), MAX_ERROR_MESSAGE_BYTES * 2)
+    message = slice_utf8_prefix(
         _redact_sensitive_text(raw), min(MAX_ERROR_MESSAGE_BYTES, max(0, max_bytes - 512))
     )
     return _fit_envelope_with_excerpt({"type": "tool_error", "code": code}, message, max_bytes)
@@ -385,26 +385,26 @@ def _build_error_content(code: str, error: Any, max_bytes: int) -> str:
 
 def _fit_envelope_with_excerpt(base: dict[str, Any], source: str, max_bytes: int) -> str:
     low = 0
-    high = min(utf8ByteLength(source), max_bytes)
+    high = min(utf8_byte_length(source), max_bytes)
     best = _json_stringify(base)
     while low <= high:
         midpoint = (low + high) // 2
-        candidate = _json_stringify({**base, "excerpt": buildUtf8HeadTailSample(source, midpoint)})
-        if serializedContentBytes(candidate) <= max_bytes:
+        candidate = _json_stringify({**base, "excerpt": build_utf8_head_tail_sample(source, midpoint)})
+        if serialized_content_bytes(candidate) <= max_bytes:
             best = candidate
             low = midpoint + 1
         else:
             high = midpoint - 1
-    if serializedContentBytes(best) <= max_bytes:
+    if serialized_content_bytes(best) <= max_bytes:
         return best
     fallback = _json_stringify({"type": "tool_result_truncated", "outputTruncated": True})
-    if serializedContentBytes(fallback) <= max_bytes:
+    if serialized_content_bytes(fallback) <= max_bytes:
         return fallback
-    return sliceUtf8Prefix(fallback, max(0, max_bytes - 2))
+    return slice_utf8_prefix(fallback, max(0, max_bytes - 2))
 
 
 def _safe_content_string(value: Any) -> str:
-    return normalizeUtf8String(value) if isinstance(value, str) else "Tool result could not be represented safely."
+    return normalize_utf8_string(value) if isinstance(value, str) else "Tool result could not be represented safely."
 
 
 def _safe_error_message(error: Any) -> str:
@@ -419,7 +419,7 @@ def _safe_error_message(error: Any) -> str:
 
 
 def _safe_error_bytes(error: Any) -> int:
-    return utf8ByteLength(_safe_error_message(error))
+    return utf8_byte_length(_safe_error_message(error))
 
 
 def _looks_like_json(value: str) -> bool:

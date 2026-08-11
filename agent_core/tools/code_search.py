@@ -14,13 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from .._utils import pretty_json
-from ..payloads.cursor import fingerprintPayloadSource, resolvePayloadCursor
+from ..payloads.cursor import fingerprint_payload_source, resolve_payload_cursor
 from ..acquisition.search import buildStreamingSearchFromOutput, runStreamingSearch
-from ..payloads.search_results import buildStreamingGlobPayload, buildStreamingGrepPayload
+from ..payloads.search_results import build_streaming_glob_payload, build_streaming_grep_payload
 from ..payloads.tools import (
-    applyDefaultGlobExcludes,
-    filterDefaultIgnoredGlobMatches,
-    getToolPayloadPolicy,
+    apply_default_glob_excludes,
+    filter_default_ignored_glob_matches,
+    get_tool_payload_policy,
 )
 from .cancellation import _create_tool_abort_error
 from .definitions import ToolDefinition
@@ -40,11 +40,11 @@ def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
             return {"content": "ripgrep is required for Glob and was not found.", "isError": True}
         if _is_filesystem_root(search_path):
             return {"content": "Glob refuses to search the filesystem root. Provide a narrower path or an absolute glob inside the target directory.", "isError": True}
-        args = applyDefaultGlobExcludes(["--files", "--sort", "path", "-g", pattern])
+        args = apply_default_glob_excludes(["--files", "--sort", "path", "-g", pattern])
         args.append(search_path)
-        policy = getToolPayloadPolicy(context["config"])
-        source_fingerprint = fingerprintPayloadSource(["glob", cwd, *args])
-        cursor = resolvePayloadCursor(
+        policy = get_tool_payload_policy(context["config"])
+        source_fingerprint = fingerprint_payload_source(["glob", cwd, *args])
+        cursor = resolve_payload_cursor(
             family="glob",
             sourceFingerprint=source_fingerprint,
             cursor=input.get("cursor"),
@@ -69,7 +69,7 @@ def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
             offset=offset,
             sampleItems=limit,
             sampleBytes=policy["globInlineBytes"],
-            accept=lambda record: bool(filterDefaultIgnoredGlobMatches([record])),
+            accept=lambda record: bool(filter_default_ignored_glob_matches([record])),
             abortSignal=context.get("abortSignal"),
         )
         if acquisition["aborted"]:
@@ -78,7 +78,7 @@ def _glob_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         failure = _build_search_process_failure("Glob", acquisition)
         if failure:
             return failure
-        payload = buildStreamingGlobPayload(
+        payload = build_streaming_glob_payload(
             pattern=pattern,
             searchPath=search_path,
             offset=offset,
@@ -107,7 +107,7 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
             args.append("-c")
         else:
             args.append("-n")
-        applyDefaultGlobExcludes(args)
+        apply_default_glob_excludes(args)
         if input.get("glob"):
             args.extend(["--glob", _require_string(input.get("glob"), "glob")])
         if input.get("type"):
@@ -133,9 +133,9 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         if input.get("multiline"):
             args.extend(["-U", "--multiline-dotall"])
         args.extend([pattern, search_path])
-        policy = getToolPayloadPolicy(context["config"])
-        source_fingerprint = fingerprintPayloadSource(["grep", cwd, *args])
-        cursor = resolvePayloadCursor(
+        policy = get_tool_payload_policy(context["config"])
+        source_fingerprint = fingerprint_payload_source(["grep", cwd, *args])
+        cursor = resolve_payload_cursor(
             family="grep",
             sourceFingerprint=source_fingerprint,
             cursor=input.get("cursor"),
@@ -169,7 +169,7 @@ def _grep_tool(search: dict[str, Any] | None = None) -> ToolDefinition:
         failure = _build_search_process_failure("Grep", acquisition)
         if failure:
             return failure
-        payload = buildStreamingGrepPayload(
+        payload = build_streaming_grep_payload(
             pattern=pattern,
             searchPath=search_path,
             outputMode=output_mode,
@@ -211,7 +211,7 @@ def _packaged_ripgrep_path() -> str | None:
 async def _run_search(search: dict[str, Any] | None, **kwargs: Any) -> dict[str, Any]:
     """Run a streaming ripgrep search, honoring an injected executor.
 
-    Tests inject execSearch via createBuiltinTools(options={"search": ...});
+    Tests inject execSearch via create_builtin_tools(options={"search": ...});
     its output feeds the same streaming-result builder the real search uses.
     """
     exec_search = (search or {}).get("execSearch")

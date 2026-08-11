@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 import agent_core._facade as core
-from agent_core.payloads.attachments import resolveRuntimeProviderCapabilities
+from agent_core.payloads.attachments import resolve_runtime_provider_capabilities
 
 
 class Package31VisionCapabilityTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class Package31VisionCapabilityTests(unittest.TestCase):
         self.assertTrue(kimi["supportsVision"])
         self.assertTrue(kimi["capabilities"]["imageInput"])
         self.assertTrue(
-            resolveRuntimeProviderCapabilities(
+            resolve_runtime_provider_capabilities(
                 {"providerProfile": kimi, "providerCapabilities": kimi["capabilities"]}
             )["imageInput"]
         )

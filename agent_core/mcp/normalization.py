@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from .._utils import pretty_json
-from ..payloads.attachments import createImageToolResultAttachment
+from ..payloads.attachments import create_image_tool_result_attachment
 from .blobs import _save_blob_content
 from .protocol import _without_none_values
 
@@ -72,7 +72,7 @@ async def _spill_binary_block(
     attached = False
     if kind == "image" and len(attachments) < MCP_RESULT_ATTACHMENT_MAX:
         attachments.append(
-            createImageToolResultAttachment(filePath=saved, mimeType=mime, buffer=raw)
+            create_image_tool_result_attachment(filePath=saved, mimeType=mime, buffer=raw)
         )
         attached = True
     return pretty_json(

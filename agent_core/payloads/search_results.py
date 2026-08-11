@@ -4,11 +4,11 @@ from .._utils import drop_none_deep as _without_none
 import os
 from typing import Any
 
-from .cursor import encodePayloadCursor
-from .utf8_bounds import utf8ByteLength
+from .cursor import encode_payload_cursor
+from .utf8_bounds import utf8_byte_length
 
 
-def buildStreamingGlobPayload(**kwargs: Any) -> dict[str, Any]:
+def build_streaming_glob_payload(**kwargs: Any) -> dict[str, Any]:
     common = _build_common_payload(type="glob", **kwargs)
     counts: dict[str, int] = {}
     for match in kwargs["result"]["matches"]:
@@ -26,7 +26,7 @@ def buildStreamingGlobPayload(**kwargs: Any) -> dict[str, Any]:
     }
 
 
-def buildStreamingGrepPayload(**kwargs: Any) -> dict[str, Any]:
+def build_streaming_grep_payload(**kwargs: Any) -> dict[str, Any]:
     return {
         **_build_common_payload(type="grep", **kwargs),
         "outputMode": kwargs["outputMode"],
@@ -60,7 +60,7 @@ def _build_common_payload(
     artifact = result.get("stdoutArtifact")
     next_offset = next_record_offset if not acquisition_incomplete and has_more else None
     next_cursor = (
-        encodePayloadCursor(
+        encode_payload_cursor(
             family=type,  # type: ignore[arg-type]
             sourceFingerprint=sourceFingerprint,
             position={
@@ -120,7 +120,7 @@ def _build_common_payload(
             "truncated": truncated,
             "originalBytes": result["stdoutBytes"],
             "originalLines": result["totalMatches"],
-            "returnedBytes": utf8ByteLength("\n".join(result["matches"])),
+            "returnedBytes": utf8_byte_length("\n".join(result["matches"])),
             "returnedLines": len(result["matches"]),
             "artifact": artifact,
         },

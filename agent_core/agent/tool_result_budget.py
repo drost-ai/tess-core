@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..payloads.agent_results import finalizeToolDispatchResult
+from ..payloads.agent_results import finalize_tool_dispatch_result
 from ..providers.token_budget import resolve_interactive_context_policy
 from ..payloads.result_guard import (
     MIN_EFFECTIVE_TOOL_RESULT_BYTES,
     non_artifact_tool_result_max_bytes,
-    serializedContentBytes,
+    serialized_content_bytes,
 )
 
 
@@ -45,7 +45,7 @@ class ToolResultBatchBudget:
             side_effects_may_have_occurred: bool = False,
         ) -> dict[str, Any]:
             artifact_page = tool_use.get("name") == "ReadToolArtifact"
-            completed = await finalizeToolDispatchResult(
+            completed = await finalize_tool_dispatch_result(
                 config=config,
                 sessionId=sessionId,
                 assistantMessageIndex=assistantMessageIndex,
@@ -87,7 +87,7 @@ class ToolResultBatchBudget:
             if tool_use.get("name") == "ReadToolArtifact"
         }
         used = sum(
-            serializedContentBytes(str(block.get("content") or ""))
+            serialized_content_bytes(str(block.get("content") or ""))
             for block in blocks
             if (
                 isinstance(block, dict)
@@ -96,7 +96,7 @@ class ToolResultBatchBudget:
             )
         )
         reserved_used = sum(
-            serializedContentBytes(str(block.get("content") or ""))
+            serialized_content_bytes(str(block.get("content") or ""))
             for block in blocks
             if (
                 isinstance(block, dict)

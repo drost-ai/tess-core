@@ -5,8 +5,8 @@ import hashlib
 import json
 from typing import Any
 
-from ..payloads.image_redaction import redactImagePayloads
-from ..payloads.token_estimation import estimateTextTokens
+from ..payloads.image_redaction import redact_image_payloads
+from ..payloads.token_estimation import estimate_text_tokens
 from ..storage.message_origin import (
     is_plain_user_turn_anchor as _is_plain_user_turn_anchor,
     message_for_stable_fingerprint as _message_for_stable_fingerprint,
@@ -329,7 +329,7 @@ def _content_tokens(content: Any, *, include_tool_results: bool = True) -> int:
         elif block_type == "tool_result":
             total += _content_tokens(block.get("content"))
         else:
-            total += _estimate_json_tokens(redactImagePayloads(block))
+            total += _estimate_json_tokens(redact_image_payloads(block))
     return total
 
 
@@ -432,7 +432,7 @@ def _request_fingerprint(request: dict[str, Any]) -> str:
         "tools": request.get("tools") or [],
     }
     serialized = json.dumps(
-        redactImagePayloads(projection),
+        redact_image_payloads(projection),
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),
@@ -444,7 +444,7 @@ def _request_fingerprint(request: dict[str, Any]) -> str:
 def _estimate_json_tokens(value: Any) -> int:
     return _estimate_text_tokens(
         json.dumps(
-            redactImagePayloads(value),
+            redact_image_payloads(value),
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -454,7 +454,7 @@ def _estimate_json_tokens(value: Any) -> int:
 
 
 def _estimate_text_tokens(value: str) -> int:
-    return estimateTextTokens(value)
+    return estimate_text_tokens(value)
 
 
 def _count(value: Any) -> int:

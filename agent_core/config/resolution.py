@@ -280,7 +280,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     }
     profile_binding_inputs = {
         "providerProfiles": provider_profiles,
-        "settingsEnv": settings_env,
+        "settings_env": settings_env,
         "openaiStoredToken": openai_stored_token,
         "openaiEnvToken": openai_env_token,
         "openaiCodexToken": openai_codex_token,
@@ -309,13 +309,13 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
             "explicitAuthToken": explicit_auth_token,
             "storedApiKey": stored_anthropic_api_key,
             "storedAuthToken": stored_anthropic_auth_token,
-            "settingsEnv": settings_env,
+            "settings_env": settings_env,
         }
     )
     openai_token = _resolve_openai_credential(
         {
             "profile": selected_profile,
-            "settingsEnv": settings_env,
+            "settings_env": settings_env,
             "storedToken": openai_stored_token,
             "envDefaultToken": openai_env_token,
             "codexToken": openai_codex_token,
@@ -414,7 +414,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "sandbox": sandbox_config,
         "subagents": subagents_config,
         "webSearch": web_search_config,
-        "settingsEnv": _omit_provider_credential_environment(settings_env, provider_profiles),
+        "settings_env": _omit_provider_credential_environment(settings_env, provider_profiles),
         "tools": tools,
         "allowedTools": allowed_tools,
         "disallowedTools": disallowed_tools,

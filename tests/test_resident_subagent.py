@@ -110,7 +110,7 @@ class ResidentSubagentTests(AgentCoreTestCase):
         child["metadata"]["parentSessionId"] = parent["id"]
         child["metadata"]["agentId"] = "resident-agent"
         child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
-        child_authority = run(core.captureAgentAuthority(config=config, session=child, tools=core.createBuiltinTools()))
+        child_authority = run(core.captureAgentAuthority(config=config, session=child, tools=core.create_builtin_tools()))
         child["metadata"]["effectiveAgentAuthority"] = child_authority
         run(core.save_session(parent))
         run(core.save_session(child))

@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from .continuation.tokens import estimate_messages_tokens, estimateTextTokens
+from .continuation.tokens import estimate_messages_tokens, estimate_text_tokens
 
 
 
@@ -101,7 +101,7 @@ def _collect_message_stats(messages: list[dict[str, Any]]) -> dict[str, int]:
             if block.get("type") != "tool_result":
                 continue
             tool_results += 1
-            result_tokens = estimateTextTokens(_tool_result_content_string(block.get("content")))
+            result_tokens = estimate_text_tokens(_tool_result_content_string(block.get("content")))
             tool_result_tokens += result_tokens
             largest_tool_result_tokens = max(largest_tool_result_tokens, result_tokens)
     return {

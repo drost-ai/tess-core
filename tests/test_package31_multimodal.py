@@ -12,20 +12,20 @@ from unittest import mock
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
 import agent_core._facade as core
-from agent_core.payloads.agent_results import finalizeToolDispatchResult
+from agent_core.payloads.agent_results import finalize_tool_dispatch_result
 from agent_core.payloads.image_budget import (
     ImageBudgetError,
-    admitImageMessages,
-    createImageBudgetReservation,
-    estimateEncodedImageRequestBytes,
-    measureAdmittedImageSet,
-    measureCanonicalBase64,
-    assertImageContextCapacity,
+    admit_image_messages,
+    create_image_budget_reservation,
+    estimate_encoded_image_request_bytes,
+    measure_admitted_image_set,
+    measure_canonical_base64,
+    assert_image_context_capacity,
 )
 from agent_core.payloads.attachments import (
-    filterImagesForProviderCapabilities,
-    resolveRuntimeProviderCapabilities,
-    stripInMemoryImageData,
+    filter_images_for_provider_capabilities,
+    resolve_runtime_provider_capabilities,
+    strip_in_memory_image_data,
 )
 
 
@@ -98,15 +98,15 @@ def create_session(config: dict) -> dict:
 
 class Package31ImageBudgetUnitTests(unittest.TestCase):
     def test_encoded_request_prediction_and_canonical_base64_are_allocation_free_contracts(self):
-        self.assertEqual(measureCanonicalBase64("aW1n"), 3)
-        self.assertEqual(measureCanonicalBase64("YQ=="), 1)
+        self.assertEqual(measure_canonical_base64("aW1n"), 3)
+        self.assertEqual(measure_canonical_base64("YQ=="), 1)
         with self.assertRaisesRegex(ImageBudgetError, "non-canonical"):
-            measureCanonicalBase64("YR==")
+            measure_canonical_base64("YR==")
         with self.assertRaisesRegex(ImageBudgetError, "non-canonical"):
-            measureCanonicalBase64("aW1n\n")
-        predicted = estimateEncodedImageRequestBytes("image/png", 3)
+            measure_canonical_base64("aW1n\n")
+        predicted = estimate_encoded_image_request_bytes("image/png", 3)
         self.assertGreater(predicted, 4)
-        self.assertEqual(predicted - estimateEncodedImageRequestBytes("image/png", 0), 4)
+        self.assertEqual(predicted - estimate_encoded_image_request_bytes("image/png", 0), 4)
 
     def test_aggregate_count_decoded_and_encoded_limits_fail_at_plus_one(self):
         one = image_block(b"a")
@@ -118,7 +118,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
             "maxAggregateImageBytes": 2,
             "maxEncodedImageRequestBytes": 10_000,
         }
-        admitted = admitImageMessages(
+        admitted = admit_image_messages(
             messages=[{"role": "user", "content": [one, one]}],
             capabilities=base,
             provider="openai",
@@ -126,22 +126,22 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
         self.assertEqual(admitted["summary"]["count"], 2)
         self.assertEqual(admitted["summary"]["decodedBytes"], 2)
         with self.assertRaises(ImageBudgetError) as count_error:
-            admitImageMessages(
+            admit_image_messages(
                 messages=[{"role": "user", "content": [one, one, one]}],
                 capabilities={**base, "maxAggregateImageBytes": 10},
                 provider="openai",
             )
         self.assertEqual(count_error.exception.code, "image_count_limit")
         with self.assertRaises(ImageBudgetError) as decoded_error:
-            admitImageMessages(
+            admit_image_messages(
                 messages=[{"role": "user", "content": [one, image_block(b"bb")]}],
                 capabilities={**base, "maxImageCount": 3},
                 provider="openai",
             )
         self.assertEqual(decoded_error.exception.code, "aggregate_decoded_image_limit")
-        encoded_limit = estimateEncodedImageRequestBytes("image/png", 1)
+        encoded_limit = estimate_encoded_image_request_bytes("image/png", 1)
         with self.assertRaises(ImageBudgetError) as encoded_error:
-            admitImageMessages(
+            admit_image_messages(
                 messages=[{"role": "user", "content": [one, one]}],
                 capabilities={
                     **base,
@@ -154,7 +154,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
 
     def test_per_item_capability_drop_is_bounded_and_aggregate_errors_remain_hard(self):
         dropped = []
-        result = admitImageMessages(
+        result = admit_image_messages(
             messages=[{"role": "user", "content": [image_block(b"img")]}],
             capabilities={**DEFAULT_CAPABILITIES, "imageInput": False},
             provider="openai",
@@ -171,8 +171,8 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
         png[16:20] = (1024).to_bytes(4, "big")
         png[20:24] = (512).to_bytes(4, "big")
         messages = [{"role": "user", "content": [image_block(bytes(png))]}]
-        first = measureAdmittedImageSet(messages, "openai")
-        second = measureAdmittedImageSet(messages, "openai")
+        first = measure_admitted_image_set(messages, "openai")
+        second = measure_admitted_image_set(messages, "openai")
         self.assertEqual(first, second)
         self.assertEqual(first["count"], 1)
         self.assertEqual(first["images"][0]["estimatedInputTokens"], 425)
@@ -186,7 +186,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
                 "maxAggregateImageBytes": 10,
                 "maxEncodedImageRequestBytes": 10_000,
             }
-            reservation = createImageBudgetReservation(capabilities, [0, 1])
+            reservation = create_image_budget_reservation(capabilities, [0, 1])
             later = asyncio.create_task(
                 reservation.reserve({"mimeType": "image/png", "decodedBytes": 1}, 1)
             )
@@ -203,7 +203,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
         run(exercise())
 
     def test_runtime_capability_limits_are_hard_capped(self):
-        capabilities = resolveRuntimeProviderCapabilities(
+        capabilities = resolve_runtime_provider_capabilities(
             {
                 "providerCapabilities": {
                     "imageInput": True,
@@ -249,7 +249,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
         self.assertEqual(measurement["imageInputTokens"], 255)
         self.assertRegex(measurement["imageSetFingerprint"], r"^[a-f0-9]{64}$")
         with self.assertRaises(ImageBudgetError) as caught:
-            assertImageContextCapacity(
+            assert_image_context_capacity(
                 measurement,
                 {"insufficient": True, "remainingOutputTokens": 1, "minUsefulOutputTokens": 2},
             )
@@ -259,7 +259,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
 
 class Package31MultimodalIntegrationTests(AgentCoreTestCase):
     def _read_tool(self):
-        return next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
+        return next(tool for tool in core.create_builtin_tools() if tool.name == "Read")
 
     def _read_context(self, config: dict, session: dict, events: list | None = None) -> dict:
         events = events if events is not None else []
@@ -272,7 +272,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             "outputJson": lambda event, data: events.append((event, data)),
             "askQuestion": lambda *_: "",
             "persist_session": lambda: None,
-            "getTools": core.createBuiltinTools,
+            "getTools": core.create_builtin_tools,
         }
 
     def test_read_image_and_pdf_return_metadata_without_inline_binary_content(self):
@@ -334,7 +334,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
                 "data": base64.b64encode(b"img").decode("ascii"),
             }
             events = []
-            completed = run(finalizeToolDispatchResult(
+            completed = run(finalize_tool_dispatch_result(
                 config=config,
                 sessionId="session-1",
                 assistantMessageIndex=0,
@@ -385,7 +385,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
                     "interactive": False,
                     "askQuestion": lambda *_: "",
                     "emitEvent": lambda event, data: events.append((event, data)),
-                    "tools": core.createBuiltinTools(),
+                    "tools": core.create_builtin_tools(),
                 },
             )
             result = run(core.runAgentPrompt(
@@ -450,7 +450,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
 
     def test_strip_in_memory_data_replaces_every_image_shape(self):
         messages = [{"role": "user", "content": [image_block(b"img")]}]
-        stripped = stripInMemoryImageData(messages)
+        stripped = strip_in_memory_image_data(messages)
         self.assertEqual(stripped[0]["content"][0]["type"], "text")
         self.assertIn("Payload bytes: 3", stripped[0]["content"][0]["text"])
         self.assertEqual(messages[0]["content"][0]["type"], "image")
@@ -464,7 +464,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             "maxEncodedImageRequestBytes": 10_000,
         }
         with self.assertRaises(ImageBudgetError) as caught:
-            filterImagesForProviderCapabilities(
+            filter_images_for_provider_capabilities(
                 messages=[{"role": "user", "content": [image_block(b"a"), image_block(b"b")]}],
                 config=config,
             )

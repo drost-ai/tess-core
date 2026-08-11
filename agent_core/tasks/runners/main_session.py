@@ -12,7 +12,7 @@ from ...runtime.agent_bindings import create_agent_runtime_bindings
 from ...config import resolveConfig
 from ...runtime.generation import create_runtime_session_binding
 from ...storage import configure_runtime_home, load_session, save_session
-from ...tools import createBuiltinTools
+from ...tools import create_builtin_tools
 
 
 async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
@@ -31,7 +31,7 @@ async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
 
     runtime = create_agent_runtime_bindings({
         "emitEvent": emit_event,
-        "tools": createBuiltinTools(),
+        "tools": create_builtin_tools(),
         "daemon": {"state": "unavailable", "reason": {"code": "background.daemon_unavailable", "message": "No task daemon is attached to this background runner."}},
         "refreshMcpToolRegistry": lambda: None,
         "sessionBinding": create_runtime_session_binding(session["id"], 1, 1),

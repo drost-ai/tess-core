@@ -9,12 +9,12 @@ from functools import wraps
 import pytest
 
 import agent_core._facade as core
-from agent_core.payloads.agent_results import finalizeToolDispatchResult
+from agent_core.payloads.agent_results import finalize_tool_dispatch_result
 from agent_core.shell_surface.status import buildTodosReport
 from agent_core.payloads.result_guard import (
     TOOL_RESULT_FINAL_BYTES,
-    guardToolCallResult,
-    serializedContentBytes,
+    guard_tool_call_result,
+    serialized_content_bytes,
 )
 
 
@@ -59,7 +59,7 @@ def _small_config(cwd: str) -> dict:
 
 
 def _todo_tool():
-    return next(tool for tool in core.createBuiltinTools() if tool.name == "TodoWrite")
+    return next(tool for tool in core.create_builtin_tools() if tool.name == "TodoWrite")
 
 
 def _assert_no_finite_repetition_keywords(schema: object) -> None:
@@ -107,7 +107,7 @@ async def test_todo_write_enforces_runtime_limits_and_returns_bounded_summary(tm
         "completed": 33,
         "unknown": 0,
     }
-    assert serializedContentBytes(result["content"]) <= TOOL_RESULT_FINAL_BYTES["large"]
+    assert serialized_content_bytes(result["content"]) <= TOOL_RESULT_FINAL_BYTES["large"]
     assert session["metadata"]["activeTask"]["content"] == "todo-0"
 
     before = copy.deepcopy(session["todos"])
@@ -150,10 +150,10 @@ async def test_worst_case_todo_summary_bypasses_generic_reshaping(tmp_path):
         },
         {"session": session, "persist_session": lambda: None},
     )
-    assert serializedContentBytes(result["content"]) <= TOOL_RESULT_FINAL_BYTES["small"]
+    assert serialized_content_bytes(result["content"]) <= TOOL_RESULT_FINAL_BYTES["small"]
     payload = json.loads(result["content"])
     assert payload["returnedItemCount"] == 20
-    guarded = await guardToolCallResult(
+    guarded = await guard_tool_call_result(
         config=_small_config(str(tmp_path)),
         sessionId=session["id"],
         toolName="TodoWrite",
@@ -170,7 +170,7 @@ async def test_generic_byte_small_nested_json_is_structurally_bounded(tmp_path):
         {"rows": [{"index": index, "nested": {"label": f"row-{index}"}} for index in range(140)]},
         separators=(",", ":"),
     )
-    assert serializedContentBytes(raw) < TOOL_RESULT_FINAL_BYTES["small"]
+    assert serialized_content_bytes(raw) < TOOL_RESULT_FINAL_BYTES["small"]
     captured = None
 
     async def artifact_writer(values: dict) -> dict:
@@ -188,7 +188,7 @@ async def test_generic_byte_small_nested_json_is_structurally_bounded(tmp_path):
             "createdAt": "2026-01-01T00:00:00Z",
         }
 
-    guarded = await guardToolCallResult(
+    guarded = await guard_tool_call_result(
         config=_small_config(str(tmp_path)),
         sessionId=str(uuid.uuid4()),
         toolName="generic_rows",
@@ -203,14 +203,14 @@ async def test_generic_byte_small_nested_json_is_structurally_bounded(tmp_path):
     assert payload["type"] == "structured_result_summary"
     assert payload["artifact"]["artifactId"] == "artifact-cardinality"
     assert payload["returnedItemCount"] <= 60
-    assert serializedContentBytes(guarded["result"]["content"]) <= TOOL_RESULT_FINAL_BYTES["small"]
+    assert serialized_content_bytes(guarded["result"]["content"]) <= TOOL_RESULT_FINAL_BYTES["small"]
 
 
 @_run_async
 async def test_finalization_records_emits_and_types_cardinality(tmp_path):
     emitted: list[dict] = []
     recorded: list[dict] = []
-    completed = await finalizeToolDispatchResult(
+    completed = await finalize_tool_dispatch_result(
         config=_small_config(str(tmp_path)),
         sessionId=str(uuid.uuid4()),
         assistantMessageIndex=1,

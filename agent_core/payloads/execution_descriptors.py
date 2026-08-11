@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 
-def summarizeOutputManifest(text: str, filePath: str | None = None, maxExcerptChars: int = 1200) -> dict[str, Any]:
+def summarize_output_manifest(text: str, filePath: str | None = None, maxExcerptChars: int = 1200) -> dict[str, Any]:
     return _without_none(
         {
             "filePath": filePath,
@@ -17,7 +17,7 @@ def summarizeOutputManifest(text: str, filePath: str | None = None, maxExcerptCh
     )
 
 
-def createTaskExecutionDescriptor(record: dict[str, Any], output: str = "", activities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def create_task_execution_descriptor(record: dict[str, Any], output: str = "", activities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     task_id = record.get("taskId") or record.get("id")
     return _without_none(
         {
@@ -29,7 +29,7 @@ def createTaskExecutionDescriptor(record: dict[str, Any], output: str = "", acti
             "command": record.get("command"),
             "startedAt": record.get("startedAt"),
             "finishedAt": record.get("finishedAt") or record.get("stoppedAt"),
-            "output": summarizeOutputManifest(output, record.get("outputFile")),
+            "output": summarize_output_manifest(output, record.get("outputFile")),
             "activities": activities or [],
             "metadata": _without_none(
                 {
@@ -42,7 +42,7 @@ def createTaskExecutionDescriptor(record: dict[str, Any], output: str = "", acti
     )
 
 
-def createWorkspaceExecutionDescriptor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def create_workspace_execution_descriptor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     workspace = args.get("workspace") if isinstance(args.get("workspace"), dict) else args
     action = args.get("action") or "refresh"
@@ -89,7 +89,7 @@ def createWorkspaceExecutionDescriptor(args: dict[str, Any] | None = None, **kwa
     )
 
 
-def createPluginActivityDescriptors(plugins: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def create_plugin_activity_descriptors(plugins: list[dict[str, Any]]) -> list[dict[str, Any]]:
     descriptors = []
     for plugin in plugins:
         plugin_id = plugin.get("id") or plugin.get("manifest", {}).get("id") or "plugin"
@@ -112,7 +112,7 @@ def createPluginActivityDescriptors(plugins: list[dict[str, Any]]) -> list[dict[
     return descriptors
 
 
-def createMcpActivityDescriptors(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def create_mcp_activity_descriptors(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     descriptors = []
     for server in servers:
         name = server.get("name") or "mcp"

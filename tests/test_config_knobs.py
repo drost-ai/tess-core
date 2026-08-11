@@ -381,31 +381,31 @@ class PayloadClassKnobTests(unittest.TestCase):
         resetConfiguredKnobs()
 
     def test_profile_payload_class_beats_the_name_heuristic(self):
-        from agent_core.payloads.tools import deriveToolPayloadClass
+        from agent_core.payloads.tools import derive_tool_payload_class
 
         sniffed = {"providerKind": "openai", "openaiBaseUrl": "https://api.example.test", "model": "deepseek-v4-flash"}
-        self.assertEqual(deriveToolPayloadClass(sniffed), "small")  # heuristic fallback
+        self.assertEqual(derive_tool_payload_class(sniffed), "small")  # heuristic fallback
         declared = {**sniffed, "providerProfile": {"payloadClass": "large"}}
-        self.assertEqual(deriveToolPayloadClass(declared), "large")
+        self.assertEqual(derive_tool_payload_class(declared), "large")
         junk = {**sniffed, "providerProfile": {"payloadClass": "enormous"}}
-        self.assertEqual(deriveToolPayloadClass(junk), "small")  # invalid values fall through
+        self.assertEqual(derive_tool_payload_class(junk), "small")  # invalid values fall through
 
     def test_payload_budget_knobs_drive_policy_and_derived_line_caps(self):
-        from agent_core.payloads.result_guard import getToolResultMaxBytes
-        from agent_core.payloads.tools import getToolPayloadPolicy
+        from agent_core.payloads.result_guard import get_tool_result_max_bytes
+        from agent_core.payloads.tools import get_tool_payload_policy
 
         small = {"providerKind": "openai", "openaiBaseUrl": "https://x.test", "model": "deepseek-v4-flash"}
-        policy = getToolPayloadPolicy(small)
+        policy = get_tool_payload_policy(small)
         self.assertEqual(policy["textInlineBytes"], 8_000)
         self.assertEqual(policy["textInlineLines"], 400)
-        self.assertEqual(getToolResultMaxBytes(small), 12_000)
+        self.assertEqual(get_tool_result_max_bytes(small), 12_000)
         configureKnobs({"payloads": {"text_inline_bytes_small": 16_000, "result_final_bytes_small": 20_000}})
-        policy = getToolPayloadPolicy(small)
+        policy = get_tool_payload_policy(small)
         self.assertEqual(policy["textInlineBytes"], 16_000)
         self.assertEqual(policy["textInlineLines"], 800)  # derived: bytes // 20
         self.assertEqual(policy["textHeadLines"], 200)
         self.assertEqual(policy["textTailLines"], 400)
-        self.assertEqual(getToolResultMaxBytes(small), 20_000)
+        self.assertEqual(get_tool_result_max_bytes(small), 20_000)
 
 
 class KnobResolutionIntegrationTests(AgentCoreTestCase):

@@ -34,7 +34,7 @@ from .common import (
 )
 from .shared import PERMISSION_MODES, PERMISSION_MODE_ORDER
 from typing import Any
-from ..payloads.todo_policy import summarizeTodoState as _summarize_todo_state
+from ..payloads.todo_policy import summarize_todo_state as _summarize_todo_state
 
 
 def buildStatusReport(session: dict[str, Any], config: dict[str, Any]) -> str:

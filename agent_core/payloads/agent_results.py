@@ -3,13 +3,13 @@ from __future__ import annotations
 import inspect
 from typing import Any, Callable
 
-from .result_guard import boundedToolIdentity, guardToolCallResult
+from .result_guard import bounded_tool_identity, guard_tool_call_result
 from .attachments import (
-    imageAttachmentEligibility,
-    imageAttachmentToBlock,
-    resolveRuntimeProviderCapabilities,
+    image_attachment_eligibility,
+    image_attachment_to_block,
+    resolve_runtime_provider_capabilities,
 )
-from .utf8_bounds import sliceUtf8Prefix
+from .utf8_bounds import slice_utf8_prefix
 
 
 COMMS_INLINE_TOOLS = {"SendMessage", "Agent"}
@@ -29,11 +29,11 @@ def _comms_inline_budget(tool_name: str, requested: Any) -> dict[str, Any]:
     return {"maxBytes": int(knobValue("comms.inline_result_bytes")), "allowRaise": True, "skipStructuredShaping": True}
 
 
-async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def finalize_tool_dispatch_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
     tool_use = values["toolUse"]
-    tool_name = boundedToolIdentity(values.get("toolName") or tool_use["name"])
-    guarded = await guardToolCallResult(
+    tool_name = bounded_tool_identity(values.get("toolName") or tool_use["name"])
+    guarded = await guard_tool_call_result(
         config=values["config"],
         sessionId=values["sessionId"],
         toolName=tool_name,
@@ -96,17 +96,17 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
         "content": guarded["result"]["content"],
     }
     blocks = [block]
-    capabilities = resolveRuntimeProviderCapabilities(values["config"])
+    capabilities = resolve_runtime_provider_capabilities(values["config"])
     for attachment in guarded["result"].get("attachments") or []:
         if not isinstance(attachment, dict) or attachment.get("type") != "image":
             continue
         try:
-            eligibility = imageAttachmentEligibility(
+            eligibility = image_attachment_eligibility(
                 capabilities=capabilities,
                 mimeType=attachment["mimeType"],
                 byteLength=attachment["byteLength"],
             )
-            image_block = imageAttachmentToBlock(attachment) if eligibility["eligible"] else None
+            image_block = image_attachment_to_block(attachment) if eligibility["eligible"] else None
             reason = "missing_attachment_data" if eligibility["eligible"] else eligibility["reason"]
         except Exception:
             image_block = None
@@ -120,7 +120,7 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
                         "tool_name": tool_name,
                         "tool_use_id": tool_use["id"],
                         "type": "image",
-                        "file_path": sliceUtf8Prefix(str(attachment.get("filePath") or ""), 1_024),
+                        "file_path": slice_utf8_prefix(str(attachment.get("filePath") or ""), 1_024),
                         "mime_type": attachment.get("mimeType"),
                         "bytes": attachment.get("byteLength"),
                         "reason": reason,
@@ -136,7 +136,7 @@ async def finalizeToolDispatchResult(args: dict[str, Any] | None = None, **kwarg
                     "tool_name": tool_name,
                     "tool_use_id": tool_use["id"],
                     "type": "image",
-                    "file_path": sliceUtf8Prefix(str(attachment.get("filePath") or ""), 1_024),
+                    "file_path": slice_utf8_prefix(str(attachment.get("filePath") or ""), 1_024),
                     "mime_type": attachment.get("mimeType"),
                     "bytes": attachment.get("byteLength"),
                     "sha256": attachment.get("sha256"),

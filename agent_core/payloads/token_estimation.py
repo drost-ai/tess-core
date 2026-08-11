@@ -12,30 +12,30 @@ apart on metadata-bearing tool results.
 import json
 from typing import Any
 
-from .image_redaction import redactImagePayloads
+from .image_redaction import redact_image_payloads
 
 
-def estimateTextTokens(value: str) -> int:
+def estimate_text_tokens(value: str) -> int:
     return (len(value) + 3) // 4
 
 
-def stringifyMessageForTokenEstimate(message: dict[str, Any]) -> str:
+def stringify_message_for_token_estimate(message: dict[str, Any]) -> str:
     content = message.get("content")
     rendered = (
         content
         if isinstance(content, str)
-        else json.dumps(redactImagePayloads(content), ensure_ascii=False, separators=(",", ":"))
+        else json.dumps(redact_image_payloads(content), ensure_ascii=False, separators=(",", ":"))
     )
     return f"{message.get('role')}:{rendered}"
 
 
-def stringifyValueForTokenEstimate(value: Any) -> str:
-    return json.dumps(redactImagePayloads(value), ensure_ascii=False, separators=(",", ":"))
+def stringify_value_for_token_estimate(value: Any) -> str:
+    return json.dumps(redact_image_payloads(value), ensure_ascii=False, separators=(",", ":"))
 
 
-def estimateSingleMessageTokens(message: dict[str, Any]) -> int:
-    return estimateTextTokens(stringifyMessageForTokenEstimate(message))
+def estimate_single_message_tokens(message: dict[str, Any]) -> int:
+    return estimate_text_tokens(stringify_message_for_token_estimate(message))
 
 
-def estimateMessageTokens(messages: list[dict[str, Any]]) -> int:
-    return sum(estimateSingleMessageTokens(message) for message in messages)
+def estimate_message_tokens(messages: list[dict[str, Any]]) -> int:
+    return sum(estimate_single_message_tokens(message) for message in messages)

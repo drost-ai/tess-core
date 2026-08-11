@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from ..payloads.media_persistence import sanitizeMediaForPersistence
+from ..payloads.media_persistence import sanitize_media_for_persistence
 from ..storage.message_origin import is_genuine_user_request as _is_genuine_user_request
 
 
@@ -46,7 +46,7 @@ def sync_transient_execution_session(
     execution_session: dict[str, Any],
 ) -> None:
     canonical_session.clear()
-    canonical_session.update(sanitizeMediaForPersistence(execution_session))
+    canonical_session.update(sanitize_media_for_persistence(execution_session))
 
 
 def runtime_with_sanitized_events(runtime: dict[str, Any]) -> dict[str, Any]:
@@ -58,7 +58,7 @@ def runtime_with_sanitized_events(runtime: dict[str, Any]) -> dict[str, Any]:
     def emit_sanitized(event: str, data: Any = None) -> Any:
         return emit(
             event,
-            sanitizeMediaForPersistence(data if data is not None else {}),
+            sanitize_media_for_persistence(data if data is not None else {}),
         )
 
     sanitized["emitEvent"] = emit_sanitized

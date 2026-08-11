@@ -38,8 +38,8 @@ from .dynamic_context import (
     dynamicContextBelongsInMessages as _dynamic_context_belongs_in_messages,
     injectSystemContextIntoMessages as _inject_system_context_into_messages,
 )
-from ..payloads.image_budget import assertImageContextCapacity as _assert_image_context_capacity
-from ..payloads.attachments import filterImagesForProviderCapabilities as _filter_images_for_provider_capabilities
+from ..payloads.image_budget import assert_image_context_capacity as _assert_image_context_capacity
+from ..payloads.attachments import filter_images_for_provider_capabilities as _filter_images_for_provider_capabilities
 
 async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]

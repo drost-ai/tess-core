@@ -17,16 +17,16 @@ from .web import _web_fetch_tool, _web_search_tool
 from .worktree import _enter_worktree_tool, _exit_worktree_tool
 
 
-def createBuiltinToolContractSnapshot(options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def create_builtin_tool_contract_snapshot(options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     return [
         {"name": tool.name, "description": tool.description, "inputSchema": tool.inputSchema}
-        for tool in createBuiltinTools(options)
+        for tool in create_builtin_tools(options)
     ]
 
 
 
 
-def createBuiltinTools(options: dict[str, Any] | None = None) -> list[ToolDefinition]:
+def create_builtin_tools(options: dict[str, Any] | None = None) -> list[ToolDefinition]:
     options = options or {}
     tools = [
         _read_tool(),

@@ -18,7 +18,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
 
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            tools = {tool.name: tool for tool in core.createBuiltinTools()}
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
             cwd_updates = []
 
             def update_cwd(next_cwd):
@@ -78,7 +78,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
                 async def exitWorktree(self):
                     return None
 
-            tools = {tool.name: tool for tool in core.createBuiltinTools({"workspaceController": Controller()})}
+            tools = {tool.name: tool for tool in core.create_builtin_tools({"workspaceController": Controller()})}
             cwd_updates = []
 
             def update_cwd(next_cwd):
@@ -140,7 +140,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
                 async def exitWorktree(self):
                     return exit_snapshot
 
-            tools = core.createBuiltinTools({"workspaceController": WorktreeController()})
+            tools = core.create_builtin_tools({"workspaceController": WorktreeController()})
             enter = next(tool for tool in tools if tool.name == "EnterWorktree")
             exit_tool = next(tool for tool in tools if tool.name == "ExitWorktree")
             cwd_updates = []
@@ -190,7 +190,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
                     return None
 
             bare_session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            bare_tools = core.createBuiltinTools({"workspaceController": BareWorktreeController()})
+            bare_tools = core.create_builtin_tools({"workspaceController": BareWorktreeController()})
             bare_enter = next(tool for tool in bare_tools if tool.name == "EnterWorktree")
             bare_exit = next(tool for tool in bare_tools if tool.name == "ExitWorktree")
             bare_context = {"session": bare_session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "updateCwd": lambda next_cwd: bare_session.__setitem__("cwd", next_cwd)}
@@ -247,7 +247,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             notebook_path = workspace / "demo.ipynb"
             notebook_path.write_text(json.dumps({"cells": [{"id": "cell-1", "cell_type": "code", "source": ["print(1)"], "metadata": {}, "outputs": []}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}))
-            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "NotebookEdit")
+            tool = next(tool for tool in core.create_builtin_tools() if tool.name == "NotebookEdit")
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}
             replaced = run(tool.handler({"notebook_path": str(notebook_path), "cell_id": "cell-1", "new_source": "print(2)"}, context))
             self.assertEqual(replaced, {"content": f"Updated notebook {notebook_path}"})

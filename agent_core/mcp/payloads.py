@@ -9,10 +9,10 @@ def _knob(name: str):
 import json
 from typing import Any, Iterable
 
-from ..payloads.cursor import encodePayloadCursor, fingerprintPayloadSource, resolvePayloadCursor
-from ..payloads.structured_value import summarizeStructuredValue
-from ..payloads.tools import _persist_artifact, getToolPayloadPolicy
-from ..payloads.utf8_bounds import sliceUtf8Prefix, sliceUtf8Window, utf8ByteLength
+from ..payloads.cursor import encode_payload_cursor, fingerprint_payload_source, resolve_payload_cursor
+from ..payloads.structured_value import summarize_structured_value
+from ..payloads.tools import _persist_artifact, get_tool_payload_policy
+from ..payloads.utf8_bounds import slice_utf8_prefix, slice_utf8_window, utf8_byte_length
 
 
 MAX_MCP_CONTENTS = 12
@@ -22,10 +22,10 @@ async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
     inline_bytes = _inline_budget(args.get("context"))
     limit = min(_limit(args.get("requestedLimit"), int(_knob("mcp.max_resource_page"))), int(_knob("mcp.max_resource_page")))
     resources = sorted(args.get("resources", []), key=_resource_sort_key)
-    fingerprint = fingerprintPayloadSource(
+    fingerprint = fingerprint_payload_source(
         _resource_list_cursor_parts(resources, args.get("server"))
     )
-    cursor = resolvePayloadCursor(
+    cursor = resolve_payload_cursor(
         family="mcp_resource_list",
         sourceFingerprint=fingerprint,
         cursor=args.get("cursor"),
@@ -41,7 +41,7 @@ async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
     candidates = resources[offset : offset + limit]
     page: list[Any] = []
     for candidate in candidates:
-        summary = summarizeStructuredValue(
+        summary = summarize_structured_value(
             candidate,
             {
                 "maxDepth": 2,
@@ -52,7 +52,7 @@ async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
             },
         )
         next_page = [*page, summary["value"]]
-        if utf8ByteLength(json.dumps(next_page, ensure_ascii=False, separators=(",", ":"))) > max(
+        if utf8_byte_length(json.dumps(next_page, ensure_ascii=False, separators=(",", ":"))) > max(
             1_000, inline_bytes - 2_000
         ):
             break
@@ -61,7 +61,7 @@ async def shapeMcpResourceList(**args: Any) -> dict[str, Any]:
     advanced = len(page) + skipped
     next_offset = offset + advanced if offset + advanced < len(resources) else None
     next_cursor = (
-        encodePayloadCursor(
+        encode_payload_cursor(
             family="mcp_resource_list",
             sourceFingerprint=fingerprint,
             position={"recordOffset": next_offset},
@@ -117,10 +117,10 @@ async def shapeMcpResourceRead(**args: Any) -> dict[str, Any]:
     inline_bytes = _inline_budget(args.get("context"))
     result = args.get("value") if isinstance(args.get("value"), dict) else {}
     contents = result.get("contents") if isinstance(result.get("contents"), list) else []
-    fingerprint = fingerprintPayloadSource(
+    fingerprint = fingerprint_payload_source(
         _resource_read_cursor_parts(args["server"], args["uri"], contents)
     )
-    cursor = resolvePayloadCursor(
+    cursor = resolve_payload_cursor(
         family="mcp_resource_read",
         sourceFingerprint=fingerprint,
         cursor=args.get("cursor"),
@@ -146,7 +146,7 @@ async def shapeMcpResourceRead(**args: Any) -> dict[str, Any]:
         fair_budget = max(1, remaining // remaining_slots)
         text_budget = min(remaining, max(256, fair_budget))
         text = (
-            sliceUtf8Window(content["text"], text_start, text_budget)
+            slice_utf8_window(content["text"], text_start, text_budget)
             if isinstance(content.get("text"), str)
             else None
         )
@@ -157,7 +157,7 @@ async def shapeMcpResourceRead(**args: Any) -> dict[str, Any]:
             for key, value in content.items()
             if key not in ("text", "blob", "data")
         }
-        extra = summarizeStructuredValue(
+        extra = summarize_structured_value(
             extra_source,
             {
                 "maxDepth": 3,
@@ -206,7 +206,7 @@ async def shapeMcpResourceRead(**args: Any) -> dict[str, Any]:
     if next_position is None and index < len(contents):
         next_position = {"recordOffset": index}
     next_cursor = (
-        encodePayloadCursor(
+        encode_payload_cursor(
             family="mcp_resource_read",
             sourceFingerprint=fingerprint,
             position=next_position,
@@ -237,8 +237,8 @@ async def shapeMcpResourceRead(**args: Any) -> dict[str, Any]:
     return _without_none(
         {
             "type": "mcp_resource",
-            "server": sliceUtf8Prefix(args["server"], 256),
-            "uri": sliceUtf8Prefix(args["uri"], 2_000),
+            "server": slice_utf8_prefix(args["server"], 256),
+            "uri": slice_utf8_prefix(args["uri"], 2_000),
             "totalContents": len(contents),
             "offset": offset,
             "limit": limit,
@@ -322,7 +322,7 @@ def _resource_sort_key(value: Any) -> str:
 
 
 def _inline_budget(context: dict[str, Any] | None) -> int:
-    return getToolPayloadPolicy(context["config"])["textInlineBytes"] if context else int(_knob("mcp.inline_bytes"))
+    return get_tool_payload_policy(context["config"])["textInlineBytes"] if context else int(_knob("mcp.inline_bytes"))
 
 
 def _offset(value: Any) -> int:

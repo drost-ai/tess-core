@@ -72,8 +72,8 @@ class ConfigProfileTests(AgentCoreTestCase):
                     "urlAllowlist": ["openai.com"],
                 },
             )
-            self.assertEqual(config["settingsEnv"]["EXA_API_KEY"], "settings-exa-key")
-            self.assertEqual(config["settingsEnv"]["TESS_WEB_SEARCH_PROVIDER"], "exa")
+            self.assertEqual(config["settings_env"]["EXA_API_KEY"], "settings-exa-key")
+            self.assertEqual(config["settings_env"]["TESS_WEB_SEARCH_PROVIDER"], "exa")
         finally:
             self.restore_home(root, previous)
 

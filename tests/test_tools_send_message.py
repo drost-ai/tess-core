@@ -140,12 +140,12 @@ if __name__ == "__main__":
 
 class CommsInlineBudgetTests(AgentCoreTestCase):
     def test_large_sendmessage_result_returns_inline_not_artifact(self):
-        from agent_core.payloads.agent_results import finalizeToolDispatchResult
+        from agent_core.payloads.agent_results import finalize_tool_dispatch_result
 
         root, _home, workspace, previous = self.temp_context()
         try:
             big_reply = json.dumps({"status": "reply_received", "reply": "x" * 20_000})
-            completed = run(finalizeToolDispatchResult(
+            completed = run(finalize_tool_dispatch_result(
                 config={"providerProfile": {}},
                 sessionId="comms-budget-session",
                 toolUse={"id": "tool-1", "name": "SendMessage", "input": {}},
@@ -156,7 +156,7 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
             self.assertIn("x" * 1000, content)
 
             huge_reply = json.dumps({"status": "reply_received", "reply": "y" * 100_000})
-            spilled = run(finalizeToolDispatchResult(
+            spilled = run(finalize_tool_dispatch_result(
                 config={"providerProfile": {}},
                 sessionId="comms-budget-session",
                 toolUse={"id": "tool-2", "name": "SendMessage", "input": {}},
@@ -164,7 +164,7 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
             ))
             self.assertIn("tool_result_truncated", spilled["result"]["content"])
 
-            plain_big = run(finalizeToolDispatchResult(
+            plain_big = run(finalize_tool_dispatch_result(
                 config={"providerProfile": {}},
                 sessionId="comms-budget-session",
                 toolUse={"id": "tool-3", "name": "Bash", "input": {}},
@@ -207,7 +207,7 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_comms_results_skip_the_structured_summarizer(self):
-        from agent_core.payloads.agent_results import finalizeToolDispatchResult
+        from agent_core.payloads.agent_results import finalize_tool_dispatch_result
 
         root, _home, workspace, previous = self.temp_context()
         try:
@@ -215,7 +215,7 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
                 "status": "reply_received", "message_id": "m-1",
                 "reply_message_id": "m-2", "reply": "section one\n" * 800,
             })
-            completed = run(finalizeToolDispatchResult(
+            completed = run(finalize_tool_dispatch_result(
                 config={"providerProfile": {}},
                 sessionId="comms-shape-session",
                 toolUse={"id": "tool-1", "name": "SendMessage", "input": {}},

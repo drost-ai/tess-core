@@ -16,7 +16,7 @@ from ..process.output import (
     SUBPROCESS_RING_MAX_BYTES,
     createSubprocessOutputCollector,
 )
-from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, utf8ByteLength
+from ..payloads.utf8_bounds import normalize_utf8_string, slice_utf8_prefix, utf8_byte_length
 
 
 SEARCH_RECORD_MAX_BYTES = 1024 * 1024
@@ -84,12 +84,12 @@ class _BoundedLineSampler:
         stored = bytes(self.record)
         if stored.endswith(b"\r"):
             stored = stored[:-1]
-        record = normalizeUtf8String(stored.decode("utf-8", errors="replace"))
+        record = normalize_utf8_string(stored.decode("utf-8", errors="replace"))
         if source_bytes > self.max_record_bytes:
             self.oversized_records += 1
             marker = f"...[record truncated from {source_bytes} bytes]"
-            prefix_limit = max(0, self.max_record_bytes - utf8ByteLength(marker))
-            record = f"{sliceUtf8Prefix(record, prefix_limit)}{marker}"
+            prefix_limit = max(0, self.max_record_bytes - utf8_byte_length(marker))
+            record = f"{slice_utf8_prefix(record, prefix_limit)}{marker}"
         self.record.clear()
         self.source_bytes = 0
         if not record or (self.accept and not self.accept(record)):
@@ -111,7 +111,7 @@ class _BoundedLineSampler:
         self.page_records_advanced += 1
         if fragmented:
             self.fragmented_records += 1
-        self.sample_bytes += separator_bytes + utf8ByteLength(sampled)
+        self.sample_bytes += separator_bytes + utf8_byte_length(sampled)
 
     def _skip_if_no_progress(self) -> None:
         if self.page_records_advanced == 0:
@@ -131,13 +131,13 @@ class _BoundedLineSampler:
 
 
 def _fit_record(record: str, source_bytes: int, max_bytes: int) -> tuple[str, bool]:
-    if utf8ByteLength(record) <= max_bytes:
+    if utf8_byte_length(record) <= max_bytes:
         return record, False
     marker = f"...[record fragment; {source_bytes} source bytes]"
-    marker_bytes = utf8ByteLength(marker)
+    marker_bytes = utf8_byte_length(marker)
     if marker_bytes >= max_bytes:
-        return sliceUtf8Prefix(marker, max_bytes), True
-    return f"{sliceUtf8Prefix(record, max_bytes - marker_bytes)}{marker}", True
+        return slice_utf8_prefix(marker, max_bytes), True
+    return f"{slice_utf8_prefix(record, max_bytes - marker_bytes)}{marker}", True
 
 
 async def runStreamingSearch(**kwargs: Any) -> dict[str, Any]:

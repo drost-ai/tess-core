@@ -31,7 +31,7 @@ class SubagentWorktreeIsolationTests(AgentCoreTestCase):
                 return {"taskId": "wt-task", "outputFile": str(workspace / "out.log")}
 
             result = run(
-                next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
+                next(tool for tool in core.create_builtin_tools() if tool.name == "Agent").handler(
                     {"description": "Worktree child", "prompt": "go", "isolation": "worktree"},
                     {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
                 )

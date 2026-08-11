@@ -8,7 +8,7 @@ from ...storage import (
     get_session_compactions_dir,
 )
 from typing import Any
-from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ...payloads.media_persistence import sanitize_media_for_persistence as _sanitize_media_for_persistence
 from ...providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
 
 

@@ -56,7 +56,7 @@ from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentA
 from ..runtime.agent_bindings import assert_agent_runtime_bindings, materialize_agent_execution_runtime
 from ..authority.hooks import fireToolHooks as fireToolHooks
 from ..payloads.image_budget import ImageBudgetError as _ImageBudgetError
-from ..payloads.image_budget import createImageBudgetReservation as _create_image_budget_reservation
+from ..payloads.image_budget import create_image_budget_reservation as _create_image_budget_reservation
 from ..storage.message_origin import user_request_message as _user_request_message
 from ..authority.permission_rules import findDispatchDenyRule
 from ..providers.prompt_cache_orchestration import record_prompt_cache_eviction_intent_at_finalization as _record_prompt_cache_eviction_intent_at_finalization
@@ -67,9 +67,9 @@ from ..tasks.communication import deliver_queued_task_messages_to_session
 from ._question_gate import _knob as _question_knob, backstop_open_questions_on_turn_exit as _backstop_open_questions_on_turn_exit, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
 from ..runtime.transient_input import runtime_with_sanitized_events as _runtime_with_sanitized_events
 from ..payloads.attachments import (
-    imageAttachmentReservationOrder as _image_attachment_reservation_order,
-    resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
-    stripInMemoryImageData as _strip_in_memory_image_data,
+    image_attachment_reservation_order as _image_attachment_reservation_order,
+    resolve_runtime_provider_capabilities as _resolve_runtime_provider_capabilities,
+    strip_in_memory_image_data as _strip_in_memory_image_data,
 )
 async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}

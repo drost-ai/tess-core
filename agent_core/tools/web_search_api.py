@@ -8,14 +8,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.request import Request, urlopen
 
-from ..payloads.bounded_io import readResponseTextBoundedSync
+from ..payloads.bounded_io import read_response_text_bounded_sync
 from .cancellation import _create_tool_abort_error, _signal_aborted
 
 
 EXA_RESPONSE_MAX_BYTES = 2 * 1024 * 1024
 
 
-async def searchExa(
+async def search_exa(
     query: str,
     *,
     api_key: str,
@@ -37,8 +37,8 @@ async def searchExa(
     }
     if category:
         payload["category"] = category
-    include_domains = normalizeSearchDomains(allowedDomains)
-    exclude_domains = normalizeSearchDomains(blockedDomains)
+    include_domains = normalize_search_domains(allowedDomains)
+    exclude_domains = normalize_search_domains(blockedDomains)
     if include_domains:
         payload["includeDomains"] = include_domains
     if exclude_domains:
@@ -80,18 +80,18 @@ async def searchExa(
 
 def _read_exa_response(request: Request) -> str:
     with urlopen(request, timeout=30) as response:
-        return readResponseTextBoundedSync(
+        return read_response_text_bounded_sync(
             response,
             maxBytes=EXA_RESPONSE_MAX_BYTES,
             label="Exa search response",
         )["text"]
 
 
-def resolveSearchApiProvider(config: dict[str, Any] | None, provider: str | None = None) -> dict[str, str] | None:
-    configured = resolveSearchProviderPreference(config, provider)
+def resolve_search_api_provider(config: dict[str, Any] | None, provider: str | None = None) -> dict[str, str] | None:
+    configured = resolve_search_provider_preference(config, provider)
     if configured == "scraper":
         return None
-    api_key = searchApiKey(config)
+    api_key = search_api_key(config)
     if configured == "exa":
         return {"provider": "exa", "api_key": api_key} if api_key else None
     if not configured and api_key:
@@ -99,30 +99,30 @@ def resolveSearchApiProvider(config: dict[str, Any] | None, provider: str | None
     return None
 
 
-def resolveSearchProviderPreference(config: dict[str, Any] | None, provider: str | None = None) -> str:
-    configured = normalizeSearchProvider(provider)
-    web_settings = webSearchSettings(config)
+def resolve_search_provider_preference(config: dict[str, Any] | None, provider: str | None = None) -> str:
+    configured = normalize_search_provider(provider)
+    web_settings = web_search_settings(config)
     if not configured:
-        settings_env = settingsEnv(config)
-        configured = normalizeSearchProvider(
+        env_settings = settings_env(config)
+        configured = normalize_search_provider(
             os.environ.get("TESS_WEB_SEARCH_PROVIDER")
             or os.environ.get("WEB_SEARCH_PROVIDER")
-            or settings_env.get("TESS_WEB_SEARCH_PROVIDER")
-            or settings_env.get("WEB_SEARCH_PROVIDER")
+            or env_settings.get("TESS_WEB_SEARCH_PROVIDER")
+            or env_settings.get("WEB_SEARCH_PROVIDER")
             or web_settings.get("provider")
-            or configLookup(config, "webSearchProvider", "web_search_provider")
+            or config_lookup(config, "webSearchProvider", "web_search_provider")
         )
     return configured
 
 
-def searchApiKey(config: dict[str, Any] | None) -> str:
-    web_settings = webSearchSettings(config)
-    settings_env = settingsEnv(config)
-    env_name = optionalString(web_settings.get("exaApiKeyEnv") or web_settings.get("exa_api_key_env")) or "EXA_API_KEY"
-    return os.environ.get(env_name) or os.environ.get("EXA_API_KEY") or settings_env.get(env_name) or settings_env.get("EXA_API_KEY") or ""
+def search_api_key(config: dict[str, Any] | None) -> str:
+    web_settings = web_search_settings(config)
+    env_settings = settings_env(config)
+    env_name = optional_string(web_settings.get("exaApiKeyEnv") or web_settings.get("exa_api_key_env")) or "EXA_API_KEY"
+    return os.environ.get(env_name) or os.environ.get("EXA_API_KEY") or env_settings.get(env_name) or env_settings.get("EXA_API_KEY") or ""
 
 
-def webSearchSettings(config: dict[str, Any] | None) -> dict[str, Any]:
+def web_search_settings(config: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(config, dict):
         return {}
     for key in ("webSearch", "web_search"):
@@ -144,34 +144,34 @@ def webSearchSettings(config: dict[str, Any] | None) -> dict[str, Any]:
     return {}
 
 
-def settingsEnv(config: dict[str, Any] | None) -> dict[str, str]:
+def settings_env(config: dict[str, Any] | None) -> dict[str, str]:
     if not isinstance(config, dict):
         return {}
-    value = config.get("settingsEnv") or config.get("settings_env")
+    value = config.get("settings_env") or config.get("settings_env")
     if not isinstance(value, dict):
         return {}
     return {str(key): str(item) for key, item in value.items() if item is not None}
 
 
-def configuredAllowedDomains(web_settings: dict[str, Any]) -> list[str]:
+def configured_allowed_domains(web_settings: dict[str, Any]) -> list[str]:
     raw = web_settings.get("urlAllowlist") or web_settings.get("url_allowlist") or []
     if not isinstance(raw, list):
         return []
     return [str(item).strip().lower() for item in raw if str(item).strip()]
 
 
-def normalizeSearchDomains(values: list[str] | None) -> list[str]:
+def normalize_search_domains(values: list[str] | None) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
     for value in values or []:
-        normalized = normalizeSearchDomain(value)
+        normalized = normalize_search_domain(value)
         if normalized and normalized not in seen:
             seen.add(normalized)
             out.append(normalized)
     return out
 
 
-def normalizeSearchDomain(value: str) -> str | None:
+def normalize_search_domain(value: str) -> str | None:
     trimmed = str(value or "").strip()
     trimmed = re.sub(r"^\*\.", "", trimmed)
     trimmed = re.sub(r"^\.", "", trimmed)
@@ -186,7 +186,7 @@ def normalizeSearchDomain(value: str) -> str | None:
         return trimmed.split("/", 1)[0] or None
 
 
-def hostnameMatchesRule(hostname: str, domain: str) -> bool:
+def hostname_matches_rule(hostname: str, domain: str) -> bool:
     host = str(hostname or "").strip().lower()
     rule = str(domain or "").strip().lower()
     if not host or not rule:
@@ -196,7 +196,7 @@ def hostnameMatchesRule(hostname: str, domain: str) -> bool:
     return host == rule or host.endswith(f".{rule}")
 
 
-def configLookup(config: dict[str, Any] | None, *keys: str) -> Any:
+def config_lookup(config: dict[str, Any] | None, *keys: str) -> Any:
     if not isinstance(config, dict):
         return None
     for key in keys:
@@ -205,7 +205,7 @@ def configLookup(config: dict[str, Any] | None, *keys: str) -> Any:
     return None
 
 
-def normalizeSearchProvider(value: Any) -> str:
+def normalize_search_provider(value: Any) -> str:
     cleaned = str(value or "").strip().lower()
     if cleaned == "exa":
         return "exa"
@@ -214,7 +214,7 @@ def normalizeSearchProvider(value: Any) -> str:
     return ""
 
 
-def coerceResultCount(value: Any) -> int:
+def coerce_result_count(value: Any) -> int:
     try:
         parsed = int(float(value)) if value is not None else 8
     except Exception:
@@ -222,14 +222,14 @@ def coerceResultCount(value: Any) -> int:
     return max(1, min(10, parsed))
 
 
-def optionalString(value: Any) -> str | None:
+def optional_string(value: Any) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
     return text or None
 
 
-def joinFallbackReasons(*reasons: str | None) -> str | None:
+def join_fallback_reasons(*reasons: str | None) -> str | None:
     cleaned = [reason for reason in reasons if isinstance(reason, str) and reason.strip()]
     return ";".join(cleaned) if cleaned else None
 

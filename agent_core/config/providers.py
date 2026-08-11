@@ -412,7 +412,7 @@ def resolveCompactionProviderProfileBinding(args: dict[str, Any] | None = None, 
             "openaiToken": _resolve_openai_credential(
                 {
                     "profile": profile,
-                    "settingsEnv": args.get("settingsEnv") or {},
+                    "settings_env": args.get("settings_env") or {},
                     "storedToken": args.get("openaiStoredToken"),
                     "envDefaultToken": args.get("openaiEnvToken"),
                     "codexToken": args.get("openaiCodexToken"),
@@ -427,7 +427,7 @@ def resolveCompactionProviderProfileBinding(args: dict[str, Any] | None = None, 
             "explicitAuthToken": args.get("explicitAuthToken"),
             "storedApiKey": args.get("storedAnthropicApiKey"),
             "storedAuthToken": args.get("storedAnthropicAuthToken"),
-            "settingsEnv": args.get("settingsEnv") or {},
+            "settings_env": args.get("settings_env") or {},
         }
     )
     return {

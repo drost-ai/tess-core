@@ -21,7 +21,7 @@ from agent_core.storage.io_executor import (
     run_storage_io,
     storage_executor_snapshot,
 )
-from agent_core.payloads.attachments import stripInMemoryImageData
+from agent_core.payloads.attachments import strip_in_memory_image_data
 from agent_core_harness.performance import (
     REPORT_SCHEMA,
     ROLLBACK_SNAPSHOT_BENCHMARK,
@@ -396,7 +396,7 @@ class Package46RollbackRecordTests(AgentCoreTestCase):
                 current = self._session()
                 legacy_live = copy.deepcopy(current)
                 legacy_snapshot = copy.deepcopy(legacy_live)
-                legacy_snapshot["messages"] = stripInMemoryImageData(legacy_snapshot["messages"])
+                legacy_snapshot["messages"] = strip_in_memory_image_data(legacy_snapshot["messages"])
                 rollback = _capture_session_rollback(current)
 
                 self._mutate_after_boundary(current, replace_messages=replace_messages)

@@ -98,7 +98,7 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
             config["tools"] = config["allowedTools"] = ["ReadToolArtifact"]
             reader = next(
                 tool
-                for tool in core.createBuiltinTools()
+                for tool in core.create_builtin_tools()
                 if tool.name == "ReadToolArtifact"
             )
             result, calls = self._run_repeating_tool(

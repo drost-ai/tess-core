@@ -9,7 +9,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+            bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
             base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
             foreground = run(bash.handler({"command": "printf foreground-ok"}, base_context))
             foreground_payload = json.loads(foreground["content"])
@@ -94,7 +94,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(meta["owner"], "client")
             self.assertIsInstance(meta["runnerPid"], int)
             self.assertIsInstance(meta["pid"], int)
-            task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
+            task_output = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskOutput")
             output = run(task_output.handler({"task_id": task_id, "block": True, "timeout": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(output["content"])
             self.assertIn("hello from background", payload["output"])

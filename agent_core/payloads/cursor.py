@@ -28,7 +28,7 @@ class PayloadCursorPosition(TypedDict, total=False):
     snapshotFingerprint: str
 
 
-def encodePayloadCursor(
+def encode_payload_cursor(
     *,
     family: PayloadCursorFamily,
     sourceFingerprint: str,
@@ -58,7 +58,7 @@ def encodePayloadCursor(
     return f"{CURSOR_PREFIX}{encoded}"
 
 
-def resolvePayloadCursor(
+def resolve_payload_cursor(
     *,
     family: PayloadCursorFamily,
     sourceFingerprint: str,
@@ -86,7 +86,7 @@ def resolvePayloadCursor(
     return {"recordOffset": max(0, value - legacyBase), "source": "legacy"}
 
 
-def fingerprintPayloadSource(parts: Iterable[str]) -> str:
+def fingerprint_payload_source(parts: Iterable[str]) -> str:
     digest = hashlib.sha256()
     for part in parts:
         value = str(part)

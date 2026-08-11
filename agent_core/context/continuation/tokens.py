@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ..compaction.utils import collapse_whitespace, estimateTextTokens, truncate
-from ...payloads.token_estimation import estimateMessageTokens as _estimate_message_tokens
+from ..compaction.utils import collapse_whitespace, estimate_text_tokens, truncate
+from ...payloads.token_estimation import estimate_message_tokens as _estimate_message_tokens
 
 from ..coerce import as_record
 
@@ -10,8 +10,8 @@ from .shared import LOW_VALUE_TOOL_NAMES, _tool_result_content_string
 import json
 import re
 from typing import Any
-from ...payloads.image_redaction import redactImagePayloads as _redact_image_payloads
-from ...payloads.todo_policy import selectTodoState as _select_todo_state
+from ...payloads.image_redaction import redact_image_payloads as _redact_image_payloads
+from ...payloads.todo_policy import select_todo_state as _select_todo_state
 
 
 def estimate_messages_tokens(messages: list[dict[str, Any]]) -> int:
@@ -26,7 +26,7 @@ def estimate_todo_and_plan_tokens(session: dict[str, Any]) -> int:
     )
     # Trailing newline kept: the TS peer estimates f"{todos}\n{plan}" and its
     # plan segment is always empty here — byte length must match for parity.
-    return estimateTextTokens(f"{todo_text}\n")
+    return estimate_text_tokens(f"{todo_text}\n")
 
 
 
@@ -47,7 +47,7 @@ def classify_context_pressure(args: dict[str, Any] | None = None, **kwargs: Any)
         "currentTurnToolPayloadTokens": 0,
         "lowValueTailTokens": 0,
         "repeatedFileContentTokens": 0,
-        "planTodoNoiseTokens": estimateTextTokens(system_context) + estimate_todo_and_plan_tokens(session),
+        "planTodoNoiseTokens": estimate_text_tokens(system_context) + estimate_todo_and_plan_tokens(session),
     }
 
     tool_uses: dict[str, str] = {}
@@ -65,7 +65,7 @@ def classify_context_pressure(args: dict[str, Any] | None = None, **kwargs: Any)
                 continue
             content_text = _tool_result_content_string(block.get("content"))
             tool_name = tool_uses.get(str(block.get("tool_use_id") or ""), "UnknownTool")
-            token_estimate = estimateTextTokens(content_text)
+            token_estimate = estimate_text_tokens(content_text)
             categories["currentTurnToolPayloadTokens"] += token_estimate
             if tool_name in LOW_VALUE_TOOL_NAMES:
                 categories["lowValueTailTokens"] += token_estimate
@@ -73,6 +73,6 @@ def classify_context_pressure(args: dict[str, Any] | None = None, **kwargs: Any)
                 categories["repeatedFileContentTokens"] += token_estimate
 
     return {
-        "totalTokenEstimate": estimate_messages_tokens(messages) + estimateTextTokens(system_context),
+        "totalTokenEstimate": estimate_messages_tokens(messages) + estimate_text_tokens(system_context),
         "categories": categories,
     }

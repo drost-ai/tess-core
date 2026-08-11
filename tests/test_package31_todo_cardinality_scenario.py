@@ -5,14 +5,14 @@ import copy
 from tests.support.agent_core_case import *
 
 from agent_core.shell_surface.status import buildTodosReport
-from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serializedContentBytes
+from agent_core.payloads.result_guard import TOOL_RESULT_FINAL_BYTES, serialized_content_bytes
 
 
 class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
     def test_todo_cardinality_and_small_terminal_view_are_bounded(self):
         async def scenario():
             with tempfile.TemporaryDirectory() as tmp:
-                tool = next(tool for tool in core.createBuiltinTools() if tool.name == "TodoWrite")
+                tool = next(tool for tool in core.create_builtin_tools() if tool.name == "TodoWrite")
                 session = core.create_empty_session(
                     cwd=tmp,
                     provider="openai",
@@ -45,7 +45,7 @@ class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
                 self.assertEqual(payload["omittedItemCount"], 80)
                 self.assertTrue(payload["itemsTruncated"])
                 self.assertLessEqual(
-                    serializedContentBytes(result["content"]),
+                    serialized_content_bytes(result["content"]),
                     TOOL_RESULT_FINAL_BYTES["small"],
                 )
 

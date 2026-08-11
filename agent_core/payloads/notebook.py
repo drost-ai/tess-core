@@ -9,20 +9,20 @@ def _knob(name: str):
 
 from typing import Any
 
-from .cursor import encodePayloadCursor
-from .structured_value import summarizeStructuredValue
-from .tools import _persist_artifact, getToolPayloadPolicy
-from .utf8_bounds import sliceUtf8Prefix, utf8ByteLength
+from .cursor import encode_payload_cursor
+from .structured_value import summarize_structured_value
+from .tools import _persist_artifact, get_tool_payload_policy
+from .utf8_bounds import slice_utf8_prefix, utf8_byte_length
 
 
 MAX_OUTPUTS_PER_CELL = 12
 
 
-async def shapeNotebookPayload(**args: Any) -> dict[str, Any]:
+async def shape_notebook_payload(**args: Any) -> dict[str, Any]:
     notebook = args.get("notebook")
     if not isinstance(notebook, dict) or not isinstance(notebook.get("cells"), list):
         raise ValueError("Notebook JSON must contain a cells array.")
-    policy = getToolPayloadPolicy(args["config"])
+    policy = get_tool_payload_policy(args["config"])
     offset = _offset(args.get("offset"))
     requested_limit = _limit(args.get("requestedLimit"), int(_knob("payloads.notebook_cells_per_page")))
     limit = min(requested_limit, int(_knob("payloads.notebook_cells_per_page")))
@@ -71,7 +71,7 @@ async def shapeNotebookPayload(**args: Any) -> dict[str, Any]:
     recovery = "\n\n".join(recovery_text)
     output_artifact = None
     output_artifact_unavailable = False
-    if utf8ByteLength(recovery) > policy["artifactThresholdBytes"]:
+    if utf8_byte_length(recovery) > policy["artifactThresholdBytes"]:
         try:
             output_artifact = await _persist_artifact(
                 {
@@ -87,7 +87,7 @@ async def shapeNotebookPayload(**args: Any) -> dict[str, Any]:
             output_artifact_unavailable = True
     next_offset = offset + len(page) if offset + len(page) < len(notebook["cells"]) else None
     next_cursor = (
-        encodePayloadCursor(
+        encode_payload_cursor(
             family="read_notebook",
             sourceFingerprint=args["sourceFingerprint"],
             position={"recordOffset": next_offset},
@@ -95,7 +95,7 @@ async def shapeNotebookPayload(**args: Any) -> dict[str, Any]:
         if next_offset is not None
         else None
     )
-    metadata = summarizeStructuredValue(
+    metadata = summarize_structured_value(
         notebook.get("metadata"),
         {
             "maxDepth": 3,
@@ -164,7 +164,7 @@ def _summarize_output(
             mime_summaries.append(
                 {
                     "mimeType": mime_type,
-                    "encodedBytes": utf8ByteLength(_text_sequence(payload)),
+                    "encodedBytes": utf8_byte_length(_text_sequence(payload)),
                     "inlined": False,
                 }
             )
@@ -193,8 +193,8 @@ def _summarize_output(
     if isinstance(output.get("ename"), str) or isinstance(output.get("evalue"), str):
         error = _without_none(
             {
-                "name": sliceUtf8Prefix(output.get("ename", ""), 120) or None,
-                "value": sliceUtf8Prefix(output.get("evalue", ""), 400) or None,
+                "name": slice_utf8_prefix(output.get("ename", ""), 120) or None,
+                "value": slice_utf8_prefix(output.get("evalue", ""), 400) or None,
                 "traceback": traceback["text"] or None,
                 "tracebackBytes": traceback["originalBytes"] or None,
                 "tracebackTruncated": traceback["truncated"] or None,
@@ -203,7 +203,7 @@ def _summarize_output(
     return _without_none(
         {
             "outputType": output_type,
-            "name": sliceUtf8Prefix(output.get("name", ""), 120)
+            "name": slice_utf8_prefix(output.get("name", ""), 120)
             if isinstance(output.get("name"), str)
             else None,
             "text": text["text"] or None,
@@ -217,12 +217,12 @@ def _summarize_output(
 
 def _summarize_text_sequence(value: Any, max_bytes: int) -> dict[str, Any]:
     full = _text_sequence(value)
-    fitted = sliceUtf8Prefix(full, max(0, max_bytes))
+    fitted = slice_utf8_prefix(full, max(0, max_bytes))
     return {
         "text": fitted,
         "fullText": full,
-        "originalBytes": utf8ByteLength(full),
-        "returnedBytes": utf8ByteLength(fitted),
+        "originalBytes": utf8_byte_length(full),
+        "returnedBytes": utf8_byte_length(fitted),
         "truncated": fitted != full,
     }
 

@@ -6,9 +6,9 @@ import json
 from typing import Any
 
 from ..payloads.token_estimation import (
-    estimateSingleMessageTokens,
-    estimateTextTokens,
-    stringifyValueForTokenEstimate,
+    estimate_single_message_tokens,
+    estimate_text_tokens,
+    stringify_value_for_token_estimate,
 )
 from ..providers.openai import build_chat_completions_create_params, build_responses_create_params
 
@@ -18,11 +18,11 @@ def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 
     # serializing whole message dicts with spaced JSON inflated
     # metadata-bearing tool results by 43.5% against the compaction units
     # this number is subtracted from.
-    total = estimateTextTokens(request.get("system", ""))
+    total = estimate_text_tokens(request.get("system", ""))
     for message in request.get("messages", []):
-        total += estimateSingleMessageTokens(message)
+        total += estimate_single_message_tokens(message)
     if request.get("tools"):
-        total += estimateTextTokens(stringifyValueForTokenEstimate(request["tools"]))
+        total += estimate_text_tokens(stringify_value_for_token_estimate(request["tools"]))
     return total + image_input_tokens
 
 
@@ -31,30 +31,30 @@ def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_in
         params = build_chat_completions_create_params(request)
         total = 0
         for message in params.get("messages") or []:
-            total += estimateTextTokens(stringifyValueForTokenEstimate(message))
+            total += estimate_text_tokens(stringify_value_for_token_estimate(message))
         if params.get("tools"):
-            total += estimateTextTokens(stringifyValueForTokenEstimate(params["tools"]))
+            total += estimate_text_tokens(stringify_value_for_token_estimate(params["tools"]))
         if params.get("reasoning_effort"):
-            total += estimateTextTokens(json.dumps(params["reasoning_effort"], ensure_ascii=False))
+            total += estimate_text_tokens(json.dumps(params["reasoning_effort"], ensure_ascii=False))
         if params.get("stream_options"):
-            total += estimateTextTokens(json.dumps(params["stream_options"], ensure_ascii=False))
+            total += estimate_text_tokens(json.dumps(params["stream_options"], ensure_ascii=False))
         return total + image_input_tokens
     params = _sanitize_openai_count_params(
         build_responses_create_params({"isCodexBackend": mode == "codex", "request": request})
     )
     total = 0
     if isinstance(params.get("instructions"), str):
-        total += estimateTextTokens(params["instructions"])
+        total += estimate_text_tokens(params["instructions"])
     input_value = params.get("input")
     if isinstance(input_value, list):
         for item in input_value:
-            total += estimateTextTokens(stringifyValueForTokenEstimate(item))
+            total += estimate_text_tokens(stringify_value_for_token_estimate(item))
     elif isinstance(input_value, str):
-        total += estimateTextTokens(input_value)
+        total += estimate_text_tokens(input_value)
     if params.get("tools"):
-        total += estimateTextTokens(stringifyValueForTokenEstimate(params["tools"]))
+        total += estimate_text_tokens(stringify_value_for_token_estimate(params["tools"]))
     if params.get("reasoning"):
-        total += estimateTextTokens(stringifyValueForTokenEstimate(params["reasoning"]))
+        total += estimate_text_tokens(stringify_value_for_token_estimate(params["reasoning"]))
     return total + image_input_tokens
 
 

@@ -10,13 +10,13 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from .._utils import get_value as _get_value, maybe_await as _maybe_await, now_iso
-from ..payloads.image_budget import measureAdmittedImageSet as _measure_admitted_image_set
-from ..payloads.image_redaction import redactImagePayloads as _redact_image_payloads
+from ..payloads.image_budget import measure_admitted_image_set as _measure_admitted_image_set
+from ..payloads.image_redaction import redact_image_payloads as _redact_image_payloads
 from .request_estimation import (
     _estimate_openai_request_tokens,
     _estimate_request_tokens,
 )
-from ..payloads.token_estimation import estimateTextTokens
+from ..payloads.token_estimation import estimate_text_tokens
 from ..providers.errors import (
     create_provider_failure_record as _create_provider_failure_record,
     create_provider_request_error as _create_provider_request_error,
@@ -176,7 +176,7 @@ def record_actual_token_usage(session: dict[str, Any], usage: dict[str, Any]) ->
 
 
 def _estimate_text_tokens(value: str) -> int:
-    return estimateTextTokens(value)
+    return estimate_text_tokens(value)
 
 
 def _request_component_fields(

@@ -11,15 +11,15 @@ from ...storage import get_session_compactions_dir
 from .documents import load_working_context_artifact
 from .prompts import render_working_context_prompt_context
 from .shared import CONTINUATION_BRIDGE_MESSAGE, compaction_knob
-from .utils import estimateMessageTokens, estimateTextTokens
+from .utils import estimate_message_tokens, estimate_text_tokens
 
 def estimate_working_context_tokens(session: dict[str, Any]) -> int:
     state = session.get("metadata", {}).get("compactionState")
     if not state:
-        return estimateMessageTokens(session.get("messages", []))
+        return estimate_message_tokens(session.get("messages", []))
     cutoff = int(state.get("compactedThroughMessageIndex") or 0)
     recent_messages = session.get("messages", [])[cutoff:]
-    return int(state.get("compactedContextTokenEstimate") or 0) + estimateMessageTokens(recent_messages)
+    return int(state.get("compactedContextTokenEstimate") or 0) + estimate_message_tokens(recent_messages)
 
 
 def should_auto_compact(
@@ -106,7 +106,7 @@ async def _build_compaction_system_prompt_projection(
             "projectedTokens": 0,
         }
     original = render_working_context_prompt_context(working_context)
-    original_tokens = estimateTextTokens(original)
+    original_tokens = estimate_text_tokens(original)
     return {
         "text": original,
         "applied": False,

@@ -5,7 +5,7 @@ import math
 import re
 from typing import Any, Iterable
 
-from .utf8_bounds import normalizeUtf8String, truncateUtf8, utf8ByteLength
+from .utf8_bounds import normalize_utf8_string, truncate_utf8, utf8_byte_length
 
 
 TODO_WRITE_LIMITS = {
@@ -19,7 +19,7 @@ TODO_WRITE_LIMITS = {
 }
 
 
-def requireTodoItems(value: Any) -> list[dict[str, str]]:
+def require_todo_items(value: Any) -> list[dict[str, str]]:
     if not isinstance(value, list):
         raise ValueError("Expected todos to be an array")
     if len(value) > TODO_WRITE_LIMITS["maxItems"]:
@@ -29,7 +29,7 @@ def requireTodoItems(value: Any) -> list[dict[str, str]]:
     return [_require_todo_item(item, index) for index, item in enumerate(value)]
 
 
-def deriveTodoActiveForm(content: str) -> str:
+def derive_todo_active_form(content: str) -> str:
     normalized = content.strip().lower()
     if not normalized:
         return "work"
@@ -37,7 +37,7 @@ def deriveTodoActiveForm(content: str) -> str:
     return match.group(0) if match else "work"
 
 
-def selectTodoState(
+def select_todo_state(
     todos: Iterable[dict[str, Any]],
     limits: dict[str, Any],
 ) -> dict[str, Any]:
@@ -57,10 +57,10 @@ def selectTodoState(
     return {"total": len(values), "open": open_items, "completed": completed, "statusCounts": counts}
 
 
-def summarizeTodoState(todos: Iterable[dict[str, Any]], maxItems: int = 20) -> dict[str, Any]:
+def summarize_todo_state(todos: Iterable[dict[str, Any]], maxItems: int = 20) -> dict[str, Any]:
     values = list(todos)
     limit = min(TODO_WRITE_LIMITS["maxResultItems"], _normalize_projection_limit(maxItems))
-    selected = selectTodoState(values, {"maxOpen": limit, "maxCompleted": limit})
+    selected = select_todo_state(values, {"maxOpen": limit, "maxCompleted": limit})
     completed_reserve = min(math.ceil(limit * 0.3), len(selected["completed"]))
     selected_open = selected["open"][: max(0, limit - completed_reserve)]
     selected_completed = selected["completed"][-max(0, limit - len(selected_open)) :] if limit - len(selected_open) > 0 else []
@@ -80,12 +80,12 @@ def summarizeTodoState(todos: Iterable[dict[str, Any]], maxItems: int = 20) -> d
     }
 
 
-def boundTodoViewText(value: Any, maxBytes: int = 512) -> str:
+def bound_todo_view_text(value: Any, maxBytes: int = 512) -> str:
     return _bounded_legacy_text(value, maxBytes)
 
 
-def serializeTodoStateSummary(todos: Iterable[dict[str, Any]], maxBytes: int = 12_000) -> str:
-    summary = summarizeTodoState(todos)
+def serialize_todo_state_summary(todos: Iterable[dict[str, Any]], maxBytes: int = 12_000) -> str:
+    summary = summarize_todo_state(todos)
     low = 0
     high = TODO_WRITE_LIMITS["maxViewContentBytes"]
     best = _build_fitted_todo_summary(summary, 0)
@@ -110,7 +110,7 @@ def serializeTodoStateSummary(todos: Iterable[dict[str, Any]], maxBytes: int = 1
     )
 
 
-def updateActiveTaskFromTodos(session: dict[str, Any], todos: list[dict[str, str]]) -> None:
+def update_active_task_from_todos(session: dict[str, Any], todos: list[dict[str, str]]) -> None:
     active = next((todo for todo in todos if todo["status"] == "in_progress"), None)
     active = active or next((todo for todo in todos if todo["status"] == "pending"), None)
     metadata = session.setdefault("metadata", {})
@@ -144,7 +144,7 @@ def _require_todo_item(value: Any, index: int) -> dict[str, str]:
             TODO_WRITE_LIMITS["maxActiveFormBytes"],
         )
         if isinstance(raw_active, str) and raw_active.strip()
-        else deriveTodoActiveForm(content)
+        else derive_todo_active_form(content)
     )
     return {"content": content, "status": status, "activeForm": active_form}
 
@@ -152,8 +152,8 @@ def _require_todo_item(value: Any, index: int) -> dict[str, str]:
 def _require_bounded_todo_text(value: Any, field: str, max_bytes: int) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Expected {field} to be a non-empty string")
-    normalized = normalizeUtf8String(value)
-    size = utf8ByteLength(normalized)
+    normalized = normalize_utf8_string(value)
+    size = utf8_byte_length(normalized)
     if size > max_bytes:
         raise ValueError(f"{field} exceeds the {max_bytes}-byte UTF-8 limit ({size} bytes)")
     return normalized
@@ -168,14 +168,14 @@ def _project_todo(value: Any, index: int) -> dict[str, Any]:
         "position": index + 1,
         "content": content,
         "status": status,
-        "activeForm": active or deriveTodoActiveForm(content),
+        "activeForm": active or derive_todo_active_form(content),
     }
 
 
 def _bounded_legacy_text(value: Any, max_bytes: int) -> str:
     if not isinstance(value, str):
         return ""
-    return truncateUtf8(value, max_bytes)["value"]
+    return truncate_utf8(value, max_bytes)["value"]
 
 
 def _build_fitted_todo_summary(summary: dict[str, Any], content_bytes: int) -> str:
@@ -186,8 +186,8 @@ def _build_fitted_todo_summary(summary: dict[str, Any], content_bytes: int) -> s
             "todos": [
                 {
                     **todo,
-                    "content": truncateUtf8(todo["content"], content_bytes)["value"],
-                    "activeForm": truncateUtf8(todo["activeForm"], active_bytes)["value"],
+                    "content": truncate_utf8(todo["content"], content_bytes)["value"],
+                    "activeForm": truncate_utf8(todo["activeForm"], active_bytes)["value"],
                 }
                 for todo in summary["todos"]
             ],
@@ -196,7 +196,7 @@ def _build_fitted_todo_summary(summary: dict[str, Any], content_bytes: int) -> s
 
 
 def _serialized_content_bytes(content: str) -> int:
-    return utf8ByteLength(_json_stringify(content))
+    return utf8_byte_length(_json_stringify(content))
 
 
 def _json_stringify(value: Any) -> str:

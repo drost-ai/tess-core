@@ -53,7 +53,7 @@ _DIAGNOSTIC_JSON_KEYS = frozenset(
 )
 
 
-def sanitizeMediaForPersistence(
+def sanitize_media_for_persistence(
     value: Any,
     *,
     includeByteLength: bool = True,

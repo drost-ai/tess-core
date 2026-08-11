@@ -27,7 +27,7 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
     def _reader(self):
         return next(
             tool
-            for tool in core.createBuiltinTools()
+            for tool in core.create_builtin_tools()
             if tool.name == "ReadToolArtifact"
         )
 
@@ -157,7 +157,7 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
                     config=config,
                     runtime=bind_test_runtime(
                         session,
-                        {"tools": core.createBuiltinTools()},
+                        {"tools": core.create_builtin_tools()},
                     ),
                     prompt="read artifact",
                     providerOverride={"send": send},

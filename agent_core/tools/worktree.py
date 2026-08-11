@@ -6,7 +6,7 @@ from ..contracts.tools import ToolResult
 from typing import Any
 
 from .._utils import maybe_await, pretty_json
-from ..payloads.execution_descriptors import createWorkspaceExecutionDescriptor
+from ..payloads.execution_descriptors import create_workspace_execution_descriptor
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
 from .schemas import builtin_tool
@@ -37,7 +37,7 @@ def _enter_worktree_tool(controller: Any) -> ToolDefinition:
         snapshot = result.get("snapshot") if isinstance(result, dict) else None
         if snapshot:
             _apply_workspace_snapshot_metadata(context["session"], snapshot)
-        execution = createWorkspaceExecutionDescriptor({"action": "enter", "workspace": snapshot, "branch": branch_name, "created": True}) if snapshot else None
+        execution = create_workspace_execution_descriptor({"action": "enter", "workspace": snapshot, "branch": branch_name, "created": True}) if snapshot else None
         result_payload = _without_none_values({"cwd": target_path, "branch": branch_name, "created": True, "workspace": snapshot, "execution": execution})
         result = {"content": pretty_json(result_payload)}
         if execution:
@@ -58,7 +58,7 @@ def _exit_worktree_tool(controller: Any) -> ToolDefinition:
         snapshot = await maybe_await(exit_worktree()) if callable(exit_worktree) else None
         if snapshot:
             _apply_workspace_snapshot_metadata(context["session"], snapshot)
-        execution = createWorkspaceExecutionDescriptor({"action": "exit", "workspace": snapshot}) if snapshot else None
+        execution = create_workspace_execution_descriptor({"action": "exit", "workspace": snapshot}) if snapshot else None
         result_payload = _without_none_values({"cwd": original, "workspace": snapshot, "execution": execution})
         result = {"content": pretty_json(result_payload)}
         if execution:

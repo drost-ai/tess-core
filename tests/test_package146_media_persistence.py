@@ -10,7 +10,7 @@ from pathlib import Path
 
 import agent_core._facade as core
 from agent_core.headless.stream import JsonStreamSink
-from agent_core.payloads.media_persistence import sanitizeMediaForPersistence
+from agent_core.payloads.media_persistence import sanitize_media_for_persistence
 from tests.support.agent_core_case import bind_test_runtime, run
 
 
@@ -132,7 +132,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
         ]
         original = copy.deepcopy(values)
 
-        sanitized = sanitizeMediaForPersistence(values)
+        sanitized = sanitize_media_for_persistence(values)
         serialized = json.dumps(sanitized)
 
         self.assertEqual(values, original)
@@ -141,7 +141,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
         self.assertGreaterEqual(serialized.count("current-turn-only"), 6)
         self.assertEqual(sanitized[-1]["data"], long_non_media_data)
         self.assertEqual(
-            sanitizeMediaForPersistence({"type": "record", "data": "ordinary"}),
+            sanitize_media_for_persistence({"type": "record", "data": "ordinary"}),
             {"type": "record", "data": "ordinary"},
         )
 
@@ -290,7 +290,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
                     {"type": "text", "text": "after"},
                 ],
             }
-            canonical_message = sanitizeMediaForPersistence(provider_message)
+            canonical_message = sanitize_media_for_persistence(provider_message)
             canonical_message["metadata"] = {"host": {"turn_id": "turn-146"}}
             session["messages"] = [canonical_message]
             captured: list[dict] = []
@@ -344,7 +344,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
                 "role": "user",
                 "content": [{"type": "text", "text": "inspect"}, _image_block()],
             }
-            canonical_message = sanitizeMediaForPersistence(provider_message)
+            canonical_message = sanitize_media_for_persistence(provider_message)
             canonical_message["metadata"] = {"host": {"turn_id": "turn-failure"}}
             session["messages"] = [canonical_message]
             events: list[tuple[str, dict]] = []

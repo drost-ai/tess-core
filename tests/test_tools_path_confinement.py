@@ -27,7 +27,7 @@ class ToolPathConfinementTests(AgentCoreTestCase):
         }
 
     def _tool(self, name):
-        return next(tool for tool in core.createBuiltinTools() if tool.name == name)
+        return next(tool for tool in core.create_builtin_tools() if tool.name == name)
 
     def test_reads_outside_roots_are_refused_without_an_approval_path(self):
         root, home, workspace, previous = self.temp_context()

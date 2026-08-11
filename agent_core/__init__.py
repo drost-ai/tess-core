@@ -50,7 +50,7 @@ from .subagents.finalizers import finalize_background_subagent_failure_from_env,
 from .tasks.collaboration import create_collaboration_runtime
 from .tasks.monitors import create_monitor_record
 from .tools.definitions import ToolDefinition
-from .tools.registry import createBuiltinTools
+from .tools.registry import create_builtin_tools
 
 __all__ = [
     "AnthropicMessage",
@@ -67,7 +67,7 @@ __all__ = [
     "create_empty_session",
     "create_agent_runtime_bindings",
     "createBridgeRuntime",
-    "createBuiltinTools",
+    "create_builtin_tools",
     "create_collaboration_runtime",
     "create_git_worktree",
     "create_initial_runtime_state",

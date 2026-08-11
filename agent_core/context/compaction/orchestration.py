@@ -35,10 +35,10 @@ from .models import (
 )
 from .prompts import render_working_context_prompt_context
 from .shared import COMPACTION_STRATEGY
-from .utils import estimateMessageTokens, estimateTextTokens
+from .utils import estimate_message_tokens, estimate_text_tokens
 from typing import Any
 from ..compaction_state import refresh_compaction_state_from_manifest as _refresh_compaction_state_from_manifest
-from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ...payloads.media_persistence import sanitize_media_for_persistence as _sanitize_media_for_persistence
 from ...providers._knob_reader import provider_knob as _provider_knob
 from ...providers.usage_costs import merge_provider_usage as _merge_provider_usage
 
@@ -89,8 +89,8 @@ async def run_compaction(args: dict[str, Any] | None = None, **kwargs: Any) -> d
         messages[previous_cutoff:cutoff]
     )
     recent_messages = messages[cutoff:]
-    raw_token_estimate = estimateMessageTokens(messages)
-    source_token_estimate = estimateMessageTokens(source_messages)
+    raw_token_estimate = estimate_message_tokens(messages)
+    source_token_estimate = estimate_message_tokens(source_messages)
     current_input_tokens = int(args.get("currentInputTokens") or 0)
     compaction_threshold_tokens = int(args.get("compactionThresholdTokens") or 0)
     compaction_target_tokens = int(
@@ -280,8 +280,8 @@ async def run_compaction(args: dict[str, Any] | None = None, **kwargs: Any) -> d
     )
     todos = {"sessionId": session["id"], "generatedAt": created_at, "todos": session.get("todos", [])}
     prompt_context = render_working_context_prompt_context(working_context)
-    compacted_context_token_estimate = estimateTextTokens(prompt_context)
-    working_context_token_estimate = compacted_context_token_estimate + estimateMessageTokens(recent_messages)
+    compacted_context_token_estimate = estimate_text_tokens(prompt_context)
+    working_context_token_estimate = compacted_context_token_estimate + estimate_message_tokens(recent_messages)
 
     _write_text(artifacts["summary"], summary.rstrip() + "\n")
     _write_text(artifacts["decisions"], render_decisions_markdown(working_context).rstrip() + "\n")

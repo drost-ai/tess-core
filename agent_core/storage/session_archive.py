@@ -4,7 +4,7 @@ import copy
 from pathlib import Path
 from typing import Any
 
-from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ..payloads.media_persistence import sanitize_media_for_persistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
 from .message_history import (
     set_session_persistence_checkpoint as _set_session_persistence_checkpoint,

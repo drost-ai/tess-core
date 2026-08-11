@@ -460,11 +460,11 @@ class TokenEstimatorUnificationTests(AgentCoreTestCase):
     def test_every_estimator_shares_one_message_serialization(self):
         from agent_core.context.token_accounting import _estimate_request_tokens
         from agent_core.context.continuation.tokens import estimate_messages_tokens
-        from agent_core.context.compaction.utils import estimateMessageTokens as compaction_estimate
+        from agent_core.context.compaction.utils import estimate_message_tokens as compaction_estimate
         from agent_core.payloads.token_estimation import (
-            estimateMessageTokens,
-            estimateTextTokens,
-            stringifyValueForTokenEstimate,
+            estimate_message_tokens,
+            estimate_text_tokens,
+            stringify_value_for_token_estimate,
         )
 
         messages = [
@@ -477,7 +477,7 @@ class TokenEstimatorUnificationTests(AgentCoreTestCase):
                 "lineage": {"logicalTurnId": "turn-1"},
             },
         ]
-        canonical = estimateMessageTokens(messages)
+        canonical = estimate_message_tokens(messages)
         # Origin metadata must not count: the whole-dict spaced serialization
         # measured 43.5% above the role:content form on tool results, and the
         # relief gate subtracts these numbers from each other.
@@ -486,9 +486,9 @@ class TokenEstimatorUnificationTests(AgentCoreTestCase):
         request = {"system": "sys", "messages": messages, "tools": [{"name": "Bash"}]}
         self.assertEqual(
             _estimate_request_tokens(request),
-            estimateTextTokens("sys")
+            estimate_text_tokens("sys")
             + canonical
-            + estimateTextTokens(stringifyValueForTokenEstimate(request["tools"])),
+            + estimate_text_tokens(stringify_value_for_token_estimate(request["tools"])),
         )
         stripped = [{"role": m["role"], "content": m["content"]} for m in messages]
-        self.assertEqual(estimateMessageTokens(stripped), canonical)
+        self.assertEqual(estimate_message_tokens(stripped), canonical)

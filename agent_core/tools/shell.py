@@ -12,8 +12,8 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
 from ..process.bash_lifecycle import runInlineShellCommand
-from ..payloads.bash_results import buildBashResultPayload
-from ..payloads.execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
+from ..payloads.bash_results import build_bash_result_payload
+from ..payloads.execution_descriptors import create_task_execution_descriptor, summarize_output_manifest
 from ..process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
 from ..storage import read_task_meta, save_task_record, task_output_path, write_task_meta
 from ..process.task_launch import (
@@ -251,7 +251,7 @@ def _bash_tool() -> ToolDefinition:
                     "owner": "daemon" if context.get("daemon") or context.get("taskSupervisor") else "client",
                 },
             )
-            execution = createTaskExecutionDescriptor(
+            execution = create_task_execution_descriptor(
                 task_record,
                 "",
                 [
@@ -289,7 +289,7 @@ def _bash_tool() -> ToolDefinition:
         )
         if run["aborted"] and not run["outputLimitExceeded"]:
             raise _create_tool_abort_error()
-        shaped = await buildBashResultPayload(
+        shaped = await build_bash_result_payload(
             config=context["config"],
             sessionId=context["session"]["id"],
             command=command,
@@ -303,7 +303,7 @@ def _bash_tool() -> ToolDefinition:
             "status": "failed" if shaped["isError"] else "completed",
             "cwd": context["session"]["cwd"],
             "command": command,
-            "output": summarizeOutputManifest(shaped["summaryText"]),
+            "output": summarize_output_manifest(shaped["summaryText"]),
             "metadata": {
                 "exit_code": run["exitCode"],
                 "timed_out": run["timedOut"],

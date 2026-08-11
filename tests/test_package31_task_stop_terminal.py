@@ -455,7 +455,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                     },
                 )
             )
-            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskStop")
+            tool = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskStop")
             events: list[tuple[str, dict[str, object]]] = []
             context = {
                 "session": session,

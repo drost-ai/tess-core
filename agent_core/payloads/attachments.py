@@ -6,7 +6,7 @@ import hashlib
 import re
 from typing import Any
 
-from .media_persistence import sanitizeMediaForPersistence
+from .media_persistence import sanitize_media_for_persistence
 from ..config.shared import (
     DEFAULT_IMAGE_INPUT_MIME_TYPES,
     default_max_aggregate_image_input_bytes,
@@ -18,7 +18,7 @@ from ..config.shared import (
     MAX_PROVIDER_IMAGE_INPUT_BYTES,
     MAX_PROVIDER_IMAGE_INPUT_COUNT,
 )
-from .image_budget import admitImageMessages, estimateEncodedImageRequestBytes
+from .image_budget import admit_image_messages, estimate_encoded_image_request_bytes
 
 
 _IMAGE_READ_PATH_PATTERN = re.compile(r"\.(?:gif|jpe?g|png|webp)$", re.IGNORECASE)
@@ -27,7 +27,7 @@ _PERSISTED_IMAGE_PLACEHOLDER_PREFIX = "Image attachment was available to the mod
 _CURRENT_TURN_PLACEHOLDER = re.compile(r"^<image:(?P<mime>[^:>]+)(?::(?P<path>.*?))?:current-turn-only>$")
 
 
-def imageAttachmentReservationOrder(toolUses: list[dict[str, Any]]) -> list[int]:
+def image_attachment_reservation_order(toolUses: list[dict[str, Any]]) -> list[int]:
     return [
         index
         for index, tool_use in enumerate(toolUses)
@@ -37,7 +37,7 @@ def imageAttachmentReservationOrder(toolUses: list[dict[str, Any]]) -> list[int]
     ]
 
 
-def resolveRuntimeProviderCapabilities(config: dict[str, Any]) -> dict[str, Any]:
+def resolve_runtime_provider_capabilities(config: dict[str, Any]) -> dict[str, Any]:
     profile = config.get("providerProfile") if isinstance(config.get("providerProfile"), dict) else {}
     configured = config.get("providerCapabilities")
     if not isinstance(configured, dict):
@@ -69,7 +69,7 @@ def resolveRuntimeProviderCapabilities(config: dict[str, Any]) -> dict[str, Any]
     }
 
 
-def createImageToolResultAttachment(
+def create_image_tool_result_attachment(
     *, filePath: str, mimeType: str, buffer: bytes
 ) -> dict[str, Any]:
     return {
@@ -77,16 +77,16 @@ def createImageToolResultAttachment(
         "filePath": filePath,
         "mimeType": mimeType,
         "byteLength": len(buffer),
-        "sha256": sha256ForBuffer(buffer),
+        "sha256": sha256_for_buffer(buffer),
         "data": base64.b64encode(buffer).decode("ascii"),
     }
 
 
-def sha256ForBuffer(buffer: bytes) -> str:
+def sha256_for_buffer(buffer: bytes) -> str:
     return hashlib.sha256(buffer).hexdigest()
 
 
-def imageAttachmentEligibility(
+def image_attachment_eligibility(
     *, capabilities: dict[str, Any], mimeType: str, byteLength: int
 ) -> dict[str, Any]:
     if not capabilities["imageInput"]:
@@ -104,7 +104,7 @@ def imageAttachmentEligibility(
             "reason": "image exceeds aggregate decoded byte limit "
             f"({byteLength} > {capabilities['maxAggregateImageBytes']})",
         }
-    encoded_bytes = estimateEncodedImageRequestBytes(mimeType, byteLength)
+    encoded_bytes = estimate_encoded_image_request_bytes(mimeType, byteLength)
     if encoded_bytes > capabilities["maxEncodedImageRequestBytes"]:
         return {
             "eligible": False,
@@ -114,7 +114,7 @@ def imageAttachmentEligibility(
     return {"eligible": True}
 
 
-def imageAttachmentToBlock(attachment: dict[str, Any]) -> dict[str, Any] | None:
+def image_attachment_to_block(attachment: dict[str, Any]) -> dict[str, Any] | None:
     if attachment.get("type") != "image" or not attachment.get("data"):
         return None
     return {
@@ -127,7 +127,7 @@ def imageAttachmentToBlock(attachment: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def filterImagesForProviderCapabilities(
+def filter_images_for_provider_capabilities(
     *,
     messages: list[dict[str, Any]],
     config: dict[str, Any],
@@ -140,9 +140,9 @@ def filterImagesForProviderCapabilities(
         nonlocal dropped
         dropped += 1
 
-    admitted = admitImageMessages(
+    admitted = admit_image_messages(
         messages=_textify_legacy_image_placeholders(messages),
-        capabilities=resolveRuntimeProviderCapabilities(config),
+        capabilities=resolve_runtime_provider_capabilities(config),
         provider=config.get("provider") or (config.get("providerProfile") or {}).get("kind") or "openai",
         onDrop=on_drop,
     )
@@ -159,7 +159,7 @@ def filterImagesForProviderCapabilities(
     return admitted["messages"]
 
 
-def persistedImagePlaceholderText(mediaType: str, byteLength: int) -> str:
+def persisted_image_placeholder_text(mediaType: str, byteLength: int) -> str:
     return "\n".join(
         [
             _PERSISTED_IMAGE_PLACEHOLDER_PREFIX,
@@ -170,8 +170,8 @@ def persistedImagePlaceholderText(mediaType: str, byteLength: int) -> str:
     )
 
 
-def stripInMemoryImageData(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sanitizeMediaForPersistence(messages)
+def strip_in_memory_image_data(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sanitize_media_for_persistence(messages)
 
 
 def _normalize_mime_types(values: list[Any]) -> list[str]:

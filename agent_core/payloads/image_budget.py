@@ -21,8 +21,8 @@ class ImageBudgetError(RuntimeError):
         self.measurement = dict(measurement or {})
 
 
-def estimateEncodedImageRequestBytes(mimeType: str, decodedBytes: int) -> int:
-    mime_type = normalizeImageMimeType(mimeType)
+def estimate_encoded_image_request_bytes(mimeType: str, decodedBytes: int) -> int:
+    mime_type = normalize_image_mime_type(mimeType)
     if isinstance(decodedBytes, bool) or not isinstance(decodedBytes, int) or decodedBytes < 0:
         raise ValueError("decoded image bytes must be a non-negative integer")
     base64_bytes = 4 * math.ceil(decodedBytes / 3)
@@ -36,7 +36,7 @@ def estimateEncodedImageRequestBytes(mimeType: str, decodedBytes: int) -> int:
     return overhead + base64_bytes + 1
 
 
-def admitImageMessages(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def admit_image_messages(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
     capabilities = values["capabilities"]
     provider = str(values.get("provider") or "openai")
@@ -115,7 +115,7 @@ def admitImageMessages(args: dict[str, Any] | None = None, **kwargs: Any) -> dic
     }
 
 
-def measureAdmittedImageSet(messages: list[dict[str, Any]], provider: str) -> dict[str, Any]:
+def measure_admitted_image_set(messages: list[dict[str, Any]], provider: str) -> dict[str, Any]:
     hasher = hashlib.sha256()
     count = decoded_bytes = encoded_bytes = input_tokens = 0
     images: list[dict[str, Any]] = []
@@ -144,7 +144,7 @@ def measureAdmittedImageSet(messages: list[dict[str, Any]], provider: str) -> di
     }
 
 
-class _ImageBudgetReservation:
+class _image_budget_reservation:
     def __init__(self, capabilities: dict[str, Any], reservation_order: list[int]) -> None:
         self.capabilities = capabilities
         self.order = list(dict.fromkeys(value for value in reservation_order if isinstance(value, int)))
@@ -186,9 +186,9 @@ class _ImageBudgetReservation:
 
     def _reserve_now(self, input: dict[str, Any]) -> dict[str, Any]:
         try:
-            mime_type = normalizeImageMimeType(input.get("mimeType"))
+            mime_type = normalize_image_mime_type(input.get("mimeType"))
             decoded = input.get("decodedBytes")
-            predicted = estimateEncodedImageRequestBytes(mime_type, decoded)
+            predicted = estimate_encoded_image_request_bytes(mime_type, decoded)
         except Exception as error:
             return {"accepted": False, "reason": _bounded_error_message(error)}
         rejection = _per_file_reservation_rejection(
@@ -219,13 +219,13 @@ class _ImageBudgetReservation:
         return {"accepted": True, "encodedRequestBytes": predicted, "release": release}
 
 
-def createImageBudgetReservation(
+def create_image_budget_reservation(
     capabilities: dict[str, Any], reservationOrder: list[int] | None = None
-) -> _ImageBudgetReservation:
-    return _ImageBudgetReservation(capabilities, reservationOrder or [])
+) -> _image_budget_reservation:
+    return _image_budget_reservation(capabilities, reservationOrder or [])
 
 
-def assertImageContextCapacity(measurement: dict[str, Any], budget: dict[str, Any]) -> None:
+def assert_image_context_capacity(measurement: dict[str, Any], budget: dict[str, Any]) -> None:
     if not budget.get("insufficient") or not measurement.get("imageCount"):
         return
     raise ImageBudgetError(
@@ -250,14 +250,14 @@ def assertImageContextCapacity(measurement: dict[str, Any], budget: dict[str, An
     )
 
 
-def normalizeImageMimeType(value: Any) -> str:
+def normalize_image_mime_type(value: Any) -> str:
     normalized = value.strip().lower() if isinstance(value, str) else ""
     if not _IMAGE_MIME_PATTERN.fullmatch(normalized):
         raise ImageBudgetError("invalid_image_mime", "Image MIME type is invalid or too long.")
     return normalized
 
 
-def measureCanonicalBase64(value: Any, index: int = 1) -> int:
+def measure_canonical_base64(value: Any, index: int = 1) -> int:
     if not isinstance(value, str) or not value or len(value) % 4:
         raise _invalid_base64(index)
     padding = 2 if value.endswith("==") else 1 if value.endswith("=") else 0
@@ -277,16 +277,16 @@ def measureCanonicalBase64(value: Any, index: int = 1) -> int:
 
 def _measure_image_block(block: dict[str, Any], index: int) -> dict[str, Any]:
     source = block.get("source") if isinstance(block.get("source"), dict) else block
-    mime_type = normalizeImageMimeType(
+    mime_type = normalize_image_mime_type(
         source.get("media_type") or source.get("mime_type") or source.get("mimeType") or source.get("mime")
     )
     data = source.get("data") or source.get("data_base64") or source.get("base64")
-    decoded = measureCanonicalBase64(data, index)
+    decoded = measure_canonical_base64(data, index)
     return {
         "index": index,
         "mimeType": mime_type,
         "decodedBytes": decoded,
-        "encodedRequestBytes": estimateEncodedImageRequestBytes(mime_type, decoded),
+        "encodedRequestBytes": estimate_encoded_image_request_bytes(mime_type, decoded),
         "data": data,
         **_read_image_dimensions(mime_type, data),
     }

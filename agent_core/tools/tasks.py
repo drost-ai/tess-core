@@ -11,8 +11,8 @@ import signal
 from typing import Any
 
 from .._utils import maybe_await, now_iso, pretty_json
-from ..payloads.bounded_io import readFileTailBounded
-from ..payloads.execution_descriptors import createTaskExecutionDescriptor
+from ..payloads.bounded_io import read_file_tail_bounded
+from ..payloads.execution_descriptors import create_task_execution_descriptor
 from ..tasks.monitor_transitions import monitor_stop_note as _monitor_stop_note
 from ..tasks.monitor_transitions import stop_monitor_record as _stop_monitor_record
 from ..tasks.health_check_policy import (
@@ -30,7 +30,7 @@ from ..process.identity import processIdentityFromRecord, signalOwnedProcess
 from ..tasks.terminal_store import clear_prepared_task_stop, commit_prepared_task_stop, prepare_task_stop
 from ..storage import list_session_monitors, load_monitor, read_task_meta, save_monitor, task_output_path
 from ..tasks.ownership import require_model_owned_monitor, require_model_owned_task
-from ..payloads.tools import getToolPayloadPolicy, shapeTextToolResult
+from ..payloads.tools import get_tool_payload_policy, shape_text_tool_result
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission
@@ -56,7 +56,7 @@ def _task_output_tool() -> ToolDefinition:
                 await asyncio.sleep(int(knobValue("tools.task_output_poll_ms")) / 1000)
         owned = await require_model_owned_task(context, task_id, "output")
         meta = owned["meta"]
-        policy = getToolPayloadPolicy(context["config"])
+        policy = get_tool_payload_policy(context["config"])
         output_result = None
         daemon = context.get("daemon")
         if daemon:
@@ -69,7 +69,7 @@ def _task_output_tool() -> ToolDefinition:
         fallback_output = None
         if output_result is None:
             try:
-                fallback_output = await readFileTailBounded(
+                fallback_output = await read_file_tail_bounded(
                     filePath=task_output_path(task_id),
                     maxBytes=policy["textInlineBytes"],
                 )
@@ -90,7 +90,7 @@ def _task_output_tool() -> ToolDefinition:
             if fallback_output is not None
             else len(text.encode("utf-8", errors="replace"))
         )
-        shaped = await shapeTextToolResult(
+        shaped = await shape_text_tool_result(
             config=context["config"],
             sessionId=context["session"]["id"],
             toolName="TaskOutput",
@@ -100,7 +100,7 @@ def _task_output_tool() -> ToolDefinition:
             strategy="tail",
             persistArtifact=False,
         )
-        execution = createTaskExecutionDescriptor(meta, text)
+        execution = create_task_execution_descriptor(meta, text)
         output_file = output_result.get("outputFile") if output_result is not None else None
         output_file = output_file or task_output_path(task_id)
         output_manifest = {

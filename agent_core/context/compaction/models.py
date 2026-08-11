@@ -16,7 +16,7 @@ from .shared import (
     COMPACTION_VERIFICATION_SYSTEM_PROMPT,
     MAX_FAILURES,
 )
-from .utils import collapse_whitespace, estimateMessageTokens, truncate
+from .utils import collapse_whitespace, estimate_message_tokens, truncate
 from typing import Any
 from .artifacts import merge_compaction_usage_into_session
 from ...storage.message_origin import is_genuine_user_request as _is_genuine_user_request
@@ -45,7 +45,7 @@ def build_compaction_attempt_strategies(modelCandidates: list[dict[str, Any]], o
 async def run_model_backed_compaction_synthesis_with_fallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     candidates = resolve_compaction_model_candidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "synthesis"})
-    source_token_estimate = estimateMessageTokens(args["sourceMessages"])
+    source_token_estimate = estimate_message_tokens(args["sourceMessages"])
     attempts = build_compaction_attempt_strategies(
         candidates,
         {
@@ -107,7 +107,7 @@ async def run_model_backed_compaction_synthesis(args: dict[str, Any] | None = No
     last_error = "No compaction synthesis response was returned."
     last_raw_response_text = ""
     usage: dict[str, Any] = {}
-    source_token_estimate = estimateMessageTokens(args["sourceMessages"])
+    source_token_estimate = estimate_message_tokens(args["sourceMessages"])
     token_policy = resolve_compaction_token_policy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
     target_preservation_tokens = math.ceil(source_token_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
@@ -165,7 +165,7 @@ async def run_model_backed_compaction_synthesis(args: dict[str, Any] | None = No
 async def run_compaction_checkpoint_verification_with_fallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     candidates = resolve_compaction_model_candidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "verification"})
-    source_token_estimate = estimateMessageTokens(args["sourceMessages"])
+    source_token_estimate = estimate_message_tokens(args["sourceMessages"])
     attempts = build_compaction_attempt_strategies(
         candidates,
         {
@@ -203,7 +203,7 @@ async def run_compaction_checkpoint_verification(args: dict[str, Any] | None = N
     last_invalid_response: dict[str, Any] | None = None
     last_invalid_raw_response_text = ""
     usage: dict[str, Any] = {}
-    source_token_estimate = estimateMessageTokens(args["sourceMessages"])
+    source_token_estimate = estimate_message_tokens(args["sourceMessages"])
     token_policy = resolve_compaction_token_policy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
     target_preservation_tokens = math.ceil(source_token_estimate * float(provider_knob("provider.compaction_preservation_ratio")))

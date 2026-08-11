@@ -192,7 +192,7 @@ class SandboxTests(AgentCoreTestCase):
     def _bash_fixture(self, home, workspace, sandbox):
         config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions", "sandbox": sandbox}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-        bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
+        bash = next(tool for tool in core.create_builtin_tools() if tool.name == "Bash")
         return config, session, bash, []
 
     def _context(self, session, config, workspace, events):

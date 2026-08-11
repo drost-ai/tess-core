@@ -6,7 +6,7 @@ import uuid
 from typing import Any, Callable
 
 from ..contracts.session_records import PersistedSessionHeadV2
-from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media
+from ..payloads.media_persistence import sanitize_media_for_persistence as _sanitize_media
 from .message_origin import is_genuine_user_request as _is_genuine_user_request
 from ..runtime.identifiers import parse_session_id
 from .message_history import (
@@ -168,7 +168,7 @@ async def commit_session_v2(
     presanitized: bool = False,
 ) -> dict[str, Any]:
     session_id = parse_session_id(sessionId)
-    # sanitizeMediaForPersistence rebuilds every container, so a caller that
+    # sanitize_media_for_persistence rebuilds every container, so a caller that
     # just sanitized may hand its decoupled output over without paying for a
     # second deepcopy-and-walk of the full history.
     safe = nextSession if presanitized else _sanitize_media(copy.deepcopy(nextSession))

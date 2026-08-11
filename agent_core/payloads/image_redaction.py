@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .media_persistence import sanitizeMediaForPersistence
+from .media_persistence import sanitize_media_for_persistence
 
 
-def redactImagePayloads(value: Any) -> Any:
+def redact_image_payloads(value: Any) -> Any:
     """Return the shared content-free persistence projection for media."""
 
-    return sanitizeMediaForPersistence(value, includeByteLength=False)
+    return sanitize_media_for_persistence(value, includeByteLength=False)
 
 

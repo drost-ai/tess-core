@@ -15,7 +15,7 @@ from typing import Any, Callable, Literal
 
 from .._utils import now_iso
 from ..storage import tool_artifact_data_path, tool_artifact_meta_path, write_json_file
-from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, sliceUtf8Suffix, utf8ByteLength
+from ..payloads.utf8_bounds import normalize_utf8_string, slice_utf8_prefix, slice_utf8_suffix, utf8_byte_length
 
 
 SUBPROCESS_RING_MAX_BYTES = 128 * 1024
@@ -52,16 +52,16 @@ class _HeadTailRing:
 
     def render(self) -> str:
         if not self.truncated:
-            return normalizeUtf8String(bytes(self.full).decode("utf-8", errors="replace"))
-        head = sliceUtf8Prefix(
-            normalizeUtf8String(self.head.decode("utf-8", errors="replace")),
+            return normalize_utf8_string(bytes(self.full).decode("utf-8", errors="replace"))
+        head = slice_utf8_prefix(
+            normalize_utf8_string(self.head.decode("utf-8", errors="replace")),
             self.head_bytes,
         )
-        tail = sliceUtf8Suffix(
-            normalizeUtf8String(self.tail.decode("utf-8", errors="replace")),
+        tail = slice_utf8_suffix(
+            normalize_utf8_string(self.tail.decode("utf-8", errors="replace")),
             self.tail_bytes,
         )
-        omitted = max(0, self.source_bytes - utf8ByteLength(head) - utf8ByteLength(tail))
+        omitted = max(0, self.source_bytes - utf8_byte_length(head) - utf8_byte_length(tail))
         return f"{head}\n...[omitted {omitted} bytes from bounded process ring]...\n{tail}"
 
 
@@ -208,7 +208,7 @@ class SubprocessOutputCollector:
             "stdoutLines": self.lines["stdout"],
             "stderrLines": self.lines["stderr"],
             "ringBytes": min(
-                self.max_ring_bytes, utf8ByteLength(stdout) + utf8ByteLength(stderr)
+                self.max_ring_bytes, utf8_byte_length(stdout) + utf8_byte_length(stderr)
             ),
             "spoolBytes": self.spool_bytes["stdout"] + self.spool_bytes["stderr"],
             "outputLimitExceeded": self.output_limit_exceeded,

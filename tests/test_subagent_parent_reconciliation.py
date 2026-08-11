@@ -199,7 +199,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "subagents": {"maxDepth": 1}}, str(workspace)))
-            agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
+            agent = next(tool for tool in core.create_builtin_tools() if tool.name == "Agent")
             root_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent["metadata"]["depth"] = 1

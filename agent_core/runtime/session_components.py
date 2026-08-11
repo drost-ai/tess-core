@@ -102,7 +102,7 @@ async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[st
 
         def compose_tools() -> list[Any]:
             raw = [
-                *factories["createBuiltinTools"](tool_options),
+                *factories["create_builtin_tools"](tool_options),
                 *(mcp_runtime["createToolDefinitions"]() if mcp_runtime else []),
                 *plugin_tools,
             ]

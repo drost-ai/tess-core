@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .structured_value import summarizeStructuredValue
-from .utf8_bounds import sliceUtf8Prefix, utf8ByteLength
+from .structured_value import summarize_structured_value
+from .utf8_bounds import slice_utf8_prefix, utf8_byte_length
 
 
 STRUCTURED_RESULT_LIMITS = {
@@ -16,7 +16,7 @@ STRUCTURED_RESULT_LIMITS = {
 }
 
 
-def analyzeStructuredResult(content: str) -> dict[str, Any] | None:
+def analyze_structured_result(content: str) -> dict[str, Any] | None:
     stripped = content.lstrip()
     if not stripped or stripped[0] not in "[{":
         return None
@@ -30,7 +30,7 @@ def analyzeStructuredResult(content: str) -> dict[str, Any] | None:
     if declared is not None:
         return {"parsed": parsed, "cardinality": declared, "requiresShaping": False}
     original = _count_structured_entries(parsed)
-    summary = summarizeStructuredValue(parsed, STRUCTURED_RESULT_LIMITS)
+    summary = summarize_structured_value(parsed, STRUCTURED_RESULT_LIMITS)
     returned = min(original, summary["returnedItems"])
     truncated = bool(summary["truncated"])
     return {
@@ -45,7 +45,7 @@ def analyzeStructuredResult(content: str) -> dict[str, Any] | None:
     }
 
 
-def buildStructuredResultSummary(
+def build_structured_result_summary(
     analysis: dict[str, Any] | None = None,
     maxBytes: int | None = None,
     artifact: dict[str, Any] | None = None,
@@ -80,7 +80,7 @@ def buildStructuredResultSummary(
 
 
 def _build_candidate(args: dict[str, Any], max_summary_bytes: int) -> dict[str, Any]:
-    summary = summarizeStructuredValue(
+    summary = summarize_structured_value(
         args["analysis"]["parsed"],
         {**STRUCTURED_RESULT_LIMITS, "maxBytes": max_summary_bytes},
     )
@@ -101,7 +101,7 @@ def _build_candidate(args: dict[str, Any], max_summary_bytes: int) -> dict[str, 
     if artifact:
         payload["artifact"] = {
             "artifactId": artifact["artifactId"],
-            "filePath": sliceUtf8Prefix(artifact["filePath"], 1_024),
+            "filePath": slice_utf8_prefix(artifact["filePath"], 1_024),
             "bytes": artifact["bytes"],
             "contentType": artifact["contentType"],
             "readWith": "ReadToolArtifact",
@@ -189,7 +189,7 @@ def _is_bounded_todo_projection(value: Any) -> bool:
 
 
 def _is_bounded_text(value: Any, max_bytes: int) -> bool:
-    return isinstance(value, str) and utf8ByteLength(value) <= max_bytes
+    return isinstance(value, str) and utf8_byte_length(value) <= max_bytes
 
 
 def _non_negative_safe_integer(value: Any) -> int | None:
@@ -197,7 +197,7 @@ def _non_negative_safe_integer(value: Any) -> int | None:
 
 
 def _serialized_tool_content_bytes(content: str) -> int:
-    return utf8ByteLength(_json_stringify(content))
+    return utf8_byte_length(_json_stringify(content))
 
 
 def _json_stringify(value: Any) -> str:

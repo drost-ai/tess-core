@@ -74,7 +74,7 @@ class ToolPayloadManifest(_ToolPayloadManifestRequired, total=False):
 
 
 class OutputManifest(TypedDict, total=False):
-    """Task output manifest (execution_descriptors.summarizeOutputManifest)."""
+    """Task output manifest (execution_descriptors.summarize_output_manifest)."""
 
     filePath: str
     bytes: int

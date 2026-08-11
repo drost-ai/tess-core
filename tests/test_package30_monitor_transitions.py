@@ -43,7 +43,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
             "cwd": str(workspace),
             "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1),
         }
-        tool = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskMonitorStop")
+        tool = next(tool for tool in core.create_builtin_tools() if tool.name == "TaskMonitorStop")
         return config, session, monitor, events, persisted, context, tool
 
     def test_active_and_muted_stop_once_without_failure_and_preserve_underlying_task(self):

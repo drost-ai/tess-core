@@ -24,7 +24,7 @@ from .shared import (
 )
 from .utils import summarize_todo, truncate
 from typing import Any
-from ...payloads.todo_policy import selectTodoState as _select_todo_state
+from ...payloads.todo_policy import select_todo_state as _select_todo_state
 
 
 def build_compaction_quality_from_synthesis(synthesized: dict[str, Any]) -> dict[str, Any]:

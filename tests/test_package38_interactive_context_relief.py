@@ -10,7 +10,7 @@ from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, 
 
 from agent_core.providers.token_budget import resolve_interactive_context_policy
 from agent_core.agent.tool_result_budget import ToolResultBatchBudget
-from agent_core.payloads.result_guard import guardToolCallResult, serializedContentBytes
+from agent_core.payloads.result_guard import guard_tool_call_result, serialized_content_bytes
 
 
 def _codex_config(home: Path, workspace: Path) -> dict[str, Any]:
@@ -287,12 +287,12 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
             ]
             self.assertEqual(len(blocks), 2)
             self.assertTrue(
-                all(serializedContentBytes(block["content"]) <= 12_000 for block in blocks)
+                all(serialized_content_bytes(block["content"]) <= 12_000 for block in blocks)
             )
             self.assertTrue(all('"artifact"' in block["content"] for block in blocks))
             reader = next(
                 tool
-                for tool in core.createBuiltinTools()
+                for tool in core.create_builtin_tools()
                 if tool.name == "ReadToolArtifact"
             )
             for block in blocks:
@@ -422,7 +422,7 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
             raise RuntimeError("storage unavailable")
 
         guarded = run(
-            guardToolCallResult(
+            guard_tool_call_result(
                 config={"providerKind": "openai", "model": "gpt-5.6-sol"},
                 sessionId="session",
                 toolName="Read",
@@ -441,7 +441,7 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
         self.assertNotIn("storage unavailable", guarded["result"]["content"])
 
         structured = run(
-            guardToolCallResult(
+            guard_tool_call_result(
                 config={"providerKind": "openai", "model": "gpt-5.6-sol"},
                 sessionId="session",
                 toolName="List",
@@ -465,7 +465,7 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
         )
         with self.assertRaisesRegex(ValueError, "positive integer"):
             run(
-                guardToolCallResult(
+                guard_tool_call_result(
                     config={
                         "providerKind": "openai",
                         "model": "gpt-5.6-sol",

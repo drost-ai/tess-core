@@ -293,7 +293,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             session["metadata"]["subagentTaskId"] = "task-question"
             session["metadata"]["subagentRuntimeContract"] = {"communication": {"allowChildQuestions": True, "maxPendingQuestions": 1}}
             run(core.write_task_meta("task-question", {"type": "subagent", "task_id": "task-question", "session_id": session["id"], "status": "running", "startedAt": session["createdAt"], "outputFile": core.task_output_path("task-question")}))
-            question_tool = next(tool for tool in core.createBuiltinTools() if tool.name == "AskUserQuestion")
+            question_tool = next(tool for tool in core.create_builtin_tools() if tool.name == "AskUserQuestion")
             result = run(
                 question_tool.handler(
                     {"questions": [{"question": "Which path?", "options": [{"label": "A"}, {"label": "B"}]}]},

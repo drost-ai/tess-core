@@ -15,7 +15,7 @@ from ...storage import configure_runtime_home, load_child_agent, load_session, l
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ...subagents import finalize_background_subagent_failure_from_env, finalize_background_subagent_success_from_env
 from ...subagents.finalizers import _background_structured_result_fields
-from ...tools import createBuiltinTools
+from ...tools import create_builtin_tools
 from ...runtime.generation import create_runtime_session_binding
 from ..._utils import now_iso
 
@@ -72,7 +72,7 @@ async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[st
     await enforceSessionAgentAuthority(session=session, config=config)
     runtime = create_agent_runtime_bindings({
         "emitEvent": _create_trace_emitter(args["taskId"]),
-        "tools": createBuiltinTools(),
+        "tools": create_builtin_tools(),
         "daemon": {"state": "unavailable", "reason": {"code": "subagent.daemon_unavailable", "message": "No task daemon is attached to this background subagent runner."}},
         "refreshMcpToolRegistry": lambda: None,
         "sessionBinding": create_runtime_session_binding(session["id"], 1, 1),

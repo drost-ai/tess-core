@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, TextIO
 
-from ..payloads.media_persistence import sanitizeMediaForPersistence
+from ..payloads.media_persistence import sanitize_media_for_persistence
 from ..runtime.events import create_runtime_event
 
 
@@ -26,7 +26,7 @@ class JsonStreamSink:
         return typed
 
     def write(self, envelope: dict[str, Any]) -> None:
-        safe = self._redact(sanitizeMediaForPersistence(envelope))
+        safe = self._redact(sanitize_media_for_persistence(envelope))
         self._observe(safe)
         self.event_count += 1
         if self.stream is None:

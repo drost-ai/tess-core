@@ -5,7 +5,7 @@ from ..durable_memory import render_retrieved_memory_prompt, retrieve_relevant_d
 from .relief import apply_context_relief_modes
 from .tokens import classify_context_pressure
 from .rendering import render_context_relief_prompt, render_continuation_overlay
-from .tokens import estimateTextTokens
+from .tokens import estimate_text_tokens
 from typing import Any
 from ..compaction.projection import _build_compaction_system_prompt_projection
 
@@ -41,10 +41,10 @@ async def build_continuation_context(args: dict[str, Any] | None = None, **kwarg
         if isinstance(part, str) and part.strip()
     ) or None
     preflight_segments = {
-        "checkpointTokens": estimateTextTokens(compaction_context or ""),
-        "continuationOverlayTokens": estimateTextTokens(continuation_overlay or ""),
-        "retrievedMemoryTokens": estimateTextTokens(memory_prompt or ""),
-        "reliefTokens": estimateTextTokens(relief_prompt or ""),
+        "checkpointTokens": estimate_text_tokens(compaction_context or ""),
+        "continuationOverlayTokens": estimate_text_tokens(continuation_overlay or ""),
+        "retrievedMemoryTokens": estimate_text_tokens(memory_prompt or ""),
+        "reliefTokens": estimate_text_tokens(relief_prompt or ""),
     }
     return {
         "systemContext": system_context,

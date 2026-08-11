@@ -199,7 +199,7 @@ class ResolvedConfig(_ResolvedConfigRequired, total=False):
     sandbox: dict[str, Any]
     subagents: dict[str, Any]
     webSearch: WebSearchSettings
-    settingsEnv: dict[str, str]
+    settings_env: dict[str, str]
     allowedTools: list[str]
     disallowedTools: list[str]
     inputFormat: str

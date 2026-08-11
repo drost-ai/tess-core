@@ -11,7 +11,7 @@ import typing as _typing
 
 from .._utils import now_iso
 from ..storage import tool_artifact_data_path, tool_artifact_meta_path, write_json_file
-from .utf8_bounds import sliceUtf8Suffix as _slice_utf8_suffix
+from .utf8_bounds import slice_utf8_suffix as _slice_utf8_suffix
 
 if _typing.TYPE_CHECKING:
     from ..contracts.tools import ToolArtifactRef
@@ -132,10 +132,10 @@ def _byte_len(value: str) -> int:
 
 
 def _count_lines(value: str) -> int:
-    return 0 if value == "" else len(splitToolTextLines(value))
+    return 0 if value == "" else len(split_tool_text_lines(value))
 
 
-def splitToolTextLines(value: str) -> list[str]:
+def split_tool_text_lines(value: str) -> list[str]:
     return re.split(r"\r?\n", value)
 
 
@@ -154,7 +154,7 @@ def _fit_lines_within_bytes(lines: list[str], max_bytes: int) -> list[str]:
 
 
 def _head_tail_excerpt(text: str, head_lines: int, tail_lines: int, max_bytes: int) -> dict[str, Any]:
-    lines = splitToolTextLines(text)
+    lines = split_tool_text_lines(text)
     # Budget the halves jointly (head up to a third, tail the rest) so the
     # combined excerpt fits max_bytes at any line cap; a lone half keeps the
     # whole budget. The tail window starts after the head so overlapping
@@ -203,7 +203,7 @@ async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
     return record
 
 
-def deriveToolPayloadClass(config: dict[str, Any]) -> str:
+def derive_tool_payload_class(config: dict[str, Any]) -> str:
     profile = config.get("providerProfile") if isinstance(config.get("providerProfile"), dict) else {}
     declared = profile.get("payloadClass")
     if declared in TOOL_PAYLOAD_POLICIES:
@@ -223,8 +223,8 @@ def deriveToolPayloadClass(config: dict[str, Any]) -> str:
     return "large"
 
 
-def getToolPayloadPolicy(config: dict[str, Any]) -> dict[str, int]:
-    cls = deriveToolPayloadClass(config)
+def get_tool_payload_policy(config: dict[str, Any]) -> dict[str, int]:
+    cls = derive_tool_payload_class(config)
     policy = dict(TOOL_PAYLOAD_POLICIES[cls])
     from ..config._knobs import knobValue
 
@@ -243,17 +243,17 @@ def getToolPayloadPolicy(config: dict[str, Any]) -> dict[str, int]:
     return policy
 
 
-def getDefaultGlobExcludes() -> list[str]:
+def get_default_glob_excludes() -> list[str]:
     return list(DEFAULT_GLOB_EXCLUDES)
 
 
-def applyDefaultGlobExcludes(args: list[str]) -> list[str]:
+def apply_default_glob_excludes(args: list[str]) -> list[str]:
     for pattern in DEFAULT_GLOB_EXCLUDES:
         args.extend(["-g", f"!{pattern}"])
     return args
 
 
-def filterDefaultIgnoredGlobMatches(matches: list[str]) -> list[str]:
+def filter_default_ignored_glob_matches(matches: list[str]) -> list[str]:
     out = []
     for candidate in matches:
         normalized = candidate.replace("\\", "/")
@@ -265,9 +265,9 @@ def filterDefaultIgnoredGlobMatches(matches: list[str]) -> list[str]:
     return out
 
 
-async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def shape_text_tool_result(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    policy = getToolPayloadPolicy(args["config"])
+    policy = get_tool_payload_policy(args["config"])
     text = args.get("text", "")
     text_bytes = _byte_len(text)
     text_lines = _count_lines(text)
@@ -301,7 +301,7 @@ async def shapeTextToolResult(args: dict[str, Any] | None = None, **kwargs: Any)
     elif strategy == "head_tail":
         excerpt = _head_tail_excerpt(text, policy["textHeadLines"], policy["textTailLines"], policy["textInlineBytes"])
     else:
-        lines = _fit_lines_within_bytes(splitToolTextLines(text)[: policy["textInlineLines"]], policy["textInlineBytes"])
+        lines = _fit_lines_within_bytes(split_tool_text_lines(text)[: policy["textInlineLines"]], policy["textInlineBytes"])
         next_text = "\n".join(lines).strip()
         excerpt = {"text": next_text, "truncated": next_text != text, "strategy": "inline_full" if next_text == text else "inline_truncated_head"}
     artifact = args.get("existingArtifact")

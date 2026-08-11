@@ -6,7 +6,7 @@ import unittest
 from tests.support.agent_core_case import run
 
 import agent_core._facade as core
-from agent_core.context.compaction.utils import estimateMessageTokens
+from agent_core.context.compaction.utils import estimate_message_tokens
 
 
 MIB = 1024 * 1024
@@ -80,8 +80,8 @@ class ImageTokenEstimationTests(unittest.TestCase):
             )["shouldCheckpoint"]
         )
         self.assertEqual(
-            estimateMessageTokens([large_message]),
-            estimateMessageTokens([small_message]),
+            estimate_message_tokens([large_message]),
+            estimate_message_tokens([small_message]),
         )
 
         measurement = run(

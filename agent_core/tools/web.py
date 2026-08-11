@@ -12,22 +12,22 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from .._utils import pretty_json
 from ..acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
 from ..authority.permission_rules import findDispatchDenyRule
-from ..payloads.tools import shapeTextToolResult
-from ..payloads.utf8_bounds import sliceUtf8Prefix
+from ..payloads.tools import shape_text_tool_result
+from ..payloads.utf8_bounds import slice_utf8_prefix
 from .cancellation import _create_tool_abort_error, _signal_aborted, _throw_if_tool_cancelled
 from .definitions import ToolDefinition
 from .schemas import builtin_tool
 from .validation import _require_string
 from .web_search_api import (
-    coerceResultCount,
-    configuredAllowedDomains,
-    hostnameMatchesRule,
-    joinFallbackReasons,
-    optionalString,
-    resolveSearchApiProvider,
-    searchExa,
-    resolveSearchProviderPreference,
-    webSearchSettings,
+    coerce_result_count,
+    configured_allowed_domains,
+    hostname_matches_rule,
+    join_fallback_reasons,
+    optional_string,
+    resolve_search_api_provider,
+    search_exa,
+    resolve_search_provider_preference,
+    web_search_settings,
 )
 
 
@@ -66,7 +66,7 @@ def _web_fetch_tool() -> ToolDefinition:
         except Exception as error:
             if _signal_aborted(context.get("abortSignal")):
                 raise _create_tool_abort_error()
-            message = sliceUtf8Prefix(str(error) or "WebFetch failed", 1_000)
+            message = slice_utf8_prefix(str(error) or "WebFetch failed", 1_000)
             return {
                 "content": pretty_json(
                     {
@@ -94,7 +94,7 @@ def _web_fetch_tool() -> ToolDefinition:
                 "isError": True,
             }
         _throw_if_tool_cancelled(context)
-        shaped = await shapeTextToolResult(
+        shaped = await shape_text_tool_result(
             config=context["config"], sessionId=context["session"]["id"],
             toolName="WebFetch", family="web", text=_strip_html(fetched["body"]),
             sourceTruncated=fetched["truncated"], artifactTruncated=fetched["truncated"],
@@ -107,7 +107,7 @@ def _web_fetch_tool() -> ToolDefinition:
                     "status": "partial" if fetched["outcome"] == "partial" else "completed",
                     "url": fetched["finalUrl"],
                     "requested_url": fetched["requestedUrl"],
-                    "prompt": sliceUtf8Prefix(prompt, 2_000),
+                    "prompt": slice_utf8_prefix(prompt, 2_000),
                     "content": shaped["text"],
                     "content_manifest": shaped["view"],
                     "acquisition": {
@@ -157,7 +157,7 @@ async def _authorize_web_fetch_hop(context: ToolContext, url: str, toolNames: tu
         )
         if deny:
             raise WebFetchPolicyError(
-                f"Redirect hop blocked by permission rule {sliceUtf8Prefix(deny['raw'], 512)} "
+                f"Redirect hop blocked by permission rule {slice_utf8_prefix(deny['raw'], 512)} "
                 f"({deny['scope']} settings)."
             )
 
@@ -165,28 +165,28 @@ async def _authorize_web_fetch_hop(context: ToolContext, url: str, toolNames: tu
 def _web_search_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         raw_query = _require_string(input.get("query"), "query")
-        query = normalizeWebSearchQuery(raw_query)
+        query = normalize_web_search_query(raw_query)
         _throw_if_tool_cancelled(context)
         if _network_disabled(context):
             return _web_search_policy_error(
                 "WebSearch is blocked because this session's network policy is disabled."
             )
-        web_settings = webSearchSettings(context.get("config"))
-        configured_allowed = configuredAllowedDomains(web_settings)
+        web_settings = web_search_settings(context.get("config"))
+        configured_allowed = configured_allowed_domains(web_settings)
         allowed = [item for item in input.get("allowed_domains", []) if isinstance(item, str)]
         blocked = [item for item in input.get("blocked_domains", []) if isinstance(item, str)]
-        count = coerceResultCount(input.get("count") or input.get("max_results") or input.get("limit"))
+        count = coerce_result_count(input.get("count") or input.get("max_results") or input.get("limit"))
         results = []
         try:
-            response = await searchWebResponse(
+            response = await search_web_response(
                 query,
                 context.get("abortSignal"),
                 config=context.get("config"),
                 count=count,
-                country=optionalString(input.get("country")) or "US",
-                freshness=optionalString(input.get("freshness")),
-                category=optionalString(input.get("category")),
-                provider=optionalString(input.get("provider")),
+                country=optional_string(input.get("country")) or "US",
+                freshness=optional_string(input.get("freshness")),
+                category=optional_string(input.get("category")),
+                provider=optional_string(input.get("provider")),
                 allowed_domains=allowed,
                 blocked_domains=blocked,
                 authorizeHop=lambda hop: _authorize_web_fetch_hop(context, hop, toolNames=("WebSearch", "WebFetch")),
@@ -198,11 +198,11 @@ def _web_search_tool() -> ToolDefinition:
             hostname = _safe_hostname(result["url"])
             if not hostname:
                 continue
-            if configured_allowed and not any(hostnameMatchesRule(hostname, domain) for domain in configured_allowed):
+            if configured_allowed and not any(hostname_matches_rule(hostname, domain) for domain in configured_allowed):
                 continue
-            if allowed and not any(hostnameMatchesRule(hostname, domain) for domain in allowed):
+            if allowed and not any(hostname_matches_rule(hostname, domain) for domain in allowed):
                 continue
-            if any(hostnameMatchesRule(hostname, domain) for domain in blocked):
+            if any(hostname_matches_rule(hostname, domain) for domain in blocked):
                 continue
             results.append(_compact_web_result(result))
             if len(results) >= count:
@@ -229,19 +229,19 @@ def _web_search_policy_error(message: str) -> ToolResult:
                 "type": "web_search_error",
                 "status": "failed",
                 "reason": "policy",
-                "message": sliceUtf8Prefix(message, 1_000),
+                "message": slice_utf8_prefix(message, 1_000),
             }
         ),
         "isError": True,
     }
 
 
-async def searchWeb(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
-    response = await searchWebResponse(query, abortSignal)
+async def search_web(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
+    response = await search_web_response(query, abortSignal)
     return response["results"]
 
 
-async def searchWebResponse(
+async def search_web_response(
     query: str,
     abortSignal: Any = None,
     *,
@@ -258,13 +258,13 @@ async def searchWebResponse(
 ) -> dict[str, Any]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
-    api_provider = resolveSearchApiProvider(config, provider)
-    preferred_provider = resolveSearchProviderPreference(config, provider)
+    api_provider = resolve_search_api_provider(config, provider)
+    preferred_provider = resolve_search_provider_preference(config, provider)
     api_fallback_reason = None
     if api_provider:
         try:
             if api_provider["provider"] == "exa":
-                exa = await searchExa(
+                exa = await search_exa(
                     query,
                     api_key=api_provider["api_key"],
                     count=count,
@@ -283,26 +283,26 @@ async def searchWebResponse(
         api_fallback_reason = "exa_unavailable"
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
-    duck = await searchDuckDuckGo(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
+    duck = await search_duck_duck_go(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     if duck:
         return {"provider": "scraper", "results": duck, "fallback_reason": api_fallback_reason}
-    bing = await searchBing(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
+    bing = await search_bing(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
     if bing:
         return {
             "provider": "scraper",
             "results": bing,
-            "fallback_reason": joinFallbackReasons(api_fallback_reason, "duckduckgo_empty"),
+            "fallback_reason": join_fallback_reasons(api_fallback_reason, "duckduckgo_empty"),
         }
     return {
         "provider": "scraper",
         "results": [],
-        "fallback_reason": joinFallbackReasons(api_fallback_reason, "scraper_empty"),
+        "fallback_reason": join_fallback_reasons(api_fallback_reason, "scraper_empty"),
     }
 
 
-async def searchDuckDuckGo(query: str, abortSignal: Any = None, *, fetcher: Any = None, authorizeHop: Any = None) -> list[dict[str, str]]:
+async def search_duck_duck_go(query: str, abortSignal: Any = None, *, fetcher: Any = None, authorizeHop: Any = None) -> list[dict[str, str]]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     url = f"https://html.duckduckgo.com/html/?{urlencode({'q': query})}"
@@ -314,10 +314,10 @@ async def searchDuckDuckGo(query: str, abortSignal: Any = None, *, fetcher: Any 
     raw = await response.text()
     if "anomaly-modal__mask" in raw or "anomaly-modal__modal" in raw:
         return []
-    return parseDuckDuckGoResults(raw)
+    return parse_duck_duck_go_results(raw)
 
 
-async def searchBing(query: str, abortSignal: Any = None, *, fetcher: Any = None, authorizeHop: Any = None) -> list[dict[str, str]]:
+async def search_bing(query: str, abortSignal: Any = None, *, fetcher: Any = None, authorizeHop: Any = None) -> list[dict[str, str]]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     url = f"https://www.bing.com/search?{urlencode({'q': query})}"
@@ -326,20 +326,20 @@ async def searchBing(query: str, abortSignal: Any = None, *, fetcher: Any = None
         raise _create_tool_abort_error()
     if not response.ok:
         return []
-    return parseBingResults(await response.text())
+    return parse_bing_results(await response.text())
 
 
-def parseDuckDuckGoResults(raw: str) -> list[dict[str, str]]:
+def parse_duck_duck_go_results(raw: str) -> list[dict[str, str]]:
     pattern = re.compile(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)</a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)</a>')
     out = []
     for match in pattern.finditer(raw):
-        url = normalizeDuckDuckGoResultUrl(match.group(1))
+        url = normalize_duck_duck_go_result_url(match.group(1))
         if url:
             out.append({"source": "duckduckgo", "url": url, "title": _strip_html(html.unescape(match.group(2))), "snippet": _strip_html(html.unescape(match.group(3)))})
     return out
 
 
-def normalizeDuckDuckGoResultUrl(raw: str) -> str | None:
+def normalize_duck_duck_go_result_url(raw: str) -> str | None:
     decoded = html.unescape(raw).strip()
     if not decoded:
         return None
@@ -355,14 +355,14 @@ def normalizeDuckDuckGoResultUrl(raw: str) -> str | None:
         return None
 
 
-def parseBingResults(raw: str) -> list[dict[str, str]]:
+def parse_bing_results(raw: str) -> list[dict[str, str]]:
     sections = re.split(r'<li class="b_algo"[^>]*>', raw, flags=re.I)[1:]
     out = []
     for section in sections:
         title_match = re.search(r'<h2[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)</a>[\s\S]*?</h2>', section, re.I)
         if not title_match:
             continue
-        url = normalizeBingResultUrl(title_match.group(1))
+        url = normalize_bing_result_url(title_match.group(1))
         if not url:
             continue
         snippet_match = re.search(r"<p[^>]*>([\s\S]*?)</p>", section, re.I)
@@ -370,7 +370,7 @@ def parseBingResults(raw: str) -> list[dict[str, str]]:
     return out
 
 
-def normalizeBingResultUrl(raw: str) -> str | None:
+def normalize_bing_result_url(raw: str) -> str | None:
     decoded = html.unescape(raw).strip()
     if not decoded:
         return None
@@ -379,7 +379,7 @@ def normalizeBingResultUrl(raw: str) -> str | None:
         if parsed.hostname == "www.bing.com" and parsed.path == "/ck/a":
             encoded = parse_qs(parsed.query).get("u", [None])[0]
             if encoded:
-                target = decodeBingRedirectTarget(encoded)
+                target = decode_bing_redirect_target(encoded)
                 if target:
                     return target
         return urlunparse(parsed)
@@ -387,7 +387,7 @@ def normalizeBingResultUrl(raw: str) -> str | None:
         return None
 
 
-def decodeBingRedirectTarget(value: str) -> str | None:
+def decode_bing_redirect_target(value: str) -> str | None:
     normalized = value.strip()
     if normalized.startswith("a1"):
         encoded = normalized[2:]
@@ -399,7 +399,7 @@ def decodeBingRedirectTarget(value: str) -> str | None:
     return None
 
 
-def normalizeWebSearchQuery(query: str) -> str:
+def normalize_web_search_query(query: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"\\([\"'])", r"\1", query)).strip()
 
 

@@ -50,7 +50,7 @@ from .tokens import (
     classify_context_pressure,
     collapse_whitespace,
     estimate_messages_tokens,
-    estimateTextTokens,
+    estimate_text_tokens,
     estimate_todo_and_plan_tokens,
     truncate,
 )
@@ -76,7 +76,7 @@ __all__ = [
     "empty_compaction_result",
     "empty_relief_summary",
     "estimate_messages_tokens",
-    "estimateTextTokens",
+    "estimate_text_tokens",
     "estimate_todo_and_plan_tokens",
     "extract_command",
     "extract_file_path",

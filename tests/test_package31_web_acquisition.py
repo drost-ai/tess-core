@@ -6,7 +6,7 @@ import gzip
 import socket
 
 import agent_core.tools.web as web_module
-from agent_core.payloads.bounded_io import AcquisitionLimitError, readResponseTextBoundedSync
+from agent_core.payloads.bounded_io import AcquisitionLimitError, read_response_text_bounded_sync
 from agent_core.acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
 
 
@@ -183,13 +183,13 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
 
         declared = Response([], content_length=2_000)
         with self.assertRaises(AcquisitionLimitError) as declared_error:
-            readResponseTextBoundedSync(declared, maxBytes=1_000, label="fixture")
+            read_response_text_bounded_sync(declared, maxBytes=1_000, label="fixture")
         self.assertEqual(declared_error.exception.measuredBytes, 2_000)
         self.assertEqual(declared.read_sizes, [])
 
         streamed = Response([b"a" * 600, b"b" * 401])
         with self.assertRaises(AcquisitionLimitError) as streamed_error:
-            readResponseTextBoundedSync(streamed, maxBytes=1_000, label="fixture")
+            read_response_text_bounded_sync(streamed, maxBytes=1_000, label="fixture")
         self.assertEqual(streamed_error.exception.measuredBytes, 1_001)
         self.assertTrue(streamed.read_sizes)
         self.assertLessEqual(max(streamed.read_sizes), 1_001)
@@ -399,7 +399,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
                 await authorizeHop(url)
             return web_module.FetchResponse(200, "<html></html>")
 
-        tool = next(tool for tool in core.createBuiltinTools() if tool.name == "WebSearch")
+        tool = next(tool for tool in core.create_builtin_tools() if tool.name == "WebSearch")
         with mock.patch.dict(os.environ):
             os.environ.pop("EXA_API_KEY", None)
             os.environ.pop("TESS_WEB_SEARCH_PROVIDER", None)
@@ -438,7 +438,7 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             request.wfile.write(b"must not be reached")
 
         with _serve(handler) as base:
-            tool = next(tool for tool in core.createBuiltinTools() if tool.name == "WebFetch")
+            tool = next(tool for tool in core.create_builtin_tools() if tool.name == "WebFetch")
             context = {
                 "cwd": os.getcwd(),
                 "config": {

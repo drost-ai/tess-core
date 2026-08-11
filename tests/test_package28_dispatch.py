@@ -10,7 +10,7 @@ from agent_core.agent.tool_dispatch import (
 
 class Package28DispatchTests(AgentCoreTestCase):
     def test_every_builtin_has_a_reviewed_concurrency_contract(self):
-        tools = {tool.name: tool.concurrency for tool in core.createBuiltinTools()}
+        tools = {tool.name: tool.concurrency for tool in core.create_builtin_tools()}
         self.assertEqual(
             {name for name, concurrency in tools.items() if concurrency == "parallel"},
             {

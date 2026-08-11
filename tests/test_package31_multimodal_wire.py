@@ -214,7 +214,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
                     runtime=bind_test_runtime(session, {
                         "interactive": False,
                         "askQuestion": lambda *_: "",
-                        "tools": core.createBuiltinTools(),
+                        "tools": core.create_builtin_tools(),
                         "emitEvent": lambda event, data: events.append((event, data)),
                     }),
                     prompt="read both",
