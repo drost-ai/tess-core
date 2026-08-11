@@ -468,7 +468,6 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             "emitRuntimeEvent": dispatch,
             "subscribe": subscribe,
             "subscribeEvents": subscribe_events,
-            "subscribeState": state_store["subscribe"],
             "getState": state_store["getState"],
             "stateStore": state_store,
             "getActiveBinding": lambda: active_binding,
@@ -481,9 +480,6 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             "getTaskSnapshot": lambda: task_runtime["getSnapshot"]()
             if task_runtime and callable(task_runtime.get("getSnapshot"))
             else _task_snapshot_from_state(state_store["getState"]),
-            "getCollaborationSnapshot": lambda: state_store["getState"]().get(
-                "collaboration"
-            ),
             "setActiveSession": set_active_session,
             "startTurn": session_runtime["startTurn"] if session_runtime else lambda *_a, **_k: None, "setTurnCancelling": session_runtime["setTurnCancelling"] if session_runtime else lambda: None,
             "finishTurn": session_runtime["finishTurn"] if session_runtime else lambda *_a, **_k: None,

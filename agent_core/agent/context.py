@@ -15,7 +15,8 @@ from ..context.token_accounting import (
 from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import computeProviderTokenBudget, resolveCompactionPolicy
 from ..session.persistence import persistSession
-from .cancellation import _now, _safe_emit
+from .._utils import now_iso as _now
+from ..runtime.events.emit import safeEmit as _safe_emit
 from .shared import modelSupportsImageInputs, requestHasImageInputs
 from typing import Any
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession
@@ -64,6 +65,11 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "reactiveAttempt": reactive_attempt,
             }
         )
+        # Relief is emitted and recorded per built attempt — including passes
+        # a compaction continue discards — because the TS peer does exactly
+        # this ahead of its measurement/compaction decision. Moving it after
+        # the decision reads cleaner but changes the event stream (verified
+        # against agent-provider.ts and the context-management golden).
         emitContinuationRelief(runtime, session, request_context)
         recordContinuationRelief(session, request_context)
         system = base_system_prompt

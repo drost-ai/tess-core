@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .._utils import field as _field
 
 import asyncio
 import hashlib
@@ -130,23 +131,16 @@ def taskSnapshotFromState(getState: Callable[[], dict[str, Any]]) -> dict[str, A
 
 def daemonSnapshotPayload(status: Mapping[str, Any]) -> dict[str, Any]:
     return {
-        "phase": firstPresent(status, "phase"),
-        "epoch": firstPresent(status, "epoch"),
-        "pid": firstPresent(status, "pid"),
-        "socket_path": firstPresent(status, "socketPath", "socket_path"),
-        "supervisor_id": firstPresent(status, "supervisorId", "supervisor_id"),
-        "attached_clients": firstPresent(status, "attachedClients", "attached_clients"),
-        "watched_sessions": firstPresent(status, "watchedSessions", "watched_sessions"),
-        "active_tasks": firstPresent(status, "activeTasks", "active_tasks"),
-        "updated_at": firstPresent(status, "updatedAt", "updated_at"),
+        "phase": _field(status, "phase"),
+        "epoch": _field(status, "epoch"),
+        "pid": _field(status, "pid"),
+        "socket_path": _field(status, "socketPath", "socket_path"),
+        "supervisor_id": _field(status, "supervisorId", "supervisor_id"),
+        "attached_clients": _field(status, "attachedClients", "attached_clients"),
+        "watched_sessions": _field(status, "watchedSessions", "watched_sessions"),
+        "active_tasks": _field(status, "activeTasks", "active_tasks"),
+        "updated_at": _field(status, "updatedAt", "updated_at"),
     }
-
-
-def firstPresent(data: Mapping[str, Any], *keys: str) -> Any:
-    for key in keys:
-        if key in data:
-            return data.get(key)
-    return None
 
 
 def defaultRuntimeComponentFactories() -> dict[str, Any]:

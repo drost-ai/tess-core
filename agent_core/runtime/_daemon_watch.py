@@ -49,9 +49,9 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
     instance_id = context["instanceId"]
     # A SIGKILLed daemon stays a zombie child of this runtime until reaped;
     # poll the spawn handle first so pid liveness below is truthful.
-    from ..daemon.lifecycle import _DAEMON_PROCESSES
+    from ..daemon.lifecycle import spawned_daemon_process
 
-    spawned = _DAEMON_PROCESSES.get(instance_id)
+    spawned = spawned_daemon_process(instance_id)
     if spawned is not None:
         spawned.poll()
     state = await load_daemon_state(instance_id)

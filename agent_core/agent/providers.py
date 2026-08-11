@@ -5,7 +5,7 @@ from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.errors import isProviderRequestError
 from ..providers.openai import sendOpenAiRequest
 from ..session.persistence import persistProviderFailure, persistSession
-from .cancellation import _safe_emit
+from ..runtime.events.emit import safeEmit as _safe_emit
 from typing import Any
 from ..providers.partial_output_state import (
     createPartialOutputStateStore as _create_partial_output_state_store,

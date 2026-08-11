@@ -7,7 +7,8 @@ from ..context.context_policy import decide_durable_checkpoint
 from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import resolveCompactionPolicy
 from ..session.persistence import persistProviderFailure, persistSession
-from .cancellation import _now, _safe_emit
+from .._utils import now_iso as _now
+from ..runtime.events.emit import safeEmit as _safe_emit
 from typing import Any
 from ..context.compaction_state import refresh_compaction_state_from_manifest as _refresh_compaction_state_from_manifest
 from ..context.compaction_transport import resolve_compaction_execution_plan as _resolve_compaction_execution_plan

@@ -45,6 +45,11 @@ _SUPERVISORS: dict[str, dict[str, Any]] = {}
 _DAEMON_PROCESSES: dict[str, subprocess.Popen[Any]] = {}
 
 
+def spawned_daemon_process(instance_id: str) -> subprocess.Popen[Any] | None:
+    """The Popen this runtime spawned for an instance, if it owns one."""
+    return _DAEMON_PROCESSES.get(instance_id)
+
+
 def _required_instance_id(values: dict[str, Any]) -> str:
     instance_id = values.get("instanceId") or values.get("instance_id")
     if not isinstance(instance_id, str) or not instance_id:
