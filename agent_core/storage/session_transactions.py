@@ -28,36 +28,28 @@ def normalizeSessionRevision(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
-async def updateSessionRecord(
-    sessionId: str,
-    mutation: Callable[[dict[str, Any]], Any],
-    options: dict[str, Any] | None = None,
-    **kwargs: Any,
-) -> dict[str, Any]:
-    async def require_latest(latest: dict[str, Any] | None) -> dict[str, Any]:
-        if latest is None:
-            raise SessionRecordNotFoundError(f"Session not found: {parseSessionId(sessionId)}")
-        # The engine already hands the mutation a private deepcopy of the
-        # persisted record; copying it again here was pure waste.
-        return await _await_mutation(mutation(latest))
-
-    return await mutateSessionRecordTransaction(sessionId, require_latest, options, **kwargs)
-
-
 async def mutateSessionRecordTransaction(
     sessionId: str,
     mutation: Callable[[dict[str, Any] | None], Any],
     options: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
+    """The one locked read-modify-write engine for session records.
+
+    ``requireExisting=True`` raises SessionRecordNotFoundError for a missing
+    record before the mutation runs, so the mutation always receives a dict.
+    """
     session_id = parseSessionId(sessionId)
     settings = {**(options or {}), **kwargs}
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
+    require_existing = bool(settings.get("requireExisting"))
 
     async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
         raw = await readJsonFileTolerant(sessionPath(session_id), None)
         hydrated = await hydratePersistedSession(session_id, raw)
         latest = hydrated["record"]
+        if latest is None and require_existing:
+            raise SessionRecordNotFoundError(f"Session not found: {session_id}")
         if latest is not None and latest.get("id") != session_id:
             raise ValueError(
                 f"Session transaction record identity mismatch ({session_id} != {latest.get('id')})."

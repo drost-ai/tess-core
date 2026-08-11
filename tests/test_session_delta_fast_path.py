@@ -102,3 +102,54 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             self.assertEqual(blocks[0], {"type": "text", "text": "look"})
         finally:
             self.restore_home(root, previous)
+
+    def test_head_delta_transaction_contract_directly(self):
+        from agent_core.storage.session_transactions import mutateSessionHeadDeltaTransaction
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            session = self._session(workspace, "33333333-3333-4333-8333-333333333333")
+            run(core.persistSession(session, {"sessionPersistence": True, "cwd": str(workspace)}))
+            live = run(core.loadSession(session["id"]))
+            messages = live["messages"]
+            base_revision = live["revision"]
+            messages.append({"role": "assistant", "content": "delta suffix"})
+
+            async def rename(head):
+                return {"changed": True, "session": {**head, "name": "delta-named"}}
+
+            committed = run(mutateSessionHeadDeltaTransaction(session["id"], messages, rename))
+            self.assertTrue(committed["fastPath"])
+            self.assertEqual(committed["revision"], base_revision + 1)
+            self.assertEqual(committed["session"]["name"], "delta-named")
+            self.assertIs(committed["session"]["messages"], messages)
+            self.assertEqual(messages.checkpoint().messageCount, 2)
+
+            reloaded = run(core.loadSession(session["id"]))
+            self.assertEqual(reloaded["name"], "delta-named")
+            self.assertEqual(len(reloaded["messages"]), 2)
+            self.assertEqual(reloaded["messages"][-1]["content"], "delta suffix")
+
+            # A plain list has no append authority; neither does a tracked
+            # list whose checkpoint went stale against the store revision.
+            async def untouched(head):
+                return {"changed": False, "session": head}
+
+            self.assertIsNone(
+                run(mutateSessionHeadDeltaTransaction(session["id"], list(messages), untouched))
+            )
+            stale = run(core.loadSession(session["id"]))
+            run(mutateSessionHeadDeltaTransaction(session["id"], reloaded["messages"], rename))
+            self.assertIsNone(
+                run(mutateSessionHeadDeltaTransaction(session["id"], stale["messages"], rename))
+            )
+
+            # A head mutation may not smuggle a message list past the body.
+            async def with_messages(head):
+                return {"changed": True, "session": {**head, "messages": []}}
+
+            fresh = run(core.loadSession(session["id"]))
+            with self.assertRaises(TypeError):
+                run(mutateSessionHeadDeltaTransaction(session["id"], fresh["messages"], with_messages))
+        finally:
+            self.restore_home(root, previous)

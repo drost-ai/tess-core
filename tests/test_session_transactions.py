@@ -26,7 +26,7 @@ def _session_mutation_worker(
         time.sleep(0.005)
 
     async def mutate() -> None:
-        await core.updateSessionRecord(
+        await core.mutateSessionRecordTransaction(
             session_id,
             lambda latest: {
                 "changed": task_id not in latest.get("metadata", {}).get("taskIds", []),
@@ -113,18 +113,20 @@ class SessionTransactionTests(AgentCoreTestCase):
 
             async def nested_update() -> dict:
                 async with core.withRecordTransaction("session", session["id"]):
-                    return await core.updateSessionRecord(
+                    return await core.mutateSessionRecordTransaction(
                         session["id"],
                         lambda latest: {"changed": True, "session": {**latest, "name": "nested"}},
+                        requireExisting=True,
                     )
 
             committed = run(nested_update())
             self.assertEqual(committed["revision"], 1)
             path = core.sessionPath(session["id"])
             before = os.stat(path).st_mtime_ns
-            no_op = run(core.updateSessionRecord(
+            no_op = run(core.mutateSessionRecordTransaction(
                 session["id"],
                 lambda latest: {"changed": False, "session": latest},
+                requireExisting=True,
             ))
             after = os.stat(path).st_mtime_ns
             self.assertEqual(no_op["revision"], 1)
@@ -148,16 +150,18 @@ class SessionTransactionTests(AgentCoreTestCase):
             path.write_bytes(b'{"id": "torn')
 
             with self.assertRaises(core.SessionRecordNotFoundError):
-                run(core.updateSessionRecord(
+                run(core.mutateSessionRecordTransaction(
                     session["id"],
                     lambda latest: {"changed": True, "session": latest},
+                    requireExisting=True,
                 ))
             self.assertIsNone(run(core.loadSession(session["id"])))
 
             run(core.saveSession(session))
-            committed = run(core.updateSessionRecord(
+            committed = run(core.mutateSessionRecordTransaction(
                 session["id"],
                 lambda latest: {"changed": True, "session": {**latest, "name": "repaired"}},
+                requireExisting=True,
             ))
             self.assertEqual(committed["session"]["name"], "repaired")
             persisted = run(core.loadSession(session["id"]))
@@ -180,7 +184,7 @@ class SessionTransactionTests(AgentCoreTestCase):
             run(core.saveSession(session))
             stale = run(core.loadSession(session["id"]))
             task_id = str(uuid.uuid4())
-            run(core.updateSessionRecord(
+            run(core.mutateSessionRecordTransaction(
                 session["id"],
                 lambda latest: {
                     "changed": True,

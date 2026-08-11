@@ -209,16 +209,15 @@ def _parse_archived_session_header(raw: str, session_id: str) -> SessionRecord |
     return None
 
 async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
-    """Locked read-modify-write for cross-process session metadata updates.
+    """Reconciling adapter over the one session mutate engine.
 
-    Reconciles the archived transcript while holding the same record lock,
-    applies ``mutate`` (return the record, or ``None`` after mutating in
-    place), and persists with the same redaction as ``saveSession``. Returns
-    ``None`` without writing when the session does not exist.
+    Not a peer engine: it delegates to ``mutateSessionRecordTransaction`` and
+    only adds archived-transcript reconciliation under the same record lock,
+    the in-place mutation convenience (return the record, or ``None`` after
+    mutating in place), and ``None`` instead of raising when the session does
+    not exist.
     """
-    async def apply(session: SessionRecord | None) -> dict[str, Any]:
-        if session is None:
-            raise SessionRecordNotFoundError(f"Session not found: {parseSessionId(sessionId)}")
+    async def apply(session: SessionRecord) -> dict[str, Any]:
         before = copy.deepcopy(session)
         reconciliation = await _reconcile_session_record(sessionId, session)
         working = reconciliation["record"]
@@ -230,7 +229,7 @@ async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
         return {"session": updated, "changed": updated != before}
 
     try:
-        result = await mutateSessionRecordTransaction(sessionId, apply)
+        result = await mutateSessionRecordTransaction(sessionId, apply, requireExisting=True)
     except SessionRecordNotFoundError:
         return None
     return result["session"]

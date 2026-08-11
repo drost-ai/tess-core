@@ -175,7 +175,6 @@ from .session_transactions import (
     mutateSessionHeadDeltaTransaction,
     mutateSessionRecordTransaction,
     normalizeSessionRevision,
-    updateSessionRecord,
 )
 from .sessions import (
     MAX_SHALLOW_SESSION_BYTES,
@@ -397,7 +396,6 @@ __all__ = [
     "toolArtifactDataPath",
     "toolArtifactMetaPath",
     "transactionLockPath",
-    "updateSessionRecord",
     "withRecordTransaction",
     "writeBackSessionV1",
     "writeJsonFile",

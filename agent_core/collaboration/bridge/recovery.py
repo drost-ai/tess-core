@@ -17,7 +17,7 @@ from ...runtime.identifiers import parseBridgeId, parseSessionId
 from ...storage import (
     getStateRoot,
     loadSessionRecordShallow,
-    updateSessionRecord,
+    mutateSessionRecordTransaction,
     withRecordTransaction,
 )
 from ...storage.remote import (
@@ -302,7 +302,7 @@ async def _publish_pointers(journal):
         updated = {**session, "metadata": metadata, "updatedAt": published_at}
         return {"session": updated, "changed": updated != session}
 
-    await updateSessionRecord(journal["sessionId"], mutate)
+    await mutateSessionRecordTransaction(journal["sessionId"], mutate, requireExisting=True)
     await _call_hook("session_pointer_written", journal)
     claims = {item["ownerId"]: item for item in journal["pointerClaims"] if item["owner"] == "remote_session"}
     for remote_id in journal["remoteSessionIds"]:

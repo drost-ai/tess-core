@@ -6,7 +6,7 @@ from ..._utils import now_iso
 from ...storage import (
     listRemoteSessions,
     loadSessionRecordShallow,
-    updateSessionRecord,
+    mutateSessionRecordTransaction,
     withRecordTransaction,
 )
 from ...storage.remote import (
@@ -58,7 +58,7 @@ async def closeCurrentBridgeGeneration(bridge, eventName="bridge.closed"):
                 next_session["metadata"].pop("bridgeId", None)
                 next_session["metadata"].pop("bridgeGeneration", None)
                 return {"session": next_session, "changed": next_session != latest}
-            await updateSessionRecord(bridge["sessionId"], clear_pointer)
+            await mutateSessionRecordTransaction(bridge["sessionId"], clear_pointer, requireExisting=True)
         for remote in await listRemoteSessions():
             if not _remote_owns(remote, bridge):
                 continue
