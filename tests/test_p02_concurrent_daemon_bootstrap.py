@@ -16,8 +16,8 @@ from agent_core.daemon.security import (
     daemonTokenId,
     readDaemonAuthMaterial,
     verifyOwnedDaemonSocket,
-    verifyPrivateDaemonRuntime,
 )
+from agent_core.daemon.security_tree import verifyPrivateDaemonRuntime
 
 
 P02_INSTANCE = "p02-test-instance"

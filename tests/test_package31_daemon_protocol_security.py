@@ -23,9 +23,11 @@ from agent_core.daemon.security import (
     createDaemonAuthMaterial,
     daemonAuthTokenPath,
     generateDaemonAuthMaterial,
-    prepareDaemonRuntimeSecurity,
     publishDaemonAuthMaterial,
     readDaemonAuthMaterial,
+)
+from agent_core.daemon.security_tree import (
+    prepareDaemonRuntimeSecurity,
     verifyPrivateDaemonRuntime,
 )
 import agent_core.daemon.server as daemon_server_module

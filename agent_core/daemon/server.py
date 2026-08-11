@@ -40,11 +40,11 @@ from .security import (
     DaemonSecurityError,
     daemonAuthTokenPath,
     generateDaemonAuthMaterial,
-    prepareDaemonRuntimeSecurity,
     publishDaemonAuthMaterial,
     removeDaemonAuthMaterialIfOwned,
     verifyOwnedDaemonSocket,
 )
+from .security_tree import prepareDaemonRuntimeSecurity
 from .transport import (
     AuthenticatedDaemonServer,
     DaemonAbortSignal,

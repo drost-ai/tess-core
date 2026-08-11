@@ -34,24 +34,26 @@ from .protocol import (
 )
 from .security import (
     DaemonSecurityError,
-    MAX_DAEMON_STATE_BYTES,
     MAX_DAEMON_TOKEN_BYTES,
-    MAX_DAEMON_TREE_DEPTH,
-    MAX_DAEMON_TREE_ENTRIES,
-    PRIVATE_DIRECTORY_MODE,
     PRIVATE_FILE_MODE,
     createDaemonAuthMaterial,
     daemonAuthTokenPath,
     daemonTokenId,
     generateDaemonAuthMaterial,
     isDaemonSocketListenerActive,
-    prepareDaemonRuntimeSecurity,
     publishDaemonAuthMaterial,
     readDaemonAuthMaterial,
     removeDaemonAuthMaterialIfOwned,
     removeInactiveOwnedDaemonSocket,
     removeOwnedDaemonAuthMaterial,
     verifyOwnedDaemonSocket,
+)
+from .security_tree import (
+    MAX_DAEMON_STATE_BYTES,
+    MAX_DAEMON_TREE_DEPTH,
+    MAX_DAEMON_TREE_ENTRIES,
+    PRIVATE_DIRECTORY_MODE,
+    prepareDaemonRuntimeSecurity,
     verifyPrivateDaemonRuntime,
 )
 from .server import runTaskSupervisorDaemon

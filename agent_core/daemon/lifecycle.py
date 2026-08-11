@@ -25,16 +25,15 @@ from ..storage import (
 )
 from .client import _create_daemon_client
 from .protocol import DaemonProtocolError
+from .._utils import is_process_alive as _is_process_alive
 from .security import (
     DaemonSecurityError,
-    _is_process_alive,
-    prepareDaemonRuntimeSecurity,
     readDaemonAuthMaterial,
     removeDaemonAuthMaterialIfOwned,
     removeInactiveOwnedDaemonSocket,
     removeOwnedDaemonAuthMaterial,
-    verifyPrivateDaemonRuntime,
 )
+from .security_tree import prepareDaemonRuntimeSecurity, verifyPrivateDaemonRuntime
 from ._instance_gc import (
     _reap_daemon_tmp_artifacts,
     _reap_dead_daemon_instance_dirs,
