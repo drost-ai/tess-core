@@ -4,6 +4,7 @@ import copy
 from typing import Any, Callable
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
+from ..contracts.records import SessionRecord
 from ..runtime.identifiers import parseSessionId
 from .message_history import (
     SessionMessageList,
@@ -27,7 +28,7 @@ class SessionRecordNotFoundError(RuntimeError):
 
 async def mutate_session_record_transaction(
     sessionId: str,
-    mutation: Callable[[dict[str, Any] | None], Any],
+    mutation: Callable[[SessionRecord | None], Any],
     options: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:

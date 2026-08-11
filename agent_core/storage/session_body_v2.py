@@ -7,13 +7,14 @@ import time
 import uuid
 from typing import Any
 
+from ..contracts.session_records import SessionBodyCommitRecord, SessionBodyMessageRecord
 from .persistence_metrics import (
     persistence_observers_active as _persistence_observers_active,
     record_persistence_io as _record_persistence_io,
 )
 
 
-def _message_entry(session_id: str, index: int, message: Any) -> dict[str, Any]:
+def _message_entry(session_id: str, index: int, message: Any) -> SessionBodyMessageRecord:
     return {
         "type": "message",
         "session_id": session_id,
@@ -24,7 +25,7 @@ def _message_entry(session_id: str, index: int, message: Any) -> dict[str, Any]:
 
 def _commit_entry(
     session_id: str, commit_id: str, message_count: int
-) -> dict[str, Any]:
+) -> SessionBodyCommitRecord:
     return {
         "type": "commit",
         "session_id": session_id,

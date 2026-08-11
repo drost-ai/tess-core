@@ -5,6 +5,7 @@ import os
 import uuid
 from typing import Any, Callable
 
+from ..contracts.session_records import PersistedSessionHeadV2
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media
 from .message_origin import is_genuine_user_request as _is_genuine_user_request
 from ..runtime.identifiers import parseSessionId
@@ -372,7 +373,7 @@ def _validate_v2_head(head: dict[str, Any], session_id: str) -> None:
 
 def _head_from_session(
     session: dict[str, Any], *, body_commit_id: str | None = None
-) -> dict[str, Any]:
+) -> PersistedSessionHeadV2:
     session_id = parseSessionId(session["id"])
     keys = [key for key in session if key not in _HEAD_FIELDS]
     message_index = keys.index("messages") if "messages" in keys else len(keys)
@@ -401,7 +402,7 @@ def _head_from_delta(
     safe_suffix: list[Any],
     message_count: int,
     body_commit_id: str,
-) -> dict[str, Any]:
+) -> PersistedSessionHeadV2:
     body_ref = copy.deepcopy(previous["bodyRef"])
     body_ref["commitId"] = body_commit_id
     first_user_text = str(previous.get("firstUserText") or "")

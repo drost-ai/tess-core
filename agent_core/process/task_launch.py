@@ -7,6 +7,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Mapping
 
+from ..contracts.task_records import TaskLaunchReservation
+
 from .._utils import now_iso
 from .identity import ProcessIdentityError, captureOwnedProcessIdentity, signalOwnedProcess
 from ..runtime.identifiers import parseSessionId, parseTaskId
@@ -27,7 +29,7 @@ def createTaskLaunchReservation(
     sessionId: str | None = None,
     kind: str | None = None,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> TaskLaunchReservation:
     values = dict(args or {})
     task_id = parseTaskId(values.get("taskId", taskId))
     session_id = parseSessionId(values.get("sessionId", sessionId))
@@ -45,7 +47,7 @@ def createTaskLaunchReservation(
     }
 
 
-def attachTaskLaunchReservation(reservation: Mapping[str, Any], now: str | None = None) -> dict[str, Any]:
+def attachTaskLaunchReservation(reservation: Mapping[str, Any], now: str | None = None) -> TaskLaunchReservation:
     _assert_starting_reservation(reservation)
     return {**reservation, "state": "attached", "attachedAt": now or now_iso()}
 
@@ -54,7 +56,7 @@ def failTaskLaunchReservation(
     reservation: Mapping[str, Any],
     error: Any,
     now: str | None = None,
-) -> dict[str, Any]:
+) -> TaskLaunchReservation:
     return {
         **reservation,
         "state": "failed",

@@ -32,10 +32,10 @@ they are listed so they remain a known, shrinking set rather than a habit.
 | Location | Pattern | Why it stays |
 |---|---|---|
 | `tasks/supervisor.py` launcher args (`sessionId`/`session_id`, `agentId`/`agent_id`, `parentSessionId`/`parent_session_id`, `parentTaskId`/`parent_task_id`, `intervalMs`/`interval_ms`, …) | input alias acceptance | public input contract: callers may pass either spelling; not record drift |
-| `runtime_event_parts/shared.py` `_field(data, "snake", "camel")` helpers | typed-payload projection | this layer *is* the absorption point that builds the camelCase typed payload from either spelling (TypeScript-shaped) |
-| `runtime_state_parts/reducer.py` session.activated handler (`event.get("sessionId") or summary id or _field(data, …)`) | payload-specific fallback chain | precedence crosses three sources (envelope, summary, body); not a pure alias read |
-| `tasks/subagent_parts/foreground.py` result `toolCount`/`tool_count`, `stopReason`/`stop_reason` | foreign-result tolerance | accepts results from both the embedded runtime and runtime callbacks |
-| `daemon_runtime/client.py`, `tasks/supervisor_parts/projection.py` (`sessionId`/`session_id` on generic event values) | wire tolerance | daemon socket payloads are produced by both runtimes |
+| `runtime/events/shared.py` `_field(data, "snake", "camel")` helpers | typed-payload projection | this layer *is* the absorption point that builds the camelCase typed payload from either spelling (TypeScript-shaped) |
+| `runtime/state/reducer.py` session.activated handler (`event.get("sessionId") or summary id or _field(data, …)`) | payload-specific fallback chain | precedence crosses three sources (envelope, summary, body); not a pure alias read |
+| `subagents/result_payload.py` result `toolCount`/`tool_count`, `stopReason`/`stop_reason` | foreign-result tolerance | accepts results from both the embedded runtime and runtime callbacks |
+| `daemon/client.py`, `tasks/supervisor_parts/projection.py` (`sessionId`/`session_id` on generic event values) | wire tolerance | daemon socket payloads are produced by both runtimes |
 
 ## Single-spelling boundary fields
 

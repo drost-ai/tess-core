@@ -11,6 +11,8 @@ import sys
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Literal, Mapping
 
+from ..contracts.task_records import OwnedProcessIdentity
+
 from .identity_darwin import inspect_darwin_process as _native_inspect_darwin_process
 
 
@@ -42,7 +44,7 @@ async def captureOwnedProcessIdentity(
     pid: int | None = None,
     expectedArgv: list[str] | None = None,
     spawnedAt: str | None = None,
-) -> dict[str, Any]:
+) -> OwnedProcessIdentity:
     values = dict(args or {})
     process_id = _require_pid(values.get("pid", pid))
     argv = values.get("expectedArgv", expectedArgv)

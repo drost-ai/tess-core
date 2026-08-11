@@ -5,6 +5,7 @@ import os
 import re
 from typing import Any
 
+from ..contracts.records import SessionRecord
 from .._utils import now_iso
 from ..config.prompts import buildEffectiveSystemPrompt
 from ..storage.persistence_metrics import (
@@ -60,7 +61,7 @@ async def resolveSession(options: dict[str, Any], config: dict[str, Any], launch
 
 
 async def persistSession(
-    session: dict[str, Any],
+    session: SessionRecord,
     config: dict[str, Any],
     options: dict[str, Any] | None = None,
     **kwargs: Any,

@@ -96,43 +96,6 @@ class SubagentRuntimeContract(TypedDict, total=False):
     concurrencyGroup: str
 
 
-class TaskMailboxMessage(TypedDict, total=False):
-    messageId: str
-    taskId: str
-    childSessionId: str
-    sender: str
-    kind: str
-    content: str
-    status: Literal["queued", "delivered"]
-    createdAt: str
-    deliveredAt: str | None
-    metadata: dict[str, Any]
-
-
-class TaskEventRecord(TypedDict, total=False):
-    eventId: str
-    taskId: str
-    type: str
-    createdAt: str
-    messageId: str
-    questionId: str
-    childSessionId: str
-    metadata: dict[str, Any]
-
-
-class TaskQuestionRecord(TypedDict, total=False):
-    questionId: str
-    taskId: str
-    childSessionId: str
-    question: str
-    options: list[Any]
-    status: TaskQuestionStatus
-    createdAt: str
-    answeredAt: str | None
-    answer: str | None
-    metadata: dict[str, Any]
-
-
 class _TaskLaunchResultRequired(TypedDict):
     taskId: str
     task_id: str
@@ -339,12 +302,9 @@ __all__ = [
     "SubagentCommunicationPolicy",
     "SubagentRuntimeContract",
     "SubagentStructuredResultStatus",
-    "TaskEventRecord",
-    "TaskMailboxMessage",
     "TaskMeta",
     "TaskMetaType",
     "TaskOwner",
-    "TaskQuestionRecord",
     "TaskQuestionStatus",
     "TaskRecord",
     "TaskStatus",
