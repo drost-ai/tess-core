@@ -281,9 +281,9 @@ async def _collaboration_snapshot(session_id: str) -> dict[str, Any]:
     remote = await load_remote_session(remote_id) if isinstance(remote_id, str) and remote_id else None
     bridge_id = metadata.get("bridgeId") or (remote or {}).get("bridgeId")
     bridge = await load_bridge(bridge_id) if isinstance(bridge_id, str) and bridge_id else None
-    from ..collaboration import buildCollaborationWorkers, createCollaborationSnapshot
+    from ..collaboration import build_collaboration_workers, create_collaboration_snapshot
 
-    workers = buildCollaborationWorkers(
+    workers = build_collaboration_workers(
         {
             "session": session,
             "childAgents": await list_child_agents(),
@@ -292,7 +292,7 @@ async def _collaboration_snapshot(session_id: str) -> dict[str, Any]:
             "bridge": bridge,
         }
     )
-    return createCollaborationSnapshot(workers, remote, bridge)
+    return create_collaboration_snapshot(workers, remote, bridge)
 
 
 def _is_active_task_status(status: Any) -> bool:

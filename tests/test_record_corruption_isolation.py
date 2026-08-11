@@ -101,7 +101,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             Path(core.child_agent_path("agent-malformed")).write_text("{", encoding="utf-8")
             _make_sparse(Path(core.child_agent_path("agent-oversized")), 2 * 1024 * 1024)
 
-            monitor = core.createMonitorRecord({
+            monitor = core.create_monitor_record({
                 "id": "monitor-valid",
                 "sessionId": session["id"],
                 "taskId": "task-valid",
@@ -154,7 +154,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             self.assertTrue(all(len(issue.get("detail", "")) <= 240 for issue in issues))
 
             events: list[tuple[str, dict[str, Any]]] = []
-            runtime = run(core.createTaskRuntime({
+            runtime = run(core.create_task_runtime({
                 "session": session,
                 "config": {"cwd": str(workspace), "runtimeHome": str(home)},
                 "emit": lambda event, data: events.append((event, data)),
@@ -282,13 +282,13 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                     raise RuntimeError("reject corruption diagnostic")
 
             with self.assertRaisesRegex(RuntimeError, "reject corruption diagnostic"):
-                run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": reject}))
+                run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": reject}))
             calls_after_reject = calls
             time.sleep(0.1)
             self.assertEqual(calls, calls_after_reject)
 
             events: list[dict[str, Any]] = []
-            supervisor = run(core.createTaskSupervisor({
+            supervisor = run(core.create_task_supervisor({
                 "cwd": str(workspace),
                 "onEvent": events.append,
             }))

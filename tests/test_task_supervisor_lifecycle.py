@@ -69,17 +69,17 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("a" * 13000, encoding="utf-8")
             run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": "tail-session", "command": "long-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": output_file}))
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
-            default_tail = run(supervisor["readTaskOutput"](task_id))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
+            default_tail = run(supervisor["read_task_output"](task_id))
             self.assertTrue(default_tail["truncated"])
             self.assertEqual(len(default_tail["output"]), 12000)
-            public_tail = run(core.readTaskOutput(task_id, tail_bytes=64))
+            public_tail = run(core.read_task_output(task_id, tail_bytes=64))
             self.assertTrue(public_tail["truncated"])
             self.assertEqual(len(public_tail["output"]), 64)
-            zero_tail = run(supervisor["readTaskOutput"](task_id, 0))
+            zero_tail = run(supervisor["read_task_output"](task_id, 0))
             self.assertTrue(zero_tail["truncated"])
             self.assertEqual(zero_tail["output"], "")
-            negative_tail = run(supervisor["readTaskOutput"](task_id, -10))
+            negative_tail = run(supervisor["read_task_output"](task_id, -10))
             self.assertTrue(negative_tail["truncated"])
             self.assertEqual(negative_tail["output"], "")
         finally:
@@ -95,7 +95,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(0.4)')}"
             started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "background parity"}))
             task_id = started["taskId"]
@@ -126,7 +126,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
             started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "stop parity"}))
             task_id = started["taskId"]
@@ -335,7 +335,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             async def on_event(event):
                 events.append(event)
 
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": on_event}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": on_event}))
             script = "import signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\nprint('armed', flush=True)\ntime.sleep(120)"
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "wedged worker"}))

@@ -112,7 +112,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
             )
             session["metadata"]["taskIds"] = [task_id]
 
-            supervisor_result = run(core.readTaskOutput(task_id, tail_bytes=4096))
+            supervisor_result = run(core.read_task_output(task_id, tail_bytes=4096))
             self.assertTrue(supervisor_result["truncated"])
             self.assertLessEqual(utf8ByteLength(supervisor_result["output"]), 4096)
             self.assertTrue(supervisor_result["output"].endswith("最后🙂terminal\n"))

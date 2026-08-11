@@ -158,18 +158,18 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             )
             attacker = {"id": "session-attacker", "metadata": {"taskIds": ["task-owned"]}}
             with self.assertRaises(core.TaskOwnershipError) as foreign:
-                run(core.requireModelOwnedTask({"session": attacker}, "task-owned", "output"))
+                run(core.require_model_owned_task({"session": attacker}, "task-owned", "output"))
             self.assertEqual(foreign.exception.code, "task.not_owned")
             with self.assertRaises(core.RuntimeIdentifierError):
-                run(core.requireModelOwnedTask({"session": attacker}, "../../task-owned", "output"))
+                run(core.require_model_owned_task({"session": attacker}, "../../task-owned", "output"))
 
             owner = {"id": "session-owner", "metadata": {"taskIds": []}}
             with self.assertRaises(core.TaskOwnershipError) as unreferenced:
-                run(core.requireModelOwnedTask({"session": owner}, "task-owned", "output"))
+                run(core.require_model_owned_task({"session": owner}, "task-owned", "output"))
             self.assertEqual(unreferenced.exception.code, "task.not_referenced")
             owner["metadata"]["taskIds"].append("task-owned")
             self.assertEqual(
-                run(core.requireModelOwnedTask({"session": owner}, "task-owned", "output"))["id"],
+                run(core.require_model_owned_task({"session": owner}, "task-owned", "output"))["id"],
                 "task-owned",
             )
 
@@ -177,7 +177,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             run(core.write_task_meta("task-remote", {"type": "remote", "taskId": "task-remote", "sessionId": "session-owner"}))
             owner["metadata"]["taskIds"].append("task-remote")
             with self.assertRaises(core.TaskOwnershipError) as wrong_kind:
-                run(core.requireModelOwnedTask({"session": owner}, "task-remote", "output"))
+                run(core.require_model_owned_task({"session": owner}, "task-remote", "output"))
             self.assertEqual(wrong_kind.exception.code, "task.kind_mismatch")
         finally:
             self.restore_home(root, previous)
@@ -201,14 +201,14 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             owner = {"id": "session-owner", "metadata": {"monitorIds": []}}
             other = {"id": "session-other", "metadata": {"monitorIds": ["monitor-owned"]}}
             with self.assertRaises(core.TaskOwnershipError) as foreign:
-                run(core.requireModelOwnedMonitor({"session": other}, "monitor-owned"))
+                run(core.require_model_owned_monitor({"session": other}, "monitor-owned"))
             self.assertEqual(foreign.exception.code, "task.not_owned")
             with self.assertRaises(core.TaskOwnershipError) as missing:
-                run(core.requireModelOwnedMonitor({"session": owner}, "monitor-owned"))
+                run(core.require_model_owned_monitor({"session": owner}, "monitor-owned"))
             self.assertEqual(missing.exception.code, "task.not_referenced")
             owner["metadata"]["monitorIds"].append("monitor-owned")
             self.assertEqual(
-                run(core.requireModelOwnedMonitor({"session": owner}, "monitor-owned"))["id"],
+                run(core.require_model_owned_monitor({"session": owner}, "monitor-owned"))["id"],
                 "monitor-owned",
             )
         finally:

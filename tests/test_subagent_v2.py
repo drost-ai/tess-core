@@ -25,7 +25,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 }
             }
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
-            from agent_core.subagents import prepareSubagent
+            from agent_core.subagents import prepare_subagent
 
             context = {
                 "session": parent,
@@ -36,7 +36,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 "cwd": str(workspace),
                 "persist_session": lambda: None,
             }
-            prepared = run(prepareSubagent({
+            prepared = run(prepare_subagent({
                 "context": context,
                 "description": "Investigate",
                 "prompt": "Find it",
@@ -56,7 +56,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             os.environ["TESS_CHILD_AGENT_ID"] = prepared["agentId"]
             os.environ["TESS_CHILD_TASK_ID"] = "structured-task"
             try:
-                run(core.finalizeBackgroundSubagentSuccessFromEnv(
+                run(core.finalize_background_subagent_success_from_env(
                     prepared["childSession"],
                     {"text": '{"summary":"done"}', "toolCount": 0, "usage": {}, "stopReason": "end_turn"},
                 ))
@@ -343,7 +343,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             os.environ["TESS_CHILD_AGENT_ID"] = "agent-bg-structured"
             os.environ["TESS_CHILD_TASK_ID"] = "task-bg-structured"
             os.environ["TESS_CHILD_SESSION_ID"] = session["id"]
-            run(core.finalizeBackgroundSubagentSuccessFromEnv(session, {"text": '{"ok": true}', "stopReason": "end_turn"}))
+            run(core.finalize_background_subagent_success_from_env(session, {"text": '{"ok": true}', "stopReason": "end_turn"}))
             child = run(core.load_child_agent("agent-bg-structured"))
             self.assertEqual(child["structuredResultStatus"], "valid")
             self.assertEqual(child["structuredResult"], {"ok": True})

@@ -38,7 +38,7 @@ def _coordination_writer(home: str, writer_id: str, barrier_dir: str) -> None:
                 "event": "test.writer",
                 "data": {"writer_id": writer_id},
             }),
-            core.upsertSubagentReconciliation({
+            core.upsert_subagent_reconciliation({
                 "id": f"reconciliation-{writer_id}",
                 "idempotencyKey": f"writer:{writer_id}",
                 "parentSessionId": PARENT_ID,
@@ -98,7 +98,7 @@ class CoordinationTransactionMigrationTests(AgentCoreTestCase):
 
             inbox = run(core.load_bridge_inbox(BRIDGE_ID))
             events = run(core.load_bridge_events(BRIDGE_ID))
-            reconciliations = run(core.listSubagentReconciliations(PARENT_ID))
+            reconciliations = run(core.list_subagent_reconciliations(PARENT_ID))
             self.assertEqual(len(inbox), 50)
             self.assertEqual(len({entry["id"] for entry in inbox}), 50)
             self.assertEqual(len(events), 50)
@@ -116,7 +116,7 @@ class CoordinationTransactionMigrationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             parent_id = "50000000-0000-4000-8000-000000000002"
-            run(core.upsertSubagentReconciliation(_reconciliation(parent_id, "delivery")))
+            run(core.upsert_subagent_reconciliation(_reconciliation(parent_id, "delivery")))
             sessions = [
                 {"id": parent_id, "messages": [], "metadata": {}},
                 {"id": parent_id, "messages": [], "metadata": {}},
@@ -124,18 +124,18 @@ class CoordinationTransactionMigrationTests(AgentCoreTestCase):
 
             async def deliver() -> list[dict]:
                 return await asyncio.gather(*(
-                    core.appendPendingSubagentReconciliationsToSession(session)
+                    core.append_pending_subagent_reconciliations_to_session(session)
                     for session in sessions
                 ))
 
             deliveries = run(deliver())
             winners = [delivery for delivery in deliveries if delivery["records"]]
             self.assertEqual(len(winners), 1)
-            consumed = run(core.consumeAppendedSubagentReconciliations(
+            consumed = run(core.consume_appended_subagent_reconciliations(
                 sessions[deliveries.index(winners[0])], winners[0]
             ))
             self.assertEqual(len(consumed), 1)
             self.assertEqual(sum(len(session["messages"]) for session in sessions), 1)
-            self.assertIsNotNone(run(core.listSubagentReconciliations(parent_id))[0].get("consumedAt"))
+            self.assertIsNotNone(run(core.list_subagent_reconciliations(parent_id))[0].get("consumedAt"))
         finally:
             self.restore_home(root, previous)

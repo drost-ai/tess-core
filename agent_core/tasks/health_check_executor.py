@@ -14,15 +14,15 @@ from ..process.bash_lifecycle import runInlineShellCommand
 from ..acquisition.bounded_web_fetch import boundedWebFetch
 from ..payloads.utf8_bounds import sliceUtf8Prefix
 from .health_check_policy import (
-    assertHealthCheckExecutionPolicy,
-    buildHealthCheckEnvironment,
-    healthCheckSpecDigest,
+    assert_health_check_execution_policy,
+    build_health_check_environment,
+    health_check_spec_digest,
 )
 
 
 
 
-async def executeHealthCheck(
+async def execute_health_check(
     *,
     record: dict[str, Any],
     signal: Any,
@@ -31,16 +31,16 @@ async def executeHealthCheck(
     policy = record.get("executionPolicy")
     if record.get("schemaVersion") != 2 or not record.get("specDigest") or not isinstance(policy, dict):
         raise RuntimeError("Health check has no verified execution policy.")
-    spec = recordToSpec(record)
-    if healthCheckSpecDigest(spec) != record["specDigest"]:
+    spec = record_to_spec(record)
+    if health_check_spec_digest(spec) != record["specDigest"]:
         raise RuntimeError("Health-check persisted spec no longer matches its authorized digest.")
-    assertHealthCheckExecutionPolicy(spec, policy)
+    assert_health_check_execution_policy(spec, policy)
     if record["mode"] == "command":
         return await _execute_command(record, signal, onProcessIdentity)
     return await _execute_http(record, signal)
 
 
-def recordToSpec(record: dict[str, Any]) -> dict[str, Any]:
+def record_to_spec(record: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "title",
         "mode",
@@ -61,7 +61,7 @@ def recordToSpec(record: dict[str, Any]) -> dict[str, Any]:
     return {key: record[key] for key in keys if record.get(key) is not None}
 
 
-async def appendHealthCheckLog(
+async def append_health_check_log(
     record: dict[str, Any], startedAt: str, result: dict[str, Any]
 ) -> None:
     target = record.get("outputFile")
@@ -95,7 +95,7 @@ async def _execute_command(
         command=record["command"],
         argv=argv,
         cwd=record["cwd"],
-        env=buildHealthCheckEnvironment(policy),
+        env=build_health_check_environment(policy),
         timeoutMs=record["timeoutMs"],
         abortSignal=signal,
         sessionId=record["sessionId"],

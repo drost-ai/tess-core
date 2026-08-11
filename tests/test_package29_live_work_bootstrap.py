@@ -163,7 +163,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             target = Path(core.session_path(session["id"]))
             before = (target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"]))
             events = []
-            runtime = run(core.createCollaborationRuntime({"session": session, "config": {"provider": "openai", "openaiToken": "test", "sessionPersistence": True}, "startTicker": False, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
+            runtime = run(core.create_collaboration_runtime({"session": session, "config": {"provider": "openai", "openaiToken": "test", "sessionPersistence": True}, "startTicker": False, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
             self.assertEqual(calls, [])
             self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"])), before)
             self.assertTrue(any(event == "subagent.status_changed" for event, _ in events))
@@ -192,7 +192,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text("initial\n", encoding="utf-8")
             run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "sessionId": session["id"], "status": "running", "startedAt": _OLD, "pid": os.getpid(), "outputFile": str(output)}))
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": task_id, "goal": "watch"})
             monitor["checkIntervalMs"] = 1
             monitor["createdAt"] = _OLD
             monitor["updatedAt"] = _OLD
@@ -208,7 +208,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             before = (target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"]))
             events = []
             async def exercise_runtime():
-                created = await core.createMonitorRuntime({"session": session, "config": {"provider": "openai", "openaiToken": "test", "sessionPersistence": True}, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
+                created = await core.create_monitor_runtime({"session": session, "config": {"provider": "openai", "openaiToken": "test", "sessionPersistence": True}, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
                 self.assertEqual(calls, [])
                 self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"])), before)
                 with output.open("a", encoding="utf-8") as handle:

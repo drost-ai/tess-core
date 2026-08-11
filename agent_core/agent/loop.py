@@ -12,8 +12,8 @@ from ..session.persistence import (
     repair_session_transcript,
 )
 from ..subagents.reconciliation import (
-    appendPendingSubagentReconciliationsToSession,
-    consumeAppendedSubagentReconciliations,
+    append_pending_subagent_reconciliations_to_session,
+    consume_appended_subagent_reconciliations,
 )
 from .cancellation import (
     _capture_session_rollback,
@@ -159,14 +159,14 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         _safe_emit(runtime, "agent.no_progress", event)
         return _no_progress_turn_result(receipt=prior_no_progress, text="", tool_count=0, usage=state.total_usage, model=state.active_model, estimated_cost_usd=0.0)
 
-    appended_reconciliations = await appendPendingSubagentReconciliationsToSession(
+    appended_reconciliations = await append_pending_subagent_reconciliations_to_session(
         session,
         runtime=runtime,
         parentTurnId=parent_turn_id,
     )
     if appended_reconciliations.get("records"):
         await persist_session(session, config)
-        await consumeAppendedSubagentReconciliations(session, appended_reconciliations, runtime=runtime)
+        await consume_appended_subagent_reconciliations(session, appended_reconciliations, runtime=runtime)
         # consumedAt is on disk; a cancel must not roll back past these records.
         state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
 

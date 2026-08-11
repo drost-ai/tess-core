@@ -21,7 +21,7 @@ from ..storage.records import (
     task_output_path,
 )
 from ..storage.session_archive import load_session
-from .supervisor_parts.communication import createTaskCommunicationApi, readTaskOutput
+from .supervisor_parts.communication import create_task_communication_api, read_task_output
 from .supervisor_parts.health import _inspect_latest_task_record
 from .supervisor_parts.launch import _create_process_task_launcher
 from .supervisor_parts.monitor_watch import tick_daemon_monitors as _tick_daemon_monitors
@@ -46,12 +46,12 @@ from .supervisor_parts.subagent_launch import _create_subagent_task_starter
 from .supervisor_parts.utils import _dedupe, _require_string
 from typing import Any, Callable
 from ..contracts.records import launch_task_id
-from .health_check_executor import recordToSpec
-from .health_check_runtime import createHealthCheckController, drainOrphanedHealthProbes
-from .task_stop_coordination import createTaskStopCoordinator
+from .health_check_executor import record_to_spec
+from .health_check_runtime import create_health_check_controller, drain_orphaned_health_probes
+from .task_stop_coordination import create_task_stop_coordinator
 
 
-async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def create_task_supervisor(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     cwd = args.get("cwd") or os.getcwd()
     on_event: Callable[[dict[str, Any]], Any] = args.get("onEvent") or (lambda _event: None)
@@ -70,7 +70,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
             await maybe_await(subscriber(payload))
         await maybe_await(on_event(payload))
 
-    task_stop_coordinator = createTaskStopCoordinator()
+    task_stop_coordinator = create_task_stop_coordinator()
     _launch_process_task = _create_process_task_launcher(
         live_work_cache,
         emit,
@@ -82,7 +82,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         registries.taskWatchers.add(task)
         task.add_done_callback(registries.taskWatchers.discard)
 
-    health_check_controller = createHealthCheckController(
+    health_check_controller = create_health_check_controller(
         emit=emit,
         invalidateSession=lambda session_id: _invalidate_live_work_cache(
             live_work_cache, session_id
@@ -295,7 +295,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return await health_check_controller["start"](
             {
                 "sessionId": health["sessionId"],
-                "spec": recordToSpec(health),
+                "spec": record_to_spec(health),
                 "specDigest": health["specDigest"],
                 "executionPolicy": health["executionPolicy"],
                 "lineageId": health.get("lineageId") or health["taskId"],
@@ -454,7 +454,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     try:
         await _reconcile_persisted_tasks(supervisor_id, emit, registries)
         await list_child_agents()
-        await drainOrphanedHealthProbes(emit)
+        await drain_orphaned_health_probes(emit)
         await health_check_controller["tick"]()
         await _tick_daemon_monitors(emit)
         await _report_persisted_record_issues(emit, reported_record_issues)
@@ -484,8 +484,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         "getBootstrap": get_bootstrap,
         "listTasks": list_tasks,
         "inspectTask": inspect_task,
-        "readTaskOutput": readTaskOutput,
-        **createTaskCommunicationApi(emit),
+        "read_task_output": read_task_output,
+        **create_task_communication_api(emit),
         "stopTask": stop_task,
         "retryTask": retry_task,
         "startBackgroundCommand": start_background_command,

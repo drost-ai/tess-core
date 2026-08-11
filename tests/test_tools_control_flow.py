@@ -128,7 +128,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
             events = []
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
 
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
             run(core.save_monitor(monitor))
             session["metadata"]["monitorIds"] = [monitor["id"]]
             stopped = json.loads(run(tools["TaskMonitorStop"].handler({"monitor_id": monitor["id"]}, context))["content"])

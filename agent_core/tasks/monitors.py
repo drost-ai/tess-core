@@ -18,22 +18,23 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .._utils import now_iso
-from .monitor_bootstrap import _MonitorBootstrapBaseline
+from ..contracts.monitor_records import MonitorRecord
+from .monitor_bootstrap import _monitor_bootstrap_baseline
 from .monitor_narration import _author_monitor_update
 from .monitor_observation import (
-    buildMonitorNarrationMutation as _build_monitor_narration_mutation,
-    buildMonitorObservationMutation as _build_monitor_observation_mutation,
+    build_monitor_narration_mutation as _build_monitor_narration_mutation,
+    build_monitor_observation_mutation as _build_monitor_observation_mutation,
 )
 from .monitor_transactions import (
-    commitMonitorMutation as _commit_monitor_mutation,
-    monitorTransitionEventFields as _monitor_transition_event_fields,
+    commit_monitor_mutation as _commit_monitor_mutation,
+    monitor_transition_event_fields as _monitor_transition_event_fields,
 )
 from ..session.persistence import persist_session
 from ..storage import list_session_monitors, mutate_task_meta, read_task_meta, save_monitor, task_output_path, write_task_meta
 
 
 
-async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def create_monitor_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session_ref = args.get("session") or {}
     config_ref = args.get("config") or {}
@@ -43,7 +44,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     foreground_busy = False
     tick_in_flight = False
     snapshot = _empty_snapshot()
-    bootstrap_baseline = _MonitorBootstrapBaseline()
+    bootstrap_baseline = _monitor_bootstrap_baseline()
     stop_event = asyncio.Event()
 
     async def tick() -> None:
@@ -193,20 +194,21 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
     return {"close": close, "setForegroundBusy": set_foreground_busy, "getSnapshot": lambda: snapshot, "setSession": set_session}
 
 
-def defaultMonitorCheckIntervalMs(value: Any) -> int:
+def default_monitor_check_interval_ms(value: Any) -> int:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
         return int(_knob("tasks.monitor_check_interval_ms"))
     return max(2000, min(round(value), 60000))
 
 
-def defaultMonitorHeartbeatIntervalMs(value: Any) -> int:
+def default_monitor_heartbeat_interval_ms(value: Any) -> int:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
         return int(_knob("tasks.monitor_heartbeat_interval_ms"))
     return max(15000, min(round(value), 15 * 60_000))
 
 
-def createMonitorRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
+def create_monitor_record(fields: dict[str, Any]) -> MonitorRecord:
+    """Build one monitor record from record-shaped fields (wire-key input)."""
+    args = fields
     session = args.get("session") if isinstance(args.get("session"), dict) else {}
     now = now_iso()
     return {
@@ -218,14 +220,14 @@ def createMonitorRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         "status": "active",
         "goal": args.get("goal", ""),
         "summaryStyle": args.get("summaryStyle"),
-        "checkIntervalMs": defaultMonitorCheckIntervalMs(args.get("checkIntervalMs")),
-        "heartbeatIntervalMs": defaultMonitorHeartbeatIntervalMs(args.get("heartbeatIntervalMs")),
+        "checkIntervalMs": default_monitor_check_interval_ms(args.get("checkIntervalMs")),
+        "heartbeatIntervalMs": default_monitor_heartbeat_interval_ms(args.get("heartbeatIntervalMs")),
         "lastNarratedOutputSize": 0,
         "lastObservedOutputSize": 0,
     }
 
 
-def formatMonitorSummary(monitors: list[dict[str, Any]]) -> str:
+def format_monitor_summary(monitors: list[dict[str, Any]]) -> str:
     if not monitors:
         return "No monitors."
     lines = []

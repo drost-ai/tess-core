@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-def stopMonitorRecord(monitor: dict[str, Any], now: str) -> dict[str, Any]:
+def stop_monitor_record(monitor: dict[str, Any], now: str) -> dict[str, Any]:
     status = monitor.get("status")
     if status in {"completed", "failed"}:
         return {"record": monitor, "changed": False, "previousStatus": status, "reason": "already_terminal"}
@@ -17,7 +17,7 @@ def stopMonitorRecord(monitor: dict[str, Any], now: str) -> dict[str, Any]:
     }
 
 
-def monitorStopNote(transition: dict[str, Any]) -> str | None:
+def monitor_stop_note(transition: dict[str, Any]) -> str | None:
     if transition.get("reason") == "already_stopped":
         return "Monitor was already stopped; no action was needed."
     if transition.get("reason") == "already_terminal":
@@ -25,7 +25,7 @@ def monitorStopNote(transition: dict[str, Any]) -> str | None:
     return None
 
 
-def resumeMonitorRecord(monitor: dict[str, Any], now: str) -> dict[str, Any]:
+def resume_monitor_record(monitor: dict[str, Any], now: str) -> dict[str, Any]:
     status = monitor.get("status")
     if status in {"completed", "failed"}:
         return {"record": monitor, "changed": False, "previousStatus": status, "reason": "already_terminal"}
@@ -36,7 +36,7 @@ def resumeMonitorRecord(monitor: dict[str, Any], now: str) -> dict[str, Any]:
     return {"record": record, "changed": True, "previousStatus": status, "reason": "resumed"}
 
 
-def monitorResumeNote(transition: dict[str, Any]) -> str | None:
+def monitor_resume_note(transition: dict[str, Any]) -> str | None:
     if transition.get("reason") == "already_active":
         return "Monitor was already active; no action was needed."
     if transition.get("reason") == "already_terminal":

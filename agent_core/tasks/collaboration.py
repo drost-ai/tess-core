@@ -15,7 +15,7 @@ from typing import Any
 
 from .._utils import maybe_await
 from . import collaboration_narration as _collaboration_narration
-from .collaboration_narration import appendAssistantCollaborationMessage, staleWorkPayload
+from .collaboration_narration import append_assistant_collaboration_message, stale_work_payload
 from ..session.persistence import persist_session
 from ..storage import list_child_agents, list_session_monitors, load_bridge, load_remote_session
 from ..runtime.generation import create_runtime_session_binding, same_runtime_binding
@@ -30,13 +30,13 @@ sendOpenAiRequest = _collaboration_narration.sendOpenAiRequest
 sendAnthropicMessagesRequest = _collaboration_narration.sendAnthropicMessagesRequest
 
 
-async def authorCollaborationUpdate(args: dict[str, Any]) -> str:
+async def author_collaboration_update(args: dict[str, Any]) -> str:
     _collaboration_narration.sendOpenAiRequest = sendOpenAiRequest
     _collaboration_narration.sendAnthropicMessagesRequest = sendAnthropicMessagesRequest
-    return await _collaboration_narration.authorCollaborationUpdate(args)
+    return await _collaboration_narration.author_collaboration_update(args)
 
 
-async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def create_collaboration_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session_ref = args["session"]
     config_ref = args.get("config") or {}
@@ -54,7 +54,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     state = {
         "closed": False,
         "foregroundBusy": False,
-        "snapshot": emptyCollaborationSnapshot(),
+        "snapshot": empty_collaboration_snapshot(),
         "previousWorkers": {},
         "previousRemoteSignature": "",
         "lastAssistantUpdateAt": 0,
@@ -82,15 +82,15 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             if not _is_active(captured_binding):
                 await _report_stale(captured_binding, "collaboration.tick_discarded")
                 return get_snapshot()
-            workers = buildCollaborationWorkers({"session": captured_session, "childAgents": child_agents, "monitors": monitors, "remote": remote, "bridge": bridge})
-            snapshot = createCollaborationSnapshot(workers, remote, bridge)
+            workers = build_collaboration_workers({"session": captured_session, "childAgents": child_agents, "monitors": monitors, "remote": remote, "bridge": bridge})
+            snapshot = create_collaboration_snapshot(workers, remote, bridge)
             with state_lock:
                 previous_snapshot = copy.deepcopy(state["snapshot"])
             if json.dumps(snapshot, sort_keys=True, default=str) != json.dumps(previous_snapshot, sort_keys=True, default=str):
-                await _emit_bound(captured_binding, "collaboration.snapshot", collaborationSnapshotPayload(snapshot))
+                await _emit_bound(captured_binding, "collaboration.snapshot", collaboration_snapshot_payload(snapshot))
                 if not _is_active(captured_binding):
                     return get_snapshot()
-            candidates = buildUpdateCandidates({"session": captured_session, "workers": workers, "previousWorkers": captured_previous_workers, "remote": remote, "bridge": bridge, "previousRemoteSignature": captured_remote_signature})
+            candidates = build_update_candidates({"session": captured_session, "workers": workers, "previousWorkers": captured_previous_workers, "remote": remote, "bridge": bridge, "previousRemoteSignature": captured_remote_signature})
             stale_before_commit = False
             with state_lock:
                 if not _is_active_locked(captured_binding):
@@ -98,7 +98,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
                 else:
                     state["snapshot"] = snapshot
                     state["previousWorkers"] = {worker["id"]: worker for worker in workers}
-                    state["previousRemoteSignature"] = serializeRemote(remote, bridge)
+                    state["previousRemoteSignature"] = serialize_remote(remote, bridge)
                     state["bootstrapTick"] = False
             if stale_before_commit:
                 await _report_stale(captured_binding, "collaboration.tick_discarded")
@@ -111,9 +111,9 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             if not captured_bootstrap_tick and not foreground_busy and candidates:
                 now_ms = int(time.time() * 1000)
                 if now_ms - last_update_at >= min_update_spacing_ms:
-                    narratable = next((candidate for candidate in candidates if shouldNarrateWorker(candidate.get("worker") or {})), None)
+                    narratable = next((candidate for candidate in candidates if should_narrate_worker(candidate.get("worker") or {})), None)
                     if narratable:
-                        text = await authorCollaborationUpdate({"config": captured_config, "session": captured_session, "worker": narratable.get("worker"), "summary": narratable.get("summary") or ""})
+                        text = await author_collaboration_update({"config": captured_config, "session": captured_session, "worker": narratable.get("worker"), "summary": narratable.get("summary") or ""})
                         with state_lock:
                             busy_after_authoring = state["foregroundBusy"]
                         if busy_after_authoring:
@@ -121,7 +121,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
                             # would land mid-turn. Next idle tick re-narrates.
                             return get_snapshot()
                         if text and _is_active(captured_binding):
-                            appendAssistantCollaborationMessage(captured_session, text)
+                            append_assistant_collaboration_message(captured_session, text)
                             await persist_session(captured_session, captured_config)
                             if not _is_active(captured_binding):
                                 await _report_stale(captured_binding, "collaboration.assistant_update")
@@ -167,7 +167,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     async def _report_stale(binding: Any, source_event: str) -> None:
         with state_lock:
             active = runtime_binding
-        await _emit_contained("runtime.stale_work_discarded", staleWorkPayload(active, binding, source_event))
+        await _emit_contained("runtime.stale_work_discarded", stale_work_payload(active, binding, source_event))
 
     async def _emit_bound(binding: Any, event: str, data: dict[str, Any]) -> None:
         if not _is_active(binding):
@@ -219,7 +219,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             session_ref = session
             config_ref = config or config_ref
             runtime_binding = binding
-            state["snapshot"] = emptyCollaborationSnapshot()
+            state["snapshot"] = empty_collaboration_snapshot()
             state["previousWorkers"] = {}
             state["previousRemoteSignature"] = ""
             state["lastAssistantUpdateAt"] = 0
@@ -246,23 +246,23 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     return {"workers": state["snapshot"]["workers"], "snapshot": get_snapshot, "getSnapshot": get_snapshot, "refresh": refresh, "setForegroundBusy": set_foreground_busy, "setSession": set_session, "activateSession": activate_session, "close": close}
 
 
-def emptyCollaborationSnapshot() -> dict[str, Any]:
+def empty_collaboration_snapshot() -> dict[str, Any]:
     return {"workers": [], "activeCount": 0, "awaitingInputCount": 0, "backgroundCount": 0, "labels": []}
 
 
-def buildCollaborationWorkers(args: dict[str, Any]) -> list[dict[str, Any]]:
+def build_collaboration_workers(args: dict[str, Any]) -> list[dict[str, Any]]:
     session = args["session"]
     workers: list[dict[str, Any]] = []
     for record in args.get("childAgents") or []:
-        if not isRelatedChildAgent(session, record):
+        if not is_related_child_agent(session, record):
             continue
         workers.append(
             {
                 "id": record.get("agentId"),
                 "kind": "subagent",
-                "status": mapChildAgentStatus(record.get("status")),
+                "status": map_child_agent_status(record.get("status")),
                 "label": record.get("name") or record.get("agentType") or record.get("agentId"),
-                "summary": buildSubagentWorkerSummary(record),
+                "summary": build_subagent_worker_summary(record),
                 "sessionId": record.get("sessionId"),
                 "parentSessionId": record.get("parentSessionId"),
                 "parentTaskId": record.get("parentTaskId"),
@@ -286,7 +286,7 @@ def buildCollaborationWorkers(args: dict[str, Any]) -> list[dict[str, Any]]:
             {
                 "id": monitor.get("id"),
                 "kind": "monitor",
-                "status": mapMonitorStatus(monitor.get("status")),
+                "status": map_monitor_status(monitor.get("status")),
                 "label": monitor.get("goal"),
                 "summary": monitor.get("lastAssistantUpdateSummary") or monitor.get("failureReason") or monitor.get("lastObservedTaskStatus"),
                 "sessionId": session["id"],
@@ -302,7 +302,7 @@ def buildCollaborationWorkers(args: dict[str, Any]) -> list[dict[str, Any]]:
             {
                 "id": remote.get("id"),
                 "kind": "remote",
-                "status": mapRemoteStatus(remote.get("status")),
+                "status": map_remote_status(remote.get("status")),
                 "label": remote.get("title"),
                 "summary": remote.get("lastEventSummary"),
                 "sessionId": session["id"],
@@ -315,7 +315,7 @@ def buildCollaborationWorkers(args: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(workers, key=lambda item: item.get("updatedAt") or "", reverse=True)
 
 
-def createCollaborationSnapshot(workers: list[dict[str, Any]], remote: dict[str, Any] | None = None, bridge: dict[str, Any] | None = None) -> dict[str, Any]:
+def create_collaboration_snapshot(workers: list[dict[str, Any]], remote: dict[str, Any] | None = None, bridge: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "workers": workers,
         "activeCount": sum(1 for worker in workers if worker.get("status") in {"active", "running", "backgrounded"}),
@@ -329,7 +329,7 @@ def createCollaborationSnapshot(workers: list[dict[str, Any]], remote: dict[str,
     }
 
 
-def collaborationSnapshotPayload(snapshot: dict[str, Any]) -> dict[str, Any]:
+def collaboration_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "active_count": snapshot.get("activeCount"),
         "awaiting_input_count": snapshot.get("awaitingInputCount"),
@@ -343,17 +343,17 @@ def collaborationSnapshotPayload(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
+def build_update_candidates(args: dict[str, Any]) -> list[dict[str, Any]]:
     candidates = []
     previous = args.get("previousWorkers") or {}
     for worker in args.get("workers") or []:
         prior = previous.get(worker.get("id"))
         if not prior:
-            candidates.append(workerEventCandidate(worker, "started"))
+            candidates.append(worker_event_candidate(worker, "started"))
             continue
         if prior.get("status") != worker.get("status") or (prior.get("summary") or "") != (worker.get("summary") or "") or prior.get("updatedAt") != worker.get("updatedAt"):
-            candidates.append(workerEventCandidate(worker, "changed"))
-    remote_signature = serializeRemote(args.get("remote"), args.get("bridge"))
+            candidates.append(worker_event_candidate(worker, "changed"))
+    remote_signature = serialize_remote(args.get("remote"), args.get("bridge"))
     remote = args.get("remote")
     bridge = args.get("bridge")
     if remote_signature and remote_signature != args.get("previousRemoteSignature") and remote:
@@ -363,7 +363,7 @@ def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
                 "worker": {
                     "id": remote.get("id"),
                     "kind": "remote",
-                    "status": mapRemoteStatus(remote.get("status")),
+                    "status": map_remote_status(remote.get("status")),
                     "label": remote.get("title"),
                     "summary": remote.get("lastEventSummary"),
                     "sessionId": args["session"]["id"],
@@ -410,16 +410,16 @@ def buildUpdateCandidates(args: dict[str, Any]) -> list[dict[str, Any]]:
     return _dedupe_candidates(candidates)
 
 
-def workerEventCandidate(worker: dict[str, Any], changeKind: str) -> dict[str, Any]:
+def worker_event_candidate(worker: dict[str, Any], changeKind: str) -> dict[str, Any]:
     raw_event = "subagent.status_changed" if worker.get("kind") == "subagent" else "monitor.status_changed" if worker.get("kind") == "monitor" else "remote.status_changed"
     return {"key": f"{worker.get('kind')}:{worker.get('id')}:{worker.get('status')}:{worker.get('updatedAt')}:{worker.get('summary') or ''}", "worker": worker, "summary": worker.get("summary") or f"{worker.get('label')} is {worker.get('status')}.", "rawEvent": raw_event, "payload": {**_worker_payload(worker), "change_kind": changeKind}}
 
 
-def shouldNarrateWorker(worker: dict[str, Any]) -> bool:
+def should_narrate_worker(worker: dict[str, Any]) -> bool:
     return worker.get("kind") in {"subagent", "remote"}
 
 
-def buildSubagentWorkerSummary(record: dict[str, Any]) -> str | None:
+def build_subagent_worker_summary(record: dict[str, Any]) -> str | None:
     if record.get("waitingReason"):
         return record.get("waitingReason")
     if record.get("status") == "completed" and record.get("resultSummary"):
@@ -429,23 +429,23 @@ def buildSubagentWorkerSummary(record: dict[str, Any]) -> str | None:
     return record.get("lastSummary") or record.get("error") or record.get("stopReason")
 
 
-def isRelatedChildAgent(session: dict[str, Any], record: dict[str, Any]) -> bool:
+def is_related_child_agent(session: dict[str, Any], record: dict[str, Any]) -> bool:
     return record.get("parentSessionId") == session.get("id") or record.get("sessionId") == session.get("id") or record.get("agentId") in (session.get("metadata", {}).get("childAgentIds") or [])
 
 
-def mapChildAgentStatus(status: str | None) -> str:
+def map_child_agent_status(status: str | None) -> str:
     return {"queued": "idle", "running": "running", "backgrounded": "backgrounded", "awaiting_input": "awaiting_input", "completed": "completed", "failed": "failed", "truncated": "failed", "cancelled": "stopped", "stopped": "stopped"}.get(status or "", "idle")
 
 
-def mapMonitorStatus(status: str | None) -> str:
+def map_monitor_status(status: str | None) -> str:
     return {"active": "active", "completed": "completed", "failed": "failed", "stopped": "stopped", "muted": "stopped"}.get(status or "", "idle")
 
 
-def mapRemoteStatus(status: str | None) -> str:
+def map_remote_status(status: str | None) -> str:
     return {"created": "idle", "idle": "idle", "active": "active", "awaiting_input": "awaiting_input", "completed": "completed", "failed": "failed", "closed": "stopped"}.get(status or "", "idle")
 
 
-def serializeRemote(remote: dict[str, Any] | None, bridge: dict[str, Any] | None) -> str:
+def serialize_remote(remote: dict[str, Any] | None, bridge: dict[str, Any] | None) -> str:
     if not remote and not bridge:
         return ""
     return json.dumps({"remoteId": (remote or {}).get("id"), "remoteStatus": (remote or {}).get("status"), "remoteSummary": (remote or {}).get("lastEventSummary"), "unread": (remote or {}).get("unreadBridgeMessages"), "bridgeId": (bridge or {}).get("id"), "bridgeStatus": (bridge or {}).get("status"), "pending": (bridge or {}).get("pendingMessages"), "event": (bridge or {}).get("lastEventName"), "updatedAt": (remote or {}).get("updatedAt") or (bridge or {}).get("updatedAt")}, sort_keys=True)

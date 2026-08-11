@@ -114,12 +114,12 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             async def read_daemon_output(_task_id):
                 return {"output": "daemon output\n", "truncated": True}
 
-            daemon_result = run(task_output.handler({"task_id": daemon_task_id, "block": False, "timeout": 1000}, {**base_context, "daemon": {"readTaskOutput": read_daemon_output}}))
+            daemon_result = run(task_output.handler({"task_id": daemon_task_id, "block": False, "timeout": 1000}, {**base_context, "daemon": {"read_task_output": read_daemon_output}}))
             daemon_payload = json.loads(daemon_result["content"])
             self.assertEqual(daemon_payload["output"], "daemon output\n")
             self.assertTrue(daemon_payload["output_truncated"])
 
-            supervisor_only = run(task_output.handler({"task_id": daemon_task_id, "block": False, "timeout": 1000}, {**base_context, "taskSupervisor": {"readTaskOutput": read_daemon_output}}))
+            supervisor_only = run(task_output.handler({"task_id": daemon_task_id, "block": False, "timeout": 1000}, {**base_context, "taskSupervisor": {"read_task_output": read_daemon_output}}))
             supervisor_payload = json.loads(supervisor_only["content"])
             self.assertEqual(supervisor_payload["output"], "file output\n")
             self.assertFalse(supervisor_payload["output_truncated"])
@@ -182,7 +182,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
                 if meta and meta.get("status") == "completed":
                     break
                 time.sleep(0.05)
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch replay"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": task_id, "goal": "watch replay"})
             run(core.save_monitor(monitor))
 
             bootstrap = run(client["getBootstrap"](session["id"]))
@@ -233,7 +233,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"].append({"role": "user", "content": "Coordinate the long lived work."})
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "bootstrap-monitor-task", "goal": "watch bootstrap families"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "bootstrap-monitor-task", "goal": "watch bootstrap families"})
             session["metadata"]["monitorIds"] = [monitor["id"]]
             session["metadata"]["childAgentIds"] = ["bootstrap-agent"]
             run(core.save_session(session))
@@ -283,7 +283,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             session["metadata"]["remoteSessionId"] = remote["id"]
             run(core.save_session(session))
 
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             bootstrap = run(supervisor["getBootstrap"](session["id"]))
             tasks = {task["id"]: task for task in bootstrap["taskSnapshot"]["tasks"]}
             self.assertEqual(tasks[f"monitor:{monitor['id']}"]["kind"], "monitor")
@@ -345,7 +345,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
                 )
             )
             events = []
-            runtime = run(core.createTaskRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
+            runtime = run(core.create_task_runtime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
             task_events = [event for event, data in events if data.get("task_id") == task_id]
             self.assertEqual(task_events[:2], ["task.restored", "task.registered"])
             self.assertTrue(any(event == "task.snapshot" and data["tasks"][0]["task_family"] == "shell" for event, data in events))
@@ -393,7 +393,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             session["messages"].append({"role": "assistant", "content": "Live in-memory session state is the source of truth."})
             run(core.write_task_meta(task_id, {"type": "main_session", "taskId": task_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": output_file, "attachableSessionId": session["id"]}))
 
-            runtime = run(core.createTaskRuntime({"session": session, "config": config, "emit": lambda *_: None, "startTicker": False}))
+            runtime = run(core.create_task_runtime({"session": session, "config": config, "emit": lambda *_: None, "startTicker": False}))
             snapshot = runtime["getSnapshot"]()
             ids = [task["id"] for task in snapshot["tasks"]]
             self.assertIn(task_id, ids)
@@ -431,7 +431,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             run(core.write_task_meta(main_id, {"type": "main_session", "taskId": main_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": main_output, "attachableSessionId": session["id"], "owner": "daemon"}))
             run(core.write_task_meta(health_id, {"type": "health_check", "taskId": health_id, "sessionId": session["id"], "cwd": str(workspace), "title": "API health", "url": "http://localhost:9", "intervalMs": 5000, "timeoutMs": 1000, "backoffMultiplier": 2, "maxIntervalMs": 20000, "failureThreshold": 2, "status": "unhealthy", "createdAt": "2026-01-01T00:00:00Z", "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:02Z", "lastError": "timeout", "lastStatusCode": 503, "consecutiveFailures": 1, "outputFile": health_output}))
 
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             bootstrap = run(supervisor["getBootstrap"](session["id"]))
             tasks = {task["id"]: task for task in bootstrap["taskSnapshot"]["tasks"]}
             background = tasks[background_id]

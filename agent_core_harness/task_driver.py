@@ -13,9 +13,9 @@ from unittest import mock
 
 import agent_core._facade as core
 from agent_core.tasks.health_check_policy import (
-    authorizeHealthCheckSpec,
-    healthCheckSpecDigest,
-    normalizeHealthCheckSpec,
+    authorize_health_check_spec,
+    health_check_spec_digest,
+    normalize_health_check_spec,
 )
 
 from .model import ScenarioAssertionError
@@ -108,7 +108,7 @@ async def wait_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, stat
 async def read_task_output(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     task_id = _task_id(data, state)
     client = await ensure_task_client(data, sandbox, state)
-    result = await client["readTaskOutput"](task_id, data.get("tailBytes"))
+    result = await client["read_task_output"](task_id, data.get("tailBytes"))
     record = {"driver": "read_task_output", "status": "passed", "taskId": task_id, "result": _json_safe(result)}
     state.setdefault("task_outputs", []).append(record)
     state.setdefault("task_driver_results", []).append(record)
@@ -129,7 +129,7 @@ async def stop_task(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[
 
 async def create_monitor(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, _config = await ensure_session_config(data, sandbox, state)
-    monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": _task_id(data, state), "goal": data.get("goal", "watch task"), "checkIntervalMs": data.get("checkIntervalMs", 2000)})
+    monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": _task_id(data, state), "goal": data.get("goal", "watch task"), "checkIntervalMs": data.get("checkIntervalMs", 2000)})
     await core.save_monitor(monitor)
     metadata = session.setdefault("metadata", {})
     metadata["monitorIds"] = _dedupe([*(metadata.get("monitorIds") or []), monitor["id"]])
@@ -212,8 +212,8 @@ async def start_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, sta
         payload["mode"] = "command"
         payload["command"] = _health_recovery_command(sandbox, data.get("counterFile", "health-count.txt"))
     with mock.patch.dict(os.environ, _isolated_task_environment(sandbox), clear=True):
-        spec = await normalizeHealthCheckSpec(payload, str(sandbox.workspace))
-        execution_policy = await authorizeHealthCheckSpec(
+        spec = await normalize_health_check_spec(payload, str(sandbox.workspace))
+        execution_policy = await authorize_health_check_spec(
             {
                 "session": session,
                 "config": config,
@@ -227,7 +227,7 @@ async def start_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, sta
             {
                 "sessionId": session["id"],
                 "spec": spec,
-                "specDigest": healthCheckSpecDigest(spec),
+                "specDigest": health_check_spec_digest(spec),
                 "executionPolicy": execution_policy,
             }
         )

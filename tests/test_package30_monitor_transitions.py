@@ -124,7 +124,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
 
             async def scenario():
                 projected = []
-                runtime = await core.createTaskRuntime({"session": session, "config": config, "emit": lambda event, data: projected.append((event, data)), "tickIntervalMs": 30})
+                runtime = await core.create_task_runtime({"session": session, "config": config, "emit": lambda event, data: projected.append((event, data)), "tickIntervalMs": 30})
                 try:
                     for _ in range(100):
                         if any(event == "task.registered" for event, _ in projected):

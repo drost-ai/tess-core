@@ -13,23 +13,23 @@ from typing import Any
 from .._utils import maybe_await, now_iso, pretty_json
 from ..payloads.bounded_io import readFileTailBounded
 from ..payloads.execution_descriptors import createTaskExecutionDescriptor
-from ..tasks.monitor_transitions import monitorStopNote as _monitor_stop_note
-from ..tasks.monitor_transitions import stopMonitorRecord as _stop_monitor_record
+from ..tasks.monitor_transitions import monitor_stop_note as _monitor_stop_note
+from ..tasks.monitor_transitions import stop_monitor_record as _stop_monitor_record
 from ..tasks.health_check_policy import (
-    authorizeHealthCheckSpec,
-    healthCheckSpecDigest,
-    normalizeHealthCheckSpec,
+    authorize_health_check_spec,
+    health_check_spec_digest,
+    normalize_health_check_spec,
 )
 from ..tasks.monitor_transactions import (
-    commitMonitorMutation,
-    monitorTransitionEventFields,
-    startMonitorOnce,
+    commit_monitor_mutation,
+    monitor_transition_event_fields,
+    start_monitor_once,
 )
-from ..tasks.monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
+from ..tasks.monitors import create_monitor_record, default_monitor_check_interval_ms, default_monitor_heartbeat_interval_ms
 from ..process.identity import processIdentityFromRecord, signalOwnedProcess
-from ..tasks.terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
+from ..tasks.terminal_store import clear_prepared_task_stop, commit_prepared_task_stop, prepare_task_stop
 from ..storage import list_session_monitors, load_monitor, read_task_meta, save_monitor, task_output_path
-from ..tasks.ownership import requireModelOwnedMonitor, requireModelOwnedTask
+from ..tasks.ownership import require_model_owned_monitor, require_model_owned_task
 from ..payloads.tools import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
 from .definitions import ToolDefinition
@@ -42,7 +42,7 @@ from .validation import _require_string, _without_none_values
 def _task_output_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
-        await requireModelOwnedTask(context, task_id, "output")
+        await require_model_owned_task(context, task_id, "output")
         if input.get("block"):
             started = asyncio.get_running_loop().time()
             timeout = float(input.get("timeout") or 30000) / 1000
@@ -54,7 +54,7 @@ def _task_output_tool() -> ToolDefinition:
                 from ..config._knobs import knobValue
 
                 await asyncio.sleep(int(knobValue("tools.task_output_poll_ms")) / 1000)
-        owned = await requireModelOwnedTask(context, task_id, "output")
+        owned = await require_model_owned_task(context, task_id, "output")
         meta = owned["meta"]
         policy = getToolPayloadPolicy(context["config"])
         output_result = None
@@ -62,7 +62,7 @@ def _task_output_tool() -> ToolDefinition:
         if daemon:
             try:
                 output_result = await _read_daemon_task_output(
-                    daemon["readTaskOutput"], task_id, policy["textInlineBytes"]
+                    daemon["read_task_output"], task_id, policy["textInlineBytes"]
                 )
             except Exception:
                 output_result = None
@@ -150,7 +150,7 @@ async def _read_daemon_task_output(reader: Any, task_id: str, max_bytes: int) ->
 def _task_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
-        owned = await requireModelOwnedTask(context, task_id, "stop")
+        owned = await require_model_owned_task(context, task_id, "stop")
         existing_status = _terminal_task_status(
             (owned.get("record") or {}).get("status"),
             (owned.get("meta") or {}).get("status"),
@@ -183,11 +183,11 @@ def _task_stop_tool() -> ToolDefinition:
                     "note": "Task stopped by deliberate request.",
                 }
             return {"content": pretty_json(_task_stop_content(task_id, stopped))}
-        owned = await requireModelOwnedTask(context, task_id, "stop")
+        owned = await require_model_owned_task(context, task_id, "stop")
         meta = owned["meta"]
         identity = processIdentityFromRecord(owned.get("record"), meta)
         await _ensure_tool_permission(context, "TaskStop", "process", f"Stop background task {task_id} (pid {identity['pid']})")
-        prepared = await prepareTaskStop(task_id, "SIGTERM", "tool")
+        prepared = await prepare_task_stop(task_id, "SIGTERM", "tool")
         if not prepared:
             return {"content": f"Task not found or not stoppable: {task_id}", "isError": True}
         if prepared.get("result"):
@@ -202,9 +202,9 @@ def _task_stop_tool() -> ToolDefinition:
             await signalOwnedProcess(prepared_identity, signal.SIGTERM)
         except Exception:
             with contextlib.suppress(Exception):
-                await clearPreparedTaskStop(task_id, transition_id)
+                await clear_prepared_task_stop(task_id, transition_id)
             raise
-        committed = await commitPreparedTaskStop(task_id, transition_id, "tool")
+        committed = await commit_prepared_task_stop(task_id, transition_id, "tool")
         stop_result = committed["result"]
         record = committed.get("record")
         if stop_result.get("changed") and isinstance(record, dict):
@@ -235,20 +235,20 @@ def _task_monitor_start_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         goal = _require_string(input.get("goal"), "goal")
-        owned = await requireModelOwnedTask(context, task_id, "monitor")
+        owned = await require_model_owned_task(context, task_id, "monitor")
         task = owned["meta"]
         summary_style = input.get("summary_style") if isinstance(input.get("summary_style"), str) and input.get("summary_style").strip() else None
-        started = await startMonitorOnce(
+        started = await start_monitor_once(
             sessionId=context["session"]["id"],
             taskId=task_id,
-            create=lambda: createMonitorRecord(
+            create=lambda: create_monitor_record(
                 {
                     "sessionId": context["session"]["id"],
                     "taskId": task_id,
                     "goal": goal,
                     "summaryStyle": summary_style.strip() if isinstance(summary_style, str) else None,
-                    "checkIntervalMs": defaultMonitorCheckIntervalMs(input.get("check_interval_ms")),
-                    "heartbeatIntervalMs": defaultMonitorHeartbeatIntervalMs(input.get("heartbeat_interval_ms")),
+                    "checkIntervalMs": default_monitor_check_interval_ms(input.get("check_interval_ms")),
+                    "heartbeatIntervalMs": default_monitor_heartbeat_interval_ms(input.get("heartbeat_interval_ms")),
                 }
             ),
         )
@@ -274,7 +274,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
                 )
             }
         context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": f"monitor:{record['id']}", "kind": "monitor", "status": "running", "title": f"Monitor {goal}"})
-        context.get("outputJson", lambda *_: None)("monitor.created", {"session_id": context["session"]["id"], "monitor_id": record["id"], "task_id": task_id, "goal": goal, "status": record["status"], "changed": True, **monitorTransitionEventFields(started)})
+        context.get("outputJson", lambda *_: None)("monitor.created", {"session_id": context["session"]["id"], "monitor_id": record["id"], "task_id": task_id, "goal": goal, "status": record["status"], "changed": True, **monitor_transition_event_fields(started)})
         execution = {
             "id": record["id"],
             "kind": "task",
@@ -308,8 +308,8 @@ def _task_monitor_start_tool() -> ToolDefinition:
 def _task_monitor_stop_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         monitor_id = _require_string(input.get("monitor_id"), "monitor_id")
-        monitor = await requireModelOwnedMonitor(context, monitor_id)
-        committed = await commitMonitorMutation(
+        monitor = await require_model_owned_monitor(context, monitor_id)
+        committed = await commit_monitor_mutation(
             monitorId=monitor["id"],
             expectedSessionId=context["session"]["id"],
             mutate=lambda latest: _monitor_stop_mutation(latest),
@@ -331,7 +331,7 @@ def _task_monitor_stop_tool() -> ToolDefinition:
                     "status": record["status"],
                     "previous_status": transition["previousStatus"],
                     "changed": True,
-                    **monitorTransitionEventFields(committed),
+                    **monitor_transition_event_fields(committed),
                 },
             )
         return {
@@ -372,7 +372,7 @@ def _task_health_check_start_tool() -> ToolDefinition:
         supervisor = context.get("daemon")
         if not supervisor:
             raise RuntimeError("Health checks require the local task supervisor daemon.")
-        spec = await normalizeHealthCheckSpec(
+        spec = await normalize_health_check_spec(
             {
                 "title": input.get("title"),
                 "mode": input.get("mode"),
@@ -392,12 +392,12 @@ def _task_health_check_start_tool() -> ToolDefinition:
             },
             context["session"]["cwd"],
         )
-        execution_policy = await authorizeHealthCheckSpec(context, spec)
+        execution_policy = await authorize_health_check_spec(context, spec)
         started = await supervisor["startHealthCheck"](
             {
                 "sessionId": context["session"]["id"],
                 "spec": spec,
-                "specDigest": healthCheckSpecDigest(spec),
+                "specDigest": health_check_spec_digest(spec),
                 "executionPolicy": execution_policy,
             }
         )
@@ -416,7 +416,7 @@ def _task_health_check_stop_tool() -> ToolDefinition:
         if not supervisor:
             raise RuntimeError("Health checks require the local task supervisor daemon.")
         task_id = _require_string(input.get("task_id"), "task_id")
-        await requireModelOwnedTask(context, task_id, "health_stop")
+        await require_model_owned_task(context, task_id, "health_stop")
         stopped = await supervisor["stopTask"](task_id)
         if not stopped:
             raise RuntimeError(f"Task not found or not stoppable: {task_id}")

@@ -19,7 +19,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             async def fake_connect(*_args, **_kwargs):
                 return {
                     "_daemonClient": True,
-                    "readTaskOutput": lambda task_id, tail: calls.append(("read", task_id, tail)) or {"output": f"daemon output {task_id}", "truncated": True},
+                    "read_task_output": lambda task_id, tail: calls.append(("read", task_id, tail)) or {"output": f"daemon output {task_id}", "truncated": True},
                     "stopTask": lambda task_id: calls.append(("stop", task_id)) or True,
                     "retryTask": lambda task_id: calls.append(("retry", task_id)) or {"taskId": "task-daemon-retry"},
                     "close": lambda: calls.append(("close",)),
@@ -76,7 +76,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             session["metadata"]["bridgeId"] = bridge["id"]
             run(core.save_session(session))
             run(core.save_task_record({"id": "task-collab-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Collaboration task", "updatedAt": "2026-01-01T00:00:00Z"}))
-            run(core.save_monitor(core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-collab-shell", "goal": "Watch shell collaboration"})))
+            run(core.save_monitor(core.create_monitor_record({"sessionId": session["id"], "taskId": "task-collab-shell", "goal": "Watch shell collaboration"})))
             run(core.save_child_agent({"agentId": "agent-collab-shell", "sessionId": "child-collab-shell", "parentSessionId": session["id"], "name": "Collab worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "awaiting_input", "startedAt": "2026-01-01T00:00:00Z"}))
             session["metadata"]["childAgentIds"] = ["agent-collab-shell"]
 
@@ -161,7 +161,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 )
             )
             session["metadata"]["childAgentIds"] = ["agent-bg-shell"]
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-bg-shell", "goal": "Watch shell background"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-bg-shell", "goal": "Watch shell background"})
             run(core.save_monitor(monitor))
             remote = run(core.createRemoteSession({"session": session, "description": "Remote Shell", "channelServers": ["local"]}))
             remote = run(

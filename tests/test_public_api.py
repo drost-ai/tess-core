@@ -18,6 +18,6 @@ class PublicApiTests(AgentCoreTestCase):
         self.assertTrue(callable(provider_watchdog.createProviderRequestWatchdog))
         self.assertEqual(platform_common.buildShellCommand("echo", ["hello world"], {"FOO": "bar baz"}), "FOO='bar baz' echo 'hello world'")
         self.assertEqual(
-            subagents_module.sanitizePermissionMode("bogus"),
+            subagents_module.sanitize_permission_mode("bogus"),
             "default",
         )

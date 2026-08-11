@@ -8,7 +8,7 @@ from typing import Any, Callable
 _TEST_HOOK: Callable[[str, str], Any] | None = None
 
 
-def setTaskStopCoordinationTestHookForTests(
+def set_task_stop_coordination_test_hook_for_tests(
     hook: Callable[[str, str], Any] | None,
 ) -> None:
     global _TEST_HOOK
@@ -88,7 +88,7 @@ class TaskStopCoordinator:
             asyncio.run(result)
 
 
-def createTaskStopCoordinator() -> TaskStopCoordinator:
+def create_task_stop_coordinator() -> TaskStopCoordinator:
     return TaskStopCoordinator()
 
 

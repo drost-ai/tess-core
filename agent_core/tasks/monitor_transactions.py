@@ -20,7 +20,7 @@ class MonitorTransactionError(RuntimeError):
         self.code = code
 
 
-async def commitMonitorMutation(
+async def commit_monitor_mutation(
     *,
     monitorId: str,
     expectedSessionId: str,
@@ -48,10 +48,10 @@ async def commitMonitorMutation(
                 "current": previous,
                 "changed": False,
                 "statusChanged": False,
-                "revision": monitorRevision(previous),
+                "revision": monitor_revision(previous),
                 "value": mutation.get("value"),
             }
-        revision = monitorRevision(previous) + 1
+        revision = monitor_revision(previous) + 1
         status_changed = previous.get("status") != mutation["record"].get("status")
         event_bearing = status_changed or mutation.get("transition") is True
         transition_id = (
@@ -83,7 +83,7 @@ async def commitMonitorMutation(
         }
 
 
-async def startMonitorOnce(
+async def start_monitor_once(
     *, sessionId: str, taskId: str, create: Callable[[], dict[str, Any]]
 ) -> dict[str, Any]:
     key = json.dumps([sessionId, taskId], separators=(",", ":"))
@@ -101,7 +101,7 @@ async def startMonitorOnce(
             return {
                 "monitor": existing,
                 "changed": False,
-                "revision": monitorRevision(existing),
+                "revision": monitor_revision(existing),
             }
         created = create()
         if created.get("sessionId") != sessionId or created.get("taskId") != taskId:
@@ -127,12 +127,12 @@ async def startMonitorOnce(
         }
 
 
-def monitorRevision(record: dict[str, Any]) -> int:
+def monitor_revision(record: dict[str, Any]) -> int:
     value = record.get("revision")
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
-def monitorTransitionEventFields(commit: dict[str, Any]) -> dict[str, Any]:
+def monitor_transition_event_fields(commit: dict[str, Any]) -> dict[str, Any]:
     result = {"revision": commit["revision"]}
     if commit.get("transitionId"):
         result["transition_id"] = commit["transitionId"]

@@ -168,7 +168,7 @@ class SandboxTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda payload: events.append(payload)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda payload: events.append(payload)}))
             session = core.create_empty_session(cwd=str(workspace), provider="openai", model="gpt-5.4", systemPrompt="s", permissionMode="bypassPermissions")
             run(core.save_session(session))
             started = run(
@@ -182,7 +182,7 @@ class SandboxTests(AgentCoreTestCase):
                     }
                 )
             )
-            output = run(supervisor["readTaskOutput"](started["taskId"], 12000))
+            output = run(supervisor["read_task_output"](started["taskId"], 12000))
 
             self.assertTrue(any(payload["event"] == "sandbox.downgraded" for payload in events))
             self.assertIn("supervisor-ok", self._wait_for_output(output["outputFile"]))

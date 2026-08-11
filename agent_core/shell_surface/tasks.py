@@ -131,7 +131,7 @@ async def _handle_tasks(arg_text: str, session: dict[str, Any], hooks: dict[str,
 async def _read_task_output(record: dict[str, Any], args: dict[str, Any] | None = None) -> tuple[str, bool]:
     supervisor, should_close = await _resolve_task_supervisor(args or {})
     try:
-        read_output = supervisor.get("readTaskOutput") if isinstance(supervisor, dict) else None
+        read_output = supervisor.get("read_task_output") if isinstance(supervisor, dict) else None
         if callable(read_output):
             value = await _maybe_await(read_output(record.get("id"), 12000))
             if isinstance(value, dict):

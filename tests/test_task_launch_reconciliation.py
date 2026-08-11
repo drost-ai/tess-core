@@ -64,7 +64,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
                 )
             )
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             record = run(supervisor["inspectTask"](task_id))
             meta = run(core.read_task_meta(task_id))
             persisted = run(core.load_session_record_shallow(session["id"]))
@@ -77,7 +77,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
             self.assertEqual(sum(event["event"] == "task.failed" for event in events), 1)
 
             run(supervisor["close"]())
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(persisted["metadata"]["taskIds"], [task_id])
             self.assertEqual(sum(event["event"] == "task.failed" for event in events), 1)
@@ -149,7 +149,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
                 )
             )
 
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             parent_record = run(core.load_session_record_shallow(parent["id"]))
             child_record = run(core.load_session_record_shallow(child["id"]))
             self.assertEqual(parent_record["metadata"]["taskIds"], [task_id])

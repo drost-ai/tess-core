@@ -6,7 +6,7 @@ def _knob(name: str):
     return knobValue(name)
 
 
-from ._shared import withSubagentCoordinationTransaction
+from ._shared import with_subagent_coordination_transaction
 
 import copy
 import uuid
@@ -22,11 +22,11 @@ from . import reconciliation as _reconciliations
 
 
 
-async def listSubagentReconciliations(parentSessionId: str) -> list[dict[str, Any]]:
-    return await _reconciliations.readSubagentReconciliations(parentSessionId)
+async def list_subagent_reconciliations(parentSessionId: str) -> list[dict[str, Any]]:
+    return await _reconciliations.read_subagent_reconciliations(parentSessionId)
 
 
-async def claimUnconsumedSubagentReconciliations(
+async def claim_unconsumed_subagent_reconciliations(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any] | None:
@@ -38,8 +38,8 @@ async def claimUnconsumedSubagentReconciliations(
     lease_ms = max(1, int(values.get("leaseMs") or int(_knob("subagents.continuation_lease_ms"))))
     token = str(uuid.uuid4())
     claimed: list[dict[str, Any]] = []
-    path = _reconciliations.subagentReconciliationLogPath(parent_id)
-    async with withSubagentCoordinationTransaction(parent_id):
+    path = _reconciliations.subagent_reconciliation_log_path(parent_id)
+    async with with_subagent_coordination_transaction(parent_id):
         records = await _reconciliations._read_records(path)
         next_records: list[dict[str, Any]] = []
         for record in records:
@@ -66,7 +66,7 @@ async def claimUnconsumedSubagentReconciliations(
     return {"claimToken": token, "records": claimed} if claimed else None
 
 
-async def completeSubagentReconciliationClaim(
+async def complete_subagent_reconciliation_claim(
     parentSessionId: str,
     claimToken: str,
     consumedAt: str | None = None,
@@ -76,8 +76,8 @@ async def completeSubagentReconciliationClaim(
 ) -> list[dict[str, Any]]:
     consumed_at = consumedAt or now_iso()
     completed: list[dict[str, Any]] = []
-    path = _reconciliations.subagentReconciliationLogPath(parentSessionId)
-    async with withSubagentCoordinationTransaction(parentSessionId):
+    path = _reconciliations.subagent_reconciliation_log_path(parentSessionId)
+    async with with_subagent_coordination_transaction(parentSessionId):
         records = await _reconciliations._read_records(path)
         next_records = []
         for record in records:
@@ -103,11 +103,11 @@ async def completeSubagentReconciliationClaim(
 
 
 
-async def listSubagentLaunchGroups(parentSessionId: str) -> list[dict[str, Any]]:
+async def list_subagent_launch_groups(parentSessionId: str) -> list[dict[str, Any]]:
     return await _groups._read_subagent_launch_groups(parentSessionId)
 
 
-async def upsertSubagentLaunchGroup(record: dict[str, Any]) -> dict[str, Any]:
+async def upsert_subagent_launch_group(record: dict[str, Any]) -> dict[str, Any]:
     return await _groups._upsert_subagent_launch_group(record["parentSessionId"], record)
 
 

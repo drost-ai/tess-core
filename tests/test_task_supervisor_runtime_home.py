@@ -94,7 +94,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
 
             async def _start_with_scoped_home():
                 async with core.scoped_runtime_home(str(home)):
-                    supervisor_local = await core.createTaskSupervisor({"cwd": str(workspace)})
+                    supervisor_local = await core.create_task_supervisor({"cwd": str(workspace)})
                     started_local = await supervisor_local["startSubagentTask"](
                         {
                             "parentSessionId": parent["id"],
@@ -122,7 +122,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
 
             async def _read_final():
                 async with core.scoped_runtime_home(str(home)):
-                    return await core.read_task_meta(task_id), await supervisor["readTaskOutput"](
+                    return await core.read_task_meta(task_id), await supervisor["read_task_output"](
                         task_id,
                         12000,
                     )

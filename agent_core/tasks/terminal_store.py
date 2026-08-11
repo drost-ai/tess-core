@@ -15,15 +15,15 @@ from ..storage import (
     write_task_meta,
 )
 from .terminal_transitions import (
-    applyDeliberateTaskStop,
-    applyTaskProcessCompletion,
-    normalizeTaskProcessOutcome,
-    resolveTaskSemanticStatus,
-    toTaskStopResult,
+    apply_deliberate_task_stop,
+    apply_task_process_completion,
+    normalize_task_process_outcome,
+    resolve_task_semantic_status,
+    to_task_stop_result,
 )
 
 
-async def prepareTaskStop(
+async def prepare_task_stop(
     taskId: str,
     signalName: str,
     eventOwner: str = "supervisor",
@@ -34,12 +34,12 @@ async def prepareTaskStop(
         health = await load_health_check_task(taskId)
         if not record and not meta and not health:
             return None
-        current = resolveTaskSemanticStatus(
+        current = resolve_task_semantic_status(
             (record or {}).get("status"),
             (health or {}).get("status"),
             (meta or {}).get("status"),
         )
-        transition = applyDeliberateTaskStop(current)
+        transition = apply_deliberate_task_stop(current)
         common = {
             "record": record,
             "healthCheck": bool(health),
@@ -52,7 +52,7 @@ async def prepareTaskStop(
             or (meta or {}).get("title"),
         }
         if not transition["changed"]:
-            return {**common, "result": toTaskStopResult(taskId, transition)}
+            return {**common, "result": to_task_stop_result(taskId, transition)}
         transition_id = str(uuid.uuid4())
         if health:
             committed = await _persist_terminal_transition(
@@ -67,7 +67,7 @@ async def prepareTaskStop(
             return {
                 **common,
                 "record": committed.get("record"),
-                "result": toTaskStopResult(taskId, transition, transition_id),
+                "result": to_task_stop_result(taskId, transition, transition_id),
                 "transitionId": transition_id,
             }
         identity_error: str | None = None
@@ -97,7 +97,7 @@ async def prepareTaskStop(
         }
 
 
-async def commitPreparedTaskStop(
+async def commit_prepared_task_stop(
     taskId: str,
     transitionId: str,
     eventOwner: str = "supervisor",
@@ -105,7 +105,7 @@ async def commitPreparedTaskStop(
     async with with_record_transaction("task-lifecycle", taskId):
         record = await load_task_record(taskId)
         meta = await read_task_meta(taskId)
-        current = resolveTaskSemanticStatus(
+        current = resolve_task_semantic_status(
             (record or {}).get("status"),
             (meta or {}).get("status"),
         )
@@ -127,7 +127,7 @@ async def commitPreparedTaskStop(
                 "summary": "Task stopped by deliberate request.",
             }
             if runner_committed
-            else applyDeliberateTaskStop(current)
+            else apply_deliberate_task_stop(current)
         )
         if transition["changed"] and (intent or {}).get("transitionId") != transitionId:
             raise RuntimeError(f"Task stop intent changed before commit: {taskId}")
@@ -144,11 +144,11 @@ async def commitPreparedTaskStop(
         return {
             "transition": transition,
             "record": committed.get("record"),
-            "result": toTaskStopResult(taskId, transition, transitionId),
+            "result": to_task_stop_result(taskId, transition, transitionId),
         }
 
 
-async def clearPreparedTaskStop(taskId: str, transitionId: str) -> None:
+async def clear_prepared_task_stop(taskId: str, transitionId: str) -> None:
     async with with_record_transaction("task-lifecycle", taskId):
         record = await load_task_record(taskId)
         meta = await read_task_meta(taskId)
@@ -164,18 +164,18 @@ async def clearPreparedTaskStop(taskId: str, transitionId: str) -> None:
             await write_task_meta(taskId, next_meta)
 
 
-async def commitTaskProcessCompletion(
+async def commit_task_process_completion(
     *,
     taskId: str,
     code: int | None,
     signalName: str | None,
     error: str | None = None,
 ) -> dict[str, Any]:
-    code, signalName = normalizeTaskProcessOutcome(code, signalName)
+    code, signalName = normalize_task_process_outcome(code, signalName)
     async with with_record_transaction("task-lifecycle", taskId):
         record = await load_task_record(taskId)
         meta = await read_task_meta(taskId)
-        current = resolveTaskSemanticStatus(
+        current = resolve_task_semantic_status(
             (record or {}).get("status"),
             (meta or {}).get("status"),
         )
@@ -192,9 +192,9 @@ async def commitTaskProcessCompletion(
                 "summary": error,
             }
         elif error:
-            transition = applyDeliberateTaskStop(current)
+            transition = apply_deliberate_task_stop(current)
         else:
-            transition = applyTaskProcessCompletion(
+            transition = apply_task_process_completion(
                 current=current,
                 code=code,
                 signalName=signalName,
@@ -225,10 +225,10 @@ async def commitTaskProcessCompletion(
         return {"transition": transition, "record": committed.get("record")}
 
 
-async def saveProjectedTaskRecord(record: dict[str, Any]) -> dict[str, Any]:
+async def save_projected_task_record(record: dict[str, Any]) -> dict[str, Any]:
     async with with_record_transaction("task-lifecycle", record["id"]):
         existing = await load_task_record(record["id"])
-        if existing and resolveTaskSemanticStatus(existing.get("status")) != "running":
+        if existing and resolve_task_semantic_status(existing.get("status")) != "running":
             return existing
         await save_task_record(record)
         return record

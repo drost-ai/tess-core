@@ -5,16 +5,16 @@ from agent_core._utils import now_iso
 
 from agent_core.tasks import health_check_executor as executor
 from agent_core.tasks.health_check_policy import (
-    authorizeHealthCheckSpec,
-    healthCheckSpecDigest,
-    normalizeHealthCheckSpec,
+    authorize_health_check_spec,
+    health_check_spec_digest,
+    normalize_health_check_spec,
 )
 from agent_core.tasks.health_check_record import (
-    buildAuthorizedHealthCheckRecord,
-    persistHealthCheckRecord,
+    build_authorized_health_check_record,
+    persist_health_check_record,
 )
 from agent_core.tasks.health_check_runtime import _commit_attempt
-from agent_core.tasks.terminal_store import prepareTaskStop
+from agent_core.tasks.terminal_store import prepare_task_stop
 
 
 class Package31HealthCheckSafetyTests(AgentCoreTestCase):
@@ -56,7 +56,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
 
     def _command_spec(self, workspace: Path):
         return run(
-            normalizeHealthCheckSpec(
+            normalize_health_check_spec(
                 {
                     "title": "command health",
                     "mode": "command",
@@ -71,7 +71,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
         return {
             "sessionId": session["id"],
             "spec": spec,
-            "specDigest": healthCheckSpecDigest(spec),
+            "specDigest": health_check_spec_digest(spec),
             "executionPolicy": policy,
         }
 
@@ -114,7 +114,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             ]
             for row in invalid:
                 with self.subTest(row=row), self.assertRaises(ValueError):
-                    run(normalizeHealthCheckSpec(row, str(workspace)))
+                    run(normalize_health_check_spec(row, str(workspace)))
         finally:
             self.restore_home(root, previous)
 
@@ -145,7 +145,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 )
             )
             self.assertEqual(json.loads(result["content"])["task_id"], "health-authorized")
-            self.assertEqual(calls[0]["specDigest"], healthCheckSpecDigest(calls[0]["spec"]))
+            self.assertEqual(calls[0]["specDigest"], health_check_spec_digest(calls[0]["spec"]))
             self.assertEqual(calls[0]["executionPolicy"]["allowedOrigins"], ["http://example.test"])
 
         finally:
@@ -157,7 +157,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             _config, session = self._session(home, workspace)
 
             async def scenario():
-                supervisor = await core.createTaskSupervisor({"cwd": str(workspace)})
+                supervisor = await core.create_task_supervisor({"cwd": str(workspace)})
                 try:
                     with self.assertRaises(RuntimeError) as raised:
                         await supervisor["startHealthCheck"](
@@ -189,7 +189,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             config, session = self._session(home, workspace)
             context = self._context(config, session)
             spec = self._command_spec(workspace)
-            policy = run(authorizeHealthCheckSpec(context, spec))
+            policy = run(authorize_health_check_spec(context, spec))
             self.assertNotIn("HEALTH_CHECK_TEST_SECRET", policy["environment"])
             captured = {}
 
@@ -207,10 +207,10 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 }
 
             executor.runInlineShellCommand = fake_run
-            record = buildAuthorizedHealthCheckRecord(
+            record = build_authorized_health_check_record(
                 request=self._request(session, spec, policy), taskId="health-command-policy"
             )
-            result = run(executor.executeHealthCheck(record=record, signal=asyncio.Event()))
+            result = run(executor.execute_health_check(record=record, signal=asyncio.Event()))
             self.assertTrue(result["okay"])
             self.assertFalse(result["lastTimedOut"])
             self.assertFalse(result["lastTerminated"])
@@ -231,7 +231,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
         try:
             config, session = self._session(home, workspace)
             spec = run(
-                normalizeHealthCheckSpec(
+                normalize_health_check_spec(
                     {
                         "title": "http health",
                         "mode": "http",
@@ -245,7 +245,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                     str(workspace),
                 )
             )
-            policy = run(authorizeHealthCheckSpec(self._context(config, session), spec))
+            policy = run(authorize_health_check_spec(self._context(config, session), spec))
             captured = {}
 
             async def fake_fetch(**kwargs):
@@ -262,10 +262,10 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 }
 
             executor.boundedWebFetch = fake_fetch
-            record = buildAuthorizedHealthCheckRecord(
+            record = build_authorized_health_check_record(
                 request=self._request(session, spec, policy), taskId="health-http-policy"
             )
-            result = run(executor.executeHealthCheck(record=record, signal=asyncio.Event()))
+            result = run(executor.execute_health_check(record=record, signal=asyncio.Event()))
             self.assertTrue(result["okay"])
             self.assertEqual(captured["compressedMaxBytes"], 4096)
             self.assertEqual(captured["decodedMaxBytes"], 4096)
@@ -280,13 +280,13 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
         try:
             config, session = self._session(home, workspace)
             spec = self._command_spec(workspace)
-            policy = run(authorizeHealthCheckSpec(self._context(config, session), spec))
+            policy = run(authorize_health_check_spec(self._context(config, session), spec))
             task_id = "health-stop-generation"
-            record = buildAuthorizedHealthCheckRecord(
+            record = build_authorized_health_check_record(
                 request=self._request(session, spec, policy), taskId=task_id
             )
-            run(persistHealthCheckRecord(record))
-            prepared = run(prepareTaskStop(task_id, "SIGTERM"))
+            run(persist_health_check_record(record))
+            prepared = run(prepare_task_stop(task_id, "SIGTERM"))
             self.assertTrue(prepared["result"]["changed"])
             stopped = run(core.load_health_check_task(task_id))
             self.assertEqual((stopped["status"], stopped["generation"]), ("stopped", 2))

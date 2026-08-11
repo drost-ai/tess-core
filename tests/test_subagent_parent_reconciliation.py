@@ -28,10 +28,10 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             os.environ["TESS_CHILD_TASK_ID"] = "task-parent-reconcile"
             os.environ["TESS_CHILD_SESSION_ID"] = child["id"]
 
-            run(core.finalizeBackgroundSubagentSuccessFromEnv(child, {"text": "Child found the result.", "stopReason": "end_turn", "usage": {"input_tokens": 2}}))
-            run(core.finalizeBackgroundSubagentSuccessFromEnv(child, {"text": "Child found the result.", "stopReason": "end_turn", "usage": {"input_tokens": 2}}))
+            run(core.finalize_background_subagent_success_from_env(child, {"text": "Child found the result.", "stopReason": "end_turn", "usage": {"input_tokens": 2}}))
+            run(core.finalize_background_subagent_success_from_env(child, {"text": "Child found the result.", "stopReason": "end_turn", "usage": {"input_tokens": 2}}))
 
-            records = run(core.readSubagentReconciliations(parent["id"]))
+            records = run(core.read_subagent_reconciliations(parent["id"]))
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0]["terminalStatus"], "completed")
             self.assertEqual(records[0]["summary"], "Child found the result.")
@@ -64,7 +64,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             self.assertIn("[Background subagent updates]", request_messages[0]["content"])
             self.assertIn("Child found the result.", request_messages[0]["content"])
             self.assertEqual(request_messages[1]["content"], "Synthesize now.")
-            consumed = run(core.readSubagentReconciliations(parent["id"]))
+            consumed = run(core.read_subagent_reconciliations(parent["id"]))
             self.assertEqual(len(consumed), 1)
             self.assertIsNotNone(consumed[0].get("consumedAt"))
             self.assertEqual(consumed[0].get("parentMessageIndex"), 0)
@@ -81,7 +81,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         try:
             run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             record = run(
-                core.createSubagentReconciliationForTerminalChild(
+                core.create_subagent_reconciliation_for_terminal_child(
                     childRecord={
                         "agentId": "agent-failed-reconcile",
                         "sessionId": "child-failed-reconcile",
@@ -103,7 +103,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             self.assertEqual(record["terminalStatus"], "failed")
             self.assertEqual(record["terminalReason"], "worker_failed")
             self.assertIn("Traceback line 1", record["summary"])
-            rendered = core.renderSubagentReconciliationMessage([record])
+            rendered = core.render_subagent_reconciliation_message([record])
             self.assertIn("Failed: Failing worker", rendered)
             self.assertIn("Output: task-output://task-failed-reconcile/final", rendered)
             self.assertNotIn("full-transcript-with-tools", rendered)
@@ -113,7 +113,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
     def test_reconciliation_record_shape_is_pinned(self):
         # Characterization pin for audit B6: this freezes the current parent-visible
         # record shape while the cross-runtime contract is still being finalized.
-        record = core.buildSubagentReconciliationRecord(
+        record = core.build_subagent_reconciliation_record(
             childRecord={
                 "agentId": "agent-pin",
                 "sessionId": "child-pin",
@@ -172,15 +172,15 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         }
         for stop_reason, expected_terminal in cases.items():
             with self.subTest(stop_reason=stop_reason):
-                status = core.mapStopReasonToStatus(stop_reason)
-                record = core.buildSubagentReconciliationRecord(
+                status = core.map_stop_reason_to_status(stop_reason)
+                record = core.build_subagent_reconciliation_record(
                     childRecord={
                         "agentId": f"agent-{stop_reason}",
                         "sessionId": f"child-{stop_reason}",
                         "parentSessionId": "parent-limit",
                         "name": "Limited worker",
                         "status": status,
-                        "completionReason": core.mapStopReasonToCompletionReason(stop_reason),
+                        "completionReason": core.map_stop_reason_to_completion_reason(stop_reason),
                     },
                     taskMeta={
                         "task_id": f"task-{stop_reason}",
@@ -250,7 +250,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             os.environ["TESS_CHILD_AGENT_ID"] = "agent-finalizer-group"
             os.environ["TESS_CHILD_TASK_ID"] = "task-finalizer-group"
             os.environ["TESS_CHILD_SESSION_ID"] = child["id"]
-            run(core.finalizeBackgroundSubagentSuccessFromEnv(child, {"text": "Group worker done.", "stopReason": "end_turn"}))
+            run(core.finalize_background_subagent_success_from_env(child, {"text": "Group worker done.", "stopReason": "end_turn"}))
             groups = run(groups_module._read_subagent_launch_groups("parent-finalizer-group"))
             self.assertEqual(groups[0]["id"], "group-finalizer")
             self.assertEqual(groups[0]["childAgentIds"], ["agent-finalizer-group"])

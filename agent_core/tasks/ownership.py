@@ -20,7 +20,7 @@ _ALLOWED_KINDS = {
 }
 
 
-async def requireModelOwnedTask(context: Mapping[str, Any], rawTaskId: str, operation: str) -> dict[str, Any]:
+async def require_model_owned_task(context: Mapping[str, Any], rawTaskId: str, operation: str) -> dict[str, Any]:
     task_id = parse_task_id(rawTaskId)
     record = await load_task_record(task_id)
     meta = await read_task_meta(task_id)
@@ -47,7 +47,7 @@ async def requireModelOwnedTask(context: Mapping[str, Any], rawTaskId: str, oper
     return {"id": task_id, "kind": kind, "record": record, "meta": meta or {}}
 
 
-async def requireModelOwnedMonitor(context: Mapping[str, Any], rawMonitorId: str) -> dict[str, Any]:
+async def require_model_owned_monitor(context: Mapping[str, Any], rawMonitorId: str) -> dict[str, Any]:
     monitor_id = parse_monitor_id(rawMonitorId)
     monitor = await load_monitor(monitor_id)
     session = context.get("session")

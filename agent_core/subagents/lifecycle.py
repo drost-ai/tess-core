@@ -19,13 +19,13 @@ from .contract import (
     runtime_contract_for_agent,
     summarize_subagent_runtime_contract,
 )
-from .depth_policy import requireSubagentDepthAllowed
+from .depth_policy import require_subagent_depth_allowed
 from .groups import (
     _upsert_subagent_launch_group,
-    appendLaunchGroupMetadata,
-    resolveSubagentLaunchGroupId,
+    append_launch_group_metadata,
+    resolve_subagent_launch_group_id,
 )
-from .permissions import inheritParentPermissionMode, sanitizePermissionMode
+from .permissions import inherit_parent_permission_mode, sanitize_permission_mode
 from .spawn_utils import (
     _create_subagent_worktree,
     _dedupe,
@@ -44,17 +44,17 @@ from ..authority.agent import (
 from ..contracts.records import launch_output_file, launch_task_id
 
 
-async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def start_background_subagent(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     context = args["context"]
     supervisor = context.get("daemon") or context.get("taskSupervisor")
     if not supervisor:
-        # Checked before prepareSubagent so a refused launch persists nothing.
+        # Checked before prepare_subagent so a refused launch persists nothing.
         raise RuntimeError(
             "Subagent launch requires the task supervisor daemon; unsupervised local spawning has been removed."
         )
     _throw_if_subagent_cancelled(context)
-    prepared = await prepareSubagent(args)
+    prepared = await prepare_subagent(args)
     _throw_if_subagent_cancelled(context)
     child_session = prepared["childSession"]
     child_record = prepared["childRecord"]
@@ -75,7 +75,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
         )
     if isinstance(launched, dict) and launched.get("atCapacity"):
         # The supervisor refused the launch. Finalize the child record that
-        # prepareSubagent already persisted - leaving it "queued" with no task
+        # prepare_subagent already persisted - leaving it "queued" with no task
         # creates a phantom that no sweep, message, or stop can ever reach -
         # and surface the structured refusal so the model can decide.
         refused_at = now_iso()
@@ -115,7 +115,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
     task_id = launch_task_id(launched)
     output_file = launch_output_file(launched) or (task_output_path(task_id) if task_id else None)
     started_at = now_iso()
-    appendLaunchGroupMetadata(context["session"], child_record.get("launchGroupId") or prepared.get("launchGroupId"), agent_id, task_id)
+    append_launch_group_metadata(context["session"], child_record.get("launchGroupId") or prepared.get("launchGroupId"), agent_id, task_id)
     await _upsert_subagent_launch_group(
         context["session"]["id"],
         {
@@ -167,11 +167,11 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
     return {"content": pretty_json(_without_none_values({"agent_id": agent_id, "session_id": child_session["id"], "task_id": task_id, "status": "running", "run_in_background": True, "output_file": output_file, "runtime_contract": prepared.get("runtimeContractSummary"), "worktree_path": prepared.get("worktreePath")}))}
 
 
-async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
+async def prepare_subagent(args: dict[str, Any]) -> dict[str, Any]:
     context = args["context"]
     parent = context["session"]
     config = context["config"]
-    requireSubagentDepthAllowed(parent, config)
+    require_subagent_depth_allowed(parent, config)
     description = _require_string(args.get("description"), "description")
     prompt = _require_string(args.get("prompt"), "prompt")
     agent_type = (args.get("agentType") or args.get("subagent_type") or "").strip() or None
@@ -182,8 +182,8 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     run_in_background = bool(args.get("runInBackground") if "runInBackground" in args else args.get("run_in_background"))
     isolation = "worktree" if args.get("isolation") == "worktree" else None
     agent_id = f"agent-{uuid.uuid4()}"
-    requested_mode = sanitizePermissionMode(args.get("mode") or parent.get("permissionMode") or config.get("permissionMode"))
-    child_mode = inheritParentPermissionMode(requested_mode, parent.get("permissionMode") or config.get("permissionMode") or "default")
+    requested_mode = sanitize_permission_mode(args.get("mode") or parent.get("permissionMode") or config.get("permissionMode"))
+    child_mode = inherit_parent_permission_mode(requested_mode, parent.get("permissionMode") or config.get("permissionMode") or "default")
     parent_provider = parent.get("provider") if parent.get("provider") is not None else config.get("provider")
     parent_model = parent.get("model") if parent.get("model") is not None else config.get("model")
     child_model = normalizeModelName(model, parent_provider) if model else resolveModelForAgent(config, agent_type, parent_model)
@@ -202,7 +202,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         tools=parent_tools,
     )
     parent.setdefault("metadata", {})["effectiveAgentAuthority"] = parent_authority
-    launch_group_id = resolveSubagentLaunchGroupId(args, parent, context)
+    launch_group_id = resolve_subagent_launch_group_id(args, parent, context)
     worktree_path = await _create_subagent_worktree(context, agent_id, child_name) if isolation == "worktree" else None
     derived_authority = deriveChildAgentAuthority(
         parent=parent_authority,
@@ -294,7 +294,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     parent_metadata["childSessionIds"] = _dedupe([*(parent_metadata.get("childSessionIds") or []), child_session["id"]])
     parent_metadata["childAgentIds"] = _dedupe([*(parent_metadata.get("childAgentIds") or []), agent_id])
     parent_metadata["subagentLaunchGroups"] = _dedupe([*(parent_metadata.get("subagentLaunchGroups") or []), launch_group_id])
-    appendLaunchGroupMetadata(parent, launch_group_id, agent_id)
+    append_launch_group_metadata(parent, launch_group_id, agent_id)
     await _upsert_subagent_launch_group(
         parent["id"],
         {

@@ -40,7 +40,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                     await release.wait()
                     raise RuntimeError("delayed generation-A consumer failure")
 
-            runtime = await core.createCollaborationRuntime(
+            runtime = await core.create_collaboration_runtime(
                 {
                     "session": sessions["a"],
                     "config": config,

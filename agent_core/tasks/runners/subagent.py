@@ -13,7 +13,7 @@ from ...runtime.agent_bindings import create_agent_runtime_bindings
 from ...config import resolveConfig
 from ...storage import configure_runtime_home, load_child_agent, load_session, load_task_record, mutate_child_agent, mutate_task_meta, save_session, save_task_record, with_record_transaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
-from ...subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
+from ...subagents import finalize_background_subagent_failure_from_env, finalize_background_subagent_success_from_env
 from ...subagents.finalizers import _background_structured_result_fields
 from ...tools import createBuiltinTools
 from ...runtime.generation import create_runtime_session_binding
@@ -22,7 +22,7 @@ from ..._utils import now_iso
 
 async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:
     session, result, payload = await _execute_background_subagent(args)
-    await finalizeBackgroundSubagentSuccessFromEnv(session, result)
+    await finalize_background_subagent_success_from_env(session, result)
     await save_session(session)
     return payload
 
@@ -227,10 +227,10 @@ def main() -> None:
             return
         session, result, payload = asyncio.run(_execute_background_subagent(worker_args))
         print(json.dumps(payload, indent=2), flush=True)
-        asyncio.run(finalizeBackgroundSubagentSuccessFromEnv(session, result))
+        asyncio.run(finalize_background_subagent_success_from_env(session, result))
         asyncio.run(save_session(session))
     except Exception as exc:
-        asyncio.run(finalizeBackgroundSubagentFailureFromEnv(exc))
+        asyncio.run(finalize_background_subagent_failure_from_env(exc))
         print(json.dumps({"ok": False, "error": str(exc), "session_id": parsed.session_id, "agent_id": parsed.agent_id, "task_id": parsed.task_id}, indent=2), file=sys.stderr)
         raise
 

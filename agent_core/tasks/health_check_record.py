@@ -13,7 +13,7 @@ from ..storage import (
 )
 
 
-def buildAuthorizedHealthCheckRecord(
+def build_authorized_health_check_record(
     *,
     request: dict[str, Any],
     taskId: str,
@@ -46,14 +46,14 @@ def buildAuthorizedHealthCheckRecord(
     return _omit_none(record)
 
 
-async def persistHealthCheckRecord(record: dict[str, Any]) -> None:
+async def persist_health_check_record(record: dict[str, Any]) -> None:
     async with with_record_transaction("task-lifecycle", record["taskId"]):
         await save_health_check_task(record)
         await write_task_meta(record["taskId"], {**record, "type": "health_check"})
         await save_task_record(_health_task_record(record))
 
 
-async def linkHealthChecksToSession(sessionId: str, taskIds: list[str]) -> None:
+async def link_health_checks_to_session(sessionId: str, taskIds: list[str]) -> None:
     def link(session: dict[str, Any]) -> dict[str, Any]:
         metadata = dict(session.get("metadata") or {})
         metadata["taskIds"] = list(dict.fromkeys([*(metadata.get("taskIds") or []), *taskIds]))

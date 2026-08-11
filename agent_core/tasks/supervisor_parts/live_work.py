@@ -23,8 +23,8 @@ from ...storage import (
     task_meta_path as _task_meta_path,
 )
 from .finalize_child import (
-    finalizeLostWorker as _finalize_lost_worker,
-    workerVerifiedDead as _worker_verified_dead,
+    finalize_lost_worker as _finalize_lost_worker,
+    worker_verified_dead as _worker_verified_dead,
 )
 from .mappers import _is_active_child_agent_status, _is_related_child_agent
 from .processes import _is_process_alive

@@ -8,7 +8,7 @@ from ..storage import with_record_transaction
 
 
 @asynccontextmanager
-async def withSubagentCoordinationTransaction(parentSessionId: str) -> AsyncIterator[None]:
+async def with_subagent_coordination_transaction(parentSessionId: str) -> AsyncIterator[None]:
     """All subagent coordination stores share one lock domain per parent session."""
     async with with_record_transaction("subagent-coordination", parentSessionId):
         yield

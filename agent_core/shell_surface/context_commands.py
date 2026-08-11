@@ -13,12 +13,12 @@ from ..storage import (
     load_compaction_manifest,
     load_session,
 )
-from ..tasks.monitor_transactions import commitMonitorMutation as _commit_monitor_mutation
+from ..tasks.monitor_transactions import commit_monitor_mutation as _commit_monitor_mutation
 from ..tasks.monitor_transitions import (
-    monitorResumeNote as _monitor_resume_note,
-    monitorStopNote as _monitor_stop_note,
-    resumeMonitorRecord as _resume_monitor_record,
-    stopMonitorRecord as _stop_monitor_record,
+    monitor_resume_note as _monitor_resume_note,
+    monitor_stop_note as _monitor_stop_note,
+    resume_monitor_record as _resume_monitor_record,
+    stop_monitor_record as _stop_monitor_record,
 )
 from .common import (
     _call,

@@ -15,7 +15,7 @@ from ..communication import (
 )
 
 
-async def readTaskOutput(task_id: str, tailBytes: int | None = 12000, **kwargs: Any) -> dict[str, Any]:
+async def read_task_output(task_id: str, tailBytes: int | None = 12000, **kwargs: Any) -> dict[str, Any]:
     if "tail_bytes" in kwargs:
         tailBytes = kwargs["tail_bytes"]
     meta = await read_task_meta(task_id)
@@ -33,7 +33,7 @@ async def readTaskOutput(task_id: str, tailBytes: int | None = 12000, **kwargs: 
     }
 
 
-def createTaskCommunicationApi(emit: Callable[[str, dict[str, Any], str | None], Any]) -> dict[str, Any]:
+def create_task_communication_api(emit: Callable[[str, dict[str, Any], str | None], Any]) -> dict[str, Any]:
     async def emit_task_update(task_id: str) -> None:
         meta = await read_task_meta(task_id)
         if meta:

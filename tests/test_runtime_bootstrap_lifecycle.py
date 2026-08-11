@@ -55,11 +55,11 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 bridge_runtime_module,
                 "createBridgeRuntime",
                 fake_bridge,
-            ), mock.patch.object(runtime_module, "createMonitorRuntime", fake_monitors), mock.patch.object(
+            ), mock.patch.object(runtime_module, "create_monitor_runtime", fake_monitors), mock.patch.object(
                 runtime_module,
-                "createTaskRuntime",
+                "create_task_runtime",
                 fake_tasks,
-            ), mock.patch.object(runtime_module, "createCollaborationRuntime", fake_collaboration):
+            ), mock.patch.object(runtime_module, "create_collaboration_runtime", fake_collaboration):
                 boot = run(core.bootstrap_runtime({"session": session, "config": config, "enableBridge": True, "daemonEnabled": False}))
                 run(boot["close"]())
 

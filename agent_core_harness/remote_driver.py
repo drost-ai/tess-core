@@ -22,7 +22,7 @@ async def seed_collaboration_fixture(data: dict[str, Any], sandbox: ScenarioSand
     for record in children:
         await core.save_child_agent(record)
     metadata["childAgentIds"] = [record["agentId"] for record in children]
-    monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch remote tests"})
+    monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch remote tests"})
     monitor.update({"id": "monitor-remote", "updatedAt": "2026-01-01T00:00:06Z", "lastAssistantUpdateSummary": "Remote tests are still running."})
     await core.save_monitor(monitor)
     await core.write_task_meta("task-monitor", {"type": "background_command", "taskId": "task-monitor", "id": "task-monitor", "sessionId": session["id"], "command": "pytest", "cwd": str(sandbox.workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:06Z", "status": "running", "outputFile": core.task_output_path("task-monitor")})
@@ -125,7 +125,7 @@ async def refresh_collaboration(data: dict[str, Any], sandbox: ScenarioSandbox, 
     runtime = state.get("collaboration_runtime")
     if not runtime or data.get("newRuntime"):
         events = state.setdefault("collaboration_events", [])
-        runtime = await core.createCollaborationRuntime({"session": session, "config": config, "startTicker": False, "minAssistantUpdateSpacingMs": int(data.get("minAssistantUpdateSpacingMs") or 10**15), "emit": lambda event, payload: events.append({"event": event, "data": _json_safe(payload)})})
+        runtime = await core.create_collaboration_runtime({"session": session, "config": config, "startTicker": False, "minAssistantUpdateSpacingMs": int(data.get("minAssistantUpdateSpacingMs") or 10**15), "emit": lambda event, payload: events.append({"event": event, "data": _json_safe(payload)})})
         state["collaboration_runtime"] = runtime
     else:
         await runtime["refresh"]()

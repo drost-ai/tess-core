@@ -27,8 +27,8 @@ async def _handle_daemon_request(
         result = await supervisor["listTasks"](params.get("sessionId"))
     elif method == "inspectTask":
         result = await supervisor["inspectTask"](params.get("taskId"))
-    elif method == "readTaskOutput":
-        result = await supervisor["readTaskOutput"](
+    elif method == "read_task_output":
+        result = await supervisor["read_task_output"](
             params.get("taskId"),
             params.get("tailBytes"),
         )
@@ -80,7 +80,7 @@ def _normalise_daemon_method(method: Any) -> str | None:
         "daemon.getBootstrap": "getBootstrap",
         "daemon.listTasks": "listTasks",
         "daemon.inspectTask": "inspectTask",
-        "daemon.readTaskOutput": "readTaskOutput",
+        "daemon.read_task_output": "read_task_output",
         "daemon.stopTask": "stopTask",
         "daemon.retryTask": "retryTask",
         "daemon.startBackgroundCommand": "startBackgroundCommand",
@@ -91,7 +91,7 @@ def _normalise_daemon_method(method: Any) -> str | None:
         "daemon.shutdown": "shutdown",
         "tasks.list": "listTasks",
         "tasks.inspect": "inspectTask",
-        "tasks.read_output": "readTaskOutput",
+        "tasks.read_output": "read_task_output",
         "tasks.stop": "stopTask",
         "tasks.retry": "retryTask",
         "tasks.start_background_command": "startBackgroundCommand",

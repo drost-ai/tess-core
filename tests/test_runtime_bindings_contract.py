@@ -201,7 +201,7 @@ def _gateway(boundary):
             "startHealthCheck",
             "stopTask",
             "retryTask",
-            "readTaskOutput",
+            "read_task_output",
             "sendTaskMessage",
             "readTaskEvents",
             "readTaskQuestions",

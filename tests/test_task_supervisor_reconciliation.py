@@ -52,7 +52,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                 )
             )
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             record = run(supervisor["inspectTask"](task_id))
             self.assertEqual(record["status"], "stopped")
             self.assertEqual(record["detailStatus"], "launching")
@@ -160,7 +160,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                 )
             )
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             record = run(supervisor["inspectTask"](task_id))
             self.assertEqual(record["status"], "completed")
             self.assertEqual(record["summary"], "Recovered result")
@@ -205,7 +205,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             run(core.save_task_record({"id": failed_subagent_id, "sessionId": parent_session_id, "sourceId": agent_id, "kind": "subagent", "status": "running", "title": "Failed worker", "summary": "Background subagent is running under daemon supervision.", "createdAt": created_at, "updatedAt": created_at, "startedAt": created_at, "cwd": str(workspace), "outputFile": core.task_output_path(failed_subagent_id), "foregroundMode": "background", "taskFamily": "subagent", "detailStatus": "worker_running", "retrieveOnly": False, "attachableSessionId": child_session_id, "relatedChildSessionIds": [child_session_id], "owner": "daemon", "metadata": {"agent_id": agent_id, "child_session_id": child_session_id, "pid": 999999999}}))
 
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             completed = run(supervisor["inspectTask"](completed_id))
             unknown = run(supervisor["inspectTask"](unknown_id))
             failed_subagent = run(supervisor["inspectTask"](failed_subagent_id))
@@ -334,7 +334,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
                     },
                 )
             )
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             stopped = run(supervisor["stopTask"](task_id))
             self.assertEqual((stopped["status"], stopped["changed"]), ("stopped", True))
             child = run(core.load_child_agent(agent_id))

@@ -14,7 +14,7 @@ from typing import Any
 
 
 
-def applyMonitorObservation(
+def apply_monitor_observation(
     monitor: dict[str, Any], *, task: dict[str, Any] | None, outputSize: int, now: int
 ) -> dict[str, Any]:
     observed_task_status = (task or {}).get("status") or "unknown"
@@ -24,8 +24,8 @@ def applyMonitorObservation(
     now_iso = datetime.fromtimestamp(now / 1000, timezone.utc).isoformat().replace(
         "+00:00", "Z"
     )
-    was_terminal = isTerminalMonitorStatus(monitor.get("status"))
-    became_terminal = not was_terminal and isTerminalMonitorStatus(final_status)
+    was_terminal = is_terminal_monitor_status(monitor.get("status"))
+    became_terminal = not was_terminal and is_terminal_monitor_status(final_status)
     record = {
         **monitor,
         "updatedAt": now_iso,
@@ -55,19 +55,19 @@ def applyMonitorObservation(
     }
 
 
-def buildMonitorObservationMutation(
+def build_monitor_observation_mutation(
     latest: dict[str, Any],
     task: dict[str, Any] | None,
     outputSize: int,
     now: int,
 ) -> dict[str, Any]:
-    transition = applyMonitorObservation(
+    transition = apply_monitor_observation(
         latest, task=task, outputSize=outputSize, now=now
     )
     return {**transition, "value": transition}
 
 
-def buildMonitorNarrationMutation(
+def build_monitor_narration_mutation(
     latest: dict[str, Any],
     expectedRevision: int,
     updateTime: str,
@@ -75,7 +75,7 @@ def buildMonitorNarrationMutation(
     outputSize: int,
     reason: str,
 ) -> dict[str, Any]:
-    if latest.get("revision") != expectedRevision or isTerminalMonitorStatus(
+    if latest.get("revision") != expectedRevision or is_terminal_monitor_status(
         latest.get("status")
     ):
         return {
@@ -99,14 +99,14 @@ def buildMonitorNarrationMutation(
     }
 
 
-def isTerminalMonitorStatus(status: Any) -> bool:
+def is_terminal_monitor_status(status: Any) -> bool:
     return status in {"completed", "failed", "stopped"}
 
 
 def _derive_monitor_status(
     task: dict[str, Any] | None, monitor: dict[str, Any]
 ) -> str:
-    if isTerminalMonitorStatus(monitor.get("status")) or monitor.get("status") == "muted":
+    if is_terminal_monitor_status(monitor.get("status")) or monitor.get("status") == "muted":
         return str(monitor.get("status"))
     task_status = (task or {}).get("status") or monitor.get("lastObservedTaskStatus") or "unknown"
     if task_status == "completed":
@@ -125,7 +125,7 @@ def _narration_reason(
     output_size: int,
     now: int,
 ) -> str | None:
-    if isTerminalMonitorStatus(monitor.get("status")):
+    if is_terminal_monitor_status(monitor.get("status")):
         return None
     if not monitor.get("lastAssistantUpdateAt"):
         return "start"

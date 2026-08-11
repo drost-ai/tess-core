@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 
-class _MonitorBootstrapBaseline:
+class _monitor_bootstrap_baseline:
     """Suppress narration for adopted monitors until something changes."""
 
     def __init__(self) -> None:

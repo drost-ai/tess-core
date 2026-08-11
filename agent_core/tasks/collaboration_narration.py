@@ -10,16 +10,16 @@ from ..runtime.secret_provider import resolve_provider_config_secrets
 from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
-async def authorCollaborationUpdate(args: dict[str, Any]) -> str:
+async def author_collaboration_update(args: dict[str, Any]) -> str:
     try:
-        return await authorCollaborationUpdateWithProvider(args)
+        return await author_collaboration_update_with_provider(args)
     except Exception:
-        return buildDeterministicCollaborationUpdate(
+        return build_deterministic_collaboration_update(
             args.get("worker") or {}, args.get("summary") or ""
         )
 
 
-async def authorCollaborationUpdateWithProvider(args: dict[str, Any]) -> str:
+async def author_collaboration_update_with_provider(args: dict[str, Any]) -> str:
     config = args.get("config") or {}
     session = args.get("session") or {}
     worker = args.get("worker") or {}
@@ -86,11 +86,11 @@ async def authorCollaborationUpdateWithProvider(args: dict[str, Any]) -> str:
     ).strip()
     if not text:
         raise RuntimeError("Provider returned an empty collaboration update.")
-    mergeUsage(session, response.get("usage") or {})
+    _merge_usage_into_session(session, response.get("usage") or {})
     return text
 
 
-def buildDeterministicCollaborationUpdate(worker: dict[str, Any], summary: str) -> str:
+def build_deterministic_collaboration_update(worker: dict[str, Any], summary: str) -> str:
     if worker.get("kind") == "subagent":
         if worker.get("status") == "completed":
             return f"{worker.get('label')} finished its background work. {worker.get('resultSummary') or summary}"
@@ -110,7 +110,7 @@ def buildDeterministicCollaborationUpdate(worker: dict[str, Any], summary: str) 
     return f"{worker.get('label')}: {summary}"
 
 
-def appendAssistantCollaborationMessage(session: dict[str, Any], text: str) -> None:
+def append_assistant_collaboration_message(session: dict[str, Any], text: str) -> None:
     trimmed = text.strip()
     if not trimmed:
         return
@@ -124,20 +124,15 @@ def appendAssistantCollaborationMessage(session: dict[str, Any], text: str) -> N
     messages.append({"role": "assistant", "content": trimmed})
 
 
-def mergeUsage(session: dict[str, Any], usage: dict[str, Any]) -> None:
-    _merge_usage_into_session(session, usage)
-
-
 __all__ = [
-    "appendAssistantCollaborationMessage",
-    "authorCollaborationUpdate",
-    "authorCollaborationUpdateWithProvider",
-    "buildDeterministicCollaborationUpdate",
-    "mergeUsage",
+    "append_assistant_collaboration_message",
+    "author_collaboration_update",
+    "author_collaboration_update_with_provider",
+    "build_deterministic_collaboration_update",
 ]
 
 
-def staleWorkPayload(active: dict[str, Any], binding: dict[str, Any], source_event: str) -> dict[str, Any]:
+def stale_work_payload(active: dict[str, Any], binding: dict[str, Any], source_event: str) -> dict[str, Any]:
     return {
         "session_id": active.get("sessionId"),
         "stale_session_id": binding.get("sessionId"),

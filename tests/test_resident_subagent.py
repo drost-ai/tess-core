@@ -138,7 +138,7 @@ class ResidentSubagentTests(AgentCoreTestCase):
         try:
             os.environ["AGENT_CORE_SUBAGENTS_RESIDENT_POLL_MS"] = "200"
             config, parent, child = self._seed_family(home, workspace)
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             started = run(supervisor["startSubagentTask"]({
                 "parentSessionId": parent["id"], "sessionId": child["id"],
                 "agentId": "resident-agent", "cwd": str(workspace), "label": "Resident",
@@ -198,7 +198,7 @@ class SubagentCapacityGovernanceTests(AgentCoreTestCase):
             seeder = ResidentSubagentTests()
             config, parent, child = seeder._seed_family(home, workspace)
             events = []
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             started = run(supervisor["startSubagentTask"]({
                 "parentSessionId": parent["id"], "sessionId": child["id"],
                 "agentId": "resident-agent", "cwd": str(workspace), "label": "Resident",

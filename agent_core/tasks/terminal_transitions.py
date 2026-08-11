@@ -5,7 +5,7 @@ import signal
 from typing import Any
 
 
-def resolveTaskSemanticStatus(*statuses: Any) -> str:
+def resolve_task_semantic_status(*statuses: Any) -> str:
     for status in statuses:
         normalized = str(status or "")
         if normalized == "completed":
@@ -17,7 +17,7 @@ def resolveTaskSemanticStatus(*statuses: Any) -> str:
     return "running"
 
 
-def normalizeTaskProcessOutcome(
+def normalize_task_process_outcome(
     code: int | None,
     signalName: str | None,
 ) -> tuple[int | None, str | None]:
@@ -29,7 +29,7 @@ def normalizeTaskProcessOutcome(
     return (None if resolved_signal else code), resolved_signal
 
 
-def applyDeliberateTaskStop(current: str) -> dict[str, Any]:
+def apply_deliberate_task_stop(current: str) -> dict[str, Any]:
     if current != "running":
         return _terminal_noop(current)
     return {
@@ -41,7 +41,7 @@ def applyDeliberateTaskStop(current: str) -> dict[str, Any]:
     }
 
 
-def applyTaskProcessCompletion(
+def apply_task_process_completion(
     *,
     current: str,
     code: int | None,
@@ -83,7 +83,7 @@ def applyTaskProcessCompletion(
     }
 
 
-def toTaskStopResult(
+def to_task_stop_result(
     taskId: str,
     transition: dict[str, Any],
     transitionId: str | None = None,

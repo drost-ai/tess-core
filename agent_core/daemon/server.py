@@ -22,7 +22,7 @@ from ..storage import (
     save_daemon_state,
     with_record_transaction,
 )
-from ..tasks.supervisor import createTaskSupervisor
+from ..tasks.supervisor import create_task_supervisor
 from .events import (
     _publish_daemon_event,
     _record_daemon_lifecycle_event,
@@ -207,7 +207,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
             next_event_cursor,
         )
         await write_daemon_state("recovering")
-        supervisor = await createTaskSupervisor({"cwd": cwd, "onEvent": on_event})
+        supervisor = await create_task_supervisor({"cwd": cwd, "onEvent": on_event})
         rotation_task = asyncio.create_task(_rotate_daemon_events_periodically(instance_id, shutdown))
         if isinstance(owner_pid, int) and owner_pid > 0:
             owner_watch_task = asyncio.create_task(

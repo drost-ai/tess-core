@@ -29,7 +29,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             }
             run(core.save_child_agent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch tests"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch tests"})
             monitor["lastAssistantUpdateSummary"] = "Tests are still running."
             run(core.save_monitor(monitor))
             run(
@@ -65,7 +65,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             self.assertIn("bridge.message.queued", run(core.formatBridgeTail(bridge["id"])))
 
             events = []
-            runtime = run(core.createCollaborationRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data))}))
+            runtime = run(core.create_collaboration_runtime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data))}))
             snapshot = runtime["getSnapshot"]()
             self.assertEqual(snapshot["activeCount"], 2)
             self.assertEqual(snapshot["awaitingInputCount"], 1)
@@ -180,7 +180,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
 
             events = []
             runtime = run(
-                core.createCollaborationRuntime(
+                core.create_collaboration_runtime(
                     {
                         "session": session,
                         "config": config,
@@ -251,7 +251,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
 
             events = []
             runtime = run(
-                core.createCollaborationRuntime(
+                core.create_collaboration_runtime(
                     {
                         "session": session_a,
                         "config": config,
@@ -301,7 +301,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             run(core.save_child_agent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
             events = []
-            runtime = run(core.createCollaborationRuntime({"session": session, "config": config, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
+            runtime = run(core.create_collaboration_runtime({"session": session, "config": config, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
             self.assertFalse(any(event == "collaboration.assistant_update" for event, _ in events))
             run(core.save_child_agent({**child, "status": "completed", "completedAt": "2026-01-01T00:00:02Z", "lastUpdatedAt": "2026-01-01T00:00:02Z", "resultSummary": "Collected the evidence."}))
             run(runtime["refresh"]())

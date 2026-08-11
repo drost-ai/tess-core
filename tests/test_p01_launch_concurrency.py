@@ -109,7 +109,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
                     )
                 )
             self.assertFalse(spawned)
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             reconciled = run(supervisor["inspectTask"](task_id))
             persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(reconciled["status"], "failed")
@@ -134,7 +134,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
                 sessionId="p01-twenty-five-session",
             )
             run(core.save_session(session))
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
 
             async def launch_all() -> list[dict]:
                 return await asyncio.gather(

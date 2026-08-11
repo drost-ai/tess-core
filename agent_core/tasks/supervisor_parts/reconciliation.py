@@ -18,7 +18,7 @@ from ...storage import (
     task_output_path,
     write_task_meta,
 )
-from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
+from ...subagents.reconciliation import create_subagent_reconciliation_for_terminal_child
 from .mappers import (
     _event_name_for_task_status,
     _is_active_child_agent_status,
@@ -30,7 +30,7 @@ from .processes import _process_exit_summary
 from .records import _build_recovered_subagent_task_record, _build_task_record
 from .shared import _DEAD_WORKER_SUMMARY, SupervisorRegistries
 from typing import Any, Callable
-from .finalize_child import _process_state_metadata, finalizeLostWorker
+from .finalize_child import _process_state_metadata, finalize_lost_worker
 from .launch_reconciliation import (
     _has_interrupted_launch,
     _reconcile_interrupted_launch,
@@ -158,7 +158,7 @@ async def _mark_lost_process(
 ) -> None:
     if record.get("kind") == "subagent" and await _recover_completed_subagent_task(task_id, record, emit, record.get("sessionId")):
         return
-    await finalizeLostWorker(
+    await finalize_lost_worker(
         taskId=task_id,
         cause=cause,
         source="boot_sweep",
@@ -254,7 +254,7 @@ async def _recover_completed_subagent_task(
         agent_id,
         lambda current: {**(current or child), "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at},
     )
-    reconciliation = await createSubagentReconciliationForTerminalChild(
+    reconciliation = await create_subagent_reconciliation_for_terminal_child(
         childRecord=updated_child or child,
         taskMeta=task_meta,
         source="supervisor_recovery",
@@ -321,7 +321,7 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
         "completionReason": "cancelled",
         "outputFile": meta.get("outputFile") or task_output_path(task_id),
     }
-    await createSubagentReconciliationForTerminalChild(
+    await create_subagent_reconciliation_for_terminal_child(
         childRecord=child,
         taskMeta=task_meta,
         error=summary,

@@ -26,7 +26,7 @@ def _completed_task_with_monitor(task_id: str) -> dict:
             },
         )
     )
-    monitor = core.createMonitorRecord(sessionId=SESSION_ID, taskId=task_id, goal="watch the build")
+    monitor = core.create_monitor_record(sessionId=SESSION_ID, taskId=task_id, goal="watch the build")
     run(core.save_monitor(monitor))
     return monitor
 
@@ -74,7 +74,7 @@ class DaemonMonitorWatchTests(AgentCoreTestCase):
             async def on_event(event):
                 events.append(event)
 
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": on_event}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace), "onEvent": on_event}))
             committed = run(core.load_monitor(monitor["id"]))
             self.assertEqual(committed["status"], "completed")
             self.assertTrue(

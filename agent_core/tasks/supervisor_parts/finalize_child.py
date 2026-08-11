@@ -7,7 +7,7 @@ task record, so a dead subagent held a capacity slot until reboot; no lost
 path wrote the parent-facing reconciliation ledger entry, so the parent
 transcript never learned a child died on daemon loss; and the launch path
 guarded child records with a status set containing an invalid member. Every
-lost-worker terminalization now flows through :func:`finalizeLostWorker`:
+lost-worker terminalization now flows through :func:`finalize_lost_worker`:
 task meta + task record + child-agent record + parent reconciliation ledger
 + session links, under one task-lifecycle transaction, honoring
 first-terminal-wins inside it.
@@ -31,8 +31,8 @@ from ...storage import (
     with_record_transaction,
     write_task_meta,
 )
-from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
-from ..terminal_transitions import resolveTaskSemanticStatus
+from ...subagents.reconciliation import create_subagent_reconciliation_for_terminal_child
+from ..terminal_transitions import resolve_task_semantic_status
 from .mappers import _is_active_child_agent_status, _task_record_event_payload
 from .records import _build_task_record
 from .shared import _DEAD_WORKER_SUMMARY
@@ -64,7 +64,7 @@ def _process_state_metadata(process_state: dict[str, Any] | None) -> dict[str, A
     return result
 
 
-async def workerVerifiedDead(record_like: dict[str, Any]) -> bool:
+async def worker_verified_dead(record_like: dict[str, Any]) -> bool:
     """Raw pid liveness is not proof OUR worker is alive: a recycled pid pins
     a dead worker's records live forever. A dead pid proves death; a live pid
     must additionally match the persisted identity, and liveness-indeterminate
@@ -99,7 +99,7 @@ def _lost_summary(cause: str, is_subagent: bool) -> str:
     return _DEAD_WORKER_SUMMARY
 
 
-async def finalizeLostWorker(
+async def finalize_lost_worker(
     *,
     taskId: str,
     cause: str,
@@ -121,7 +121,7 @@ async def finalizeLostWorker(
         is_subagent = kind == "subagent"
         text = summary or _lost_summary(cause, is_subagent)
         now = now_iso()
-        current = resolveTaskSemanticStatus(record.get("status"), meta.get("status"))
+        current = resolve_task_semantic_status(record.get("status"), meta.get("status"))
         already_terminal = current in _TERMINAL_SEMANTIC_STATUSES
         extra_metadata: dict[str, Any] = dict(_process_state_metadata(processState))
         if cause == "launch_interrupted":
@@ -215,7 +215,7 @@ async def finalizeLostWorker(
             # The parent-facing ledger entry: without it the parent transcript
             # never learns the child died on the one path where live events
             # are least likely to have survived.
-            await createSubagentReconciliationForTerminalChild(
+            await create_subagent_reconciliation_for_terminal_child(
                 childRecord=child_after,
                 taskMeta=next_meta,
                 error=text,

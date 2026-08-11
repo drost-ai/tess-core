@@ -10,7 +10,7 @@ from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
 from .reconciliation import _mark_subagent_cancelled_from_stop
-from ..terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
+from ..terminal_store import clear_prepared_task_stop, commit_prepared_task_stop, prepare_task_stop
 
 
 def _create_task_stopper(
@@ -22,7 +22,7 @@ def _create_task_stopper(
     async def stop_task(task_id: str, signal_name: str = "SIGTERM") -> dict[str, Any] | None:
         release_stop = await coordinator.acquireStop(task_id)
         try:
-            prepared = await prepareTaskStop(task_id, signal_name)
+            prepared = await prepare_task_stop(task_id, signal_name)
             if not prepared:
                 return None
             result = prepared.get("result")
@@ -56,11 +56,11 @@ def _create_task_stopper(
                 # a still-"starting" reservation reconciles first-terminal-
                 # wins at the next boot sweep, and an attach against the
                 # terminal record is refused by the reservation ladder.
-                committed = await commitPreparedTaskStop(task_id, transition_id)
+                committed = await commit_prepared_task_stop(task_id, transition_id)
             else:
                 signum = getattr(signal, signal_name, None)
                 if signum is None:
-                    await clearPreparedTaskStop(task_id, transition_id)
+                    await clear_prepared_task_stop(task_id, transition_id)
                     raise ValueError(f"Unsupported task stop signal: {signal_name}")
                 release_finalization = coordinator.holdFinalization(task_id)
                 try:
@@ -75,10 +75,10 @@ def _create_task_stopper(
                             await signalOwnedProcess(identity, signum)
                     except Exception:
                         with contextlib.suppress(Exception):
-                            await clearPreparedTaskStop(task_id, transition_id)
+                            await clear_prepared_task_stop(task_id, transition_id)
                         raise
                     await coordinator.afterSignal(task_id)
-                    committed = await commitPreparedTaskStop(task_id, transition_id)
+                    committed = await commit_prepared_task_stop(task_id, transition_id)
                 finally:
                     release_finalization()
 

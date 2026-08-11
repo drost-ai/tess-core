@@ -8,14 +8,14 @@ from .supervisor_parts.projection import _is_active_task_status, _project_sessio
 from ..runtime.identifiers import try_parse_task_id
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ..storage import save_task_record  # retained as a compatibility export
-from .terminal_store import saveProjectedTaskRecord as _save_projected_task_record
+from .terminal_store import save_projected_task_record as _save_projected_task_record
 
 
 def _empty_snapshot() -> dict[str, Any]:
     return {"total": 0, "active": 0, "backgrounded": 0, "awaitingInput": 0, "failed": 0, "labels": [], "tasks": []}
 
 
-async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def create_task_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session_ref = args.get("session") or {}
     config_ref = args.get("config") or {}

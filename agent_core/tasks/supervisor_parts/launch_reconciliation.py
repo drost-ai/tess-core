@@ -7,7 +7,7 @@ from ...process.identity import (
 from typing import Any, Callable
 from ...process.task_launch import failTaskLaunchReservation
 from ...process._termination import drain_owned_process
-from .finalize_child import finalizeLostWorker
+from .finalize_child import finalize_lost_worker
 
 
 def _has_interrupted_launch(record: dict[str, Any], meta: dict[str, Any]) -> bool:
@@ -41,7 +41,7 @@ async def _reconcile_interrupted_launch(
 
     reason = "Task launch was interrupted before durable attachment; retry is safe."
     failed = failTaskLaunchReservation(reservation, reason)
-    await finalizeLostWorker(
+    await finalize_lost_worker(
         taskId=task_id,
         cause="launch_interrupted",
         source="launch_reconciliation",

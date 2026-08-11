@@ -13,16 +13,16 @@ import agent_core.tasks.supervisor_parts.stop as supervisor_stop_module
 import agent_core.tasks.runners.background as background_runner_module
 from agent_core.tasks.task_stop_coordination import (
     TaskStopCoordinator,
-    setTaskStopCoordinationTestHookForTests,
+    set_task_stop_coordination_test_hook_for_tests,
 )
 from agent_core.tasks.terminal_store import (
-    commitPreparedTaskStop,
-    commitTaskProcessCompletion,
-    prepareTaskStop,
+    commit_prepared_task_stop,
+    commit_task_process_completion,
+    prepare_task_stop,
 )
 from agent_core.tasks.terminal_transitions import (
-    applyDeliberateTaskStop,
-    applyTaskProcessCompletion,
+    apply_deliberate_task_stop,
+    apply_task_process_completion,
 )
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
@@ -108,32 +108,32 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
         return identity
 
     def test_transition_matrix_distinguishes_expected_and_unexpected_loss(self):
-        stopped = applyDeliberateTaskStop("running")
+        stopped = apply_deliberate_task_stop("running")
         self.assertEqual(
             (stopped["status"], stopped["changed"], stopped["event"]),
             ("stopped", True, "task.stopped"),
         )
         for terminal in ("completed", "failed", "stopped"):
             with self.subTest(terminal=terminal):
-                transition = applyDeliberateTaskStop(terminal)
+                transition = apply_deliberate_task_stop(terminal)
                 self.assertEqual(
                     (transition["previousStatus"], transition["status"], transition["changed"]),
                     (terminal, terminal, False),
                 )
 
-        expected = applyTaskProcessCompletion(
+        expected = apply_task_process_completion(
             current="running",
             code=None,
             signalName="SIGTERM",
             terminationIntent={"signal": "SIGTERM"},
         )
-        unexpected = applyTaskProcessCompletion(
+        unexpected = apply_task_process_completion(
             current="running",
             code=None,
             signalName="SIGTERM",
             terminationIntent=None,
         )
-        escalated = applyTaskProcessCompletion(
+        escalated = apply_task_process_completion(
             current="running",
             code=None,
             signalName="SIGKILL",
@@ -150,7 +150,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             _config, session = self._session(home, workspace)
             events: list[dict[str, object]] = []
             supervisor = run(
-                core.createTaskSupervisor(
+                core.create_task_supervisor(
                     {"cwd": str(workspace), "onEvent": lambda event: events.append(event)}
                 )
             )
@@ -211,7 +211,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             _config, session = self._session(home, workspace)
             task_id = "task-stop-caller-first"
             self._seed_process_task(task_id, session["id"])
-            prepared = run(prepareTaskStop(task_id, "SIGTERM"))
+            prepared = run(prepare_task_stop(task_id, "SIGTERM"))
             self.assertIsNotNone(prepared)
             coordinator = TaskStopCoordinator()
             release = coordinator.holdFinalization(task_id)
@@ -227,7 +227,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 coordinator.waitForStopCommit(task_id)
                 finalizer_result.append(
                     run(
-                        commitTaskProcessCompletion(
+                        commit_task_process_completion(
                             taskId=task_id,
                             code=None,
                             signalName="SIGTERM",
@@ -235,12 +235,12 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                     )
                 )
 
-            setTaskStopCoordinationTestHookForTests(hook)
+            set_task_stop_coordination_test_hook_for_tests(hook)
             thread = threading.Thread(target=finalize, daemon=True)
             thread.start()
             self.assertTrue(finalizer_waiting.wait(2))
             committed = run(
-                commitPreparedTaskStop(task_id, prepared["transitionId"])
+                commit_prepared_task_stop(task_id, prepared["transitionId"])
             )
             release()
             thread.join(2)
@@ -249,7 +249,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             self.assertEqual(finalizer_result[0]["transition"]["changed"], False)
             self.assertEqual(run(core.load_task_record(task_id))["status"], "stopped")
         finally:
-            setTaskStopCoordinationTestHookForTests(None)
+            set_task_stop_coordination_test_hook_for_tests(None)
             self.restore_home(root, previous)
 
     def test_runner_first_adopts_prepared_transition(self):
@@ -258,7 +258,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             _config, session = self._session(home, workspace)
             task_id = "task-stop-runner-first"
             self._seed_process_task(task_id, session["id"])
-            prepared = run(prepareTaskStop(task_id, "SIGTERM"))
+            prepared = run(prepare_task_stop(task_id, "SIGTERM"))
             meta = run(core.read_task_meta(task_id))
             run(
                 core.write_task_meta(
@@ -273,7 +273,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 )
             )
             committed = run(
-                commitPreparedTaskStop(task_id, prepared["transitionId"])
+                commit_prepared_task_stop(task_id, prepared["transitionId"])
             )
             self.assertTrue(committed["transition"]["changed"])
             self.assertEqual(committed["result"]["transitionId"], prepared["transitionId"])
@@ -367,7 +367,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             _config, session = self._session(home, workspace)
             events: list[dict[str, object]] = []
             supervisor = run(
-                core.createTaskSupervisor(
+                core.create_task_supervisor(
                     {"cwd": str(workspace), "onEvent": lambda event: events.append(event)}
                 )
             )

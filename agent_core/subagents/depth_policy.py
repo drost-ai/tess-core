@@ -11,7 +11,7 @@ from typing import Any
 
 
 
-def resolveSubagentMaxDepth(config: dict[str, Any] | None = None, session: dict[str, Any] | None = None) -> int:
+def resolve_subagent_max_depth(config: dict[str, Any] | None = None, session: dict[str, Any] | None = None) -> int:
     config = config or {}
     session_metadata = session.get("metadata") if isinstance(session, dict) and isinstance(session.get("metadata"), dict) else {}
     candidates = [
@@ -32,13 +32,13 @@ def resolveSubagentMaxDepth(config: dict[str, Any] | None = None, session: dict[
     return int(_knob("subagents.max_depth"))
 
 
-def checkSubagentDepthAllowed(session: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
+def check_subagent_depth_allowed(session: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     try:
         parent_depth = int(metadata.get("depth") or 0)
     except (TypeError, ValueError):
         parent_depth = 0
-    max_depth = resolveSubagentMaxDepth(config, session)
+    max_depth = resolve_subagent_max_depth(config, session)
     child_depth = parent_depth + 1
     allowed = child_depth <= max_depth
     message = (
@@ -55,8 +55,8 @@ def checkSubagentDepthAllowed(session: dict[str, Any], config: dict[str, Any] | 
     }
 
 
-def requireSubagentDepthAllowed(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
-    result = checkSubagentDepthAllowed(session, config)
+def require_subagent_depth_allowed(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
+    result = check_subagent_depth_allowed(session, config)
     if not result["allowed"]:
         raise RuntimeError(result["message"])
 

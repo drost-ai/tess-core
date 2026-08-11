@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ._shared import _dedupe, _string, withSubagentCoordinationTransaction
+from ._shared import _dedupe, _string, with_subagent_coordination_transaction
 
 import json
 import os
@@ -13,7 +13,7 @@ from ..storage import session_archive_dir, with_record_transaction
 from ..storage.io_executor import run_storage_io as _run_storage_io
 
 
-def resolveSubagentLaunchGroupId(args: dict[str, Any], parentSession: dict[str, Any], context: dict[str, Any] | None = None) -> str:
+def resolve_subagent_launch_group_id(args: dict[str, Any], parentSession: dict[str, Any], context: dict[str, Any] | None = None) -> str:
     context = context or {}
     for value in (
         args.get("launchGroupId"),
@@ -28,7 +28,7 @@ def resolveSubagentLaunchGroupId(args: dict[str, Any], parentSession: dict[str, 
     return f"subagent-group-{parentSession.get('id') or uuid.uuid4()}-{message_count}-{_slug(team)}"
 
 
-def appendLaunchGroupMetadata(parentSession: dict[str, Any], launchGroupId: str, childAgentId: str, taskId: str | None = None) -> None:
+def append_launch_group_metadata(parentSession: dict[str, Any], launchGroupId: str, childAgentId: str, taskId: str | None = None) -> None:
     metadata = parentSession.setdefault("metadata", {})
     groups = metadata.setdefault("subagentLaunchGroups", [])
     if launchGroupId and launchGroupId not in groups:
@@ -76,7 +76,7 @@ async def _upsert_subagent_launch_group(parentSessionId: str, group: dict[str, A
         raise ValueError("Subagent launch group requires an id.")
     now = now_iso()
     path = _subagent_launch_groups_path(parentSessionId)
-    async with withSubagentCoordinationTransaction(parentSessionId):
+    async with with_subagent_coordination_transaction(parentSessionId):
         records = await _read_subagent_launch_groups(parentSessionId)
         current = next((record for record in records if record.get("id") == group_id), None)
         merged = _merge_group_record(current or {}, group, parentSessionId, group_id, now)

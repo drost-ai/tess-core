@@ -34,7 +34,7 @@ HEALTH_CHECK_LIMITS = {
 }
 
 
-async def normalizeHealthCheckSpec(
+async def normalize_health_check_spec(
     raw: dict[str, Any],
     fallbackCwd: str,
     options: dict[str, Any] | None = None,
@@ -116,7 +116,7 @@ async def normalizeHealthCheckSpec(
     return base
 
 
-async def authorizeHealthCheckSpec(
+async def authorize_health_check_spec(
     context: dict[str, Any], spec: dict[str, Any]
 ) -> dict[str, Any]:
     if spec["mode"] == "command":
@@ -191,21 +191,21 @@ async def authorizeHealthCheckSpec(
     fingerprint_input = {
         "sessionId": context["session"]["id"],
         "cwd": spec["cwd"],
-        "specDigest": healthCheckSpecDigest(spec),
+        "specDigest": health_check_spec_digest(spec),
         "permission": policy,
         "effectiveAuthority": (context["session"].get("metadata") or {}).get("effectiveAgentAuthority"),
         "allowedRoots": sorted(context.get("config", {}).get("allowedRoots") or []),
     }
     policy["authorityFingerprint"] = _digest(fingerprint_input)
-    assertHealthCheckExecutionPolicy(spec, policy)
+    assert_health_check_execution_policy(spec, policy)
     return policy
 
 
-def healthCheckSpecDigest(spec: dict[str, Any]) -> str:
+def health_check_spec_digest(spec: dict[str, Any]) -> str:
     return _digest(spec)
 
 
-def assertHealthCheckExecutionPolicy(spec: dict[str, Any], policy: dict[str, Any]) -> None:
+def assert_health_check_execution_policy(spec: dict[str, Any], policy: dict[str, Any]) -> None:
     sandbox = policy.get("sandbox") if isinstance(policy.get("sandbox"), dict) else {}
     environment = policy.get("environment")
     valid = (
@@ -242,7 +242,7 @@ def assertHealthCheckExecutionPolicy(spec: dict[str, Any], policy: dict[str, Any
             raise ValueError("HTTP health-check network authority does not cover exactly its approved origin.")
 
 
-def buildHealthCheckEnvironment(policy: dict[str, Any]) -> dict[str, str]:
+def build_health_check_environment(policy: dict[str, Any]) -> dict[str, str]:
     return dict(policy["environment"])
 
 

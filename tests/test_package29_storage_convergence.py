@@ -241,7 +241,7 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
             run(core.save_session(session))
             run(projection_module._project_session_task_records(session["id"], session))
             runtime = run(
-                core.createCollaborationRuntime(
+                core.create_collaboration_runtime(
                     {"session": session, "config": {"sessionPersistence": True}, "startTicker": False}
                 )
             )

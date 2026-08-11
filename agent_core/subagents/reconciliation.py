@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ._shared import withSubagentCoordinationTransaction
+from ._shared import with_subagent_coordination_transaction
 
 from ..runtime.events.emit import safe_emit as _emit
 
@@ -17,14 +17,14 @@ from ..storage.io_executor import run_storage_io as _run_storage_io
 
 TERMINAL_RECONCILIATION_STATUSES = {"completed", "failed", "stopped", "timed_out"}
 _SUMMARY_LIMIT = 1200
-def subagentReconciliationLogPath(parentSessionId: str) -> str:
+def subagent_reconciliation_log_path(parentSessionId: str) -> str:
     return os.path.join(session_archive_dir(parentSessionId), "subagent-reconciliations.jsonl")
 
-async def readSubagentReconciliations(parentSessionId: str) -> list[dict[str, Any]]:
-    return await _read_records(subagentReconciliationLogPath(parentSessionId))
+async def read_subagent_reconciliations(parentSessionId: str) -> list[dict[str, Any]]:
+    return await _read_records(subagent_reconciliation_log_path(parentSessionId))
 
-async def listUnconsumedSubagentReconciliations(parentSessionId: str) -> list[dict[str, Any]]:
-    records = await readSubagentReconciliations(parentSessionId)
+async def list_unconsumed_subagent_reconciliations(parentSessionId: str) -> list[dict[str, Any]]:
+    records = await read_subagent_reconciliations(parentSessionId)
     return [
         record
         for record in records
@@ -32,7 +32,7 @@ async def listUnconsumedSubagentReconciliations(parentSessionId: str) -> list[di
     ]
 
 
-async def upsertSubagentReconciliation(record: dict[str, Any]) -> dict[str, Any]:
+async def upsert_subagent_reconciliation(record: dict[str, Any]) -> dict[str, Any]:
     parent_session_id = _string(record.get("parentSessionId"))
     if not parent_session_id:
         raise ValueError("Subagent reconciliation requires parentSessionId.")
@@ -47,9 +47,9 @@ async def upsertSubagentReconciliation(record: dict[str, Any]) -> dict[str, Any]
         "createdAt": _string(record.get("createdAt")) or now,
         "updatedAt": now,
     }
-    path = subagentReconciliationLogPath(parent_session_id)
+    path = subagent_reconciliation_log_path(parent_session_id)
 
-    async with withSubagentCoordinationTransaction(parent_session_id):
+    async with with_subagent_coordination_transaction(parent_session_id):
         records = await _read_records(path)
         replaced = False
         next_records: list[dict[str, Any]] = []
@@ -80,7 +80,7 @@ async def upsertSubagentReconciliation(record: dict[str, Any]) -> dict[str, Any]
     return normalized
 
 
-async def markSubagentReconciliationsConsumed(
+async def mark_subagent_reconciliations_consumed(
     parentSessionId: str,
     recordIds: list[str],
     *,
@@ -90,10 +90,10 @@ async def markSubagentReconciliationsConsumed(
     wanted = {item for item in recordIds if isinstance(item, str) and item}
     if not wanted:
         return []
-    path = subagentReconciliationLogPath(parentSessionId)
+    path = subagent_reconciliation_log_path(parentSessionId)
     consumed_at = now_iso()
     changed: list[dict[str, Any]] = []
-    async with withSubagentCoordinationTransaction(parentSessionId):
+    async with with_subagent_coordination_transaction(parentSessionId):
         records = await _read_records(path)
         next_records = []
         for record in records:
@@ -113,7 +113,7 @@ async def markSubagentReconciliationsConsumed(
     return changed
 
 
-async def createSubagentReconciliationForTerminalChild(
+async def create_subagent_reconciliation_for_terminal_child(
     *,
     childRecord: dict[str, Any] | None = None,
     taskMeta: dict[str, Any] | None = None,
@@ -122,7 +122,7 @@ async def createSubagentReconciliationForTerminalChild(
     error: Any = None,
     source: str = "terminal_finalizer",
 ) -> dict[str, Any] | None:
-    record = buildSubagentReconciliationRecord(
+    record = build_subagent_reconciliation_record(
         childRecord=childRecord,
         taskMeta=taskMeta,
         session=session,
@@ -132,10 +132,10 @@ async def createSubagentReconciliationForTerminalChild(
     )
     if not record:
         return None
-    return await upsertSubagentReconciliation(record)
+    return await upsert_subagent_reconciliation(record)
 
 
-def buildSubagentReconciliationRecord(
+def build_subagent_reconciliation_record(
     *,
     childRecord: dict[str, Any] | None = None,
     taskMeta: dict[str, Any] | None = None,
@@ -239,7 +239,7 @@ def buildSubagentReconciliationRecord(
     )
 
 
-def renderSubagentReconciliationMessage(records: list[dict[str, Any]]) -> str:
+def render_subagent_reconciliation_message(records: list[dict[str, Any]]) -> str:
     lines = ["[Background subagent updates]"]
     for index, record in enumerate(_sort_records(records), start=1):
         status = _string(record.get("terminalStatus")) or "completed"
@@ -265,7 +265,7 @@ def renderSubagentReconciliationMessage(records: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-async def appendPendingSubagentReconciliationsToSession(
+async def append_pending_subagent_reconciliations_to_session(
     session: dict[str, Any],
     *,
     runtime: dict[str, Any] | None = None,
@@ -273,11 +273,11 @@ async def appendPendingSubagentReconciliationsToSession(
 ) -> dict[str, Any]:
     from .coordination import (
         _has_delivered_reconciliation,
-        claimUnconsumedSubagentReconciliations,
-        completeSubagentReconciliationClaim,
+        claim_unconsumed_subagent_reconciliations,
+        complete_subagent_reconciliation_claim,
     )
 
-    claim = await claimUnconsumedSubagentReconciliations(
+    claim = await claim_unconsumed_subagent_reconciliations(
         parentSessionId=session["id"],
         consumerId=f"parent-delivery:{os.getpid()}:{uuid.uuid4()}",
     )
@@ -285,10 +285,10 @@ async def appendPendingSubagentReconciliationsToSession(
         return {"records": [], "messageIndex": None}
     records = [record for record in claim["records"] if not _has_delivered_reconciliation(session, record)]
     if not records:
-        await completeSubagentReconciliationClaim(session["id"], claim["claimToken"])
+        await complete_subagent_reconciliation_claim(session["id"], claim["claimToken"])
         return {"records": [], "messageIndex": None}
     message_index = len(session.setdefault("messages", []))
-    text = renderSubagentReconciliationMessage(records)
+    text = render_subagent_reconciliation_message(records)
     session["messages"].append(_synthetic_user_message(text, actor="subagent", kind="subagent_reconciliation", lineage={"logicalTurnId": str(parentTurnId or "")}))
     metadata = session.setdefault("metadata", {})
     injected_ids = [record.get("id") for record in records if record.get("id")]
@@ -311,17 +311,17 @@ async def appendPendingSubagentReconciliationsToSession(
     }
 
 
-async def consumeAppendedSubagentReconciliations(
+async def consume_appended_subagent_reconciliations(
     session: dict[str, Any],
     appended: dict[str, Any],
     *,
     runtime: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    from .coordination import completeSubagentReconciliationClaim
+    from .coordination import complete_subagent_reconciliation_claim
 
     claim_token = appended.get("claimToken") if isinstance(appended, dict) else None
     if isinstance(claim_token, str) and claim_token:
-        consumed = await completeSubagentReconciliationClaim(
+        consumed = await complete_subagent_reconciliation_claim(
             session["id"],
             claim_token,
             parentMessageIndex=appended.get("messageIndex"),
@@ -332,7 +332,7 @@ async def consumeAppendedSubagentReconciliations(
         return consumed
     records = appended.get("records") if isinstance(appended, dict) else []
     record_ids = [record.get("id") or record.get("idempotencyKey") for record in records if isinstance(record, dict)]
-    consumed = await markSubagentReconciliationsConsumed(
+    consumed = await mark_subagent_reconciliations_consumed(
         session["id"],
         [record_id for record_id in record_ids if isinstance(record_id, str) and record_id],
         parentMessageIndex=appended.get("messageIndex") if isinstance(appended, dict) else None,

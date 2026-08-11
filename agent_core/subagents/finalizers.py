@@ -7,23 +7,23 @@ from .groups import _upsert_subagent_launch_group
 
 _TERMINAL_CHILD_STATUSES = {"completed", "failed", "cancelled", "stopped", "truncated"}
 _TERMINAL_META_STATUSES = {"completed", "failed", "terminated", "stopped", "cancelled", "truncated"}
-from .reconciliation import createSubagentReconciliationForTerminalChild
+from .reconciliation import create_subagent_reconciliation_for_terminal_child
 from .result import evaluate_subagent_result, persist_structured_subagent_result
 from ..tasks.communication import append_task_event
 from .permissions import (
-    mapStopReasonToCompletionReason,
-    mapStopReasonToStatus,
-    mapStopReasonToWaitingReason,
+    map_stop_reason_to_completion_reason,
+    map_stop_reason_to_status,
+    map_stop_reason_to_waiting_reason,
 )
 from typing import Any
 
 
-async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], result: dict[str, Any]) -> None:
+async def finalize_background_subagent_success_from_env(session: dict[str, Any], result: dict[str, Any]) -> None:
     agent_id = os.environ.get("TESS_CHILD_AGENT_ID")
     task_id = os.environ.get("TESS_CHILD_TASK_ID")
     if not agent_id or not task_id:
         return
-    status = mapStopReasonToStatus(result.get("stopReason"))
+    status = map_stop_reason_to_status(result.get("stopReason"))
     completed_at = now_iso()
     summary = (result.get("text") or "").strip()[:280] or None
     retryable = (
@@ -66,8 +66,8 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
             "error": result.get("text") if retryable else None,
             "attachableSessionId": session["id"],
             "owner": existing.get("owner") or "daemon",
-            "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")),
-            "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")),
+            "waitingReason": map_stop_reason_to_waiting_reason(result.get("stopReason")),
+            "completionReason": map_stop_reason_to_completion_reason(result.get("stopReason")),
             "resultSummary": summary,
             "latestResultAt": completed_at if completed_like else None,
             "retryable": retryable,
@@ -98,8 +98,8 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
         "stopReason": result.get("stopReason"),
         "summary": summary,
         "resultSummary": summary,
-        "waitingReason": mapStopReasonToWaitingReason(result.get("stopReason")),
-        "completionReason": mapStopReasonToCompletionReason(result.get("stopReason")),
+        "waitingReason": map_stop_reason_to_waiting_reason(result.get("stopReason")),
+        "completionReason": map_stop_reason_to_completion_reason(result.get("stopReason")),
         "attachableSessionId": session["id"],
         "retryable": retryable,
         "stoppable": False,
@@ -108,7 +108,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
         **structured_fields,
     }
     await write_task_meta(task_id, task_meta)
-    reconciliation = await createSubagentReconciliationForTerminalChild(
+    reconciliation = await create_subagent_reconciliation_for_terminal_child(
         childRecord=child_record,
         taskMeta=task_meta,
         session=session,
@@ -142,7 +142,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
     )
 
 
-async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
+async def finalize_background_subagent_failure_from_env(error: Any) -> None:
     agent_id = os.environ.get("TESS_CHILD_AGENT_ID")
     task_id = os.environ.get("TESS_CHILD_TASK_ID")
     session_id = os.environ.get("TESS_CHILD_SESSION_ID")
@@ -204,7 +204,7 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         else task_meta,
         fallback=task_meta,
     )
-    reconciliation = await createSubagentReconciliationForTerminalChild(
+    reconciliation = await create_subagent_reconciliation_for_terminal_child(
         childRecord=child_record,
         taskMeta=task_meta,
         error=message,

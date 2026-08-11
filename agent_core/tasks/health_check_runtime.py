@@ -21,21 +21,21 @@ from ..storage import (
     with_record_transaction,
     write_task_meta,
 )
-from .health_check_executor import appendHealthCheckLog, executeHealthCheck
+from .health_check_executor import append_health_check_log, execute_health_check
 from .health_check_policy import (
-    assertHealthCheckExecutionPolicy,
-    healthCheckSpecDigest,
+    assert_health_check_execution_policy,
+    health_check_spec_digest,
 )
 from .health_check_record import (
-    buildAuthorizedHealthCheckRecord,
-    linkHealthChecksToSession,
-    persistHealthCheckRecord,
+    build_authorized_health_check_record,
+    link_health_checks_to_session,
+    persist_health_check_record,
 )
 
 
 
 
-def createHealthCheckController(
+def create_health_check_controller(
     *,
     emit: Callable[[str, dict[str, Any], str | None], Any],
     invalidateSession: Callable[[str], Any] | None = None,
@@ -87,9 +87,9 @@ def createHealthCheckController(
         if not isinstance(session_id, str) or not await load_session(session_id):
             raise RuntimeError(f"Session not found: {session_id}")
         task_id = str(uuid.uuid4())
-        record = buildAuthorizedHealthCheckRecord(request=request, taskId=task_id)
-        await persistHealthCheckRecord(record)
-        await linkHealthChecksToSession(session_id, [task_id])
+        record = build_authorized_health_check_record(request=request, taskId=task_id)
+        await persist_health_check_record(record)
+        await link_health_checks_to_session(session_id, [task_id])
         if invalidateSession:
             invalidateSession(session_id)
         await tick()
@@ -145,7 +145,7 @@ def createHealthCheckController(
         if not await _mark_attempt_started(record["taskId"], generation, started_at):
             return
         try:
-            result = await executeHealthCheck(
+            result = await execute_health_check(
                 record=record,
                 signal=cancel,
                 onProcessIdentity=lambda identity: _persist_active_identity(
@@ -159,7 +159,7 @@ def createHealthCheckController(
         if closed or cancel.is_set():
             return
         with contextlib.suppress(Exception):
-            await appendHealthCheckLog(record, started_at, result)
+            await append_health_check_log(record, started_at, result)
         committed = await _commit_attempt(
             record["taskId"], generation, started_at, result
         )
@@ -305,7 +305,7 @@ async def _commit_attempt(
             "lastOutputTruncated": bool(result.get("outputTruncated")),
         }
         next_record.pop("activeProcessIdentity", None)
-        await persistHealthCheckRecord(next_record)
+        await persist_health_check_record(next_record)
         return next_record
 
 
@@ -313,13 +313,13 @@ def _validate_start_request(request: dict[str, Any]) -> None:
     spec = request.get("spec")
     digest = request.get("specDigest")
     policy = request.get("executionPolicy")
-    if not isinstance(spec, dict) or healthCheckSpecDigest(spec) != digest:
+    if not isinstance(spec, dict) or health_check_spec_digest(spec) != digest:
         raise RuntimeError("Health-check spec changed after authorization.")
     if not isinstance(policy, dict):
         error = RuntimeError("Health-check start requires explicit execution authorization.")
         setattr(error, "code", "health_check.authorization_required")
         raise error
-    assertHealthCheckExecutionPolicy(spec, policy)
+    assert_health_check_execution_policy(spec, policy)
 
 
 def _is_runnable(record: dict[str, Any]) -> bool:
@@ -370,7 +370,7 @@ def _failed_result(error: Exception) -> dict[str, Any]:
 
 
 
-async def drainOrphanedHealthProbes(
+async def drain_orphaned_health_probes(
     emit: Callable[[str, dict[str, Any], str | None], Any],
 ) -> int:
     """Boot containment for probe shells orphaned by a daemon crash.

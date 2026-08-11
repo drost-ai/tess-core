@@ -9,7 +9,7 @@ from typing import Any
 class SupervisorRegistries:
     """Per-supervisor-instance process and watcher tracking.
 
-    One instance per ``createTaskSupervisor`` call: two supervisors in the
+    One instance per ``create_task_supervisor`` call: two supervisors in the
     same process (tests, embedders, watchdog restarts) must never observe
     each other's workers, and ``close()`` must only reap its own.
     """

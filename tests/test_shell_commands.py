@@ -213,7 +213,7 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertIn("Prefer shell parity tests", memory_show["message"])
             self.assertTrue(any(record["id"] == "manual-project-memory" for record in run(core.load_project_memory_records(str(workspace)))))
 
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-shell-monitor", "goal": "Watch shell parity"})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-shell-monitor", "goal": "Watch shell parity"})
             run(core.save_monitor(monitor))
             monitors = run(core.handleSlashCommand({"command": "/monitors", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Watch shell parity", monitors["message"])
@@ -280,7 +280,7 @@ class ShellCommandTests(AgentCoreTestCase):
                 "requestResume": lambda next_session: resumed.append(next_session["id"]),
             }
             supervisor = {
-                "readTaskOutput": lambda task_id, _tail: {"output": f"log for {task_id}"},
+                "read_task_output": lambda task_id, _tail: {"output": f"log for {task_id}"},
                 "stopTask": lambda task_id: stopped.append(task_id) or True,
                 "retryTask": lambda task_id: retried.append(task_id) or {"taskId": "task-shell-retry", "outputFile": str(workspace / "retry.log")},
             }

@@ -334,21 +334,21 @@ class ClosingWaveKnobWiringTests(unittest.TestCase):
 
     def test_monitor_agent_mcp_and_process_knobs_drive_machinery(self):
         from agent_core.authority.hooks import _knob as hooks_knob
-        from agent_core.subagents.depth_policy import checkSubagentDepthAllowed
-        from agent_core.tasks.monitors import defaultMonitorCheckIntervalMs
+        from agent_core.subagents.depth_policy import check_subagent_depth_allowed
+        from agent_core.tasks.monitors import default_monitor_check_interval_ms
 
-        self.assertEqual(defaultMonitorCheckIntervalMs(None), 5_000)
+        self.assertEqual(default_monitor_check_interval_ms(None), 5_000)
         self.assertEqual(int(hooks_knob("agent.hook_timeout_ms")), 60_000)
         deep_session = {"metadata": {"depth": 2}}
-        self.assertFalse(checkSubagentDepthAllowed(deep_session, {})["allowed"])  # default depth 2
+        self.assertFalse(check_subagent_depth_allowed(deep_session, {})["allowed"])  # default depth 2
         configureKnobs({
             "tasks": {"monitor_check_interval_ms": 9_000},
             "agent": {"hook_timeout_ms": 1_000},
             "subagents": {"max_depth": 4},
         })
-        self.assertEqual(defaultMonitorCheckIntervalMs(None), 9_000)
+        self.assertEqual(default_monitor_check_interval_ms(None), 9_000)
         self.assertEqual(int(hooks_knob("agent.hook_timeout_ms")), 1_000)
-        self.assertTrue(checkSubagentDepthAllowed(deep_session, {})["allowed"])
+        self.assertTrue(check_subagent_depth_allowed(deep_session, {})["allowed"])
 
     def test_mcp_blob_keep_env_absorption_is_canonical(self):
         from agent_core.mcp.blobs import _knob as mcp_knob

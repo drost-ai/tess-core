@@ -6,7 +6,7 @@ import sys
 import unittest
 
 import agent_core._facade as core
-from agent_core.tasks.supervisor_parts.finalize_child import finalizeLostWorker
+from agent_core.tasks.supervisor_parts.finalize_child import finalize_lost_worker
 from agent_core.tasks.supervisor_parts.live_work import _reconcile_dead_task_meta
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
@@ -101,7 +101,7 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             child = run(core.load_child_agent(agent_id))
             self.assertEqual(child["status"], "failed")
             self.assertEqual(child["completionReason"], "worker_lost")
-            ledger = run(core.listSubagentReconciliations(PARENT_ID))
+            ledger = run(core.list_subagent_reconciliations(PARENT_ID))
             self.assertEqual(len(ledger), 1)
             self.assertEqual(ledger[0]["taskId"], task_id)
             self.assertEqual(ledger[0]["terminalStatus"], "failed")
@@ -124,7 +124,7 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
                 )
             )
             outcome = run(
-                finalizeLostWorker(taskId=task_id, cause="worker_lost", source="test")
+                finalize_lost_worker(taskId=task_id, cause="worker_lost", source="test")
             )
             self.assertFalse(outcome["changed"])
             self.assertEqual(run(core.load_task_record(task_id))["status"], "completed")
@@ -204,14 +204,14 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             os.environ["TESS_CHILD_AGENT_ID"] = agent_id
             os.environ["TESS_CHILD_TASK_ID"] = task_id
             os.environ["TESS_CHILD_SESSION_ID"] = CHILD_SESSION_ID
-            run(core.finalizeBackgroundSubagentFailureFromEnv(RuntimeError("late failure")))
+            run(core.finalize_background_subagent_failure_from_env(RuntimeError("late failure")))
             child = run(core.load_child_agent(agent_id))
             self.assertEqual(child["status"], "completed")
             self.assertEqual(child["resultSummary"], "the result")
             self.assertNotIn("error", child)
             meta = run(core.read_task_meta(task_id))
             self.assertEqual(meta["status"], "completed")
-            self.assertEqual(run(core.listSubagentReconciliations(PARENT_ID)), [])
+            self.assertEqual(run(core.list_subagent_reconciliations(PARENT_ID)), [])
         finally:
             for name, value in previous_env.items():
                 if value is None:

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 from agent_core.tasks.health_check_policy import (
-    authorizeHealthCheckSpec,
-    healthCheckSpecDigest,
-    normalizeHealthCheckSpec,
+    authorize_health_check_spec,
+    health_check_spec_digest,
+    normalize_health_check_spec,
 )
 
 
@@ -15,8 +15,8 @@ async def _start_authorized_health_check(
     workspace: Path,
     request: dict,
 ) -> dict:
-    spec = await normalizeHealthCheckSpec(request, str(workspace))
-    execution_policy = await authorizeHealthCheckSpec(
+    spec = await normalize_health_check_spec(request, str(workspace))
+    execution_policy = await authorize_health_check_spec(
         {
             "session": session,
             "config": config,
@@ -30,7 +30,7 @@ async def _start_authorized_health_check(
         {
             "sessionId": session["id"],
             "spec": spec,
-            "specDigest": healthCheckSpecDigest(spec),
+            "specDigest": health_check_spec_digest(spec),
             "executionPolicy": execution_policy,
         }
     )
@@ -78,12 +78,12 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertEqual(payload["execution"]["metadata"]["summary_style"], "brief")
             self.assertIn(payload["monitor_id"], session["metadata"]["monitorIds"])
             self.assertEqual(
-                core.formatMonitorSummary([{"id": "monitor-123456", "status": "active", "taskId": task_id, "goal": "watch server", "lastAssistantUpdateAt": "2026-01-01T00:00:00Z"}]),
+                core.format_monitor_summary([{"id": "monitor-123456", "status": "active", "taskId": task_id, "goal": "watch server", "lastAssistantUpdateAt": "2026-01-01T00:00:00Z"}]),
                 "monitor-  active · task monitor- · watch server · last update 2026-01-01T00:00:00Z",
             )
-            self.assertEqual(core.defaultMonitorCheckIntervalMs(math.inf), 5000)
-            self.assertEqual(core.defaultMonitorHeartbeatIntervalMs(math.inf), 60000)
-            self.assertEqual(core.defaultMonitorCheckIntervalMs(True), 5000)
+            self.assertEqual(core.default_monitor_check_interval_ms(math.inf), 5000)
+            self.assertEqual(core.default_monitor_heartbeat_interval_ms(math.inf), 60000)
+            self.assertEqual(core.default_monitor_check_interval_ms(True), 5000)
 
             plugin_descriptors = core.createPluginActivityDescriptors(
                 [
@@ -122,10 +122,10 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("starting\n", encoding="utf-8")
             run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "python worker.py", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch runtime monitor", "checkIntervalMs": 2000})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": task_id, "goal": "watch runtime monitor", "checkIntervalMs": 2000})
             run(core.save_monitor(monitor))
             events = []
-            runtime = run(core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
+            runtime = run(core.create_monitor_runtime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
             self.assertEqual(runtime["getSnapshot"]()["active"], 1)
             self.assertTrue(any(event == "monitor.snapshot" for event, _ in events))
             self.assertTrue(any(event == "monitor.status_changed" and data["task_id"] == task_id for event, data in events))
@@ -154,7 +154,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("pytest started\n", encoding="utf-8")
             run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "pytest", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
-            monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch provider monitor", "summaryStyle": "brief", "checkIntervalMs": 2000})
+            monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": task_id, "goal": "watch provider monitor", "summaryStyle": "brief", "checkIntervalMs": 2000})
             monitor["checkIntervalMs"] = 1
             monitor["createdAt"] = "2026-01-01T00:00:00Z"
             monitor["updatedAt"] = "2026-01-01T00:00:00Z"
@@ -168,7 +168,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             monitors_module.sendOpenAiRequest = fake_send
             events = []
             async def exercise_runtime():
-                created = await core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
+                created = await core.create_monitor_runtime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
                 try:
                     self.assertNotIn("args", calls)
                     with Path(output_file).open("a", encoding="utf-8") as handle:
@@ -223,7 +223,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 )
                 command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
                 events = []
-                supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
+                supervisor = await core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
                 try:
                     started = await _start_authorized_health_check(
                         supervisor,
@@ -249,7 +249,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                         if health and health.get("status") == "active" and health.get("lastSuccessAt"):
                             break
                         await asyncio.sleep(0.05)
-                    output = await supervisor["readTaskOutput"](task_id, 12000)
+                    output = await supervisor["read_task_output"](task_id, 12000)
                     task_record = await supervisor["inspectTask"](task_id)
                     persisted = await core.load_session(session["id"])
                     await supervisor["stopTask"](task_id)
@@ -312,7 +312,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
                 await core.save_session(session)
                 events = []
-                supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
+                supervisor = await core.create_task_supervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
                 try:
                     http_started = await _start_authorized_health_check(
                         supervisor,
@@ -361,8 +361,8 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                         if timeout_record and timeout_record.get("status") == "failed":
                             break
                         await asyncio.sleep(0.05)
-                    http_output = await supervisor["readTaskOutput"](http_task_id, 12000)
-                    timeout_output = await supervisor["readTaskOutput"](timeout_task_id, 12000)
+                    http_output = await supervisor["read_task_output"](http_task_id, 12000)
+                    timeout_output = await supervisor["read_task_output"](timeout_task_id, 12000)
                     await supervisor["stopTask"](http_task_id)
                     return {"events": events, "http": http_record, "timeout": timeout_record, "httpOutput": http_output, "timeoutOutput": timeout_output, "httpTaskId": http_task_id, "timeoutTaskId": timeout_task_id}
                 finally:

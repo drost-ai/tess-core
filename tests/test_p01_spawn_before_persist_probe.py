@@ -299,7 +299,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
 
             events: list[dict] = []
             supervisor = run(
-                core.createTaskSupervisor(
+                core.create_task_supervisor(
                     {"cwd": str(workspace), "onEvent": lambda event: events.append(event)}
                 )
             )
@@ -349,7 +349,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
             supervisor = None
             restart_events: list[dict] = []
             supervisor = run(
-                core.createTaskSupervisor(
+                core.create_task_supervisor(
                     {
                         "cwd": str(workspace),
                         "onEvent": lambda event: restart_events.append(event),

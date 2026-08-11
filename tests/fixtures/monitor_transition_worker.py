@@ -8,14 +8,14 @@ import time
 from pathlib import Path
 
 from agent_core._utils import now_iso
-from agent_core.tasks.monitors import createMonitorRecord
+from agent_core.tasks.monitors import create_monitor_record
 from agent_core.storage import configure_runtime_home
-from agent_core.tasks.monitor_observation import applyMonitorObservation
+from agent_core.tasks.monitor_observation import apply_monitor_observation
 from agent_core.tasks.monitor_transactions import (
-    commitMonitorMutation,
-    startMonitorOnce,
+    commit_monitor_mutation,
+    start_monitor_once,
 )
-from agent_core.tasks.monitor_transitions import stopMonitorRecord
+from agent_core.tasks.monitor_transitions import stop_monitor_record
 
 
 async def main() -> None:
@@ -39,10 +39,10 @@ async def main() -> None:
             raise RuntimeError("monitor worker barrier timed out")
         await asyncio.sleep(0.01)
     if operation == "start":
-        commit = await startMonitorOnce(
+        commit = await start_monitor_once(
             sessionId=session_id,
             taskId=task_id,
-            create=lambda: createMonitorRecord(
+            create=lambda: create_monitor_record(
                 {
                     "id": f"monitor-worker-{os.getpid()}",
                     "sessionId": session_id,
@@ -59,7 +59,7 @@ async def main() -> None:
             "status": commit["monitor"]["status"],
         }
     else:
-        commit = await commitMonitorMutation(
+        commit = await commit_monitor_mutation(
             monitorId=monitor_id,
             expectedSessionId=session_id,
             mutate=(
@@ -82,7 +82,7 @@ async def main() -> None:
 
 
 def _stop_mutation(latest):
-    transition = stopMonitorRecord(latest, now_iso())
+    transition = stop_monitor_record(latest, now_iso())
     return {
         "record": transition["record"],
         "changed": transition["changed"],
@@ -95,7 +95,7 @@ def _stop_mutation(latest):
 
 
 def _complete_mutation(latest):
-    transition = applyMonitorObservation(
+    transition = apply_monitor_observation(
         latest,
         task={"status": "completed"},
         outputSize=321,

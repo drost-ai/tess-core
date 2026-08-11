@@ -12,12 +12,12 @@ from .definitions import ToolDefinition
 from .permissions import _ensure_tool_permission, _parse_permission_mode_value
 from .schemas import builtin_tool
 from .validation import _require_string
-from ..subagents.depth_policy import checkSubagentDepthAllowed
+from ..subagents.depth_policy import check_subagent_depth_allowed
 
 
 def _agent_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        depth = checkSubagentDepthAllowed(context["session"], context.get("config"))
+        depth = check_subagent_depth_allowed(context["session"], context.get("config"))
         if not depth["allowed"]:
             output = context.get("outputJson")
             if callable(output):
@@ -38,12 +38,12 @@ def _agent_tool() -> ToolDefinition:
         if input.get("isolation") == "worktree":
             await _ensure_tool_permission(context, "Agent", "worktree", f"Spawn subagent with isolated worktree\n{description}")
         _throw_if_tool_cancelled(context)
-        from ..subagents import startBackgroundSubagent
+        from ..subagents import start_background_subagent
 
         # Background-only: every spawn is a daemon-supervised resident child;
         # the parent never blocks on it (settled subagent-v2 design). Results
         # arrive as child messages that wake the parent at a turn boundary.
-        launched = await startBackgroundSubagent(
+        launched = await start_background_subagent(
             {
                 "context": context,
                 "description": description,

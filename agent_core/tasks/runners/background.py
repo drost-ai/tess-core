@@ -14,9 +14,9 @@ from typing import Any
 from ..._utils import now_iso
 from ...storage import configure_runtime_home, read_task_meta, write_task_meta
 from ..terminal_transitions import (
-    applyTaskProcessCompletion,
-    normalizeTaskProcessOutcome,
-    resolveTaskSemanticStatus,
+    apply_task_process_completion,
+    normalize_task_process_outcome,
+    resolve_task_semantic_status,
 )
 
 
@@ -70,12 +70,12 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
 
         current = await _read_runner_meta(task_id, meta_path)
         now = now_iso()
-        exit_code, signal_name = normalizeTaskProcessOutcome(
+        exit_code, signal_name = normalize_task_process_outcome(
             raw_exit_code,
             _exit_signal_name(raw_exit_code),
         )
-        transition = applyTaskProcessCompletion(
-            current=resolveTaskSemanticStatus(current.get("status")),
+        transition = apply_task_process_completion(
+            current=resolve_task_semantic_status(current.get("status")),
             code=exit_code,
             signalName=signal_name,
             terminationIntent=(
@@ -125,7 +125,7 @@ async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         now = now_iso()
         current = await _read_runner_meta(task_id, meta_path)
-        if resolveTaskSemanticStatus(current.get("status")) == "running":
+        if resolve_task_semantic_status(current.get("status")) == "running":
             await _merge_task_meta(
                 task_id,
                 {

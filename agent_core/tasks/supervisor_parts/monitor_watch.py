@@ -20,11 +20,11 @@ from typing import Any, Callable
 
 from ..._utils import maybe_await
 from ...storage import list_monitors
-from ..monitor_observation import buildMonitorObservationMutation
+from ..monitor_observation import build_monitor_observation_mutation
 from ..monitor_transactions import (
     MonitorTransactionError,
-    commitMonitorMutation,
-    monitorTransitionEventFields,
+    commit_monitor_mutation,
+    monitor_transition_event_fields,
 )
 from ..monitors import _get_output_size, _load_task_record, _should_check_monitor
 
@@ -47,10 +47,10 @@ async def tick_daemon_monitors(
         task = await _load_task_record(monitor.get("taskId"))
         output_size = _get_output_size(monitor.get("taskId"))
         try:
-            observed = await commitMonitorMutation(
+            observed = await commit_monitor_mutation(
                 monitorId=monitor_id,
                 expectedSessionId=session_id,
-                mutate=lambda latest, task=task, size=output_size: buildMonitorObservationMutation(
+                mutate=lambda latest, task=task, size=output_size: build_monitor_observation_mutation(
                     latest, task, size, now_ms
                 ),
             )
@@ -71,7 +71,7 @@ async def tick_daemon_monitors(
                         "changed": observed.get("statusChanged", False),
                         "task_status": next_monitor.get("lastObservedTaskStatus"),
                         "exit_code": (task or {}).get("exitCode"),
-                        **monitorTransitionEventFields(observed),
+                        **monitor_transition_event_fields(observed),
                     },
                     session_id,
                 )

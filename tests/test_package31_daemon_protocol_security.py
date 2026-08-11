@@ -117,7 +117,7 @@ class Package31DaemonProtocolSecurityTests(AgentCoreTestCase):
             "publishDaemonAuthMaterial": publish,
             "save_daemon_state": save,
             "_record_daemon_lifecycle_event": lifecycle,
-            "createTaskSupervisor": create_supervisor,
+            "create_task_supervisor": create_supervisor,
             "append_daemon_event": nothing,
             "_publish_daemon_event": nothing,
             "verifyOwnedDaemonSocket": lambda _path: object(),

@@ -103,7 +103,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
                 )
             )
 
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             run(supervisor["close"]())
             supervisor = None
             self.assertIsNone(
@@ -129,7 +129,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
                     },
                 )
             )
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             run(supervisor["close"]())
             supervisor = None
             deadline = time.monotonic() + 5

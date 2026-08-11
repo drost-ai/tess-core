@@ -19,7 +19,7 @@ from .records import _build_task_record
 from .shared import SupervisorRegistries
 from pathlib import Path
 from typing import Any, Callable
-from ..terminal_store import commitTaskProcessCompletion, saveProjectedTaskRecord
+from ..terminal_store import commit_task_process_completion, save_projected_task_record
 from ...sandbox import prepareSandboxedArgv
 
 
@@ -111,7 +111,7 @@ def _watch_process_thread(
         signal_name = _signal_name(abs(code)) if code is not None and code < 0 else None
 
         async def finalize() -> None:
-            committed = await commitTaskProcessCompletion(
+            committed = await commit_task_process_completion(
                 taskId=task_id,
                 code=code,
                 signalName=signal_name,
@@ -140,7 +140,7 @@ def _watch_process_thread(
             if not meta or not _is_terminal_worker_status(meta.get("status")):
                 return
             projected = _build_task_record(meta, None)
-            saved = await saveProjectedTaskRecord(projected)
+            saved = await save_projected_task_record(projected)
             metadata = saved.get("metadata") if isinstance(saved.get("metadata"), dict) else {}
             owner = metadata.get("terminal_event_owner")
             if owner in {"supervisor", "tool"}:

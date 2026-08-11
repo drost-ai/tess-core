@@ -115,7 +115,7 @@ def _create_daemon_client(
         return await request("inspectTask", {"taskId": task_id})
 
     async def read_task_output(task_id: str, tailBytes: int | None = None) -> dict[str, Any]:
-        return await request("readTaskOutput", {"taskId": task_id, "tailBytes": tailBytes})
+        return await request("read_task_output", {"taskId": task_id, "tailBytes": tailBytes})
 
     async def stop_task(task_id: str) -> bool:
         return await request("stopTask", {"taskId": task_id})
@@ -231,7 +231,7 @@ def _create_daemon_client(
         "getStatus": lambda: request("getStatus", {}),
         "listTasks": list_tasks,
         "inspectTask": inspect_task,
-        "readTaskOutput": read_task_output,
+        "read_task_output": read_task_output,
         "stopTask": stop_task,
         "retryTask": retry_task,
         "startBackgroundCommand": start_background_command,

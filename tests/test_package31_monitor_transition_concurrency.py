@@ -116,7 +116,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             _config, session = self._session(home, workspace)
-            monitor = core.createMonitorRecord(
+            monitor = core.create_monitor_record(
                 {
                     "id": "monitor-terminal-race",
                     "sessionId": session["id"],

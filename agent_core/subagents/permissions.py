@@ -14,11 +14,11 @@ _SUBAGENT_LIMIT_STOP_REASONS = {
 _BUDGET_STOP_REASONS = {"max_budget_usd", "max_budget_exceeded"}
 
 
-def sanitizePermissionMode(mode: Any) -> str:
+def sanitize_permission_mode(mode: Any) -> str:
     return mode if mode in PERMISSION_MODES else "default"
 
 
-def inheritParentPermissionMode(childMode: str, parentMode: str) -> str:
+def inherit_parent_permission_mode(childMode: str, parentMode: str) -> str:
     if parentMode == "bypassPermissions":
         return "bypassPermissions"
     if parentMode == "acceptEdits" and childMode == "default":
@@ -26,7 +26,7 @@ def inheritParentPermissionMode(childMode: str, parentMode: str) -> str:
     return childMode
 
 
-def mapStopReasonToStatus(stopReason: str | None) -> str:
+def map_stop_reason_to_status(stopReason: str | None) -> str:
     if stopReason == "cancelled":
         return "cancelled"
     if stopReason == "no_progress":
@@ -38,11 +38,11 @@ def mapStopReasonToStatus(stopReason: str | None) -> str:
     return "completed"
 
 
-def mapStopReasonToWaitingReason(stopReason: str | None) -> str | None:
+def map_stop_reason_to_waiting_reason(stopReason: str | None) -> str | None:
     return None
 
 
-def mapStopReasonToCompletionReason(stopReason: str | None) -> str | None:
+def map_stop_reason_to_completion_reason(stopReason: str | None) -> str | None:
     if stopReason in _OUTPUT_LIMIT_STOP_REASONS:
         return "max_output_tokens"
     if stopReason in {"max_turns", "subagent_max_turns_exceeded"}:

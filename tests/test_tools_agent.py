@@ -6,7 +6,7 @@ class ToolAgentTests(AgentCoreTestCase):
     def test_agent_tool_prepares_child_session_and_record(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            from agent_core.subagents import prepareSubagent
+            from agent_core.subagents import prepare_subagent
 
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "acceptEdits"}, str(workspace)))
             config["systemPrompt"] = "Config level prompt."
@@ -27,7 +27,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 "cwd": str(workspace),
                 "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1),
             }
-            prepared = run(prepareSubagent({
+            prepared = run(prepare_subagent({
                 "context": context,
                 "description": "Investigate",
                 "prompt": "Find the issue",
@@ -75,7 +75,7 @@ class ToolAgentTests(AgentCoreTestCase):
 
             auto_config = {**config, "permissionMode": "auto"}
             auto_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
-            auto_prepared = run(prepareSubagent({
+            auto_prepared = run(prepare_subagent({
                 "context": {**context, "session": auto_parent, "config": auto_config},
                 "description": "Invalid mode",
                 "prompt": "inherit auto",
@@ -114,7 +114,7 @@ class ToolAgentTests(AgentCoreTestCase):
             os.environ["TESS_CHILD_AGENT_ID"] = "agent-env-success"
             os.environ["TESS_CHILD_TASK_ID"] = "task-env-success"
             os.environ["TESS_CHILD_SESSION_ID"] = session["id"]
-            run(core.finalizeBackgroundSubagentSuccessFromEnv(session, {"text": "finished", "stopReason": "end_turn"}))
+            run(core.finalize_background_subagent_success_from_env(session, {"text": "finished", "stopReason": "end_turn"}))
             success_child = run(core.load_child_agent("agent-env-success"))
             self.assertEqual(success_child["parentSessionId"], "parent-env")
             self.assertEqual(success_child["status"], "completed")
@@ -127,7 +127,7 @@ class ToolAgentTests(AgentCoreTestCase):
             os.environ["TESS_CHILD_AGENT_ID"] = "agent-env-failure"
             os.environ["TESS_CHILD_TASK_ID"] = "task-env-failure"
             os.environ["TESS_CHILD_SESSION_ID"] = "session-env-failure"
-            run(core.finalizeBackgroundSubagentFailureFromEnv(RuntimeError("boom")))
+            run(core.finalize_background_subagent_failure_from_env(RuntimeError("boom")))
             failure_child = run(core.load_child_agent("agent-env-failure"))
             self.assertEqual(failure_child["parentSessionId"], "")
             self.assertEqual(failure_child["provider"], "anthropic")
@@ -152,7 +152,7 @@ class ToolAgentTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(parent))
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             events = []
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             result = run(
@@ -235,7 +235,7 @@ class ToolAgentTests(AgentCoreTestCase):
                     }
                 )
             )
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             started = run(supervisor["startSubagentTask"]({"parentSessionId": parent["id"], "sessionId": child["id"], "agentId": "agent-worker", "cwd": str(workspace), "label": "Worker"}))
             task_id = started["taskId"]
             for _ in range(100):
@@ -254,7 +254,7 @@ class ToolAgentTests(AgentCoreTestCase):
             self.assertEqual(child_record["taskId"], task_id)
             self.assertFalse(child_record["stoppable"])
             self.assertEqual(child_record["completionReason"], "worker_completed")
-            output = run(supervisor["readTaskOutput"](task_id, 12000))
+            output = run(supervisor["read_task_output"](task_id, 12000))
             self.assertIn('"ok": true', output["output"])
             self.assertIn("No credential is configured", output["output"])
             task_record = None
@@ -278,7 +278,7 @@ class ToolAgentTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             prompt = "finish detached main-session work"
             started = run(supervisor["startMainSessionTask"]({"sessionId": session["id"], "cwd": str(workspace), "prompt": prompt, "title": "Detached check"}))
             task_id = started["taskId"]
@@ -292,7 +292,7 @@ class ToolAgentTests(AgentCoreTestCase):
             self.assertEqual(meta["status"], "completed")
             self.assertEqual(meta["sessionId"], session["id"])
             self.assertEqual(meta["command"], prompt)
-            output = run(supervisor["readTaskOutput"](task_id, 12000))
+            output = run(supervisor["read_task_output"](task_id, 12000))
             self.assertIn('"ok": true', output["output"])
             self.assertIn("No credential is configured", output["output"])
             task_record = None
@@ -341,7 +341,7 @@ class ToolAgentTests(AgentCoreTestCase):
             run(core.write_task_meta(original_id, {"type": "background_command", "taskId": original_id, "id": original_id, "sessionId": session["id"], "command": retry_command, "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "finishedAt": "2026-01-01T00:00:01Z", "status": "failed", "outputFile": output_file, "owner": "daemon", "metadata": {"retry_attempt": 2, "retry_root_task_id": "root-task"}}))
             run(core.save_task_record({"id": original_id, "sessionId": session["id"], "sourceId": original_id, "kind": "background_command", "status": "failed", "title": "retry original", "summary": "failed", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "startedAt": "2026-01-01T00:00:00Z", "cwd": str(workspace), "command": retry_command, "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "retrieveOnly": True, "owner": "daemon", "metadata": {"retry_attempt": 2, "retry_root_task_id": "root-task"}}))
             run(core.save_task_record({"id": "retry-monitor", "sessionId": session["id"], "sourceId": "retry-monitor", "kind": "monitor", "status": "running", "title": "monitor", "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "startedAt": "2026-01-01T00:00:00Z", "foregroundable": False, "restorable": True}))
-            supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
+            supervisor = run(core.create_task_supervisor({"cwd": str(workspace)}))
             retried = run(supervisor["retryTask"](original_id))
             retry_id = retried["taskId"]
             self.assertNotEqual(retry_id, original_id)
