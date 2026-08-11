@@ -37,6 +37,14 @@ async def _start_authorized_health_check(
 
 
 class TaskMonitorHealthTests(AgentCoreTestCase):
+    def setUp(self):
+        super().setUp()
+        # HTTP health checks target loopback fixtures; the fetch plane's
+        # private-address block requires the explicit opt-in knob.
+        env = mock.patch.dict(os.environ, {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "127.0.0.1,localhost"})
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_task_monitor_and_activity_descriptors_match_reference_shape(self):
         root, home, workspace, previous = self.temp_context()
         try:

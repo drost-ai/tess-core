@@ -322,5 +322,7 @@ knobs:
     fetch_headers_timeout_ms: 10000
     # Maximum redirects followed per WebFetch acquisition. [0..20]
     fetch_max_redirects: 5
+    # Comma-separated hostnames, IP addresses, or CIDR blocks exempted from the web fetch plane's private-address block (loopback, RFC1918, and other non-global destinations); link-local and cloud-metadata endpoints are never exempted.
+    fetch_private_host_allowlist: ""
     # Total milliseconds for one WebFetch acquisition; per-call overrides win. [1000..3600000]
     fetch_total_timeout_ms: 30000

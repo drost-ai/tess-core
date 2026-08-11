@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
+import agent_core.tools.web as web_module
 import agent_core.tools.web_search_api as web_search_api_module
 
 
@@ -116,7 +117,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
 
     def test_websearch_decodes_redirects_and_bing_fallback(self):
         root, home, workspace, previous = self.temp_context()
-        original_fetch = tools_module.fetch
+        original_fetch = web_module.fetch
         previous_exa = os.environ.pop("EXA_API_KEY", None)
         previous_provider = os.environ.pop("TESS_WEB_SEARCH_PROVIDER", None)
         try:
@@ -128,7 +129,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
                     </body></html>"""
                 )
 
-            tools_module.fetch = ddg_fetch
+            web_module.fetch = ddg_fetch
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home)}, str(workspace)))
             session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=config["permissionMode"])
             tool = next(tool for tool in core.createBuiltinTools() if tool.name == "WebSearch")
@@ -152,14 +153,14 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
                     </li>"""
                 )
 
-            tools_module.fetch = fallback_fetch
+            web_module.fetch = fallback_fetch
             result = run(tool.handler({"query": "fallback test"}, {"session": session, "config": config, "interactive": False, "abortSignal": None, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace)}))
             payload = json.loads(result["content"])
             self.assertEqual(payload["fallback_reason"], "duckduckgo_empty")
             self.assertEqual(payload["results"][0]["url"], "https://example.com/research")
             self.assertEqual(calls["count"], 2)
         finally:
-            tools_module.fetch = original_fetch
+            web_module.fetch = original_fetch
             if previous_exa is not None:
                 os.environ["EXA_API_KEY"] = previous_exa
             if previous_provider is not None:

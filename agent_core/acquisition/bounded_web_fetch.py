@@ -9,8 +9,10 @@ def _knob(name: str):
 import asyncio
 import http.client
 import inspect
+import ipaddress
 import math
 import socket
+import ssl
 import time
 import zlib
 from typing import Any
@@ -22,10 +24,18 @@ WEB_FETCH_DECODED_MAX_BYTES = 16 * 1024 * 1024
 WEB_FETCH_MAX_HEADER_BYTES = 64 * 1024
 _READ_CHUNK_BYTES = 64 * 1024
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+_METADATA_HOSTNAMES = {"metadata.google.internal", "metadata.goog"}
+_METADATA_IPV4 = ipaddress.IPv4Address("169.254.169.254")
 
 
 class WebFetchPolicyError(RuntimeError):
     pass
+
+
+class _AddressPolicyRefusal(Exception):
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 async def boundedWebFetch(
@@ -140,7 +150,15 @@ def _request_hop(
     connection = connection_class(parsed.hostname, port, timeout=max(0.001, connect_timeout_ms / 1000))
     phase = "connect"
     try:
-        connection.connect()
+        plain = _connect_policy_checked(parsed.hostname or "", port, max(0.001, connect_timeout_ms / 1000))
+        if parsed.scheme == "https":
+            tls_context = getattr(connection, "_context", None) or ssl.create_default_context()
+            try:
+                plain = tls_context.wrap_socket(plain, server_hostname=parsed.hostname)
+            except BaseException:
+                plain.close()
+                raise
+        connection.sock = plain
         if connection.sock:
             connection.sock.settimeout(max(0.001, headers_timeout_ms / 1000))
         phase = "headers"
@@ -186,6 +204,8 @@ def _request_hop(
             response, connection, status, content_type, decoder,
             compressed_limit, decoded_limit, body_idle_timeout_ms, deadline,
         )
+    except _AddressPolicyRefusal as refusal:
+        return {"kind": "refused", "reason": refusal.reason}
     except http.client.LineTooLong:
         return {"kind": "refused", "reason": "header_limit"}
     except (TimeoutError, socket.timeout):
@@ -306,6 +326,70 @@ def _validate_http_url(value: Any) -> str:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         raise WebFetchPolicyError("WebFetch permits only HTTP(S) URLs without embedded credentials.")
     return parsed.geturl()
+
+
+def _connect_policy_checked(hostname: str, port: int, timeout: float) -> socket.socket:
+    """Resolve once, vet every resolved address, then dial one of the vetted
+    sockaddrs — the checked address is the connected address, so a changed
+    DNS answer cannot slip between the policy check and the connection."""
+    host = hostname.strip().lower().rstrip(".")
+    if host in _METADATA_HOSTNAMES:
+        raise _AddressPolicyRefusal("metadata_address")
+    resolved = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    addresses = []
+    for _family, _sock_type, _proto, _canonical, sockaddr in resolved:
+        try:
+            addresses.append(ipaddress.ip_address(sockaddr[0]))
+        except ValueError:
+            continue
+    blocked = _address_block_reason(host, addresses)
+    if blocked:
+        raise _AddressPolicyRefusal(blocked)
+    last_error: OSError | None = None
+    for family, sock_type, proto, _canonical, sockaddr in resolved:
+        connected = socket.socket(family, sock_type, proto)
+        connected.settimeout(timeout)
+        try:
+            connected.connect(sockaddr)
+            return connected
+        except OSError as error:
+            connected.close()
+            last_error = error
+    raise last_error if last_error is not None else OSError(f"no usable addresses resolved for {hostname!r}")
+
+
+def _address_block_reason(host: str, addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address]) -> str | None:
+    """SSRF policy for one hop: metadata and link-local destinations are
+    refused unconditionally; every other non-global destination is refused
+    unless web.fetch_private_host_allowlist names the host or a covering
+    network. Applies to every resolved address, not just the dialed one."""
+    allowed_hostnames, allowed_networks = _private_host_allowlist()
+    for address in addresses:
+        ip = address.ipv4_mapped if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped else address
+        if ip == _METADATA_IPV4:
+            return "metadata_address"
+        if ip.is_link_local:
+            return "link_local_address"
+        if ip.is_global:
+            continue
+        if host in allowed_hostnames or any(ip in network for network in allowed_networks):
+            continue
+        return "private_address"
+    return None
+
+
+def _private_host_allowlist() -> tuple[set[str], list[ipaddress.IPv4Network | ipaddress.IPv6Network]]:
+    hostnames: set[str] = set()
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for entry in str(_knob("web.fetch_private_host_allowlist") or "").split(","):
+        cleaned = entry.strip().lower().rstrip(".")
+        if not cleaned:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(cleaned, strict=False))
+        except ValueError:
+            hostnames.add(cleaned)
+    return hostnames, networks
 
 
 def _header_bytes(values: list[tuple[str, str]]) -> int:

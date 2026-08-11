@@ -5,6 +5,7 @@ from tests.support.agent_core_case import *
 import gzip
 import socket
 
+import agent_core.tools.web as web_module
 from agent_core.payloads.bounded_io import AcquisitionLimitError, readResponseTextBoundedSync
 from agent_core.acquisition.bounded_web_fetch import WebFetchPolicyError, boundedWebFetch
 
@@ -34,24 +35,24 @@ def _serve(callback):
 
 
 class Package31WebAcquisitionTests(AgentCoreTestCase):
+    def setUp(self):
+        super().setUp()
+        # These fixtures serve from loopback; admitting that requires the
+        # explicit private-host opt-in knob.
+        env = mock.patch.dict(os.environ, {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "127.0.0.1,localhost"})
+        env.start()
+        self.addCleanup(env.stop)
+
     def test_connect_deadline_is_classified_independently(self):
         observed = {}
 
-        class TimedOutConnection:
-            sock = None
-
-            def __init__(self, host, port, timeout):
-                observed.update(host=host, port=port, timeout=timeout)
-
-            def connect(self):
-                raise socket.timeout("controlled connect deadline")
-
-            def close(self):
-                return None
+        def timed_out_dial(hostname, port, timeout):
+            observed.update(host=hostname, port=port, timeout=timeout)
+            raise socket.timeout("controlled connect deadline")
 
         with mock.patch(
-            "agent_core.acquisition.bounded_web_fetch.http.client.HTTPSConnection",
-            TimedOutConnection,
+            "agent_core.acquisition.bounded_web_fetch._connect_policy_checked",
+            side_effect=timed_out_dial,
         ):
             result = run(
                 boundedWebFetch(
@@ -67,6 +68,100 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
         self.assertEqual(result["timeoutPhase"], "connect")
         self.assertEqual(observed["host"], "connect-timeout.invalid")
         self.assertEqual(observed["timeout"], 0.03)
+
+    def test_private_and_metadata_addresses_are_refused_by_default(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop("AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
+            for url, reason in (
+                ("http://169.254.169.254/latest/meta-data/", "metadata_address"),
+                ("http://metadata.google.internal/computeMetadata/", "metadata_address"),
+                ("http://169.254.7.7/", "link_local_address"),
+                ("http://127.0.0.1:9/", "private_address"),
+                ("http://[::1]:9/", "private_address"),
+                ("http://[::ffff:127.0.0.1]:9/", "private_address"),
+                ("http://10.1.2.3/", "private_address"),
+                ("http://192.168.0.10/", "private_address"),
+            ):
+                with self.subTest(url=url):
+                    result = run(boundedWebFetch(url=url, totalTimeoutMs=2_000))
+                    self.assertEqual(result["outcome"], "refused")
+                    self.assertEqual(result["reason"], reason)
+                    self.assertEqual(result["body"], "")
+
+    def test_private_allowlist_admits_loopback_but_never_metadata(self):
+        def handler(request):
+            request.send_response(200)
+            request.send_header("content-type", "text/plain")
+            request.end_headers()
+            request.wfile.write(b"local ok")
+
+        with _serve(handler) as base:
+            admitted = run(boundedWebFetch(url=base))
+            self.assertEqual(admitted["outcome"], "ok")
+            self.assertEqual(admitted["body"], "local ok")
+
+        with mock.patch.dict(
+            os.environ,
+            {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "169.254.169.254,169.254.0.0/16,metadata.google.internal"},
+        ):
+            metadata = run(boundedWebFetch(url="http://169.254.169.254/"))
+            self.assertEqual(metadata["outcome"], "refused")
+            self.assertEqual(metadata["reason"], "metadata_address")
+            hostname = run(boundedWebFetch(url="http://metadata.google.internal/"))
+            self.assertEqual(hostname["outcome"], "refused")
+            self.assertEqual(hostname["reason"], "metadata_address")
+            link_local = run(boundedWebFetch(url="http://169.254.7.7/"))
+            self.assertEqual(link_local["outcome"], "refused")
+            self.assertEqual(link_local["reason"], "link_local_address")
+
+    def test_redirects_to_blocked_addresses_are_refused_per_hop(self):
+        def handler(request):
+            request.send_response(302)
+            request.send_header("location", "http://169.254.169.254/latest/meta-data/")
+            request.end_headers()
+
+        with _serve(handler) as base:
+            result = run(boundedWebFetch(url=f"{base}/start"))
+            self.assertEqual(result["outcome"], "refused")
+            self.assertEqual(result["reason"], "metadata_address")
+            self.assertEqual(len(result["redirects"]), 1)
+
+    def test_resolved_addresses_are_vetted_and_pinned(self):
+        def handler(request):
+            request.send_response(200)
+            request.send_header("content-type", "text/plain")
+            request.end_headers()
+            request.wfile.write(b"pinned")
+
+        with _serve(handler) as base:
+            port = int(base.rsplit(":", 1)[1])
+            resolutions = []
+
+            def fake_getaddrinfo(host, requested_port, *args, **kwargs):
+                resolutions.append(host)
+                return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", requested_port))]
+
+            with mock.patch(
+                "agent_core.acquisition.bounded_web_fetch.socket.getaddrinfo",
+                side_effect=fake_getaddrinfo,
+            ):
+                with mock.patch.dict(os.environ):
+                    os.environ.pop("AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST", None)
+                    hidden = run(boundedWebFetch(url=f"http://rebind.test:{port}/"))
+                self.assertEqual(hidden["outcome"], "refused")
+                self.assertEqual(hidden["reason"], "private_address")
+
+                with mock.patch.dict(
+                    os.environ,
+                    {"AGENT_CORE_WEB_FETCH_PRIVATE_HOST_ALLOWLIST": "rebind.test"},
+                ):
+                    resolutions.clear()
+                    admitted = run(boundedWebFetch(url=f"http://rebind.test:{port}/"))
+                self.assertEqual(admitted["outcome"], "ok")
+                self.assertEqual(admitted["body"], "pinned")
+                # One resolution serves both the policy check and the dial;
+                # a second lookup would reopen the rebinding window.
+                self.assertEqual(resolutions, ["rebind.test"])
 
     def test_one_shot_api_response_refuses_declared_and_streamed_overflow(self):
         class Response:
@@ -259,6 +354,71 @@ class Package31WebAcquisitionTests(AgentCoreTestCase):
             oversized = run(boundedWebFetch(url=f"{base}/headers", maxHeaderBytes=512))
             self.assertEqual(oversized["outcome"], "refused")
             self.assertEqual(oversized["reason"], "header_limit")
+
+    def test_fetch_forwards_hop_authorizer_to_bounded_acquisition(self):
+        captured = {}
+
+        async def fake_bounded(**kwargs):
+            captured.update(kwargs)
+            return {"statusCode": 200, "body": "ok"}
+
+        async def authorize(_url):
+            return None
+
+        with mock.patch.object(web_module, "boundedWebFetch", fake_bounded):
+            run(web_module.fetch("https://example.test/", authorizeHop=authorize))
+        self.assertIs(captured["authorizeHop"], authorize)
+
+    def test_websearch_scraper_hops_are_gated_by_policy(self):
+        def make_context(network: bool, rules: list | None = None) -> dict:
+            return {
+                "cwd": os.getcwd(),
+                "config": {
+                    "providerKind": "openai", "model": "tiny",
+                    "sandbox": {"network": True}, "settingsSources": [],
+                },
+                "session": {
+                    "id": "search-policy-session", "cwd": os.getcwd(),
+                    "metadata": {
+                        "effectiveAgentAuthority": {
+                            "sandbox": {"network": network},
+                            "permissionRules": rules or [],
+                            "permissionRuleProjectRoot": os.getcwd(),
+                        }
+                    },
+                },
+                "interactive": False, "askQuestion": lambda *_: "",
+                "outputJson": lambda *_: None, "abortSignal": None,
+            }
+
+        fetched = []
+
+        async def scraper_fetch(url, *, headers=None, signal=None, authorizeHop=None):
+            fetched.append(url)
+            if authorizeHop is not None:
+                await authorizeHop(url)
+            return web_module.FetchResponse(200, "<html></html>")
+
+        tool = next(tool for tool in core.createBuiltinTools() if tool.name == "WebSearch")
+        with mock.patch.dict(os.environ):
+            os.environ.pop("EXA_API_KEY", None)
+            os.environ.pop("TESS_WEB_SEARCH_PROVIDER", None)
+            with mock.patch.object(web_module, "fetch", scraper_fetch):
+                offline = run(tool.handler({"query": "blocked"}, make_context(network=False)))
+                self.assertTrue(offline["isError"])
+                self.assertRegex(offline["content"], r"network policy is disabled")
+                self.assertEqual(fetched, [])
+
+                deny_rule = {
+                    "effect": "deny", "tool": "WebFetch",
+                    "pattern": "domain:html.duckduckgo.com", "scope": "inline",
+                    "raw": "WebFetch(domain:html.duckduckgo.com)", "approved": True,
+                }
+                denied = run(tool.handler({"query": "blocked"}, make_context(network=True, rules=[deny_rule])))
+                self.assertTrue(denied["isError"])
+                self.assertRegex(denied["content"], r"blocked by permission rule")
+                self.assertEqual(len(fetched), 1)
+                self.assertIn("html.duckduckgo.com", fetched[0])
 
     def test_webfetch_tool_enforces_network_and_redirect_domain_policy(self):
         target_requests = {"count": 0}

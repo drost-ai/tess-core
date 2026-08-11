@@ -6,7 +6,6 @@ from ..contracts.tools import ToolResult
 import base64
 import html
 import re
-import sys
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -44,19 +43,13 @@ class FetchResponse:
         return self.body
 
 
-async def fetch(url: str, *, headers: dict[str, str] | None = None, signal: Any = None) -> FetchResponse:
+async def fetch(url: str, *, headers: dict[str, str] | None = None, signal: Any = None, authorizeHop: Any = None) -> FetchResponse:
     if _signal_aborted(signal):
         raise _create_tool_abort_error()
-    result = await boundedWebFetch(url=url, headers=headers or {}, abortSignal=signal)
+    result = await boundedWebFetch(url=url, headers=headers or {}, abortSignal=signal, authorizeHop=authorizeHop)
     if _signal_aborted(signal):
         raise _create_tool_abort_error()
     return FetchResponse(int(result.get("statusCode") or 0), result["body"], acquisition=result)
-
-
-def _facade_fetch():
-    facade = sys.modules.get("agent_core.tools")
-    current = getattr(facade, "fetch", None)
-    return current if callable(current) else fetch
 
 
 def _web_fetch_tool() -> ToolDefinition:
@@ -132,32 +125,41 @@ def _web_fetch_tool() -> ToolDefinition:
     return builtin_tool("WebFetch", handler)
 
 
-async def _authorize_web_fetch_hop(context: ToolContext, url: str) -> None:
+def _effective_agent_authority(context: ToolContext) -> dict[str, Any]:
     metadata = context.get("session", {}).get("metadata") or {}
-    authority = metadata.get("effectiveAgentAuthority") if isinstance(metadata, dict) else {}
-    sandbox = authority.get("sandbox") if isinstance(authority, dict) else {}
+    authority = metadata.get("effectiveAgentAuthority") if isinstance(metadata, dict) else None
+    return authority if isinstance(authority, dict) else {}
+
+
+def _network_disabled(context: ToolContext) -> bool:
+    sandbox = _effective_agent_authority(context).get("sandbox") or {}
     configured_sandbox = context.get("config", {}).get("sandbox") or {}
-    network_allowed = sandbox.get("network", configured_sandbox.get("network", True))
-    if network_allowed is False:
+    return sandbox.get("network", configured_sandbox.get("network", True)) is False
+
+
+async def _authorize_web_fetch_hop(context: ToolContext, url: str, toolNames: tuple[str, ...] = ("WebFetch",)) -> None:
+    if _network_disabled(context):
         raise WebFetchPolicyError(
-            "WebFetch is blocked because this session's network policy is disabled."
+            f"{toolNames[0]} is blocked because this session's network policy is disabled."
         )
-    deny = await findDispatchDenyRule(
-        {
-            "cwd": context["session"]["cwd"],
-            "toolName": "WebFetch",
-            "input": {"url": url},
-            "settingsSources": context.get("config", {}).get("settingsSources"),
-            "inlineSettings": context.get("config", {}).get("inlineSettings"),
-            "rules": authority.get("permissionRules") if isinstance(authority, dict) else None,
-            "projectRoot": authority.get("permissionRuleProjectRoot") if isinstance(authority, dict) else None,
-        }
-    )
-    if deny:
-        raise WebFetchPolicyError(
-            f"Redirect hop blocked by permission rule {sliceUtf8Prefix(deny['raw'], 512)} "
-            f"({deny['scope']} settings)."
+    authority = _effective_agent_authority(context)
+    for tool_name in toolNames:
+        deny = await findDispatchDenyRule(
+            {
+                "cwd": context["session"]["cwd"],
+                "toolName": tool_name,
+                "input": {"url": url},
+                "settingsSources": context.get("config", {}).get("settingsSources"),
+                "inlineSettings": context.get("config", {}).get("inlineSettings"),
+                "rules": authority.get("permissionRules"),
+                "projectRoot": authority.get("permissionRuleProjectRoot"),
+            }
         )
+        if deny:
+            raise WebFetchPolicyError(
+                f"Redirect hop blocked by permission rule {sliceUtf8Prefix(deny['raw'], 512)} "
+                f"({deny['scope']} settings)."
+            )
 
 
 def _web_search_tool() -> ToolDefinition:
@@ -165,24 +167,32 @@ def _web_search_tool() -> ToolDefinition:
         raw_query = _require_string(input.get("query"), "query")
         query = normalizeWebSearchQuery(raw_query)
         _throw_if_tool_cancelled(context)
+        if _network_disabled(context):
+            return _web_search_policy_error(
+                "WebSearch is blocked because this session's network policy is disabled."
+            )
         web_settings = webSearchSettings(context.get("config"))
         configured_allowed = configuredAllowedDomains(web_settings)
         allowed = [item for item in input.get("allowed_domains", []) if isinstance(item, str)]
         blocked = [item for item in input.get("blocked_domains", []) if isinstance(item, str)]
         count = coerceResultCount(input.get("count") or input.get("max_results") or input.get("limit"))
         results = []
-        response = await searchWebResponse(
-            query,
-            context.get("abortSignal"),
-            config=context.get("config"),
-            count=count,
-            country=optionalString(input.get("country")) or "US",
-            freshness=optionalString(input.get("freshness")),
-            category=optionalString(input.get("category")),
-            provider=optionalString(input.get("provider")),
-            allowed_domains=allowed,
-            blocked_domains=blocked,
-        )
+        try:
+            response = await searchWebResponse(
+                query,
+                context.get("abortSignal"),
+                config=context.get("config"),
+                count=count,
+                country=optionalString(input.get("country")) or "US",
+                freshness=optionalString(input.get("freshness")),
+                category=optionalString(input.get("category")),
+                provider=optionalString(input.get("provider")),
+                allowed_domains=allowed,
+                blocked_domains=blocked,
+                authorizeHop=lambda hop: _authorize_web_fetch_hop(context, hop, toolNames=("WebSearch", "WebFetch")),
+            )
+        except WebFetchPolicyError as error:
+            return _web_search_policy_error(str(error) or "WebSearch was blocked by policy.")
         for result in response["results"]:
             _throw_if_tool_cancelled(context)
             hostname = _safe_hostname(result["url"])
@@ -212,6 +222,20 @@ def _web_search_tool() -> ToolDefinition:
     return builtin_tool("WebSearch", handler)
 
 
+def _web_search_policy_error(message: str) -> ToolResult:
+    return {
+        "content": pretty_json(
+            {
+                "type": "web_search_error",
+                "status": "failed",
+                "reason": "policy",
+                "message": sliceUtf8Prefix(message, 1_000),
+            }
+        ),
+        "isError": True,
+    }
+
+
 async def searchWeb(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
     response = await searchWebResponse(query, abortSignal)
     return response["results"]
@@ -229,6 +253,8 @@ async def searchWebResponse(
     provider: str | None = None,
     allowed_domains: list[str] | None = None,
     blocked_domains: list[str] | None = None,
+    fetcher: Any = None,
+    authorizeHop: Any = None,
 ) -> dict[str, Any]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
@@ -257,12 +283,12 @@ async def searchWebResponse(
         api_fallback_reason = "exa_unavailable"
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
-    duck = await searchDuckDuckGo(query, abortSignal)
+    duck = await searchDuckDuckGo(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     if duck:
         return {"provider": "scraper", "results": duck, "fallback_reason": api_fallback_reason}
-    bing = await searchBing(query, abortSignal)
+    bing = await searchBing(query, abortSignal, fetcher=fetcher, authorizeHop=authorizeHop)
     if bing:
         return {
             "provider": "scraper",
@@ -276,11 +302,11 @@ async def searchWebResponse(
     }
 
 
-async def searchDuckDuckGo(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
+async def searchDuckDuckGo(query: str, abortSignal: Any = None, *, fetcher: Any = None, authorizeHop: Any = None) -> list[dict[str, str]]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     url = f"https://html.duckduckgo.com/html/?{urlencode({'q': query})}"
-    response = await _facade_fetch()(url, headers=_web_search_headers(), signal=abortSignal)
+    response = await (fetcher or fetch)(url, headers=_web_search_headers(), signal=abortSignal, authorizeHop=authorizeHop)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     if not response.ok:
@@ -291,11 +317,11 @@ async def searchDuckDuckGo(query: str, abortSignal: Any = None) -> list[dict[str
     return parseDuckDuckGoResults(raw)
 
 
-async def searchBing(query: str, abortSignal: Any = None) -> list[dict[str, str]]:
+async def searchBing(query: str, abortSignal: Any = None, *, fetcher: Any = None, authorizeHop: Any = None) -> list[dict[str, str]]:
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     url = f"https://www.bing.com/search?{urlencode({'q': query})}"
-    response = await _facade_fetch()(url, headers=_web_search_headers(), signal=abortSignal)
+    response = await (fetcher or fetch)(url, headers=_web_search_headers(), signal=abortSignal, authorizeHop=authorizeHop)
     if _signal_aborted(abortSignal):
         raise _create_tool_abort_error()
     if not response.ok:

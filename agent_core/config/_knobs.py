@@ -198,6 +198,8 @@ def _render_value(value: Any) -> str:
         return "true"
     if value is False:
         return "false"
+    if value == "":
+        return '""'
     return str(value)
 
 

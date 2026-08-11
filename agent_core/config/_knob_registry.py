@@ -120,6 +120,7 @@ _DECLARATIONS: tuple[tuple[str, Any, str, str, float | None, float | None], ...]
     ("web.fetch_body_idle_timeout_ms", 10_000, "int", "Milliseconds of WebFetch body silence tolerated before the fetch fails; per-call overrides win.", 500, 600_000),
     ("web.fetch_total_timeout_ms", 30_000, "int", "Total milliseconds for one WebFetch acquisition; per-call overrides win.", 1_000, 3_600_000),
     ("web.fetch_max_redirects", 5, "int", "Maximum redirects followed per WebFetch acquisition.", 0, 20),
+    ("web.fetch_private_host_allowlist", "", "str", "Comma-separated hostnames, IP addresses, or CIDR blocks exempted from the web fetch plane's private-address block (loopback, RFC1918, and other non-global destinations); link-local and cloud-metadata endpoints are never exempted.", None, None),
     ("collab.min_update_spacing_ms", 20_000, "int", "Minimum milliseconds between assistant collaboration updates.", 1_000, 3_600_000),
     ("collab.tick_ms", 1_500, "int", "Milliseconds between collaboration runtime ticks.", 100, 60_000),
     ("collab.bridge_poll_ms", 750, "int", "Milliseconds between remote-bridge inbox polls.", 50, 60_000),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import agent_core.authority.mcp_origin_policy as mcp_origin_policy_module
 
 from tests.support.agent_core_case import *
+import agent_core.tools.web as web_module
 
 
 class ToolControlFlowTests(AgentCoreTestCase):
@@ -35,7 +36,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
 
     def test_tool_cancellation_guards_web_question_and_mcp_paths(self):
         root, home, workspace, previous = self.temp_context()
-        original_fetch = tools_module.fetch
+        original_fetch = web_module.fetch
         original_search = tools_module.searchWeb
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
@@ -52,7 +53,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 calls.append(("search", args, kwargs))
                 return []
 
-            tools_module.fetch = fetch_should_not_run
+            web_module.fetch = fetch_should_not_run
             tools_module.searchWeb = search_should_not_run
             context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda *_: calls.append(("question", (), {})) or "Blue", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "abortSignal": {"aborted": True}}
 
@@ -68,7 +69,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                     self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")
             self.assertEqual(calls, [])
         finally:
-            tools_module.fetch = original_fetch
+            web_module.fetch = original_fetch
             tools_module.searchWeb = original_search
             self.restore_home(root, previous)
 
@@ -119,7 +120,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
 
     def test_monitor_health_check_mcp_resource_and_ripgrep_tool_edges(self):
         root, home, workspace, previous = self.temp_context()
-        original_fetch = tools_module.fetch
+        original_fetch = web_module.fetch
         original_resolve_rg = tools_module._resolve_ripgrep_binary
         original_exec_rg = tools_module._exec_ripgrep_allowing_no_matches
         try:
@@ -240,7 +241,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
             self.assertIn("-i", rg_calls[-1][1])
             self.assertIn("-C", rg_calls[-1][1])
         finally:
-            tools_module.fetch = original_fetch
+            web_module.fetch = original_fetch
             tools_module._resolve_ripgrep_binary = original_resolve_rg
             tools_module._exec_ripgrep_allowing_no_matches = original_exec_rg
             self.restore_home(root, previous)
