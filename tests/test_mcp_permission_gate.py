@@ -13,7 +13,7 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             context = {"session": session, "config": config, "interactive": False, "cwd": str(workspace)}
             cases = [
                 ("bypassPermissions", {"decision": "allow", "source": "mode"}),
@@ -35,7 +35,7 @@ class McpPermissionResolutionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             cases = [
                 ({"allow": ["mcp__srv__tool"]}, "default", "allow", "rule:inline"),
                 ({"allow": ["mcp__srv"]}, "default", "allow", "rule:inline"),
@@ -81,7 +81,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
 
     def _context(self, workspace: Path, home: Path, mode: str, **overrides):
         config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": mode}, str(workspace)))
-        session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=mode)
+        session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=mode)
         return {
             "session": session,
             "config": config,

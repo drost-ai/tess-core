@@ -4,24 +4,24 @@ from ...daemon.events import _event_matches_session
 
 from ..._utils import now_iso
 from ...storage.persisted_record_scanner import (
-    getPersistedRecordIssue,
-    listPersistedRecordIssues,
+    get_persisted_record_issue,
+    list_persisted_record_issues,
 )
 from ...storage import (
-    getStateRoot,
-    hasPersistableSessionMessages,
-    listChildAgents,
-    listHealthCheckTasks,
-    listSessionMonitors,
-    loadBridge,
-    loadRemoteSession,
-    loadSession,
-    loadTaskRecord,
-    readTaskMeta,
-    saveSession,
-    saveTaskRecord,
-    taskMetaPath,
-    writeTaskMeta,
+    get_state_root,
+    has_persistable_session_messages,
+    list_child_agents,
+    list_health_check_tasks,
+    list_session_monitors,
+    load_bridge,
+    load_remote_session,
+    load_session,
+    load_task_record,
+    read_task_meta,
+    save_session,
+    save_task_record,
+    task_meta_path,
+    write_task_meta,
 )
 from .live_work import _resolve_session_live_work
 from .mappers import _is_related_child_agent
@@ -49,7 +49,7 @@ async def _project_session_task_records(
     live_work_cache: dict[str, Any] | None = None,
     on_issue: Callable[[dict[str, Any]], Any] | None = None,
 ) -> list[dict[str, Any]]:
-    session = session or await loadSession(session_id) or {"id": session_id, "metadata": {}}
+    session = session or await load_session(session_id) or {"id": session_id, "metadata": {}}
     # Projection is also the existing restoration/attachment boundary. Verify
     # marker authority first so dead records converge before snapshots are
     # built; the verdict itself never reads the session transcript archive.
@@ -60,12 +60,12 @@ async def _project_session_task_records(
     metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
     records_by_id: dict[str, dict[str, Any]] = {}
 
-    monitors = await listSessionMonitors(session_id)
-    child_agents = await listChildAgents()
-    health_checks = await listHealthCheckTasks()
-    for issue in listPersistedRecordIssues(
+    monitors = await list_session_monitors(session_id)
+    child_agents = await list_child_agents()
+    health_checks = await list_health_check_tasks()
+    for issue in list_persisted_record_issues(
         ("agent", "health_check", "monitor"),
-        getStateRoot(),
+        get_state_root(),
     ):
         if on_issue:
             on_issue(_projection_issue(issue))
@@ -74,9 +74,9 @@ async def _project_session_task_records(
     task_ids.extend(task.get("taskId") for task in health_checks if task.get("sessionId") == session_id and task.get("taskId"))
     for task_id in _dedupe([item for item in task_ids if isinstance(item, str) and item]):
         try:
-            meta = await readTaskMeta(task_id)
+            meta = await read_task_meta(task_id)
             if not meta:
-                issue = getPersistedRecordIssue(taskMetaPath(task_id))
+                issue = get_persisted_record_issue(task_meta_path(task_id))
                 if on_issue:
                     on_issue(
                         _projection_issue(issue, task_id)
@@ -124,10 +124,10 @@ async def _project_session_task_records(
                     on_issue({"taskId": child.get("taskId") or child.get("agentId"), "reason": str(exc)})
 
     remote_id = metadata.get("remoteSessionId")
-    remote = await loadRemoteSession(remote_id) if isinstance(remote_id, str) and remote_id else None
+    remote = await load_remote_session(remote_id) if isinstance(remote_id, str) and remote_id else None
     if remote:
         try:
-            bridge = await loadBridge(remote.get("bridgeId")) if isinstance(remote.get("bridgeId"), str) else None
+            bridge = await load_bridge(remote.get("bridgeId")) if isinstance(remote.get("bridgeId"), str) else None
             records_by_id[f"remote:{remote['id']}"] = _build_remote_task_record(session, remote, (bridge or {}).get("status"))
         except Exception as exc:
             if on_issue:
@@ -163,16 +163,16 @@ async def _annotate_retry_lineage(original_task_id: str, new_task_id: Any, sourc
         "retryRootTaskId": root_task_id,
         "retryAttempt": retry_attempt,
     }
-    meta = await readTaskMeta(new_task_id)
+    meta = await read_task_meta(new_task_id)
     if meta:
         meta_metadata = dict(meta.get("metadata") or {})
         meta_metadata.update(lineage)
-        await writeTaskMeta(new_task_id, {**meta, **camel_lineage, "metadata": meta_metadata})
-    record = await loadTaskRecord(new_task_id)
+        await write_task_meta(new_task_id, {**meta, **camel_lineage, "metadata": meta_metadata})
+    record = await load_task_record(new_task_id)
     if record:
         record_metadata = dict(record.get("metadata") or {})
         record_metadata.update(lineage)
-        await saveTaskRecord({**record, "metadata": record_metadata})
+        await save_task_record({**record, "metadata": record_metadata})
 
 
 async def _sync_projected_task_metadata(session: dict[str, Any], records: list[dict[str, Any]]) -> None:
@@ -218,12 +218,12 @@ async def _sync_projected_task_metadata(session: dict[str, Any], records: list[d
     # Import locally to avoid a package initialization cycle.
     from ...session.persistence import persistSession
 
-    if hasPersistableSessionMessages(session):
+    if has_persistable_session_messages(session):
         await persistSession(session, {"sessionPersistence": True}, touch=False)
     else:
         # Empty child/bootstrap sessions still need their restore projection,
-        # and saveSession already preserves their semantic timestamp.
-        await saveSession(session)
+        # and save_session already preserves their semantic timestamp.
+        await save_session(session)
 
 
 def _task_snapshot(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -273,21 +273,21 @@ def _empty_collaboration_snapshot() -> dict[str, Any]:
 
 
 async def _collaboration_snapshot(session_id: str) -> dict[str, Any]:
-    session = await loadSession(session_id)
+    session = await load_session(session_id)
     if not session:
         return _empty_collaboration_snapshot()
     metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
     remote_id = metadata.get("remoteSessionId")
-    remote = await loadRemoteSession(remote_id) if isinstance(remote_id, str) and remote_id else None
+    remote = await load_remote_session(remote_id) if isinstance(remote_id, str) and remote_id else None
     bridge_id = metadata.get("bridgeId") or (remote or {}).get("bridgeId")
-    bridge = await loadBridge(bridge_id) if isinstance(bridge_id, str) and bridge_id else None
+    bridge = await load_bridge(bridge_id) if isinstance(bridge_id, str) and bridge_id else None
     from ...collaboration import buildCollaborationWorkers, createCollaborationSnapshot
 
     workers = buildCollaborationWorkers(
         {
             "session": session,
-            "childAgents": await listChildAgents(),
-            "monitors": await listSessionMonitors(session_id),
+            "childAgents": await list_child_agents(),
+            "monitors": await list_session_monitors(session_id),
             "remote": remote,
             "bridge": bridge,
         }

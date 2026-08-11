@@ -22,20 +22,20 @@ from .recovery import activateBridgeGeneration
 from ...runtime.paths import getActiveRuntimePaths
 from ...runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ...storage import (
-    loadSessionRecordShallow,
-    saveSession,
-    withRecordTransaction,
+    load_session_record_shallow,
+    save_session,
+    with_record_transaction,
 )
 from ...storage.remote import (
-    appendBridgeEvent,
-    loadBridge,
-    loadBridgeDeliveryLedger,
-    loadBridgeEvents,
-    loadBridgeInbox,
-    loadRemoteSession,
-    saveBridge,
-    saveBridgeDeliveryLedger,
-    saveRemoteSession,
+    append_bridge_event,
+    load_bridge,
+    load_bridge_delivery_ledger,
+    load_bridge_events,
+    load_bridge_inbox,
+    load_remote_session,
+    save_bridge,
+    save_bridge_delivery_ledger,
+    save_remote_session,
 )
 
 
@@ -122,18 +122,18 @@ class BridgeRuntimeController:
         return await self._record_event(event, data or {})
 
     async def _record_event(self, event, data):
-        async with withRecordTransaction("bridge-session", self.bridge["sessionId"]):
+        async with with_record_transaction("bridge-session", self.bridge["sessionId"]):
             if self._closed or not await isCurrentBridgeGeneration(self.bridge):
                 return
             timestamp = now_iso()
-            await appendBridgeEvent(_omit_none({
+            await append_bridge_event(_omit_none({
                 "id": str(uuid.uuid4()), "bridgeId": self.bridge["id"],
                 "generation": self.generation, "createdAt": timestamp,
                 "event": event, "data": data,
             }))
             await _update_current_bridge(self.bridge, {"lastEventName": event})
             if self.bridge.get("remoteSessionId"):
-                remote = await loadRemoteSession(self.bridge["remoteSessionId"])
+                remote = await load_remote_session(self.bridge["remoteSessionId"])
                 if remote and _remote_owns(remote, self.bridge):
                     if not _terminal_remote(remote.get("status")):
                         remote.update({
@@ -142,7 +142,7 @@ class BridgeRuntimeController:
                             "lastEventSummary": _truncate(_event_summary(event, data)),
                             "updatedAt": timestamp,
                         })
-                        await saveRemoteSession(remote)
+                        await save_remote_session(remote)
 
     async def poll(self):
         if self._closed or self._poll_halted or not self._poll_lock.acquire(blocking=False):
@@ -163,12 +163,12 @@ class BridgeRuntimeController:
 
     async def _poll_locked(self):
         delivered = []
-        async with withRecordTransaction("bridge-session", self.bridge["sessionId"]):
+        async with with_record_transaction("bridge-session", self.bridge["sessionId"]):
             if self._closed or not await isCurrentBridgeGeneration(self.bridge):
                 return delivered
-            async with withRecordTransaction("bridge-delivery", self.bridge["id"]):
-                inbox = await loadBridgeInbox(self.bridge["id"])
-                events = await loadBridgeEvents(self.bridge["id"])
+            async with with_record_transaction("bridge-delivery", self.bridge["id"]):
+                inbox = await load_bridge_inbox(self.bridge["id"])
+                events = await load_bridge_events(self.bridge["id"])
                 ledger = await _require_ledger(self.bridge)
                 while ledger["cursor"] < len(inbox):
                     if self._closed or not await isCurrentBridgeGeneration(self.bridge):
@@ -220,7 +220,7 @@ class BridgeRuntimeController:
                                 "source": message["source"], "text": message["text"],
                             },
                         }
-                        await appendBridgeEvent(receipt)
+                        await append_bridge_event(receipt)
                         events.append(receipt)
                     entries = [
                         {**item, "disposition": "delivered", "deliveredAt": delivered_at}
@@ -262,11 +262,11 @@ class BridgeRuntimeController:
         self._closing = False
 
     async def diagnostics(self):
-        bridge = await loadBridge(self.bridge["id"])
-        events = await loadBridgeEvents(self.bridge["id"])
-        inbox = await loadBridgeInbox(self.bridge["id"])
-        ledger = await loadBridgeDeliveryLedger(self.bridge["id"])
-        remote = await loadRemoteSession(bridge["remoteSessionId"]) if bridge and bridge.get("remoteSessionId") else None
+        bridge = await load_bridge(self.bridge["id"])
+        events = await load_bridge_events(self.bridge["id"])
+        inbox = await load_bridge_inbox(self.bridge["id"])
+        ledger = await load_bridge_delivery_ledger(self.bridge["id"])
+        remote = await load_remote_session(bridge["remoteSessionId"]) if bridge and bridge.get("remoteSessionId") else None
         return {
             "bridge": bridge, "remote": remote, "status": (bridge or {}).get("status"),
             "remoteStatus": (remote or {}).get("status"), "bridgeStatus": (remote or {}).get("bridgeStatus"),
@@ -361,10 +361,10 @@ class BridgeRuntimeController:
 
 async def createBridgeRuntimeController(args):
     session = args.get("session") or {}
-    if not await loadSessionRecordShallow(session.get("id")):
-        await saveSession(session)
+    if not await load_session_record_shallow(session.get("id")):
+        await save_session(session)
     requested = args.get("bridgeId") or args.get("bridge_id")
-    if requested and not await loadBridge(requested):
+    if requested and not await load_bridge(requested):
         raise RuntimeError(f"Bridge not found for reconnect: {requested}")
     paths = args.get("runtimePaths") or getActiveRuntimePaths()
     activated = await activateBridgeGeneration({
@@ -383,15 +383,15 @@ async def createBridgeRuntimeController(args):
 
 async def _commit_ledger(ledger, **updates):
     next_ledger = {**ledger, **updates, "revision": ledger["revision"] + 1, "updatedAt": now_iso()}
-    await saveBridgeDeliveryLedger(next_ledger)
+    await save_bridge_delivery_ledger(next_ledger)
     return next_ledger
 
 
 async def _update_current_bridge(identity, updates):
-    current = await loadBridge(identity["id"])
+    current = await load_bridge(identity["id"])
     if not current or current.get("status") != "active" or current.get("generation") != identity.get("generation"):
         return
-    await saveBridge({
+    await save_bridge({
         **current, **updates, "id": current["id"], "sessionId": current["sessionId"],
         "schemaVersion": 2, "generation": current["generation"],
         "revision": int(current.get("revision") or 0) + 1, "updatedAt": now_iso(),
@@ -401,7 +401,7 @@ async def _update_current_bridge(identity, updates):
 async def _update_remote_delivery(bridge, message, delivered_at, pending):
     if not bridge.get("remoteSessionId"):
         return
-    remote = await loadRemoteSession(bridge["remoteSessionId"])
+    remote = await load_remote_session(bridge["remoteSessionId"])
     if not remote or not _remote_owns(remote, bridge):
         return
     remote.update({
@@ -410,7 +410,7 @@ async def _update_remote_delivery(bridge, message, delivered_at, pending):
         "lastEventAt": delivered_at, "lastEventSummary": _truncate(f"Bridge message: {message['text']}"),
         "updatedAt": delivered_at,
     })
-    await saveRemoteSession(remote)
+    await save_remote_session(remote)
 
 
 def _matching_receipt(receipt, bridge, message, key):

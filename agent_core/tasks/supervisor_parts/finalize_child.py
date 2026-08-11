@@ -23,13 +23,13 @@ from ...process.identity import (
     verifyOwnedProcessIdentity,
 )
 from ...storage import (
-    loadTaskRecord,
-    mutateChildAgent,
-    mutateSessionRecord,
-    readTaskMeta,
-    saveTaskRecord,
-    withRecordTransaction,
-    writeTaskMeta,
+    load_task_record,
+    mutate_child_agent,
+    mutate_session_record,
+    read_task_meta,
+    save_task_record,
+    with_record_transaction,
+    write_task_meta,
 )
 from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
 from ..terminal_transitions import resolveTaskSemanticStatus
@@ -112,9 +112,9 @@ async def finalizeLostWorker(
 ) -> dict[str, Any] | None:
     if cause not in LOST_WORKER_CAUSES:
         raise ValueError(f"Unknown lost-worker cause: {cause}")
-    async with withRecordTransaction("task-lifecycle", taskId):
-        record = await loadTaskRecord(taskId) or {}
-        meta = await readTaskMeta(taskId) or {}
+    async with with_record_transaction("task-lifecycle", taskId):
+        record = await load_task_record(taskId) or {}
+        meta = await read_task_meta(taskId) or {}
         if not record and not meta:
             return None
         kind = record.get("kind") or meta.get("type")
@@ -175,8 +175,8 @@ async def finalizeLostWorker(
                 next_record["detailStatus"] = "launch_failed"
                 if failedReservation is not None:
                     next_record["launchReservation"] = failedReservation
-            await writeTaskMeta(taskId, next_meta)
-            await saveTaskRecord(next_record)
+            await write_task_meta(taskId, next_meta)
+            await save_task_record(next_record)
         child_after: dict[str, Any] | None = None
         agent_id = (
             meta.get("agent_id")
@@ -204,7 +204,7 @@ async def finalizeLostWorker(
                     updated["retryable"] = True
                 return updated
 
-            child_after = await mutateChildAgent(agent_id, _finalize_child_record)
+            child_after = await mutate_child_agent(agent_id, _finalize_child_record)
         session_id: str | None = None
         if cause == "launch_interrupted":
             session_id = await _repair_interrupted_launch_links(taskId, record, meta)
@@ -239,7 +239,7 @@ async def _repair_interrupted_launch_links(
         else record.get("sessionId") or meta.get("sessionId")
     )
     if isinstance(parent_session_id, str) and parent_session_id:
-        await mutateSessionRecord(
+        await mutate_session_record(
             parent_session_id,
             lambda session: _append_reconciled_task_id(
                 session,
@@ -253,7 +253,7 @@ async def _repair_interrupted_launch_links(
         and child_session_id
         and child_session_id != parent_session_id
     ):
-        await mutateSessionRecord(
+        await mutate_session_record(
             child_session_id,
             lambda session: _bind_reconciled_subagent_task(session, task_id, meta),
         )

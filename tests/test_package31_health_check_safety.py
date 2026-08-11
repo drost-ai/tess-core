@@ -30,7 +30,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 str(workspace),
             )
         )
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace),
             provider=config["provider"],
             providerProfileName=config["providerProfileName"],
@@ -39,7 +39,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             systemPrompt=config["systemPrompt"],
             permissionMode=mode,
         )
-        run(core.saveSession(session))
+        run(core.save_session(session))
         return config, session
 
     def _context(self, config, session, daemon=None):
@@ -172,7 +172,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                         getattr(raised.exception, "code", None),
                         "health_check.authorization_required",
                     )
-                    self.assertEqual(await core.listHealthCheckTasks(), [])
+                    self.assertEqual(await core.list_health_check_tasks(), [])
                 finally:
                     await supervisor["close"]()
 
@@ -288,7 +288,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             run(persistHealthCheckRecord(record))
             prepared = run(prepareTaskStop(task_id, "SIGTERM"))
             self.assertTrue(prepared["result"]["changed"])
-            stopped = run(core.loadHealthCheckTask(task_id))
+            stopped = run(core.load_health_check_task(task_id))
             self.assertEqual((stopped["status"], stopped["generation"]), ("stopped", 2))
             committed = run(
                 _commit_attempt(
@@ -304,7 +304,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
                 )
             )
             self.assertIsNone(committed)
-            self.assertEqual(run(core.loadHealthCheckTask(task_id))["status"], "stopped")
+            self.assertEqual(run(core.load_health_check_task(task_id))["status"], "stopped")
         finally:
             self.restore_home(root, previous)
 

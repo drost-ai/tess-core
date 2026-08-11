@@ -7,7 +7,7 @@ from .shared import (
 )
 from .utils import estimateMessageTokens
 from typing import Any
-from ...storage.message_origin import isPlainUserTurnAnchor as _is_plain_user_turn_anchor
+from ...storage.message_origin import is_plain_user_turn_anchor as _is_plain_user_turn_anchor
 from ...session.tool_boundaries import (
     assistantToolUsesAreCompleted,
     messageHasToolResults,
@@ -17,10 +17,10 @@ from ...session.tool_boundaries import (
 )
 
 
-def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, previousCutoff: int = 0) -> int | None:
+def choose_compaction_cutoff(messages: list[dict[str, Any]], force: bool = False, previousCutoff: int = 0) -> int | None:
     if not messages:
         return None
-    tool_aware_cutoff = chooseToolAwareCompactionCutoff(messages, previousCutoff)
+    tool_aware_cutoff = choose_tool_aware_compaction_cutoff(messages, previousCutoff)
     if tool_aware_cutoff is not None and tool_aware_cutoff > previousCutoff:
         return tool_aware_cutoff
 
@@ -36,16 +36,16 @@ def chooseCompactionCutoff(messages: list[dict[str, Any]], force: bool = False, 
         index = fallback_index
 
     for cursor in range(index, 0, -1):
-        if isSafeWorkingSetStart(messages, cursor):
+        if is_safe_working_set_start(messages, cursor):
             return cursor
     for cursor in range(fallback_index, 0, -1):
-        if isSafeWorkingSetStart(messages, cursor):
+        if is_safe_working_set_start(messages, cursor):
             return cursor
     return None
 
 
-def chooseToolAwareCompactionCutoff(messages: list[dict[str, Any]], previousCutoff: int = 0) -> int | None:
-    pair_starts = collectSubstantiveToolExchangeStarts(messages, previousCutoff)
+def choose_tool_aware_compaction_cutoff(messages: list[dict[str, Any]], previousCutoff: int = 0) -> int | None:
+    pair_starts = collect_substantive_tool_exchange_starts(messages, previousCutoff)
     if not pair_starts:
         return None
     preserved_starts = pair_starts[-min(compaction_knob("compaction.max_preserved_tool_pairs"), len(pair_starts)) :]
@@ -57,7 +57,7 @@ def chooseToolAwareCompactionCutoff(messages: list[dict[str, Any]], previousCuto
     return preserved_starts[0]
 
 
-def collectSubstantiveToolExchangeStarts(messages: list[dict[str, Any]], previousCutoff: int = 0) -> list[int]:
+def collect_substantive_tool_exchange_starts(messages: list[dict[str, Any]], previousCutoff: int = 0) -> list[int]:
     starts: list[int] = []
     for message_index, message in enumerate(messages):
         if message_index <= previousCutoff or message.get("role") != "assistant" or not isinstance(message.get("content"), list):
@@ -73,14 +73,14 @@ def collectSubstantiveToolExchangeStarts(messages: list[dict[str, Any]], previou
     return starts
 
 
-def collectToolResultIds(messages: list[dict[str, Any]]) -> set[str]:
+def collect_tool_result_ids(messages: list[dict[str, Any]]) -> set[str]:
     result_ids: set[str] = set()
     for message in messages:
         result_ids |= _message_tool_result_ids(message)
     return result_ids
 
 
-def isSafeWorkingSetStart(messages: list[dict[str, Any]], index: int) -> bool:
+def is_safe_working_set_start(messages: list[dict[str, Any]], index: int) -> bool:
     current = messages[index] if 0 <= index < len(messages) else None
     if not current:
         return False

@@ -3,18 +3,18 @@ from __future__ import annotations
 from .artifacts import _read_text
 from .models import _model_record
 from .parsing import (
-    asRecord,
-    asStringArray,
-    coerceRelevantFiles,
-    coerceWorkingContextDocument,
+    as_record,
+    as_string_array,
+    coerce_relevant_files,
+    coerce_working_context_document,
     parseMaybeJson,
 )
 from .prompts import (
-    appendActivitySection,
-    appendProjectFactsSection,
-    appendRelevantFilesSection,
-    appendStringSection,
-    appendSubsection,
+    append_activity_section,
+    append_project_facts_section,
+    append_relevant_files_section,
+    append_string_section,
+    append_subsection,
 )
 from .shared import (
     MAX_ACTIVITY_LINES,
@@ -22,13 +22,13 @@ from .shared import (
     MAX_TODOS,
     _bound_preserved_trace_record,
 )
-from .utils import summarizeTodo, truncate
+from .utils import summarize_todo, truncate
 from typing import Any
 from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
-def buildCompactionQualityFromSynthesis(synthesized: dict[str, Any]) -> dict[str, Any]:
-    return buildCompactionQualityFromCandidate(
+def build_compaction_quality_from_synthesis(synthesized: dict[str, Any]) -> dict[str, Any]:
+    return build_compaction_quality_from_candidate(
         {
             "qualityClassification": synthesized.get("qualityClassification"),
             "qualityReason": synthesized.get("qualityReason"),
@@ -37,35 +37,35 @@ def buildCompactionQualityFromSynthesis(synthesized: dict[str, Any]) -> dict[str
     )
 
 
-def buildCompactionQualityFromCandidate(candidate: dict[str, Any]) -> dict[str, Any]:
+def build_compaction_quality_from_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     classification = candidate.get("qualityClassification") if candidate.get("qualityClassification") in {"thin", "usable", "rich"} else "usable"
     score = 16 if classification == "rich" else 8 if classification == "usable" else 3
     working_context = candidate.get("workingContext") or {}
-    goals = asRecord(working_context.get("goals")) or {}
-    project = asRecord(working_context.get("project")) or {}
-    activity = asRecord(working_context.get("activity")) or {}
+    goals = as_record(working_context.get("goals")) or {}
+    project = as_record(working_context.get("project")) or {}
+    activity = as_record(working_context.get("activity")) or {}
     return {
         "passed": classification != "thin",
         "score": score,
         "classification": classification,
         "detail": candidate.get("qualityReason") or "Model-backed checkpoint synthesis completed.",
         "metrics": {
-            "userRequests": len(asStringArray(goals.get("active"))),
-            "relevantFiles": len(coerceRelevantFiles(project.get("keyFiles"))),
-            "decisions": len(asStringArray(working_context.get("decisions"))),
-            "discoveries": len(asStringArray(working_context.get("discoveries"))),
+            "userRequests": len(as_string_array(goals.get("active"))),
+            "relevantFiles": len(coerce_relevant_files(project.get("keyFiles"))),
+            "decisions": len(as_string_array(working_context.get("decisions"))),
+            "discoveries": len(as_string_array(working_context.get("discoveries"))),
             "reads": 0,
             "fileChanges": 0,
-            "commands": len(asStringArray(activity.get("commands"))),
-            "searches": len(asStringArray(activity.get("searches"))),
-            "web": len(asStringArray(activity.get("web"))),
-            "failures": len(asStringArray(activity.get("failures"))),
+            "commands": len(as_string_array(activity.get("commands"))),
+            "searches": len(as_string_array(activity.get("searches"))),
+            "web": len(as_string_array(activity.get("web"))),
+            "failures": len(as_string_array(activity.get("failures"))),
         },
     }
 
 
-def buildSynthesizedWorkingContextDocument(args: dict[str, Any]) -> dict[str, Any]:
-    return buildWorkingContextDocumentFromCandidate(
+def build_synthesized_working_context_document(args: dict[str, Any]) -> dict[str, Any]:
+    return build_working_context_document_from_candidate(
         {
             "previous": args.get("previous"),
             "session": args["session"],
@@ -84,7 +84,7 @@ def buildSynthesizedWorkingContextDocument(args: dict[str, Any]) -> dict[str, An
     )
 
 
-def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, Any]:
+def build_working_context_document_from_candidate(args: dict[str, Any]) -> dict[str, Any]:
     previous = args.get("previous") or {}
     session = args["session"]
     candidate = args["candidate"]
@@ -93,8 +93,8 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
     selected_todos = _select_todo_state(
         session.get("todos", []), {"maxOpen": MAX_TODOS, "maxCompleted": MAX_TODOS}
     )
-    open_todos = [summarizeTodo(todo) for todo in selected_todos["open"]]
-    completed_todos = [summarizeTodo(todo) for todo in selected_todos["completed"]]
+    open_todos = [summarize_todo(todo) for todo in selected_todos["open"]]
+    completed_todos = [summarize_todo(todo) for todo in selected_todos["completed"]]
     preserved_trace = _latest_preserved_trace(
         previous.get("preservedTrace"),
         args.get("sourceRange"),
@@ -139,7 +139,7 @@ def buildWorkingContextDocumentFromCandidate(args: dict[str, Any]) -> dict[str, 
     }
 
 
-def buildPreservedTraceRecord(sourceRange: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
+def build_preserved_trace_record(sourceRange: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
     return _bound_preserved_trace_record({
         "sourceRange": sourceRange,
         "entryCount": evidence.get("entryCount"),
@@ -158,7 +158,7 @@ def _latest_preserved_trace(
     evidence: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     if isinstance(evidence, dict) and isinstance(source_range, dict):
-        return [buildPreservedTraceRecord(source_range, evidence)]
+        return [build_preserved_trace_record(source_range, evidence)]
     if not isinstance(previous_traces, list):
         return []
     for trace in reversed(previous_traces):
@@ -167,7 +167,7 @@ def _latest_preserved_trace(
     return []
 
 
-def buildModelBackedCompactionStateSnapshot(args: dict[str, Any]) -> dict[str, Any]:
+def build_model_backed_compaction_state_snapshot(args: dict[str, Any]) -> dict[str, Any]:
     synthesized = args["synthesized"]
     verification = args["verification"]
     quality = args["quality"]
@@ -216,7 +216,7 @@ def buildModelBackedCompactionStateSnapshot(args: dict[str, Any]) -> dict[str, A
     }
 
 
-def renderSummaryMarkdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
+def render_summary_markdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
     session = context.get("session") or {}
     compaction = context.get("compaction") or {}
     lines = [
@@ -252,19 +252,19 @@ def renderSummaryMarkdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
         lines.append(f"- note: {quality['detail']}")
     if verification.get("reason"):
         lines.append(f"- verification note: {verification['reason']}")
-    appendProjectFactsSection(lines, context)
-    appendStringSection(lines, "User Goal", context["goals"]["active"])
-    appendStringSection(lines, "Constraints And Preferences", [*context["goals"]["constraints"], *context["goals"]["preferences"]])
-    appendStringSection(lines, "Discoveries", context["discoveries"])
-    appendRelevantFilesSection(lines, context["project"].get("keyFiles") or [])
+    append_project_facts_section(lines, context)
+    append_string_section(lines, "User Goal", context["goals"]["active"])
+    append_string_section(lines, "Constraints And Preferences", [*context["goals"]["constraints"], *context["goals"]["preferences"]])
+    append_string_section(lines, "Discoveries", context["discoveries"])
+    append_relevant_files_section(lines, context["project"].get("keyFiles") or [])
     lines.extend(["", "## Current State", ""])
-    appendSubsection(lines, "Completed", context["currentState"]["completed"])
-    appendSubsection(lines, "In Progress", context["currentState"]["inProgress"])
-    appendSubsection(lines, "Blocked", context["currentState"]["blocked"])
-    appendStringSection(lines, "Key Decisions", context["decisions"])
-    appendStringSection(lines, "Verification Notes", [*verification.get("notes", []), *[f"Issue: {entry}" for entry in verification.get("issues", [])]])
+    append_subsection(lines, "Completed", context["currentState"]["completed"])
+    append_subsection(lines, "In Progress", context["currentState"]["inProgress"])
+    append_subsection(lines, "Blocked", context["currentState"]["blocked"])
+    append_string_section(lines, "Key Decisions", context["decisions"])
+    append_string_section(lines, "Verification Notes", [*verification.get("notes", []), *[f"Issue: {entry}" for entry in verification.get("issues", [])]])
     activity = context["activity"]
-    appendStringSection(
+    append_string_section(
         lines,
         "Activity Highlights",
         [
@@ -280,14 +280,14 @@ def renderSummaryMarkdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
         if todos.get("originalItemCount") is not None
         else []
     )
-    appendStringSection(lines, "Todo State", [*cardinality, *[f"Open: {entry}" for entry in todos.get("open", [])], *[f"Completed: {entry}" for entry in todos.get("completed", [])]])
-    appendStringSection(lines, "Next Steps", context["nextSteps"])
-    appendStringSection(lines, "Critical Context", context["criticalContext"])
+    append_string_section(lines, "Todo State", [*cardinality, *[f"Open: {entry}" for entry in todos.get("open", [])], *[f"Completed: {entry}" for entry in todos.get("completed", [])]])
+    append_string_section(lines, "Next Steps", context["nextSteps"])
+    append_string_section(lines, "Critical Context", context["criticalContext"])
     lines.extend(["", "## Resume Guidance", "", "- Use this checkpoint as the authoritative source for earlier compacted work.", "- Prefer the recent raw conversation turns when they conflict with this checkpoint.", ""])
     return "\n".join(lines)
 
 
-def renderDecisionsMarkdown(context: dict[str, Any]) -> str:
+def render_decisions_markdown(context: dict[str, Any]) -> str:
     lines = ["# Assistant Decisions", ""]
     for decision in context.get("decisions", [])[:12]:
         lines.append(f"- {decision}")
@@ -297,39 +297,39 @@ def renderDecisionsMarkdown(context: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def renderActivityMarkdown(context: dict[str, Any]) -> str:
+def render_activity_markdown(context: dict[str, Any]) -> str:
     lines = ["# Assistant Activity Ledger", ""]
     relevant_files = []
     for record in (context.get("project", {}).get("keyFiles") or [])[:MAX_ACTIVITY_LINES]:
         note = f" ({record.get('note')})" if record.get("note") else ""
         role = "modified" if record.get("role") == "modified" else "read"
         relevant_files.append(f"- {role} `{record.get('path')}`{note}")
-    appendActivitySection(
+    append_activity_section(
         lines,
         "Relevant Files",
         relevant_files,
     )
     activity = context.get("activity") or {}
-    appendActivitySection(lines, "Commands", [f"- {entry}" for entry in activity.get("commands", [])[:MAX_ACTIVITY_LINES]])
-    appendActivitySection(lines, "Searches", [f"- {entry}" for entry in activity.get("searches", [])[:MAX_ACTIVITY_LINES]])
-    appendActivitySection(lines, "Web", [f"- {entry}" for entry in activity.get("web", [])[:MAX_ACTIVITY_LINES]])
-    appendActivitySection(lines, "Failures", [f"- {entry}" for entry in activity.get("failures", [])[:MAX_FAILURES]])
+    append_activity_section(lines, "Commands", [f"- {entry}" for entry in activity.get("commands", [])[:MAX_ACTIVITY_LINES]])
+    append_activity_section(lines, "Searches", [f"- {entry}" for entry in activity.get("searches", [])[:MAX_ACTIVITY_LINES]])
+    append_activity_section(lines, "Web", [f"- {entry}" for entry in activity.get("web", [])[:MAX_ACTIVITY_LINES]])
+    append_activity_section(lines, "Failures", [f"- {entry}" for entry in activity.get("failures", [])[:MAX_FAILURES]])
     return "\n".join(lines) + "\n"
 
 
-async def loadWorkingContextArtifact(filePath: str | None) -> dict[str, Any] | None:
+async def load_working_context_artifact(filePath: str | None) -> dict[str, Any] | None:
     if not filePath:
         return None
     raw = _read_text(filePath)
     if not raw.strip():
         return None
-    return coerceWorkingContextDocument(parseMaybeJson(raw))
+    return coerce_working_context_document(parseMaybeJson(raw))
 
 
-def assertModelBackedCompactionArtifacts(stateSnapshot: dict[str, Any], workingContext: dict[str, Any]) -> None:
-    if not asRecord(stateSnapshot.get("compactionModel")) or not asRecord(stateSnapshot.get("synthesis")):
+def assert_model_backed_compaction_artifacts(stateSnapshot: dict[str, Any], workingContext: dict[str, Any]) -> None:
+    if not as_record(stateSnapshot.get("compactionModel")) or not as_record(stateSnapshot.get("synthesis")):
         raise RuntimeError("Compaction state snapshot is not model-backed; refusing to persist checkpoint.")
-    if not asRecord(stateSnapshot.get("verificationModel")) or not asRecord(stateSnapshot.get("verification")):
+    if not as_record(stateSnapshot.get("verificationModel")) or not as_record(stateSnapshot.get("verification")):
         raise RuntimeError("Compaction state snapshot is not verifier-backed; refusing to persist checkpoint.")
     if not workingContext.get("compaction"):
         raise RuntimeError("Working context is missing compaction model metadata; refusing to persist checkpoint.")

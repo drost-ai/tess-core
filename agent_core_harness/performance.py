@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.storage.persistence_metrics import registerPersistenceObserver
+from agent_core.storage.persistence_metrics import register_persistence_observer
 from agent_core.providers.turn_session import createProviderTurnSession
 from agent_core.providers.watchdog import AbortSignal
 from agent_core.agent.cancellation import _capture_session_rollback
@@ -111,7 +111,7 @@ async def runPersistenceBenchmarkAsync(
         workspace = root / "workspace"
         runtime_home.mkdir()
         workspace.mkdir()
-        async with core.scopedRuntimeHome(str(runtime_home)):
+        async with core.scoped_runtime_home(str(runtime_home)):
             series = [
                 await _measure_message_count(
                     workspace,
@@ -303,7 +303,7 @@ async def _measure_message_count(
         session = _synthetic_session(workspace, message_count, content_bytes, sample_index)
         await core.persistSession(session, {"sessionPersistence": True}, touch=False)
         collector = PersistenceMeasurementCollector()
-        unsubscribe = registerPersistenceObserver(collector.observe)
+        unsubscribe = register_persistence_observer(collector.observe)
         started_ns = time.perf_counter_ns()
         try:
             for invocation in range(persists_per_sample):
@@ -315,7 +315,7 @@ async def _measure_message_count(
         result = collector.summary(wall_elapsed_ns)
         _validate_sample(result, persists_per_sample)
         results.append(result)
-        serialized_bytes.append(os.path.getsize(core.sessionPath(session["id"])))
+        serialized_bytes.append(os.path.getsize(core.session_path(session["id"])))
     return {
         "messageCount": message_count,
         "serializedSessionBytesMedian": int(statistics.median(serialized_bytes)),
@@ -457,7 +457,7 @@ def _synthetic_session(
     content_bytes: int,
     sample_index: int,
 ) -> dict[str, Any]:
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd=str(workspace),
         provider="anthropic",
         model="claude-sonnet-4-6",

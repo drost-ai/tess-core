@@ -390,11 +390,11 @@ class SessionMessageList(list):
         return result
 
 
-def createSessionMessageList(values: Iterable[Any] = ()) -> SessionMessageList:
+def create_session_message_list(values: Iterable[Any] = ()) -> SessionMessageList:
     return SessionMessageList(values)
 
 
-def ensureSessionMessageTracking(session: dict[str, Any]) -> SessionMessageList:
+def ensure_session_message_tracking(session: dict[str, Any]) -> SessionMessageList:
     messages = session.get("messages")
     if isinstance(messages, SessionMessageList):
         return messages
@@ -403,18 +403,18 @@ def ensureSessionMessageTracking(session: dict[str, Any]) -> SessionMessageList:
     return tracked
 
 
-def sessionPersistenceCheckpoint(session: dict[str, Any]) -> SessionPersistenceCheckpoint | None:
+def session_persistence_checkpoint(session: dict[str, Any]) -> SessionPersistenceCheckpoint | None:
     messages = session.get("messages")
     return messages.checkpoint() if isinstance(messages, SessionMessageList) else None
 
 
-def setSessionPersistenceCheckpoint(
+def set_session_persistence_checkpoint(
     session: dict[str, Any],
     revision: int,
     message_count: int | None = None,
     body_commit_id: str | None = None,
 ) -> None:
-    messages = ensureSessionMessageTracking(session)
+    messages = ensure_session_message_tracking(session)
     messages.set_checkpoint(
         revision,
         len(messages) if message_count is None else message_count,
@@ -422,14 +422,14 @@ def setSessionPersistenceCheckpoint(
     )
 
 
-def invalidateSessionMessagePrefix(session: dict[str, Any], index: int = 0) -> None:
-    ensureSessionMessageTracking(session).invalidate(index)
+def invalidate_session_message_prefix(session: dict[str, Any], index: int = 0) -> None:
+    ensure_session_message_tracking(session).invalidate(index)
 
 
-def replaceSessionMessagesWithPersistedCanonical(
+def replace_session_messages_with_persisted_canonical(
     session: dict[str, Any], values: Iterable[Any]
 ) -> None:
-    ensureSessionMessageTracking(session).replace_persisted_canonical(values)
+    ensure_session_message_tracking(session).replace_persisted_canonical(values)
 
 
 def _track_nested(value: Any, dirty: _DirtyCallback) -> Any:
@@ -443,10 +443,10 @@ def _track_nested(value: Any, dirty: _DirtyCallback) -> Any:
 __all__ = [
     "SessionMessageList",
     "SessionPersistenceCheckpoint",
-    "createSessionMessageList",
-    "ensureSessionMessageTracking",
-    "invalidateSessionMessagePrefix",
-    "replaceSessionMessagesWithPersistedCanonical",
-    "sessionPersistenceCheckpoint",
-    "setSessionPersistenceCheckpoint",
+    "create_session_message_list",
+    "ensure_session_message_tracking",
+    "invalidate_session_message_prefix",
+    "replace_session_messages_with_persisted_canonical",
+    "session_persistence_checkpoint",
+    "set_session_persistence_checkpoint",
 ]

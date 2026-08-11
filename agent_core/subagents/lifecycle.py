@@ -10,10 +10,10 @@ from ..config import (
     resolveProviderForModelSelection,
 )
 from ..storage import (
-    createEmptySession,
-    saveChildAgent,
-    saveSession,
-    taskOutputPath,
+    create_empty_session,
+    save_child_agent,
+    save_session,
+    task_output_path,
 )
 from .contract import (
     runtime_contract_for_agent,
@@ -35,7 +35,7 @@ from .spawn_utils import (
     _without_none_values,
 )
 from typing import Any
-from ..storage.message_origin import messageWithOrigin as _message_with_origin
+from ..storage.message_origin import message_with_origin as _message_with_origin
 from ..authority.agent import (
     captureAgentAuthority,
     deriveChildAgentAuthority,
@@ -79,7 +79,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
         # creates a phantom that no sweep, message, or stop can ever reach -
         # and surface the structured refusal so the model can decide.
         refused_at = now_iso()
-        await saveChildAgent(
+        await save_child_agent(
             {
                 **child_record,
                 "status": "cancelled",
@@ -113,7 +113,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             )
         }
     task_id = launch_task_id(launched)
-    output_file = launch_output_file(launched) or (taskOutputPath(task_id) if task_id else None)
+    output_file = launch_output_file(launched) or (task_output_path(task_id) if task_id else None)
     started_at = now_iso()
     appendLaunchGroupMetadata(context["session"], child_record.get("launchGroupId") or prepared.get("launchGroupId"), agent_id, task_id)
     await _upsert_subagent_launch_group(
@@ -126,7 +126,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
         },
     )
     await maybe_await(context.get("persistSession", lambda: None)())
-    await saveChildAgent(
+    await save_child_agent(
         {
             **child_record,
             "taskId": task_id,
@@ -216,7 +216,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     child_cwd = worktree_path or parent["cwd"]
     parent_metadata = parent.setdefault("metadata", {})
     parent_has_original_cwd = parent_metadata.get("originalCwd") is not None
-    child_session = createEmptySession(
+    child_session = create_empty_session(
         cwd=child_cwd,
         provider=child_provider,
         providerProfileName=parent.get("providerProfileName") if parent.get("providerProfileName") is not None else config.get("providerProfileName"),
@@ -306,7 +306,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     if run_in_background:
         parent_metadata["backgroundSessionIds"] = _dedupe([*(parent_metadata.get("backgroundSessionIds") or []), child_session["id"]])
     await maybe_await(context.get("persistSession", lambda: None)())
-    await saveSession(child_session)
+    await save_session(child_session)
     now = now_iso()
     child_record = {
         "agentId": agent_id,
@@ -342,7 +342,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
         "lastUpdatedAt": now,
         "lastSummary": "Queued for background execution." if run_in_background else "Starting foreground execution.",
     }
-    await saveChildAgent(child_record)
+    await save_child_agent(child_record)
     return {
         "agentId": agent_id,
         "childSession": child_session,

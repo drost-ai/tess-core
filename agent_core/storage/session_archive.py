@@ -7,21 +7,21 @@ from typing import Any
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
 from .message_history import (
-    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+    set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
-from .io_executor import runStorageIo as _run_storage_io
+from .io_executor import run_storage_io as _run_storage_io
 import json
 
 from ..runtime.identifiers import parseSessionId
-from .json_io import readJsonFileTolerant, withRecordTransaction
-from .paths import sessionPath, sessionTranscriptLogPath
-from .session_schema_v2 import commitSessionV2, hydratePersistedSession
+from .json_io import read_json_file_tolerant, with_record_transaction
+from .paths import session_path, session_transcript_log_path
+from .session_schema_v2 import commit_session_v2, hydrate_persisted_session
 from .session_transactions import (
     SessionRecordNotFoundError,
-    mutateSessionRecordTransaction,
-    normalizeSessionRevision,
+    mutate_session_record_transaction,
+    normalize_session_revision,
 )
-from .sessions import createEmptySession
+from .sessions import create_empty_session
 
 
 def _parse_archived_messages(raw: str) -> list[dict[str, Any]]:
@@ -57,35 +57,35 @@ def _latest_archived_timestamp(raw: str) -> str | None:
     return latest
 
 
-async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
+async def load_session_with_reconciliation(sessionId: str) -> dict[str, Any]:
     """Full selected-session load with an explicit, convergent repair verdict."""
-    path = sessionPath(sessionId)
-    async with withRecordTransaction("session", sessionId):
-        raw = await readJsonFileTolerant(path, None)
+    path = session_path(sessionId)
+    async with with_record_transaction("session", sessionId):
+        raw = await read_json_file_tolerant(path, None)
         if not raw:
             recovered = await _rebuild_session_from_transcript_archive(sessionId)
             if recovered is None:
                 return {"record": None, "changed": False, "reason": None}
             safe_recovered = _sanitize_media_for_persistence(recovered)
-            commit = await commitSessionV2(sessionId, None, None, safe_recovered, presanitized=True)
+            commit = await commit_session_v2(sessionId, None, None, safe_recovered, presanitized=True)
             _set_session_persistence_checkpoint(
                 safe_recovered,
-                normalizeSessionRevision(safe_recovered.get("revision")),
+                normalize_session_revision(safe_recovered.get("revision")),
                 len(safe_recovered.get("messages") or []),
                 commit["bodyCommitId"],
             )
             return {"record": safe_recovered, "changed": True, "reason": "archive_recovery"}
-        hydration = await hydratePersistedSession(sessionId, raw)
+        hydration = await hydrate_persisted_session(sessionId, raw)
         record = hydration["record"]
         result = await _reconcile_session_record(sessionId, record)
         safe_record = _sanitize_media_for_persistence(result["record"])
         body_commit_id = hydration.get("bodyCommitId")
         if result["changed"]:
-            commit = await commitSessionV2(sessionId, raw, record, safe_record, presanitized=True)
+            commit = await commit_session_v2(sessionId, raw, record, safe_record, presanitized=True)
             body_commit_id = commit["bodyCommitId"]
         _set_session_persistence_checkpoint(
             safe_record,
-            normalizeSessionRevision(safe_record.get("revision")),
+            normalize_session_revision(safe_record.get("revision")),
             len(safe_record.get("messages") or []),
             body_commit_id,
         )
@@ -94,13 +94,13 @@ async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
         return {**result, "record": safe_record, "changed": changed, "reason": reason}
 
 
-async def loadSession(sessionId: str) -> SessionRecord | None:
-    result = await loadSessionWithReconciliation(sessionId)
+async def load_session(sessionId: str) -> SessionRecord | None:
+    result = await load_session_with_reconciliation(sessionId)
     return result["record"]
 
 
 async def _reconcile_session_record(session_id: str, record: SessionRecord) -> dict[str, Any]:
-    transcript_path = sessionTranscriptLogPath(session_id)
+    transcript_path = session_transcript_log_path(session_id)
     raw = await _run_storage_io(_read_text_sync, transcript_path, False)
     if raw is None:
         return {"record": record, "changed": False, "reason": None}
@@ -133,7 +133,7 @@ async def _reconcile_session_record(session_id: str, record: SessionRecord) -> d
 
 
 async def _rebuild_session_from_transcript_archive(session_id: str) -> SessionRecord | None:
-    transcript_path = sessionTranscriptLogPath(session_id)
+    transcript_path = session_transcript_log_path(session_id)
     raw = await _run_storage_io(_read_text_sync, transcript_path, True)
     if raw is None:
         return None
@@ -182,7 +182,7 @@ def _parse_archived_session_header(raw: str, session_id: str) -> SessionRecord |
             and isinstance(candidate.get("metadata"), dict)
         ):
             continue
-        recovered = createEmptySession(
+        recovered = create_empty_session(
             cwd=candidate["cwd"],
             provider=candidate["provider"],
             providerProfileName=candidate.get("providerProfileName"),
@@ -204,10 +204,10 @@ def _parse_archived_session_header(raw: str, session_id: str) -> SessionRecord |
         return recovered
     return None
 
-async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
+async def mutate_session_record(sessionId: str, mutate) -> SessionRecord | None:
     """Reconciling adapter over the one session mutate engine.
 
-    Not a peer engine: it delegates to ``mutateSessionRecordTransaction`` and
+    Not a peer engine: it delegates to ``mutate_session_record_transaction`` and
     only adds archived-transcript reconciliation under the same record lock,
     the in-place mutation convenience (return the record, or ``None`` after
     mutating in place), and ``None`` instead of raising when the session does
@@ -225,7 +225,7 @@ async def mutateSessionRecord(sessionId: str, mutate) -> SessionRecord | None:
         return {"session": updated, "changed": updated != before}
 
     try:
-        result = await mutateSessionRecordTransaction(sessionId, apply, requireExisting=True)
+        result = await mutate_session_record_transaction(sessionId, apply, requireExisting=True)
     except SessionRecordNotFoundError:
         return None
     return result["session"]

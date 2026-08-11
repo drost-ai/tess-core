@@ -9,7 +9,7 @@ import signal
 import subprocess
 import threading
 from ..._utils import maybe_await
-from ...storage import getStateRoot, loadTaskRecord, readTaskMeta
+from ...storage import get_state_root, load_task_record, read_task_meta
 from .mappers import (
     _event_name_for_task_status,
     _is_terminal_worker_status,
@@ -86,7 +86,7 @@ def _worker_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     # active home so a client that configured it in-process (config option
     # or scoped home) still spawns workers against the same store; explicit
     # per-task overrides in ``extra`` win.
-    env = {**os.environ, "AGENT_CORE_HOME": getStateRoot(), **(extra or {})}
+    env = {**os.environ, "AGENT_CORE_HOME": get_state_root(), **(extra or {})}
     package_root = str(Path(__file__).resolve().parents[3])
     env["PYTHONPATH"] = package_root if not env.get("PYTHONPATH") else f"{package_root}{os.pathsep}{env['PYTHONPATH']}"
     return env
@@ -133,10 +133,10 @@ def _watch_process_thread(
             # the process watcher observes exit.  Project that worker-owned
             # state once, while preserving a supervisor/tool terminal record
             # as the first-terminal-wins authority.
-            existing = await loadTaskRecord(task_id)
+            existing = await load_task_record(task_id)
             if existing and existing.get("status") in {"completed", "failed", "stopped"}:
                 return
-            meta = await readTaskMeta(task_id)
+            meta = await read_task_meta(task_id)
             if not meta or not _is_terminal_worker_status(meta.get("status")):
                 return
             projected = _build_task_record(meta, None)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from agent_core._utils import now_iso
 from agent_core.tasks.monitors import createMonitorRecord
-from agent_core.storage import configureRuntimeHome
+from agent_core.storage import configure_runtime_home
 from agent_core.tasks.monitor_observation import applyMonitorObservation
 from agent_core.tasks.monitor_transactions import (
     commitMonitorMutation,
@@ -30,7 +30,7 @@ async def main() -> None:
         result_path,
         event_path,
     ) = sys.argv[1:]
-    configureRuntimeHome(runtime_home)
+    configure_runtime_home(runtime_home)
     with open(ready_path, "a", encoding="utf-8") as handle:
         handle.write(f"{os.getpid()}\n")
     deadline = time.monotonic() + 10

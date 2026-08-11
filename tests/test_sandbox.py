@@ -156,7 +156,7 @@ class SandboxTests(AgentCoreTestCase):
             )
             payload = json.loads(result["content"])
             task_id = payload["task_id"]
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             run(processes_module._wait_for_tracked_background_runner(meta["runnerPid"]))
 
             self.assertIn("bg-ok", self._wait_for_output(payload["output_file"]))
@@ -169,8 +169,8 @@ class SandboxTests(AgentCoreTestCase):
         try:
             events = []
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda payload: events.append(payload)}))
-            session = core.createEmptySession(cwd=str(workspace), provider="openai", model="gpt-5.4", systemPrompt="s", permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider="openai", model="gpt-5.4", systemPrompt="s", permissionMode="bypassPermissions")
+            run(core.save_session(session))
             started = run(
                 supervisor["startBackgroundCommand"](
                     {
@@ -191,7 +191,7 @@ class SandboxTests(AgentCoreTestCase):
 
     def _bash_fixture(self, home, workspace, sandbox):
         config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions", "sandbox": sandbox}, str(workspace)))
-        session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+        session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
         bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
         return config, session, bash, []
 

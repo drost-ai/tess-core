@@ -13,11 +13,11 @@ from agent_core.storage.persisted_record_scanner import (
     DEFAULT_MAX_SCAN_ENTRIES,
     DEFAULT_READ_CONCURRENCY,
     FAMILY_MAX_BYTES,
-    getPersistedRecordIssue,
-    listPersistedRecordIssues,
-    scanPersistedJsonRecords,
-    setPersistedRecordBeforeOpenObserverForTesting,
-    setPersistedRecordReadObserverForTesting,
+    get_persisted_record_issue,
+    list_persisted_record_issues,
+    scan_persisted_json_records,
+    set_persisted_record_before_open_observer_for_testing,
+    set_persisted_record_read_observer_for_testing,
 )
 
 
@@ -25,9 +25,9 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
     def test_scalar_record_reads_retry_concurrent_atomic_replacement(self):
         root, home, _workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(home)))
-            state_path = Path(core.daemonStatePath("rc-instance"))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(home)))
+            state_path = Path(core.daemon_state_path("rc-instance"))
             state_path.parent.mkdir(parents=True, exist_ok=True)
             state_path.write_text(json.dumps({"pid": 101, "phase": "starting"}), encoding="utf-8")
             replacements = []
@@ -44,13 +44,13 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 os.replace(replacements[replacement_count], state_path)
                 replacement_count += 1
 
-            setPersistedRecordBeforeOpenObserverForTesting(replace_before_open)
-            state = run(core.loadDaemonState("rc-instance"))
+            set_persisted_record_before_open_observer_for_testing(replace_before_open)
+            state = run(core.load_daemon_state("rc-instance"))
             self.assertEqual(replacement_count, 3)
             self.assertEqual(state["pid"], 404)
-            self.assertIsNone(getPersistedRecordIssue(str(state_path)))
+            self.assertIsNone(get_persisted_record_issue(str(state_path)))
         finally:
-            setPersistedRecordBeforeOpenObserverForTesting(None)
+            set_persisted_record_before_open_observer_for_testing(None)
             self.restore_home(root, previous)
 
     def test_mixed_malformed_and_oversized_stores_isolate_failures(self):
@@ -58,9 +58,9 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
         runtime = None
         reads: list[tuple[str, int, int]] = []
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
-            session = core.createEmptySession(
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="test-model",
@@ -75,9 +75,9 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 "task-oversized",
                 "task-future",
             ]
-            run(core.saveSession(session))
+            run(core.save_session(session))
             now = "2026-07-16T00:00:00Z"
-            run(core.writeTaskMeta("task-valid", {
+            run(core.write_task_meta("task-valid", {
                 "taskId": "task-valid",
                 "sessionId": session["id"],
                 "type": "background_command",
@@ -85,21 +85,21 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 "startedAt": now,
                 "updatedAt": now,
             }))
-            run(core.writeTaskMeta("task-future", {
+            run(core.write_task_meta("task-future", {
                 "taskId": "task-future",
                 "sessionId": session["id"],
                 "type": "future_quantum_task",
                 "status": "future_waiting",
             }))
-            malformed_task = Path(core.taskMetaPath("task-malformed"))
+            malformed_task = Path(core.task_meta_path("task-malformed"))
             malformed_task.parent.mkdir(parents=True, exist_ok=True)
             malformed_task.write_text("{", encoding="utf-8")
-            _make_sparse(Path(core.taskMetaPath("task-oversized")), 2 * 1024 * 1024)
+            _make_sparse(Path(core.task_meta_path("task-oversized")), 2 * 1024 * 1024)
 
-            run(core.saveChildAgent(_child_agent("agent-valid", session["id"], "backgrounded", now)))
-            run(core.saveChildAgent(_child_agent("agent-future", session["id"], "future_status", now)))
-            Path(core.childAgentPath("agent-malformed")).write_text("{", encoding="utf-8")
-            _make_sparse(Path(core.childAgentPath("agent-oversized")), 2 * 1024 * 1024)
+            run(core.save_child_agent(_child_agent("agent-valid", session["id"], "backgrounded", now)))
+            run(core.save_child_agent(_child_agent("agent-future", session["id"], "future_status", now)))
+            Path(core.child_agent_path("agent-malformed")).write_text("{", encoding="utf-8")
+            _make_sparse(Path(core.child_agent_path("agent-oversized")), 2 * 1024 * 1024)
 
             monitor = core.createMonitorRecord({
                 "id": "monitor-valid",
@@ -107,10 +107,10 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 "taskId": "task-valid",
                 "goal": "watch valid work",
             })
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             session["metadata"]["monitorIds"] = ["monitor-valid", "monitor-malformed", "monitor-oversized"]
-            Path(core.monitorPath("monitor-malformed")).write_text("{", encoding="utf-8")
-            _make_sparse(Path(core.monitorPath("monitor-oversized")), 2 * 1024 * 1024)
+            Path(core.monitor_path("monitor-malformed")).write_text("{", encoding="utf-8")
+            _make_sparse(Path(core.monitor_path("monitor-oversized")), 2 * 1024 * 1024)
 
             health = {
                 "taskId": "health-valid",
@@ -122,21 +122,21 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 "updatedAt": now,
                 "command": "true",
             }
-            run(core.saveHealthCheckTask(health))
-            Path(core.healthCheckMetaPath("health-malformed")).parent.mkdir(parents=True, exist_ok=True)
-            Path(core.healthCheckMetaPath("health-malformed")).write_text("{", encoding="utf-8")
-            _make_sparse(Path(core.healthCheckMetaPath("health-oversized")), 2 * 1024 * 1024)
-            Path(core.daemonStatePath("rc-instance")).parent.mkdir(parents=True, exist_ok=True)
-            Path(core.daemonStatePath("rc-instance")).write_text("{", encoding="utf-8")
+            run(core.save_health_check_task(health))
+            Path(core.health_check_meta_path("health-malformed")).parent.mkdir(parents=True, exist_ok=True)
+            Path(core.health_check_meta_path("health-malformed")).write_text("{", encoding="utf-8")
+            _make_sparse(Path(core.health_check_meta_path("health-oversized")), 2 * 1024 * 1024)
+            Path(core.daemon_state_path("rc-instance")).parent.mkdir(parents=True, exist_ok=True)
+            Path(core.daemon_state_path("rc-instance")).write_text("{", encoding="utf-8")
 
             oversized_paths = [
-                Path(core.taskMetaPath("task-oversized")),
-                Path(core.childAgentPath("agent-oversized")),
-                Path(core.monitorPath("monitor-oversized")),
-                Path(core.healthCheckMetaPath("health-oversized")),
+                Path(core.task_meta_path("task-oversized")),
+                Path(core.child_agent_path("agent-oversized")),
+                Path(core.monitor_path("monitor-oversized")),
+                Path(core.health_check_meta_path("health-oversized")),
             ]
             sizes_before = [path.stat().st_size for path in oversized_paths]
-            setPersistedRecordReadObserverForTesting(
+            set_persisted_record_read_observer_for_testing(
                 lambda file_path, requested, actual: reads.append((file_path, requested, actual))
             )
 
@@ -144,11 +144,11 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             self.assertEqual(sorted(record["agentId"] for record in agents), ["agent-future", "agent-valid"])
             self.assertEqual([record["id"] for record in monitors], ["monitor-valid"])
             self.assertEqual([record["taskId"] for record in health_checks], ["health-valid"])
-            self.assertIsNone(run(core.loadDaemonState("rc-instance")))
+            self.assertIsNone(run(core.load_daemon_state("rc-instance")))
             for path in oversized_paths:
                 self.assertFalse(any(file_path == str(path) for file_path, _requested, _actual in reads))
 
-            issues = listPersistedRecordIssues(None, str(home))
+            issues = list_persisted_record_issues(None, str(home))
             self.assertTrue(any(issue["reason"] == "malformed_json" for issue in issues))
             self.assertTrue(any(issue["reason"] == "record_too_large" for issue in issues))
             self.assertTrue(all(len(issue.get("detail", "")) <= 240 for issue in issues))
@@ -190,7 +190,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             ]
             self.assertEqual(quarantine_names, [])
         finally:
-            setPersistedRecordReadObserverForTesting(None)
+            set_persisted_record_read_observer_for_testing(None)
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)
@@ -207,7 +207,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             select = lambda entry: {"id": entry.name, "filePath": str(directory / entry.name)}
             validate = lambda value, _candidate: isinstance(value, dict)
 
-            entry_limited = run(scanPersistedJsonRecords(
+            entry_limited = run(scan_persisted_json_records(
                 family="agent",
                 directory=str(directory),
                 select=select,
@@ -219,7 +219,7 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             self.assertLessEqual(entry_limited["examinedEntries"], 4)
             self.assertTrue(any(issue["reason"] == "scan_entry_limit" for issue in entry_limited["issues"]))
 
-            byte_limited = run(scanPersistedJsonRecords(
+            byte_limited = run(scan_persisted_json_records(
                 family="agent",
                 directory=str(directory),
                 select=select,
@@ -246,8 +246,8 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
                 with lock:
                     active -= 1
 
-            setPersistedRecordBeforeOpenObserverForTesting(observe_before_open)
-            run(scanPersistedJsonRecords(
+            set_persisted_record_before_open_observer_for_testing(observe_before_open)
+            run(scan_persisted_json_records(
                 family="agent",
                 directory=str(directory),
                 select=select,
@@ -262,16 +262,16 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
             self.assertEqual(min(FAMILY_MAX_BYTES.values()), 256 * 1024)
             self.assertEqual(max(FAMILY_MAX_BYTES.values()), 4 * 1024 * 1024)
         finally:
-            setPersistedRecordBeforeOpenObserverForTesting(None)
+            set_persisted_record_before_open_observer_for_testing(None)
             self.restore_home(root, previous)
 
     def test_rejected_corruption_reporting_leaves_no_periodic_work(self):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
-            malformed = Path(core.childAgentPath("agent-malformed"))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
+            malformed = Path(core.child_agent_path("agent-malformed"))
             malformed.write_text("{", encoding="utf-8")
             calls = 0
 
@@ -303,9 +303,9 @@ class PersistedRecordScannerTests(AgentCoreTestCase):
 
 async def _gather_records() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     return tuple(await asyncio.gather(
-        core.listChildAgents(),
-        core.listMonitors(),
-        core.listHealthCheckTasks(),
+        core.list_child_agents(),
+        core.list_monitors(),
+        core.list_health_check_tasks(),
     ))
 
 

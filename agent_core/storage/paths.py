@@ -21,7 +21,7 @@ Scope = Literal["user", "project", "local"]
 DEFAULT_RUNTIME_HOME = "~/.agent-core"
 class RuntimeHomeScope:
     def __init__(self, runtimeHome: str):
-        self.runtimeHome = resolveRuntimeHome(None, runtimeHome)
+        self.runtimeHome = resolve_runtime_home(None, runtimeHome)
         self._scope = RuntimePathsScope(resolveRuntimePaths(candidate=self.runtimeHome), immutable=False)
 
     def __enter__(self) -> str:
@@ -38,35 +38,35 @@ class RuntimeHomeScope:
         self.__exit__(exc_type, exc, tb)
 
 
-def scopedRuntimeHome(runtimeHome: str) -> RuntimeHomeScope:
+def scoped_runtime_home(runtimeHome: str) -> RuntimeHomeScope:
     return RuntimeHomeScope(runtimeHome)
 
 
-def getContextRuntimeHome() -> str | None:
+def get_context_runtime_home() -> str | None:
     scoped = getScopedRuntimePaths()
     return scoped.home if scoped is not None else None
 
 
-def expandHome(rawPath: str) -> str:
+def expand_home(rawPath: str) -> str:
     if rawPath == "~":
         return str(Path.home())
     if rawPath.startswith("~/"):
         return str(Path.home() / rawPath[2:])
     return rawPath
 
-def resolveRuntimeHome(cwd: str | None = None, candidate: str | None = None) -> str:
+def resolve_runtime_home(cwd: str | None = None, candidate: str | None = None) -> str:
     return resolveRuntimePaths(cwd, candidate).home
 
-def configureRuntimeHome(runtimeHome: str) -> str:
+def configure_runtime_home(runtimeHome: str) -> str:
     return configureActiveRuntimePaths(runtimeHome).home
 
-def resetConfiguredRuntimeHome() -> None:
+def reset_configured_runtime_home() -> None:
     resetActiveRuntimePaths()
 
-def getStateRoot() -> str:
+def get_state_root() -> str:
     return getActiveRuntimePaths().home
 
-def findGitRoot(cwd: str) -> str | None:
+def find_git_root(cwd: str) -> str | None:
     """Resolve the nearest worktree root without spawning ``git``.
 
     Git represents ordinary repositories with a ``.git`` directory and linked
@@ -85,97 +85,97 @@ def findGitRoot(cwd: str) -> str | None:
         return None
     return None
 
-def getProjectRoot(cwd: str) -> str:
-    return findGitRoot(cwd) or cwd
+def get_project_root(cwd: str) -> str:
+    return find_git_root(cwd) or cwd
 
-def getProjectStateDir(cwd: str) -> str:
-    return os.path.join(getProjectRoot(cwd), ".tess", "project")
+def get_project_state_dir(cwd: str) -> str:
+    return os.path.join(get_project_root(cwd), ".tess", "project")
 
-def getLocalStateDir(cwd: str) -> str:
+def get_local_state_dir(cwd: str) -> str:
     return os.path.join(cwd, ".tess", "local")
 
-def getProjectMemoryPath(cwd: str) -> str:
-    return os.path.join(getProjectStateDir(cwd), "memory.md")
+def get_project_memory_path(cwd: str) -> str:
+    return os.path.join(get_project_state_dir(cwd), "memory.md")
 
-def getProjectMemoryRecordsPath(cwd: str) -> str:
-    return os.path.join(getProjectStateDir(cwd), "memory-records.json")
+def get_project_memory_records_path(cwd: str) -> str:
+    return os.path.join(get_project_state_dir(cwd), "memory-records.json")
 
-def getDaemonDir() -> str:
-    return os.path.join(getStateRoot(), "daemon")
+def get_daemon_dir() -> str:
+    return os.path.join(get_state_root(), "daemon")
 
-def getDaemonInstancesDir() -> str:
-    return os.path.join(getDaemonDir(), "instances")
+def get_daemon_instances_dir() -> str:
+    return os.path.join(get_daemon_dir(), "instances")
 
 _DAEMON_INSTANCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$")
 
-def parseDaemonInstanceId(instanceId: str) -> str:
+def parse_daemon_instance_id(instanceId: str) -> str:
     if not isinstance(instanceId, str) or not _DAEMON_INSTANCE_ID_PATTERN.fullmatch(instanceId):
         raise ValueError(f"Invalid daemon instance id: {instanceId!r}")
     return instanceId
 
-def daemonInstanceDir(instanceId: str) -> str:
-    return os.path.join(getDaemonInstancesDir(), parseDaemonInstanceId(instanceId))
+def daemon_instance_dir(instanceId: str) -> str:
+    return os.path.join(get_daemon_instances_dir(), parse_daemon_instance_id(instanceId))
 
 MAX_DAEMON_SOCKET_PATH_BYTES = 100
 
-def daemonSocketPath(instanceId: str) -> str:
-    preferred = os.path.join(daemonInstanceDir(instanceId), "daemon.sock")
+def daemon_socket_path(instanceId: str) -> str:
+    preferred = os.path.join(daemon_instance_dir(instanceId), "daemon.sock")
     if len(preferred.encode("utf-8")) <= MAX_DAEMON_SOCKET_PATH_BYTES:
         return preferred
     scope_hash = hashlib.sha256(
-        f"{getStateRoot()}\n{parseDaemonInstanceId(instanceId)}".encode("utf-8")
+        f"{get_state_root()}\n{parse_daemon_instance_id(instanceId)}".encode("utf-8")
     ).hexdigest()[:12]
     return os.path.join(tempfile.gettempdir(), f"agent-core-{scope_hash}.sock")
 
-def daemonPidPath(instanceId: str) -> str:
-    return os.path.join(daemonInstanceDir(instanceId), "pid")
+def daemon_pid_path(instanceId: str) -> str:
+    return os.path.join(daemon_instance_dir(instanceId), "pid")
 
-def daemonStatePath(instanceId: str) -> str:
-    return os.path.join(daemonInstanceDir(instanceId), "state.json")
+def daemon_state_path(instanceId: str) -> str:
+    return os.path.join(daemon_instance_dir(instanceId), "state.json")
 
-def daemonEventsPath(instanceId: str) -> str:
-    return os.path.join(daemonInstanceDir(instanceId), "events.jsonl")
+def daemon_events_path(instanceId: str) -> str:
+    return os.path.join(daemon_instance_dir(instanceId), "events.jsonl")
 
-def daemonSpawnLedgerPath(instanceId: str) -> str:
-    return os.path.join(daemonInstanceDir(instanceId), "spawn-ledger.jsonl")
+def daemon_spawn_ledger_path(instanceId: str) -> str:
+    return os.path.join(daemon_instance_dir(instanceId), "spawn-ledger.jsonl")
 
-def daemonLogsDir(instanceId: str) -> str:
-    return os.path.join(daemonInstanceDir(instanceId), "logs")
+def daemon_logs_dir(instanceId: str) -> str:
+    return os.path.join(daemon_instance_dir(instanceId), "logs")
 
-def getCompactionsDir() -> str:
-    return os.path.join(getStateRoot(), "compactions")
+def get_compactions_dir() -> str:
+    return os.path.join(get_state_root(), "compactions")
 
-def getToolArtifactsDir() -> str:
-    return os.path.join(getStateRoot(), "tool-artifacts")
+def get_tool_artifacts_dir() -> str:
+    return os.path.join(get_state_root(), "tool-artifacts")
 
-def getSessionToolArtifactsDir(sessionId: str) -> str:
-    return os.path.join(getToolArtifactsDir(), parseSessionId(sessionId))
+def get_session_tool_artifacts_dir(sessionId: str) -> str:
+    return os.path.join(get_tool_artifacts_dir(), parseSessionId(sessionId))
 
-def toolArtifactMetaPath(sessionId: str, artifactId: str) -> str:
+def tool_artifact_meta_path(sessionId: str, artifactId: str) -> str:
     return os.path.join(
-        getSessionToolArtifactsDir(sessionId),
+        get_session_tool_artifacts_dir(sessionId),
         f"{parseArtifactId(artifactId)}.meta.json",
     )
 
-def toolArtifactDataPath(sessionId: str, artifactId: str, extension: str) -> str:
+def tool_artifact_data_path(sessionId: str, artifactId: str, extension: str) -> str:
     ext = extension if extension.startswith(".") else f".{extension}"
     if not re.fullmatch(r"\.[A-Za-z0-9]{1,16}(?:\.[A-Za-z0-9]{1,8})?", ext):
         raise ValueError("Invalid artifact extension")
     return os.path.join(
-        getSessionToolArtifactsDir(sessionId),
+        get_session_tool_artifacts_dir(sessionId),
         f"{parseArtifactId(artifactId)}{ext}",
     )
 
-def getSessionCompactionsDir(sessionId: str) -> str:
-    return os.path.join(getCompactionsDir(), parseSessionId(sessionId))
+def get_session_compactions_dir(sessionId: str) -> str:
+    return os.path.join(get_compactions_dir(), parseSessionId(sessionId))
 
-def compactionManifestPath(sessionId: str) -> str:
-    return os.path.join(getSessionCompactionsDir(sessionId), "manifest.json")
+def compaction_manifest_path(sessionId: str) -> str:
+    return os.path.join(get_session_compactions_dir(sessionId), "manifest.json")
 
-def compactionCheckpointPath(sessionId: str, generation: int) -> str:
-    return os.path.join(getSessionCompactionsDir(sessionId), "checkpoints", f"{generation:04d}.json")
+def compaction_checkpoint_path(sessionId: str, generation: int) -> str:
+    return os.path.join(get_session_compactions_dir(sessionId), "checkpoints", f"{generation:04d}.json")
 
-async def ensureBaseLayout(cwd: str, paths: RuntimePaths | None = None) -> None:
+async def ensure_base_layout(cwd: str, paths: RuntimePaths | None = None) -> None:
     graph = paths or getActiveRuntimePaths()
     runtime_dirs = [
         graph.home,
@@ -190,7 +190,7 @@ async def ensureBaseLayout(cwd: str, paths: RuntimePaths | None = None) -> None:
         graph.remoteSessionsDir,
         graph.bridgesDir,
         graph.logsDir,
-        graph.daemonLogsDir,
+        graph.daemon_logs_dir,
         graph.locksDir,
         graph.trustDir,
         graph.repositoryTrustDir,
@@ -203,15 +203,15 @@ async def ensureBaseLayout(cwd: str, paths: RuntimePaths | None = None) -> None:
         os.makedirs(directory, exist_ok=True)
         if os.name != "nt":
             os.chmod(directory, 0o700)
-    for directory in (getProjectStateDir(cwd), getLocalStateDir(cwd)):
+    for directory in (get_project_state_dir(cwd), get_local_state_dir(cwd)):
         os.makedirs(directory, exist_ok=True)
 
 
-def sessionPath(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", f"{parseSessionId(sessionId)}.json")
+def session_path(sessionId: str) -> str:
+    return os.path.join(get_state_root(), "sessions", f"{parseSessionId(sessionId)}.json")
 
-def sessionArchiveDir(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", parseSessionId(sessionId))
+def session_archive_dir(sessionId: str) -> str:
+    return os.path.join(get_state_root(), "sessions", parseSessionId(sessionId))
 
-def sessionTranscriptLogPath(sessionId: str) -> str:
-    return os.path.join(sessionArchiveDir(sessionId), "full-transcript-with-tools.jsonl")
+def session_transcript_log_path(sessionId: str) -> str:
+    return os.path.join(session_archive_dir(sessionId), "full-transcript-with-tools.jsonl")

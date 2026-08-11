@@ -65,7 +65,7 @@ def _ensure_daemon_worker(
         os.environ["AGENT_CORE_TEST_DAEMON_BOOT_FAULT_STAGE"] = fault_stage
     if fault_marker:
         os.environ["P02_FAULT_MARKER"] = fault_marker
-    core.configureRuntimeHome(runtime_home)
+    core.configure_runtime_home(runtime_home)
     try:
         start_barrier.wait(timeout=20)
 
@@ -104,7 +104,7 @@ def _reattach_daemon_worker(
 ) -> None:
     os.environ["AGENT_CORE_HOME"] = runtime_home
     os.environ["AGENT_CORE_DAEMON_INSTANCE_LOCK_TIMEOUT_MS"] = "15000"
-    core.configureRuntimeHome(runtime_home)
+    core.configure_runtime_home(runtime_home)
     failure_phase = "attached"
 
     async def attach() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -217,7 +217,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
                 root, home, workspace, previous = self.temp_context()
                 workers: list[multiprocessing.Process] = []
                 try:
-                    core.configureRuntimeHome(str(home))
+                    core.configure_runtime_home(str(home))
                     marker = Path(root.name, f"p02-{fault_stage}.marker")
                     barrier = context.Barrier(2)
                     results = context.Queue()
@@ -259,7 +259,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
         context = multiprocessing.get_context("spawn")
         workers: list[multiprocessing.Process] = []
         try:
-            core.configureRuntimeHome(str(home))
+            core.configure_runtime_home(str(home))
             start_barrier = context.Barrier(2)
             recovery_barrier = context.Barrier(2)
             crash_released = context.Event()
@@ -305,7 +305,7 @@ class P02ConcurrentDaemonBootstrapTests(AgentCoreTestCase):
             self.assertNotEqual(
                 new_states[0]["authTokenId"], old_states[0]["authTokenId"]
             )
-            events = run(core.loadDaemonEvents(P02_INSTANCE))
+            events = run(core.load_daemon_events(P02_INSTANCE))
             self.assertTrue(
                 any(
                     event.get("event") == "daemon.recovered"

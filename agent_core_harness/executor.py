@@ -164,7 +164,7 @@ async def run_scenario_async(
         await close_remote_driver(state)
         await close_runtime_driver(state)
         sandbox.cleanup_sandbox(passed=failure is None)
-        core.resetConfiguredRuntimeHome()
+        core.reset_configured_runtime_home()
 
 
 def run_scenario(scenario: Scenario | str, **kwargs: Any) -> ScenarioResult:
@@ -191,7 +191,7 @@ async def _execute_step(
             },
             str(sandbox.workspace),
         )
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(sandbox.workspace),
             provider=config["provider"],
             providerProfileName=config.get("providerProfileName"),
@@ -204,11 +204,11 @@ async def _execute_step(
         state["session"] = session
         return ["session"]
     if step_type == "save_session":
-        await core.saveSession(_current_session(state))
+        await core.save_session(_current_session(state))
         return ["session"]
     if step_type == "load_session":
         session_id = data.get("sessionId") or _current_session(state)["id"]
-        loaded = await core.loadSession(session_id)
+        loaded = await core.load_session(session_id)
         if not loaded:
             raise ScenarioAssertionError(f"Session not found: {session_id}", category="runtime")
         state["session"] = loaded

@@ -13,7 +13,7 @@ from tests.test_package38_interactive_context_relief import _codex_config
 
 class Package44ProgressFuseTests(AgentCoreTestCase):
     def _session(self, workspace: Path) -> dict[str, Any]:
-        return core.createEmptySession(
+        return core.create_empty_session(
             cwd=str(workspace),
             provider="openai",
             providerProfileName="codex",
@@ -64,8 +64,8 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
     def test_same_large_result_with_fresh_artifact_ids_stops_on_third_cycle(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             config["tools"] = config["allowedTools"] = ["large-repeat"]
 
@@ -92,8 +92,8 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
     def test_failed_artifact_pages_use_specific_terminal_subcode(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             config["tools"] = config["allowedTools"] = ["ReadToolArtifact"]
             reader = next(
@@ -123,8 +123,8 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
     def test_incident_scale_productive_work_has_no_time_or_call_fuse(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             config["tools"] = config["allowedTools"] = ["progress"]
             session = self._session(workspace)
@@ -363,8 +363,8 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
     def test_host_logical_turn_id_recovers_durable_terminal_without_dispatch(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             session = self._session(workspace)
             session["messages"].append(
@@ -379,8 +379,8 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
                     provider_call_index=provider_call_index,
                 )
             self.assertEqual(terminal["reason"], "repeated_tool_cycle")
-            run(core.saveSession(session))
-            restored = run(core.loadSession(session["id"]))
+            run(core.save_session(session))
+            restored = run(core.load_session(session["id"]))
             self.assertIsNotNone(restored)
 
             dispatched = False

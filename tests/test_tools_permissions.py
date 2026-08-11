@@ -8,7 +8,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
 
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
@@ -21,7 +21,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             self.assertEqual((workspace / "accepted.txt").read_text(), "ok")
 
             yes_events = []
-            yes_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            yes_session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             yes_config = {**config, "permissionMode": "default"}
             yes_context = {
                 **context,
@@ -68,7 +68,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             authority = run(core.captureAgentAuthority(config=config, session=session, tools=core.createBuiltinTools()))
             session["metadata"]["effectiveAgentAuthority"] = authority
 
@@ -88,7 +88,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             self.assertEqual(session["permissionMode"], "bypassPermissions")
             self.assertEqual(config["permissionMode"], "bypassPermissions")
 
-            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            child = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child["metadata"]["parentSessionId"] = session["id"]
             child["metadata"]["effectiveAgentAuthority"] = authority
             child_config = {**config, "permissionMode": "default"}
@@ -117,9 +117,9 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             context = {"session": session, "config": config, "interactive": False, "cwd": str(workspace)}
-            run(core.saveAutoMode(str(workspace), {"allow": ["echo"], "deny": ["rm -rf"], "environment": {}}))
+            run(core.save_auto_mode(str(workspace), {"allow": ["echo"], "deny": ["rm -rf"], "environment": {}}))
 
             cases = [
                 ("Write", "edit", "bypassPermissions", False, None, {"decision": "allow", "source": "mode"}),
@@ -144,8 +144,8 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "auto"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
-            run(core.saveAutoMode(str(workspace), {"allow": ["echo"], "deny": [sys.executable], "environment": {}}))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="auto")
+            run(core.save_auto_mode(str(workspace), {"allow": ["echo"], "deny": [sys.executable], "environment": {}}))
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
             events = []
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
@@ -171,10 +171,10 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child.setdefault("metadata", {})["parentSessionId"] = parent["id"]
-            run(core.saveSession(parent))
+            run(core.save_session(parent))
             write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
             persisted = {"count": 0}
             context = {"session": child, "config": config, "interactive": True, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
@@ -190,7 +190,7 @@ class ToolPermissionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["metadata"]["depth"] = 2
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
             result = run(agent.handler({}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
@@ -209,7 +209,7 @@ class ToolPermissionTests(AgentCoreTestCase):
                 return {"taskId": f"depth-task-{task_args['agentId'][:8]}", "outputFile": str(workspace / "out.log")}
 
             supervisor = {"startSubagentTask": fake_start}
-            depth_one_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            depth_one_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             depth_one_parent["metadata"]["depth"] = 1
             result = json.loads(
                 run(
@@ -220,17 +220,17 @@ class ToolPermissionTests(AgentCoreTestCase):
                 )["content"]
             )
             self.assertIsNone(result["result"])  # non-blocking default: spawn registered, no wait
-            child_session = run(core.loadSession(result["session_id"]))
+            child_session = run(core.load_session(result["session_id"]))
             self.assertEqual(child_session["metadata"]["depth"], 2)
 
-            depth_two_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            depth_two_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             depth_two_parent["metadata"]["depth"] = 2
             blocked = run(agent.handler({"description": "Blocked", "prompt": "no"}, {"session": depth_two_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor}))
             self.assertTrue(blocked["isError"])
             self.assertEqual(depth_two_parent["metadata"].get("childAgentIds"), [])
             self.assertEqual(depth_two_parent["metadata"].get("childSessionIds"), [])
 
-            already_cancelled_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            already_cancelled_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             with self.assertRaises(RuntimeError) as abort_ctx:
                 run(agent.handler({"description": "Already cancelled", "prompt": "no"}, {"session": already_cancelled_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor, "abortSignal": {"aborted": True}}))
             self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")

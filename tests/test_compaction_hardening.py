@@ -17,7 +17,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
             },
         ]
 
-        projected = core.coercePreservedTrace(traces)
+        projected = core.coerce_preserved_trace(traces)
 
         self.assertEqual(len(projected), 1)
         self.assertEqual(projected[0]["sourceRange"]["generation"], 3)
@@ -27,7 +27,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
         self.assertTrue(projected[0]["truncated"])
 
     def test_working_context_reinjects_only_the_latest_bounded_trace(self):
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd="/tmp/workspace",
             provider="openai",
             model="gpt-5.4",
@@ -59,7 +59,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
             "createdAt": "2026-07-20T17:01:07.533Z",
         }
 
-        document = core.buildWorkingContextDocumentFromCandidate(
+        document = core.build_working_context_document_from_candidate(
             {
                 "previous": previous,
                 "session": session,
@@ -122,7 +122,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
                 }
 
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -136,7 +136,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
             client = MalformedSynthesisClient()
 
             result = run(
-                core.runCompaction(
+                core.run_compaction(
                     {
                         "session": session,
                         "config": {"durableMemory": {"enabled": False}},
@@ -168,7 +168,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
                 raise AssertionError("A non-beneficial incremental compaction must not call a model.")
 
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -193,7 +193,7 @@ class CompactionHardeningTests(AgentCoreTestCase):
             }
 
             result = run(
-                core.runCompaction(
+                core.run_compaction(
                     {
                         "session": session,
                         "config": {},

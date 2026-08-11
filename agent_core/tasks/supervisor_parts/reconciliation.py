@@ -8,15 +8,15 @@ from ...process.identity import (
     verifyOwnedProcessIdentity,
 )
 from ...storage import (
-    listLiveDaemonStates,
-    listTaskRecords,
-    loadChildAgent,
-    loadTaskRecord,
-    mutateChildAgent,
-    readTaskMeta,
-    saveTaskRecord,
-    taskOutputPath,
-    writeTaskMeta,
+    list_live_daemon_states,
+    list_task_records,
+    load_child_agent,
+    load_task_record,
+    mutate_child_agent,
+    read_task_meta,
+    save_task_record,
+    task_output_path,
+    write_task_meta,
 )
 from ...subagents.reconciliation import createSubagentReconciliationForTerminalChild
 from .mappers import (
@@ -43,12 +43,12 @@ async def _reconcile_persisted_tasks(
     emit: Callable[[str, dict[str, Any], str | None], Any],
     registries: SupervisorRegistries,
 ) -> None:
-    records = await listTaskRecords()
+    records = await list_task_records()
     active_statuses = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
     recoverable_kinds = {"background_command", "main_session", "subagent"}
     live_foreign_supervisors = {
         state["supervisorId"]
-        for state in await listLiveDaemonStates()
+        for state in await list_live_daemon_states()
         if isinstance(state.get("supervisorId"), str) and state["supervisorId"] != supervisor_id
     }
     for record in records:
@@ -60,7 +60,7 @@ async def _reconcile_persisted_tasks(
             task_id = record.get("id") or record.get("taskId")
             if not isinstance(task_id, str) or not task_id:
                 continue
-            meta = await readTaskMeta(task_id)
+            meta = await read_task_meta(task_id)
             if not meta:
                 continue
             stamped_supervisor = record.get("supervisorId") or meta.get("supervisorId")
@@ -207,8 +207,8 @@ async def _mark_terminal_process_from_meta(
         "supervisorId": supervisor_id,
         "metadata": {**dict(record.get("metadata") or {}), **_process_state_metadata(process_state)},
     }
-    await writeTaskMeta(task_id, next_meta)
-    await saveTaskRecord(next_record)
+    await write_task_meta(task_id, next_meta)
+    await save_task_record(next_record)
     await maybe_await(emit(_event_name_for_task_status(status), _task_record_event_payload(next_record), record.get("sessionId")))
 
 
@@ -220,12 +220,12 @@ async def _recover_completed_subagent_task(
 ) -> bool:
     metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
     agent_id = metadata.get("agent_id") or record.get("sourceId")
-    child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+    child = await load_child_agent(agent_id) if isinstance(agent_id, str) and agent_id else None
     if not child or _is_active_child_agent_status(child.get("status")):
         return False
     next_record = _build_recovered_subagent_task_record(record, child)
-    await saveTaskRecord(next_record)
-    meta = await readTaskMeta(task_id) or {}
+    await save_task_record(next_record)
+    meta = await read_task_meta(task_id) or {}
     task_meta = {
         **meta,
         "type": "subagent",
@@ -248,9 +248,9 @@ async def _recover_completed_subagent_task(
         "stoppable": child.get("stoppable"),
         "owner": "daemon",
     }
-    await writeTaskMeta(task_id, task_meta)
+    await write_task_meta(task_id, task_meta)
     updated_at = next_record.get("updatedAt") or now_iso()
-    updated_child = await mutateChildAgent(
+    updated_child = await mutate_child_agent(
         agent_id,
         lambda current: {**(current or child), "recoveryState": "completed_while_detached", "lastUpdatedAt": updated_at},
     )
@@ -303,7 +303,7 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
             "lastSummary": summary,
         }
 
-    child = await mutateChildAgent(agent_id, _cancel)
+    child = await mutate_child_agent(agent_id, _cancel)
     task_meta = {
         **meta,
         "type": "subagent",
@@ -319,7 +319,7 @@ async def _mark_subagent_cancelled_from_stop(meta: dict[str, Any], task_id: str,
         "summary": summary,
         "resultSummary": summary,
         "completionReason": "cancelled",
-        "outputFile": meta.get("outputFile") or taskOutputPath(task_id),
+        "outputFile": meta.get("outputFile") or task_output_path(task_id),
     }
     await createSubagentReconciliationForTerminalChild(
         childRecord=child,

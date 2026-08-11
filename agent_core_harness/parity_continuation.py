@@ -8,9 +8,9 @@ import agent_core as core
 
 async def run_continuation_relief(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
     config, session, messages, memory = await _build_fixture(data, paths)
-    before = core.classifyContextPressure({"session": session, "messages": messages})
-    lightweight = core.applyLightweightContextRelief(messages, session)
-    relief = core.applyContextReliefModes(
+    before = core.classify_context_pressure({"session": session, "messages": messages})
+    lightweight = core.apply_lightweight_context_relief(messages, session)
+    relief = core.apply_context_relief_modes(
         {
             "session": session,
             "config": config,
@@ -21,7 +21,7 @@ async def run_continuation_relief(data: dict[str, Any], paths: dict[str, Any]) -
             "reactiveAttempt": data.get("reactiveAttempt", 0),
         }
     )
-    after = core.classifyContextPressure({"session": session, "messages": relief["messages"]})
+    after = core.classify_context_pressure({"session": session, "messages": relief["messages"]})
     summary = relief["summary"]
     return _clean(
         {
@@ -51,7 +51,7 @@ async def _build_fixture(data: dict[str, Any], paths: dict[str, Any]) -> tuple[d
         },
         str(paths["python_workspace"]),
     )
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         {
             "cwd": str(paths["python_workspace"]),
             "provider": config["provider"],

@@ -24,7 +24,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                     "concurrencyGroup": "research",
                 }
             }
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
+            parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="acceptEdits")
             from agent_core.subagents import prepareSubagent
 
             context = {
@@ -49,7 +49,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             self.assertEqual(contract["communication"]["maxPendingQuestions"], 2)
             self.assertEqual(contract["concurrencyGroup"], "research")
             self.assertEqual(prepared["runtimeContractSummary"]["tools"], ["Read", "Grep"])
-            child_record = run(core.loadChildAgent(prepared["agentId"]))
+            child_record = run(core.load_child_agent(prepared["agentId"]))
             self.assertEqual(child_record["runtimeContract"]["tools"], ["Read", "Grep"])
 
             # Structured validation now runs in the background finalizer.
@@ -63,7 +63,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             finally:
                 os.environ.pop("TESS_CHILD_AGENT_ID", None)
                 os.environ.pop("TESS_CHILD_TASK_ID", None)
-            child_record = run(core.loadChildAgent(prepared["agentId"]))
+            child_record = run(core.load_child_agent(prepared["agentId"]))
             self.assertEqual(child_record["structuredResultStatus"], "valid")
             self.assertEqual(child_record["structuredResult"], {"summary": "done"})
         finally:
@@ -90,7 +90,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             config["sessionPersistence"] = False
             config["tools"] = ["AllowedTool", "BlockedTool"]
             config["allowedTools"] = ["AllowedTool", "BlockedTool"]
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["subagentRuntimeContract"] = {"tools": ["AllowedTool"]}
             blocked_called = {"value": False}
 
@@ -148,7 +148,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             config["sessionPersistence"] = False
             config["tools"] = ["AllowedTool"]
             config["allowedTools"] = ["AllowedTool"]
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["subagentRuntimeContract"] = {"tools": ["AllowedTool"], "maxToolCalls": 1}
             calls = {"tool": 0, "provider": 0}
 
@@ -202,9 +202,9 @@ class SubagentV2Tests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["subagentTaskId"] = "task-mailbox"
-            run(core.writeTaskMeta("task-mailbox", {"type": "subagent", "task_id": "task-mailbox", "session_id": session["id"], "status": "running", "startedAt": session["createdAt"], "outputFile": core.taskOutputPath("task-mailbox")}))
+            run(core.write_task_meta("task-mailbox", {"type": "subagent", "task_id": "task-mailbox", "session_id": session["id"], "status": "running", "startedAt": session["createdAt"], "outputFile": core.task_output_path("task-mailbox")}))
             message = run(core.send_task_message("task-mailbox", {"childSessionId": session["id"], "content": "Use the new clue."}))
             self.assertEqual(message["status"], "queued")
             delivered = run(core.deliver_queued_task_messages_to_session(session))
@@ -222,8 +222,8 @@ class SubagentV2Tests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.writeTaskMeta("task-contract-pin", {"type": "subagent", "task_id": "task-contract-pin", "session_id": session["id"], "status": "running", "startedAt": "2026-07-05T00:00:00Z", "outputFile": core.taskOutputPath("task-contract-pin")}))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.write_task_meta("task-contract-pin", {"type": "subagent", "task_id": "task-contract-pin", "session_id": session["id"], "status": "running", "startedAt": "2026-07-05T00:00:00Z", "outputFile": core.task_output_path("task-contract-pin")}))
             message = run(
                 core.send_task_message(
                     "task-contract-pin",
@@ -289,10 +289,10 @@ class SubagentV2Tests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["subagentTaskId"] = "task-question"
             session["metadata"]["subagentRuntimeContract"] = {"communication": {"allowChildQuestions": True, "maxPendingQuestions": 1}}
-            run(core.writeTaskMeta("task-question", {"type": "subagent", "task_id": "task-question", "session_id": session["id"], "status": "running", "startedAt": session["createdAt"], "outputFile": core.taskOutputPath("task-question")}))
+            run(core.write_task_meta("task-question", {"type": "subagent", "task_id": "task-question", "session_id": session["id"], "status": "running", "startedAt": session["createdAt"], "outputFile": core.task_output_path("task-question")}))
             question_tool = next(tool for tool in core.createBuiltinTools() if tool.name == "AskUserQuestion")
             result = run(
                 question_tool.handler(
@@ -305,7 +305,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             self.assertEqual(payload["questions"][0]["options"], ["A", "B"])
             questions = run(core.read_task_questions("task-question"))
             self.assertEqual(questions[0]["status"], "pending")
-            meta = run(core.readTaskMeta("task-question"))
+            meta = run(core.read_task_meta("task-question"))
             self.assertEqual(meta["status"], "awaiting_input")
             answered = run(core.answer_task_question("task-question", questions[0]["questionId"], "Use A"))
             self.assertEqual(answered["status"], "answered")
@@ -330,7 +330,7 @@ class SubagentV2Tests(AgentCoreTestCase):
         previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["metadata"]["parentSessionId"] = "parent-bg"
             session["metadata"]["subagentRuntimeContract"] = {
                 "responseSchema": {
@@ -344,10 +344,10 @@ class SubagentV2Tests(AgentCoreTestCase):
             os.environ["TESS_CHILD_TASK_ID"] = "task-bg-structured"
             os.environ["TESS_CHILD_SESSION_ID"] = session["id"]
             run(core.finalizeBackgroundSubagentSuccessFromEnv(session, {"text": '{"ok": true}', "stopReason": "end_turn"}))
-            child = run(core.loadChildAgent("agent-bg-structured"))
+            child = run(core.load_child_agent("agent-bg-structured"))
             self.assertEqual(child["structuredResultStatus"], "valid")
             self.assertEqual(child["structuredResult"], {"ok": True})
-            meta = run(core.readTaskMeta("task-bg-structured"))
+            meta = run(core.read_task_meta("task-bg-structured"))
             self.assertEqual(meta["structuredResultStatus"], "valid")
             self.assertTrue(Path(meta["structuredResultPath"]).exists())
             events = run(core.read_task_events("task-bg-structured"))

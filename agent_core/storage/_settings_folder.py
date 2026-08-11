@@ -31,25 +31,25 @@ import os
 import re
 from typing import Any
 
-from .paths import getStateRoot
+from .paths import get_state_root
 
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
-def settingsFolderPath() -> str:
-    return os.path.join(getStateRoot(), "settings")
+def settings_folder_path() -> str:
+    return os.path.join(get_state_root(), "settings")
 
 
-def loadSettingsFolder() -> dict[str, Any] | None:
+def load_settings_folder() -> dict[str, Any] | None:
     """Read the settings folder, or return None when it does not exist."""
 
-    folder = settingsFolderPath()
+    folder = settings_folder_path()
     if not os.path.isdir(folder):
         return None
     record = _load_config_with_fragments(folder)
     providers = _read_yaml_mapping(os.path.join(folder, "providers.yaml"))
     if providers:
-        record = mergeSettingsRecords(record, providers)
+        record = merge_settings_records(record, providers)
     env = _read_env_file(os.path.join(folder, ".env"))
     if env:
         record["env"] = {**(record.get("env") or {}), **env}
@@ -139,7 +139,7 @@ def _record_leaf_origins(origins: dict[str, str], mapping: dict[str, Any], sourc
             origins.setdefault(path, source)
 
 
-def mergeSettingsRecords(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+def merge_settings_records(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     """Merge two settings records; overlay wins per top-level key.
 
     ``env`` and ``providerProfiles`` merge per entry instead of being

@@ -9,94 +9,94 @@ import uuid
 from typing import Any
 
 from .._utils import is_process_alive as _is_process_alive
-from .json_io import withRecordTransaction
+from .json_io import with_record_transaction
 from .paths import (
-    daemonEventsPath,
-    daemonPidPath,
-    daemonSocketPath,
-    daemonStatePath,
-    getDaemonInstancesDir,
-    getStateRoot,
-    parseDaemonInstanceId,
+    daemon_events_path,
+    daemon_pid_path,
+    daemon_socket_path,
+    daemon_state_path,
+    get_daemon_instances_dir,
+    get_state_root,
+    parse_daemon_instance_id,
 )
-from .persisted_record_scanner import readPersistedJsonRecord
-from .persisted_record_validation import isDaemonStateRecord
+from .persisted_record_scanner import read_persisted_json_record
+from .persisted_record_validation import is_daemon_state_record
 
 
-async def saveDaemonState(instanceId: str, record: dict[str, Any]) -> None:
-    await asyncio.to_thread(_write_private_json, daemonStatePath(instanceId), record)
-    await asyncio.to_thread(_write_private_bytes, daemonPidPath(instanceId), f"{record.get('pid')}\n".encode("utf-8"))
+async def save_daemon_state(instanceId: str, record: dict[str, Any]) -> None:
+    await asyncio.to_thread(_write_private_json, daemon_state_path(instanceId), record)
+    await asyncio.to_thread(_write_private_bytes, daemon_pid_path(instanceId), f"{record.get('pid')}\n".encode("utf-8"))
 
-async def loadDaemonState(instanceId: str) -> dict[str, Any] | None:
-    result = await readPersistedJsonRecord(
+async def load_daemon_state(instanceId: str) -> dict[str, Any] | None:
+    result = await read_persisted_json_record(
         family="daemon_state",
-        filePath=daemonStatePath(instanceId),
-        validate=isDaemonStateRecord,
+        filePath=daemon_state_path(instanceId),
+        validate=is_daemon_state_record,
     )
     return result.get("record")
 
-async def clearDaemonState(instanceId: str) -> None:
-    for path in (daemonPidPath(instanceId), daemonStatePath(instanceId), daemonSocketPath(instanceId)):
+async def clear_daemon_state(instanceId: str) -> None:
+    for path in (daemon_pid_path(instanceId), daemon_state_path(instanceId), daemon_socket_path(instanceId)):
         try:
             os.remove(path)
         except FileNotFoundError:
             pass
 
-async def listDaemonInstanceIds() -> list[str]:
+async def list_daemon_instance_ids() -> list[str]:
     try:
-        names = os.listdir(getDaemonInstancesDir())
+        names = os.listdir(get_daemon_instances_dir())
     except FileNotFoundError:
         return []
     instance_ids: list[str] = []
     for name in sorted(names):
         try:
-            instance_ids.append(parseDaemonInstanceId(name))
+            instance_ids.append(parse_daemon_instance_id(name))
         except ValueError:
             continue
     return instance_ids
 
 
-async def listLiveDaemonStates() -> list[dict[str, Any]]:
+async def list_live_daemon_states() -> list[dict[str, Any]]:
     states: list[dict[str, Any]] = []
-    for instance_id in await listDaemonInstanceIds():
-        state = await loadDaemonState(instance_id)
+    for instance_id in await list_daemon_instance_ids():
+        state = await load_daemon_state(instance_id)
         if state and isinstance(state.get("pid"), int) and _is_process_alive(state["pid"]):
             states.append(state)
     return states
 
 
-async def appendDaemonEvent(instanceId: str, record: dict[str, Any]) -> None:
-    async with withRecordTransaction(f"daemon-events-{parseDaemonInstanceId(instanceId)}", getStateRoot()):
+async def append_daemon_event(instanceId: str, record: dict[str, Any]) -> None:
+    async with with_record_transaction(f"daemon-events-{parse_daemon_instance_id(instanceId)}", get_state_root()):
         next_record = dict(record)
         if not isinstance(next_record.get("cursor"), int):
-            next_record["cursor"] = await readLastDaemonEventCursor(instanceId) + 1
+            next_record["cursor"] = await read_last_daemon_event_cursor(instanceId) + 1
         payload = json.dumps(next_record, ensure_ascii=False, separators=(",", ":")) + "\n"
         await asyncio.to_thread(
             _append_private_bytes,
-            daemonEventsPath(instanceId),
+            daemon_events_path(instanceId),
             payload.encode("utf-8"),
         )
 
-async def loadDaemonEvents(instanceId: str) -> list[dict[str, Any]]:
+async def load_daemon_events(instanceId: str) -> list[dict[str, Any]]:
     try:
-        with open(daemonEventsPath(instanceId), "r", encoding="utf-8") as handle:
+        with open(daemon_events_path(instanceId), "r", encoding="utf-8") as handle:
             return [json.loads(line) for line in handle if line.strip()]
     except Exception:
         return []
 
-async def readLastDaemonEventCursor(instanceId: str) -> int:
-    live = await _read_last_daemon_cursor_from_tail(daemonEventsPath(instanceId))
+async def read_last_daemon_event_cursor(instanceId: str) -> int:
+    live = await _read_last_daemon_cursor_from_tail(daemon_events_path(instanceId))
     if live > 0:
         return live
-    return await _read_last_daemon_cursor_from_tail(f"{daemonEventsPath(instanceId)}.1")
+    return await _read_last_daemon_cursor_from_tail(f"{daemon_events_path(instanceId)}.1")
 
-async def rotateDaemonEventsIfOversized(instanceId: str, capBytes: int | None = None) -> bool:
+async def rotate_daemon_events_if_oversized(instanceId: str, capBytes: int | None = None) -> bool:
     if capBytes is None:
         # Call-time import: config resolution imports storage at load.
         from ..config._knobs import knobValue
 
         capBytes = int(knobValue("daemon.events_rotate_bytes"))
-    file_path = daemonEventsPath(instanceId)
+    file_path = daemon_events_path(instanceId)
     try:
         size = os.path.getsize(file_path)
     except OSError:

@@ -307,9 +307,9 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_default_auto_mode_validates_strict(self) -> None:
         from agent_core.contracts import AutoModePolicy
-        from agent_core.storage.settings import getDefaultAutoMode
+        from agent_core.storage.settings import get_default_auto_mode
 
-        self.assertEqual(validate(getDefaultAutoMode(), AutoModePolicy, strict=True), [])
+        self.assertEqual(validate(get_default_auto_mode(), AutoModePolicy, strict=True), [])
 
     def test_provider_failure_record_validates_strict(self) -> None:
         from agent_core.contracts import ProviderFailureRecord
@@ -341,9 +341,9 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(validate(error.record, ProviderFailureRecord, strict=True), [])
 
     def test_empty_session_record_validates_strict(self) -> None:
-        from agent_core.storage import createEmptySession
+        from agent_core.storage import create_empty_session
 
-        session = createEmptySession(
+        session = create_empty_session(
             cwd="/tmp",
             provider="anthropic",
             model="claude-sonnet-4-6",

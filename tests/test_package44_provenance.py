@@ -6,11 +6,11 @@ import agent_core as core
 from agent_core.context.compaction.models import _extract_recent_user_requests
 from agent_core.context.request_preflight import _request_fingerprint
 from agent_core.storage.message_origin import (
-    isGenuineUserRequest,
-    isPlainUserTurnAnchor,
-    messageWithOrigin,
-    syntheticUserMessage,
-    userRequestMessage,
+    is_genuine_user_request,
+    is_plain_user_turn_anchor,
+    message_with_origin,
+    synthetic_user_message,
+    user_request_message,
 )
 from agent_core.providers.token_budget import resolve_interactive_context_policy
 from tests.support.agent_core_case import AgentCoreTestCase
@@ -53,38 +53,38 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         )
 
     def test_synthetic_messages_never_acquire_request_authority(self):
-        genuine = userRequestMessage("Fix the current production issue.")
+        genuine = user_request_message("Fix the current production issue.")
         bridge = {"role": "user", "content": core.CONTINUATION_BRIDGE_MESSAGE}
-        partial = syntheticUserMessage(
+        partial = synthetic_user_message(
             "Partial continuation summary for older raw context in this session:\n"
             "Carry-forward requests:\n- stale synthetic objective",
             kind="partial_compaction_summary",
         )
-        task = syntheticUserMessage(
+        task = synthetic_user_message(
             "[PARENT MESSAGE]\nkind: guidance\nmessage_id: msg-1\n\n"
             "synthetic guidance\n[/PARENT MESSAGE]",
             kind="task_notification",
         )
         messages = [genuine, bridge, partial, task]
-        self.assertTrue(isGenuineUserRequest(genuine))
+        self.assertTrue(is_genuine_user_request(genuine))
         self.assertTrue(
-            isGenuineUserRequest(
-                userRequestMessage(core.CONTINUATION_BRIDGE_MESSAGE)
+            is_genuine_user_request(
+                user_request_message(core.CONTINUATION_BRIDGE_MESSAGE)
             )
         )
         self.assertTrue(
-            all(not isGenuineUserRequest(message) for message in messages[1:])
+            all(not is_genuine_user_request(message) for message in messages[1:])
         )
         self.assertEqual(
             _extract_recent_user_requests(messages),
             ["Fix the current production issue."],
         )
-        self.assertEqual(core.findLastPlainUserIndex(messages), 0)
+        self.assertEqual(core.find_last_plain_user_index(messages), 0)
         self.assertEqual(
-            core.summarizeContinuationRegion(messages)["requests"],
+            core.summarize_continuation_region(messages)["requests"],
             ["Fix the current production issue."],
         )
-        synthesis = core.buildEvidenceBackedCompactionSynthesis(
+        synthesis = core.build_evidence_backed_compaction_synthesis(
             {
                 "sourceStart": 0,
                 "sourceMessages": messages,
@@ -107,10 +107,10 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         )
 
     def test_runtime_compaction_messages_carry_origin(self):
-        bridged = core.buildMessagesForWorkingContext(
+        bridged = core.build_messages_for_working_context(
             {
                 "messages": [
-                    userRequestMessage("Original objective."),
+                    user_request_message("Original objective."),
                     {"role": "assistant", "content": "working"},
                 ],
                 "metadata": {
@@ -124,29 +124,29 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         )
         messages: list[dict[str, Any]] = [
             (
-                userRequestMessage(f"request {index}")
+                user_request_message(f"request {index}")
                 if index % 2 == 0
                 else {"role": "assistant", "content": f"finding {index}"}
             )
             for index in range(30)
         ]
-        summary = core.applyPartialCompaction(messages)["messages"][0]
+        summary = core.apply_partial_compaction(messages)["messages"][0]
         self.assertEqual(
             summary["metadata"]["agentCoreOrigin"]["kind"],
             "partial_compaction_summary",
         )
-        self.assertFalse(isGenuineUserRequest(summary))
+        self.assertFalse(is_genuine_user_request(summary))
 
     def test_origin_copy_isolated_and_no_progress_event_typed(self):
-        original = userRequestMessage("hello")
-        copied = messageWithOrigin(
+        original = user_request_message("hello")
+        copied = message_with_origin(
             original,
             actor="runtime",
             kind="test",
             synthetic=True,
         )
-        self.assertTrue(isGenuineUserRequest(original))
-        self.assertFalse(isGenuineUserRequest(copied))
+        self.assertTrue(is_genuine_user_request(original))
+        self.assertFalse(is_genuine_user_request(copied))
         self.assertNotEqual(original["metadata"], copied["metadata"])
         event = core.createRuntimeEvent(
             {
@@ -167,17 +167,17 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         self.assertEqual(event["payload"]["artifactId"], "artifact-1")
 
     def test_explicit_delegated_task_authority_survives_synthetic_authorship(self):
-        delegated = messageWithOrigin(
+        delegated = message_with_origin(
             {"role": "user", "content": "Investigate the child task."},
             actor="subagent",
             kind="subagent_task_prompt",
             intentAuthority="request",
             synthetic=True,
         )
-        self.assertTrue(isGenuineUserRequest(delegated))
-        self.assertTrue(isPlainUserTurnAnchor(delegated))
+        self.assertTrue(is_genuine_user_request(delegated))
+        self.assertTrue(is_plain_user_turn_anchor(delegated))
         self.assertEqual(
-            core.summarizeContinuationRegion([delegated])["requests"],
+            core.summarize_continuation_region([delegated])["requests"],
             ["Investigate the child task."],
         )
 
@@ -185,7 +185,7 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         first = {
             "model": "gpt-5.6-sol",
             "messages": [
-                userRequestMessage(
+                user_request_message(
                     "same request",
                     lineage={"logicalTurnId": "turn-random-a"},
                 )
@@ -194,7 +194,7 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         second = {
             "model": "gpt-5.6-sol",
             "messages": [
-                userRequestMessage(
+                user_request_message(
                     "same request",
                     lineage={"logicalTurnId": "turn-random-b"},
                 )

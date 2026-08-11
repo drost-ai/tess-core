@@ -17,7 +17,7 @@ from .._utils import maybe_await
 from . import updates as _collaboration_updates
 from .updates import appendAssistantCollaborationMessage, staleWorkPayload
 from ..session.persistence import persistSession
-from ..storage import listChildAgents, listSessionMonitors, loadBridge, loadRemoteSession
+from ..storage import list_child_agents, list_session_monitors, load_bridge, load_remote_session
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 
@@ -75,10 +75,10 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             return get_snapshot()
         try:
             metadata = captured_session.get("metadata", {})
-            remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
-            bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
-            child_agents = await listChildAgents()
-            monitors = await listSessionMonitors(captured_session["id"])
+            remote = await load_remote_session(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+            bridge = await load_bridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+            child_agents = await list_child_agents()
+            monitors = await list_session_monitors(captured_session["id"])
             if not _is_active(captured_binding):
                 await _report_stale(captured_binding, "collaboration.tick_discarded")
                 return get_snapshot()

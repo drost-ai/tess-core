@@ -23,24 +23,24 @@ def _context(session, workspace):
 
 class BlockingQuestionTests(AgentCoreTestCase):
     def _family(self, workspace):
-        parent = core.createEmptySession(
+        parent = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="gpt-5.4",
             systemPrompt="parent", permissionMode="default", sessionId="bq-parent",
         )
         parent["metadata"]["taskIds"] = ["bq-task"]
-        child = core.createEmptySession(
+        child = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="gpt-5.4",
             systemPrompt="child", permissionMode="default", sessionId="bq-child",
         )
         child["metadata"]["subagentTaskId"] = "bq-task"
-        run(core.writeTaskMeta("bq-task", {
+        run(core.write_task_meta("bq-task", {
             "type": "subagent", "taskId": "bq-task", "id": "bq-task",
             "sessionId": child["id"], "session_id": child["id"],
             "parent_session_id": parent["id"], "agent_id": "bq-agent",
             "status": "running", "cwd": str(workspace),
             "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
         }))
-        run(core.saveChildAgent({
+        run(core.save_child_agent({
             "agentId": "bq-agent", "sessionId": child["id"],
             "parentSessionId": parent["id"], "name": "Worker",
             "provider": "openai", "model": "gpt-5.4", "mode": "default",
@@ -63,7 +63,7 @@ class BlockingQuestionTests(AgentCoreTestCase):
                             open_questions = await read_open_child_questions(parent)
                             if open_questions:
                                 break
-                        self.assertEqual((await core.readTaskMeta("bq-task"))["status"], "awaiting_input")
+                        self.assertEqual((await core.read_task_meta("bq-task"))["status"], "awaiting_input")
                         question_id = open_questions[0]["questionId"]
                         return await tool.handler(
                             {"to": "bq-agent", "reply_to": question_id, "message": "yes, ship it"},
@@ -84,7 +84,7 @@ class BlockingQuestionTests(AgentCoreTestCase):
                 self.assertIn("yes, ship it", payload["reply"])
                 questions = run(read_task_questions("bq-task"))
                 self.assertEqual(questions[0]["status"], "answered")
-                self.assertEqual((run(core.readTaskMeta("bq-task")))["status"], "running")
+                self.assertEqual((run(core.read_task_meta("bq-task")))["status"], "running")
                 self.assertEqual(run(read_open_child_questions(parent)), [])
             finally:
                 os.environ.pop("AGENT_CORE_COMMS_REPLY_POLL_MS", None)
@@ -109,7 +109,7 @@ class BlockingQuestionTests(AgentCoreTestCase):
             questions = run(read_task_questions("bq-task"))
             self.assertEqual(questions[0]["status"], "skipped")
             self.assertEqual(questions[0]["answer"], "unanswered:child_timeout")
-            self.assertEqual((run(core.readTaskMeta("bq-task")))["status"], "running")
+            self.assertEqual((run(core.read_task_meta("bq-task")))["status"], "running")
         finally:
             self.restore_home(root, previous)
 

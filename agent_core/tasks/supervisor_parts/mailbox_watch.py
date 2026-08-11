@@ -18,7 +18,7 @@ import time
 from typing import Any, Callable
 
 from ..._utils import maybe_await
-from ...storage import listTaskRecords, readTaskMeta
+from ...storage import list_task_records, read_task_meta
 from ..communication import read_task_events, read_task_mailbox_messages, task_events_path, task_mailbox_path
 
 _WATCHED_TASK_STATUSES = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
@@ -43,7 +43,7 @@ def create_mailbox_watch_loop(
         # Trace events must route on the PARENT session: attached parent
         # runtimes subscribe filtered by their own session id.
         if task_id not in parent_ids:
-            meta = await readTaskMeta(task_id) or {}
+            meta = await read_task_meta(task_id) or {}
             parent = meta.get("parent_session_id") or meta.get("parentSessionId")
             parent_ids[task_id] = parent if isinstance(parent, str) and parent else None
         return parent_ids[task_id]
@@ -124,7 +124,7 @@ def create_mailbox_watch_loop(
         nonlocal sweep_counter
         sweep_counter += 1
         emitted = 0
-        for record in await listTaskRecords():
+        for record in await list_task_records():
             if record.get("kind") != "subagent":
                 continue
             task_id = record.get("id") or record.get("taskId")

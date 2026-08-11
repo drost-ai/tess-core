@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from ..storage import loadDaemonState
+from ..storage import load_daemon_state
 
 
 async def _handle_daemon_request(
@@ -20,7 +20,7 @@ async def _handle_daemon_request(
     if method == "getState":
         result = supervisor["getState"]()
     elif method == "getStatus":
-        result = await loadDaemonState(instance_id)
+        result = await load_daemon_state(instance_id)
     elif method == "getBootstrap":
         result = await supervisor["getBootstrap"](params.get("sessionId"))
     elif method == "listTasks":

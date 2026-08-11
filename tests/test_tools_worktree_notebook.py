@@ -17,7 +17,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
             subprocess.run(["git", "commit", "-m", "init"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             tools = {tool.name: tool for tool in core.createBuiltinTools()}
             cwd_updates = []
 
@@ -102,7 +102,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
             worktree = Path(root.name) / "workspace-slice-5"
             worktree.mkdir()
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
 
             enter_snapshot = {
                 "workspaceId": "workspace_slice_5",
@@ -189,7 +189,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
                 async def exitWorktree(self):
                     return None
 
-            bare_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            bare_session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bare_tools = core.createBuiltinTools({"workspaceController": BareWorktreeController()})
             bare_enter = next(tool for tool in bare_tools if tool.name == "EnterWorktree")
             bare_exit = next(tool for tool in bare_tools if tool.name == "ExitWorktree")
@@ -205,7 +205,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
             self.assertEqual(bare_exited_payload, {"cwd": str(workspace)})
             self.assertNotIn("meta", bare_exited)
 
-            missing_original_session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            missing_original_session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             missing_original_session["metadata"].pop("originalCwd", None)
             missing_updates = []
             missing_context = {
@@ -244,7 +244,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             notebook_path = workspace / "demo.ipynb"
             notebook_path.write_text(json.dumps({"cells": [{"id": "cell-1", "cell_type": "code", "source": ["print(1)"], "metadata": {}, "outputs": []}], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}))
             tool = next(tool for tool in core.createBuiltinTools() if tool.name == "NotebookEdit")

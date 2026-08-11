@@ -8,7 +8,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
             base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
             foreground = run(bash.handler({"command": "printf foreground-ok"}, base_context))
@@ -85,11 +85,11 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(events[-1][1]["task_id"], task_id)
             self.assertIsNone(run(core.getTaskSupervisorDaemonState({"instanceId": "sup-core-instance"})))
             for _ in range(80):
-                meta = run(core.readTaskMeta(task_id))
+                meta = run(core.read_task_meta(task_id))
                 if meta and meta.get("status") == "completed":
                     break
                 time.sleep(0.05)
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             self.assertEqual(meta["status"], "completed")
             self.assertEqual(meta["owner"], "client")
             self.assertIsInstance(meta["runnerPid"], int)
@@ -106,10 +106,10 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
 
             daemon_task_id = "task-output-daemon"
             session["metadata"]["taskIds"].append(daemon_task_id)
-            daemon_output = core.taskOutputPath(daemon_task_id)
+            daemon_output = core.task_output_path(daemon_task_id)
             Path(daemon_output).parent.mkdir(parents=True, exist_ok=True)
             Path(daemon_output).write_text("file output\n", encoding="utf-8")
-            run(core.writeTaskMeta(daemon_task_id, {"taskId": daemon_task_id, "id": daemon_task_id, "sessionId": session["id"], "command": "daemon-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": daemon_output}))
+            run(core.write_task_meta(daemon_task_id, {"taskId": daemon_task_id, "id": daemon_task_id, "sessionId": session["id"], "command": "daemon-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": daemon_output}))
 
             async def read_daemon_output(_task_id):
                 return {"output": "daemon output\n", "truncated": True}
@@ -136,8 +136,8 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         unsubscribe = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-core-instance", "cwd": str(workspace)}))
             events = []
             unsubscribe = client["subscribe"](lambda event: events.append(event), session["id"])
@@ -170,20 +170,20 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         unsubscribe = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "sup-core-instance", "cwd": str(workspace)}))
             script = 'print("bootstrap replay")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "bootstrap replay"}))
             task_id = started["taskId"]
             for _ in range(60):
-                meta = run(core.readTaskMeta(task_id))
+                meta = run(core.read_task_meta(task_id))
                 if meta and meta.get("status") == "completed":
                     break
                 time.sleep(0.05)
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch replay"})
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
 
             bootstrap = run(client["getBootstrap"](session["id"]))
             self.assertGreaterEqual(bootstrap["taskSnapshot"]["total"], 1)
@@ -193,7 +193,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(bootstrap["collaborationSnapshot"]["workers"][0]["kind"], "monitor")
             self.assertEqual(bootstrap["collaborationSnapshot"]["workers"][0]["monitorId"], monitor["id"])
 
-            persisted_events = run(core.loadDaemonEvents("sup-core-instance"))
+            persisted_events = run(core.load_daemon_events("sup-core-instance"))
             self.assertTrue(all(isinstance(event.get("cursor"), int) for event in persisted_events))
             self.assertEqual([event["cursor"] for event in persisted_events], sorted(event["cursor"] for event in persisted_events))
 
@@ -231,18 +231,18 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         supervisor = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"].append({"role": "user", "content": "Coordinate the long lived work."})
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "bootstrap-monitor-task", "goal": "watch bootstrap families"})
             session["metadata"]["monitorIds"] = [monitor["id"]]
             session["metadata"]["childAgentIds"] = ["bootstrap-agent"]
-            run(core.saveSession(session))
-            run(core.saveMonitor(monitor))
+            run(core.save_session(session))
+            run(core.save_monitor(monitor))
             # The watched task must exist and be live: the daemon's monitor
             # watch runs at supervisor construction and fails a monitor whose
             # task has vanished.
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     "bootstrap-monitor-task",
                     {
                         "type": "background_command",
@@ -251,12 +251,12 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
                         "sessionId": session["id"],
                         "status": "running",
                         "startedAt": "2026-01-01T00:00:00Z",
-                        "outputFile": core.taskOutputPath("bootstrap-monitor-task"),
+                        "outputFile": core.task_output_path("bootstrap-monitor-task"),
                     },
                 )
             )
             run(
-                core.saveChildAgent(
+                core.save_child_agent(
                     {
                         "agentId": "bootstrap-agent",
                         "sessionId": "bootstrap-child-session",
@@ -281,7 +281,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             remote = run(core.createRemoteSession({"session": session, "description": "Bootstrap remote", "channelServers": ["local"]}))
             remote = run(core.updateRemoteSession(remote["id"], {"status": "awaiting_input", "lastEventSummary": "Remote wants input"}))
             session["metadata"]["remoteSessionId"] = remote["id"]
-            run(core.saveSession(session))
+            run(core.save_session(session))
 
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             bootstrap = run(supervisor["getBootstrap"](session["id"]))
@@ -295,7 +295,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(tasks[f"remote:{remote['id']}"]["status"], "awaiting_input")
             self.assertEqual(bootstrap["taskSnapshot"]["awaitingInput"], 1)
             self.assertGreaterEqual(bootstrap["taskSnapshot"]["active"], 3)
-            restored = run(core.loadSession(session["id"]))["metadata"]["runtimeRestore"]
+            restored = run(core.load_session(session["id"]))["metadata"]["runtimeRestore"]
             restored_ids = {task["id"] for task in restored["activeTasks"]}
             self.assertIn(f"monitor:{monitor['id']}", restored_ids)
             self.assertIn("bootstrap-child-task", restored_ids)
@@ -317,15 +317,15 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         runtime = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             task_id = "runtime-task-family"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("first\n", encoding="utf-8")
             session["metadata"]["taskIds"] = [task_id]
-            run(core.saveSession(session))
+            run(core.save_session(session))
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "type": "background_command",
@@ -349,7 +349,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             task_events = [event for event, data in events if data.get("task_id") == task_id]
             self.assertEqual(task_events[:2], ["task.restored", "task.registered"])
             self.assertTrue(any(event == "task.snapshot" and data["tasks"][0]["task_family"] == "shell" for event, data in events))
-            restored = run(core.loadSession(session["id"]))["metadata"]["runtimeRestore"]
+            restored = run(core.load_session(session["id"]))["metadata"]["runtimeRestore"]
             self.assertEqual(restored["activeTasks"][0]["id"], task_id)
             self.assertEqual(restored["restoredTaskCount"], 1)
 
@@ -361,9 +361,9 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             delta = next(data for event, data in events if event == "task.output_delta" and data.get("task_id") == task_id)
             self.assertGreater(delta["bytes_delta"], 0)
 
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             meta.update({"status": "completed", "finishedAt": "2026-01-01T00:00:03Z", "updatedAt": "2026-01-01T00:00:03Z"})
-            run(core.writeTaskMeta(task_id, meta))
+            run(core.write_task_meta(task_id, meta))
             for _ in range(40):
                 if any(event == "task.completed" and data.get("task_id") == task_id for event, data in events):
                     break
@@ -379,19 +379,19 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         runtime = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
-            run(core.saveTaskRecord({"id": "stale-runtime-record", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "stale cache record", "updatedAt": "2026-01-01T00:00:09Z"}))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
+            run(core.save_task_record({"id": "stale-runtime-record", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "stale cache record", "updatedAt": "2026-01-01T00:00:09Z"}))
 
             task_id = "live-main-runtime"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("", encoding="utf-8")
             session["metadata"]["taskIds"] = [task_id]
             session["updatedAt"] = "2026-01-01T00:00:10Z"
             session["messages"].append({"role": "user", "content": "Continue with Slice 8."})
             session["messages"].append({"role": "assistant", "content": "Live in-memory session state is the source of truth."})
-            run(core.writeTaskMeta(task_id, {"type": "main_session", "taskId": task_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": output_file, "attachableSessionId": session["id"]}))
+            run(core.write_task_meta(task_id, {"type": "main_session", "taskId": task_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": output_file, "attachableSessionId": session["id"]}))
 
             runtime = run(core.createTaskRuntime({"session": session, "config": config, "emit": lambda *_: None, "startTicker": False}))
             snapshot = runtime["getSnapshot"]()
@@ -400,7 +400,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertNotIn("stale-runtime-record", ids)
             task = next(item for item in snapshot["tasks"] if item["id"] == task_id)
             self.assertEqual(task["summary"], "This session is continuing in the background. Latest assistant state: Live in-memory session state is the source of truth.")
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertEqual(persisted["messages"][-1]["content"], "Live in-memory session state is the source of truth.")
         finally:
             if runtime:
@@ -412,7 +412,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
         supervisor = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["updatedAt"] = "2026-01-01T00:00:05Z"
             session["messages"].append({"role": "user", "content": "Build the parity slice."})
             session["messages"].append({"role": "assistant", "content": "The detached worker is synthesizing the result."})
@@ -420,16 +420,16 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             main_id = "projection-main"
             health_id = "projection-health"
             session["metadata"]["taskIds"] = [background_id, main_id, health_id]
-            run(core.saveSession(session))
-            background_output = core.taskOutputPath(background_id)
-            main_output = core.taskOutputPath(main_id)
-            health_output = core.taskOutputPath(health_id)
+            run(core.save_session(session))
+            background_output = core.task_output_path(background_id)
+            main_output = core.task_output_path(main_id)
+            health_output = core.task_output_path(health_id)
             for output_file, text in [(background_output, "old line\nlatest output line\n"), (main_output, ""), (health_output, "timeout\n")]:
                 Path(output_file).parent.mkdir(parents=True, exist_ok=True)
                 Path(output_file).write_text(text, encoding="utf-8")
-            run(core.writeTaskMeta(background_id, {"type": "background_command", "taskId": background_id, "sessionId": session["id"], "command": "python -m tests", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": background_output, "pid": os.getpid(), "owner": "daemon"}))
-            run(core.writeTaskMeta(main_id, {"type": "main_session", "taskId": main_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": main_output, "attachableSessionId": session["id"], "owner": "daemon"}))
-            run(core.writeTaskMeta(health_id, {"type": "health_check", "taskId": health_id, "sessionId": session["id"], "cwd": str(workspace), "title": "API health", "url": "http://localhost:9", "intervalMs": 5000, "timeoutMs": 1000, "backoffMultiplier": 2, "maxIntervalMs": 20000, "failureThreshold": 2, "status": "unhealthy", "createdAt": "2026-01-01T00:00:00Z", "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:02Z", "lastError": "timeout", "lastStatusCode": 503, "consecutiveFailures": 1, "outputFile": health_output}))
+            run(core.write_task_meta(background_id, {"type": "background_command", "taskId": background_id, "sessionId": session["id"], "command": "python -m tests", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": background_output, "pid": os.getpid(), "owner": "daemon"}))
+            run(core.write_task_meta(main_id, {"type": "main_session", "taskId": main_id, "sessionId": session["id"], "command": "continue", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:01Z", "status": "running", "outputFile": main_output, "attachableSessionId": session["id"], "owner": "daemon"}))
+            run(core.write_task_meta(health_id, {"type": "health_check", "taskId": health_id, "sessionId": session["id"], "cwd": str(workspace), "title": "API health", "url": "http://localhost:9", "intervalMs": 5000, "timeoutMs": 1000, "backoffMultiplier": 2, "maxIntervalMs": 20000, "failureThreshold": 2, "status": "unhealthy", "createdAt": "2026-01-01T00:00:00Z", "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:02Z", "lastError": "timeout", "lastStatusCode": 503, "consecutiveFailures": 1, "outputFile": health_output}))
 
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             bootstrap = run(supervisor["getBootstrap"](session["id"]))
@@ -454,7 +454,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             self.assertEqual(health["detailStatus"], "unhealthy")
             self.assertEqual(health["resultSummary"], "timeout")
             self.assertEqual(health["metadata"]["current_interval_ms"], 5000)
-            restored = run(core.loadSession(session["id"]))["metadata"]["runtimeRestore"]
+            restored = run(core.load_session(session["id"]))["metadata"]["runtimeRestore"]
             self.assertEqual(restored["restoredTaskCount"], 3)
         finally:
             if supervisor:

@@ -6,7 +6,7 @@ import re
 import subprocess
 from typing import Any
 
-from ..storage import fileOrJson, loadSettingsBySources
+from ..storage import file_or_json, load_settings_by_sources
 from ..authority.executable_config import parseMcpServerConfigList
 from ..authority.executable_source_policy import loadSelectedMcpServers, parseSettingSources
 from ..runtime.secrets import assertNoLiteralMcpSecrets
@@ -15,8 +15,8 @@ def _parse_setting_sources(raw: str | None) -> list[str]:
     return parseSettingSources(raw)
 
 async def _load_merged_settings(sources: list[str], cwd: str, inline_settings: str | None) -> dict[str, Any]:
-    merged = await loadSettingsBySources(sources, cwd)  # type: ignore[arg-type]
-    direct = fileOrJson(inline_settings) or {}
+    merged = await load_settings_by_sources(sources, cwd)  # type: ignore[arg-type]
+    direct = file_or_json(inline_settings) or {}
     return {**merged, **direct, "providerProfiles": {**(merged.get("providerProfiles") or {}), **(direct.get("providerProfiles") or {})}}
 
 async def _resolve_api_key_from_helper(settings: dict[str, Any]) -> str | None:
@@ -75,7 +75,7 @@ async def _load_mcp_config(cwd: str, inputs: list[str] | None, sources: list[str
     existing = [] if strict else await loadSelectedMcpServers(cwd=cwd, sources=sources)
     inline = []
     for item in inputs or []:
-        parsed = fileOrJson(item)
+        parsed = file_or_json(item)
         records = parseMcpServerConfigList(parsed, "explicitMcpConfig") if parsed else []
         assertNoLiteralMcpSecrets(records, "explicit")
         inline.extend(records)

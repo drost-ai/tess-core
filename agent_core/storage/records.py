@@ -15,20 +15,20 @@ from ..runtime.identifiers import (
     tryParseMonitorId,
     tryParseTaskId,
 )
-from .persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
+from .persisted_record_scanner import read_persisted_json_record, scan_persisted_json_records
 from .persisted_record_validation import (
-    isChildAgentRecord,
-    isHealthCheckTaskRecord,
-    isMonitorRecord,
-    isTaskMetaRecord,
-    isTaskRecord,
+    is_child_agent_record,
+    is_health_check_task_record,
+    is_monitor_record,
+    is_task_meta_record,
+    is_task_record,
 )
 
 import os
 from typing import Any
 
-from .json_io import readJsonFile, withRecordTransaction, writeJsonFile
-from .paths import getStateRoot
+from .json_io import read_json_file, with_record_transaction, write_json_file
+from .paths import get_state_root
 
 # Every record mutation acquires its family's record transaction, keyed by
 # record id. Task record, task meta, and health-check meta are one lifecycle
@@ -37,35 +37,35 @@ from .paths import getStateRoot
 # transaction holders. The transaction is reentrant within a task context, so
 # these writers compose with an enclosing transaction instead of deadlocking.
 
-def taskDir(taskId: str) -> str:
-    return os.path.join(getStateRoot(), "tasks", parseTaskId(taskId))
+def task_dir(taskId: str) -> str:
+    return os.path.join(get_state_root(), "tasks", parseTaskId(taskId))
 
-def taskRecordPath(taskId: str) -> str:
-    return os.path.join(getStateRoot(), "task-records", f"{parseTaskId(taskId)}.json")
+def task_record_path(taskId: str) -> str:
+    return os.path.join(get_state_root(), "task-records", f"{parseTaskId(taskId)}.json")
 
-def taskMetaPath(taskId: str) -> str:
-    return os.path.join(taskDir(taskId), "meta.json")
+def task_meta_path(taskId: str) -> str:
+    return os.path.join(task_dir(taskId), "meta.json")
 
-def taskOutputPath(taskId: str) -> str:
-    return os.path.join(taskDir(taskId), "output.log")
+def task_output_path(taskId: str) -> str:
+    return os.path.join(task_dir(taskId), "output.log")
 
-def healthCheckMetaPath(taskId: str) -> str:
-    return os.path.join(taskDir(taskId), "health-check.json")
+def health_check_meta_path(taskId: str) -> str:
+    return os.path.join(task_dir(taskId), "health-check.json")
 
-def monitorPath(monitorId: str) -> str:
-    return os.path.join(getStateRoot(), "monitors", f"{parseMonitorId(monitorId)}.json")
+def monitor_path(monitorId: str) -> str:
+    return os.path.join(get_state_root(), "monitors", f"{parseMonitorId(monitorId)}.json")
 
-def childAgentPath(agentId: str) -> str:
-    return os.path.join(getStateRoot(), "agents", f"{parseAgentId(agentId)}.json")
+def child_agent_path(agentId: str) -> str:
+    return os.path.join(get_state_root(), "agents", f"{parseAgentId(agentId)}.json")
 
 async def _load_by_path(path: str) -> dict[str, Any] | None:
-    return await readJsonFile(path, None)
+    return await read_json_file(path, None)
 
-def omitNoneFields(value: Any) -> Any:
+def omit_none_fields(value: Any) -> Any:
     if isinstance(value, dict):
-        return {key: omitNoneFields(item) for key, item in value.items() if item is not None}
+        return {key: omit_none_fields(item) for key, item in value.items() if item is not None}
     if isinstance(value, list):
-        return [omitNoneFields(item) for item in value]
+        return [omit_none_fields(item) for item in value]
     return value
 
 
@@ -132,62 +132,62 @@ def _json_candidate(directory: str, entry: os.DirEntry[str], parse_id) -> dict[s
         return None
     return {"id": record_id, "filePath": os.path.join(directory, entry.name)}
 
-async def saveChildAgent(record: ChildAgentRecord) -> None:
+async def save_child_agent(record: ChildAgentRecord) -> None:
     agent_id = parseAgentId(record["agentId"])
-    path = childAgentPath(agent_id)
-    async with withRecordTransaction("agent-record", agent_id):
+    path = child_agent_path(agent_id)
+    async with with_record_transaction("agent-record", agent_id):
         current = await _load_by_path(path)
-        await writeJsonFile(path, omitNoneFields(_merge_child_agent_for_full_save(current, record)))
+        await write_json_file(path, omit_none_fields(_merge_child_agent_for_full_save(current, record)))
 
 
-async def mutateChildAgent(agentId: str, mutate) -> ChildAgentRecord | None:
+async def mutate_child_agent(agentId: str, mutate) -> ChildAgentRecord | None:
     """Locked read-modify-write for the multi-writer child-agent record.
 
     ``mutate`` receives the current record (or ``None`` when missing) and
     returns the record to persist; returning ``None`` skips the write when no
     record exists, or persists the received record after in-place mutation.
     The persisted value passes through the same ``None``-field omission as
-    ``saveChildAgent``.
+    ``save_child_agent``.
     """
     agent_id = parseAgentId(agentId)
-    path = childAgentPath(agent_id)
-    async with withRecordTransaction("agent-record", agent_id):
+    path = child_agent_path(agent_id)
+    async with with_record_transaction("agent-record", agent_id):
         current = await _load_by_path(path)
         updated = mutate(current)
         if updated is None:
             updated = current
         if updated is None:
             return None
-        await writeJsonFile(path, omitNoneFields(updated))
+        await write_json_file(path, omit_none_fields(updated))
         return updated
 
-async def loadChildAgent(agentId: str) -> ChildAgentRecord | None:
+async def load_child_agent(agentId: str) -> ChildAgentRecord | None:
     agent_id = parseAgentId(agentId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="agent",
         id=agent_id,
-        filePath=childAgentPath(agent_id),
-        validate=isChildAgentRecord,
+        filePath=child_agent_path(agent_id),
+        validate=is_child_agent_record,
     )
     return result.get("record")
 
-async def listChildAgents() -> list[ChildAgentRecord]:
-    directory = os.path.join(getStateRoot(), "agents")
-    scan = await scanPersistedJsonRecords(
+async def list_child_agents() -> list[ChildAgentRecord]:
+    directory = os.path.join(get_state_root(), "agents")
+    scan = await scan_persisted_json_records(
         family="agent",
         directory=directory,
         select=lambda entry: _json_candidate(directory, entry, tryParseAgentId),
-        validate=isChildAgentRecord,
+        validate=is_child_agent_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("startedAt", ""), reverse=True)
 
-async def writeTaskMeta(taskId: str, value: TaskMeta) -> None:
+async def write_task_meta(taskId: str, value: TaskMeta) -> None:
     task_id = parseTaskId(taskId)
-    async with withRecordTransaction("task-lifecycle", task_id):
-        await writeJsonFile(taskMetaPath(task_id), value)
+    async with with_record_transaction("task-lifecycle", task_id):
+        await write_json_file(task_meta_path(task_id), value)
 
 
-async def mutateTaskMeta(taskId: str, mutate, fallback: TaskMeta | None = None) -> TaskMeta | None:
+async def mutate_task_meta(taskId: str, mutate, fallback: TaskMeta | None = None) -> TaskMeta | None:
     """Locked read-modify-write for task meta (supervisor-owned record).
 
     ``mutate`` receives the current meta (or ``fallback`` when missing) and
@@ -196,125 +196,125 @@ async def mutateTaskMeta(taskId: str, mutate, fallback: TaskMeta | None = None) 
     mutation.
     """
     task_id = parseTaskId(taskId)
-    path = taskMetaPath(task_id)
-    async with withRecordTransaction("task-lifecycle", task_id):
-        current = await readJsonFile(path, fallback)
+    path = task_meta_path(task_id)
+    async with with_record_transaction("task-lifecycle", task_id):
+        current = await read_json_file(path, fallback)
         updated = mutate(current)
         if updated is None:
             updated = current
         if updated is None:
             return None
-        await writeJsonFile(path, updated)
+        await write_json_file(path, updated)
         return updated
 
-async def readTaskMeta(taskId: str) -> TaskMeta | None:
+async def read_task_meta(taskId: str) -> TaskMeta | None:
     task_id = parseTaskId(taskId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="task_meta",
         id=task_id,
-        filePath=taskMetaPath(task_id),
-        validate=isTaskMetaRecord,
+        filePath=task_meta_path(task_id),
+        validate=is_task_meta_record,
     )
     return result.get("record")
 
-async def saveTaskRecord(record: TaskRecord) -> None:
+async def save_task_record(record: TaskRecord) -> None:
     task_id = parseTaskId(record["id"])
-    async with withRecordTransaction("task-lifecycle", task_id):
-        await writeJsonFile(taskRecordPath(task_id), omitNoneFields(record))
+    async with with_record_transaction("task-lifecycle", task_id):
+        await write_json_file(task_record_path(task_id), omit_none_fields(record))
 
-async def loadTaskRecord(taskId: str) -> TaskRecord | None:
+async def load_task_record(taskId: str) -> TaskRecord | None:
     task_id = parseTaskId(taskId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="task_record",
         id=task_id,
-        filePath=taskRecordPath(task_id),
-        validate=isTaskRecord,
+        filePath=task_record_path(task_id),
+        validate=is_task_record,
     )
     return result.get("record")
 
-async def listTaskRecords() -> list[TaskRecord]:
-    directory = os.path.join(getStateRoot(), "task-records")
-    scan = await scanPersistedJsonRecords(
+async def list_task_records() -> list[TaskRecord]:
+    directory = os.path.join(get_state_root(), "task-records")
+    scan = await scan_persisted_json_records(
         family="task_record",
         directory=directory,
         select=lambda entry: _json_candidate(directory, entry, tryParseTaskId),
-        validate=isTaskRecord,
+        validate=is_task_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-async def listSessionTaskRecords(sessionId: str) -> list[TaskRecord]:
-    return [task for task in await listTaskRecords() if task.get("sessionId") == sessionId]
+async def list_session_task_records(sessionId: str) -> list[TaskRecord]:
+    return [task for task in await list_task_records() if task.get("sessionId") == sessionId]
 
-async def saveMonitor(record: MonitorRecord) -> None:
+async def save_monitor(record: MonitorRecord) -> None:
     monitor_id = parseMonitorId(record["id"])
-    async with withRecordTransaction("monitor-record", monitor_id):
-        await writeJsonFile(monitorPath(monitor_id), record)
+    async with with_record_transaction("monitor-record", monitor_id):
+        await write_json_file(monitor_path(monitor_id), record)
 
-async def loadMonitor(monitorId: str) -> MonitorRecord | None:
+async def load_monitor(monitorId: str) -> MonitorRecord | None:
     monitor_id = parseMonitorId(monitorId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="monitor",
         id=monitor_id,
-        filePath=monitorPath(monitor_id),
-        validate=isMonitorRecord,
+        filePath=monitor_path(monitor_id),
+        validate=is_monitor_record,
     )
     return result.get("record")
 
-async def listMonitors() -> list[MonitorRecord]:
-    directory = os.path.join(getStateRoot(), "monitors")
-    scan = await scanPersistedJsonRecords(
+async def list_monitors() -> list[MonitorRecord]:
+    directory = os.path.join(get_state_root(), "monitors")
+    scan = await scan_persisted_json_records(
         family="monitor",
         directory=directory,
         select=lambda entry: _json_candidate(directory, entry, tryParseMonitorId),
-        validate=isMonitorRecord,
+        validate=is_monitor_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-async def listSessionMonitors(sessionId: str) -> list[MonitorRecord]:
-    return [monitor for monitor in await listMonitors() if monitor.get("sessionId") == sessionId]
+async def list_session_monitors(sessionId: str) -> list[MonitorRecord]:
+    return [monitor for monitor in await list_monitors() if monitor.get("sessionId") == sessionId]
 
-async def saveHealthCheckTask(record: TaskMeta) -> None:
+async def save_health_check_task(record: TaskMeta) -> None:
     task_id = parseTaskId(record["taskId"])
-    async with withRecordTransaction("task-lifecycle", task_id):
-        await writeJsonFile(healthCheckMetaPath(task_id), record)
+    async with with_record_transaction("task-lifecycle", task_id):
+        await write_json_file(health_check_meta_path(task_id), record)
 
 
-async def mutateHealthCheckTask(taskId: str, mutate) -> TaskMeta | None:
+async def mutate_health_check_task(taskId: str, mutate) -> TaskMeta | None:
     """Locked read-modify-write for the health-check meta record."""
     task_id = parseTaskId(taskId)
-    path = healthCheckMetaPath(task_id)
-    async with withRecordTransaction("task-lifecycle", task_id):
-        current = await readJsonFile(path, None)
+    path = health_check_meta_path(task_id)
+    async with with_record_transaction("task-lifecycle", task_id):
+        current = await read_json_file(path, None)
         updated = mutate(current)
         if updated is None:
             updated = current
         if updated is None:
             return None
-        await writeJsonFile(path, updated)
+        await write_json_file(path, updated)
         return updated
 
-async def loadHealthCheckTask(taskId: str) -> TaskMeta | None:
+async def load_health_check_task(taskId: str) -> TaskMeta | None:
     task_id = parseTaskId(taskId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="health_check",
         id=task_id,
-        filePath=healthCheckMetaPath(task_id),
-        validate=isHealthCheckTaskRecord,
+        filePath=health_check_meta_path(task_id),
+        validate=is_health_check_task_record,
     )
     return result.get("record")
 
-async def listHealthCheckTasks() -> list[TaskMeta]:
-    directory = os.path.join(getStateRoot(), "tasks")
+async def list_health_check_tasks() -> list[TaskMeta]:
+    directory = os.path.join(get_state_root(), "tasks")
     def select(entry: os.DirEntry[str]) -> dict[str, str] | None:
         task_id = tryParseTaskId(entry.name)
         if task_id is None or not entry.is_dir(follow_symlinks=False):
             return None
-        return {"id": task_id, "filePath": healthCheckMetaPath(task_id)}
+        return {"id": task_id, "filePath": health_check_meta_path(task_id)}
 
-    scan = await scanPersistedJsonRecords(
+    scan = await scan_persisted_json_records(
         family="health_check",
         directory=directory,
         select=select,
-        validate=isHealthCheckTaskRecord,
+        validate=is_health_check_task_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)

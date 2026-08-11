@@ -123,9 +123,9 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
 
         async def scenario():
-            core.configureRuntimeHome(str(home))
-            await core.ensureBaseLayout(str(workspace))
-            session = core.createEmptySession(
+            core.configure_runtime_home(str(home))
+            await core.ensure_base_layout(str(workspace))
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -136,7 +136,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
             )
             session["messages"] = [{"role": "user", "content": "preserve"}]
             session["metadata"]["taskIds"] = []
-            await core.saveSession(session)
+            await core.save_session(session)
             first, second = "task-p01-first", "task-p01-second"
             reservation = core.createTaskLaunchReservation(
                 taskId=first, sessionId=session["id"], kind="background_command"
@@ -147,7 +147,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
 
             async def reserve():
                 now = reservation["createdAt"]
-                await core.saveTaskRecord(
+                await core.save_task_record(
                     {
                         "id": first,
                         "sessionId": session["id"],
@@ -163,7 +163,7 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                         "launchReservation": reservation,
                     }
                 )
-                await core.mutateSessionRecord(
+                await core.mutate_session_record(
                     session["id"],
                     lambda current: _append_session_task(current, first),
                 )
@@ -182,8 +182,8 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
             async def attach(identity):
                 attach_reached.set()
                 await release_attach.wait()
-                current = await core.loadTaskRecord(first)
-                await core.saveTaskRecord(
+                current = await core.load_task_record(first)
+                await core.save_task_record(
                     {
                         **current,
                         "status": "backgrounded",
@@ -203,21 +203,21 @@ class TaskLaunchReservationTests(AgentCoreTestCase):
                 )
             )
             await attach_reached.wait()
-            starting = await core.loadTaskRecord(first)
+            starting = await core.load_task_record(first)
             self.assertEqual(starting["status"], "queued")
             self.assertNotIn("processIdentity", starting)
-            await core.mutateSessionRecord(
+            await core.mutate_session_record(
                 session["id"],
                 lambda current: _append_session_task(current, second),
             )
             release_attach.set()
             launched = await launch
             try:
-                persisted = await core.loadSession(session["id"])
+                persisted = await core.load_session(session["id"])
                 self.assertEqual(set(persisted["metadata"]["taskIds"]), {first, second})
                 self.assertEqual(persisted["name"], "p01 sentinel")
                 self.assertEqual(persisted["messages"], [{"role": "user", "content": "preserve"}])
-                attached = await core.loadTaskRecord(first)
+                attached = await core.load_task_record(first)
                 self.assertEqual(attached["launchReservation"]["state"], "attached")
                 self.assertEqual(attached["processIdentity"], launched.identity)
             finally:

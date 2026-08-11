@@ -137,7 +137,7 @@ async def call_tool(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[
     state.setdefault("driver_results", []).append(record)
     if data.get("appendTranscript", True):
         _append_tool_transcript(session, name, input_data, result)
-        await core.saveSession(session)
+        await core.save_session(session)
     return ["tool_results", "driver_results", "transcript", "tool_artifacts"]
 
 
@@ -181,7 +181,7 @@ async def ensure_session_config(data: dict[str, Any], sandbox: ScenarioSandbox, 
     if state.get("session") and state.get("config"):
         return state["session"], state["config"]
     config = await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": data.get("permissionMode", "bypassPermissions")}, str(sandbox.workspace))
-    session = core.createEmptySession(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode=data.get("permissionMode", "bypassPermissions"))
+    session = core.create_empty_session(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode=data.get("permissionMode", "bypassPermissions"))
     state["config"] = config
     state["session"] = session
     return session, config
@@ -243,7 +243,7 @@ def _tool_context(sandbox: ScenarioSandbox, state: dict[str, Any], session: dict
         "interactive": False,
         "outputJson": lambda event, data: state.setdefault("runtime_events", []).append({"event": event, "data": _json_safe(data)}),
         "askQuestion": lambda *_args: "",
-        "persistSession": lambda: core.saveSession(session),
+        "persistSession": lambda: core.save_session(session),
         "updateCwd": lambda next_cwd: session.__setitem__("cwd", next_cwd),
         "getTools": lambda: runtime.get("tools", []),
         "daemon": runtime.get("daemon"),

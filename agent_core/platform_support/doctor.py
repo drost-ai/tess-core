@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 from ..runtime.workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
-from ..storage import getProjectRoot, getStateRoot, listLiveDaemonStates, loadAuth, loadMcpServers, loadPlugins
+from ..storage import get_project_root, get_state_root, list_live_daemon_states, load_auth, load_mcp_servers, load_plugins
 from .chrome import detectChromeCompanionStatus
 from .ide import detectIdeTargets
 from .install import inspectInstallState
@@ -13,14 +13,14 @@ from .tmux import detectTmuxAvailability
 
 async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    state_root = getStateRoot()
-    project_root = getProjectRoot(cwd)
-    auth = await loadAuth()
+    state_root = get_state_root()
+    project_root = get_project_root(cwd)
+    auth = await load_auth()
     install = await inspectInstallState(args)
     tmux = await detectTmuxAvailability(args)
     ide_targets = await detectIdeTargets(args)
     chrome = await detectChromeCompanionStatus({**args, "includeNativeHostManifest": True})
-    live_daemons = await listLiveDaemonStates()
+    live_daemons = await list_live_daemon_states()
     daemon = live_daemons[0] if live_daemons else None
     workspace = await captureWorkspaceSnapshot(cwd)
     capabilities = summarizeWorkspaceCapabilities(workspace)
@@ -28,8 +28,8 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
     mcp_records = []
     plugin_records = []
     for scope in ("user", "project", "local"):
-        mcp_records.extend(await loadMcpServers(scope, cwd))
-        plugin_records.extend(await loadPlugins(scope, cwd))
+        mcp_records.extend(await load_mcp_servers(scope, cwd))
+        plugin_records.extend(await load_plugins(scope, cwd))
     checks = [
         _doctor_check("auth", "pass" if _has_auth(auth) else "warn", "Provider authentication is configured." if _has_auth(auth) else "No provider credential is configured.", "Set provider credentials or login before running model calls."),
         _doctor_check("dist", "pass" if install.get("distExists") and not install.get("distStale") else "warn" if install.get("distExists") else "fail", "Python package files are present and current." if install.get("distExists") and not install.get("distStale") else "Python package files are present but may need reinstall." if install.get("distExists") else "Python package files are missing.", "Run `python -m pip install -e .` from this repo."),

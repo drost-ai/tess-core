@@ -48,7 +48,7 @@ class Package29StoreScaleTests(AgentCoreTestCase):
                 archive_payload_bytes += len(line.encode())
             (sessions_dir / "foreign-note.txt").write_text("preserve me", encoding="utf-8")
 
-            cache = core.createSessionListCache()
+            cache = core.create_session_list_cache()
             started = time.perf_counter()
             self.assertEqual(len(run(cache["list"]())), count)
             first_elapsed = time.perf_counter() - started
@@ -65,7 +65,7 @@ class Package29StoreScaleTests(AgentCoreTestCase):
             self.assertLess(second_elapsed, 10)
 
             changed_id = "80000000-0000-4000-8000-000000000123"
-            changed_path = Path(core.sessionPath(changed_id))
+            changed_path = Path(core.session_path(changed_id))
             changed = json.loads(changed_path.read_text(encoding="utf-8"))
             changed["name"] = "changed once"
             changed_path.write_text(json.dumps(changed), encoding="utf-8")

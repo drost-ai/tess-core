@@ -35,7 +35,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 model="deepseek-v4-pro",
@@ -101,7 +101,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 model="local-model",
@@ -175,7 +175,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 model="gpt-5.5",
@@ -253,7 +253,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
             log = []
 
             async def slow_handler(_input, _context):
@@ -322,7 +322,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -422,7 +422,7 @@ class AgentLoopTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
             tool_ran = False
             calls = {"count": 0}
 

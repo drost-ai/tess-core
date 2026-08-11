@@ -19,14 +19,14 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                await core.writeTaskMeta("wake-task", {
+                await core.write_task_meta("wake-task", {
                     "type": "subagent", "taskId": "wake-task", "id": "wake-task",
                     "sessionId": "wake-child", "session_id": "wake-child",
                     "parent_session_id": "wake-parent", "status": "running",
                     "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
                     "updatedAt": "2026-01-01T00:00:00Z",
                 })
-                await core.saveTaskRecord({
+                await core.save_task_record({
                     "id": "wake-task", "sessionId": "wake-child", "sourceId": "wake-task",
                     "kind": "subagent", "status": "running", "title": "wake worker",
                     "summary": "running", "createdAt": "2026-01-01T00:00:00Z",
@@ -77,14 +77,14 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                await core.writeTaskMeta("dying-task", {
+                await core.write_task_meta("dying-task", {
                     "type": "subagent", "taskId": "dying-task", "id": "dying-task",
                     "sessionId": "dying-child", "session_id": "dying-child",
                     "parent_session_id": "dying-parent", "status": "failed",
                     "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
                     "updatedAt": "2026-01-01T00:00:00Z",
                 })
-                await core.saveTaskRecord({
+                await core.save_task_record({
                     "id": "dying-task", "sessionId": "dying-child", "sourceId": "dying-task",
                     "kind": "subagent", "status": "running", "title": "dying worker",
                     "summary": "running", "createdAt": "2026-01-01T00:00:00Z",
@@ -93,7 +93,7 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
                 record = await core.sendTaskMessage("dying-task", {
                     "direction": "to_parent", "content": "[turn failed] boom",
                 })
-                await core.saveTaskRecord({
+                await core.save_task_record({
                     "id": "dying-task", "sessionId": "dying-child", "sourceId": "dying-task",
                     "kind": "subagent", "status": "failed", "title": "dying worker",
                     "summary": "failed", "createdAt": "2026-01-01T00:00:00Z",
@@ -119,14 +119,14 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                await core.writeTaskMeta("trace-wake", {
+                await core.write_task_meta("trace-wake", {
                     "type": "subagent", "taskId": "trace-wake", "id": "trace-wake",
                     "sessionId": "trace-child", "session_id": "trace-child",
                     "parent_session_id": "trace-parent", "status": "running",
                     "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
                     "updatedAt": "2026-01-01T00:00:00Z",
                 })
-                await core.saveTaskRecord({
+                await core.save_task_record({
                     "id": "trace-wake", "sessionId": "trace-child", "sourceId": "trace-wake",
                     "kind": "subagent", "status": "running", "title": "trace worker",
                     "summary": "running", "createdAt": "2026-01-01T00:00:00Z",

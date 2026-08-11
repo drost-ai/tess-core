@@ -8,38 +8,38 @@ from typing import Any
 from .._utils import now_iso
 from ..config.prompts import buildEffectiveSystemPrompt
 from ..storage.persistence_metrics import (
-    beginPersistenceCall as _begin_persistence_call,
-    finishPersistenceCall as _finish_persistence_call,
+    begin_persistence_call as _begin_persistence_call,
+    finish_persistence_call as _finish_persistence_call,
 )
 from .fork import createForkArchiveHeader, createForkedSession
 from ..storage.message_history import (
     SessionMessageList,
-    createSessionMessageList as _create_session_message_list,
-    sessionPersistenceCheckpoint as _session_persistence_checkpoint,
-    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+    create_session_message_list as _create_session_message_list,
+    session_persistence_checkpoint as _session_persistence_checkpoint,
+    set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
 from .tool_boundaries import findIncompleteToolExchange as _find_incomplete_tool_exchange
 from ..storage import (
-    appendSessionTranscriptLogEntries,
-    createEmptySession,
-    hasPersistableSessionMessages,
-    listSessions,
-    loadSession,
-    mutateSessionHeadDeltaTransaction,
-    mutateSessionRecordTransaction,
-    normalizeSessionRevision,
+    append_session_transcript_log_entries,
+    create_empty_session,
+    has_persistable_session_messages,
+    list_sessions,
+    load_session,
+    mutate_session_head_delta_transaction,
+    mutate_session_record_transaction,
+    normalize_session_revision,
 )
 from ..runtime.workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
 
 async def resolveSession(options: dict[str, Any], config: dict[str, Any], launchContext: dict[str, Any] | None = None) -> dict[str, Any]:
     launch = launchContext or {"cwd": config["cwd"], "originalCwd": config["cwd"]}
-    sessions = await listSessions()
+    sessions = await list_sessions()
     existing = await _resolve_existing_session(options, sessions, launch)
     if existing:
-        selected = await loadSession(existing["id"])
+        selected = await load_session(existing["id"])
         return _fork_or_reuse_session(selected or existing, options, config, launch)
-    created = createEmptySession(
+    created = create_empty_session(
         cwd=launch["cwd"],
         provider=config["provider"],
         providerProfileName=config.get("providerProfileName"),
@@ -69,7 +69,7 @@ async def persistSession(
     try:
         persist_options = {**(options or {}), **kwargs}
         if not config.get("sessionPersistence", True) or (
-            not hasPersistableSessionMessages(session)
+            not has_persistable_session_messages(session)
             and not persist_options.get("force")
         ):
             _finish_persistence_call(measurement, "skipped")
@@ -107,7 +107,7 @@ async def persistSession(
 
 
 async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any], failure: dict[str, Any]) -> None:
-    if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
+    if not config.get("sessionPersistence", True) or not has_persistable_session_messages(session):
         return
     metadata = session.setdefault("metadata", {})
     metadata["providerFailureCount"] = metadata.get("providerFailureCount", 0) + 1
@@ -129,17 +129,17 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
                 "receipt": copy.deepcopy(interrupted),
             }
         )
-    await appendSessionTranscriptLogEntries(session["id"], entries)
+    await append_session_transcript_log_entries(session["id"], entries)
 
 
 async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any], details: dict[str, Any]) -> None:
-    if not config.get("sessionPersistence", True) or not hasPersistableSessionMessages(session):
+    if not config.get("sessionPersistence", True) or not has_persistable_session_messages(session):
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
     snapshot = _copy_session_for_persist(session)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
-    await appendSessionTranscriptLogEntries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])
+    await append_session_transcript_log_entries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])
 
 
 _CONCURRENT_SESSION_ID_FIELDS = (
@@ -163,8 +163,8 @@ def _merge_concurrent_operational_state(
 ) -> dict[str, Any]:
     if latest is None:
         return copy.deepcopy(desired)
-    desired_revision = normalizeSessionRevision(desired.get("revision"))
-    latest_revision = normalizeSessionRevision(latest.get("revision"))
+    desired_revision = normalize_session_revision(desired.get("revision"))
+    latest_revision = normalize_session_revision(latest.get("revision"))
     merged = copy.deepcopy(desired)
     if "revision" in latest:
         merged["revision"] = latest["revision"]
@@ -198,7 +198,7 @@ async def _commit_prepared_session_snapshot(
         return {"changed": merged != latest, "session": merged}
 
     if isinstance(messages, list):
-        fast = await mutateSessionHeadDeltaTransaction(
+        fast = await mutate_session_head_delta_transaction(
             snapshot["id"],
             messages,
             commit_head,
@@ -211,7 +211,7 @@ async def _commit_prepared_session_snapshot(
         merged = _merge_concurrent_operational_state(snapshot, latest)
         return {"changed": latest is None or merged != latest, "session": merged}
 
-    return await mutateSessionRecordTransaction(
+    return await mutate_session_record_transaction(
         snapshot["id"], commit, faultInjector=fault_injector
     )
 
@@ -279,7 +279,7 @@ def _adopt_repaired_checkpoint(
     ):
         return
     live.set_checkpoint(
-        normalizeSessionRevision(committed.get("revision")), covered, committed["bodyCommitId"]
+        normalize_session_revision(committed.get("revision")), covered, committed["bodyCommitId"]
     )
 
 
@@ -352,7 +352,7 @@ async def _persist_session_transcript_log(
     for index in range(min(previous, len(session.get("messages", []))), len(session.get("messages", []))):
         message = session["messages"][index]
         entries.append({"type": "message", "session_id": session["id"], "message_index": index, "persisted_at": archived_at, "role": message.get("role"), "content": message.get("content")})
-    path = await appendSessionTranscriptLogEntries(session["id"], entries)
+    path = await append_session_transcript_log_entries(session["id"], entries)
     appended = bool(entries)
     return (
         {

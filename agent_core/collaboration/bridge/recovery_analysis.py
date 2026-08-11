@@ -9,9 +9,9 @@ from typing import Any
 
 from ...runtime.identifiers import parseSessionId, tryParseBridgeId, tryParseRemoteSessionId
 from ...storage import (
-    getStateRoot,
-    hydrateSessionHeadFromBodyBytes,
-    isSessionHeadV2,
+    get_state_root,
+    hydrate_session_head_from_body_bytes,
+    is_session_head_v2,
 )
 
 MAX_SCAN_ENTRIES = 4_096
@@ -33,7 +33,7 @@ async def analyzeBridgeRecovery(
     logicallySupersededBridgeIds: list[str] | None = None,
 ) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
-    root = Path(getStateRoot()).resolve()
+    root = Path(get_state_root()).resolve()
     excluded = set(excludedBridgeIds or [])
     superseded = set(logicallySupersededBridgeIds or [])
     sources: list[dict[str, Any]] = []
@@ -42,11 +42,11 @@ async def analyzeBridgeRecovery(
     session_raw = _read_source(session_path, MAX_SESSION_BYTES, required=True)
     sources.append(_source_record(session_path, session_raw))
     session_head = _parse_object(session_raw, f"session {session_id}")
-    if isSessionHeadV2(session_head):
+    if is_session_head_v2(session_head):
         body_path = root / "sessions" / f"{session_id}.messages.jsonl"
         body_raw = _read_source(body_path, MAX_SOURCE_BYTES, required=True)
         sources.append(_source_record(body_path, body_raw))
-        session = hydrateSessionHeadFromBodyBytes(session_id, session_head, body_raw)["record"]
+        session = hydrate_session_head_from_body_bytes(session_id, session_head, body_raw)["record"]
     else:
         session = session_head
     if session.get("id") != session_id or not isinstance(session.get("metadata"), dict):

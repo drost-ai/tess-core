@@ -10,7 +10,7 @@ from .executable_source_policy import executableConfigDigest, loadSelectedPlugin
 from .hooks import loadHooks
 from .permission_rules import loadPermissionRulesCached
 from ..sandbox import resolveSandboxPolicy
-from ..storage import getProjectRoot
+from ..storage import get_project_root
 
 
 _FILESYSTEM_RANK = {"read-only": 0, "workspace-write": 1, "full": 2}
@@ -243,7 +243,7 @@ async def captureAgentAuthority(
         "promptPolicy": _prompt_policy(mode),
         "enabledTools": enabled,
         "permissionRules": copy.deepcopy(permission_rules),
-        "permissionRuleProjectRoot": os.path.realpath(getProjectRoot(session["cwd"])),
+        "permissionRuleProjectRoot": os.path.realpath(get_project_root(session["cwd"])),
         "readableRoots": readable,
         "writableRoots": writable,
         "sandbox": sandbox,

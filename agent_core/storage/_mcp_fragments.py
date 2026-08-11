@@ -15,17 +15,17 @@ import os
 import re
 from typing import Any, Callable
 
-from .io_executor import runStorageIo as _run_storage_io
-from .json_io import fileLock, readJsonFile, writeJsonFile
-from .paths import getStateRoot
+from .io_executor import run_storage_io as _run_storage_io
+from .json_io import file_lock, read_json_file, write_json_file
+from .paths import get_state_root
 
 
-def userMcpFragmentsDir() -> str:
-    return os.path.join(getStateRoot(), "settings", "mcp")
+def user_mcp_fragments_dir() -> str:
+    return os.path.join(get_state_root(), "settings", "mcp")
 
 
 def _legacy_user_mcp_path() -> str:
-    return os.path.join(getStateRoot(), "mcp.json")
+    return os.path.join(get_state_root(), "mcp.json")
 
 
 def _assert_no_legacy_user_mcp() -> None:
@@ -33,7 +33,7 @@ def _assert_no_legacy_user_mcp() -> None:
     if os.path.lexists(legacy):
         raise ValueError(
             f"{legacy}: legacy user-scope mcp.json is no longer read. "
-            f"Move each server record into {userMcpFragmentsDir()}{os.sep}<server-name>.json "
+            f"Move each server record into {user_mcp_fragments_dir()}{os.sep}<server-name>.json "
             "(one file per server) and delete mcp.json."
         )
 
@@ -47,13 +47,13 @@ def _fragment_names(folder: str) -> list[str]:
 
 
 async def _read_fragments() -> tuple[list[dict[str, Any]], dict[str, str], dict[str, list[dict[str, Any]]]]:
-    folder = userMcpFragmentsDir()
+    folder = user_mcp_fragments_dir()
     records: list[dict[str, Any]] = []
     owners: dict[str, str] = {}
     by_file: dict[str, list[dict[str, Any]]] = {}
     for name in await _run_storage_io(_fragment_names, folder):
         path = os.path.join(folder, name)
-        value = await readJsonFile(path, None)
+        value = await read_json_file(path, None)
         if value is None:
             continue
         entries = value if isinstance(value, list) else [value]
@@ -77,7 +77,7 @@ async def _read_fragments() -> tuple[list[dict[str, Any]], dict[str, str], dict[
     return records, owners, by_file
 
 
-async def loadUserMcpFragments() -> list[dict[str, Any]]:
+async def load_user_mcp_fragments() -> list[dict[str, Any]]:
     _assert_no_legacy_user_mcp()
     records, _owners, _by_file = await _read_fragments()
     return records
@@ -88,7 +88,7 @@ def _fragment_filename(name: Any) -> str:
     return f"{normalized}.json"
 
 
-async def saveUserMcpFragments(servers: list[dict[str, Any]]) -> None:
+async def save_user_mcp_fragments(servers: list[dict[str, Any]]) -> None:
     """Replace the user-scope server list, keeping each record in its file.
 
     Servers already registered keep their fragment file (updated in place);
@@ -96,7 +96,7 @@ async def saveUserMcpFragments(servers: list[dict[str, Any]]) -> None:
     list are removed — list-replacement semantics distributed over files.
     """
     _assert_no_legacy_user_mcp()
-    folder = userMcpFragmentsDir()
+    folder = user_mcp_fragments_dir()
     _records, owners, by_file = await _read_fragments()
     updated: dict[str, list[dict[str, Any]]] = {}
     for server in servers:
@@ -104,7 +104,7 @@ async def saveUserMcpFragments(servers: list[dict[str, Any]]) -> None:
         target = owners.get(server_name) if isinstance(server_name, str) else None
         updated.setdefault(target or _fragment_filename(server_name), []).append(server)
     for name, entries in updated.items():
-        await writeJsonFile(
+        await write_json_file(
             os.path.join(folder, name),
             entries[0] if len(entries) == 1 else entries,
         )
@@ -113,12 +113,12 @@ async def saveUserMcpFragments(servers: list[dict[str, Any]]) -> None:
             await _run_storage_io(os.remove, os.path.join(folder, name))
 
 
-async def mutateUserMcpFragments(mutate: Callable[[list[dict[str, Any]]], Any]) -> list[dict[str, Any]]:
+async def mutate_user_mcp_fragments(mutate: Callable[[list[dict[str, Any]]], Any]) -> list[dict[str, Any]]:
     _assert_no_legacy_user_mcp()
-    async with fileLock(os.path.join(userMcpFragmentsDir(), ".fragments")):
+    async with file_lock(os.path.join(user_mcp_fragments_dir(), ".fragments")):
         records, _owners, _by_file = await _read_fragments()
         updated = mutate(records)
         if updated is None:
             updated = records
-        await saveUserMcpFragments(updated)
+        await save_user_mcp_fragments(updated)
         return updated

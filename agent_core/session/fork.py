@@ -4,7 +4,7 @@ import copy
 from typing import Any
 
 from ..providers.usage_costs import createUsageTotals
-from ..storage.message_history import createSessionMessageList as _create_session_message_list
+from ..storage.message_history import create_session_message_list as _create_session_message_list
 
 
 SESSION_FORK_METADATA_DISPOSITIONS = {

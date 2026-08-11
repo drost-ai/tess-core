@@ -12,20 +12,20 @@ from .authority.executable_closure import (
 )
 from .collaboration.bridge.recovery import __setBridgeRecoveryTestHookForTests
 from .context.compaction import (
-    buildCompactionSystemPromptContext,
-    buildMessagesForWorkingContext,
-    estimateWorkingContextTokens,
-    runCompaction,
-    shouldAutoCompact,
+    build_compaction_system_prompt_context,
+    build_messages_for_working_context,
+    estimate_working_context_tokens,
+    run_compaction,
+    should_auto_compact,
 )
 from .context.compaction_transport import (
-    createDefaultCompactionModelClient,
-    resolveCompactionExecutionPlan,
-    resolveCompactionModelCandidates,
-    resolveCompactionTokenPolicy,
+    create_default_compaction_model_client,
+    resolve_compaction_execution_plan,
+    resolve_compaction_model_candidates,
+    resolve_compaction_token_policy,
 )
-from .context.continuation import applyContextReliefModes, applyLightweightContextRelief, classifyContextPressure
-from .context.token_accounting import measureRequestInputTokens
+from .context.continuation import apply_context_relief_modes, apply_lightweight_context_relief, classify_context_pressure
+from .context.token_accounting import measure_request_input_tokens
 from .providers.anthropic import (
     buildAnthropicCountTokensPayload,
     buildAnthropicHeaders,

@@ -10,15 +10,15 @@ from ..collaboration.remote import (
 )
 from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ..storage import (
-    listBridges,
-    listChildAgents,
-    listRemoteSessions,
-    listSessionMonitors,
-    listSessionTaskRecords,
-    loadBridge,
-    loadDaemonState,
-    loadRemoteSession,
-    loadSession,
+    list_bridges,
+    list_child_agents,
+    list_remote_sessions,
+    list_session_monitors,
+    list_session_task_records,
+    load_bridge,
+    load_daemon_state,
+    load_remote_session,
+    load_session,
 )
 from .agents import _is_active_child_agent, _is_related_child_agent, formatChildAgentRecord
 from .tasks import _request_runtime_instance_id
@@ -45,7 +45,7 @@ from ..collaboration.bridge.runtime import closeCurrentBridgeGeneration as _clos
 async def buildDaemonReport(instanceId: str | None) -> str:
     if not instanceId:
         return "Daemon not running (no runtime instance)."
-    daemon = await loadDaemonState(instanceId)
+    daemon = await load_daemon_state(instanceId)
     if not daemon:
         return "Daemon not running."
     return "\n".join(f"{key:<13} {daemon.get(key)}" for key in ("instanceId", "phase", "pid", "socketPath", "supervisorId", "epoch", "attachedClients", "watchedSessions", "activeTasks", "updatedAt"))
@@ -69,8 +69,8 @@ async def _handle_daemon(arg_text: str, session: dict[str, Any], config: dict[st
 
 async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     metadata = session.get("metadata", {})
-    remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
-    bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+    remote = await load_remote_session(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+    bridge = await load_bridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
     if not arg_text:
         if remote or bridge:
             return _info(hooks, "Remote", buildRemoteReport(session, remote, bridge))
@@ -84,7 +84,7 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
         selection = await _resolve_remote_record(query, session, remote)
         if not selection:
             return _error(hooks, f"No remote session matched: {query or 'current'}")
-        linked_bridge = await loadBridge(selection.get("bridgeId")) if selection.get("bridgeId") else bridge
+        linked_bridge = await load_bridge(selection.get("bridgeId")) if selection.get("bridgeId") else bridge
         return _info(hooks, "Remote", formatRemoteSessionRecord(selection, linked_bridge))
     if subcommand in {"tail", "events"}:
         selected_bridge = await _resolve_bridge_record(query, session, bridge)
@@ -96,7 +96,7 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
             return _error(hooks, "Usage: /remote queue TEXT")
         selected_bridge = await _resolve_bridge_record("", session, bridge)
         if not selected_bridge and remote and remote.get("bridgeId"):
-            selected_bridge = await loadBridge(remote["bridgeId"])
+            selected_bridge = await load_bridge(remote["bridgeId"])
         if not selected_bridge:
             return _error(hooks, "No active bridge is available for this session.")
         try:
@@ -121,7 +121,7 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
     target_session_id = await _resolve_remote_attach_target(query, session, remote)
     if not target_session_id:
         return _error(hooks, "No attachable remote session is available.")
-    target_session = await loadSession(target_session_id)
+    target_session = await load_session(target_session_id)
     if not target_session:
         return _error(hooks, f"Remote session target not found: {target_session_id}")
     await _persist(hooks)
@@ -130,16 +130,16 @@ async def _handle_remote(arg_text: str, session: dict[str, Any], hooks: dict[str
 
 
 async def _handle_background(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
-    agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
-    monitors = await listSessionMonitors(session.get("id"))
+    agents = [record for record in await list_child_agents() if _is_related_child_agent(session, record)]
+    monitors = await list_session_monitors(session.get("id"))
     tasks = [
         record
-        for record in await listSessionTaskRecords(session.get("id"))
+        for record in await list_session_task_records(session.get("id"))
         if record.get("kind") in {"background_command", "main_session"}
     ]
     metadata = session.get("metadata", {})
-    remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
-    bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+    remote = await load_remote_session(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+    bridge = await load_bridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
 
     if not arg_text:
         return _info(hooks, "Background", buildBackgroundReport(session, agents, monitors, tasks, remote, bridge))
@@ -162,7 +162,7 @@ async def _handle_background(arg_text: str, session: dict[str, Any], hooks: dict
     target_session_id = _background_attach_target(selection)
     if not target_session_id:
         return _error(hooks, f"No attachable session is available for {selection['label']}.")
-    target_session = await loadSession(target_session_id)
+    target_session = await load_session(target_session_id)
     if not target_session:
         return _error(hooks, f"Attach target not found: {target_session_id}")
     await _persist(hooks)
@@ -210,7 +210,7 @@ def buildRemoteFallbackReport(session: dict[str, Any]) -> str:
 
 
 async def buildRemoteListReport() -> str:
-    remotes = await listRemoteSessions()
+    remotes = await list_remote_sessions()
     if not remotes:
         return "No remote sessions recorded."
     return "\n".join(formatRemoteSessionCandidate(record) for record in remotes[:12])
@@ -226,17 +226,17 @@ async def _resolve_remote_record(
         return current_remote
     if current_remote and any(normalized in token for token in _background_remote_tokens(current_remote)):
         return current_remote
-    for record in await listRemoteSessions():
+    for record in await list_remote_sessions():
         if any(normalized in token for token in _background_remote_tokens(record)):
             return record
-    session_match = await loadSession(query)
+    session_match = await load_session(query)
     if session_match:
-        for record in await listRemoteSessions():
+        for record in await list_remote_sessions():
             if record.get("sessionId") == session_match.get("id") or record.get("foregroundSessionId") == session_match.get("id"):
                 return record
     metadata = session.get("metadata", {})
     if metadata.get("remoteSessionId") and normalized in str(metadata.get("remoteSessionId")).lower():
-        return await loadRemoteSession(metadata["remoteSessionId"])
+        return await load_remote_session(metadata["remoteSessionId"])
     return None
 
 
@@ -252,16 +252,16 @@ async def _resolve_bridge_record(
         return current_bridge
     remote = await _resolve_remote_record(query, session, None)
     if remote and remote.get("bridgeId"):
-        bridge = await loadBridge(remote["bridgeId"])
+        bridge = await load_bridge(remote["bridgeId"])
         if bridge:
             return bridge
-    for bridge in await listBridges():
+    for bridge in await list_bridges():
         tokens = _compact_tokens(bridge.get("id"), bridge.get("name"), bridge.get("remoteSessionId"), bridge.get("sessionId"), bridge.get("status"))
         if any(normalized in token for token in tokens):
             return bridge
     metadata = session.get("metadata", {})
     if metadata.get("bridgeId") and normalized in str(metadata.get("bridgeId")).lower():
-        return await loadBridge(metadata["bridgeId"])
+        return await load_bridge(metadata["bridgeId"])
     return None
 
 
@@ -321,7 +321,7 @@ async def _resolve_remote_attach_target(query: str, session: dict[str, Any], rem
     remote_id = str(metadata.get("remoteSessionId") or "")
     if remote_id and query.lower() in remote_id.lower():
         return (remote or {}).get("foregroundSessionId") or (remote or {}).get("sessionId")
-    saved = await loadSession(query)
+    saved = await load_session(query)
     return (saved or {}).get("id")
 
 

@@ -40,7 +40,7 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
         self.assertEqual(paths.sessionsDir, os.path.join(paths.home, "sessions"))
         self.assertEqual(paths.taskRecordsDir, os.path.join(paths.home, "task-records"))
         self.assertEqual(paths.repositoryTrustDir, os.path.join(paths.home, "trust", "repositories"))
-        self.assertEqual(paths.daemonLogsDir, os.path.join(paths.home, "daemon", "logs"))
+        self.assertEqual(paths.daemon_logs_dir, os.path.join(paths.home, "daemon", "logs"))
         self.assertEqual(paths.privateSecretsDir, os.path.join(paths.home, "private-secrets"))
 
     def test_immutable_runtime_scope_rejects_path_switch_across_awaits(self):
@@ -53,11 +53,11 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
             async def scenario():
                 async with runWithRuntimePaths(paths_a):
                     self.assertIs(getActiveRuntimePaths(), paths_a)
-                    self.assertEqual(core.getStateRoot(), str(home_a))
+                    self.assertEqual(core.get_state_root(), str(home_a))
                     await asyncio.sleep(0)
                     with self.assertRaisesRegex(RuntimeError, "scope is immutable"):
-                        core.configureRuntimeHome(str(home_b))
-                    self.assertEqual(core.getStateRoot(), str(home_a))
+                        core.configure_runtime_home(str(home_b))
+                    self.assertEqual(core.get_state_root(), str(home_a))
 
             run(scenario())
         finally:
@@ -69,7 +69,7 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
         try:
             async def scenario():
                 async with runWithRuntimePaths(paths):
-                    await core.ensureBaseLayout(str(workspace), paths)
+                    await core.ensure_base_layout(str(workspace), paths)
 
             run(scenario())
             for directory in (

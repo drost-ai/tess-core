@@ -16,8 +16,8 @@ from typing import Any
 from .._utils import maybe_await, pretty_json
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
-from ..storage import loadChildAgent
-from ..storage import mutateTaskMeta
+from ..storage import load_child_agent
+from ..storage import mutate_task_meta
 from ..tasks.communication import (
     answer_task_question,
     create_task_question,
@@ -93,7 +93,7 @@ def _send_message_tool() -> ToolDefinition:
 
         if is_child:
             return _error('Child-to-child messaging is not supported yet; address "parent" instead.')
-        child = await loadChildAgent(to)
+        child = await load_child_agent(to)
         task_id = (child or {}).get("taskId")
         if not isinstance(task_id, str) or not task_id:
             return _error(f"Unknown agent id: {to}. Use the agent_id returned by the Agent tool.")
@@ -189,7 +189,7 @@ async def _restore_running_status(task_id: str) -> None:
             return meta
         return {**meta, "status": "running", "waitingReason": None}
 
-    await mutateTaskMeta(task_id, _restore)
+    await mutate_task_meta(task_id, _restore)
 
 
 def _queued(record: dict[str, Any]) -> ToolResult:

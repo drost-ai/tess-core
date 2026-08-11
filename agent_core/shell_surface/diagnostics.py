@@ -4,11 +4,11 @@ import os
 from ..platform_support import collectDoctorReport
 from ..session.transcript import buildTranscriptSnapshot
 from ..storage import (
-    listChildAgents,
-    listSessionMonitors,
-    listSessionTaskRecords,
-    loadBridge,
-    loadRemoteSession,
+    list_child_agents,
+    list_session_monitors,
+    list_session_task_records,
+    load_bridge,
+    load_remote_session,
 )
 from .agents import _is_active_child_agent, _is_related_child_agent
 from .common import (
@@ -133,12 +133,12 @@ def formatDiagnosticsReport(report: dict[str, Any]) -> str:
 
 
 async def buildCollaborationStatusReport(session: dict[str, Any]) -> str:
-    agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
-    monitors = await listSessionMonitors(session.get("id"))
-    tasks = await listSessionTaskRecords(session.get("id"))
+    agents = [record for record in await list_child_agents() if _is_related_child_agent(session, record)]
+    monitors = await list_session_monitors(session.get("id"))
+    tasks = await list_session_task_records(session.get("id"))
     metadata = session.get("metadata", {})
-    remote = await loadRemoteSession(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
-    bridge = await loadBridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
+    remote = await load_remote_session(metadata.get("remoteSessionId")) if metadata.get("remoteSessionId") else None
+    bridge = await load_bridge(metadata.get("bridgeId")) if metadata.get("bridgeId") else None
     awaiting = [record for record in agents if record.get("status") in {"awaiting_input"}]
     failed = [record for record in [*agents, *tasks, *monitors] if record.get("status") in {"failed", "crashed", "orphaned"}]
     sections = [

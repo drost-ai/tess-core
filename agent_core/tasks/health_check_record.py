@@ -4,12 +4,12 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import (
-    mutateSessionRecord,
-    saveHealthCheckTask,
-    saveTaskRecord,
-    taskOutputPath,
-    writeTaskMeta,
-    withRecordTransaction,
+    mutate_session_record,
+    save_health_check_task,
+    save_task_record,
+    task_output_path,
+    write_task_meta,
+    with_record_transaction,
 )
 
 
@@ -32,7 +32,7 @@ def buildAuthorizedHealthCheckRecord(
         "updatedAt": now,
         "status": status,
         "currentIntervalMs": spec["intervalMs"],
-        "outputFile": taskOutputPath(taskId),
+        "outputFile": task_output_path(taskId),
         "schemaVersion": 2,
         "revision": revision,
         "generation": generation if generation is not None else request.get("generation", 1),
@@ -47,10 +47,10 @@ def buildAuthorizedHealthCheckRecord(
 
 
 async def persistHealthCheckRecord(record: dict[str, Any]) -> None:
-    async with withRecordTransaction("task-lifecycle", record["taskId"]):
-        await saveHealthCheckTask(record)
-        await writeTaskMeta(record["taskId"], {**record, "type": "health_check"})
-        await saveTaskRecord(_health_task_record(record))
+    async with with_record_transaction("task-lifecycle", record["taskId"]):
+        await save_health_check_task(record)
+        await write_task_meta(record["taskId"], {**record, "type": "health_check"})
+        await save_task_record(_health_task_record(record))
 
 
 async def linkHealthChecksToSession(sessionId: str, taskIds: list[str]) -> None:
@@ -59,7 +59,7 @@ async def linkHealthChecksToSession(sessionId: str, taskIds: list[str]) -> None:
         metadata["taskIds"] = list(dict.fromkeys([*(metadata.get("taskIds") or []), *taskIds]))
         return {**session, "metadata": metadata}
 
-    updated = await mutateSessionRecord(sessionId, link)
+    updated = await mutate_session_record(sessionId, link)
     if updated is None:
         raise RuntimeError(f"Session not found: {sessionId}")
 

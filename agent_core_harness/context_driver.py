@@ -18,7 +18,7 @@ from .sandbox import ScenarioSandbox
 
 async def seed_context_session(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     config = await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": data.get("permissionMode", "bypassPermissions")}, str(sandbox.workspace))
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd=str(sandbox.workspace),
         provider=config["provider"],
         providerProfileName=config.get("providerProfileName"),
@@ -47,7 +47,7 @@ async def seed_context_session(data: dict[str, Any], sandbox: ScenarioSandbox, s
 async def run_context_compaction(data: dict[str, Any], _sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session = _current_session(state)
     client = ScriptedCompactionClient(str(data.get("mode") or "accept"))
-    result = await core.runCompaction({"session": session, "config": state.get("config") or {}, "trigger": data.get("trigger", "manual"), "force": data.get("force", True), "modelClient": client})
+    result = await core.run_compaction({"session": session, "config": state.get("config") or {}, "trigger": data.get("trigger", "manual"), "force": data.get("force", True), "modelClient": client})
     alias = str(data.get("resultAlias") or data.get("alias") or data.get("mode") or "compaction")
     record = {"driver": "run_context_compaction", "alias": alias, "mode": client.mode, "status": result.get("status"), "result": _compact_result(result), "clientCalls": client.calls}
     state.setdefault("compaction_results", []).append(record)
@@ -61,7 +61,7 @@ async def run_context_compaction(data: dict[str, Any], _sandbox: ScenarioSandbox
 async def run_context_fallback(data: dict[str, Any], _sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session = _current_session(state)
     client = ContextLimitFallbackClient(core)
-    result = await core.runModelBackedCompactionSynthesisWithFallback(
+    result = await core.run_model_backed_compaction_synthesis_with_fallback(
         {
             "session": session,
             "config": state.get("config") or {},
@@ -82,8 +82,8 @@ async def apply_context_relief(data: dict[str, Any], sandbox: ScenarioSandbox, s
     profile = str(data.get("profile") or "tool_heavy")
     messages = build_context_messages(profile, int(data.get("messageCount") or 18), str(data.get("messageRoot") or "/tmp/workspace"))
     retrieved = retrieved_memory_payload() if data.get("retrievedMemory") else {"records": [], "tokenEstimate": 0}
-    pressure = core.classifyContextPressure({"session": session, "messages": messages})
-    relief = core.applyContextReliefModes(
+    pressure = core.classify_context_pressure({"session": session, "messages": messages})
+    relief = core.apply_context_relief_modes(
         {
             "session": session,
             "config": state.get("config") or {"provider": "openai"},
@@ -101,7 +101,7 @@ async def apply_context_relief(data: dict[str, Any], sandbox: ScenarioSandbox, s
         "profile": profile,
         "pressure": pressure,
         "summary": summary,
-        "renderedPrompt": core.renderContextReliefPrompt(summary),
+        "renderedPrompt": core.render_context_relief_prompt(summary),
         "beforeCount": len(messages),
         "afterCount": len(relief["messages"]),
     }
@@ -181,9 +181,9 @@ def assert_context_runtime_state(state: dict[str, Any], data: dict[str, Any]) ->
 
 
 async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, Any], *, cancel: bool) -> dict[str, Any]:
-    original_measure = agent_context_module.measureRequestInputTokens
+    original_measure = agent_context_module.measure_request_input_tokens
     config = state.get("config") or await core.resolveConfig({"runtimeHome": str(sandbox.home), "permissionMode": "bypassPermissions"}, str(sandbox.workspace))
-    session = core.createEmptySession(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+    session = core.create_empty_session(cwd=str(sandbox.workspace), provider=config["provider"], providerProfileName=config.get("providerProfileName"), model=config["model"], effort=config.get("effort"), systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
     session["messages"] = build_context_messages("plain", 22, "/tmp/workspace")
     provider_requests: list[dict[str, Any]] = []
     events: list[tuple[str, dict[str, Any]]] = []
@@ -210,7 +210,7 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
         return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
 
     try:
-        agent_context_module.measureRequestInputTokens = fake_measure
+        agent_context_module.measure_request_input_tokens = fake_measure
         result = await core.runAgentPrompt(
             session=session,
             config=config,
@@ -226,7 +226,7 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
             providerOverride={"send": send},
         )
     finally:
-        agent_context_module.measureRequestInputTokens = original_measure
+        agent_context_module.measure_request_input_tokens = original_measure
     return {
         "driver": "run_reactive_context_cancellation" if cancel else "run_reactive_context_retry",
         "status": "passed",
@@ -241,10 +241,10 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
 
 
 async def _capture_compaction_artifacts(state: dict[str, Any], alias: str, session: dict[str, Any], result: dict[str, Any]) -> None:
-    manifest = await core.loadCompactionManifest(session["id"])
+    manifest = await core.load_compaction_manifest(session["id"])
     checkpoint = None
     if manifest and manifest.get("latestGeneration"):
-        path = Path(core.compactionCheckpointPath(session["id"], int(manifest["latestGeneration"])))
+        path = Path(core.compaction_checkpoint_path(session["id"], int(manifest["latestGeneration"])))
         if path.exists():
             checkpoint = json.loads(path.read_text(encoding="utf-8"))
     artifacts = {}
@@ -254,9 +254,9 @@ async def _capture_compaction_artifacts(state: dict[str, Any], alias: str, sessi
 
 
 async def _capture_durable_memory(state: dict[str, Any], session: dict[str, Any], prompt: str) -> None:
-    records = await core.loadProjectMemoryRecords(session.get("cwd"))
-    retrieved = await core.retrieveRelevantDurableMemory({"session": session, "prompt": prompt})
-    state["durable_memory"] = {"records": _json_safe(records), "retrieved": _json_safe(retrieved), "renderedPrompt": core.renderRetrievedMemoryPrompt(retrieved)}
+    records = await core.load_project_memory_records(session.get("cwd"))
+    retrieved = await core.retrieve_relevant_durable_memory({"session": session, "prompt": prompt})
+    state["durable_memory"] = {"records": _json_safe(records), "retrieved": _json_safe(retrieved), "renderedPrompt": core.render_retrieved_memory_prompt(retrieved)}
 
 
 def _file_snapshot(path: str) -> dict[str, Any]:

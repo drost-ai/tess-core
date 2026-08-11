@@ -5,7 +5,7 @@ import signal
 from ..._utils import maybe_await, now_iso
 from ...process._termination import drain_owned_process
 from ...process.identity import signalOwnedProcess
-from ...storage import readTaskMeta
+from ...storage import read_task_meta
 from typing import Any, Callable
 from .live_work import _invalidate_live_work_cache
 from .mappers import _task_record_event_payload
@@ -86,7 +86,7 @@ def _create_task_stopper(
             record = committed.get("record")
             if result.get("changed"):
                 if prepared.get("kind") == "subagent":
-                    meta = await readTaskMeta(task_id)
+                    meta = await read_task_meta(task_id)
                     if meta:
                         await _mark_subagent_cancelled_from_stop(
                             meta,

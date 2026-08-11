@@ -35,7 +35,7 @@ async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, 
         else:
             deferred_workspace_activation = True
 
-        plugins = await factories["loadPlugins"](
+        plugins = await factories["load_plugins"](
             config,
             {
                 "pinnedInstalledRecords": copy.deepcopy(

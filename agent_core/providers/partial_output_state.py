@@ -7,10 +7,10 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso
 from ..storage import (
-    readJsonFile,
-    sessionArchiveDir,
-    withRecordTransaction,
-    writeJsonFile,
+    read_json_file,
+    session_archive_dir,
+    with_record_transaction,
+    write_json_file,
 )
 
 
@@ -24,10 +24,10 @@ class PartialOutputStateStore:
 
     def __init__(self, session_id: str) -> None:
         self.session_id = session_id
-        self.path = os.path.join(sessionArchiveDir(session_id), "partial-output-state.json")
+        self.path = os.path.join(session_archive_dir(session_id), "partial-output-state.json")
 
     async def load(self) -> dict[str, Any] | None:
-        value = await readJsonFile(self.path, None)
+        value = await read_json_file(self.path, None)
         return sanitizePartialOutputState(value, expected_session_id=self.session_id)
 
     async def save(self, value: Mapping[str, Any]) -> bool:
@@ -37,8 +37,8 @@ class PartialOutputStateStore:
         )
         if sanitized is None:
             return False
-        async with withRecordTransaction("partial-output", self.session_id):
-            await writeJsonFile(self.path, sanitized)
+        async with with_record_transaction("partial-output", self.session_id):
+            await write_json_file(self.path, sanitized)
         return True
 
 

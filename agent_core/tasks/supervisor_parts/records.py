@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..._utils import now_iso
-from ...storage import loadSession, readTaskMeta, taskOutputPath
+from ...storage import load_session, read_task_meta, task_output_path
 from ..communication import read_task_questions
 from .mappers import (
     _map_child_agent_status_to_task_status,
@@ -150,7 +150,7 @@ def _build_recovered_subagent_task_record(record: dict[str, Any], child: dict[st
 
 def _build_monitor_task_record(session: dict[str, Any], monitor: dict[str, Any]) -> dict[str, Any]:
     task_id = monitor.get("taskId")
-    output_file = taskOutputPath(task_id) if isinstance(task_id, str) else None
+    output_file = task_output_path(task_id) if isinstance(task_id, str) else None
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
     return {
         "id": f"monitor:{monitor.get('id')}",
@@ -183,10 +183,10 @@ def _build_monitor_task_record(session: dict[str, Any], monitor: dict[str, Any])
 
 async def _build_child_agent_task_record(session: dict[str, Any], child: dict[str, Any]) -> dict[str, Any]:
     task_id = child.get("taskId")
-    task_meta = await readTaskMeta(task_id) if isinstance(task_id, str) and task_id else None
+    task_meta = await read_task_meta(task_id) if isinstance(task_id, str) and task_id else None
     questions = await read_task_questions(task_id) if isinstance(task_id, str) and task_id else []
     pending_questions = [question for question in questions if question.get("status") == "pending"]
-    child_session = await loadSession(child.get("sessionId")) if isinstance(child.get("sessionId"), str) else None
+    child_session = await load_session(child.get("sessionId")) if isinstance(child.get("sessionId"), str) else None
     latest_assistant = _summarize_latest_message(child_session or {}, "assistant")
     latest_user = _summarize_latest_message(child_session or {}, "user")
     result_summary = child.get("resultSummary") or child.get("lastSummary") or latest_assistant or child.get("error") or child.get("waitingReason")
@@ -209,8 +209,8 @@ async def _build_child_agent_task_record(session: dict[str, Any], child: dict[st
         "completedAt": child.get("completedAt"),
         "foregroundable": True,
         "restorable": True,
-        "outputCursor": _output_size(taskOutputPath(task_id)) if isinstance(task_id, str) else None,
-        "outputFile": taskOutputPath(task_id) if isinstance(task_id, str) else None,
+        "outputCursor": _output_size(task_output_path(task_id)) if isinstance(task_id, str) else None,
+        "outputFile": task_output_path(task_id) if isinstance(task_id, str) else None,
         "parentTaskId": child.get("parentTaskId"),
         "relatedChildSessionIds": [child.get("sessionId")] if child.get("sessionId") else [],
         "owner": owner,
@@ -277,7 +277,7 @@ def _build_remote_task_record(session: dict[str, Any], remote: dict[str, Any], b
 def _build_task_record(meta: dict[str, Any], summary: str | None, session: dict[str, Any] | None = None) -> dict[str, Any]:
     now = now_iso()
     task_id = task_meta_id(meta)
-    output_file = meta.get("outputFile") or taskOutputPath(task_id)
+    output_file = meta.get("outputFile") or task_output_path(task_id)
     output_cursor = Path(output_file).stat().st_size if output_file and Path(output_file).exists() else 0
     output_preview = _read_output_preview(output_file)
     task_type = meta.get("type") or "background_command"

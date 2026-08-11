@@ -20,7 +20,7 @@ class ShellCommandTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["todos"] = [{"content": "ship shell slice", "status": "in_progress"}]
             session["metadata"]["compactionState"] = {
                 "workingContextTokenEstimate": 4200,
@@ -123,13 +123,13 @@ class ShellCommandTests(AgentCoreTestCase):
             self.assertIn("auto allow", policy["message"])
             run(core.handleSlashCommand({"command": "/permissions allow add python -m pytest", "session": session, "config": config, "hooks": hooks}))
             run(core.handleSlashCommand({"command": "/permissions deny add rm -rf build", "session": session, "config": config, "hooks": hooks}))
-            auto_mode = run(core.loadAutoMode(str(workspace)))
+            auto_mode = run(core.load_auto_mode(str(workspace)))
             self.assertIn("python -m pytest", auto_mode["allow"])
             self.assertIn("rm -rf build", auto_mode["deny"])
             run(core.handleSlashCommand({"command": "/permissions allow remove python -m pytest", "session": session, "config": config, "hooks": hooks}))
-            self.assertNotIn("python -m pytest", run(core.loadAutoMode(str(workspace)))["allow"])
+            self.assertNotIn("python -m pytest", run(core.load_auto_mode(str(workspace)))["allow"])
             run(core.handleSlashCommand({"command": "/permissions reset", "session": session, "config": config, "hooks": hooks}))
-            self.assertNotIn("rm -rf build", run(core.loadAutoMode(str(workspace)))["deny"])
+            self.assertNotIn("rm -rf build", run(core.load_auto_mode(str(workspace)))["deny"])
 
             provider_result = run(core.handleSlashCommand({"command": "/provider anthropic-console", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("anthropic-console", provider_result["message"])
@@ -144,19 +144,19 @@ class ShellCommandTests(AgentCoreTestCase):
             usage = run(core.handleSlashCommand({"command": "/cost", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("input tokens", usage["message"])
 
-            run(core.saveChildAgent({"agentId": "agent-shell", "sessionId": "child-shell", "parentSessionId": session["id"], "name": "Shell worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "backgrounded", "startedAt": "2026-01-01T00:00:00Z", "lastSummary": "working"}))
+            run(core.save_child_agent({"agentId": "agent-shell", "sessionId": "child-shell", "parentSessionId": session["id"], "name": "Shell worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "backgrounded", "startedAt": "2026-01-01T00:00:00Z", "lastSummary": "working"}))
             session["metadata"]["childAgentIds"] = ["agent-shell"]
             agents = run(core.handleSlashCommand({"command": "/agents running", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("agent-shell", agents["message"])
 
-            run(core.saveTaskRecord({"id": "task-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Shell task", "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.save_task_record({"id": "task-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Shell task", "updatedAt": "2026-01-01T00:00:00Z"}))
             tasks = run(core.handleSlashCommand({"command": "/tasks", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("task-shell", tasks["message"])
             inspected = run(core.handleSlashCommand({"command": "/tasks inspect task-shell", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("kind         background_command", inspected["message"])
             self.assertIn("surface      inspectable", inspected["message"])
 
-            run(core.saveDaemonState("shell-instance", {"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.save_daemon_state("shell-instance", {"phase": "running", "pid": 123, "socketPath": str(workspace / "daemon.sock"), "supervisorId": "sup", "epoch": 1, "attachedClients": 0, "watchedSessions": 1, "activeTasks": 1, "updatedAt": "2026-01-01T00:00:00Z"}))
             daemon = run(core.handleSlashCommand({"command": "/daemon", "session": session, "config": config, "hooks": hooks, "runtimeInstanceId": "shell-instance"}))
             self.assertIn("running", daemon["message"])
 
@@ -169,7 +169,7 @@ class ShellCommandTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             infos = []
             errors = []
             events = []
@@ -194,7 +194,7 @@ class ShellCommandTests(AgentCoreTestCase):
                 "emitRuntimeEvent": lambda event, data: events.append((event, data)),
                 "getExtensionsReport": lambda: "mcp: ok",
                 "requestResume": lambda next_session: resumed.append(next_session["id"]),
-                "runCompaction": fake_compaction,
+                "run_compaction": fake_compaction,
                 "runPrompt": fake_run_prompt,
                 "getStatusLineVisible": lambda: tui_state["statusline"],
                 "setStatusLineVisible": lambda visible: tui_state.__setitem__("statusline", visible),
@@ -211,20 +211,20 @@ class ShellCommandTests(AgentCoreTestCase):
             run(core.handleSlashCommand({"command": "/memory append Keep handlers deterministic", "session": session, "config": config, "hooks": hooks}))
             memory_show = run(core.handleSlashCommand({"command": "/memory", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Prefer shell parity tests", memory_show["message"])
-            self.assertTrue(any(record["id"] == "manual-project-memory" for record in run(core.loadProjectMemoryRecords(str(workspace)))))
+            self.assertTrue(any(record["id"] == "manual-project-memory" for record in run(core.load_project_memory_records(str(workspace)))))
 
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-shell-monitor", "goal": "Watch shell parity"})
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             monitors = run(core.handleSlashCommand({"command": "/monitors", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Watch shell parity", monitors["message"])
             run(core.handleSlashCommand({"command": f"/monitor stop {monitor['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
-            self.assertEqual(run(core.loadMonitor(monitor["id"]))["status"], "stopped")
+            self.assertEqual(run(core.load_monitor(monitor["id"]))["status"], "stopped")
             run(core.handleSlashCommand({"command": f"/monitor resume {monitor['id']}", "session": session, "config": config, "hooks": hooks}))
-            self.assertEqual(run(core.loadMonitor(monitor["id"]))["status"], "active")
+            self.assertEqual(run(core.load_monitor(monitor["id"]))["status"], "active")
 
-            other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            other = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
             other["messages"] = [{"role": "user", "content": "resume target session"}]
-            run(core.saveSession(other))
+            run(core.save_session(other))
             resume_list = run(core.handleSlashCommand({"command": "/resume", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("resume target session", resume_list["message"])
             run(core.handleSlashCommand({"command": f"/resume {other['id'][:8]}", "session": session, "config": config, "hooks": hooks}))
@@ -263,11 +263,11 @@ class ShellCommandTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            target = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
-            run(core.saveSession(target))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            target = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            run(core.save_session(target))
             task = {"id": "task-shell-mutate", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Mutable shell task", "updatedAt": "2026-01-01T00:00:00Z", "attachableSessionId": target["id"]}
-            run(core.saveTaskRecord(task))
+            run(core.save_task_record(task))
             stopped = []
             retried = []
             daemon_actions = []
@@ -312,7 +312,7 @@ class ShellCommandTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             hooks = {"persist": lambda: None, "refresh": lambda: None}
             availability = core.getSlashCommandAvailability({"mode": "bare", "hooks": hooks})
             review = next(command for command in availability if command["name"] == "review")
@@ -326,15 +326,15 @@ class ShellCommandTests(AgentCoreTestCase):
             run(core.handleSlashCommand({"command": "/model openai:gpt-5.4-mini", "session": session, "config": config, "hooks": hooks}))
             run(core.handleSlashCommand({"command": "/effort high", "session": session, "config": config, "hooks": hooks}))
             run(core.handleSlashCommand({"command": "/permissions acceptEdits", "session": session, "config": config, "hooks": hooks}))
-            settings = run(core.loadSettings("project", str(workspace)))
+            settings = run(core.load_settings("project", str(workspace)))
             self.assertEqual(settings["provider"], "openai")
             self.assertEqual(settings["model"], "gpt-5.4-mini")
             self.assertEqual(settings["effortLevel"], "high")
             self.assertEqual(settings["permissionMode"], "acceptEdits")
 
-            parent = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="bypassPermissions")
-            run(core.saveSession(parent))
-            child = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            parent = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="bypassPermissions")
+            run(core.save_session(parent))
+            child = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
             child["metadata"]["parentSessionId"] = parent["id"]
             report = run(core.handleSlashCommand({"command": "/permissions", "session": child, "config": config, "hooks": hooks}))
             self.assertIn("current  default", report["message"])

@@ -14,12 +14,12 @@ from typing import Any, Callable
 
 from .._utils import maybe_await, now_iso
 from ..storage import (
-    listHealthCheckTasks,
-    loadHealthCheckTask,
-    loadSession,
-    saveHealthCheckTask,
-    withRecordTransaction,
-    writeTaskMeta,
+    list_health_check_tasks,
+    load_health_check_task,
+    load_session,
+    save_health_check_task,
+    with_record_transaction,
+    write_task_meta,
 )
 from .health_check_executor import appendHealthCheckLog, executeHealthCheck
 from .health_check_policy import (
@@ -53,7 +53,7 @@ def createHealthCheckController(
         if closed:
             return
         now_ms = datetime.now(timezone.utc).timestamp() * 1000
-        for candidate in await listHealthCheckTasks():
+        for candidate in await list_health_check_tasks():
             # Legacy (pre-v2) records are inert: never runnable, never
             # mutated. The old migration lane suspended them into a state
             # with no shipped un-suspend path; skipping is the remedy.
@@ -84,7 +84,7 @@ def createHealthCheckController(
             raise RuntimeError("Health-check runtime is closed.")
         _validate_start_request(request)
         session_id = request.get("sessionId")
-        if not isinstance(session_id, str) or not await loadSession(session_id):
+        if not isinstance(session_id, str) or not await load_session(session_id):
             raise RuntimeError(f"Session not found: {session_id}")
         task_id = str(uuid.uuid4())
         record = buildAuthorizedHealthCheckRecord(request=request, taskId=task_id)
@@ -231,8 +231,8 @@ def createHealthCheckController(
 
 
 async def _mark_attempt_started(task_id: str, generation: int, started_at: str) -> bool:
-    async with withRecordTransaction("task-lifecycle", task_id):
-        current = await loadHealthCheckTask(task_id)
+    async with with_record_transaction("task-lifecycle", task_id):
+        current = await load_health_check_task(task_id)
         if not current or current.get("generation") != generation or not _is_active(current.get("status")):
             return False
         next_record = {
@@ -241,16 +241,16 @@ async def _mark_attempt_started(task_id: str, generation: int, started_at: str) 
             "updatedAt": started_at,
             "revision": int(current.get("revision") or 0) + 1,
         }
-        await saveHealthCheckTask(next_record)
-        await writeTaskMeta(task_id, {**next_record, "type": "health_check"})
+        await save_health_check_task(next_record)
+        await write_task_meta(task_id, {**next_record, "type": "health_check"})
         return True
 
 
 async def _persist_active_identity(
     task_id: str, generation: int, identity: dict[str, Any]
 ) -> None:
-    async with withRecordTransaction("task-lifecycle", task_id):
-        current = await loadHealthCheckTask(task_id)
+    async with with_record_transaction("task-lifecycle", task_id):
+        current = await load_health_check_task(task_id)
         if not current or current.get("generation") != generation or not _is_active(current.get("status")):
             return
         now = now_iso()
@@ -260,8 +260,8 @@ async def _persist_active_identity(
             "revision": int(current.get("revision") or 0) + 1,
             "updatedAt": now,
         }
-        await saveHealthCheckTask(next_record)
-        await writeTaskMeta(task_id, {**next_record, "type": "health_check"})
+        await save_health_check_task(next_record)
+        await write_task_meta(task_id, {**next_record, "type": "health_check"})
 
 
 async def _commit_attempt(
@@ -270,8 +270,8 @@ async def _commit_attempt(
     started_at: str,
     result: dict[str, Any],
 ) -> dict[str, Any] | None:
-    async with withRecordTransaction("task-lifecycle", task_id):
-        current = await loadHealthCheckTask(task_id)
+    async with with_record_transaction("task-lifecycle", task_id):
+        current = await load_health_check_task(task_id)
         if not current or current.get("generation") != generation or not _is_active(current.get("status")):
             return None
         failures = 0 if result["okay"] else int(current.get("consecutiveFailures") or 0) + 1
@@ -383,7 +383,7 @@ async def drainOrphanedHealthProbes(
     from ..process._termination import drain_owned_process
 
     drained = 0
-    for record in await listHealthCheckTasks():
+    for record in await list_health_check_tasks():
         identity = record.get("activeProcessIdentity")
         task_id = record.get("taskId")
         if not isinstance(identity, dict) or not isinstance(task_id, str) or not task_id:
@@ -401,9 +401,9 @@ async def drainOrphanedHealthProbes(
             next_record["updatedAt"] = now_iso()
             return next_record
 
-        from ..storage import mutateHealthCheckTask
+        from ..storage import mutate_health_check_task
 
-        await mutateHealthCheckTask(task_id, _clear)
+        await mutate_health_check_task(task_id, _clear)
         drained += 1
         await maybe_await(
             emit(

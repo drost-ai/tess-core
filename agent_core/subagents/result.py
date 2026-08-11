@@ -5,14 +5,14 @@ import os
 import re
 from typing import Any, Mapping
 
-from ..storage import taskDir, writeJsonFile
+from ..storage import task_dir, write_json_file
 
 _SUPPORTED_SCHEMA_KEYS = {"type", "enum", "required", "properties", "additionalProperties", "items"}
 _IGNORED_SCHEMA_ANNOTATION_KEYS = {"$schema", "$id", "title", "description", "default", "examples"}
 
 
 def structured_result_path(task_id: str) -> str:
-    return os.path.join(taskDir(task_id), "structured-result.json")
+    return os.path.join(task_dir(task_id), "structured-result.json")
 
 
 def extract_structured_result_json(text: str) -> Any:
@@ -112,7 +112,7 @@ def evaluate_subagent_result(text: str, response_schema: Mapping[str, Any] | Non
 
 async def persist_structured_subagent_result(task_id: str, evaluation: Mapping[str, Any]) -> str:
     path = structured_result_path(task_id)
-    await writeJsonFile(path, dict(evaluation))
+    await write_json_file(path, dict(evaluation))
     return path
 
 

@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import os
 from .._utils import now_iso
-from ..context.compaction import runCompaction
-from ..context.durable_memory import synchronizeManualProjectMemory
+from ..context.compaction import run_compaction
+from ..context.durable_memory import synchronize_manual_project_memory
 from ..storage import (
-    compactionCheckpointPath,
-    compactionManifestPath,
-    getProjectMemoryPath,
-    listSessionMonitors,
-    listSessions,
-    loadCompactionManifest,
-    loadSession,
+    compaction_checkpoint_path,
+    compaction_manifest_path,
+    get_project_memory_path,
+    list_session_monitors,
+    list_sessions,
+    load_compaction_manifest,
+    load_session,
 )
 from ..tasks.monitor_transactions import commitMonitorMutation as _commit_monitor_mutation
 from ..tasks.monitor_transitions import (
@@ -38,7 +38,7 @@ from typing import Any
 
 
 async def buildMonitorsReport(session: dict[str, Any]) -> str:
-    monitors = await listSessionMonitors(session.get("id"))
+    monitors = await list_session_monitors(session.get("id"))
     if not monitors:
         return "No background monitors are active for this session."
     return "\n\n".join(formatMonitorRecord(monitor) for monitor in monitors[:12])
@@ -46,10 +46,10 @@ async def buildMonitorsReport(session: dict[str, Any]) -> str:
 
 async def _handle_memory(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
     cwd = session.get("cwd") or os.getcwd()
-    memory_path = getProjectMemoryPath(cwd)
+    memory_path = get_project_memory_path(cwd)
     command, payload = _split_subcommand(arg_text)
     if not command or command == "show":
-        records = await synchronizeManualProjectMemory(cwd)
+        records = await synchronize_manual_project_memory(cwd)
         try:
             with open(memory_path, "r", encoding="utf-8") as handle:
                 content = handle.read().strip()
@@ -61,7 +61,7 @@ async def _handle_memory(arg_text: str, session: dict[str, Any], hooks: dict[str
             os.remove(memory_path)
         except FileNotFoundError:
             pass
-        records = await synchronizeManualProjectMemory(cwd)
+        records = await synchronize_manual_project_memory(cwd)
         return _info(hooks, "Memory", f"Cleared project memory at {memory_path}\nrecords  {len(records)}")
     if command not in {"set", "append"} or not payload:
         return _error(hooks, "Usage: /memory [show|append TEXT|set TEXT|clear]")
@@ -77,7 +77,7 @@ async def _handle_memory(arg_text: str, session: dict[str, Any], hooks: dict[str
         next_content = f"{previous}\n{payload}\n" if previous else f"{payload}\n"
     with open(memory_path, "w", encoding="utf-8") as handle:
         handle.write(next_content)
-    records = await synchronizeManualProjectMemory(cwd)
+    records = await synchronize_manual_project_memory(cwd)
     verb = "Replaced" if command == "set" else "Appended to"
     return _info(hooks, "Memory", f"{verb} project memory at {memory_path}\nrecords  {len(records)}")
 
@@ -93,7 +93,7 @@ async def _handle_monitor(arg_text: str, session: dict[str, Any], hooks: dict[st
     parts = arg_text.split(None, 1)
     if len(parts) != 2 or parts[0] not in {"stop", "resume"}:
         return _error(hooks, "Usage: /monitor <stop|resume> <monitor-id>")
-    monitors = await listSessionMonitors(session.get("id"))
+    monitors = await list_session_monitors(session.get("id"))
     monitor = _resolve_monitor(monitors, parts[1])
     if not monitor:
         return _error(hooks, f"No monitor matched: {parts[1]}")
@@ -148,7 +148,7 @@ def _slash_monitor_mutation(latest: dict[str, Any], operation: str) -> dict[str,
 
 
 async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str, Any]) -> dict[str, Any]:
-    candidates = [candidate for candidate in await listSessions() if candidate.get("cwd") == session.get("cwd") and candidate.get("id") != session.get("id")]
+    candidates = [candidate for candidate in await list_sessions() if candidate.get("cwd") == session.get("cwd") and candidate.get("id") != session.get("id")]
     if not arg_text:
         if not candidates:
             return _info(hooks, "Resume", "No other saved sessions found for this workspace.")
@@ -162,7 +162,7 @@ async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str
     if not callable(request_resume):
         return _error(hooks, "/resume switching is only available in the full-screen TUI.")
     await _persist(hooks)
-    selected = await loadSession(matches[0]["id"]) or matches[0]
+    selected = await load_session(matches[0]["id"]) or matches[0]
     request_resume(selected)
     return _handled(f"resuming {selected.get('id')}")
 
@@ -189,8 +189,8 @@ async def _handle_compact(arg_text: str, session: dict[str, Any], config: dict[s
             "current_token_source": token_measurement.get("source"),
         },
     )
-    runner = hooks.get("runCompaction") if isinstance(hooks, dict) else None
-    runner = runner if callable(runner) else runCompaction
+    runner = hooks.get("run_compaction") if isinstance(hooks, dict) else None
+    runner = runner if callable(runner) else run_compaction
     payload = {"session": session, "config": config, "trigger": "manual", "force": True}
     if args.get("modelClient") is not None:
         payload["modelClient"] = args["modelClient"]
@@ -311,7 +311,7 @@ async def buildCompactionStatusReport(session: dict[str, Any]) -> str:
     state = metadata.get("compactionState") or {}
     artifacts = state.get("artifacts") if isinstance(state.get("artifacts"), dict) else {}
     measurement = state.get("workingContextTokenMeasurement") or {}
-    manifest = await loadCompactionManifest(session.get("id")) if session.get("id") else None
+    manifest = await load_compaction_manifest(session.get("id")) if session.get("id") else None
     generation = state.get("latestCompactionGeneration")
     lines = [
         f"session        {session.get('id') or 'n/a'}",
@@ -320,7 +320,7 @@ async def buildCompactionStatusReport(session: dict[str, Any]) -> str:
         f"working ctx    {state.get('workingContextTokenEstimate', 'n/a')}",
         f"ctx source     {measurement.get('source', 'n/a')}",
         f"compacted to   {state.get('compactedThroughMessageIndex', 'n/a')}",
-        f"manifest       {compactionManifestPath(session.get('id')) if session.get('id') and manifest else 'none'}",
+        f"manifest       {compaction_manifest_path(session.get('id')) if session.get('id') and manifest else 'none'}",
     ]
     if manifest:
         lines.extend(
@@ -339,7 +339,7 @@ async def buildCompactionStatusReport(session: dict[str, Any]) -> str:
         if artifacts.get(key):
             lines.append(f"{label:<14} {artifacts.get(key)}")
     if session.get("id") and isinstance(generation, int):
-        lines.append(f"checkpoint src {compactionCheckpointPath(session['id'], generation)}")
+        lines.append(f"checkpoint src {compaction_checkpoint_path(session['id'], generation)}")
     if not state and not manifest:
         lines.append("No compaction checkpoint recorded for this session.")
     return "\n".join(lines)

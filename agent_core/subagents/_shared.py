@@ -4,13 +4,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
-from ..storage import withRecordTransaction
+from ..storage import with_record_transaction
 
 
 @asynccontextmanager
 async def withSubagentCoordinationTransaction(parentSessionId: str) -> AsyncIterator[None]:
     """All subagent coordination stores share one lock domain per parent session."""
-    async with withRecordTransaction("subagent-coordination", parentSessionId):
+    async with with_record_transaction("subagent-coordination", parentSessionId):
         yield
 
 

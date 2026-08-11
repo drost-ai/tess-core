@@ -85,7 +85,7 @@ def image_config(cwd: str, *, enabled: bool = True, persistence: bool = False) -
 
 
 def create_session(config: dict) -> dict:
-    return core.createEmptySession(
+    return core.create_empty_session(
         cwd=config["cwd"],
         provider="openai",
         providerProfileName=config["providerProfileName"],
@@ -243,7 +243,7 @@ class Package31ImageBudgetUnitTests(unittest.TestCase):
             "model": "gpt-5.4", "system": "test", "tools": [],
             "messages": [{"role": "user", "content": [image_block(b"img")]}],
         }
-        measurement = run(core.measureRequestInputTokens(config=config, request=request, session={}))
+        measurement = run(core.measure_request_input_tokens(config=config, request=request, session={}))
         self.assertEqual(measurement["imageCount"], 1)
         self.assertEqual(measurement["imageDecodedBytes"], 3)
         self.assertEqual(measurement["imageInputTokens"], 255)
@@ -406,7 +406,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             self.assertIn("Image attachment was available to the model on the original turn.", live)
             persisted = (
                 Path(home, "sessions", f"{session['id']}.json").read_text(encoding="utf-8")
-                + Path(core.sessionMessagesPath(session["id"])).read_text(encoding="utf-8")
+                + Path(core.session_messages_path(session["id"])).read_text(encoding="utf-8")
             )
             self.assertNotIn(encoded, persisted)
             self.assertNotIn("data:image", persisted)

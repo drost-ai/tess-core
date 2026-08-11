@@ -112,7 +112,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
     def test_generation_three_plus_sixty_eight_message_tail_creates_four_and_five(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.5",
@@ -128,7 +128,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                 for index in range(311)
             ]
             session["messages"].extend(_tool_tail(0, 34, chars=20_000))
-            previous_context = core.buildWorkingContextDocumentFromCandidate(
+            previous_context = core.build_working_context_document_from_candidate(
                 {
                     "previous": None,
                     "session": session,
@@ -156,7 +156,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             context_path = home / "generation-3-working-context.json"
             context_path.write_text(json.dumps(previous_context), encoding="utf-8")
             run(
-                core.saveCompactionManifest(
+                core.save_compaction_manifest(
                     {
                         "sessionId": session["id"],
                         "strategy": "checkpoint-v2",
@@ -181,7 +181,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             client = _CompactionClient()
 
             generation_four = run(
-                core.runCompaction(
+                core.run_compaction(
                     {
                         "session": session,
                         "config": {"durableMemory": {"enabled": False}},
@@ -200,7 +200,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             first_cutoff = generation_four["compactedThroughMessageIndex"]
             session["messages"].extend(_tool_tail(34, 34, chars=20_000))
             generation_five = run(
-                core.runCompaction(
+                core.run_compaction(
                     {
                         "session": session,
                         "config": {"durableMemory": {"enabled": False}},
@@ -219,7 +219,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             )
             calls_after_generation_five = list(client.calls)
             no_churn = run(
-                core.runCompaction(
+                core.run_compaction(
                     {
                         "session": session,
                         "config": {"durableMemory": {"enabled": False}},
@@ -241,8 +241,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
 
     def test_oversized_rebuilt_request_fails_closed_after_one_generation(self):
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_context_module.measureRequestInputTokens
-        original_compact = agent_checkpoints_module.runCompaction
+        original_measure = agent_context_module.measure_request_input_tokens
+        original_compact = agent_checkpoints_module.run_compaction
         try:
             config = run(
                 core.resolveConfig(
@@ -254,7 +254,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                     str(workspace),
                 )
             )
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -295,8 +295,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
                 provider_calls += 1
                 raise AssertionError("oversized request must not dispatch")
 
-            agent_context_module.measureRequestInputTokens = measure
-            agent_checkpoints_module.runCompaction = compact
+            agent_context_module.measure_request_input_tokens = measure
+            agent_checkpoints_module.run_compaction = compact
             with self.assertRaises(core.ProviderRequestError) as raised:
                 run(
                     core.runAgentPrompt(
@@ -311,8 +311,8 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             self.assertEqual(compact_calls, 1)
             self.assertEqual(provider_calls, 0)
         finally:
-            agent_context_module.measureRequestInputTokens = original_measure
-            agent_checkpoints_module.runCompaction = original_compact
+            agent_context_module.measure_request_input_tokens = original_measure
+            agent_checkpoints_module.run_compaction = original_compact
             self.restore_home(root, previous)
 
     def test_headroom_degraded_is_typed_and_requires_output_safety(self):

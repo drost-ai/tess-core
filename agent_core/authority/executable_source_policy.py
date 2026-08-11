@@ -17,9 +17,9 @@ from .repository_trust import (
     checkRepositoryApproval,
     resolveRepositoryIdentity,
 )
-from ..storage.json_io import resolveMaybeRelative
+from ..storage.json_io import resolve_maybe_relative
 from ..runtime.secrets import assertNoLiteralMcpSecrets, migrateLegacyMcpServerSecrets
-from ..storage.settings import loadMcpServers, loadPlugins, saveMcpServers
+from ..storage.settings import load_mcp_servers, load_plugins, save_mcp_servers
 
 
 SETTING_SOURCES = ("user", "project", "local")
@@ -92,11 +92,11 @@ def _normalized_mcp_records(scope: str, records: Any) -> list[dict[str, Any]]:
 
 
 async def _load_scoped_mcp_records(scope: str, cwd: str) -> list[dict[str, Any]]:
-    records = _normalized_mcp_records(scope, await loadMcpServers(scope, cwd))
+    records = _normalized_mcp_records(scope, await load_mcp_servers(scope, cwd))
     if scope == "user":
         migration = await migrateLegacyMcpServerSecrets(records)
         if migration["changed"]:
-            await saveMcpServers("user", cwd, migration["records"])
+            await save_mcp_servers("user", cwd, migration["records"])
         return migration["records"]
     assertNoLiteralMcpSecrets(records, scope)
     return records
@@ -230,7 +230,7 @@ async def _plugin_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -
     for index, record in enumerate(records):
         if not record.get("enabled") or str(record.get("source")).startswith(("http://", "https://")):
             continue
-        candidate = resolveMaybeRelative(cwd, str(record.get("source")))
+        candidate = resolve_maybe_relative(cwd, str(record.get("source")))
         if not os.path.lexists(candidate):
             continue
         roots.append(candidate)
@@ -250,7 +250,7 @@ async def _plugin_closure(cwd: str, scope: str, records: list[dict[str, Any]]) -
 async def inspectPluginSourceTrust(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     cwd, scope = str(args["cwd"]), str(args["scope"])
-    records = _normalized_plugins(scope, await loadPlugins(scope, cwd))
+    records = _normalized_plugins(scope, await load_plugins(scope, cwd))
     enabled = [record for record in records if record.get("enabled")]
     closure = await _plugin_closure(cwd, scope, records)
     inspection = await inspectExecutableClosure(closure["spec"])
@@ -287,7 +287,7 @@ async def loadSelectedPluginRecords(
     cwd = str(args["cwd"])
     result: list[dict[str, Any]] = []
     for scope in parseSettingSources(args.get("sources")):
-        records = _normalized_plugins(scope, await loadPlugins(scope, cwd))
+        records = _normalized_plugins(scope, await load_plugins(scope, cwd))
         enabled = [record for record in records if record.get("enabled")]
         if scope == "user" or not enabled:
             result.extend(records)

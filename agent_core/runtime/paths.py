@@ -27,7 +27,7 @@ class RuntimePaths:
     repositoryTrustDir: str
     executableSnapshotsDir: str
     daemonDir: str
-    daemonLogsDir: str
+    daemon_logs_dir: str
     locksDir: str
     logsDir: str
     mcpBlobsDir: str
@@ -77,7 +77,7 @@ def resolveRuntimePaths(cwd: str | None = None, candidate: str | None = None) ->
         repositoryTrustDir=os.path.join(trust, "repositories"),
         executableSnapshotsDir=os.path.join(trust, "snapshots"),
         daemonDir=daemon,
-        daemonLogsDir=os.path.join(daemon, "logs"),
+        daemon_logs_dir=os.path.join(daemon, "logs"),
         locksDir=os.path.join(home, "locks"),
         logsDir=os.path.join(home, "logs"),
         mcpBlobsDir=os.path.join(home, "mcp-blobs"),

@@ -24,8 +24,8 @@ class SubagentWorktreeIsolationTests(AgentCoreTestCase):
         try:
             _init_repo(str(workspace))
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(parent))
+            parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(parent))
 
             async def fake_start(task_args):
                 return {"taskId": "wt-task", "outputFile": str(workspace / "out.log")}
@@ -43,7 +43,7 @@ class SubagentWorktreeIsolationTests(AgentCoreTestCase):
                 os.path.realpath(worktree_path), os.path.realpath(str(workspace))
             )
 
-            child_session = run(core.loadSession(payload["session_id"]))
+            child_session = run(core.load_session(payload["session_id"]))
             self.assertEqual(
                 os.path.realpath(child_session["cwd"]), os.path.realpath(worktree_path)
             )

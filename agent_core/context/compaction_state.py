@@ -5,10 +5,10 @@ from .._utils import safe_int as _safe_int
 from datetime import datetime, timezone
 from typing import Any
 
-from ..storage import loadCompactionManifest
+from ..storage import load_compaction_manifest
 
 
-def isCompactionStateNewer(candidate: dict[str, Any] | None, baseline: dict[str, Any] | None) -> bool:
+def is_compaction_state_newer(candidate: dict[str, Any] | None, baseline: dict[str, Any] | None) -> bool:
     if not isinstance(candidate, dict):
         return False
     if not isinstance(baseline, dict):
@@ -28,9 +28,9 @@ def isCompactionStateNewer(candidate: dict[str, Any] | None, baseline: dict[str,
     return candidate_at > baseline_at
 
 
-async def refreshCompactionStateFromManifest(session: dict[str, Any]) -> bool:
+async def refresh_compaction_state_from_manifest(session: dict[str, Any]) -> bool:
     try:
-        manifest = await loadCompactionManifest(session["id"])
+        manifest = await load_compaction_manifest(session["id"])
     except Exception:
         return False
     if not isinstance(manifest, dict):
@@ -42,7 +42,7 @@ async def refreshCompactionStateFromManifest(session: dict[str, Any]) -> bool:
 
     candidate = _compaction_state_from_manifest(manifest)
     metadata = session.setdefault("metadata", {})
-    if not isCompactionStateNewer(candidate, metadata.get("compactionState")):
+    if not is_compaction_state_newer(candidate, metadata.get("compactionState")):
         return False
 
     metadata["compactionState"] = candidate

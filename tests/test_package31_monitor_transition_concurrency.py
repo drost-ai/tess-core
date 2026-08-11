@@ -16,7 +16,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
                 str(workspace),
             )
         )
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace),
             provider=config["provider"],
             providerProfileName=config["providerProfileName"],
@@ -25,7 +25,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
             systemPrompt=config["systemPrompt"],
             permissionMode="bypassPermissions",
         )
-        run(core.saveSession(session))
+        run(core.save_session(session))
         return config, session
 
     def _race(self, home, session_id, task_id, monitor_id, operations):
@@ -97,7 +97,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
             self.assertEqual(len({row["monitorId"] for row in starts}), 1)
             self.assertEqual(len(start_events), 1)
             monitor_id = starts[0]["monitorId"]
-            stored = run(core.loadMonitor(monitor_id))
+            stored = run(core.load_monitor(monitor_id))
             self.assertEqual((stored["status"], stored["revision"]), ("active", 1))
             self.assertEqual(stored["lastTransitionId"], start_events[0]["transitionId"])
 
@@ -106,7 +106,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
             )
             self.assertEqual(sorted(row["changed"] for row in stops), [False, True])
             self.assertEqual(len(stop_events), 1)
-            stored = run(core.loadMonitor(monitor_id))
+            stored = run(core.load_monitor(monitor_id))
             self.assertEqual((stored["status"], stored["revision"]), ("stopped", 2))
             self.assertEqual(stored["lastTransitionId"], stop_events[0]["transitionId"])
         finally:
@@ -124,7 +124,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
                     "goal": "watch terminal",
                 }
             )
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             rows, events = self._race(
                 home,
                 session["id"],
@@ -133,7 +133,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
                 ["stop", "complete"],
             )
             self.assertEqual(len(events), 1)
-            stored = run(core.loadMonitor(monitor["id"]))
+            stored = run(core.load_monitor(monitor["id"]))
             self.assertIn(stored["status"], {"stopped", "completed"})
             self.assertEqual(stored["status"], events[0]["status"])
             self.assertEqual(stored["lastTransitionId"], events[0]["transitionId"])
@@ -152,7 +152,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
             now = now_iso()
             session["metadata"]["taskIds"] = [task_id]
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sessionId": session["id"],
@@ -167,7 +167,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "taskId": task_id,

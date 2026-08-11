@@ -8,7 +8,7 @@ class PublicApiTests(AgentCoreTestCase):
         self.assertTrue(callable(core.resolveConfig))
         self.assertTrue(callable(core.runAgentPrompt))
         self.assertTrue(callable(core.bootstrapRuntime))
-        self.assertTrue(callable(core.createEmptySession))
+        self.assertTrue(callable(core.create_empty_session))
         self.assertTrue(callable(core.ensureTaskSupervisorDaemon))
 
     def test_reference_module_surfaces(self):

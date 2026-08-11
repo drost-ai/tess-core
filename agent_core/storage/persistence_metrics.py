@@ -28,7 +28,7 @@ class PersistenceCallMeasurement:
     finished: bool = False
 
 
-def registerPersistenceObserver(observer: PersistenceObserver) -> Callable[[], None]:
+def register_persistence_observer(observer: PersistenceObserver) -> Callable[[], None]:
     """Observe persistence calls and their physical writes.
 
     This is an internal measurement seam. Observers must never affect runtime
@@ -47,13 +47,13 @@ def registerPersistenceObserver(observer: PersistenceObserver) -> Callable[[], N
     return unsubscribe
 
 
-def persistenceObserversActive() -> bool:
+def persistence_observers_active() -> bool:
     with _OBSERVERS_LOCK:
         return bool(_OBSERVERS)
 
 
-def beginPersistenceCall(session_id: str, message_count: int) -> PersistenceCallMeasurement | None:
-    if not persistenceObserversActive():
+def begin_persistence_call(session_id: str, message_count: int) -> PersistenceCallMeasurement | None:
+    if not persistence_observers_active():
         return None
     call_id = f"persist-{next(_CALL_IDS)}"
     token = _CURRENT_CALL_ID.set(call_id)
@@ -70,7 +70,7 @@ def beginPersistenceCall(session_id: str, message_count: int) -> PersistenceCall
     return measurement
 
 
-def finishPersistenceCall(
+def finish_persistence_call(
     measurement: PersistenceCallMeasurement | None,
     outcome: str,
     *,
@@ -94,13 +94,13 @@ def finishPersistenceCall(
     _CURRENT_CALL_ID.reset(measurement.token)
 
 
-def recordPersistenceIo(
+def record_persistence_io(
     operation: str,
     file_path: str,
     byte_count: int,
     elapsed_ns: int,
 ) -> None:
-    if not persistenceObserversActive():
+    if not persistence_observers_active():
         return
     _notify(
         {

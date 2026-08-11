@@ -15,22 +15,22 @@ from ..._utils import now_iso
 from .recovery_analysis import analyzeBridgeRecovery
 from ...runtime.identifiers import parseBridgeId, parseSessionId
 from ...storage import (
-    getStateRoot,
-    loadSessionRecordShallow,
-    mutateSessionRecordTransaction,
-    withRecordTransaction,
+    get_state_root,
+    load_session_record_shallow,
+    mutate_session_record_transaction,
+    with_record_transaction,
 )
 from ...storage.remote import (
-    loadBridge,
-    loadBridgeDeliveryLedger,
-    loadBridgeInbox,
-    loadBridgeRecoveryRecord,
-    loadRemoteSession,
-    replaceBridgeInbox,
-    saveBridge,
-    saveBridgeDeliveryLedger,
-    saveBridgeRecoveryRecord,
-    saveRemoteSession,
+    load_bridge,
+    load_bridge_delivery_ledger,
+    load_bridge_inbox,
+    load_bridge_recovery_record,
+    load_remote_session,
+    replace_bridge_inbox,
+    save_bridge,
+    save_bridge_delivery_ledger,
+    save_bridge_recovery_record,
+    save_remote_session,
 )
 
 _RECOVERY_PHASES = {
@@ -56,7 +56,7 @@ def __setBridgeRecoveryTestHookForTests(hook) -> None:
 
 async def inspectBridgeRecovery(sessionId: str) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
-    async with withRecordTransaction("bridge-session", session_id):
+    async with with_record_transaction("bridge-session", session_id):
         journal = await _resume_pending(session_id)
         analysis = await _analyze_with_journal(session_id, journal)
         revision = _next_revision(journal, analysis["inspection"]["recoveryDigest"])
@@ -72,7 +72,7 @@ async def resolveBridgeRecovery(
 ) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session_id = parseSessionId(args["sessionId"])
-    async with withRecordTransaction("bridge-session", session_id):
+    async with with_record_transaction("bridge-session", session_id):
         existing = await _resume_pending(session_id)
         analysis = await _analyze_with_journal(session_id, existing)
         revision = _next_revision(existing, analysis["inspection"]["recoveryDigest"])
@@ -102,7 +102,7 @@ async def resolveBridgeRecovery(
 
 async def activateBridgeGeneration(args: dict[str, Any]) -> dict[str, Any]:
     session_id = parseSessionId(args["sessionId"])
-    async with withRecordTransaction("bridge-session", session_id):
+    async with with_record_transaction("bridge-session", session_id):
         existing = await _resume_pending(session_id)
         analysis = await _analyze_with_journal(session_id, existing)
         if analysis["inspection"]["blockedReasons"]:
@@ -125,7 +125,7 @@ async def activateBridgeGeneration(args: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _resume_pending(session_id: str) -> dict[str, Any] | None:
-    journal = await loadBridgeRecoveryRecord(session_id)
+    journal = await load_bridge_recovery_record(session_id)
     if not journal or journal.get("phase") in {"blocked", "committed"}:
         return journal
     return await _apply_journal(journal)
@@ -178,7 +178,7 @@ async def _create_fresh_journal(analysis, revision, args):
     plans: list[dict[str, Any]] = []
     if replacement:
         ledger = await _require_ledger(replacement)
-        inbox = await loadBridgeInbox(replacement["id"])
+        inbox = await load_bridge_inbox(replacement["id"])
         entries = {entry["key"]: entry for entry in ledger["entries"]}
         for message in inbox[ledger["cursor"] :]:
             key = message.get("idempotencyKey") or f"{replacement['id']}:{message['id']}"
@@ -233,7 +233,7 @@ async def _apply_journal(journal):
     if journal["phase"] == "prepared":
         if journal.get("destinationBridgeId"):
             now = now_iso()
-            await saveBridge({
+            await save_bridge({
                 "id": journal["destinationBridgeId"], "sessionId": journal["sessionId"],
                 "remoteSessionId": journal.get("destinationRemoteSessionId"),
                 "name": journal.get("destinationName"), "createdAt": now, "updatedAt": now,
@@ -248,8 +248,8 @@ async def _apply_journal(journal):
     if journal["phase"] == "destination_written":
         if journal.get("destinationBridgeId"):
             inbox = await _build_replay_inbox(journal)
-            await replaceBridgeInbox(journal["destinationBridgeId"], inbox)
-            await saveBridgeDeliveryLedger({
+            await replace_bridge_inbox(journal["destinationBridgeId"], inbox)
+            await save_bridge_delivery_ledger({
                 "schemaVersion": 1, "bridgeId": journal["destinationBridgeId"],
                 "sessionId": journal["sessionId"], "generation": journal["destinationGeneration"],
                 "revision": 0, "cursor": 0,
@@ -274,7 +274,7 @@ async def _apply_journal(journal):
             bridge = await _require_bridge(journal["destinationBridgeId"])
             if bridge.get("schemaVersion") != 2 or bridge.get("generation") != journal["destinationGeneration"]:
                 raise RuntimeError("Bridge recovery destination identity changed before activation.")
-            await saveBridge({
+            await save_bridge({
                 **bridge, "status": "active", "revision": int(bridge.get("revision") or 0) + 1,
                 "updatedAt": now_iso(), "lastEventName": "bridge.started",
             })
@@ -302,11 +302,11 @@ async def _publish_pointers(journal):
         updated = {**session, "metadata": metadata, "updatedAt": published_at}
         return {"session": updated, "changed": updated != session}
 
-    await mutateSessionRecordTransaction(journal["sessionId"], mutate, requireExisting=True)
+    await mutate_session_record_transaction(journal["sessionId"], mutate, requireExisting=True)
     await _call_hook("session_pointer_written", journal)
     claims = {item["ownerId"]: item for item in journal["pointerClaims"] if item["owner"] == "remote_session"}
     for remote_id in journal["remoteSessionIds"]:
-        remote = await loadRemoteSession(remote_id)
+        remote = await load_remote_session(remote_id)
         if not remote:
             raise RuntimeError(f"Remote session disappeared during bridge pointer publication: {remote_id}")
         remote_baseline = _require_baseline(journal, "remote_session", remote_id)
@@ -320,7 +320,7 @@ async def _publish_pointers(journal):
         else:
             updated.pop("bridgeId", None)
             updated.pop("bridgeGeneration", None)
-        await saveRemoteSession(updated)
+        await save_remote_session(updated)
         await _call_hook("remote_pointer_written", journal)
 
 
@@ -331,7 +331,7 @@ async def _terminalize_sources(journal):
             continue
         if bridge.get("status") in {"closed", "failed", "superseded"}:
             continue
-        await saveBridge({
+        await save_bridge({
             **bridge, "status": "superseded", "supersededBy": journal.get("destinationBridgeId"),
             "revision": int(bridge.get("revision") or 0) + 1,
             "updatedAt": now_iso(), "lastEventName": "bridge.superseded",
@@ -345,7 +345,7 @@ async def _build_replay_inbox(journal):
         if plan["disposition"] != "pending":
             continue
         if plan["sourceBridgeId"] not in sources:
-            sources[plan["sourceBridgeId"]] = await loadBridgeInbox(plan["sourceBridgeId"])
+            sources[plan["sourceBridgeId"]] = await load_bridge_inbox(plan["sourceBridgeId"])
         message = next((item for item in sources[plan["sourceBridgeId"]] if item["id"] == plan["messageId"]), None)
         if not message:
             raise RuntimeError(f"Legacy bridge message disappeared during recovery: {plan['key']}")
@@ -366,7 +366,7 @@ async def _save_blocked(analysis, inspection, existing):
     )
     journal["phase"] = "blocked"
     journal["blockedReasons"] = list(inspection["blockedReasons"])
-    await saveBridgeRecoveryRecord(analysis["session"]["id"], journal)
+    await save_bridge_recovery_record(analysis["session"]["id"], journal)
 
 
 async def _persist_phase(journal, phase):
@@ -374,7 +374,7 @@ async def _persist_phase(journal, phase):
         raise ValueError(f"Invalid bridge recovery phase: {phase}")
     journal["phase"] = phase
     journal["updatedAt"] = now_iso()
-    await saveBridgeRecoveryRecord(journal["sessionId"], journal)
+    await save_bridge_recovery_record(journal["sessionId"], journal)
     await _call_hook(phase, journal)
 
 
@@ -451,7 +451,7 @@ def _next_generation(bridges):
 
 
 async def _require_bridge(bridge_id):
-    bridge = await loadBridge(bridge_id)
+    bridge = await load_bridge(bridge_id)
     if not bridge:
         raise RuntimeError(f"Bridge disappeared during lifecycle transition: {bridge_id}")
     return bridge

@@ -11,7 +11,7 @@ from ..providers.token_budget import resolveCompactionPolicy
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import DEFAULT_CODEX_BASE_URL, getOpenAiProviderLabel, sendOpenAiRequest
 from ..runtime.secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
-from ..storage import loadCodexAuthToken
+from ..storage import load_codex_auth_token
 
 
 CODEX_SPARK_COMPACTION_MODEL = "gpt-5.3-codex-spark"
@@ -32,7 +32,7 @@ class CompactionModelClient:
         raise KeyError(key)
 
 
-def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) -> CompactionModelClient:
+def create_default_compaction_model_client(options: dict[str, Any] | None = None) -> CompactionModelClient:
     options = options or {}
 
     async def complete(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
@@ -42,7 +42,7 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
         runtime = _build_compaction_runtime(args)
         profile_resolution = resolve_compaction_profile(config, model)
         timeout_policy = resolveProviderTimeoutPolicy({"profile": profile_resolution.get("profile")})
-        token_policy = resolveCompactionTokenPolicy({"config": config, "model": model})
+        token_policy = resolve_compaction_token_policy({"config": config, "model": model})
         max_output_tokens = int(args.get("maxOutputTokens") or token_policy["compactionOutputTokens"])
         if model["provider"] == "openai":
             transport = await _resolve_compaction_openai_transport(config, model)
@@ -113,7 +113,7 @@ def _resolve_openai_client_factory(
     )
 
 
-def resolveCompactionExecutionPlan(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def resolve_compaction_execution_plan(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     config = args.get("config") or {}
     session = args.get("session") or {}
@@ -152,13 +152,13 @@ def resolveCompactionExecutionPlan(args: dict[str, Any] | None = None, **kwargs:
     return {"synthesis": synthesis, "verification": verification}
 
 
-def resolveCompactionModelCandidates(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
+def resolve_compaction_model_candidates(args: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, Any]]:
     args = {**(args or {}), **kwargs}
-    plan = resolveCompactionExecutionPlan(args)
+    plan = resolve_compaction_execution_plan(args)
     return [plan["verification"] if args.get("purpose") == "verification" else plan["synthesis"]]
 
 
-def resolveCompactionTokenPolicy(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def resolve_compaction_token_policy(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     config = args.get("config") or {}
     model = args.get("model") or {}
@@ -272,7 +272,7 @@ async def _resolve_codex_compaction_token(config: dict[str, Any]) -> str | None:
         return (await resolveProviderConfigSecrets(config)).get("openaiToken")
     if not config.get("openaiCodexAuthPath"):
         return None
-    return await loadCodexAuthToken(config["openaiCodexAuthPath"])
+    return await load_codex_auth_token(config["openaiCodexAuthPath"])
 
 
 def _resolve_compaction_anthropic_config(config: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:

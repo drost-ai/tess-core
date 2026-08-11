@@ -9,18 +9,18 @@ import uuid
 from .._utils import maybe_await
 from ..process.task_launch import createTaskLaunchReservation
 from ..process._termination import terminate_popen_group
-from ..storage.paths import ensureBaseLayout
+from ..storage.paths import ensure_base_layout
 from ..storage.records import (
-    listChildAgents,
-    listHealthCheckTasks,
-    listSessionMonitors,
-    loadChildAgent,
-    loadHealthCheckTask,
-    loadTaskRecord,
-    readTaskMeta,
-    taskOutputPath,
+    list_child_agents,
+    list_health_check_tasks,
+    list_session_monitors,
+    load_child_agent,
+    load_health_check_task,
+    load_task_record,
+    read_task_meta,
+    task_output_path,
 )
-from ..storage.session_archive import loadSession
+from ..storage.session_archive import load_session
 from .supervisor_parts.communication import createTaskCommunicationApi, readTaskOutput
 from .supervisor_parts.health import _inspect_latest_task_record
 from .supervisor_parts.launch import _create_process_task_launcher
@@ -55,7 +55,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     args = {**(args or {}), **kwargs}
     cwd = args.get("cwd") or os.getcwd()
     on_event: Callable[[dict[str, Any]], Any] = args.get("onEvent") or (lambda _event: None)
-    await ensureBaseLayout(cwd)
+    await ensure_base_layout(cwd)
     supervisor_id = str(uuid.uuid4())
     registries = SupervisorRegistries()
     live_work_cache = _create_live_work_verdict_cache()
@@ -96,10 +96,10 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         command = _require_string(task_args.get("command"), "command")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
         title = task_args.get("title")
-        if not await loadSession(session_id):
+        if not await load_session(session_id):
             raise RuntimeError(f"Session not found: {session_id}")
         task_id = str(uuid.uuid4())
-        output_file = taskOutputPath(task_id)
+        output_file = task_output_path(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         sandbox_events: list[dict[str, Any]] = []
         child_argv = _prepare_shell_argv(
@@ -165,11 +165,11 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         prompt = _require_string(task_args.get("prompt"), "prompt")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
         title = task_args.get("title") or "Detached main-session task"
-        session = await loadSession(session_id)
+        session = await load_session(session_id)
         if not session:
             raise RuntimeError(f"Session not found: {session_id}")
         task_id = str(uuid.uuid4())
-        output_file = taskOutputPath(task_id)
+        output_file = task_output_path(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         reservation = createTaskLaunchReservation(taskId=task_id, sessionId=session_id, kind="main_session")
         def _append_main_session_task(record_session: dict[str, Any]) -> dict[str, Any]:
@@ -242,9 +242,9 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         return await _inspect_latest_task_record(task_id)
 
     async def list_tasks(session_id: str | None = None) -> list[dict[str, Any]]:
-        from ..storage import listTaskRecords
+        from ..storage import list_task_records
 
-        records = await listTaskRecords()
+        records = await list_task_records()
         if session_id:
             records = [record for record in records if record.get("sessionId") == session_id]
         return records
@@ -276,7 +276,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
         )
 
     async def _retry_health_check(task_id: str, source: dict[str, Any], meta: dict[str, Any] | None) -> dict[str, Any]:
-        health = await loadHealthCheckTask(task_id)
+        health = await load_health_check_task(task_id)
         if not health:
             raise RuntimeError(f"Health check metadata not found: {task_id}")
         # Hand-written trust seam: retrying a health check re-runs an
@@ -307,10 +307,10 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     async def _retry_subagent(task_id: str, source: dict[str, Any], meta: dict[str, Any] | None) -> dict[str, Any]:
         metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
         agent_id = metadata.get("agent_id") or source.get("sourceId") or (meta or {}).get("agent_id")
-        child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+        child = await load_child_agent(agent_id) if isinstance(agent_id, str) and agent_id else None
         if not child:
             raise RuntimeError(f"Subagent metadata not found for task: {task_id}")
-        child_session = await loadSession(child["sessionId"])
+        child_session = await load_session(child["sessionId"])
         if not child_session:
             raise RuntimeError(f"Subagent session not found: {child['sessionId']}")
         return await start_subagent_task(
@@ -336,8 +336,8 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
     }
 
     async def retry_task(task_id: str) -> dict[str, Any]:
-        record = await loadTaskRecord(task_id)
-        meta = await readTaskMeta(task_id)
+        record = await load_task_record(task_id)
+        meta = await read_task_meta(task_id)
         if not record and (not meta or not meta.get("command")):
             raise RuntimeError(f"Task is not retryable: {task_id}")
         kind = (record or {}).get("kind") or (meta or {}).get("type")
@@ -423,7 +423,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
 
     async def get_bootstrap(session_id: str) -> dict[str, Any]:
         records = await _project_session_task_records(session_id, live_work_cache=live_work_cache)
-        return {"taskSnapshot": _task_snapshot(records), "monitorSnapshot": _monitor_snapshot(await listSessionMonitors(session_id)), "collaborationSnapshot": await _collaboration_snapshot(session_id)}
+        return {"taskSnapshot": _task_snapshot(records), "monitorSnapshot": _monitor_snapshot(await list_session_monitors(session_id)), "collaborationSnapshot": await _collaboration_snapshot(session_id)}
 
     async def health_reconcile_loop() -> None:
         from ..config._knobs import knobValue
@@ -453,7 +453,7 @@ async def createTaskSupervisor(args: dict[str, Any] | None = None, **kwargs: Any
 
     try:
         await _reconcile_persisted_tasks(supervisor_id, emit, registries)
-        await listChildAgents()
+        await list_child_agents()
         await drainOrphanedHealthProbes(emit)
         await health_check_controller["tick"]()
         await _tick_daemon_monitors(emit)

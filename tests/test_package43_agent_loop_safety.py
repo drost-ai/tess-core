@@ -52,7 +52,7 @@ def _config(cwd: str) -> dict[str, Any]:
 class Package43AgentLoopSafetyTests(AgentCoreTestCase):
     def test_retry_after_prior_completed_tool_does_not_reexecute_tool_iteration(self) -> None:
         with tempfile.TemporaryDirectory(prefix="agent-core-p43-tool-") as cwd:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 model="gpt-5.6-sol",

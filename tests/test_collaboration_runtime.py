@@ -8,7 +8,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             child = {
                 "agentId": "agent-collab",
                 "sessionId": "child-session",
@@ -27,13 +27,13 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                 "lastSummary": "Running in the background.",
                 "stoppable": True,
             }
-            run(core.saveChildAgent(child))
+            run(core.save_child_agent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch tests"})
             monitor["lastAssistantUpdateSummary"] = "Tests are still running."
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     "task-monitor",
                     {
                         "type": "background_command",
@@ -45,7 +45,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                         "startedAt": "2026-01-01T00:00:00Z",
                         "updatedAt": "2026-01-01T00:00:01Z",
                         "status": "running",
-                        "outputFile": core.taskOutputPath("task-monitor"),
+                        "outputFile": core.task_output_path("task-monitor"),
                     },
                 )
             )
@@ -56,10 +56,10 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             session["metadata"]["bridgeId"] = bridge_runtime["bridge"]["id"]
             message = run(core.sendBridgeMessage({"bridgeId": bridge_runtime["bridge"]["id"], "text": "please review", "source": "remote"}))
             self.assertEqual(message["source"], "remote")
-            bridge = run(core.loadBridge(bridge_runtime["bridge"]["id"]))
+            bridge = run(core.load_bridge(bridge_runtime["bridge"]["id"]))
             self.assertEqual(bridge["pendingMessages"], 1)
             self.assertEqual(bridge["lastEventName"], "bridge.message.queued")
-            remote_after_message = run(core.loadRemoteSession(remote["id"]))
+            remote_after_message = run(core.load_remote_session(remote["id"]))
             self.assertEqual(remote_after_message["status"], "awaiting_input")
             self.assertEqual(remote_after_message["unreadBridgeMessages"], 1)
             self.assertIn("bridge.message.queued", run(core.formatBridgeTail(bridge["id"])))
@@ -97,7 +97,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             run(boot["close"]())
             run(runtime["close"]())
             run(bridge_runtime["close"]())
-            closed = run(core.loadBridge(bridge["id"]))
+            closed = run(core.load_bridge(bridge["id"]))
             self.assertEqual(closed["status"], "closed")
         finally:
             self.restore_home(root, previous)
@@ -106,7 +106,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             child_records = [
                 {
                     "agentId": "agent-completed",
@@ -175,7 +175,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                 },
             ]
             for record in child_records:
-                run(core.saveChildAgent(record))
+                run(core.save_child_agent(record))
             session["metadata"]["childAgentIds"] = [record["agentId"] for record in child_records]
 
             events = []
@@ -204,7 +204,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             )
 
             running = {**child_records[-1], "status": "completed", "completedAt": "2026-01-01T00:00:05Z", "lastUpdatedAt": "2026-01-01T00:00:05Z", "completionReason": "finished", "resultSummary": "Delivered runtime notes.", "latestResultAt": "2026-01-01T00:00:05Z", "stoppable": False}
-            run(core.saveChildAgent(running))
+            run(core.save_child_agent(running))
             before_count = len(events)
             run(runtime["refresh"]())
             changed = events[before_count:]
@@ -227,7 +227,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session_a = core.createEmptySession(
+            session_a = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -236,7 +236,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="bypassPermissions",
             )
-            session_b = core.createEmptySession(
+            session_b = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -283,7 +283,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"].append({"role": "user", "content": "Track the delegated work."})
             child = {
                 "agentId": "agent-collab-update",
@@ -298,12 +298,12 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
                 "startedAt": "2026-01-01T00:00:00Z",
                 "lastUpdatedAt": "2026-01-01T00:00:01Z",
             }
-            run(core.saveChildAgent(child))
+            run(core.save_child_agent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
             events = []
             runtime = run(core.createCollaborationRuntime({"session": session, "config": config, "minAssistantUpdateSpacingMs": 0, "emit": lambda event, data: events.append((event, data))}))
             self.assertFalse(any(event == "collaboration.assistant_update" for event, _ in events))
-            run(core.saveChildAgent({**child, "status": "completed", "completedAt": "2026-01-01T00:00:02Z", "lastUpdatedAt": "2026-01-01T00:00:02Z", "resultSummary": "Collected the evidence."}))
+            run(core.save_child_agent({**child, "status": "completed", "completedAt": "2026-01-01T00:00:02Z", "lastUpdatedAt": "2026-01-01T00:00:02Z", "resultSummary": "Collected the evidence."}))
             run(runtime["refresh"]())
             update = next(data for event, data in events if event == "collaboration.assistant_update")
             self.assertEqual(update["source_kind"], "subagent")
@@ -312,7 +312,7 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             self.assertIn("Collected the evidence.", update["text"])
             self.assertEqual(session["messages"][-1]["role"], "assistant")
             self.assertEqual(session["messages"][-1]["content"], update["text"])
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertEqual(persisted["messages"][-1]["content"], update["text"])
             run(runtime["close"]())
         finally:

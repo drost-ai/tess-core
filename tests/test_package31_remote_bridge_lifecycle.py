@@ -11,25 +11,25 @@ from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
 import agent_core.collaboration.bridge.recovery as bridge_recovery
 from agent_core.storage.remote import (
-    appendBridgeEvent,
-    appendBridgeInboxMessage,
-    bridgeEventsPath,
-    bridgeInboxPath,
-    bridgeRecoveryPath,
-    loadBridgeDeliveryLedger,
-    replaceBridgeInbox,
-    saveBridgeDeliveryLedger,
+    append_bridge_event,
+    append_bridge_inbox_message,
+    bridge_events_path,
+    bridge_inbox_path,
+    bridge_recovery_path,
+    load_bridge_delivery_ledger,
+    replace_bridge_inbox,
+    save_bridge_delivery_ledger,
 )
 
 
 class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
     def _session_remote(self, workspace):
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace), provider="openai", providerProfileName="openai",
             model="gpt-5.4", effort="high", systemPrompt="test",
             permissionMode="bypassPermissions",
         )
-        run(core.saveSession(session))
+        run(core.save_session(session))
         remote = run(core.createRemoteSession({"session": session, "channelServers": []}))
         return session, remote
 
@@ -50,17 +50,17 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                 "startPolling": False, "emit": lambda *_args: None,
             }))
             self.assertEqual(second["generation"], first["generation"] + 1)
-            self.assertEqual(run(core.loadBridge(first["bridge"]["id"]))["status"], "superseded")
-            copied = run(core.loadBridgeInbox(second["bridge"]["id"]))
+            self.assertEqual(run(core.load_bridge(first["bridge"]["id"]))["status"], "superseded")
+            copied = run(core.load_bridge_inbox(second["bridge"]["id"]))
             self.assertEqual([(item["id"], item["idempotencyKey"]) for item in copied], [
                 (queued["id"], "survive-replacement")
             ])
             run(first["close"]())
-            self.assertEqual(run(core.loadBridge(second["bridge"]["id"]))["status"], "active")
+            self.assertEqual(run(core.load_bridge(second["bridge"]["id"]))["status"], "active")
             with self.assertRaisesRegex(RuntimeError, "not the active session generation"):
                 run(core.sendBridgeMessage({"bridgeId": first["bridge"]["id"], "text": "stale"}))
             run(second["close"]())
-            self.assertEqual(run(core.loadBridge(second["bridge"]["id"]))["status"], "closed")
+            self.assertEqual(run(core.load_bridge(second["bridge"]["id"]))["status"], "closed")
         finally:
             self.restore_home(root, previous)
 
@@ -92,7 +92,7 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                 return winner
 
             winner = run(race())
-            active = [bridge for bridge in run(core.listBridges()) if bridge["status"] == "active"]
+            active = [bridge for bridge in run(core.list_bridges()) if bridge["status"] == "active"]
             self.assertEqual([bridge["id"] for bridge in active], [winner["bridge"]["id"]])
             run(winner["close"]())
         finally:
@@ -128,19 +128,19 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
             run(asyncio.sleep(0.08))
             self.assertEqual((calls["messages"], calls["maximum"], calls["failures"]), (1, 1, 0))
             failures = [
-                event for event in run(core.loadBridgeEvents(runtime["bridge"]["id"]))
+                event for event in run(core.load_bridge_events(runtime["bridge"]["id"]))
                 if event["event"] == "bridge.poll_failed"
             ]
             self.assertEqual(len(failures), 1)
             with self.assertRaises(RuntimeError) as caught:
                 run(runtime["close"]())
             self.assertEqual(getattr(caught.exception, "code", None), "bridge.close_unsettled")
-            before = run(loadBridgeDeliveryLedger(runtime["bridge"]["id"]))
+            before = run(load_bridge_delivery_ledger(runtime["bridge"]["id"]))
             self.assertEqual((before["cursor"], before["entries"][-1]["disposition"]), (0, "pending"))
             release.set()
             run(asyncio.sleep(0.04))
             run(runtime["close"]())
-            after = run(loadBridgeDeliveryLedger(runtime["bridge"]["id"]))
+            after = run(load_bridge_delivery_ledger(runtime["bridge"]["id"]))
             self.assertEqual((after["cursor"], after["entries"][-1]["disposition"]), (0, "pending"))
         finally:
             self.restore_home(root, previous)
@@ -172,13 +172,13 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
 
             shared = run(admit_many())
             self.assertEqual(len({message["id"] for message in shared}), 1)
-            self.assertEqual(len(run(core.loadBridgeInbox(bridge["id"]))), 21)
-            ledger = run(loadBridgeDeliveryLedger(bridge["id"]))
+            self.assertEqual(len(run(core.load_bridge_inbox(bridge["id"]))), 21)
+            ledger = run(load_bridge_delivery_ledger(bridge["id"]))
             self.assertEqual(len({entry["key"] for entry in ledger["entries"]}), 21)
 
             message = shared[0]
             key = message["idempotencyKey"]
-            run(appendBridgeEvent({
+            run(append_bridge_event({
                 "id": f"delivery-{hashlib.sha256(key.encode()).hexdigest()[:48]}",
                 "bridgeId": bridge["id"], "generation": bridge["generation"],
                 "idempotencyKey": key, "createdAt": "2026-07-01T02:00:00+00:00",
@@ -190,13 +190,13 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
             }))
             deliveries = []
             runtime = run(core.createBridgeRuntime({
-                "session": run(core.loadSession(session["id"])), "remoteSessionId": remote["id"],
+                "session": run(core.load_session(session["id"])), "remoteSessionId": remote["id"],
                 "reuseActive": True, "startPolling": False,
                 "emit": lambda event, data: deliveries.append((event, data)),
             }))
             run(runtime["pollInbox"]())
             self.assertFalse(any(event == "bridge.message" and data["delivery_key"] == key for event, data in deliveries))
-            repaired = run(loadBridgeDeliveryLedger(bridge["id"]))
+            repaired = run(load_bridge_delivery_ledger(bridge["id"]))
             self.assertGreaterEqual(repaired["cursor"], 1)
             self.assertEqual(repaired["entries"][0]["disposition"], "delivered")
             run(runtime["close"]())
@@ -208,19 +208,19 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
         try:
             session, remote = self._session_remote(workspace)
             for bridge_id in ("legacy-a", "legacy-b"):
-                run(core.saveBridge({
+                run(core.save_bridge({
                     "id": bridge_id, "sessionId": session["id"], "remoteSessionId": remote["id"],
                     "createdAt": "2026-07-01T00:00:00+00:00",
                     "updatedAt": "2026-07-01T00:00:00+00:00",
                     "status": "active", "cwd": str(workspace),
                 }))
-                run(replaceBridgeInbox(bridge_id, [{
+                run(replace_bridge_inbox(bridge_id, [{
                     "id": f"message-{bridge_id}", "bridgeId": bridge_id,
                     "createdAt": "2026-07-01T00:00:01+00:00",
                     "source": "remote", "text": bridge_id,
                 }]))
             before = {
-                bridge_id: Path(bridgeInboxPath(bridge_id)).read_bytes()
+                bridge_id: Path(bridge_inbox_path(bridge_id)).read_bytes()
                 for bridge_id in ("legacy-a", "legacy-b")
             }
             inspection = run(core.inspectBridgeRecovery(session["id"]))
@@ -247,11 +247,11 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                     for key in inspection["deliveryUnconfirmedKeys"]
                 },
             }))
-            destination = run(core.loadBridge(resolution["activeBridgeId"]))
+            destination = run(core.load_bridge(resolution["activeBridgeId"]))
             self.assertEqual((destination["schemaVersion"], destination["status"]), (2, "active"))
-            self.assertEqual(len(run(core.loadBridgeInbox(destination["id"]))), 2)
+            self.assertEqual(len(run(core.load_bridge_inbox(destination["id"]))), 2)
             for bridge_id, raw in before.items():
-                self.assertEqual(Path(bridgeInboxPath(bridge_id)).read_bytes(), raw)
+                self.assertEqual(Path(bridge_inbox_path(bridge_id)).read_bytes(), raw)
         finally:
             self.restore_home(root, previous)
 
@@ -274,10 +274,10 @@ class Package31RemoteBridgeLifecycleTests(AgentCoreTestCase):
                 }))
             set_hook(None)
             self.assertEqual(run(core.inspectBridgeRecovery(session["id"]))["blockedReasons"], [])
-            current = run(core.loadSession(session["id"]))
-            self.assertEqual(run(core.loadBridge(current["metadata"]["bridgeId"]))["status"], "active")
+            current = run(core.load_session(session["id"]))
+            self.assertEqual(run(core.load_bridge(current["metadata"]["bridgeId"]))["status"], "active")
 
-            journal_path = Path(bridgeRecoveryPath(session["id"]))
+            journal_path = Path(bridge_recovery_path(session["id"]))
             journal = json.loads(journal_path.read_text())
             journal["immutableSourceFiles"][0]["path"] = "/etc/passwd"
             journal_path.write_text(json.dumps(journal) + "\n")

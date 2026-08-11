@@ -10,7 +10,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
             self.assertEqual(boot["getState"]()["session"]["activeSessionId"], session["id"])
             envelopes = []
@@ -20,7 +20,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             self.assertEqual(envelopes[-1]["typedEvent"]["kind"], "turn.started")
             boot["finishTurn"]({"kind": "completed", "stopReason": "stop", "message": "done"})
             self.assertEqual(boot["getState"]()["turn"]["lastOutcome"]["message"], "done")
-            other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="acceptEdits")
+            other = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="acceptEdits")
             before_switch_events = len(envelopes)
             boot["setActiveSession"](other, {**config, "permissionMode": "acceptEdits"})
             self.assertEqual(boot["getState"]()["session"]["activeSessionId"], other["id"])
@@ -42,7 +42,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             default_tools = core.getDefaultToolList()
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             remote = run(core.createRemoteSession({"session": session, "description": "Bridge parity", "channelServers": ["local"]}))
             session["metadata"]["remoteControlEnabled"] = True
             session["metadata"]["remoteSessionId"] = remote["id"]
@@ -64,7 +64,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             self.assertEqual(boot["getMonitorSnapshot"](), state["monitors"]["snapshot"])
             self.assertEqual(boot["getTaskSnapshot"]()["total"], state["tasks"]["total"])
             run(boot["close"]())
-            closed_bridge = run(core.loadBridge(boot["bridge"]["bridge"]["id"]))
+            closed_bridge = run(core.load_bridge(boot["bridge"]["bridge"]["id"]))
             self.assertEqual(closed_bridge["status"], "closed")
         finally:
             self.restore_home(root, previous)
@@ -146,7 +146,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                     str(workspace),
                 )
             )
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -219,7 +219,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 encoding="utf-8",
             )
             run(
-                core.savePlugins(
+                core.save_plugins(
                     "project",
                     str(workspace),
                     [
@@ -326,7 +326,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
             config["channels"] = ["local"]
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -386,7 +386,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             default_tools = core.getDefaultToolList()
             config["tools"] = list(default_tools)
             config["allowedTools"] = list(default_tools)
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],

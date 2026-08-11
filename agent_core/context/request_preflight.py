@@ -8,8 +8,8 @@ from typing import Any
 from ..payloads.image_redaction import redactImagePayloads
 from ..payloads.token_estimation import estimateTextTokens
 from ..storage.message_origin import (
-    isPlainUserTurnAnchor as _is_plain_user_turn_anchor,
-    messageForStableFingerprint as _message_for_stable_fingerprint,
+    is_plain_user_turn_anchor as _is_plain_user_turn_anchor,
+    message_for_stable_fingerprint as _message_for_stable_fingerprint,
 )
 SCHEMA_VERSION = 1
 RECEIPT_MAX_BYTES = 16 * 1024
@@ -27,7 +27,7 @@ _CATEGORY_NAMES = (
     "unattributed",
 )
 
-def buildRequestPreflight(
+def build_request_preflight(
     *,
     request: dict[str, Any],
     measurement: dict[str, Any],
@@ -171,7 +171,7 @@ def buildRequestPreflight(
     return receipt
 
 
-def preflightEventPayload(session_id: str, receipt: dict[str, Any]) -> dict[str, Any]:
+def preflight_event_payload(session_id: str, receipt: dict[str, Any]) -> dict[str, Any]:
     return {
         "session_id": session_id,
         "schema_version": receipt.get("schemaVersion"),
@@ -187,7 +187,7 @@ def preflightEventPayload(session_id: str, receipt: dict[str, Any]) -> dict[str,
     }
 
 
-def imageMeasurementEventFields(measurement: dict[str, Any]) -> dict[str, Any]:
+def image_measurement_event_fields(measurement: dict[str, Any]) -> dict[str, Any]:
     if not measurement.get("imageCount"):
         return {}
     return {

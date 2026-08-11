@@ -17,9 +17,9 @@ def _knob(name: str):
 
 from typing import Any
 
-from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 from ..tasks.communication import answer_task_question, read_task_questions
-from ..storage import readTaskMeta
+from ..storage import read_task_meta
 
 
 
@@ -44,7 +44,7 @@ async def build_question_reminder(questions: list[dict[str, Any]]) -> str:
     ]
     for question in questions:
         task_id = str(question.get("taskId") or "")
-        meta = await readTaskMeta(task_id) if task_id else None
+        meta = await read_task_meta(task_id) if task_id else None
         agent_id = (meta or {}).get("agent_id") or (meta or {}).get("agentId") or task_id
         lines.append(f"- question_id: {question.get('questionId')} (agent: {agent_id})")
         lines.append(f"  {question.get('question')}")

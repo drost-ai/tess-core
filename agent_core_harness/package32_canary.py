@@ -20,8 +20,8 @@ from agent_core.providers.anthropic.payloads import (
 )
 from agent_core.providers.anthropic.request import sendAnthropicMessagesRequest
 from agent_core.runtime.paths import resolveRuntimePaths
-from agent_core.storage import ensureBaseLayout
-from agent_core.context.token_accounting import measureRequestInputTokens
+from agent_core.storage import ensure_base_layout
+from agent_core.context.token_accounting import measure_request_input_tokens
 from agent_core.providers.usage_costs import estimateUsageCost
 
 from .package32_canary_evidence import (
@@ -95,7 +95,7 @@ async def _run_canary(
     paths = resolveRuntimePaths(candidate=runtime_home)
     workspace = os.path.join(runtime_home, "workspace")
     os.mkdir(workspace, 0o700)
-    await ensureBaseLayout(workspace, paths)
+    await ensure_base_layout(workspace, paths)
     stable_prefix = _stable_prefix()
     config5m = _config(preflight, workspace, "5m", "explicit", True)
     config1h = _config(preflight, workspace, "1h", "auto", False)
@@ -467,7 +467,7 @@ async def _live_send(config: dict[str, Any], request: dict[str, Any], stream: bo
 
 
 async def _live_measure(config: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
-    return await measureRequestInputTokens(
+    return await measure_request_input_tokens(
         {"config": config, "request": request, "timeoutSeconds": 30}
     )
 

@@ -6,7 +6,7 @@ from tests.support.agent_core_case import *
 class RuntimeBindingsContractTests(AgentCoreTestCase):
     def test_invalid_bindings_fail_before_any_execution_boundary(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-bindings-invalid-") as cwd:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 model="gpt-5.4",
@@ -108,7 +108,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
 
     def test_current_unavailable_binding_preserves_foreground_turn(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-bindings-current-") as cwd:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 model="gpt-5.4",

@@ -3,16 +3,16 @@ from __future__ import annotations
 import json
 import os
 from ...storage import (
-    compactionCheckpointPath,
-    compactionManifestPath,
-    getSessionCompactionsDir,
+    compaction_checkpoint_path,
+    compaction_manifest_path,
+    get_session_compactions_dir,
 )
 from typing import Any
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
-def mergeCompactionUsageIntoSession(session: dict[str, Any], usage: dict[str, Any]) -> None:
+def merge_compaction_usage_into_session(session: dict[str, Any], usage: dict[str, Any]) -> None:
     _merge_usage_into_session(
         session,
         {
@@ -27,17 +27,17 @@ def mergeCompactionUsageIntoSession(session: dict[str, Any], usage: dict[str, An
     )
 
 
-def buildArtifactPaths(sessionId: str, generation: int) -> dict[str, str]:
-    directory = getSessionCompactionsDir(sessionId)
+def build_artifact_paths(sessionId: str, generation: int) -> dict[str, str]:
+    directory = get_session_compactions_dir(sessionId)
     return {
-        "manifest": compactionManifestPath(sessionId),
+        "manifest": compaction_manifest_path(sessionId),
         "summary": os.path.join(directory, "summary.md"),
         "state": os.path.join(directory, "state.json"),
         "workingContext": os.path.join(directory, "working-context.json"),
         "decisions": os.path.join(directory, "decisions.md"),
         "todos": os.path.join(directory, "todos.json"),
         "activity": os.path.join(directory, "activity.md"),
-        "checkpoint": compactionCheckpointPath(sessionId, generation),
+        "checkpoint": compaction_checkpoint_path(sessionId, generation),
     }
 
 

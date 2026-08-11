@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from .._utils import now_iso
-from ..storage import mutateChildAgent, mutateTaskMeta, taskOutputPath, writeTaskMeta
+from ..storage import mutate_child_agent, mutate_task_meta, task_output_path, write_task_meta
 from .groups import _upsert_subagent_launch_group
 
 _TERMINAL_CHILD_STATUSES = {"completed", "failed", "cancelled", "stopped", "truncated"}
@@ -78,7 +78,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
             **structured_fields,
         }
 
-    child_record = await mutateChildAgent(agent_id, _finalize_success)
+    child_record = await mutate_child_agent(agent_id, _finalize_success)
     metadata = session.get("metadata") or {}
     task_meta = {
         "type": "subagent",
@@ -94,7 +94,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
         "startedAt": session.get("createdAt"),
         "status": status,
         "completedAt": completed_at if completed_like else None,
-        "outputFile": taskOutputPath(task_id),
+        "outputFile": task_output_path(task_id),
         "stopReason": result.get("stopReason"),
         "summary": summary,
         "resultSummary": summary,
@@ -107,7 +107,7 @@ async def finalizeBackgroundSubagentSuccessFromEnv(session: dict[str, Any], resu
         "runtimeContract": metadata.get("subagentRuntimeContract"),
         **structured_fields,
     }
-    await writeTaskMeta(task_id, task_meta)
+    await write_task_meta(task_id, task_meta)
     reconciliation = await createSubagentReconciliationForTerminalChild(
         childRecord=child_record,
         taskMeta=task_meta,
@@ -171,7 +171,7 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         }
         return {**existing, "agentId": agent_id, "sessionId": session_id, "runInBackground": True, "status": "failed", "completedAt": completed_at, "taskId": task_id, "error": message, "attachableSessionId": session_id, "owner": existing.get("owner") or "daemon", "completionReason": "worker_failed", "resultSummary": message, "latestResultAt": completed_at, "retryable": True, "stoppable": False, "recoveryState": None, "lastUpdatedAt": completed_at, "lastSummary": message}
 
-    child_record = await mutateChildAgent(agent_id, _finalize_failure)
+    child_record = await mutate_child_agent(agent_id, _finalize_failure)
     child_record = child_record or {}
     if child_record.get("status") in _TERMINAL_CHILD_STATUSES and child_record.get("status") != "failed":
         return
@@ -187,7 +187,7 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         "launch_group_id": child_record.get("launchGroupId"),
         "status": "failed",
         "completedAt": completed_at,
-        "outputFile": taskOutputPath(task_id),
+        "outputFile": task_output_path(task_id),
         "error": message,
         "summary": message,
         "resultSummary": message,
@@ -197,7 +197,7 @@ async def finalizeBackgroundSubagentFailureFromEnv(error: Any) -> None:
         "stoppable": False,
         "owner": "daemon",
     }
-    await mutateTaskMeta(
+    await mutate_task_meta(
         task_id,
         lambda current_meta: current_meta
         if current_meta and current_meta.get("status") in _TERMINAL_META_STATUSES

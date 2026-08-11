@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ..._utils import now_iso
-from ...storage import configureRuntimeHome, readTaskMeta, writeTaskMeta
+from ...storage import configure_runtime_home, read_task_meta, write_task_meta
 from ..terminal_transitions import (
     applyTaskProcessCompletion,
     normalizeTaskProcessOutcome,
@@ -23,7 +23,7 @@ from ..terminal_transitions import (
 async def run_background_command(args: dict[str, Any]) -> dict[str, Any]:
     runtime_home = os.environ.get("AGENT_CORE_HOME")
     if runtime_home:
-        configureRuntimeHome(runtime_home)
+        configure_runtime_home(runtime_home)
 
     task_id = str(args["taskId"])
     command = str(args["command"])
@@ -192,12 +192,12 @@ async def _merge_task_meta(task_id: str, update: dict[str, Any], meta_path: str 
     if meta_path:
         Path(meta_path).write_text(f"{json.dumps(next_meta, indent=2)}\n", encoding="utf-8")
     else:
-        await writeTaskMeta(task_id, next_meta)
+        await write_task_meta(task_id, next_meta)
 
 
 async def _read_runner_meta(task_id: str, meta_path: str | None = None) -> dict[str, Any]:
     if not meta_path:
-        return await readTaskMeta(task_id) or {"taskId": task_id, "id": task_id}
+        return await read_task_meta(task_id) or {"taskId": task_id, "id": task_id}
     try:
         return json.loads(Path(meta_path).read_text(encoding="utf-8"))
     except Exception:

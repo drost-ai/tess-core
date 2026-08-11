@@ -29,7 +29,7 @@ from .monitor_transactions import (
     monitorTransitionEventFields as _monitor_transition_event_fields,
 )
 from ..session.persistence import persistSession
-from ..storage import listSessionMonitors, mutateTaskMeta, readTaskMeta, saveMonitor, taskOutputPath, writeTaskMeta
+from ..storage import list_session_monitors, mutate_task_meta, read_task_meta, save_monitor, task_output_path, write_task_meta
 
 
 
@@ -52,7 +52,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
             return
         tick_in_flight = True
         try:
-            monitors = await listSessionMonitors(session_ref["id"])
+            monitors = await list_session_monitors(session_ref["id"])
             is_bootstrap_tick = bootstrap_baseline.begin(monitors)
             now_ms = _now_ms()
             next_snapshot = _compute_snapshot(monitors, now_ms)
@@ -89,7 +89,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         reason = bootstrap_baseline.resolve_reason(
             monitor, observation, reason, bootstrap_observation
         )
-        _sync_session_monitor_metadata(session_ref, await listSessionMonitors(session_ref["id"]))
+        _sync_session_monitor_metadata(session_ref, await list_session_monitors(session_ref["id"]))
 
         if observed.get("transitionId"):
             emit(
@@ -135,7 +135,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         next_monitor = narration["current"]
         _append_assistant_monitor_message(session_ref, text)
         bootstrap_baseline.narrated(monitor_id)
-        _sync_session_monitor_metadata(session_ref, await listSessionMonitors(session_ref["id"]))
+        _sync_session_monitor_metadata(session_ref, await list_session_monitors(session_ref["id"]))
         with _suppress():
             await persistSession(session_ref, config_ref)
         emit(
@@ -149,7 +149,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
                 "text": text,
             },
         )
-        snapshot = _compute_snapshot(await listSessionMonitors(session_ref["id"]), _now_ms())
+        snapshot = _compute_snapshot(await list_session_monitors(session_ref["id"]), _now_ms())
         emit("monitor.snapshot", _monitor_snapshot_payload(session_ref, snapshot))
 
     async def run_loop() -> None:
@@ -263,7 +263,7 @@ def _should_check_monitor(monitor: dict[str, Any], now_ms: int) -> bool:
 async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
     if not isinstance(task_id, str) or not task_id:
         return None
-    task = await readTaskMeta(task_id)
+    task = await read_task_meta(task_id)
     if not task:
         return None
     if task.get("status") == "running" and isinstance(task.get("pid"), int) and not _is_process_alive(task["pid"]):
@@ -279,7 +279,7 @@ async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
                 "status": "completed" if base.get("exitCode") == 0 else "failed" if base.get("exitCode") is not None else "unknown",
             }
 
-        return await mutateTaskMeta(task_id, _reconcile_dead_pid, fallback=task)
+        return await mutate_task_meta(task_id, _reconcile_dead_pid, fallback=task)
     return task
 
 
@@ -288,14 +288,14 @@ async def _load_task_record(task_id: Any) -> dict[str, Any] | None:
 def _get_output_size(task_id: Any) -> int:
     if not isinstance(task_id, str) or not task_id:
         return 0
-    path = Path(taskOutputPath(task_id))
+    path = Path(task_output_path(task_id))
     return path.stat().st_size if path.exists() else 0
 
 
 def _read_output_excerpt(task_id: Any, from_byte: int, to_byte: int, max_chars: int) -> dict[str, Any]:
     if not isinstance(task_id, str) or not task_id:
         return {"text": "", "omittedBytes": 0}
-    path = Path(taskOutputPath(task_id))
+    path = Path(task_output_path(task_id))
     if not path.exists():
         return {"text": "", "omittedBytes": 0}
     raw = path.read_text(encoding="utf-8", errors="replace")

@@ -32,7 +32,7 @@ def _todo(index: int) -> dict[str, str]:
 
 
 def _session(cwd: str) -> dict:
-    return core.createEmptySession(
+    return core.create_empty_session(
         cwd=cwd,
         provider="openai",
         model="tiny-model",

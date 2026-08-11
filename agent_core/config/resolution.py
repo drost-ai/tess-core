@@ -13,13 +13,13 @@ from typing import Any
 
 from .._utils import clone
 from ..storage import (
-    configureRuntimeHome,
-    ensureBaseLayout,
-    getContextRuntimeHome,
-    loadAuth,
-    loadCodexAuthToken,
-    resolveMaybeRelative,
-    resolveRuntimeHome,
+    configure_runtime_home,
+    ensure_base_layout,
+    get_context_runtime_home,
+    load_auth,
+    load_codex_auth_token,
+    resolve_maybe_relative,
+    resolve_runtime_home,
 )
 from .defaults import (
     getDefaultEffortForProvider,
@@ -91,12 +91,12 @@ def _omit_provider_credential_environment(
 
 def _resolve_runtime_home(options: dict[str, Any], cwd: str) -> str:
     requested = options.get("runtimeHome")
-    context = getContextRuntimeHome()
-    runtime_home = resolveRuntimeHome(cwd, requested) if requested else context or resolveRuntimeHome(cwd)
+    context = get_context_runtime_home()
+    runtime_home = resolve_runtime_home(cwd, requested) if requested else context or resolve_runtime_home(cwd)
     if context and requested and runtime_home != context:
         raise ValueError("runtimeHome conflicts with active scoped runtime home")
     if not context:
-        configureRuntimeHome(runtime_home)
+        configure_runtime_home(runtime_home)
     return runtime_home
 
 def _resolve_requested_model(
@@ -194,7 +194,7 @@ def _resolve_screen_mode(
 async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedConfig:
     options = options or {}
     runtime_home = _resolve_runtime_home(options, cwd)
-    await ensureBaseLayout(cwd)
+    await ensure_base_layout(cwd)
 
     sources = _parse_setting_sources(options.get("settingSources"))
     merged_settings = await _load_merged_settings(sources, cwd, options.get("settings"))
@@ -202,7 +202,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     from ..providers.token_budget import configureModelLimitRules
 
     configureModelLimitRules(merged_settings.get("modelLimitRules"))
-    auth = await loadAuth()
+    auth = await load_auth()
     settings_env = merged_settings.get("env") or {}
     helper_auth_value = await _resolve_api_key_from_helper(merged_settings)
     provider_profiles = resolveProviderProfiles(merged_settings.get("providerProfiles"))
@@ -212,7 +212,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     stored_anthropic_api_key = _get_stored_anthropic_api_key(auth)
     explicit_api_key = os.environ.get("ANTHROPIC_API_KEY") or settings_env.get("ANTHROPIC_API_KEY") or helper_auth_value
     explicit_auth_token = os.environ.get("ANTHROPIC_AUTH_TOKEN") or settings_env.get("ANTHROPIC_AUTH_TOKEN")
-    openai_codex_auth_path = resolveMaybeRelative(
+    openai_codex_auth_path = resolve_maybe_relative(
         cwd,
         os.environ.get("TESS_OPENAI_CODEX_AUTH_PATH")
         or settings_env.get("TESS_OPENAI_CODEX_AUTH_PATH")
@@ -222,7 +222,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     )
     openai_env_token = os.environ.get("OPENAI_API_KEY") or settings_env.get("OPENAI_API_KEY")
     openai_stored_token = (auth or {}).get("openaiToken")
-    openai_codex_token = await loadCodexAuthToken(openai_codex_auth_path)
+    openai_codex_token = await load_codex_auth_token(openai_codex_auth_path)
     openai_base_url = os.environ.get("OPENAI_BASE_URL") or settings_env.get("OPENAI_BASE_URL") or merged_settings.get("openaiBaseUrl")
     requested_openai_api_mode = normalizeOpenAiApiModeSetting(
         options.get("openaiApiMode")
@@ -348,8 +348,8 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     tools = _parse_tool_list(options.get("tools"), merged_settings.get("tools"), defaultToolList())
     allowed_tools = _dedupe(_parse_tool_list(options.get("allowedTools"), merged_settings.get("allowedTools"), tools))
     disallowed_tools = _dedupe(_parse_tool_list(options.get("disallowedTools"), merged_settings.get("disallowedTools"), []))
-    plugin_dirs = [resolveMaybeRelative(cwd, item) for item in options.get("pluginDir", [])]
-    allowed_roots = _dedupe([cwd, *[resolveMaybeRelative(cwd, item) for item in options.get("addDir", [])]])
+    plugin_dirs = [resolve_maybe_relative(cwd, item) for item in options.get("pluginDir", [])]
+    allowed_roots = _dedupe([cwd, *[resolve_maybe_relative(cwd, item) for item in options.get("addDir", [])]])
 
     agents = {**clone(BUILTIN_AGENTS), **(merged_settings.get("agents") or {}), **(_parse_inline_agents(options.get("agents")) or {})}
     assistant_name = options.get("assistantName") or merged_settings.get("assistantName") or DEFAULT_ASSISTANT_NAME

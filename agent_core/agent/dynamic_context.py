@@ -4,8 +4,8 @@ import copy
 from typing import Any
 
 from ..storage.message_origin import (
-    isGenuineUserRequest as _is_genuine_user_request,
-    syntheticUserMessage as _synthetic_user_message,
+    is_genuine_user_request as _is_genuine_user_request,
+    synthetic_user_message as _synthetic_user_message,
 )
 from ..providers.prompt_cache import resolvePromptCachePolicy
 

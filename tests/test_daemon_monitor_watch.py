@@ -11,7 +11,7 @@ SESSION_ID = "70000000-0000-4000-8000-000000000001"
 
 def _completed_task_with_monitor(task_id: str) -> dict:
     run(
-        core.writeTaskMeta(
+        core.write_task_meta(
             task_id,
             {
                 "type": "background_command",
@@ -22,12 +22,12 @@ def _completed_task_with_monitor(task_id: str) -> dict:
                 "exitCode": 0,
                 "startedAt": "2026-01-01T00:00:00Z",
                 "finishedAt": "2026-01-01T00:01:00Z",
-                "outputFile": core.taskOutputPath(task_id),
+                "outputFile": core.task_output_path(task_id),
             },
         )
     )
     monitor = core.createMonitorRecord(sessionId=SESSION_ID, taskId=task_id, goal="watch the build")
-    run(core.saveMonitor(monitor))
+    run(core.save_monitor(monitor))
     return monitor
 
 
@@ -46,7 +46,7 @@ class DaemonMonitorWatchTests(AgentCoreTestCase):
 
             transitions = run(tick_daemon_monitors(emit))
             self.assertEqual(transitions, 1)
-            committed = run(core.loadMonitor(monitor["id"]))
+            committed = run(core.load_monitor(monitor["id"]))
             self.assertEqual(committed["status"], "completed")
             self.assertGreaterEqual(committed["revision"], 1)
             self.assertTrue(committed["lastTransitionId"].startswith(f"monitor:{monitor['id']}:"))
@@ -75,7 +75,7 @@ class DaemonMonitorWatchTests(AgentCoreTestCase):
                 events.append(event)
 
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": on_event}))
-            committed = run(core.loadMonitor(monitor["id"]))
+            committed = run(core.load_monitor(monitor["id"]))
             self.assertEqual(committed["status"], "completed")
             self.assertTrue(
                 any(entry.get("event") == "monitor.status_changed" for entry in events)

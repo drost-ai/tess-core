@@ -81,7 +81,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
                     str(workspace),
                 )
             )
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -91,12 +91,12 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
                 permissionMode="bypassPermissions",
             )
             task_id = "bounded-task-output"
-            output_path = core.taskOutputPath(task_id)
+            output_path = core.task_output_path(task_id)
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             raw = (b"old-output\n" * 350_000) + "最后🙂terminal\n".encode("utf-8")
             Path(output_path).write_bytes(raw)
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "taskId": task_id,

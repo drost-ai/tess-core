@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..storage import listChildAgents, loadSession
+from ..storage import list_child_agents, load_session
 from .common import (
     _compact_tokens,
     _error,
@@ -29,7 +29,7 @@ async def _handle_agents(
     hooks: dict[str, Any],
     args: dict[str, Any],
 ) -> dict[str, Any]:
-    related_agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
+    related_agents = [record for record in await list_child_agents() if _is_related_child_agent(session, record)]
     normalized = arg_text.strip().lower()
     subcommand, query = _split_subcommand(arg_text)
     if not normalized:
@@ -47,7 +47,7 @@ async def _handle_agents(
             if not callable(request_resume):
                 return _error(hooks, "/agents attach is only available in the full-screen TUI.")
             target_session_id = record.get("attachableSessionId") or record.get("sessionId")
-            target_session = await loadSession(target_session_id)
+            target_session = await load_session(target_session_id)
             if not target_session:
                 return _error(hooks, f"Attach target not found: {target_session_id}")
             if target_session.get("id") == session.get("id"):
@@ -93,7 +93,7 @@ async def _handle_agents(
 
 
 async def _build_agents_report(session: dict[str, Any], config: dict[str, Any], arg_text: str = "") -> str:
-    related_agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
+    related_agents = [record for record in await list_child_agents() if _is_related_child_agent(session, record)]
     normalized = arg_text.strip().lower()
     if not normalized:
         configured = config.get("agents") or {}

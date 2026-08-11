@@ -13,7 +13,7 @@ PARENT_ID = "30000000-0000-4000-8000-000000000002"
 
 
 def _coordination_writer(home: str, writer_id: str, barrier_dir: str) -> None:
-    core.configureRuntimeHome(home)
+    core.configure_runtime_home(home)
     Path(barrier_dir, f"ready-{writer_id}").write_text("ready\n", encoding="utf-8")
     deadline = time.monotonic() + 20
     while not Path(barrier_dir, "go").exists():
@@ -24,14 +24,14 @@ def _coordination_writer(home: str, writer_id: str, barrier_dir: str) -> None:
     async def write() -> None:
         created_at = "2026-01-01T00:00:00.000Z"
         await asyncio.gather(
-            core.appendBridgeInboxMessage({
+            core.append_bridge_inbox_message({
                 "id": f"message-{writer_id}",
                 "bridgeId": BRIDGE_ID,
                 "createdAt": created_at,
                 "source": "local",
                 "text": f"writer {writer_id}",
             }),
-            core.appendBridgeEvent({
+            core.append_bridge_event({
                 "id": f"event-{writer_id}",
                 "bridgeId": BRIDGE_ID,
                 "createdAt": created_at,
@@ -96,8 +96,8 @@ class CoordinationTransactionMigrationTests(AgentCoreTestCase):
                 process.join(30)
                 self.assertEqual(process.exitcode, 0)
 
-            inbox = run(core.loadBridgeInbox(BRIDGE_ID))
-            events = run(core.loadBridgeEvents(BRIDGE_ID))
+            inbox = run(core.load_bridge_inbox(BRIDGE_ID))
+            events = run(core.load_bridge_events(BRIDGE_ID))
             reconciliations = run(core.listSubagentReconciliations(PARENT_ID))
             self.assertEqual(len(inbox), 50)
             self.assertEqual(len({entry["id"] for entry in inbox}), 50)

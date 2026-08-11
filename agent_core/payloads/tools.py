@@ -9,7 +9,7 @@ from typing import Any
 import typing as _typing
 
 from .._utils import now_iso
-from ..storage import toolArtifactDataPath, toolArtifactMetaPath, writeJsonFile
+from ..storage import tool_artifact_data_path, tool_artifact_meta_path, write_json_file
 from .utf8_bounds import sliceUtf8Suffix as _slice_utf8_suffix
 
 if _typing.TYPE_CHECKING:
@@ -187,7 +187,7 @@ async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
     artifact_id = str(uuid.uuid4())
     content = args["content"]
     extension = ".json" if args.get("contentType") == "json" else ".txt"
-    file_path = toolArtifactDataPath(args["sessionId"], artifact_id, extension)
+    file_path = tool_artifact_data_path(args["sessionId"], artifact_id, extension)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as handle:
         handle.write(content)
@@ -206,7 +206,7 @@ async def _persist_artifact(args: dict[str, Any]) -> ToolArtifactRef:
         "truncated": True if args.get("truncated") else None,
         "sourceBytes": args.get("sourceBytes"),
     })
-    await writeJsonFile(toolArtifactMetaPath(args["sessionId"], artifact_id), record)
+    await write_json_file(tool_artifact_meta_path(args["sessionId"], artifact_id), record)
     return record
 
 

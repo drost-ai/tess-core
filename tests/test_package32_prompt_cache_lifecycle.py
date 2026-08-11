@@ -55,7 +55,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         }
 
     def _session(self):
-        return core.createEmptySession(
+        return core.create_empty_session(
             cwd=str(self.workspace),
             provider="anthropic",
             model="claude-opus-4-8",
@@ -70,7 +70,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         runtime = {"emitEvent": lambda event, data: events.append((event, data)), "tools": []}
         runtime.update(runtime_overrides or {})
-        with mock.patch.object(context_module, "measureRequestInputTokens", fake_measure):
+        with mock.patch.object(context_module, "measure_request_input_tokens", fake_measure):
             return run(
                 core.runAgentPrompt(
                     session=session,

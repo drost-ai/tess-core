@@ -12,7 +12,7 @@ class StaleFullSaveTests(AgentCoreTestCase):
     def test_stale_full_session_save_preserves_concurrent_metadata_mutation(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -20,11 +20,11 @@ class StaleFullSaveTests(AgentCoreTestCase):
                 permissionMode="default",
             )
             session["messages"].append({"role": "user", "content": "hello"})
-            run(core.saveSession(session))
-            stale_snapshot = run(core.loadSession(session["id"]))
+            run(core.save_session(session))
+            stale_snapshot = run(core.load_session(session["id"]))
 
             run(
-                core.mutateSessionRecord(
+                core.mutate_session_record(
                     session["id"],
                     lambda record: {
                         **record,
@@ -36,9 +36,9 @@ class StaleFullSaveTests(AgentCoreTestCase):
                     },
                 )
             )
-            run(core.saveSession(stale_snapshot))
+            run(core.save_session(stale_snapshot))
 
-            loaded = run(core.loadSession(session["id"]))
+            loaded = run(core.load_session(session["id"]))
             self.assertIn("task-new", loaded["metadata"]["taskIds"])
             self.assertIn("agent-new", loaded["metadata"]["childAgentIds"])
         finally:
@@ -56,10 +56,10 @@ class StaleFullSaveTests(AgentCoreTestCase):
                 "status": "queued",
                 "startedAt": "2026-06-10T00:00:00.000Z",
             }
-            run(core.saveChildAgent(base))
-            stale_snapshot = run(core.loadChildAgent("agent-fast"))
+            run(core.save_child_agent(base))
+            stale_snapshot = run(core.load_child_agent("agent-fast"))
             run(
-                core.mutateChildAgent(
+                core.mutate_child_agent(
                     "agent-fast",
                     lambda current: {
                         **current,
@@ -73,7 +73,7 @@ class StaleFullSaveTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.saveChildAgent(
+                core.save_child_agent(
                     {
                         **stale_snapshot,
                         "status": "backgrounded",
@@ -85,7 +85,7 @@ class StaleFullSaveTests(AgentCoreTestCase):
                 )
             )
 
-            loaded = run(core.loadChildAgent("agent-fast"))
+            loaded = run(core.load_child_agent("agent-fast"))
             self.assertEqual(loaded["status"], "completed")
             self.assertEqual(loaded["resultSummary"], "done")
             self.assertEqual(loaded["taskId"], "task-fast")
@@ -97,13 +97,13 @@ class StaleFullSaveTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             async def writer(index: int) -> None:
-                await core.mutateProjectMemoryRecords(str(workspace), lambda records: [*records, _memory_record(index, workspace)])
+                await core.mutate_project_memory_records(str(workspace), lambda records: [*records, _memory_record(index, workspace)])
 
             async def main() -> None:
                 await asyncio.gather(*(writer(index) for index in range(12)))
 
             run(main())
-            records = run(core.loadProjectMemoryRecords(str(workspace)))
+            records = run(core.load_project_memory_records(str(workspace)))
             self.assertEqual({record["id"] for record in records}, {f"memory-{index}" for index in range(12)})
         finally:
             self.restore_home(root, previous)
@@ -111,9 +111,9 @@ class StaleFullSaveTests(AgentCoreTestCase):
     def test_empty_manual_memory_sync_does_not_create_records_file(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            path = core.getProjectMemoryRecordsPath(str(workspace))
+            path = core.get_project_memory_records_path(str(workspace))
 
-            records = run(core.synchronizeManualProjectMemory(str(workspace)))
+            records = run(core.synchronize_manual_project_memory(str(workspace)))
 
             self.assertEqual([], records)
             self.assertFalse(os.path.exists(path))

@@ -9,7 +9,7 @@ from ...payloads.token_estimation import (
 )
 
 
-def collapseWhitespace(value: Any) -> str:
+def collapse_whitespace(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value)).strip()
 
 
@@ -19,12 +19,12 @@ def truncate(value: str, limit: int) -> str:
     return value[: max(0, limit - 1)].rstrip() + "…"
 
 
-def summarizeTodo(todo: dict[str, Any]) -> str:
-    content = collapseWhitespace(todo.get("content", ""))
-    active_form = collapseWhitespace(todo.get("activeForm", ""))
-    preferred = content if isLowSignalTodoText(active_form) else active_form
+def summarize_todo(todo: dict[str, Any]) -> str:
+    content = collapse_whitespace(todo.get("content", ""))
+    active_form = collapse_whitespace(todo.get("activeForm", ""))
+    preferred = content if is_low_signal_todo_text(active_form) else active_form
     return truncate(preferred or content or active_form or "todo", 160)
 
 
-def isLowSignalTodoText(text: str) -> bool:
+def is_low_signal_todo_text(text: str) -> bool:
     return bool(re.match(r"^(coding|working|building|implementing|reviewing|testing|debugging|planning)$", text.strip(), re.IGNORECASE))

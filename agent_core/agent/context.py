@@ -7,10 +7,10 @@ import json
 
 import re
 from ..config import normalizeEffortForModel
-from ..context.continuation import buildContinuationContext
+from ..context.continuation import build_continuation_context
 from ..context.token_accounting import (
-    measureRequestInputTokens,
-    recordPreflightTokenMeasurement,
+    measure_request_input_tokens,
+    record_preflight_token_measurement,
 )
 from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import computeProviderTokenBudget, resolveCompactionPolicy
@@ -26,9 +26,9 @@ from .context_budget import (
     headroomEventPayload as _headroom_event_payload,
 )
 from ..context.request_preflight import (
-    buildRequestPreflight as _build_request_preflight,
-    imageMeasurementEventFields as _image_measurement_event_fields,
-    preflightEventPayload as _preflight_event_payload,
+    build_request_preflight as _build_request_preflight,
+    image_measurement_event_fields as _image_measurement_event_fields,
+    preflight_event_payload as _preflight_event_payload,
 )
 # Retained as a compatibility export from this module; dynamic_context owns use.
 
@@ -55,7 +55,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
     durable_compaction_applied = bool(raw_checkpoint_outcome and raw_checkpoint_outcome.get("status") == "completed")
 
     while True:
-        request_context = await buildContinuationContext(
+        request_context = await build_continuation_context(
             {
                 "session": session,
                 "config": config,
@@ -93,7 +93,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             "messages": request_context["messages"],
             "tools": [{"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tool_registry],
         }
-        measurement = await measureRequestInputTokens(
+        measurement = await measure_request_input_tokens(
             {
                 "config": config,
                 "request": request,
@@ -146,7 +146,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
             providerProfileName=config.get("providerProfileName"),
         )
         measurement["requestPreflight"] = preflight
-        recordPreflightTokenMeasurement(session, measurement)
+        record_preflight_token_measurement(session, measurement)
         _safe_emit(
             runtime,
             "provider.request_preflight",

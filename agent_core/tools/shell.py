@@ -15,7 +15,7 @@ from ..process.bash_lifecycle import runInlineShellCommand
 from ..payloads.bash_results import buildBashResultPayload
 from ..payloads.execution_descriptors import createTaskExecutionDescriptor, summarizeOutputManifest
 from ..process.owned_launch import activateOwnedProcessRunner, createOwnedProcessActivation
-from ..storage import readTaskMeta, saveTaskRecord, taskOutputPath, writeTaskMeta
+from ..storage import read_task_meta, save_task_record, task_output_path, write_task_meta
 from ..process.task_launch import (
     attachTaskLaunchReservation,
     createTaskLaunchReservation,
@@ -61,8 +61,8 @@ def _bash_tool() -> ToolDefinition:
                     }
                 )
                 task_id = launch_task_id(started)
-                output_path = launch_output_file(started) or taskOutputPath(task_id)
-                task_record = await readTaskMeta(task_id) or {
+                output_path = launch_output_file(started) or task_output_path(task_id)
+                task_record = await read_task_meta(task_id) or {
                     "taskId": task_id,
                     "id": task_id,
                     "sessionId": context["session"]["id"],
@@ -76,7 +76,7 @@ def _bash_tool() -> ToolDefinition:
                 }
             else:
                 task_id = str(uuid.uuid4())
-                output_path = taskOutputPath(task_id)
+                output_path = task_output_path(task_id)
                 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
                 reservation = createTaskLaunchReservation(
                     taskId=task_id,
@@ -136,8 +136,8 @@ def _bash_tool() -> ToolDefinition:
 
                 async def reserve() -> None:
                     nonlocal session_registered
-                    await writeTaskMeta(task_id, starting_meta)
-                    await saveTaskRecord(record)
+                    await write_task_meta(task_id, starting_meta)
+                    await save_task_record(record)
                     _append_unique_metadata_list(context["session"], "taskIds", task_id)
                     await maybe_await(context.get("persistSession", lambda: None)())
                     session_registered = True
@@ -157,7 +157,7 @@ def _bash_tool() -> ToolDefinition:
 
                 async def attach(identity: dict[str, Any]) -> None:
                     attached = attachTaskLaunchReservation(reservation)
-                    await writeTaskMeta(
+                    await write_task_meta(
                         task_id,
                         {
                             **starting_meta,
@@ -169,7 +169,7 @@ def _bash_tool() -> ToolDefinition:
                             "updatedAt": attached["attachedAt"],
                         },
                     )
-                    await saveTaskRecord(
+                    await save_task_record(
                         {
                             **record,
                             "status": "backgrounded",
@@ -184,7 +184,7 @@ def _bash_tool() -> ToolDefinition:
 
                 async def fail(error: Any) -> None:
                     failed = failTaskLaunchReservation(reservation, error)
-                    await writeTaskMeta(
+                    await write_task_meta(
                         task_id,
                         {
                             **starting_meta,
@@ -196,7 +196,7 @@ def _bash_tool() -> ToolDefinition:
                             "launchReservation": failed,
                         },
                     )
-                    await saveTaskRecord(
+                    await save_task_record(
                         {
                             **record,
                             "status": "failed",
@@ -219,7 +219,7 @@ def _bash_tool() -> ToolDefinition:
                 if launched.identity is None:
                     raise RuntimeError("Background runner exited before its process identity could be attached.")
                 _track_background_runner(launched.child)
-                task_record = await readTaskMeta(task_id) or starting_meta
+                task_record = await read_task_meta(task_id) or starting_meta
             task_record = {
                 **{
                     "taskId": task_id,

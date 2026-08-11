@@ -28,9 +28,9 @@ async def _daemon_socket_accepting(instance_id: str, state: dict[str, Any] | Non
     retry absorbs a transiently busy listener; a probe that raises (unsafe
     socket path) counts as inactive so the restart path surfaces the error."""
     from ..daemon import isDaemonSocketListenerActive
-    from ..storage import daemonSocketPath
+    from ..storage import daemon_socket_path
 
-    socket_path = (state or {}).get("socketPath") or daemonSocketPath(instance_id)
+    socket_path = (state or {}).get("socketPath") or daemon_socket_path(instance_id)
     for attempt in range(2):
         try:
             if await isDaemonSocketListenerActive(socket_path):
@@ -44,7 +44,7 @@ async def _daemon_socket_accepting(instance_id: str, state: dict[str, Any] | Non
 
 async def check_daemon_once(context: dict[str, Any]) -> str:
     """One heartbeat: returns "healthy", "restarted", or "restart_failed"."""
-    from ..storage import loadDaemonState
+    from ..storage import load_daemon_state
 
     instance_id = context["instanceId"]
     # A SIGKILLed daemon stays a zombie child of this runtime until reaped;
@@ -54,7 +54,7 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
     spawned = _DAEMON_PROCESSES.get(instance_id)
     if spawned is not None:
         spawned.poll()
-    state = await loadDaemonState(instance_id)
+    state = await load_daemon_state(instance_id)
     pid = (state or {}).get("pid")
     pid_alive = (
         isinstance(pid, int)
@@ -83,7 +83,7 @@ async def check_daemon_once(context: dict[str, Any]) -> str:
     set_daemon = context.get("setDaemon")
     if callable(set_daemon):
         await maybe_await(set_daemon(client))
-    fresh_state = await loadDaemonState(instance_id)
+    fresh_state = await load_daemon_state(instance_id)
     emit(
         "daemon.restarted",
         {

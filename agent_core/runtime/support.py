@@ -163,7 +163,7 @@ def defaultRuntimeComponentFactories() -> dict[str, Any]:
         "enforceAuthority": enforceSessionAgentAuthority,
         "filterAuthorityTools": filterToolsForAgentAuthority,
         "createWorkspace": createWorkspaceController,
-        "loadPlugins": loadPluginRuntime,
+        "load_plugins": loadPluginRuntime,
         "createMcp": createMcpRuntime,
         "createBridge": createBridgeRuntime,
         "createBuiltinTools": createBuiltinTools,

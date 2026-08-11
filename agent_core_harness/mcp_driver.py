@@ -179,7 +179,7 @@ async def bootstrap_mcp_plugin_runtime(data: dict[str, Any], sandbox: ScenarioSa
         str(sandbox.workspace),
     )
     config["mcpConfig"] = _config_servers_from_data(data, state)
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd=str(sandbox.workspace),
         provider=config["provider"],
         providerProfileName=config.get("providerProfileName"),

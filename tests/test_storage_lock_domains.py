@@ -19,7 +19,7 @@ class TaskLifecycleLockDomainTests(AgentCoreTestCase):
         read-modify-write window and being clobbered by the stale commit."""
         root, home, workspace, previous = self.temp_context()
         try:
-            from agent_core.storage import withRecordTransaction
+            from agent_core.storage import with_record_transaction
 
             base = {
                 "type": "background_command",
@@ -29,29 +29,29 @@ class TaskLifecycleLockDomainTests(AgentCoreTestCase):
                 "startedAt": "2026-06-10T00:00:00.000Z",
                 "outputFile": "/tmp/out.log",
             }
-            run(core.writeTaskMeta("task-x", base))
+            run(core.write_task_meta("task-x", base))
 
             async def main() -> None:
                 in_window = asyncio.Event()
                 proceed = asyncio.Event()
 
                 async def lifecycle_transaction() -> None:
-                    async with withRecordTransaction("task-lifecycle", "task-x"):
-                        stale = await core.readTaskMeta("task-x")
+                    async with with_record_transaction("task-lifecycle", "task-x"):
+                        stale = await core.read_task_meta("task-x")
                         in_window.set()
                         await proceed.wait()
                         await asyncio.sleep(0.2)
-                        await core.writeTaskMeta("task-x", {**stale, "holder": True})
+                        await core.write_task_meta("task-x", {**stale, "holder": True})
 
                 async def bare_writer() -> None:
                     await in_window.wait()
                     proceed.set()
-                    await core.mutateTaskMeta("task-x", lambda cur: {**cur, "contender": True})
+                    await core.mutate_task_meta("task-x", lambda cur: {**cur, "contender": True})
 
                 await asyncio.gather(lifecycle_transaction(), bare_writer())
 
             run(main())
-            meta = run(core.readTaskMeta("task-x"))
+            meta = run(core.read_task_meta("task-x"))
             self.assertTrue(meta.get("holder"))
             self.assertTrue(meta.get("contender"))
         finally:
@@ -68,21 +68,21 @@ class TaskLifecycleLockDomainTests(AgentCoreTestCase):
                 "startedAt": "2026-06-10T00:00:00.000Z",
                 "outputFile": "/tmp/out.log",
             }
-            run(core.writeTaskMeta("task-x", base))
+            run(core.write_task_meta("task-x", base))
             holder_script = textwrap.dedent(
                 """
                 import asyncio, sys
                 sys.path.insert(0, sys.argv[2])
                 import agent_core as core
-                from agent_core.storage import withRecordTransaction
+                from agent_core.storage import with_record_transaction
 
                 async def main():
-                    core.configureRuntimeHome(sys.argv[1])
-                    async with withRecordTransaction("task-lifecycle", "task-x"):
-                        stale = await core.readTaskMeta("task-x")
+                    core.configure_runtime_home(sys.argv[1])
+                    async with with_record_transaction("task-lifecycle", "task-x"):
+                        stale = await core.read_task_meta("task-x")
                         print("locked", flush=True)
                         await asyncio.sleep(1.0)
-                        await core.writeTaskMeta("task-x", {**stale, "holder": True})
+                        await core.write_task_meta("task-x", {**stale, "holder": True})
 
                 asyncio.run(main())
                 """
@@ -96,12 +96,12 @@ class TaskLifecycleLockDomainTests(AgentCoreTestCase):
             self.assertEqual(holder.stdout.readline().strip(), "locked")
 
             async def bare_writer() -> None:
-                await core.mutateTaskMeta("task-x", lambda cur: {**cur, "contender": True})
+                await core.mutate_task_meta("task-x", lambda cur: {**cur, "contender": True})
 
             run(bare_writer())
             _, stderr = holder.communicate(timeout=30)
             self.assertEqual(holder.returncode, 0, stderr)
-            meta = run(core.readTaskMeta("task-x"))
+            meta = run(core.read_task_meta("task-x"))
             self.assertTrue(meta.get("holder"))
             self.assertTrue(meta.get("contender"))
         finally:

@@ -40,7 +40,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                     str(workspace),
                 )
             )
-            parent = core.createEmptySession(
+            parent = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -49,7 +49,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="bypassPermissions",
             )
-            child = core.createEmptySession(
+            child = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -71,10 +71,10 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                 )
             )
             child["metadata"]["effectiveAgentAuthority"] = child_authority
-            run(core.saveSession(parent))
-            run(core.saveSession(child))
+            run(core.save_session(parent))
+            run(core.save_session(child))
             run(
-                core.saveChildAgent(
+                core.save_child_agent(
                     {
                         "agentId": "agent-runtime-home",
                         "sessionId": child["id"],
@@ -93,7 +93,7 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             os.environ["AGENT_CORE_HOME"] = str(wrong_home)
 
             async def _start_with_scoped_home():
-                async with core.scopedRuntimeHome(str(home)):
+                async with core.scoped_runtime_home(str(home)):
                     supervisor_local = await core.createTaskSupervisor({"cwd": str(workspace)})
                     started_local = await supervisor_local["startSubagentTask"](
                         {
@@ -112,8 +112,8 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
             for _ in range(100):
 
                 async def _read_meta():
-                    async with core.scopedRuntimeHome(str(home)):
-                        return await core.readTaskMeta(task_id)
+                    async with core.scoped_runtime_home(str(home)):
+                        return await core.read_task_meta(task_id)
 
                 meta = run(_read_meta())
                 if meta and meta.get("status") == "completed":
@@ -121,8 +121,8 @@ class TaskSupervisorRuntimeHomeTests(AgentCoreTestCase):
                 time.sleep(0.05)
 
             async def _read_final():
-                async with core.scopedRuntimeHome(str(home)):
-                    return await core.readTaskMeta(task_id), await supervisor["readTaskOutput"](
+                async with core.scoped_runtime_home(str(home)):
+                    return await core.read_task_meta(task_id), await supervisor["readTaskOutput"](
                         task_id,
                         12000,
                     )
@@ -155,7 +155,7 @@ class SpawnEnvRuntimeHomeTests(AgentCoreTestCase):
         scoped.mkdir()
         try:
             async def _capture():
-                async with core.scopedRuntimeHome(str(scoped)):
+                async with core.scoped_runtime_home(str(scoped)):
                     return _worker_env(), _worker_env({"AGENT_CORE_HOME": "explicit"}), _background_runner_env()
 
             worker, worker_explicit, background = run(_capture())

@@ -17,7 +17,7 @@ async def _loadAnthropicCredentialFromRuntimeHome(
     import agent_core as core
 
     selected_home = os.path.abspath(os.path.expanduser(runtime_home))
-    async with core.scopedRuntimeHome(selected_home):
+    async with core.scoped_runtime_home(selected_home):
         config = await core.resolveConfig(
             {
                 "runtimeHome": selected_home,

@@ -47,7 +47,7 @@ def _config(root: str, *, count_timeout_ms: int, total_timeout_ms: int, exact: b
 
 
 def _session(root: str):
-    return core.createEmptySession(
+    return core.create_empty_session(
         cwd=root,
         provider="anthropic",
         providerProfileName="deadline-anthropic",
@@ -119,7 +119,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
             events = []
             started = time.monotonic()
             measurement = run(
-                testing.measureRequestInputTokens(
+                testing.measure_request_input_tokens(
                     {
                         "config": config,
                         "request": _request(),
@@ -199,7 +199,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
         token_accounting_module._measure_anthropic_count_tokens = successful_count
         with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
             measurement = run(
-                testing.measureRequestInputTokens(
+                testing.measure_request_input_tokens(
                     {
                         "config": _config(
                             root,
@@ -231,7 +231,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
 
         with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
             measurement = run(
-                testing.measureRequestInputTokens(
+                testing.measure_request_input_tokens(
                     {
                         "config": _openai_config(
                             root,
@@ -271,7 +271,7 @@ class Package31TokenCountDeadlineTests(AgentCoreTestCase):
         with tempfile.TemporaryDirectory(prefix="agent-core-token-deadline-") as root:
             events = []
             measurement = run(
-                testing.measureRequestInputTokens(
+                testing.measure_request_input_tokens(
                     {
                         "config": _openai_config(
                             root,

@@ -3,27 +3,27 @@ from __future__ import annotations
 import re
 from .shared import _tool_result_content_string
 from .parsing import (
-    extractCommand,
-    extractFilePath,
-    parseStructuredToolResult,
+    extract_command,
+    extract_file_path,
+    parse_structured_tool_result,
 )
 from .tokens import truncate
 from typing import Any
 from ...storage.message_origin import (
-    isGenuineUserRequest as _is_genuine_user_request,
-    isRuntimeSyntheticMessage as _is_runtime_synthetic_message,
+    is_genuine_user_request as _is_genuine_user_request,
+    is_runtime_synthetic_message as _is_runtime_synthetic_message,
 )
 from ...payloads.todo_policy import TODO_WRITE_LIMITS as _TODO_WRITE_LIMITS
 from ...payloads.todo_policy import boundTodoViewText as _bound_todo_view_text
 from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
-def renderContinuationOverlay(session: dict[str, Any]) -> str | None:
-    parts = [renderTodoOverlay(session), _render_active_task_overlay(session)]
+def render_continuation_overlay(session: dict[str, Any]) -> str | None:
+    parts = [render_todo_overlay(session), _render_active_task_overlay(session)]
     return "\n\n".join(part for part in parts if part) or None
 
 
-def renderTodoOverlay(session: dict[str, Any]) -> str | None:
+def render_todo_overlay(session: dict[str, Any]) -> str | None:
     selected = _select_todo_state(session.get("todos", []), {"maxOpen": 12, "maxCompleted": 6})
     open_entries = []
     for todo in selected["open"]:
@@ -60,20 +60,20 @@ def _render_active_task_overlay(session: dict[str, Any]) -> str | None:
     return "\n".join(lines)
 
 
-def renderPartialCompactionSummary(summary: dict[str, list[str]], reactiveAttempt: int = 0) -> str:
+def render_partial_compaction_summary(summary: dict[str, list[str]], reactiveAttempt: int = 0) -> str:
     lines = ["Partial continuation summary for older raw context in this session:"]
     entry_limit = 2 if reactiveAttempt >= 2 else 3 if reactiveAttempt >= 1 else 4
-    appendSummarySection(lines, "Carry-forward requests", summary["requests"][:entry_limit])
-    appendSummarySection(lines, "Relevant files", summary["files"][: entry_limit + 1])
-    appendSummarySection(lines, "Commands and probes", summary["commands"][:entry_limit])
-    appendSummarySection(lines, "Assistant findings", summary["findings"][:entry_limit])
-    appendSummarySection(lines, "Observed failures", summary["failures"][:entry_limit])
+    append_summary_section(lines, "Carry-forward requests", summary["requests"][:entry_limit])
+    append_summary_section(lines, "Relevant files", summary["files"][: entry_limit + 1])
+    append_summary_section(lines, "Commands and probes", summary["commands"][:entry_limit])
+    append_summary_section(lines, "Assistant findings", summary["findings"][:entry_limit])
+    append_summary_section(lines, "Observed failures", summary["failures"][:entry_limit])
     if len(lines) == 1:
         lines.append("- Older context was compacted, but no structured carry-forward items were extracted.")
     return "\n".join(lines)
 
 
-def renderContextReliefPrompt(summary: dict[str, Any]) -> str | None:
+def render_context_relief_prompt(summary: dict[str, Any]) -> str | None:
     if not summary.get("applied") or not summary.get("appliedModes"):
         return None
     if not any(step.get("requiresReinjection") for step in summary.get("steps", []) if isinstance(step, dict)):
@@ -91,7 +91,7 @@ def renderContextReliefPrompt(summary: dict[str, Any]) -> str | None:
     return "\n".join(lines)
 
 
-def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, list[str]]:
+def summarize_continuation_region(messages: list[dict[str, Any]]) -> dict[str, list[str]]:
     requests: list[str] = []
     files: list[str] = []
     commands: list[str] = []
@@ -136,16 +136,16 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
                 continue
             if block.get("type") == "tool_use":
                 input_value = block.get("input") if isinstance(block.get("input"), dict) else {}
-                file_path = extractFilePath(input_value)
+                file_path = extract_file_path(input_value)
                 if file_path:
                     push_unique(files, file_path)
-                command = extractCommand(input_value)
+                command = extract_command(input_value)
                 if command:
                     push_unique(commands, truncate(command, 200))
                 continue
             if block.get("type") == "tool_result":
                 content = _tool_result_content_string(block.get("content"))
-                parsed = parseStructuredToolResult(content)
+                parsed = parse_structured_tool_result(content)
                 if parsed.get("filePath"):
                     push_unique(files, parsed["filePath"])
                 if parsed.get("command"):
@@ -164,14 +164,14 @@ def summarizeContinuationRegion(messages: list[dict[str, Any]]) -> dict[str, lis
     }
 
 
-def appendSummarySection(lines: list[str], heading: str, entries: list[str]) -> None:
+def append_summary_section(lines: list[str], heading: str, entries: list[str]) -> None:
     if not entries:
         return
     lines.append(f"{heading}:")
     lines.extend(f"- {entry}" for entry in entries)
 
 
-def renderRegionSummaryReinjectionLines(summary: dict[str, list[str]]) -> list[str]:
+def render_region_summary_reinjection_lines(summary: dict[str, list[str]]) -> list[str]:
     lines: list[str] = []
     if summary["requests"]:
         lines.append(f"recent requests: {' | '.join(summary['requests'])}")
@@ -186,7 +186,7 @@ def renderRegionSummaryReinjectionLines(summary: dict[str, list[str]]) -> list[s
     return lines
 
 
-def normalizeReinjectionLines(lines: list[str]) -> list[str]:
+def normalize_reinjection_lines(lines: list[str]) -> list[str]:
     seen: set[str] = set()
     output: list[str] = []
     for line in lines:

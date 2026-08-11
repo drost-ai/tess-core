@@ -20,7 +20,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             def openai_factory(_options):
                 return SimpleNamespace()
             abort_signal = object()
-            client = testing.createDefaultCompactionModelClient({"openAiRequestSender": sender})
+            client = testing.create_default_compaction_model_client({"openAiRequestSender": sender})
             result = run(
                 client.complete(
                     {
@@ -105,7 +105,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                 }
 
         try:
-            session = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
             for index in range(34):
                 role = "user" if index % 2 == 0 else "assistant"
                 session["messages"].append({"role": role, "content": f"{role} message {index}"})
@@ -114,7 +114,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             def openai_factory(_options):
                 return SimpleNamespace()
 
-            result = run(core.runCompaction({"session": session, "config": {}, "runtime": {"openaiClientFactory": openai_factory}, "trigger": "manual", "force": True, "modelClient": client}))
+            result = run(core.run_compaction({"session": session, "config": {}, "runtime": {"openaiClientFactory": openai_factory}, "trigger": "manual", "force": True, "modelClient": client}))
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(result["qualityClassification"], "rich")
@@ -132,15 +132,15 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertGreater(working["sourceRanges"][0]["end"], 0)
             self.assertEqual(session["metadata"]["compactions"], 1)
             self.assertEqual(session["metadata"]["usage"]["inputTokens"], 22)
-            prompt_context = run(core.buildCompactionSystemPromptContext(session))
+            prompt_context = run(core.build_compaction_system_prompt_context(session))
             self.assertIn("Archived working context", prompt_context)
             self.assertIn("active_goals:", prompt_context)
-            memory = run(core.loadProjectMemoryRecords(str(workspace)))
+            memory = run(core.load_project_memory_records(str(workspace)))
             self.assertTrue(any(record["source"] == "compaction" and "Use fixed Codex Spark compaction" in record["text"] for record in memory))
 
             bridged = dict(session)
             bridged["metadata"] = {"compactionState": {"compactedThroughMessageIndex": 13}}
-            bridged_messages = core.buildMessagesForWorkingContext(bridged)
+            bridged_messages = core.build_messages_for_working_context(bridged)
             self.assertEqual(bridged_messages[0]["content"], core.CONTINUATION_BRIDGE_MESSAGE)
         finally:
             self.restore_home(root, previous)
@@ -186,12 +186,12 @@ class ContextCompactionTests(AgentCoreTestCase):
                 return {"text": json.dumps(payload), "usage": {"input_tokens": 3, "output_tokens": 2}, "model": args["model"]}
 
         try:
-            session = core.createEmptySession(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
             for index in range(34):
                 session["messages"].append({"role": "user" if index % 2 == 0 else "assistant", "content": f"message {index}"})
             client = RepairClient()
 
-            result = run(core.runCompaction({"session": session, "config": {}, "trigger": "manual", "force": True, "modelClient": client}))
+            result = run(core.run_compaction({"session": session, "config": {}, "trigger": "manual", "force": True, "modelClient": client}))
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(len(client.calls), 3)
@@ -208,13 +208,13 @@ class ContextCompactionTests(AgentCoreTestCase):
 
     def test_compaction_retrigger_policy_and_safe_tool_boundaries(self):
         session = {"messages": [{"role": "user", "content": str(index)} for index in range(110)], "metadata": {"compactionState": {"archiveMessageCount": 100, "workingContextTokenEstimate": 150_000}}}
-        below = core.shouldAutoCompact(session, currentInputTokens=199_999)
+        below = core.should_auto_compact(session, currentInputTokens=199_999)
         self.assertFalse(below["shouldCompact"])
-        hard = core.shouldAutoCompact(session, currentInputTokens=200_000)
+        hard = core.should_auto_compact(session, currentInputTokens=200_000)
         self.assertTrue(hard["shouldCompact"])
         self.assertEqual(hard["trigger"], "auto_hard_limit")
         session["messages"].extend({"role": "user", "content": str(index)} for index in range(20))
-        message_delta_only = core.shouldAutoCompact(session, currentInputTokens=160_000)
+        message_delta_only = core.should_auto_compact(session, currentInputTokens=160_000)
         self.assertFalse(message_delta_only["shouldCompact"])
 
         messages = [
@@ -224,20 +224,20 @@ class ContextCompactionTests(AgentCoreTestCase):
             {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "{\"file\":{\"filePath\":\"/tmp/a.py\",\"content\":\"x\"}}"}]},
             {"role": "user", "content": "safe restart"},
         ]
-        self.assertTrue(core.isSafeWorkingSetStart(messages, 2))
-        self.assertFalse(core.isSafeWorkingSetStart(messages, 3))
-        self.assertTrue(core.isSafeWorkingSetStart(messages, 4))
-        evidence = core.buildCompactionEvidence({"sourceMessages": messages[2:4], "sourceStart": 2, "cwd": "/tmp", "tokenBudget": 10_000})
+        self.assertTrue(core.is_safe_working_set_start(messages, 2))
+        self.assertFalse(core.is_safe_working_set_start(messages, 3))
+        self.assertTrue(core.is_safe_working_set_start(messages, 4))
+        evidence = core.build_compaction_evidence({"sourceMessages": messages[2:4], "sourceStart": 2, "cwd": "/tmp", "tokenBudget": 10_000})
         self.assertIn("assistant tool_use Read", evidence["transcript"])
         self.assertIn("user tool_result Read", evidence["transcript"])
-        malformed = core.buildCompactionEvidence({"sourceMessages": [{"role": "assistant", "content": {"unexpected": True}}], "sourceStart": 0, "cwd": "/tmp", "tokenBudget": 10_000})
+        malformed = core.build_compaction_evidence({"sourceMessages": [{"role": "assistant", "content": {"unexpected": True}}], "sourceStart": 0, "cwd": "/tmp", "tokenBudget": 10_000})
         self.assertEqual(malformed["entryCount"], 0)
         self.assertEqual(malformed["transcript"], "")
         self.assertEqual(core.parseMaybeJson('"scalar"'), '"scalar"')
         self.assertEqual(core.parseMaybeJson('{"ok":true}'), {"ok": True})
 
     def test_compaction_fallback_retry_matches_provider_failure_policy(self):
-        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+        session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
         source_messages = [{"role": "user", "content": "compact this"}]
 
         class FatalClient:
@@ -250,7 +250,7 @@ class ContextCompactionTests(AgentCoreTestCase):
 
         fatal = FatalClient()
         with self.assertRaises(RuntimeError):
-            run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": fatal, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
+            run(core.run_model_backed_compaction_synthesis_with_fallback({"session": session, "config": {}, "modelClient": fatal, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
         self.assertEqual(fatal.calls, 1)
 
         class ContextLimitClient:
@@ -292,7 +292,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                 return {"text": json.dumps(payload), "usage": {}, "model": args["model"]}
 
         context_limit = ContextLimitClient()
-        result = run(core.runModelBackedCompactionSynthesisWithFallback({"session": session, "config": {}, "modelClient": context_limit, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
+        result = run(core.run_model_backed_compaction_synthesis_with_fallback({"session": session, "config": {}, "modelClient": context_limit, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
         self.assertEqual(result["qualityClassification"], "usable")
         self.assertEqual(context_limit.calls, 2)
 
@@ -302,7 +302,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             memory_file = workspace / ".tess" / "project" / "memory.md"
             memory_file.parent.mkdir(parents=True)
             memory_file.write_text("Prefer focused parity tests")
-            session = core.createEmptySession(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
             working = {
                 "project": {"description": "Python port of agent-core", "facts": {"evidence": ["agent_core/compaction.py"]}, "keyFiles": [{"path": "agent_core/compaction.py"}]},
                 "goals": {"active": ["Complete Slice 4"], "constraints": ["Match TypeScript behavior"], "preferences": ["Detailed commits"]},
@@ -311,17 +311,17 @@ class ContextCompactionTests(AgentCoreTestCase):
                 "criticalContext": ["Compaction artifacts drive future prompt context"],
             }
 
-            first = run(core.updateDurableMemoryFromWorkingContext(session, working))
-            second = run(core.updateDurableMemoryFromWorkingContext(session, working))
+            first = run(core.update_durable_memory_from_working_context(session, working))
+            second = run(core.update_durable_memory_from_working_context(session, working))
 
             self.assertEqual(first[0]["id"], "manual-project-memory")
             self.assertEqual(first[0]["kind"], "user_preference")
             workflow = next(record for record in second if record.get("kind") == "workflow")
-            expected_id = core.durableMemoryId("workflow", "Use fixed Codex Spark compaction model selection")
+            expected_id = core.durable_memory_id("workflow", "Use fixed Codex Spark compaction model selection")
             self.assertEqual(workflow["id"], expected_id)
             self.assertEqual(sum(1 for record in second if record["id"] == expected_id), 1)
-            retrieved = run(core.retrieveRelevantDurableMemory({"session": session, "prompt": "fixed Codex Spark compaction"}))
-            prompt = core.renderRetrievedMemoryPrompt(retrieved)
+            retrieved = run(core.retrieve_relevant_durable_memory({"session": session, "prompt": "fixed Codex Spark compaction"}))
+            prompt = core.render_retrieved_memory_prompt(retrieved)
             self.assertIn("<retrieved_memory>", prompt)
             self.assertIn("[workflow | compaction | agent_core/compaction.py]", prompt)
         finally:
@@ -331,11 +331,11 @@ class ContextCompactionTests(AgentCoreTestCase):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_context_module.measureRequestInputTokens
-        original_run_compaction = agent_checkpoints_module.runCompaction
+        original_measure = agent_context_module.measure_request_input_tokens
+        original_run_compaction = agent_checkpoints_module.run_compaction
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"] = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"old message {index}"} for index in range(30)]
             measure_calls = {"count": 0}
             compaction_calls = []
@@ -382,8 +382,8 @@ class ContextCompactionTests(AgentCoreTestCase):
 
             def openai_factory(_options):
                 return SimpleNamespace()
-            agent_context_module.measureRequestInputTokens = fake_measure
-            agent_checkpoints_module.runCompaction = fake_run_compaction
+            agent_context_module.measure_request_input_tokens = fake_measure
+            agent_checkpoints_module.run_compaction = fake_run_compaction
             result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": [], "openaiClientFactory": openai_factory}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "done")
@@ -396,18 +396,18 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.input_tokens" and data["input_tokens"] == 1_000 for event, data in events))
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastCompactionMode"], "full_checkpoint_compaction")
         finally:
-            agent_context_module.measureRequestInputTokens = original_measure
-            agent_checkpoints_module.runCompaction = original_run_compaction
+            agent_context_module.measure_request_input_tokens = original_measure
+            agent_checkpoints_module.run_compaction = original_run_compaction
             self.restore_home(root, previous)
 
     def test_raw_session_checkpoint_runs_before_request_relief(self):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_run_compaction = agent_checkpoints_module.runCompaction
+        original_run_compaction = agent_checkpoints_module.run_compaction
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"] = [{"role": "user", "content": "x" * 810_000}]
             compaction_calls = []
             events = []
@@ -439,7 +439,7 @@ class ContextCompactionTests(AgentCoreTestCase):
                     "artifacts": {"summary": "summary.md", "state": "state.json", "workingContext": "working-context.json", "checkpoint": "checkpoint.json"},
                 }
 
-            agent_checkpoints_module.runCompaction = fake_run_compaction
+            agent_checkpoints_module.run_compaction = fake_run_compaction
             result = run(agent_context_module.maybeAutoCheckpointRawSession({"session": session, "config": config, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}}))
 
             self.assertEqual(result["status"], "completed")
@@ -452,14 +452,14 @@ class ContextCompactionTests(AgentCoreTestCase):
             started = next(data for event, data in events if event == "compaction.started")
             self.assertEqual(started["current_token_source"], "raw_session_estimate")
         finally:
-            agent_checkpoints_module.runCompaction = original_run_compaction
+            agent_checkpoints_module.run_compaction = original_run_compaction
             self.restore_home(root, previous)
 
 
 class TokenEstimatorUnificationTests(AgentCoreTestCase):
     def test_every_estimator_shares_one_message_serialization(self):
         from agent_core.context.token_accounting import _estimate_request_tokens
-        from agent_core.context.continuation.tokens import estimateMessagesTokens
+        from agent_core.context.continuation.tokens import estimate_messages_tokens
         from agent_core.context.compaction.utils import estimateMessageTokens as compaction_estimate
         from agent_core.payloads.token_estimation import (
             estimateMessageTokens,
@@ -482,7 +482,7 @@ class TokenEstimatorUnificationTests(AgentCoreTestCase):
         # measured 43.5% above the role:content form on tool results, and the
         # relief gate subtracts these numbers from each other.
         self.assertEqual(compaction_estimate(messages), canonical)
-        self.assertEqual(estimateMessagesTokens(messages), canonical)
+        self.assertEqual(estimate_messages_tokens(messages), canonical)
         request = {"system": "sys", "messages": messages, "tools": [{"name": "Bash"}]}
         self.assertEqual(
             _estimate_request_tokens(request),

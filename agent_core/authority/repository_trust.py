@@ -8,8 +8,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from ..storage.json_io import fileLock
-from ..storage.paths import getLocalStateDir, getProjectRoot, getStateRoot
+from ..storage.json_io import file_lock
+from ..storage.paths import get_local_state_dir, get_project_root, get_state_root
 
 
 REPOSITORY_TRUST_VERSION = 1
@@ -20,7 +20,7 @@ _MAX_TRUST_RECORD_BYTES = 256 * 1024
 
 
 def _trust_directory() -> str:
-    return os.path.join(getStateRoot(), "trust", "repositories")
+    return os.path.join(get_state_root(), "trust", "repositories")
 
 
 def _normalize_canonical_path(value: str) -> str:
@@ -29,7 +29,7 @@ def _normalize_canonical_path(value: str) -> str:
 
 
 async def resolveRepositoryIdentity(cwd: str) -> dict[str, Any]:
-    canonical_root = _normalize_canonical_path(os.path.realpath(getProjectRoot(cwd)))
+    canonical_root = _normalize_canonical_path(os.path.realpath(get_project_root(cwd)))
     info = os.stat(canonical_root, follow_symlinks=False)
     if not stat.S_ISDIR(info.st_mode):
         raise RuntimeError(f"Repository root is not a directory: {canonical_root}")
@@ -185,7 +185,7 @@ async def approveRepositoryContent(args: dict[str, Any] | None = None, **kwargs:
     identity = await resolveRepositoryIdentity(str(args["cwd"]))
     path = repositoryTrustRecordPath(identity)
     _ensure_private_directory()
-    async with fileLock(path):
+    async with file_lock(path):
         record = _read_record(identity) or {
             "version": REPOSITORY_TRUST_VERSION,
             "repository": identity,
@@ -206,7 +206,7 @@ async def revokeRepositoryApproval(args: dict[str, Any] | None = None, **kwargs:
     identity = await resolveRepositoryIdentity(str(args["cwd"]))
     path = repositoryTrustRecordPath(identity)
     _ensure_private_directory()
-    async with fileLock(path):
+    async with file_lock(path):
         record = _read_record(identity)
         scopes = (record or {}).get("approvals", {}).get(family)
         if isinstance(scopes, dict) and scope in scopes:
@@ -220,7 +220,7 @@ async def revokeRepositoryApproval(args: dict[str, Any] | None = None, **kwargs:
 async def getRepositoryTrustStatus(cwd: str) -> dict[str, Any]:
     identity = await resolveRepositoryIdentity(cwd)
     record = _read_record(identity)
-    legacy_root = getLocalStateDir(cwd)
+    legacy_root = get_local_state_dir(cwd)
     return {
         "repository": identity,
         "recordPath": repositoryTrustRecordPath(identity),

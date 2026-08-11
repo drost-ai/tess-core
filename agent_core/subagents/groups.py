@@ -9,8 +9,8 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..storage import sessionArchiveDir, withRecordTransaction
-from ..storage.io_executor import runStorageIo as _run_storage_io
+from ..storage import session_archive_dir, with_record_transaction
+from ..storage.io_executor import run_storage_io as _run_storage_io
 
 
 def resolveSubagentLaunchGroupId(args: dict[str, Any], parentSession: dict[str, Any], context: dict[str, Any] | None = None) -> str:
@@ -48,7 +48,7 @@ def appendLaunchGroupMetadata(parentSession: dict[str, Any], launchGroupId: str,
 
 
 def _subagent_launch_groups_path(parentSessionId: str) -> str:
-    return os.path.join(sessionArchiveDir(parentSessionId), "subagent-launch-groups.json")
+    return os.path.join(session_archive_dir(parentSessionId), "subagent-launch-groups.json")
 
 
 def _read_subagent_launch_groups_sync(path: str) -> list[dict[str, Any]]:

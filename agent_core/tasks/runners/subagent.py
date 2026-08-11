@@ -11,7 +11,7 @@ from ...agent import runAgentPrompt
 from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
 from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
-from ...storage import configureRuntimeHome, loadChildAgent, loadSession, loadTaskRecord, mutateChildAgent, mutateTaskMeta, saveSession, saveTaskRecord, withRecordTransaction
+from ...storage import configure_runtime_home, load_child_agent, load_session, load_task_record, mutate_child_agent, mutate_task_meta, save_session, save_task_record, with_record_transaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ...subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...subagents.finalizers import _background_structured_result_fields
@@ -23,7 +23,7 @@ from ..._utils import now_iso
 async def run_background_subagent(args: dict[str, Any]) -> dict[str, Any]:
     session, result, payload = await _execute_background_subagent(args)
     await finalizeBackgroundSubagentSuccessFromEnv(session, result)
-    await saveSession(session)
+    await save_session(session)
     return payload
 
 
@@ -58,11 +58,11 @@ def _preview(value: Any, limit: int) -> str:
 async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], Any]:
     runtime_home = os.environ.get("AGENT_CORE_HOME")
     if runtime_home:
-        configureRuntimeHome(runtime_home)
-    session = await loadSession(args["sessionId"])
+        configure_runtime_home(runtime_home)
+    session = await load_session(args["sessionId"])
     if not session:
         raise RuntimeError(f"Subagent session not found: {args['sessionId']}")
-    child_record = await loadChildAgent(args["agentId"])
+    child_record = await load_child_agent(args["agentId"])
     assertMatchingPersistedChildAuthorities(
         (session.get("metadata") or {}).get("effectiveAgentAuthority"),
         (child_record or {}).get("effectiveAgentAuthority"),
@@ -105,7 +105,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     task_id, agent_id = args["taskId"], args["agentId"]
     await _mark_resident_status(task_id, agent_id, "running", None)
     result = await runAgentPrompt({"session": session, "config": config, "prompt": "", "runtime": runtime})
-    await saveSession(session)
+    await save_session(session)
     await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=[])
     turn_index = 1
     print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "session_id": session["id"], "agent_id": agent_id, "task_id": task_id, "result": {"text": result.get("text"), "stopReason": result.get("stopReason")}}), flush=True)
@@ -128,7 +128,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
             await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": f"[turn failed] {exc}", "metadata": _reply_metadata(trigger_ids)})
             await _mark_resident_status(task_id, agent_id, "awaiting_input", "resident_idle")
             continue
-        await saveSession(session)
+        await save_session(session)
         await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=trigger_ids)
         turn_index += 1
         print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "result": {"text": (result.get("text") or "")[:400], "stopReason": result.get("stopReason")}}), flush=True)
@@ -170,7 +170,7 @@ async def _publish_resident_turn_result(task_id: str, agent_id: str, session: di
             **structured_fields,
         }
 
-    await mutateChildAgent(agent_id, _idle_child)
+    await mutate_child_agent(agent_id, _idle_child)
     await _mark_resident_status(task_id, agent_id, "awaiting_input", "resident_idle", summary=summary)
 
 
@@ -194,9 +194,9 @@ async def _mark_resident_status(task_id: str, agent_id: str, status: str, waitin
             next_meta["summary"] = summary
         return next_meta
 
-    await mutateTaskMeta(task_id, _mark)
-    async with withRecordTransaction("task-lifecycle", task_id):
-        record = await loadTaskRecord(task_id)
+    await mutate_task_meta(task_id, _mark)
+    async with with_record_transaction("task-lifecycle", task_id):
+        record = await load_task_record(task_id)
         if record and record.get("status") not in {"completed", "failed", "stopped"}:
             # Keep the shared record store aligned so capacity governance and
             # the boot sweep see the resident's real state; terminal records are
@@ -211,7 +211,7 @@ async def _mark_resident_status(task_id: str, agent_id: str, status: str, waitin
                 next_record["summary"] = summary
                 next_record["resultSummary"] = summary
             next_record.pop("completedAt", None)
-            await saveTaskRecord(next_record)
+            await save_task_record(next_record)
 
 
 def main() -> None:
@@ -228,7 +228,7 @@ def main() -> None:
         session, result, payload = asyncio.run(_execute_background_subagent(worker_args))
         print(json.dumps(payload, indent=2), flush=True)
         asyncio.run(finalizeBackgroundSubagentSuccessFromEnv(session, result))
-        asyncio.run(saveSession(session))
+        asyncio.run(save_session(session))
     except Exception as exc:
         asyncio.run(finalizeBackgroundSubagentFailureFromEnv(exc))
         print(json.dumps({"ok": False, "error": str(exc), "session_id": parsed.session_id, "agent_id": parsed.agent_id, "task_id": parsed.task_id}, indent=2), file=sys.stderr)
@@ -238,10 +238,10 @@ def main() -> None:
 def _resident_enabled_for(session_id: str) -> bool:
     runtime_home = os.environ.get("AGENT_CORE_HOME")
     if runtime_home:
-        configureRuntimeHome(runtime_home)
+        configure_runtime_home(runtime_home)
 
     async def read() -> bool:
-        session = await loadSession(session_id)
+        session = await load_session(session_id)
         contract = ((session or {}).get("metadata") or {}).get("subagentRuntimeContract")
         if isinstance(contract, dict) and contract.get("resident") is False:
             return False

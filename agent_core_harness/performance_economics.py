@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core as core
-from agent_core.storage.persistence_metrics import registerPersistenceObserver
+from agent_core.storage.persistence_metrics import register_persistence_observer
 
 from .performance import (
     REPORT_SCHEMA,
@@ -96,8 +96,8 @@ async def _measure_representative_persistence_iteration() -> dict[str, Any]:
         home, workspace = root / "home", root / "workspace"
         home.mkdir()
         workspace.mkdir()
-        async with core.scopedRuntimeHome(str(home)):
-            session = core.createEmptySession(
+        async with core.scoped_runtime_home(str(home)):
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -140,7 +140,7 @@ async def _measure_representative_persistence_iteration() -> dict[str, Any]:
                 }
 
             collector = PersistenceMeasurementCollector()
-            unsubscribe = registerPersistenceObserver(collector.observe)
+            unsubscribe = register_persistence_observer(collector.observe)
             started = time.perf_counter_ns()
             try:
                 try:
@@ -202,8 +202,8 @@ async def _representative_summary(
     session: dict[str, Any],
 ) -> dict[str, Any]:
     summary = collector.summary(elapsed)
-    restored = await core.loadSession(session["id"])
-    log_path = Path(core.sessionTranscriptLogPath(session["id"]))
+    restored = await core.load_session(session["id"])
+    log_path = Path(core.session_transcript_log_path(session["id"]))
     entries = [
         json.loads(line)
         for line in log_path.read_text(encoding="utf-8").splitlines()
@@ -252,34 +252,34 @@ async def _measure_v1_v2_production(
             expected = copy.deepcopy(session)
             expected["revision"] = 1
             v1_home = root / f"v1-{sample}"
-            async with core.scopedRuntimeHome(str(v1_home)):
-                await core.writeJsonFile(core.sessionPath(session["id"]), base)
+            async with core.scoped_runtime_home(str(v1_home)):
+                await core.write_json_file(core.session_path(session["id"]), base)
                 observed = await _observe_storage_io(
-                    core.writeJsonFile(core.sessionPath(session["id"]), expected)
+                    core.write_json_file(core.session_path(session["id"]), expected)
                 )
                 _record_observation(observed, measurements, timings, "v1")
                 started = time.perf_counter_ns()
-                recovered_v1 = await core.readJsonFile(core.sessionPath(session["id"]), None)
+                recovered_v1 = await core.read_json_file(core.session_path(session["id"]), None)
                 timings["v1RecoveryNs"].append(time.perf_counter_ns() - started)
             hydrated_home = root / f"v2-hydrated-{sample}"
-            async with core.scopedRuntimeHome(str(hydrated_home)):
-                await core.saveSession(base)
+            async with core.scoped_runtime_home(str(hydrated_home)):
+                await core.save_session(base)
 
                 async def commit(_latest: dict[str, Any] | None) -> dict[str, Any]:
                     return {"session": session, "changed": True}
 
                 observed = await _observe_storage_io(
-                    core.mutateSessionRecordTransaction(session["id"], commit)
+                    core.mutate_session_record_transaction(session["id"], commit)
                 )
                 _record_observation(
                     observed, measurements, timings, "v2Hydrated"
                 )
                 started = time.perf_counter_ns()
-                hydrated_head = await core.readJsonFile(
-                    core.sessionPath(session["id"]), None
+                hydrated_head = await core.read_json_file(
+                    core.session_path(session["id"]), None
                 )
                 recovered_hydrated = (
-                    await core.hydratePersistedSession(
+                    await core.hydrate_persisted_session(
                         session["id"], hydrated_head, repairHead=False
                     )
                 )["record"]
@@ -287,7 +287,7 @@ async def _measure_v1_v2_production(
                     time.perf_counter_ns() - started
                 )
             fast_home = root / f"v2-fast-{sample}"
-            async with core.scopedRuntimeHome(str(fast_home)):
+            async with core.scoped_runtime_home(str(fast_home)):
                 fast_session = copy.deepcopy(base)
                 await core.persistSession(
                     fast_session, {"sessionPersistence": True}, touch=False
@@ -304,11 +304,11 @@ async def _measure_v1_v2_production(
                 )
                 _record_observation(observed, measurements, timings, "v2Fast")
                 started = time.perf_counter_ns()
-                fast_head = await core.readJsonFile(
-                    core.sessionPath(session["id"]), None
+                fast_head = await core.read_json_file(
+                    core.session_path(session["id"]), None
                 )
                 recovered_fast = (
-                    await core.hydratePersistedSession(
+                    await core.hydrate_persisted_session(
                         session["id"], fast_head, repairHead=False
                     )
                 )["record"]
@@ -326,7 +326,7 @@ async def _measure_v1_v2_production(
 
 async def _observe_storage_io(operation: Any) -> dict[str, Any]:
     events: list[dict[str, Any]] = []
-    unsubscribe = registerPersistenceObserver(events.append)
+    unsubscribe = register_persistence_observer(events.append)
     started = time.perf_counter_ns()
     cpu_started = time.process_time_ns()
     try:
@@ -372,7 +372,7 @@ async def _production_crash_boundary(
     class InjectedCrash(RuntimeError):
         pass
 
-    async with core.scopedRuntimeHome(str(home)):
+    async with core.scoped_runtime_home(str(home)):
         await core.persistSession(base, {"sessionPersistence": True}, touch=False)
         committed_messages = copy.deepcopy(base["messages"])
         base["messages"].extend(
@@ -392,9 +392,9 @@ async def _production_crash_boundary(
             )
         except InjectedCrash:
             pass
-        head = await core.readJsonFile(core.sessionPath(session["id"]), None)
+        head = await core.read_json_file(core.session_path(session["id"]), None)
         restored = (
-            await core.hydratePersistedSession(
+            await core.hydrate_persisted_session(
                 session["id"], head, repairHead=False
             )
         )["record"]
@@ -410,12 +410,12 @@ async def _production_crash_boundary(
 async def _production_write_back(root: Path, message_count: int, content_bytes: int) -> dict[str, Any]:
     home = root / "write-back"
     session = _synthetic_session(root, message_count, content_bytes, 92)
-    async with core.scopedRuntimeHome(str(home)):
-        await core.writeJsonFile(core.sessionPath(session["id"]), session)
-        before = Path(core.sessionPath(session["id"])).read_bytes()
-        await core.migrateSessionToV2(session["id"])
-        await core.writeBackSessionV1(session["id"])
-        after = Path(core.sessionPath(session["id"])).read_bytes()
+    async with core.scoped_runtime_home(str(home)):
+        await core.write_json_file(core.session_path(session["id"]), session)
+        before = Path(core.session_path(session["id"])).read_bytes()
+        await core.migrate_session_to_v2(session["id"])
+        await core.write_back_session_v1(session["id"])
+        after = Path(core.session_path(session["id"])).read_bytes()
     return {
         "beforeDigest": hashlib.sha256(before).hexdigest(),
         "afterDigest": hashlib.sha256(after).hexdigest(),

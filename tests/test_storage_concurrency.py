@@ -20,7 +20,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             path = str(home / "records" / "value.json")
-            result = run(core.mutateJsonFile(path, lambda value: {**value, "a": 1}, {}))
+            result = run(core.mutate_json_file(path, lambda value: {**value, "a": 1}, {}))
             self.assertEqual(result, {"a": 1})
             self.assertEqual(json.loads(Path(path).read_text()), {"a": 1})
         finally:
@@ -30,12 +30,12 @@ class MutateJsonFileTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             path = str(home / "records" / "value.json")
-            run(core.writeJsonFile(path, {"items": []}))
+            run(core.write_json_file(path, {"items": []}))
 
             def add(value):
                 value["items"].append("x")
 
-            result = run(core.mutateJsonFile(path, add, {}))
+            result = run(core.mutate_json_file(path, add, {}))
             self.assertEqual(result, {"items": ["x"]})
             self.assertEqual(json.loads(Path(path).read_text()), {"items": ["x"]})
         finally:
@@ -47,8 +47,8 @@ class MutateJsonFileTests(AgentCoreTestCase):
             value = {"b": [1, 2], "a": {"nested": None}, "text": "ünïcode"}
             plain = str(home / "plain.json")
             locked = str(home / "locked.json")
-            run(core.writeJsonFile(plain, value))
-            run(core.mutateJsonFile(locked, lambda _: value, {}))
+            run(core.write_json_file(plain, value))
+            run(core.mutate_json_file(locked, lambda _: value, {}))
             self.assertEqual(Path(plain).read_bytes(), Path(locked).read_bytes())
         finally:
             self.restore_home(root, previous)
@@ -59,7 +59,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
             path = str(home / "records" / "shared.json")
 
             async def writer(index: int) -> None:
-                await core.mutateJsonFile(path, lambda value: {**value, f"key{index}": index}, {})
+                await core.mutate_json_file(path, lambda value: {**value, f"key{index}": index}, {})
 
             async def main() -> None:
                 await asyncio.gather(*(writer(index) for index in range(16)))
@@ -84,7 +84,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 async def main():
                     index = sys.argv[2]
                     for round in range(5):
-                        await core.mutateJsonFile(
+                        await core.mutate_json_file(
                             sys.argv[1],
                             lambda value: {**value, f"proc{index}_round{round}": int(index)},
                             {},
@@ -115,7 +115,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
         try:
             path = str(home / "records" / "contended.json")
             events: list[dict] = []
-            unsubscribe = core.registerStorageLockObserver(events.append)
+            unsubscribe = core.register_storage_lock_observer(events.append)
             try:
 
                 async def real_main() -> None:
@@ -123,7 +123,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                     entered = asyncio.Event()
 
                     async def holder() -> None:
-                        async with core.fileLock(path):
+                        async with core.file_lock(path):
                             entered.set()
                             await release.wait()
 
@@ -131,7 +131,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
                     await entered.wait()
                     try:
                         with self.assertRaises(core.StorageTransactionError) as error:
-                            async with core.fileLock(path, timeoutMs=150):
+                            async with core.file_lock(path, timeoutMs=150):
                                 pass
                         self.assertEqual(error.exception.code, "storage.lock_timeout")
                     finally:
@@ -158,10 +158,10 @@ class MutateJsonFileTests(AgentCoreTestCase):
                 import agent_core as core
 
                 async def main():
-                    async with core.fileLock(sys.argv[1]):
+                    async with core.file_lock(sys.argv[1]):
                         print("locked", flush=True)
                         await asyncio.sleep(1.0)
-                        await core.writeJsonFile(sys.argv[1], {"writer": "holder"})
+                        await core.write_json_file(sys.argv[1], {"writer": "holder"})
 
                 asyncio.run(main())
                 """
@@ -175,7 +175,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
             self.assertEqual(holder.stdout.readline().strip(), "locked")
 
             async def contender() -> None:
-                await core.mutateJsonFile(path, lambda value: {**value, "writer2": True}, {})
+                await core.mutate_json_file(path, lambda value: {**value, "writer2": True}, {})
 
             run(contender())
             holder.communicate(timeout=30)
@@ -191,7 +191,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             path = str(home / "records" / "crash.json")
-            run(core.writeJsonFile(path, {"state": "old"}))
+            run(core.write_json_file(path, {"state": "old"}))
             crasher = textwrap.dedent(
                 """
                 import asyncio, os, sys
@@ -206,7 +206,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
 
                 async def main():
                     os.replace = exploding_replace
-                    await core.mutateJsonFile(sys.argv[1], lambda value: {"state": "new"}, {})
+                    await core.mutate_json_file(sys.argv[1], lambda value: {"state": "new"}, {})
 
                 asyncio.run(main())
                 """
@@ -218,7 +218,7 @@ class MutateJsonFileTests(AgentCoreTestCase):
             )
             self.assertEqual(proc.returncode, 9)
             self.assertEqual(json.loads(Path(path).read_text()), {"state": "old"})
-            run(core.mutateJsonFile(path, lambda value: {**value, "after": True}, {}))
+            run(core.mutate_json_file(path, lambda value: {**value, "after": True}, {}))
             self.assertEqual(json.loads(Path(path).read_text()), {"state": "old", "after": True})
         finally:
             self.restore_home(root, previous)
@@ -243,15 +243,15 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                 "status": "running",
                 "startedAt": "2026-06-10T00:00:00.000Z",
             }
-            run(core.saveChildAgent(base))
+            run(core.save_child_agent(base))
 
             async def finalize() -> None:
-                await core.mutateChildAgent(
+                await core.mutate_child_agent(
                     "agent-x", lambda current: {**current, "status": "completed", "resultSummary": "done"}
                 )
 
             async def reconcile() -> None:
-                await core.mutateChildAgent(
+                await core.mutate_child_agent(
                     "agent-x", lambda current: {**current, "recoveryState": "recovered_after_daemon_restart"}
                 )
 
@@ -259,7 +259,7 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                 await asyncio.gather(finalize(), reconcile())
 
             run(main())
-            record = run(core.loadChildAgent("agent-x"))
+            record = run(core.load_child_agent("agent-x"))
             self.assertEqual(record["status"], "completed")
             self.assertEqual(record["resultSummary"], "done")
             self.assertEqual(record["recoveryState"], "recovered_after_daemon_restart")
@@ -269,9 +269,9 @@ class RecordMutationHelperTests(AgentCoreTestCase):
     def test_mutate_child_agent_skips_when_missing_and_mutator_declines(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            result = run(core.mutateChildAgent("agent-missing", lambda current: None))
+            result = run(core.mutate_child_agent("agent-missing", lambda current: None))
             self.assertIsNone(result)
-            self.assertIsNone(run(core.loadChildAgent("agent-missing")))
+            self.assertIsNone(run(core.load_child_agent("agent-missing")))
         finally:
             self.restore_home(root, previous)
 
@@ -279,7 +279,7 @@ class RecordMutationHelperTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             created = run(
-                core.mutateChildAgent(
+                core.mutate_child_agent(
                     "agent-new",
                     lambda current: current
                     or {
@@ -295,8 +295,8 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                 )
             )
             self.assertEqual(created["status"], "failed")
-            record = run(core.loadChildAgent("agent-new"))
-            # None-valued fields are omitted exactly like saveChildAgent.
+            record = run(core.load_child_agent("agent-new"))
+            # None-valued fields are omitted exactly like save_child_agent.
             self.assertNotIn("error", record)
         finally:
             self.restore_home(root, previous)
@@ -304,14 +304,14 @@ class RecordMutationHelperTests(AgentCoreTestCase):
     def test_mutate_session_record_merges_metadata_under_lock(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
                 systemPrompt="prompt",
                 permissionMode="default",
             )
-            run(core.saveSession(session))
+            run(core.save_session(session))
 
             async def add_task(task_id: str) -> None:
                 def mutator(record):
@@ -319,13 +319,13 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                     metadata["taskIds"] = [*(metadata.get("taskIds") or []), task_id]
                     return record
 
-                await core.mutateSessionRecord(session["id"], mutator)
+                await core.mutate_session_record(session["id"], mutator)
 
             async def main() -> None:
                 await asyncio.gather(*(add_task(f"task-{index}") for index in range(8)))
 
             run(main())
-            loaded = run(core.loadSession(session["id"]))
+            loaded = run(core.load_session(session["id"]))
             self.assertEqual(
                 sorted(loaded["metadata"]["taskIds"]), sorted(f"task-{index}" for index in range(8))
             )
@@ -335,7 +335,7 @@ class RecordMutationHelperTests(AgentCoreTestCase):
     def test_mutate_session_record_returns_none_for_missing_session(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            self.assertIsNone(run(core.mutateSessionRecord("missing-session", lambda record: record)))
+            self.assertIsNone(run(core.mutate_session_record("missing-session", lambda record: record)))
         finally:
             self.restore_home(root, previous)
 
@@ -351,15 +351,15 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                 "startedAt": "2026-06-10T00:00:00.000Z",
                 "outputFile": "/tmp/out.log",
             }
-            run(core.writeTaskMeta("task-x", base))
+            run(core.write_task_meta("task-x", base))
 
             async def finalize_exit() -> None:
-                await core.mutateTaskMeta(
+                await core.mutate_task_meta(
                     "task-x", lambda current: {**current, "status": "completed", "exitCode": 0}
                 )
 
             async def annotate() -> None:
-                await core.mutateTaskMeta(
+                await core.mutate_task_meta(
                     "task-x", lambda current: {**current, "retryOfTaskId": "task-w"}
                 )
 
@@ -367,7 +367,7 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                 await asyncio.gather(finalize_exit(), annotate())
 
             run(main())
-            meta = run(core.readTaskMeta("task-x"))
+            meta = run(core.read_task_meta("task-x"))
             self.assertEqual(meta["status"], "completed")
             self.assertEqual(meta["exitCode"], 0)
             self.assertEqual(meta["retryOfTaskId"], "task-w")
@@ -377,9 +377,9 @@ class RecordMutationHelperTests(AgentCoreTestCase):
     def test_mutate_task_meta_skips_when_missing_and_mutator_declines(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            result = run(core.mutateTaskMeta("task-missing", lambda current: None))
+            result = run(core.mutate_task_meta("task-missing", lambda current: None))
             self.assertIsNone(result)
-            self.assertIsNone(run(core.readTaskMeta("task-missing")))
+            self.assertIsNone(run(core.read_task_meta("task-missing")))
         finally:
             self.restore_home(root, previous)
 
@@ -397,10 +397,10 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                 "outputFile": str(home / "tasks" / "hc-1" / "output.log"),
                 "intervalMs": 1000,
             }
-            run(core.saveHealthCheckTask(record))
+            run(core.save_health_check_task(record))
             # Simulate the stop landing first.
             run(
-                core.mutateHealthCheckTask(
+                core.mutate_health_check_task(
                     "hc-1",
                     lambda current: {**current, "status": "stopped", "stoppedAt": "2026-06-10T00:00:01.000Z"},
                 )
@@ -412,8 +412,8 @@ class RecordMutationHelperTests(AgentCoreTestCase):
                     return latest
                 return {**(latest or record), "status": "active", "lastRunAt": "2026-06-10T00:00:02.000Z"}
 
-            run(core.mutateHealthCheckTask("hc-1", tick))
-            final = run(core.loadHealthCheckTask("hc-1"))
+            run(core.mutate_health_check_task("hc-1", tick))
+            final = run(core.load_health_check_task("hc-1"))
             self.assertEqual(final["status"], "stopped")
             self.assertNotIn("lastRunAt", final)
         finally:

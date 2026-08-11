@@ -17,12 +17,12 @@ def _context(session, workspace, daemon=None):
 
 class SendMessageToolTests(AgentCoreTestCase):
     def _sessions(self, workspace):
-        parent = core.createEmptySession(
+        parent = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="gpt-5.4",
             systemPrompt="parent", permissionMode="default", sessionId="sm-parent",
         )
         parent["metadata"]["taskIds"] = ["sm-task"]
-        child = core.createEmptySession(
+        child = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="gpt-5.4",
             systemPrompt="child", permissionMode="default", sessionId="sm-child",
         )
@@ -30,14 +30,14 @@ class SendMessageToolTests(AgentCoreTestCase):
         return parent, child
 
     def _seed_task(self, workspace, parent, child):
-        run(core.writeTaskMeta("sm-task", {
+        run(core.write_task_meta("sm-task", {
             "type": "subagent", "taskId": "sm-task", "id": "sm-task",
             "sessionId": child["id"], "session_id": child["id"],
             "parent_session_id": parent["id"], "status": "running",
             "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z",
             "updatedAt": "2026-01-01T00:00:00Z",
         }))
-        run(core.saveChildAgent({
+        run(core.save_child_agent({
             "agentId": "sm-agent", "sessionId": child["id"],
             "parentSessionId": parent["id"], "name": "Worker",
             "provider": "openai", "model": "gpt-5.4", "mode": "default",
@@ -192,7 +192,7 @@ class CommsInlineBudgetTests(AgentCoreTestCase):
             self.assertIn("message truncated: 10,000 bytes total", envelope)
             match = re.search(r"ReadToolArtifact artifact_id=([0-9a-f-]+) offset_bytes=(\d+)", envelope)
             self.assertIsNotNone(match, envelope)
-            artifact_path = core.toolArtifactDataPath("clamp-session", match.group(1), ".txt")
+            artifact_path = core.tool_artifact_data_path("clamp-session", match.group(1), ".txt")
             self.assertEqual(Path(artifact_path).read_text(encoding="utf-8"), "a" * 10_000)
 
             small = run(_render_injected_message({

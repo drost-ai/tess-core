@@ -69,7 +69,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         supervisor = None
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -77,7 +77,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
                 permissionMode="bypassPermissions",
                 sessionId="p01-session-failure",
             )
-            run(core.saveSession(session))
+            run(core.save_session(session))
             task_id = "p01-session-mutation-failure"
             reservation = core.createTaskLaunchReservation(
                 taskId=task_id,
@@ -88,8 +88,8 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
             spawned = False
 
             async def partial_reserve() -> None:
-                await core.writeTaskMeta(task_id, {"type": "background_command", **record})
-                await core.saveTaskRecord(record)
+                await core.write_task_meta(task_id, {"type": "background_command", **record})
+                await core.save_task_record(record)
                 raise RuntimeError("injected session mutation failure")
 
             def unexpected_spawn():
@@ -111,7 +111,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
             self.assertFalse(spawned)
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             reconciled = run(supervisor["inspectTask"](task_id))
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(reconciled["status"], "failed")
             self.assertEqual(reconciled["launchReservation"]["state"], "failed")
             self.assertEqual(persisted["metadata"]["taskIds"], [task_id])
@@ -125,7 +125,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
         supervisor = None
         identities: list[dict] = []
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -133,7 +133,7 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
                 permissionMode="bypassPermissions",
                 sessionId="p01-twenty-five-session",
             )
-            run(core.saveSession(session))
+            run(core.save_session(session))
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
 
             async def launch_all() -> list[dict]:
@@ -155,18 +155,18 @@ class P01LaunchConcurrencyTests(AgentCoreTestCase):
             task_ids = [start["taskId"] for start in starts]
             self.assertEqual(len(task_ids), 25)
             self.assertEqual(len(set(task_ids)), 25)
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(set(persisted["metadata"]["taskIds"]), set(task_ids))
             self.assertEqual(len(persisted["metadata"]["taskIds"]), 25)
             records = {
                 record["id"]: record
-                for record in run(core.listTaskRecords())
+                for record in run(core.list_task_records())
                 if record.get("sessionId") == session["id"]
             }
             self.assertEqual(set(records), set(task_ids))
             for task_id in task_ids:
                 self.assertEqual(records[task_id]["launchReservation"]["state"], "attached")
-                meta = run(core.readTaskMeta(task_id))
+                meta = run(core.read_task_meta(task_id))
                 self.assertEqual(meta["launchReservation"]["state"], "attached")
                 self.assertEqual(meta["processIdentity"], records[task_id]["processIdentity"])
                 identities.append(meta["processIdentity"])

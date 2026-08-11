@@ -9,7 +9,7 @@ class ContextCompactionIsolationTests(AgentCoreTestCase):
     def test_prompt_context_accepts_only_session_owned_working_context(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -18,7 +18,7 @@ class ContextCompactionIsolationTests(AgentCoreTestCase):
                 permissionMode="default",
                 sessionId="owned-compaction-context",
             )
-            compactions_dir = Path(core.getSessionCompactionsDir(session["id"]))
+            compactions_dir = Path(core.get_session_compactions_dir(session["id"]))
             compactions_dir.mkdir(parents=True)
             outside_path = home / "outside-working-context.json"
 
@@ -77,7 +77,7 @@ class ContextCompactionIsolationTests(AgentCoreTestCase):
                         "summary": str(summary_path),
                     }
                 }
-                return run(core.buildCompactionSystemPromptContext(candidate))
+                return run(core.build_compaction_system_prompt_context(candidate))
 
             owned = prompt_for(owned_path)
             self.assertIn("owned-context marker", owned)

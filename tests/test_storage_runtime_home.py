@@ -17,38 +17,38 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             nested = repository / "a" / "b"
             nested.mkdir(parents=True)
             (repository / ".git").mkdir()
-            self.assertEqual(core.findGitRoot(str(nested)), str(repository.resolve()))
+            self.assertEqual(core.find_git_root(str(nested)), str(repository.resolve()))
 
             worktree = root / "worktree"
             child = worktree / "src"
             child.mkdir(parents=True)
             (worktree / ".git").write_text("gitdir: ../repository/.git/worktrees/test\n")
-            self.assertEqual(core.findGitRoot(str(child)), str(worktree.resolve()))
-            self.assertIsNone(core.findGitRoot(str(root / "outside")))
+            self.assertEqual(core.find_git_root(str(child)), str(worktree.resolve()))
+            self.assertIsNone(core.find_git_root(str(root / "outside")))
 
     def test_scoped_runtime_home_restores_global_home(self):
         root, home, workspace, previous = self.temp_context()
         try:
             scoped_home = home.parent / "profile-a"
             configured_home = home.parent / "configured"
-            core.configureRuntimeHome(str(configured_home))
+            core.configure_runtime_home(str(configured_home))
 
-            self.assertEqual(str(configured_home), core.getStateRoot())
-            self.assertIsNone(core.getContextRuntimeHome())
+            self.assertEqual(str(configured_home), core.get_state_root())
+            self.assertIsNone(core.get_context_runtime_home())
 
-            with core.scopedRuntimeHome(str(scoped_home)) as active_home:
+            with core.scoped_runtime_home(str(scoped_home)) as active_home:
                 self.assertEqual(str(scoped_home), active_home)
-                self.assertEqual(str(scoped_home), core.getContextRuntimeHome())
-                self.assertEqual(str(scoped_home), core.getStateRoot())
+                self.assertEqual(str(scoped_home), core.get_context_runtime_home())
+                self.assertEqual(str(scoped_home), core.get_state_root())
                 self.assertEqual(
                     str(scoped_home / "sessions" / "profile-a.json"),
-                    core.sessionPath("profile-a"),
+                    core.session_path("profile-a"),
                 )
 
-            self.assertIsNone(core.getContextRuntimeHome())
-            self.assertEqual(str(configured_home), core.getStateRoot())
+            self.assertIsNone(core.get_context_runtime_home())
+            self.assertEqual(str(configured_home), core.get_state_root())
         finally:
-            core.resetConfiguredRuntimeHome()
+            core.reset_configured_runtime_home()
             self.restore_home(root, previous)
 
     def test_scoped_runtime_home_isolated_across_concurrent_tasks(self):
@@ -58,9 +58,9 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             profile_b_home = home.parent / "profile-b-core"
 
             async def persist_session(runtime_home, session_id):
-                async with core.scopedRuntimeHome(str(runtime_home)):
+                async with core.scoped_runtime_home(str(runtime_home)):
                     await asyncio.sleep(0)
-                    session = core.createEmptySession(
+                    session = core.create_empty_session(
                         {
                             "sessionId": session_id,
                             "cwd": str(workspace),
@@ -71,9 +71,9 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
                         }
                     )
                     session["messages"].append({"role": "user", "content": f"hello {session_id}"})
-                    await core.saveSession(session)
+                    await core.save_session(session)
                     await asyncio.sleep(0)
-                    await core.appendSessionTranscriptLogEntries(
+                    await core.append_session_transcript_log_entries(
                         session_id,
                         [
                             {
@@ -86,7 +86,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
                             }
                         ],
                     )
-                    return core.getStateRoot(), core.sessionPath(session_id), core.sessionTranscriptLogPath(session_id)
+                    return core.get_state_root(), core.session_path(session_id), core.session_transcript_log_path(session_id)
 
             async def main():
                 return await asyncio.gather(
@@ -104,7 +104,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             self.assertTrue((profile_b_home / "sessions" / "profile-b" / "full-transcript-with-tools.jsonl").exists())
             self.assertFalse((profile_a_home / "sessions" / "profile-b.json").exists())
             self.assertFalse((profile_b_home / "sessions" / "profile-a.json").exists())
-            self.assertEqual(str(home), core.getStateRoot())
+            self.assertEqual(str(home), core.get_state_root())
         finally:
             self.restore_home(root, previous)
 
@@ -114,16 +114,16 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             scoped_home = home.parent / "profile-config-core"
 
             async def load_config():
-                async with core.scopedRuntimeHome(str(scoped_home)):
+                async with core.scoped_runtime_home(str(scoped_home)):
                     config = await core.resolveConfig({"provider": "openai", "permissionMode": "default"}, str(workspace))
                     self.assertEqual(str(scoped_home), config["runtimeHome"])
-                    self.assertEqual(str(scoped_home), core.getStateRoot())
+                    self.assertEqual(str(scoped_home), core.get_state_root())
                 return config
 
             config = run(load_config())
 
             self.assertEqual(str(scoped_home), config["runtimeHome"])
-            self.assertEqual(str(home), core.getStateRoot())
+            self.assertEqual(str(home), core.get_state_root())
             self.assertTrue((scoped_home / "sessions").exists())
             self.assertFalse((home / "sessions").exists())
         finally:
@@ -133,7 +133,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             image_data = "aW1hZ2UtYnl0ZXM="
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 {
                     "sessionId": "vision-session",
                     "cwd": str(workspace),
@@ -159,8 +159,8 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             )
 
             async def persist():
-                await core.saveSession(session)
-                await core.appendSessionTranscriptLogEntries(
+                await core.save_session(session)
+                await core.append_session_transcript_log_entries(
                     session["id"],
                     [
                         {
@@ -173,13 +173,13 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
                         }
                     ],
                 )
-                return await core.loadSession(session["id"])
+                return await core.load_session(session["id"])
 
             loaded = run(persist())
 
             session_text = (
                 (home / "sessions" / "vision-session.json").read_text()
-                + Path(core.sessionMessagesPath("vision-session")).read_text()
+                + Path(core.session_messages_path("vision-session")).read_text()
             )
             transcript_text = (
                 home / "sessions" / "vision-session" / "full-transcript-with-tools.jsonl"
@@ -201,7 +201,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
             other_home = home.parent / "other-core"
 
             async def load_config():
-                async with core.scopedRuntimeHome(str(scoped_home)):
+                async with core.scoped_runtime_home(str(scoped_home)):
                     await core.resolveConfig(
                         {"provider": "openai", "permissionMode": "default", "runtimeHome": str(other_home)},
                         str(workspace),
@@ -209,7 +209,7 @@ class RuntimeHomeScopeTests(AgentCoreTestCase):
 
             with self.assertRaisesRegex(ValueError, "runtimeHome conflicts"):
                 run(load_config())
-            self.assertEqual(str(home), core.getStateRoot())
+            self.assertEqual(str(home), core.get_state_root())
         finally:
             self.restore_home(root, previous)
 

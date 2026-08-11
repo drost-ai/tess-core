@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.storage.persistence_metrics import registerPersistenceObserver
+from agent_core.storage.persistence_metrics import register_persistence_observer
 from agent_core_harness.executor import run_scenario
 from agent_core_harness.performance import (
     PERSISTENCE_BENCHMARK,
@@ -16,7 +16,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
     def test_persist_session_reports_actual_calls_writes_and_bytes(self):
         root, _home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -26,7 +26,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
             )
             session["messages"] = [{"role": "user", "content": "measure me"}]
             events: list[dict[str, object]] = []
-            unsubscribe = registerPersistenceObserver(events.append)
+            unsubscribe = register_persistence_observer(events.append)
             try:
                 run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
             finally:
@@ -44,15 +44,15 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
             transcript_event, body_event, write_event = io_events
             self.assertEqual(
                 transcript_event["byteCount"],
-                Path(core.sessionTranscriptLogPath(session["id"])).stat().st_size,
+                Path(core.session_transcript_log_path(session["id"])).stat().st_size,
             )
             self.assertEqual(
                 body_event["byteCount"],
-                Path(core.sessionMessagesPath(session["id"])).stat().st_size,
+                Path(core.session_messages_path(session["id"])).stat().st_size,
             )
             self.assertEqual(
                 write_event["byteCount"],
-                Path(core.sessionPath(session["id"])).stat().st_size,
+                Path(core.session_path(session["id"])).stat().st_size,
             )
         finally:
             self.restore_home(root, previous)
@@ -60,7 +60,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
     def test_skipped_persist_is_counted_without_storage_io(self):
         session = {"id": "package47a-skipped", "messages": []}
         events: list[dict[str, object]] = []
-        unsubscribe = registerPersistenceObserver(events.append)
+        unsubscribe = register_persistence_observer(events.append)
         try:
             self.assertIsNone(run(core.persistSession(session, {"sessionPersistence": True})))
         finally:
@@ -71,7 +71,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
     def test_observer_failure_cannot_break_persistence(self):
         root, _home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -84,14 +84,14 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
             def broken_observer(_event):
                 raise RuntimeError("observer defect")
 
-            unsubscribe = registerPersistenceObserver(broken_observer)
+            unsubscribe = register_persistence_observer(broken_observer)
             try:
                 run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
             finally:
                 unsubscribe()
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertEqual(persisted["id"], session["id"])
-            self.assertTrue(Path(core.sessionPath(session["id"])).exists())
+            self.assertTrue(Path(core.session_path(session["id"])).exists())
         finally:
             self.restore_home(root, previous)
 

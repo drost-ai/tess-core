@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from .._utils import maybe_await, merge_usage
-from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 from ..providers.prompt_cache_orchestration import (
     attachPreparedPromptCacheContext,
     commitProviderPromptCacheObservation,
@@ -14,7 +14,7 @@ from ..providers.prompt_cache_orchestration import (
 from ..providers.activity import ProviderActivityEmitter, emitProviderActivity
 from ..providers.timeouts import createTurnDeadlineContext
 from ..session.persistence import persistSession
-from ..context.token_accounting import recordActualTokenUsage
+from ..context.token_accounting import record_actual_token_usage
 from ..providers.usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
 from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled, _safe_emit
 from .context import isContextWindowFailure, prepareProviderRequest
@@ -221,7 +221,7 @@ def recordEmptyResponseUsage(args: dict[str, Any] | None = None, **kwargs: Any) 
     usage = response.get("usage") or {}
     merge_usage(values["totalUsage"], usage)
     mergeUsageIntoSession(session, usage)
-    recordActualTokenUsage(session, usage)
+    record_actual_token_usage(session, usage)
     _safe_emit(
         values["runtime"],
         "provider.empty_response",

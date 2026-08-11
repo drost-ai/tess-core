@@ -22,7 +22,7 @@ MESSAGES = 24
 
 def _seed_task(workspace: str) -> None:
     run(
-        core.writeTaskMeta(
+        core.write_task_meta(
             TASK_ID,
             {
                 "type": "subagent",
@@ -34,14 +34,14 @@ def _seed_task(workspace: str) -> None:
                 "status": "running",
                 "cwd": workspace,
                 "startedAt": "2026-01-01T00:00:00Z",
-                "outputFile": core.taskOutputPath(TASK_ID),
+                "outputFile": core.task_output_path(TASK_ID),
             },
         )
     )
 
 
 def _claimer(home: str, claimer_id: str, barrier_dir: str, results_dir: str) -> None:
-    core.configureRuntimeHome(home)
+    core.configure_runtime_home(home)
     Path(barrier_dir, f"ready-{claimer_id}").write_text("ready\n", encoding="utf-8")
     deadline = time.monotonic() + 20
     while not Path(barrier_dir, "go").exists():

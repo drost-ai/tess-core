@@ -4,7 +4,7 @@ import math
 from typing import Any
 
 
-def isChildAgentRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_child_agent_record(value: Any, candidate: dict[str, Any]) -> bool:
     return (
         _matches_id(value, "agentId", candidate.get("id"))
         and _has_strings(value, ("sessionId", "parentSessionId", "status"))
@@ -15,14 +15,14 @@ def isChildAgentRecord(value: Any, candidate: dict[str, Any]) -> bool:
     )
 
 
-def isTaskRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_task_record(value: Any, candidate: dict[str, Any]) -> bool:
     return _matches_id(value, "id", candidate.get("id")) and _has_strings(
         value,
         ("sessionId", "kind", "status", "updatedAt"),
     )
 
 
-def isMonitorRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_monitor_record(value: Any, candidate: dict[str, Any]) -> bool:
     return (
         _matches_id(value, "id", candidate.get("id"))
         and _has_strings(value, ("sessionId", "taskId", "status", "createdAt", "updatedAt"))
@@ -31,30 +31,30 @@ def isMonitorRecord(value: Any, candidate: dict[str, Any]) -> bool:
     )
 
 
-def isRemoteSessionRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_remote_session_record(value: Any, candidate: dict[str, Any]) -> bool:
     # Older Python records predate the full timestamp/session projection. Keep
     # those opaque records readable while still enforcing their identity and
     # state discriminator; newly created records carry the complete schema.
     return _matches_id(value, "id", candidate.get("id")) and _has_strings(value, ("status",))
 
 
-def isBridgeRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_bridge_record(value: Any, candidate: dict[str, Any]) -> bool:
     return _matches_id(value, "id", candidate.get("id")) and _has_strings(value, ("status",))
 
 
-def isHealthCheckTaskRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_health_check_task_record(value: Any, candidate: dict[str, Any]) -> bool:
     # Early-schema health records may lack the later projection-only
     # session/mode/timestamp fields. Identity plus a status discriminator is
     # the safe legacy admission floor; current writers emit the full shape.
     return _matches_id(value, "taskId", candidate.get("id")) and _has_strings(value, ("status",))
 
 
-def isDaemonStateRecord(value: Any, _candidate: dict[str, Any]) -> bool:
+def is_daemon_state_record(value: Any, _candidate: dict[str, Any]) -> bool:
     pid = value.get("pid") if isinstance(value, dict) else None
     return isinstance(pid, (int, float)) and not isinstance(pid, bool) and math.isfinite(pid)
 
 
-def isTaskMetaRecord(value: Any, candidate: dict[str, Any]) -> bool:
+def is_task_meta_record(value: Any, candidate: dict[str, Any]) -> bool:
     if not isinstance(value, dict):
         return False
     expected = candidate.get("id")
@@ -87,12 +87,12 @@ def _optional_string(value: Any) -> bool:
 
 
 __all__ = [
-    "isBridgeRecord",
-    "isChildAgentRecord",
-    "isDaemonStateRecord",
-    "isHealthCheckTaskRecord",
-    "isMonitorRecord",
-    "isRemoteSessionRecord",
-    "isTaskMetaRecord",
-    "isTaskRecord",
+    "is_bridge_record",
+    "is_child_agent_record",
+    "is_daemon_state_record",
+    "is_health_check_task_record",
+    "is_monitor_record",
+    "is_remote_session_record",
+    "is_task_meta_record",
+    "is_task_record",
 ]

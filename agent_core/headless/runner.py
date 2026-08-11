@@ -14,7 +14,7 @@ from ..config import resolveConfig
 from ..runtime.bootstrap import bootstrapRuntime
 from ..session.persistence import resolveSession
 from ..session.runtime import activeSessionPayload
-from ..storage import scopedRuntimeHome, writeBackSessionV1
+from ..storage import scoped_runtime_home, write_back_session_v1
 from .stream import JsonStreamSink
 
 
@@ -113,8 +113,8 @@ def headless_main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "session-write-back-v1":
         try:
-            with scopedRuntimeHome(args.runtime_home):
-                report = asyncio.run(writeBackSessionV1(args.session_id))
+            with scoped_runtime_home(args.runtime_home):
+                report = asyncio.run(write_back_session_v1(args.session_id))
             sys.stdout.write(json.dumps(report, ensure_ascii=False, separators=(",", ":")) + "\n")
             return 0
         except Exception as exc:

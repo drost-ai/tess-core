@@ -29,7 +29,7 @@ from ..runtime.secret_provider import resolveProviderConfigSecrets
 
 MAX_CODEX_ERROR_SAMPLES = 12
 
-async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def measure_request_input_tokens(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     config = args["config"]
     request = args["request"]
@@ -150,14 +150,14 @@ async def measureRequestInputTokens(args: dict[str, Any] | None = None, **kwargs
         **image_fields,
     }
 
-def recordPreflightTokenMeasurement(session: dict[str, Any], measurement: dict[str, Any]) -> None:
+def record_preflight_token_measurement(session: dict[str, Any], measurement: dict[str, Any]) -> None:
     tracking = session.setdefault("metadata", {}).setdefault("tokenTracking", {})
     tracking["lastPreflight"] = measurement
     if session.get("metadata", {}).get("compactionState"):
         session["metadata"]["compactionState"]["workingContextTokenMeasurement"] = measurement
         session["metadata"]["compactionState"]["workingContextTokenEstimate"] = measurement["inputTokens"]
 
-def recordActualTokenUsage(session: dict[str, Any], usage: dict[str, Any]) -> None:
+def record_actual_token_usage(session: dict[str, Any], usage: dict[str, Any]) -> None:
     tracking = session.setdefault("metadata", {}).setdefault("tokenTracking", {})
     if usage.get("input_tokens") is not None:
         tracking["lastActualInputTokens"] = usage.get("input_tokens")

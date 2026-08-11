@@ -7,10 +7,10 @@ from typing import Any, Callable
 from .._utils import maybe_await
 from ..runtime.identifiers import parseMonitorId
 from ..storage import (
-    listSessionMonitors,
-    loadMonitor,
-    saveMonitor,
-    withRecordTransaction,
+    list_session_monitors,
+    load_monitor,
+    save_monitor,
+    with_record_transaction,
 )
 
 
@@ -27,8 +27,8 @@ async def commitMonitorMutation(
     mutate: Callable[[dict[str, Any]], Any],
 ) -> dict[str, Any]:
     monitor_id = parseMonitorId(monitorId)
-    async with withRecordTransaction("monitor-record", monitor_id):
-        previous = await loadMonitor(monitor_id)
+    async with with_record_transaction("monitor-record", monitor_id):
+        previous = await load_monitor(monitor_id)
         if not previous:
             raise MonitorTransactionError(
                 "monitor.not_found", f"Monitor not found: {monitor_id}"
@@ -71,7 +71,7 @@ async def commitMonitorMutation(
         }
         if current.get("lastTransitionId") is None:
             current.pop("lastTransitionId", None)
-        await saveMonitor(current)
+        await save_monitor(current)
         return {
             "previous": previous,
             "current": current,
@@ -87,11 +87,11 @@ async def startMonitorOnce(
     *, sessionId: str, taskId: str, create: Callable[[], dict[str, Any]]
 ) -> dict[str, Any]:
     key = json.dumps([sessionId, taskId], separators=(",", ":"))
-    async with withRecordTransaction("monitor-start", key):
+    async with with_record_transaction("monitor-start", key):
         existing = next(
             (
                 monitor
-                for monitor in await listSessionMonitors(sessionId)
+                for monitor in await list_session_monitors(sessionId)
                 if monitor.get("taskId") == taskId
                 and monitor.get("status") in {"active", "muted"}
             ),
@@ -118,7 +118,7 @@ async def startMonitorOnce(
             "revision": revision,
             "lastTransitionId": transition_id,
         }
-        await saveMonitor(monitor)
+        await save_monitor(monitor)
         return {
             "monitor": monitor,
             "changed": True,

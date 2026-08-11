@@ -9,7 +9,7 @@ from ..authority.agent import AgentAuthorityError, assertValidAgentAuthority
 from .._utils import maybe_await
 from ..authority.permission_rules import loadPermissionRulesCached, matchPermissionRule
 from ..authority.shell_command_policy import classifyReadOnlyShellCommand, parseSingleShellCommand
-from ..storage import getProjectRoot, loadAutoMode
+from ..storage import get_project_root, load_auto_mode
 
 
 PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "dontAsk", "auto"}
@@ -190,7 +190,7 @@ async def _resolve_tool_permission(
             inlineSettings=context.get("config", {}).get("inlineSettings"),
         )
     call = {"toolName": tool_name, "command": command, "path": path, "url": url}
-    project_root = (authority or {}).get("permissionRuleProjectRoot") or getProjectRoot(context["session"]["cwd"])
+    project_root = (authority or {}).get("permissionRuleProjectRoot") or get_project_root(context["session"]["cwd"])
 
     def matched(effect: str) -> dict[str, Any] | None:
         return matchPermissionRule(rules, call, effects=(effect,), projectRoot=project_root)
@@ -246,7 +246,7 @@ async def _resolve_tool_permission(
     if not always_ask and _is_safe_read_only_shell_command(command):
         return {"decision": "allow", "source": "heuristic"}
     if mode in ("auto", "dontAsk"):
-        auto_mode = await loadAutoMode(context["session"]["cwd"])
+        auto_mode = await load_auto_mode(context["session"]["cwd"])
         if _matches_command_policy(command, auto_mode.get("deny") or []):
             return {"decision": "deny", "source": "auto-mode", "reason": "Command matched the deny policy for auto mode."}
         if not always_ask and _matches_command_policy(command, auto_mode.get("allow") or []):

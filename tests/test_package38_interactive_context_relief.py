@@ -99,12 +99,12 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
     def test_removed_interactive_target_does_not_block_provider_dispatch(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             system_prompt = "irreducible identity " * 12_000
             config["systemPrompt"] = system_prompt
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 providerProfileName="codex",
@@ -141,12 +141,12 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
     def test_live_shaped_first_request_is_not_projected_or_mutated(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             system_prompt = "identity guidance " * 7_500
             config["systemPrompt"] = system_prompt
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 providerProfileName="codex",
@@ -206,12 +206,12 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
     def test_parallel_batch_budget_artifactizes_individually_valid_results(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             config["tools"] = ["first", "second"]
             config["allowedTools"] = ["first", "second"]
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 providerProfileName="codex",
@@ -316,12 +316,12 @@ class Package38InteractiveContextReliefTests(AgentCoreTestCase):
     def test_batch_budget_resets_every_iteration_and_next_turn(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             config["tools"] = ["large"]
             config["allowedTools"] = ["large"]
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 providerProfileName="codex",

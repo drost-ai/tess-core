@@ -76,19 +76,19 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
     def test_every_record_path_constructor_rejects_traversal_before_join(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
+            core.configure_runtime_home(str(home))
             constructors = (
-                core.taskDir,
-                core.taskOutputPath,
-                core.taskRecordPath,
-                core.monitorPath,
-                core.childAgentPath,
-                core.remoteSessionPath,
-                core.bridgePath,
-                core.bridgeInboxPath,
-                core.bridgeEventsPath,
-                core.sessionPath,
-                core.sessionArchiveDir,
+                core.task_dir,
+                core.task_output_path,
+                core.task_record_path,
+                core.monitor_path,
+                core.child_agent_path,
+                core.remote_session_path,
+                core.bridge_path,
+                core.bridge_inbox_path,
+                core.bridge_events_path,
+                core.session_path,
+                core.session_archive_dir,
             )
             for constructor in constructors:
                 for value in ("../../outside", "nested/child"):
@@ -101,11 +101,11 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
     def test_record_scans_ignore_hostile_filenames(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             now = now_iso()
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": "safe-task",
                         "sessionId": "session-1",
@@ -123,15 +123,15 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
             )
             records = home / "task-records"
             (records / "hostile.name.json").write_text("not-json", encoding="utf-8")
-            self.assertEqual([record["id"] for record in run(core.listTaskRecords())], ["safe-task"])
+            self.assertEqual([record["id"] for record in run(core.list_task_records())], ["safe-task"])
         finally:
             self.restore_home(root, previous)
 
     def test_task_operations_require_session_ownership_reference_and_family(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             now = now_iso()
 
             def record(task_id: str, session_id: str, kind: str):
@@ -149,9 +149,9 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
                     "restorable": True,
                 }
 
-            run(core.saveTaskRecord(record("task-owned", "session-owner", "background_command")))
+            run(core.save_task_record(record("task-owned", "session-owner", "background_command")))
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     "task-owned",
                     {"type": "background_command", "taskId": "task-owned", "sessionId": "session-owner", "status": "running"},
                 )
@@ -173,8 +173,8 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
                 "task-owned",
             )
 
-            run(core.saveTaskRecord(record("task-remote", "session-owner", "remote")))
-            run(core.writeTaskMeta("task-remote", {"type": "remote", "taskId": "task-remote", "sessionId": "session-owner"}))
+            run(core.save_task_record(record("task-remote", "session-owner", "remote")))
+            run(core.write_task_meta("task-remote", {"type": "remote", "taskId": "task-remote", "sessionId": "session-owner"}))
             owner["metadata"]["taskIds"].append("task-remote")
             with self.assertRaises(core.TaskOwnershipError) as wrong_kind:
                 run(core.requireModelOwnedTask({"session": owner}, "task-remote", "output"))
@@ -185,7 +185,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
     def test_monitor_requires_ownership_and_active_reference(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
+            core.configure_runtime_home(str(home))
             monitor = {
                 "id": "monitor-owned",
                 "sessionId": "session-owner",
@@ -197,7 +197,7 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
                 "checkIntervalMs": 1000,
                 "heartbeatIntervalMs": 2000,
             }
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             owner = {"id": "session-owner", "metadata": {"monitorIds": []}}
             other = {"id": "session-other", "metadata": {"monitorIds": ["monitor-owned"]}}
             with self.assertRaises(core.TaskOwnershipError) as foreign:

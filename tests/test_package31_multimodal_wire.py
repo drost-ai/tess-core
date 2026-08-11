@@ -64,7 +64,7 @@ def _config(cwd: str) -> dict:
 
 
 def _session(config: dict) -> dict:
-    return core.createEmptySession(
+    return core.create_empty_session(
         cwd=config["cwd"],
         provider="openai",
         providerProfileName="wire-image",

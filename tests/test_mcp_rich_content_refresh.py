@@ -78,7 +78,7 @@ class BootstrapRefreshContractTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -133,7 +133,7 @@ class McpRefreshLastHopTests(AgentCoreTestCase):
     def test_turn_adopts_refreshed_tool_registry(self):
         with tempfile.TemporaryDirectory(prefix="agent-core-mcp-refresh-") as cwd:
             config = self._config(cwd)
-            session = core.createEmptySession(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=cwd, provider="anthropic", model="claude-sonnet-4-6", effort="medium", systemPrompt="test", permissionMode="bypassPermissions")
 
             async def stale_handler(_input, _context):
                 return {"content": "STALE", "isError": False}

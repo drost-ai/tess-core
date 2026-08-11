@@ -11,7 +11,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             calls = []
 
             async def call_tool(*args):
@@ -41,7 +41,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["mcpConfig"] = [{"name": "edge", "transport": "http", "commandOrUrl": "https://mcp.example.test"}]
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             tools = {tool.name: tool for tool in core.createBuiltinTools()}
             calls = []
 
@@ -77,7 +77,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             calls = []
 
             class FlipSignal:
@@ -125,13 +125,13 @@ class ToolControlFlowTests(AgentCoreTestCase):
         original_exec_rg = tools_module._exec_ripgrep_allowing_no_matches
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             tools = {tool.name: tool for tool in core.createBuiltinTools()}
             events = []
             context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
 
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             session["metadata"]["monitorIds"] = [monitor["id"]]
             stopped = json.loads(run(tools["TaskMonitorStop"].handler({"monitor_id": monitor["id"]}, context))["content"])
             self.assertEqual(
@@ -148,7 +148,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
 
             async def start_health(payload):
                 health_calls.append(("start", payload))
-                await core.saveTaskRecord(
+                await core.save_task_record(
                     {
                         "id": "health-1",
                         "sessionId": session["id"],
@@ -161,7 +161,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                         "startedAt": "2026-01-01T00:00:00Z",
                     }
                 )
-                await core.writeTaskMeta(
+                await core.write_task_meta(
                     "health-1",
                     {
                         "type": "health_check",

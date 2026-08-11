@@ -2,29 +2,29 @@ from __future__ import annotations
 
 from ...providers.token_budget import resolveCompactionPolicy
 from .compaction import (
-    applyCompactPrefix,
-    applyPartialCompaction,
-    choosePreservedRawStart,
-    compactHistoricalTail,
+    apply_compact_prefix,
+    apply_partial_compaction,
+    choose_preserved_raw_start,
+    compact_historical_tail,
 )
-from .tokens import classifyContextPressure
-from .parsing import emptyReliefSummary
-from .rendering import normalizeReinjectionLines
+from .tokens import classify_context_pressure
+from .parsing import empty_relief_summary
+from .rendering import normalize_reinjection_lines
 from .shared import (
     relief_knob,
     LOW_VALUE_TOOL_NAMES,
 )
-from .tokens import estimateMessagesTokens
+from .tokens import estimate_messages_tokens
 from typing import Any
 
 
-def applyLightweightContextRelief(messages: list[dict[str, Any]], session: dict[str, Any]) -> dict[str, Any]:
+def apply_lightweight_context_relief(messages: list[dict[str, Any]], session: dict[str, Any]) -> dict[str, Any]:
     if len(messages) <= relief_knob("context.relief_preserve_min_messages"):
-        return {"messages": messages, "summary": emptyReliefSummary()}
-    preserved_raw_start_index = choosePreservedRawStart(messages)
+        return {"messages": messages, "summary": empty_relief_summary()}
+    preserved_raw_start_index = choose_preserved_raw_start(messages)
     if preserved_raw_start_index <= 0:
-        return {"messages": messages, "summary": emptyReliefSummary()}
-    compacted_prefix = compactHistoricalTail(
+        return {"messages": messages, "summary": empty_relief_summary()}
+    compacted_prefix = compact_historical_tail(
         messages[:preserved_raw_start_index],
         {
             "messageTextCharLimit": relief_knob("context.relief_message_text_chars"),
@@ -34,13 +34,13 @@ def applyLightweightContextRelief(messages: list[dict[str, Any]], session: dict[
         },
     )
     next_messages = [*compacted_prefix, *messages[preserved_raw_start_index:]]
-    tokens_saved_estimate = max(0, estimateMessagesTokens(messages) - estimateMessagesTokens(next_messages))
+    tokens_saved_estimate = max(0, estimate_messages_tokens(messages) - estimate_messages_tokens(next_messages))
     dropped_message_count = preserved_raw_start_index - len(compacted_prefix)
     applied = tokens_saved_estimate > 0 or dropped_message_count > 0
     return {
         "messages": next_messages,
         "summary": {
-            **emptyReliefSummary(),
+            **empty_relief_summary(),
             "applied": applied,
             "selectedMode": "microcompact" if applied else "none",
             "appliedModes": ["microcompact"] if applied else [],
@@ -65,19 +65,19 @@ def applyLightweightContextRelief(messages: list[dict[str, Any]], session: dict[
     }
 
 
-def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def apply_context_relief_modes(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     messages = args["messages"]
     session = args["session"]
     retrieved_memory = args.get("retrievedMemory") or {"records": [], "tokenEstimate": 0}
     reactive_attempt = max(0, int(args.get("reactiveAttempt") if args.get("reactiveAttempt") is not None else (1 if args.get("aggressive") else 0)))
-    pressure = classifyContextPressure({"session": session, "messages": messages})
+    pressure = classify_context_pressure({"session": session, "messages": messages})
     token_limit = resolveCompactionPolicy(
         (args.get("config") or {}).get("providerProfile") or {}
     ).get("compactionThresholdTokens")
     target_limit = token_limit
-    pressure_level = classifyContextReliefPressure(pressure, reactive_attempt, tokenLimit=token_limit)
-    modes = chooseContextReliefModes(
+    pressure_level = classify_context_relief_pressure(pressure, reactive_attempt, tokenLimit=token_limit)
+    modes = choose_context_relief_modes(
         {
             "session": session,
             "config": args.get("config") or {},
@@ -99,7 +99,7 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
     preserved_raw_start_index = 0
 
     for mode in modes:
-        result = applyContextReliefMode(
+        result = apply_context_relief_mode(
             {
                 "mode": mode,
                 "session": session,
@@ -119,8 +119,8 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
         total_compacted += int(step.get("compactedMessageCount") or 0)
         total_dropped += int(step.get("droppedMessageCount") or 0)
         preserved_raw_start_index = max(preserved_raw_start_index, int(result.get("preservedRawStartIndex") or 0))
-        pressure = classifyContextPressure({"session": session, "messages": messages})
-        if isContextPressureRelieved(
+        pressure = classify_context_pressure({"session": session, "messages": messages})
+        if is_context_pressure_relieved(
             pressure,
             pressure_level,
             reactive_attempt,
@@ -128,7 +128,7 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
         ):
             break
 
-    normalized_reinjection_lines = normalizeReinjectionLines(reinjection_lines)
+    normalized_reinjection_lines = normalize_reinjection_lines(reinjection_lines)
     reinjection_summary = " | ".join(normalized_reinjection_lines[:4]) if normalized_reinjection_lines else None
     summary = {
         "applied": bool(steps),
@@ -149,7 +149,7 @@ def applyContextReliefModes(args: dict[str, Any] | None = None, **kwargs: Any) -
     return {"messages": messages, "summary": summary}
 
 
-def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
+def choose_context_relief_modes(args: dict[str, Any]) -> list[str]:
     modes: list[str] = []
     session = args["session"]
     pressure = args["pressure"]
@@ -171,7 +171,7 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
         or int(args.get("reactiveAttempt") or 0) >= 1
         or high_pressure
     ):
-        modes.append("api_microcompact" if supportsApiMicrocompact(args.get("config") or {}) else "microcompact")
+        modes.append("api_microcompact" if supports_api_microcompact(args.get("config") or {}) else "microcompact")
 
     if (
         scheduled
@@ -186,11 +186,11 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(modes))
 
 
-def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
+def apply_context_relief_mode(args: dict[str, Any]) -> dict[str, Any]:
     mode = args["mode"]
     reactive_attempt = int(args.get("reactiveAttempt") or 0)
     if mode == "microcompact":
-        result = applyCompactPrefix(
+        result = apply_compact_prefix(
             args["messages"],
             {
                 "preserveMinMessages": relief_knob("context.relief_preserve_min_messages"),
@@ -215,7 +215,7 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
             "preservedRawStartIndex": result["summary"]["preservedRawStartIndex"],
         }
     if mode == "api_microcompact":
-        result = applyCompactPrefix(
+        result = apply_compact_prefix(
             args["messages"],
             {
                 "preserveMinMessages": max(6, relief_knob("context.relief_preserve_min_messages") - 2 - (reactive_attempt * 2)),
@@ -240,7 +240,7 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
             "preservedRawStartIndex": result["summary"]["preservedRawStartIndex"],
         }
     if mode == "partial_compaction":
-        result = applyPartialCompaction(args["messages"], reactive_attempt)
+        result = apply_partial_compaction(args["messages"], reactive_attempt)
         return {
             "applied": result["applied"],
             "messages": result["messages"],
@@ -265,11 +265,11 @@ def applyContextReliefMode(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def supportsApiMicrocompact(config: dict[str, Any]) -> bool:
+def supports_api_microcompact(config: dict[str, Any]) -> bool:
     return config.get("provider") in {"openai", "anthropic"}
 
 
-def classifyContextReliefPressure(pressure: dict[str, Any], reactiveAttempt: int, tokenLimit: int | None = None) -> str:
+def classify_context_relief_pressure(pressure: dict[str, Any], reactiveAttempt: int, tokenLimit: int | None = None) -> str:
     if (
         reactiveAttempt >= 2
         or pressure["totalTokenEstimate"] >= _token_limit_or_default(tokenLimit)
@@ -280,7 +280,7 @@ def classifyContextReliefPressure(pressure: dict[str, Any], reactiveAttempt: int
     return "low"
 
 
-def isContextPressureRelieved(
+def is_context_pressure_relieved(
     pressure: dict[str, Any],
     originalPressureLevel: str,
     reactiveAttempt: int,
@@ -290,7 +290,7 @@ def isContextPressureRelieved(
         return False
     if pressure.get("totalTokenEstimate", 0) <= _token_limit_or_default(tokenLimit):
         return True
-    current = classifyContextReliefPressure(pressure, 0, tokenLimit=tokenLimit)
+    current = classify_context_relief_pressure(pressure, 0, tokenLimit=tokenLimit)
     if originalPressureLevel == "critical":
         return current in {"high", "low"}
     if originalPressureLevel == "high":

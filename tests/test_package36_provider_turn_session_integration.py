@@ -29,7 +29,7 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
             config["providerProfile"]["compactionTargetTokens"] = 190_000
             config["providerProfile"]["contextReliefThresholdTokens"] = 200_000
             config["providerProfile"]["contextReliefTargetTokens"] = 190_000
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="openai",
                 providerProfileName="codex",

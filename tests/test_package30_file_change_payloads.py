@@ -25,7 +25,7 @@ class Package30FileChangePayloadTests(AgentCoreTestCase):
                 str(workspace),
             )
         )
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace),
             provider=config["provider"],
             providerProfileName=config["providerProfileName"],
@@ -293,7 +293,7 @@ class Package30FileChangePayloadTests(AgentCoreTestCase):
             request_payload = json.loads(request_result)
             self.assertEqual((request_payload["addedLines"], request_payload["removedLines"]), (18, 12))
 
-            archived = [json.loads(line) for line in Path(core.sessionTranscriptLogPath(session["id"])).read_text().splitlines()]
+            archived = [json.loads(line) for line in Path(core.session_transcript_log_path(session["id"])).read_text().splitlines()]
             archived_result = next(
                 block["content"]
                 for entry in archived

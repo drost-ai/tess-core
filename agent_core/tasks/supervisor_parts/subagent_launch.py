@@ -4,12 +4,12 @@ import os
 import sys
 import uuid
 from ...storage import (
-    listTaskRecords,
-    loadChildAgent,
-    loadSession,
-    readTaskMeta,
-    saveChildAgent,
-    taskOutputPath,
+    list_task_records,
+    load_child_agent,
+    load_session,
+    read_task_meta,
+    save_child_agent,
+    task_output_path,
 )
 from .utils import _require_string
 from ..._utils import maybe_await
@@ -41,7 +41,7 @@ def _create_subagent_task_starter(
         agent_id = _require_string(task_args.get("agentId") or task_args.get("agent_id"), "agentId")
         task_cwd = os.path.abspath(str(task_args.get("cwd") or cwd))
         title = task_args.get("label") or task_args.get("title") or agent_id
-        child_session = await loadSession(session_id)
+        child_session = await load_session(session_id)
         if not child_session:
             raise RuntimeError(f"Subagent session not found: {session_id}")
         child_metadata = child_session.setdefault("metadata", {})
@@ -50,7 +50,7 @@ def _create_subagent_task_starter(
             or task_args.get("runtime_contract")
             or child_metadata.get("subagentRuntimeContract")
         )
-        records = await listTaskRecords()
+        records = await list_task_records()
         capacity = check_subagent_capacity(
             resolve_subagent_concurrency_policy(),
             records,
@@ -76,7 +76,7 @@ def _create_subagent_task_starter(
                 ))
             return result
         task_id = str(uuid.uuid4())
-        output_file = taskOutputPath(task_id)
+        output_file = task_output_path(task_id)
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         reservation = createTaskLaunchReservation(
             taskId=task_id,
@@ -163,9 +163,9 @@ def _create_subagent_task_starter(
             return record_session
 
         async def attach_child(identity: dict[str, Any]) -> None:
-            child = await loadChildAgent(agent_id)
+            child = await load_child_agent(agent_id)
             if child:
-                await saveChildAgent({**child, "pid": identity["pid"], "processIdentity": identity})
+                await save_child_agent({**child, "pid": identity["pid"], "processIdentity": identity})
 
         env = _worker_env(
             {
@@ -191,7 +191,7 @@ def _create_subagent_task_starter(
             ],
             attach_extra=attach_child,
         )
-        current = await readTaskMeta(task_id) or {}
+        current = await read_task_meta(task_id) or {}
         await append_task_event(
             task_id,
             {
@@ -214,7 +214,7 @@ async def _live_children_roster(records: list[dict[str, Any]]) -> list[dict[str,
     roster: list[dict[str, Any]] = []
     for record in _active_subagent_records(records):
         agent_id = record.get("sourceId")
-        child = await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+        child = await load_child_agent(agent_id) if isinstance(agent_id, str) and agent_id else None
         roster.append({
             "agentId": agent_id,
             "name": (child or {}).get("name") or record.get("title"),

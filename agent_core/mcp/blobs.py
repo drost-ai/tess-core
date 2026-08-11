@@ -14,13 +14,13 @@ import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ..storage import getStateRoot
+from ..storage import get_state_root
 from .protocol import _sanitize_name
 from .transport_shared import contextlib_suppress
 
 
 async def _save_blob_content(server: str, uri: str, data: str) -> str:
-    target_dir = Path(getStateRoot()) / "mcp-blobs" / _sanitize_name(server)
+    target_dir = Path(get_state_root()) / "mcp-blobs" / _sanitize_name(server)
     target_dir.mkdir(parents=True, exist_ok=True)
     raw = base64.b64decode(data)
     target = target_dir / _blob_file_name(uri, raw)

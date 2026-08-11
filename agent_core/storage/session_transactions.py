@@ -7,17 +7,17 @@ from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitiz
 from ..runtime.identifiers import parseSessionId
 from .message_history import (
     SessionMessageList,
-    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+    set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
-from .json_io import _storage_lock_timeout_ms, readJsonFileTolerant, withRecordTransaction
-from .paths import sessionPath
+from .json_io import _storage_lock_timeout_ms, read_json_file_tolerant, with_record_transaction
+from .paths import session_path
 from .session_schema_v2 import (
-    commitSessionV2,
-    commitSessionV2Delta,
-    hydratePersistedSession,
-    isSessionHeadV2,
-    normalizeSessionRevision,
-    sessionLiveHeadFromV2,
+    commit_session_v2,
+    commit_session_v2_delta,
+    hydrate_persisted_session,
+    is_session_head_v2,
+    normalize_session_revision,
+    session_live_head_from_v2,
 )
 
 
@@ -25,7 +25,7 @@ class SessionRecordNotFoundError(RuntimeError):
     pass
 
 
-async def mutateSessionRecordTransaction(
+async def mutate_session_record_transaction(
     sessionId: str,
     mutation: Callable[[dict[str, Any] | None], Any],
     options: dict[str, Any] | None = None,
@@ -41,9 +41,9 @@ async def mutateSessionRecordTransaction(
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
     require_existing = bool(settings.get("requireExisting"))
 
-    async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
-        raw = await readJsonFileTolerant(sessionPath(session_id), None)
-        hydrated = await hydratePersistedSession(session_id, raw)
+    async with with_record_transaction("session", session_id, timeoutMs=timeout_ms):
+        raw = await read_json_file_tolerant(session_path(session_id), None)
+        hydrated = await hydrate_persisted_session(session_id, raw)
         latest = hydrated["record"]
         if latest is None and require_existing:
             raise SessionRecordNotFoundError(f"Session not found: {session_id}")
@@ -51,7 +51,7 @@ async def mutateSessionRecordTransaction(
             raise ValueError(
                 f"Session transaction record identity mismatch ({session_id} != {latest.get('id')})."
             )
-        current_revision = normalizeSessionRevision((latest or {}).get("revision"))
+        current_revision = normalize_session_revision((latest or {}).get("revision"))
         result = await _await_mutation(mutation(copy.deepcopy(latest)))
         if not isinstance(result, dict) or "session" not in result or "changed" not in result:
             raise TypeError("Session mutation must return {'session': ..., 'changed': bool}.")
@@ -66,8 +66,8 @@ async def mutateSessionRecordTransaction(
         if not changed:
             if latest is None:
                 raise ValueError(f"Session transaction cannot no-op a missing record: {session_id}.")
-            if not isSessionHeadV2(raw):
-                commit = await commitSessionV2(
+            if not is_session_head_v2(raw):
+                commit = await commit_session_v2(
                     session_id,
                     raw,
                     latest,
@@ -78,13 +78,13 @@ async def mutateSessionRecordTransaction(
                 session = commit["session"]
                 return {
                     "changed": True,
-                    "revision": normalizeSessionRevision(session.get("revision")),
+                    "revision": normalize_session_revision(session.get("revision")),
                     "session": session,
                     "bodyCommitId": commit["bodyCommitId"],
                 }
             return {
                 "changed": hydrated["changed"],
-                "revision": normalizeSessionRevision(latest.get("revision")),
+                "revision": normalize_session_revision(latest.get("revision")),
                 "session": latest,
                 "bodyCommitId": raw.get("bodyRef", {}).get("commitId"),
             }
@@ -94,7 +94,7 @@ async def mutateSessionRecordTransaction(
         committed = copy.deepcopy(next_session)
         committed["revision"] = current_revision + 1
         safe = _sanitize_media_for_persistence(committed)
-        commit = await commitSessionV2(
+        commit = await commit_session_v2(
             session_id,
             raw,
             latest,
@@ -105,13 +105,13 @@ async def mutateSessionRecordTransaction(
         session = commit["session"]
         return {
             "changed": True,
-            "revision": normalizeSessionRevision(session.get("revision")),
+            "revision": normalize_session_revision(session.get("revision")),
             "session": session,
             "bodyCommitId": commit["bodyCommitId"],
         }
 
 
-async def mutateSessionHeadDeltaTransaction(
+async def mutate_session_head_delta_transaction(
     sessionId: str,
     messages: list[Any],
     mutation: Callable[[dict[str, Any]], Any],
@@ -133,11 +133,11 @@ async def mutateSessionHeadDeltaTransaction(
     session_id = parseSessionId(sessionId)
     settings = {**(options or {}), **kwargs}
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
-    async with withRecordTransaction("session", session_id, timeoutMs=timeout_ms):
-        raw = await readJsonFileTolerant(sessionPath(session_id), None)
-        if not isSessionHeadV2(raw):
+    async with with_record_transaction("session", session_id, timeoutMs=timeout_ms):
+        raw = await read_json_file_tolerant(session_path(session_id), None)
+        if not is_session_head_v2(raw):
             return None
-        current_revision = normalizeSessionRevision(raw.get("revision"))
+        current_revision = normalize_session_revision(raw.get("revision"))
         body_ref = raw.get("bodyRef") if isinstance(raw.get("bodyRef"), dict) else {}
         raw_commit_id = body_ref.get("commitId")
         if (
@@ -147,7 +147,7 @@ async def mutateSessionHeadDeltaTransaction(
             or checkpoint.bodyCommitId is None
         ):
             return None
-        latest_head = sessionLiveHeadFromV2(session_id, raw)
+        latest_head = session_live_head_from_v2(session_id, raw)
         result = await _await_mutation(mutation(copy.deepcopy(latest_head)))
         if not isinstance(result, dict) or "session" not in result or "changed" not in result:
             raise TypeError("Session head mutation must return {'session': ..., 'changed': bool}.")
@@ -175,7 +175,7 @@ async def mutateSessionHeadDeltaTransaction(
             }
         committed_head = copy.deepcopy(next_head)
         committed_head["revision"] = current_revision + 1
-        committed = await commitSessionV2Delta(
+        committed = await commit_session_v2_delta(
             session_id,
             raw,
             committed_head,
@@ -183,7 +183,7 @@ async def mutateSessionHeadDeltaTransaction(
             faultInjector=settings.get("faultInjector"),
         )
         safe_head = committed["head"]
-        revision = normalizeSessionRevision(safe_head.get("revision"))
+        revision = normalize_session_revision(safe_head.get("revision"))
         body_commit_id = committed["bodyCommitId"]
         # Stamp the count the commit actually covered, not the live list's
         # current length: an append racing the commit stays unpersisted and

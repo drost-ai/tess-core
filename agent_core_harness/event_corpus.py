@@ -137,8 +137,8 @@ async def _capture_agent_loop_scenario(kind: str) -> list[dict[str, Any]]:
         workspace = root / "workspace"
         home.mkdir()
         workspace.mkdir()
-        async with core.scopedRuntimeHome(str(home)):
-            session = core.createEmptySession(
+        async with core.scoped_runtime_home(str(home)):
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",

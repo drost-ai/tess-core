@@ -21,7 +21,7 @@ async def verifyFaultSessionIntegrity(
         if cell["providerFamily"].startswith("anthropic")
         else "openai"
     )
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd=str(root),
         provider=provider,
         model="claude-sonnet-4-6" if provider == "anthropic" else "gpt-5.4",
@@ -81,7 +81,7 @@ async def verifyFaultSessionIntegrity(
         raised = exc
     _assert_settlement(cell, actual, result, raised)
 
-    restored = await core.loadSession(session["id"])
+    restored = await core.load_session(session["id"])
     if not isinstance(restored, dict):
         raise RuntimeError("Fault-matrix loop session did not reload")
     repair = core.repairSessionTranscript(restored)
@@ -133,7 +133,7 @@ def _loop_config(root: Path) -> dict[str, Any]:
     }
     return {
         "cwd": str(root),
-        "runtimeHome": core.getStateRoot(),
+        "runtimeHome": core.get_state_root(),
         "allowedRoots": [str(root)],
         "agents": {},
         "provider": "openai",
@@ -194,7 +194,7 @@ def _contract_event_sequence(
 
 
 def _archive_kinds(session_id: str) -> list[str]:
-    path = Path(core.sessionTranscriptLogPath(session_id))
+    path = Path(core.session_transcript_log_path(session_id))
     if not path.exists():
         return []
     return [

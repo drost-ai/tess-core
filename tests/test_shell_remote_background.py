@@ -10,9 +10,9 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            run(core.saveTaskRecord({"id": "task-daemon-fallback", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Daemon fallback task", "updatedAt": "2026-01-01T00:00:00Z"}))
-            run(core.saveChildAgent({"agentId": "agent-daemon-fallback", "sessionId": "child-daemon-session", "parentSessionId": session["id"], "name": "Daemon worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "running", "taskId": "task-daemon-fallback", "startedAt": "2026-01-01T00:00:00Z"}))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            run(core.save_task_record({"id": "task-daemon-fallback", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Daemon fallback task", "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.save_child_agent({"agentId": "agent-daemon-fallback", "sessionId": "child-daemon-session", "parentSessionId": session["id"], "name": "Daemon worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "running", "taskId": "task-daemon-fallback", "startedAt": "2026-01-01T00:00:00Z"}))
             session["metadata"]["childAgentIds"] = ["agent-daemon-fallback"]
             calls = []
 
@@ -44,7 +44,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["messages"] = [
                 {"role": "user", "content": "render the transcript"},
                 {"role": "assistant", "content": [{"type": "tool_use", "id": "tool-1", "name": "Bash", "input": {"command": "pytest"}}]},
@@ -66,18 +66,18 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             (workspace / "state.json").write_text("{}", encoding="utf-8")
             (workspace / "working-context.json").write_text("{}", encoding="utf-8")
             (workspace / "checkpoint.json").write_text("{}", encoding="utf-8")
-            run(core.saveSession(session))
-            run(core.saveCompactionManifest({"sessionId": session["id"], "latestGeneration": 2, "status": "ready"}))
-            run(core.saveCompactionCheckpoint({"sessionId": session["id"], "generation": 2, "state": "ok"}))
+            run(core.save_session(session))
+            run(core.save_compaction_manifest({"sessionId": session["id"], "latestGeneration": 2, "status": "ready"}))
+            run(core.save_compaction_checkpoint({"sessionId": session["id"], "generation": 2, "state": "ok"}))
             remote = run(core.createRemoteSession({"session": session, "description": "Shell remote", "channelServers": ["local"]}))
             bridge_runtime = run(core.createBridgeRuntime({"session": session, "remoteSessionId": remote["id"], "name": "shell-bridge", "startPolling": False}))
             bridge = bridge_runtime["bridge"]
             session["metadata"]["remoteSessionId"] = remote["id"]
             session["metadata"]["bridgeId"] = bridge["id"]
-            run(core.saveSession(session))
-            run(core.saveTaskRecord({"id": "task-collab-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Collaboration task", "updatedAt": "2026-01-01T00:00:00Z"}))
-            run(core.saveMonitor(core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-collab-shell", "goal": "Watch shell collaboration"})))
-            run(core.saveChildAgent({"agentId": "agent-collab-shell", "sessionId": "child-collab-shell", "parentSessionId": session["id"], "name": "Collab worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "awaiting_input", "startedAt": "2026-01-01T00:00:00Z"}))
+            run(core.save_session(session))
+            run(core.save_task_record({"id": "task-collab-shell", "sessionId": session["id"], "kind": "background_command", "status": "running", "title": "Collaboration task", "updatedAt": "2026-01-01T00:00:00Z"}))
+            run(core.save_monitor(core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-collab-shell", "goal": "Watch shell collaboration"})))
+            run(core.save_child_agent({"agentId": "agent-collab-shell", "sessionId": "child-collab-shell", "parentSessionId": session["id"], "name": "Collab worker", "provider": "openai", "model": "gpt-5.4", "mode": "auto", "runInBackground": True, "status": "awaiting_input", "startedAt": "2026-01-01T00:00:00Z"}))
             session["metadata"]["childAgentIds"] = ["agent-collab-shell"]
 
             transcript = run(core.handleSlashCommand({"command": "/transcript", "session": session, "config": config, "hooks": {}}))
@@ -110,8 +110,8 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             self.assertIn("compaction    yes", compact_debug["message"])
             closed = run(core.handleSlashCommand({"command": f"/remote close {remote['id'][:8]}", "session": session, "config": config, "hooks": {"persist": lambda: None}}))
             self.assertIn("Closed", closed["message"])
-            self.assertEqual(run(core.loadBridge(bridge["id"]))["status"], "closed")
-            self.assertEqual(run(core.loadRemoteSession(remote["id"]))["bridgeStatus"], "closed")
+            self.assertEqual(run(core.load_bridge(bridge["id"]))["status"], "closed")
+            self.assertEqual(run(core.load_remote_session(remote["id"]))["bridgeStatus"], "closed")
             run(bridge_runtime["close"]())
         finally:
             self.restore_home(root, previous)
@@ -120,11 +120,11 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            target = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
-            run(core.saveSession(target))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            target = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            run(core.save_session(target))
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": "task-bg-shell",
                         "sourceId": "task-source",
@@ -144,7 +144,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.saveChildAgent(
+                core.save_child_agent(
                     {
                         "agentId": "agent-bg-shell",
                         "sessionId": target["id"],
@@ -162,7 +162,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
             )
             session["metadata"]["childAgentIds"] = ["agent-bg-shell"]
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-bg-shell", "goal": "Watch shell background"})
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             remote = run(core.createRemoteSession({"session": session, "description": "Remote Shell", "channelServers": ["local"]}))
             remote = run(
                 core.updateRemoteSession(
@@ -222,9 +222,9 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["agents"] = {"reviewer": {"description": "Strict review pass"}}
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            target = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
-            run(core.saveSession(target))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            target = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            run(core.save_session(target))
             child = {
                 "agentId": "agent-plan-shell",
                 "sessionId": target["id"],
@@ -242,7 +242,7 @@ class ShellRemoteBackgroundTests(AgentCoreTestCase):
                 "retryable": True,
                 "stoppable": True,
             }
-            run(core.saveChildAgent(child))
+            run(core.save_child_agent(child))
             session["metadata"]["childAgentIds"] = [child["agentId"]]
 
             resumed = []

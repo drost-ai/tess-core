@@ -6,13 +6,13 @@ from typing import Any
 from .._utils import now_iso
 from ..process.identity import ProcessIdentityError, processIdentityFromRecord
 from ..storage import (
-    loadHealthCheckTask,
-    loadTaskRecord,
-    readTaskMeta,
-    saveHealthCheckTask,
-    saveTaskRecord,
-    withRecordTransaction,
-    writeTaskMeta,
+    load_health_check_task,
+    load_task_record,
+    read_task_meta,
+    save_health_check_task,
+    save_task_record,
+    with_record_transaction,
+    write_task_meta,
 )
 from .terminal_transitions import (
     applyDeliberateTaskStop,
@@ -28,10 +28,10 @@ async def prepareTaskStop(
     signalName: str,
     eventOwner: str = "supervisor",
 ) -> dict[str, Any] | None:
-    async with withRecordTransaction("task-lifecycle", taskId):
-        record = await loadTaskRecord(taskId)
-        meta = await readTaskMeta(taskId)
-        health = await loadHealthCheckTask(taskId)
+    async with with_record_transaction("task-lifecycle", taskId):
+        record = await load_task_record(taskId)
+        meta = await read_task_meta(taskId)
+        health = await load_health_check_task(taskId)
         if not record and not meta and not health:
             return None
         current = resolveTaskSemanticStatus(
@@ -87,8 +87,8 @@ async def prepareTaskStop(
             "eventOwner": eventOwner,
         }
         if record:
-            await saveTaskRecord({**record, "terminationIntent": intent})
-        await writeTaskMeta(taskId, {**(meta or {}), "terminationIntent": intent})
+            await save_task_record({**record, "terminationIntent": intent})
+        await write_task_meta(taskId, {**(meta or {}), "terminationIntent": intent})
         return {
             **common,
             "transitionId": transition_id,
@@ -102,9 +102,9 @@ async def commitPreparedTaskStop(
     transitionId: str,
     eventOwner: str = "supervisor",
 ) -> dict[str, Any]:
-    async with withRecordTransaction("task-lifecycle", taskId):
-        record = await loadTaskRecord(taskId)
-        meta = await readTaskMeta(taskId)
+    async with with_record_transaction("task-lifecycle", taskId):
+        record = await load_task_record(taskId)
+        meta = await read_task_meta(taskId)
         current = resolveTaskSemanticStatus(
             (record or {}).get("status"),
             (meta or {}).get("status"),
@@ -149,19 +149,19 @@ async def commitPreparedTaskStop(
 
 
 async def clearPreparedTaskStop(taskId: str, transitionId: str) -> None:
-    async with withRecordTransaction("task-lifecycle", taskId):
-        record = await loadTaskRecord(taskId)
-        meta = await readTaskMeta(taskId)
+    async with with_record_transaction("task-lifecycle", taskId):
+        record = await load_task_record(taskId)
+        meta = await read_task_meta(taskId)
         record_intent = _read_termination_intent((record or {}).get("terminationIntent"))
         if (record_intent or {}).get("transitionId") == transitionId:
             next_record = dict(record or {})
             next_record.pop("terminationIntent", None)
-            await saveTaskRecord(next_record)
+            await save_task_record(next_record)
         intent = _read_termination_intent((meta or {}).get("terminationIntent"))
         if meta and (intent or {}).get("transitionId") == transitionId:
             next_meta = dict(meta)
             next_meta.pop("terminationIntent", None)
-            await writeTaskMeta(taskId, next_meta)
+            await write_task_meta(taskId, next_meta)
 
 
 async def commitTaskProcessCompletion(
@@ -172,9 +172,9 @@ async def commitTaskProcessCompletion(
     error: str | None = None,
 ) -> dict[str, Any]:
     code, signalName = normalizeTaskProcessOutcome(code, signalName)
-    async with withRecordTransaction("task-lifecycle", taskId):
-        record = await loadTaskRecord(taskId)
-        meta = await readTaskMeta(taskId)
+    async with with_record_transaction("task-lifecycle", taskId):
+        record = await load_task_record(taskId)
+        meta = await read_task_meta(taskId)
         current = resolveTaskSemanticStatus(
             (record or {}).get("status"),
             (meta or {}).get("status"),
@@ -209,7 +209,7 @@ async def commitTaskProcessCompletion(
                 if error:
                     diagnostics["error"] = error
                 diagnostics["finishedAt"] = meta.get("finishedAt") or now_iso()
-                await writeTaskMeta(taskId, diagnostics)
+                await write_task_meta(taskId, diagnostics)
             return {"transition": transition, "record": record}
         committed = await _persist_terminal_transition(
             taskId=taskId,
@@ -226,11 +226,11 @@ async def commitTaskProcessCompletion(
 
 
 async def saveProjectedTaskRecord(record: dict[str, Any]) -> dict[str, Any]:
-    async with withRecordTransaction("task-lifecycle", record["id"]):
-        existing = await loadTaskRecord(record["id"])
+    async with with_record_transaction("task-lifecycle", record["id"]):
+        existing = await load_task_record(record["id"])
         if existing and resolveTaskSemanticStatus(existing.get("status")) != "running":
             return existing
-        await saveTaskRecord(record)
+        await save_task_record(record)
         return record
 
 
@@ -281,9 +281,9 @@ async def _persist_terminal_transition(
                 "metadata": metadata,
             }
         )
-        await saveTaskRecord(next_record)
+        await save_task_record(next_record)
     if health:
-        await saveHealthCheckTask(health)
+        await save_health_check_task(health)
     next_meta = dict(meta or {})
     next_meta.pop("terminationIntent", None)
     next_meta.update(
@@ -310,7 +310,7 @@ async def _persist_terminal_transition(
         next_meta["generation"] = health["generation"]
         next_meta["revision"] = health["revision"]
         next_meta.pop("activeProcessIdentity", None)
-    await writeTaskMeta(taskId, next_meta)
+    await write_task_meta(taskId, next_meta)
     return {"record": next_record}
 
 

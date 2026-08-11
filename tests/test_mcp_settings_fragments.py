@@ -23,7 +23,7 @@ class McpSettingsFragmentTests(AgentCoreTestCase):
             (fragments / "alpha.json").write_text(json.dumps([_server("alpha"), _server("alpha-extra")]))
             (fragments / "alpha.toml").write_text("ignored = true\n")
             (fragments / ".hidden.json").write_text(json.dumps(_server("hidden")))
-            servers = run(core.loadMcpServers("user", str(workspace)))
+            servers = run(core.load_mcp_servers("user", str(workspace)))
             self.assertEqual(
                 [server["name"] for server in servers],
                 ["alpha", "alpha-extra", "beta"],
@@ -39,7 +39,7 @@ class McpSettingsFragmentTests(AgentCoreTestCase):
             (fragments / "one.json").write_text(json.dumps(_server("shared")))
             (fragments / "two.json").write_text(json.dumps(_server("shared")))
             with self.assertRaisesRegex(ValueError, "exactly one file"):
-                run(core.loadMcpServers("user", str(workspace)))
+                run(core.load_mcp_servers("user", str(workspace)))
         finally:
             self.restore_home(root, previous)
 
@@ -48,9 +48,9 @@ class McpSettingsFragmentTests(AgentCoreTestCase):
         try:
             (home / "mcp.json").write_text(json.dumps([_server("legacy")]))
             with self.assertRaisesRegex(ValueError, "no longer read"):
-                run(core.loadMcpServers("user", str(workspace)))
+                run(core.load_mcp_servers("user", str(workspace)))
             with self.assertRaisesRegex(ValueError, "no longer read"):
-                run(core.saveMcpServers("user", str(workspace), [_server("new")]))
+                run(core.save_mcp_servers("user", str(workspace), [_server("new")]))
         finally:
             self.restore_home(root, previous)
 
@@ -62,7 +62,7 @@ class McpSettingsFragmentTests(AgentCoreTestCase):
             (fragments / "custom-name.json").write_text(json.dumps(_server("alpha")))
             (fragments / "beta.json").write_text(json.dumps(_server("beta")))
             run(
-                core.saveMcpServers(
+                core.save_mcp_servers(
                     "user",
                     str(workspace),
                     [_server("alpha", updatedAt="later"), _server("gamma")],
@@ -80,14 +80,14 @@ class McpSettingsFragmentTests(AgentCoreTestCase):
     def test_mutate_round_trips_through_fragments(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.saveMcpServers("user", str(workspace), [_server("origin")]))
+            run(core.save_mcp_servers("user", str(workspace), [_server("origin")]))
 
             def add(servers):
                 return [*servers, _server("added")]
 
-            updated = run(core.mutateMcpServers("user", str(workspace), add))
+            updated = run(core.mutate_mcp_servers("user", str(workspace), add))
             self.assertEqual([server["name"] for server in updated], ["origin", "added"])
-            reloaded = run(core.loadMcpServers("user", str(workspace)))
+            reloaded = run(core.load_mcp_servers("user", str(workspace)))
             self.assertEqual(
                 sorted(server["name"] for server in reloaded), ["added", "origin"]
             )
@@ -101,18 +101,18 @@ class McpSettingsFragmentTests(AgentCoreTestCase):
             fragments.mkdir(parents=True)
             (fragments / "broken.json").write_text("{not json")
             with self.assertRaises(Exception):
-                run(core.loadMcpServers("user", str(workspace)))
+                run(core.load_mcp_servers("user", str(workspace)))
             (fragments / "broken.json").write_text(json.dumps(["not-a-record"]))
             with self.assertRaisesRegex(ValueError, "server record object"):
-                run(core.loadMcpServers("user", str(workspace)))
+                run(core.load_mcp_servers("user", str(workspace)))
         finally:
             self.restore_home(root, previous)
 
     def test_project_scope_keeps_state_dir_mcp_json(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.saveMcpServers("project", str(workspace), [_server("proj")]))
-            servers = run(core.loadMcpServers("project", str(workspace)))
+            run(core.save_mcp_servers("project", str(workspace), [_server("proj")]))
+            servers = run(core.load_mcp_servers("project", str(workspace)))
             self.assertEqual([server["name"] for server in servers], ["proj"])
             self.assertFalse((home / "settings" / "mcp").exists())
         finally:

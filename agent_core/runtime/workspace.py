@@ -7,12 +7,12 @@ import subprocess
 import uuid
 from typing import Any
 
-from ..storage import findGitRoot
+from ..storage import find_git_root
 
 
 async def captureWorkspaceSnapshot(cwd: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
     options = options or {}
-    git_root = findGitRoot(cwd)
+    git_root = find_git_root(cwd)
     branch = None
     if git_root:
         try:
@@ -45,7 +45,7 @@ async def hydrateSessionWorkspaceMetadata(session: dict[str, Any], options: dict
 async def createGitWorktree(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     cwd = args["cwd"]
-    git_root = findGitRoot(cwd)
+    git_root = find_git_root(cwd)
     if not git_root:
         raise RuntimeError("Current directory is not inside a git repository.")
     requested_name = args.get("requestedName") or args.get("name") or args.get("branch") or "tess"

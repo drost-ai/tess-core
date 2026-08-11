@@ -9,10 +9,10 @@ import weakref as _weakref
 from typing import Callable
 
 from .persistence_metrics import (
-    persistenceObserversActive as _persistence_observers_active,
-    recordPersistenceIo as _record_persistence_io,
+    persistence_observers_active as _persistence_observers_active,
+    record_persistence_io as _record_persistence_io,
 )
-from .io_executor import runStorageIo as _run_storage_io
+from .io_executor import run_storage_io as _run_storage_io
 import asyncio
 import json
 import os
@@ -20,7 +20,7 @@ import re
 import uuid
 from typing import Any
 
-from .paths import expandHome, getStateRoot
+from .paths import expand_home, get_state_root
 
 try:
     import fcntl as _fcntl
@@ -37,7 +37,7 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
 #                       one lifecycle unit -> shared "task-lifecycle" domain
 #   Child-agent record  multi-writer       -> "agent-record" domain
 #   Monitor record      parent-owned       -> "monitor-record" domain
-#   Session JSON        multi-writer       -> locked save + mutateSessionRecord
+#   Session JSON        multi-writer       -> locked save + mutate_session_record
 #   Settings/auto-mode/project memory/MCP/plugin records
 #                       low-contention multi-writer -> locked helper available
 #   Daemon state/events cursor-based + append-only  -> unchanged by design
@@ -69,7 +69,7 @@ class StorageTransactionError(RuntimeError):
         self.lockPath = lockPath
 
 
-def registerStorageLockObserver(listener: Callable[[dict[str, Any]], Any]):
+def register_storage_lock_observer(listener: Callable[[dict[str, Any]], Any]):
     """Observe storage lock timeouts; returns an unsubscribe callable.
 
     The runtime bootstrap forwards these to the ``storage.lock_timeout``
@@ -92,7 +92,7 @@ def _notify_lock_observers(payload: dict[str, Any]) -> None:
             pass
 
 
-def inProcessLock(path: str) -> asyncio.Lock:
+def in_process_lock(path: str) -> asyncio.Lock:
     loop = asyncio.get_running_loop()
     locks = _IN_PROCESS_LOCKS.get(loop)
     if locks is None:
@@ -129,7 +129,7 @@ def _release_lock_handle(handle: Any) -> None:
 
 
 @_contextlib.asynccontextmanager
-async def fileLock(filePath: str, *, timeoutMs: int | None = None):
+async def file_lock(filePath: str, *, timeoutMs: int | None = None):
     """Advisory lock for read-modify-write sequences on a JSON record file.
 
     Two layers: a per-path asyncio.Lock serializes coroutines in this process,
@@ -145,7 +145,7 @@ async def fileLock(filePath: str, *, timeoutMs: int | None = None):
     if timeoutMs is None:
         timeoutMs = _storage_lock_timeout_ms()
     deadline = _time.monotonic() + max(0, int(timeoutMs)) / 1000.0
-    in_process = inProcessLock(path)
+    in_process = in_process_lock(path)
     in_process_acquired = False
     os_handle = None
     try:
@@ -213,46 +213,46 @@ async def fileLock(filePath: str, *, timeoutMs: int | None = None):
                 in_process.release()
 
 
-async def mutateJsonFile(filePath: str, mutate: Callable[[Any], Any], fallback: Any = None) -> Any:
+async def mutate_json_file(filePath: str, mutate: Callable[[Any], Any], fallback: Any = None) -> Any:
     """Locked read-modify-write: load, apply ``mutate``, persist, return.
 
     ``mutate`` must be pure-in-effect: it receives the current value (or
     ``fallback`` when the file is missing) and returns the value to persist.
     Returning ``None`` means "I mutated in place" and persists the received
     value. The write inside the lock is the same atomic temp+``os.replace``
-    as ``writeJsonFile``, so on-disk bytes are unchanged by locking.
+    as ``write_json_file``, so on-disk bytes are unchanged by locking.
     """
-    async with fileLock(filePath):
-        current = await readJsonFile(filePath, fallback)
+    async with file_lock(filePath):
+        current = await read_json_file(filePath, fallback)
         updated = mutate(current)
         if updated is None:
             updated = current
-        await writeJsonFile(filePath, updated)
+        await write_json_file(filePath, updated)
         return updated
 
 
-def transactionLockPath(namespace: str, key: str) -> str:
+def transaction_lock_path(namespace: str, key: str) -> str:
     if not re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", namespace):
         raise ValueError(f"Invalid transaction namespace: {namespace}")
     if not isinstance(key, str) or not key or len(key.encode("utf-8")) > 1024:
         raise ValueError("Transaction key must contain 1-1024 UTF-8 bytes.")
     digest = _hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return os.path.join(getStateRoot(), "locks", f"{namespace}-{digest}")
+    return os.path.join(get_state_root(), "locks", f"{namespace}-{digest}")
 
 
 @_contextlib.asynccontextmanager
-async def withRecordTransaction(
+async def with_record_transaction(
     namespace: str,
     key: str,
     *,
     timeoutMs: int | None = None,
 ):
-    lock_path = transactionLockPath(namespace, key)
+    lock_path = transaction_lock_path(namespace, key)
     held = _HELD_TRANSACTION_LOCKS.get()
     if lock_path in held:
         yield
         return
-    async with fileLock(lock_path, timeoutMs=timeoutMs):
+    async with file_lock(lock_path, timeoutMs=timeoutMs):
         token = _HELD_TRANSACTION_LOCKS.set(held | {lock_path})
         try:
             yield
@@ -260,7 +260,7 @@ async def withRecordTransaction(
             _HELD_TRANSACTION_LOCKS.reset(token)
 
 
-async def mutateJsonRecord(
+async def mutate_json_record(
     *,
     namespace: str,
     key: str,
@@ -269,9 +269,9 @@ async def mutateJsonRecord(
     mutate: Callable[[Any], Any],
     timeoutMs: int | None = None,
 ) -> dict[str, Any]:
-    lock_path = transactionLockPath(namespace, key)
-    async with withRecordTransaction(namespace, key, timeoutMs=timeoutMs):
-        current = await readJsonFile(filePath, fallback)
+    lock_path = transaction_lock_path(namespace, key)
+    async with with_record_transaction(namespace, key, timeoutMs=timeoutMs):
+        current = await read_json_file(filePath, fallback)
         result = mutate(current)
         if hasattr(result, "__await__"):
             result = await result
@@ -279,7 +279,7 @@ async def mutateJsonRecord(
             raise TypeError("Record mutation must return {'value': ..., 'changed': bool}.")
         changed = bool(result["changed"])
         if changed:
-            await writeJsonFile(filePath, result["value"])
+            await write_json_file(filePath, result["value"])
         return {"value": result["value"], "changed": changed, "lockPath": f"{lock_path}.lock"}
 
 
@@ -291,7 +291,7 @@ def _read_json_file_sync(file_path: str, fallback: Any) -> Any:
         return fallback
 
 
-async def readJsonFile(filePath: str, fallback: Any) -> Any:
+async def read_json_file(filePath: str, fallback: Any) -> Any:
     return await _run_storage_io(_read_json_file_sync, filePath, fallback)
 
 
@@ -302,7 +302,7 @@ def _read_json_file_tolerant_sync(file_path: str, fallback: Any) -> Any:
         return fallback
 
 
-async def readJsonFileTolerant(filePath: str, fallback: Any) -> Any:
+async def read_json_file_tolerant(filePath: str, fallback: Any) -> Any:
     """Degrade a torn or unreadable record to ``fallback`` instead of raising —
     only for records recovery can rebuild (e.g. v2 heads from body + archive)."""
     return await _run_storage_io(_read_json_file_tolerant_sync, filePath, fallback)
@@ -338,7 +338,7 @@ def _write_json_file_sync(file_path: str, value: Any) -> None:
         _record_persistence_io("write", file_path, byte_count, _time.perf_counter_ns() - started_ns)
 
 
-async def writeJsonFile(filePath: str, value: Any) -> None:
+async def write_json_file(filePath: str, value: Any) -> None:
     await _run_storage_io(_write_json_file_sync, filePath, value)
 
 
@@ -360,9 +360,9 @@ def _append_json_line_sync(file_path: str, value: Any) -> None:
         _record_persistence_io("append", file_path, byte_count, _time.perf_counter_ns() - started_ns)
 
 
-async def appendJsonLine(filePath: str, value: Any) -> None:
+async def append_json_line(filePath: str, value: Any) -> None:
     path = os.path.abspath(filePath)
-    async with withRecordTransaction("jsonl", path):
+    async with with_record_transaction("jsonl", path):
         await _run_storage_io(_append_json_line_sync, path, value)
 
 
@@ -385,14 +385,14 @@ def _read_json_lines_sync(file_path: str) -> list[dict[str, Any]]:
     return records
 
 
-async def readJsonLines(filePath: str) -> list[dict[str, Any]]:
+async def read_json_lines(filePath: str) -> list[dict[str, Any]]:
     """Tolerant lock-free JSONL read.
 
     Appends emit one line per write and rewrites replace atomically, so the
     worst case for an unlocked reader is a torn tail line, skipped by the
     tolerant parser until the next read observes it complete. Polling readers
     must not contend with writers for the record transaction;
-    read-modify-write callers use :func:`mutateJsonLines`, which does.
+    read-modify-write callers use :func:`mutate_json_lines`, which does.
     """
     path = os.path.abspath(filePath)
     return await _run_storage_io(_read_json_lines_sync, path)
@@ -414,16 +414,16 @@ def _write_json_lines_sync(file_path: str, records: list[dict[str, Any]]) -> Non
         _record_persistence_io("write", file_path, byte_count, _time.perf_counter_ns() - started_ns)
 
 
-async def mutateJsonLines(filePath: str, mutate: Callable[[list[dict[str, Any]]], Any]) -> Any:
+async def mutate_json_lines(filePath: str, mutate: Callable[[list[dict[str, Any]]], Any]) -> Any:
     """Atomically read, mutate, and rewrite one JSONL record.
 
     The callback returns ``{'records': ..., 'result': ..., 'changed': bool}``.
-    The transaction is shared with :func:`appendJsonLine`, including across
+    The transaction is shared with :func:`append_json_line`, including across
     processes, so an append cannot be lost behind a concurrent rewrite.
     """
 
     path = os.path.abspath(filePath)
-    async with withRecordTransaction("jsonl", path):
+    async with with_record_transaction("jsonl", path):
         records = await _run_storage_io(_read_json_lines_sync, path)
         mutation = mutate(records)
         if hasattr(mutation, "__await__"):
@@ -437,12 +437,12 @@ async def mutateJsonLines(filePath: str, mutate: Callable[[list[dict[str, Any]]]
             await _run_storage_io(_write_json_lines_sync, path, updated)
         return mutation["result"]
 
-def parseJsonString(value: str | None) -> Any:
+def parse_json_string(value: str | None) -> Any:
     if not value:
         return None
     return json.loads(value)
 
-def fileOrJson(value: str | None) -> Any:
+def file_or_json(value: str | None) -> Any:
     if not value:
         return None
     trimmed = value.strip()
@@ -451,22 +451,22 @@ def fileOrJson(value: str | None) -> Any:
     with open(trimmed, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
-def resolveMaybeRelative(baseDir: str, candidate: str) -> str:
-    expanded = expandHome(candidate)
+def resolve_maybe_relative(baseDir: str, candidate: str) -> str:
+    expanded = expand_home(candidate)
     return os.path.abspath(expanded if os.path.isabs(expanded) else os.path.join(baseDir, expanded))
 
-async def loadAuth() -> dict[str, Any] | None:
-    auth = await readJsonFile(os.path.join(getStateRoot(), "auth.json"), None)
+async def load_auth() -> dict[str, Any] | None:
+    auth = await read_json_file(os.path.join(get_state_root(), "auth.json"), None)
     if not auth:
         return None
     from ..runtime.secret_provider import migrateLegacyStoredAuthSecrets
 
     migration = await migrateLegacyStoredAuthSecrets(auth)
     if migration["changed"]:
-        await writeJsonFile(os.path.join(getStateRoot(), "auth.json"), migration["auth"])
+        await write_json_file(os.path.join(get_state_root(), "auth.json"), migration["auth"])
     return migration["auth"]
 
-async def loadCodexAuthToken(authPath: str) -> str | None:
+async def load_codex_auth_token(authPath: str) -> str | None:
     return await _run_storage_io(_load_codex_auth_token_sync, authPath)
 
 
@@ -482,14 +482,14 @@ def _load_codex_auth_token_sync(auth_path: str) -> str | None:
     except Exception:
         return None
 
-async def saveAuth(auth: dict[str, Any]) -> None:
+async def save_auth(auth: dict[str, Any]) -> None:
     from ..runtime.secret_provider import migrateLegacyStoredAuthSecrets
 
     normalized = await migrateLegacyStoredAuthSecrets(auth)
-    await writeJsonFile(os.path.join(getStateRoot(), "auth.json"), normalized["auth"])
+    await write_json_file(os.path.join(get_state_root(), "auth.json"), normalized["auth"])
 
-async def clearAuth() -> None:
-    await _run_storage_io(_clear_auth_sync, os.path.join(getStateRoot(), "auth.json"))
+async def clear_auth() -> None:
+    await _run_storage_io(_clear_auth_sync, os.path.join(get_state_root(), "auth.json"))
 
 
 def _clear_auth_sync(auth_path: str) -> None:

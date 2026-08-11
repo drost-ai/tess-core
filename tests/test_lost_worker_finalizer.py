@@ -20,7 +20,7 @@ def _dead_worker_fixture(workspace: str, task_id: str, agent_id: str) -> dict:
     dead = subprocess.Popen([sys.executable, "-c", "pass"])
     dead.wait()
     created_at = "2026-01-01T00:00:00Z"
-    output_file = core.taskOutputPath(task_id)
+    output_file = core.task_output_path(task_id)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     meta = {
         "type": "subagent",
@@ -40,9 +40,9 @@ def _dead_worker_fixture(workspace: str, task_id: str, agent_id: str) -> dict:
         "title": "Dead worker",
         "owner": "daemon",
     }
-    run(core.writeTaskMeta(task_id, meta))
+    run(core.write_task_meta(task_id, meta))
     run(
-        core.saveTaskRecord(
+        core.save_task_record(
             {
                 "id": task_id,
                 "sessionId": PARENT_ID,
@@ -66,7 +66,7 @@ def _dead_worker_fixture(workspace: str, task_id: str, agent_id: str) -> dict:
         )
     )
     run(
-        core.saveChildAgent(
+        core.save_child_agent(
             {
                 "agentId": agent_id,
                 "sessionId": CHILD_SESSION_ID,
@@ -96,9 +96,9 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             next_meta, changed = run(_reconcile_dead_task_meta(task_id, meta, "subagent", apply=True))
             self.assertTrue(changed)
             self.assertEqual(next_meta["status"], "failed")
-            record = run(core.loadTaskRecord(task_id))
+            record = run(core.load_task_record(task_id))
             self.assertEqual(record["status"], "failed")
-            child = run(core.loadChildAgent(agent_id))
+            child = run(core.load_child_agent(agent_id))
             self.assertEqual(child["status"], "failed")
             self.assertEqual(child["completionReason"], "worker_lost")
             ledger = run(core.listSubagentReconciliations(PARENT_ID))
@@ -114,21 +114,21 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             task_id, agent_id = "task-terminal", "agent-terminal"
             _dead_worker_fixture(str(workspace), task_id, agent_id)
             run(
-                core.mutateTaskMeta(
+                core.mutate_task_meta(
                     task_id, lambda current: {**current, "status": "completed", "summary": "done"}
                 )
             )
             run(
-                core.saveTaskRecord(
-                    {**run(core.loadTaskRecord(task_id)), "status": "completed", "summary": "done"}
+                core.save_task_record(
+                    {**run(core.load_task_record(task_id)), "status": "completed", "summary": "done"}
                 )
             )
             outcome = run(
                 finalizeLostWorker(taskId=task_id, cause="worker_lost", source="test")
             )
             self.assertFalse(outcome["changed"])
-            self.assertEqual(run(core.loadTaskRecord(task_id))["status"], "completed")
-            self.assertEqual(run(core.readTaskMeta(task_id))["status"], "completed")
+            self.assertEqual(run(core.load_task_record(task_id))["status"], "completed")
+            self.assertEqual(run(core.read_task_meta(task_id))["status"], "completed")
         finally:
             self.restore_home(root, previous)
 
@@ -148,14 +148,14 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             # Simulate recycling: pid field points at a LIVE process (this
             # test), while the persisted identity belongs to the dead worker.
             meta = run(
-                core.mutateTaskMeta(
+                core.mutate_task_meta(
                     task_id,
                     lambda current: {**current, "pid": os.getpid(), "processIdentity": identity},
                 )
             )
             next_meta, changed = run(_reconcile_dead_task_meta(task_id, meta, "subagent", apply=True))
             self.assertTrue(changed)
-            self.assertEqual(run(core.loadTaskRecord(task_id))["status"], "failed")
+            self.assertEqual(run(core.load_task_record(task_id))["status"], "failed")
         finally:
             self.restore_home(root, previous)
 
@@ -168,7 +168,7 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
         try:
             agent_id, task_id = "agent-done", "task-done"
             run(
-                core.saveChildAgent(
+                core.save_child_agent(
                     {
                         "agentId": agent_id,
                         "sessionId": CHILD_SESSION_ID,
@@ -185,7 +185,7 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "type": "subagent",
@@ -196,7 +196,7 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
                         "sessionId": CHILD_SESSION_ID,
                         "status": "completed",
                         "startedAt": "2026-01-01T00:00:00Z",
-                        "outputFile": core.taskOutputPath(task_id),
+                        "outputFile": core.task_output_path(task_id),
                         "resultSummary": "the result",
                     },
                 )
@@ -205,11 +205,11 @@ class LostWorkerFinalizerTests(AgentCoreTestCase):
             os.environ["TESS_CHILD_TASK_ID"] = task_id
             os.environ["TESS_CHILD_SESSION_ID"] = CHILD_SESSION_ID
             run(core.finalizeBackgroundSubagentFailureFromEnv(RuntimeError("late failure")))
-            child = run(core.loadChildAgent(agent_id))
+            child = run(core.load_child_agent(agent_id))
             self.assertEqual(child["status"], "completed")
             self.assertEqual(child["resultSummary"], "the result")
             self.assertNotIn("error", child)
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             self.assertEqual(meta["status"], "completed")
             self.assertEqual(run(core.listSubagentReconciliations(PARENT_ID)), [])
         finally:

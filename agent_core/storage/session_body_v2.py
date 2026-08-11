@@ -8,8 +8,8 @@ import uuid
 from typing import Any
 
 from .persistence_metrics import (
-    persistenceObserversActive as _persistence_observers_active,
-    recordPersistenceIo as _record_persistence_io,
+    persistence_observers_active as _persistence_observers_active,
+    record_persistence_io as _record_persistence_io,
 )
 
 

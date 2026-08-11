@@ -7,8 +7,8 @@ from unittest import mock
 
 import agent_core.daemon as daemon_module
 from agent_core.runtime._daemon_watch import check_daemon_once
-from agent_core.storage import daemonSocketPath
-from agent_core.storage.daemon import saveDaemonState
+from agent_core.storage import daemon_socket_path
+from agent_core.storage.daemon import save_daemon_state
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
@@ -27,7 +27,7 @@ class DaemonWatchdogDeadManTests(AgentCoreTestCase):
                 raise RuntimeError("unit test does not spawn a daemon")
 
             run(
-                saveDaemonState(
+                save_daemon_state(
                     "watchdog-wedged",
                     {"instanceId": "watchdog-wedged", "pid": os.getpid(), "status": "running"},
                 )
@@ -53,13 +53,13 @@ class DaemonWatchdogDeadManTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         listener = None
         try:
-            socket_path = daemonSocketPath("watchdog-live")
+            socket_path = daemon_socket_path("watchdog-live")
             os.makedirs(os.path.dirname(socket_path), exist_ok=True)
             listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             listener.bind(socket_path)
             listener.listen(1)
             run(
-                saveDaemonState(
+                save_daemon_state(
                     "watchdog-live",
                     {
                         "instanceId": "watchdog-live",

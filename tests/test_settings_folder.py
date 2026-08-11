@@ -23,7 +23,7 @@ class SettingsFolderTests(AgentCoreTestCase):
                 "    baseUrl: https://example.invalid/v1\n",
             )
             _write(home / "settings" / ".env", "# creds\nexport FAKE_KEY=abc123\nQUOTED='v 1'\n")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertEqual(settings["provider"], "fake")
             self.assertEqual(settings["model"], "test-model")
             self.assertEqual(settings["durableMemory"], {"enabled": False})
@@ -41,7 +41,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             _write(home / "settings" / "config" / "empty.yaml", "# only a comment\n")
             _write(home / "settings" / "config" / ".hidden.yaml", "permissionMode: plan\n")
             _write(home / "settings" / "config" / "notes.txt", "not: yaml\n")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertEqual(settings["permissionMode"], "default")
             self.assertEqual(settings["knobs"], {
                 "subagents": {"max_live": 4},
@@ -57,7 +57,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             _write(home / "settings" / "config.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 3000\n")
             _write(home / "settings" / "config" / "daemon.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 5000\n")
             with self.assertRaises(ValueError) as base_conflict:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn("knobs.daemon.heartbeat_ms", str(base_conflict.exception))
             self.assertIn("config.yaml", str(base_conflict.exception))
             self.assertIn("config/daemon.yaml", str(base_conflict.exception))
@@ -65,7 +65,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             (home / "settings" / "config.yaml").unlink()
             _write(home / "settings" / "config" / "extra.yaml", "knobs:\n  daemon:\n    heartbeat_ms: 4000\n")
             with self.assertRaises(ValueError) as fragment_conflict:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn("config/daemon.yaml", str(fragment_conflict.exception))
             self.assertIn("config/extra.yaml", str(fragment_conflict.exception))
 
@@ -73,7 +73,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             (home / "settings" / "config" / "extra.yaml").unlink()
             _write(home / "settings" / "config" / "zz-flat.yaml", "knobs: 5\n")
             with self.assertRaises(ValueError) as shape_conflict:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn("knobs", str(shape_conflict.exception))
             self.assertIn("config/zz-flat.yaml", str(shape_conflict.exception))
         finally:
@@ -84,13 +84,13 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / "config" / "bad.yaml", "- just\n- a\n- list\n")
             with self.assertRaises(ValueError) as bad:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn("mapping", str(bad.exception))
 
             (home / "settings" / "config" / "bad.yaml").unlink()
             _write(home / "settings" / "config" / "selection.yaml", "provider: from-fragment\nmodel: fragment-model\n")
             _write(home / "settings" / "providers.yaml", "provider: from-providers\n")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertEqual(settings["provider"], "from-providers")  # providers.yaml wins for its keys
             self.assertEqual(settings["model"], "fragment-model")
         finally:
@@ -111,7 +111,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             (home / "settings.json").write_text(json.dumps({"provider": "legacy"}), encoding="utf-8")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertEqual(settings["provider"], "legacy")
         finally:
             self.restore_home(root, previous)
@@ -141,7 +141,7 @@ class SettingsFolderTests(AgentCoreTestCase):
                 "    kind: anthropic\n",
             )
             _write(home / "settings" / ".env", "OVERRIDE=new\n")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertEqual(settings["provider"], "fresh")
             self.assertEqual(settings["effort"], "high")
             self.assertEqual(settings["env"], {"KEEP": "1", "OVERRIDE": "new"})
@@ -155,7 +155,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / "config.yaml", "provider: from-config\n")
             _write(home / "settings" / "providers.yaml", "provider: from-providers\n")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertEqual(settings["provider"], "from-providers")
         finally:
             self.restore_home(root, previous)
@@ -165,7 +165,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / ".env", "GOOD=1\nnot a pair\n")
             with self.assertRaises(ValueError) as ctx:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn(".env:2", str(ctx.exception))
         finally:
             self.restore_home(root, previous)
@@ -175,7 +175,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / "config.yaml", "- just\n- a list\n")
             with self.assertRaises(ValueError) as ctx:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn("must be a mapping", str(ctx.exception))
         finally:
             self.restore_home(root, previous)
@@ -185,7 +185,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / "config.yaml", "a: &anchor 1\n")
             with self.assertRaises(ValueError) as ctx:
-                run(core.loadSettings("user", str(workspace)))
+                run(core.load_settings("user", str(workspace)))
             self.assertIn("anchors", str(ctx.exception))
         finally:
             self.restore_home(root, previous)
@@ -252,7 +252,7 @@ class SettingsFolderTests(AgentCoreTestCase):
         try:
             _write(home / "settings" / "system_prompt.md", "   \n\n\t\n")
             _write(home / "settings" / "system_prompt_append.md", "")
-            settings = run(core.loadSettings("user", str(workspace)))
+            settings = run(core.load_settings("user", str(workspace)))
             self.assertNotIn("systemPromptFile", settings)
             self.assertNotIn("systemPromptAppendFile", settings)
             config = run(core.resolveConfig({}, str(workspace)))

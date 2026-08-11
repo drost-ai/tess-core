@@ -4,62 +4,62 @@ import copy
 import time
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
-from .message_origin import isGenuineUserRequest as _is_genuine_user_request
+from .message_origin import is_genuine_user_request as _is_genuine_user_request
 from .persistence_metrics import (
-    persistenceObserversActive as _persistence_observers_active,
-    recordPersistenceIo as _record_persistence_io,
+    persistence_observers_active as _persistence_observers_active,
+    record_persistence_io as _record_persistence_io,
 )
 from ..runtime.identifiers import RuntimeIdentifierError
 from .message_history import (
-    createSessionMessageList as _create_session_message_list,
-    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+    create_session_message_list as _create_session_message_list,
+    set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
 from ..providers.usage_costs import createUsageTotals
-from .io_executor import runStorageIo as _run_storage_io
+from .io_executor import run_storage_io as _run_storage_io
 import json
 import os
 import uuid
 from typing import Any
 
 from .._utils import now_iso
-from .json_io import inProcessLock, readJsonFile, readJsonFileTolerant, withRecordTransaction, writeJsonFile
+from .json_io import in_process_lock, read_json_file, read_json_file_tolerant, with_record_transaction, write_json_file
 from .paths import (
-    compactionCheckpointPath,
-    compactionManifestPath,
-    getStateRoot,
-    sessionPath,
-    sessionTranscriptLogPath,
+    compaction_checkpoint_path,
+    compaction_manifest_path,
+    get_state_root,
+    session_path,
+    session_transcript_log_path,
 )
-from .session_schema_v2 import commitSessionV2, hydratePersistedSession, isSessionHeadV2
-from .session_transactions import normalizeSessionRevision
+from .session_schema_v2 import commit_session_v2, hydrate_persisted_session, is_session_head_v2
+from .session_transactions import normalize_session_revision
 
-async def saveSession(session: SessionRecord) -> None:
-    path = sessionPath(session["id"])
-    async with withRecordTransaction("session", session["id"]):
-        raw = await readJsonFileTolerant(path, None)
-        hydrated = await hydratePersistedSession(session["id"], raw)
+async def save_session(session: SessionRecord) -> None:
+    path = session_path(session["id"])
+    async with with_record_transaction("session", session["id"]):
+        raw = await read_json_file_tolerant(path, None)
+        hydrated = await hydrate_persisted_session(session["id"], raw)
         current = hydrated["record"]
         merged = _sanitize_media_for_persistence(_merge_session_for_full_save(current, session))
         if isinstance(current, dict) and ("revision" in current or "revision" in merged):
             merged["revision"] = max(
-                normalizeSessionRevision(current.get("revision")),
-                normalizeSessionRevision(merged.get("revision")),
+                normalize_session_revision(current.get("revision")),
+                normalize_session_revision(merged.get("revision")),
             )
-        if current != merged or not isSessionHeadV2(raw):
-            commit = await commitSessionV2(session["id"], raw, current, merged, presanitized=True)
+        if current != merged or not is_session_head_v2(raw):
+            commit = await commit_session_v2(session["id"], raw, current, merged, presanitized=True)
             committed = commit["session"]
             _set_session_persistence_checkpoint(
                 session,
-                normalizeSessionRevision(committed.get("revision")),
+                normalize_session_revision(committed.get("revision")),
                 len(session.get("messages") or []),
                 commit["bodyCommitId"],
             )
-async def appendSessionTranscriptLogEntries(sessionId: str, entries: list[Any]) -> str:
-    path = sessionTranscriptLogPath(sessionId)
+async def append_session_transcript_log_entries(sessionId: str, entries: list[Any]) -> str:
+    path = session_transcript_log_path(sessionId)
     # The former synchronous body also serialized same-process callers by
     # blocking the event loop. Preserve that ordering explicitly now that the
     # append runs on a worker.
-    async with inProcessLock(f"{path}#transcript-append"):
+    async with in_process_lock(f"{path}#transcript-append"):
         await _run_storage_io(_append_session_transcript_log_entries_sync, path, entries)
     return path
 
@@ -220,10 +220,10 @@ def _choose_newer_compaction_state(current: Any, incoming: Any) -> Any:
 
 MAX_SHALLOW_SESSION_BYTES = 16 * 1024 * 1024
 
-async def loadSessionRecordShallow(sessionId: str) -> SessionRecord | None:
+async def load_session_record_shallow(sessionId: str) -> SessionRecord | None:
     """Read only the bounded session JSON record; never open its archive."""
 
-    return await _run_storage_io(_load_session_record_shallow_sync, sessionPath(sessionId), sessionId)
+    return await _run_storage_io(_load_session_record_shallow_sync, session_path(sessionId), sessionId)
 
 
 def _load_session_record_shallow_sync(path: str, session_id: str) -> SessionRecord | None:
@@ -251,7 +251,7 @@ def _valid_shallow_session(value: Any, expected_id: str) -> bool:
         and (
             isinstance(value.get("messages"), list)
             or (
-                isSessionHeadV2(value)
+                is_session_head_v2(value)
                 and isinstance(value.get("messageCount"), int)
                 and isinstance(value.get("bodyRef"), dict)
                 and isinstance(value.get("hasPersistableContent"), bool)
@@ -260,25 +260,25 @@ def _valid_shallow_session(value: Any, expected_id: str) -> bool:
         )
     )
 
-async def loadCompactionManifest(sessionId: str) -> dict[str, Any] | None:
-    return await readJsonFile(compactionManifestPath(sessionId), None)
+async def load_compaction_manifest(sessionId: str) -> dict[str, Any] | None:
+    return await read_json_file(compaction_manifest_path(sessionId), None)
 
-async def saveCompactionManifest(manifest: dict[str, Any]) -> None:
-    await writeJsonFile(
-        compactionManifestPath(manifest["sessionId"]),
+async def save_compaction_manifest(manifest: dict[str, Any]) -> None:
+    await write_json_file(
+        compaction_manifest_path(manifest["sessionId"]),
         _sanitize_media_for_persistence(manifest),
     )
 
-async def saveCompactionCheckpoint(checkpoint: dict[str, Any]) -> None:
-    await writeJsonFile(
-        compactionCheckpointPath(
+async def save_compaction_checkpoint(checkpoint: dict[str, Any]) -> None:
+    await write_json_file(
+        compaction_checkpoint_path(
             checkpoint["sessionId"], int(checkpoint["generation"])
         ),
         _sanitize_media_for_persistence(checkpoint),
     )
 
-def hasPersistableSessionMessages(session: SessionRecord) -> bool:
-    if isSessionHeadV2(session) and isinstance(session.get("hasPersistableContent"), bool):
+def has_persistable_session_messages(session: SessionRecord) -> bool:
+    if is_session_head_v2(session) and isinstance(session.get("hasPersistableContent"), bool):
         return session["hasPersistableContent"]
     for message in session.get("messages", []):
         if not _is_genuine_user_request(message):
@@ -292,28 +292,28 @@ def hasPersistableSessionMessages(session: SessionRecord) -> bool:
                     return True
     return False
 
-async def listSessions() -> list[SessionRecord]:
-    directory = os.path.join(getStateRoot(), "sessions")
+async def list_sessions() -> list[SessionRecord]:
+    directory = os.path.join(get_state_root(), "sessions")
     names = await _run_storage_io(_list_json_names_sync, directory)
     records: list[dict[str, Any]] = []
     for name in names:
         try:
-            record = await loadSessionRecordShallow(name[:-5])
+            record = await load_session_record_shallow(name[:-5])
         except RuntimeIdentifierError:
             continue
-        if record and hasPersistableSessionMessages(record):
+        if record and has_persistable_session_messages(record):
             records.append(record)
     return sorted(records, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 
-def createSessionListCache() -> dict[str, Any]:
+def create_session_list_cache() -> dict[str, Any]:
     """Create an instance-owned summary cache keyed by path/mtime/size."""
 
     entries: dict[str, dict[str, Any]] = {}
     stats = {"scanned": 0, "parsed": 0, "cacheHits": 0, "invalid": 0}
 
     async def list_cached() -> list[dict[str, Any]]:
-        directory = os.path.join(getStateRoot(), "sessions")
+        directory = os.path.join(get_state_root(), "sessions")
         scanned = await _run_storage_io(_scan_session_directory_sync, directory)
         seen: set[str] = set()
         summaries: list[dict[str, Any]] = []
@@ -329,10 +329,10 @@ def createSessionListCache() -> dict[str, Any]:
             session_id = name[:-5]
             stats["parsed"] += 1
             try:
-                record = await loadSessionRecordShallow(session_id)
+                record = await load_session_record_shallow(session_id)
             except RuntimeIdentifierError:
                 record = None
-            summary = _session_list_summary(record) if record and hasPersistableSessionMessages(record) else None
+            summary = _session_list_summary(record) if record and has_persistable_session_messages(record) else None
             if record is None:
                 stats["invalid"] += 1
             entries[path] = {"fingerprint": fingerprint, "summary": summary}
@@ -350,7 +350,7 @@ def createSessionListCache() -> dict[str, Any]:
         if session_id is None:
             entries.clear()
             return
-        entries.pop(os.path.realpath(sessionPath(session_id)), None)
+        entries.pop(os.path.realpath(session_path(session_id)), None)
 
     return {"list": list_cached, "getStats": get_stats, "invalidate": invalidate}
 
@@ -408,7 +408,7 @@ def _session_list_summary(record: SessionRecord) -> dict[str, Any]:
         "hasPersistableContent": True,
     }
 
-def createEmptySession(params: dict[str, Any] | None = None, **kwargs: Any) -> SessionRecord:
+def create_empty_session(params: dict[str, Any] | None = None, **kwargs: Any) -> SessionRecord:
     params = {**(params or {}), **kwargs}
     timestamp = now_iso()
     return {

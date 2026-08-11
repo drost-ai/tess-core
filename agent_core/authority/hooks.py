@@ -16,7 +16,7 @@ from typing import Any, Mapping
 from .permission_rules import matchPermissionRule, parsePermissionRule
 from .repository_trust import approveRepositoryContent, checkRepositoryApproval
 from ..sandbox import prepareSandboxedArgv
-from ..storage import getProjectRoot, loadSettings
+from ..storage import get_project_root, load_settings
 
 
 HOOK_EVENTS = ("PreToolUse", "PostToolUse", "Stop", "SessionEnd")
@@ -49,7 +49,7 @@ def _hook_set_hash(definitions: Any) -> str:
 async def approveHooks(cwd: str, scope: str) -> None:
     if scope not in {"project", "local"}:
         raise ValueError("Hook approval scope must be project or local")
-    settings = await loadSettings(scope, cwd)
+    settings = await load_settings(scope, cwd)
     await approveRepositoryContent(
         cwd=cwd,
         family="hooks",
@@ -80,7 +80,7 @@ async def loadHooks(
     for scope in _SETTINGS_SCOPES:
         if selected_sources and scope not in selected_sources:
             continue
-        settings = await loadSettings(scope, selected_cwd)
+        settings = await load_settings(scope, selected_cwd)
         hooks = settings.get("hooks") if isinstance(settings.get("hooks"), Mapping) else {}
         approved = scope == "user" or await _hook_set_approved(selected_cwd, scope, hooks)
         for event in HOOK_EVENTS:
@@ -200,7 +200,7 @@ async def fireToolHooks(args: Mapping[str, Any]) -> dict[str, Any]:
     )
     hooks = [hook for hook in hooks if hook.get("event") == args["event"] and hook.get("approved")]
     outcome: dict[str, Any] = {"decision": "continue", "ran": []}
-    project_root = (authority or {}).get("permissionRuleProjectRoot") or getProjectRoot(fire["cwd"])
+    project_root = (authority or {}).get("permissionRuleProjectRoot") or get_project_root(fire["cwd"])
     tool_input = args.get("toolInput") if isinstance(args.get("toolInput"), Mapping) else {}
     call = {
         "command": tool_input.get("command") if isinstance(tool_input.get("command"), str) else None,

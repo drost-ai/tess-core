@@ -4,10 +4,10 @@ import subprocess
 import threading
 from ..._utils import maybe_await
 from ...storage import (
-    loadTaskRecord,
-    mutateSessionRecord,
-    saveTaskRecord,
-    writeTaskMeta,
+    load_task_record,
+    mutate_session_record,
+    save_task_record,
+    write_task_meta,
 )
 from .shared import SupervisorRegistries
 from typing import Any, Callable
@@ -47,10 +47,10 @@ def _create_process_task_launcher(
         owned_argv = activation["argv"]
 
         async def reserve() -> None:
-            await writeTaskMeta(task_id, meta)
-            await saveTaskRecord(record)
+            await write_task_meta(task_id, meta)
+            await save_task_record(record)
             for target_session_id, update in reserve_session_updates:
-                updated = await mutateSessionRecord(target_session_id, update)
+                updated = await mutate_session_record(target_session_id, update)
                 if updated is None:
                     raise RuntimeError(f"Session not found during task reservation: {target_session_id}")
 
@@ -66,8 +66,8 @@ def _create_process_task_launcher(
                 "updatedAt": attached["attachedAt"],
             }
             attached_meta.pop("attachedDetailStatus", None)
-            await writeTaskMeta(task_id, attached_meta)
-            await saveTaskRecord(
+            await write_task_meta(task_id, attached_meta)
+            await save_task_record(
                 {
                     **record,
                     "status": "backgrounded",
@@ -85,7 +85,7 @@ def _create_process_task_launcher(
         async def fail(error: Any) -> None:
             failed = failTaskLaunchReservation(reservation, error)
             reason = failed.get("failureReason") or "Task launch failed."
-            await writeTaskMeta(
+            await write_task_meta(
                 task_id,
                 {
                     **meta,
@@ -97,7 +97,7 @@ def _create_process_task_launcher(
                     "launchReservation": failed,
                 },
             )
-            await saveTaskRecord(
+            await save_task_record(
                 {
                     **record,
                     "status": "failed",
@@ -128,7 +128,7 @@ def _create_process_task_launcher(
             raise RuntimeError(f"Task {task_id} exited before its process identity could be attached.")
         registries.processes[task_id] = launched.child
         _invalidate_live_work_cache(live_work_cache, *(target for target, _ in reserve_session_updates))
-        current_record = await loadTaskRecord(task_id) or record
+        current_record = await load_task_record(task_id) or record
         await emit("task.updated", _task_record_event_payload(current_record), session_id)
         watcher = threading.Thread(
             target=_watch_process_thread,

@@ -64,7 +64,7 @@ async def wait_task_status(data: dict[str, Any], sandbox: ScenarioSandbox, state
     deadline = asyncio.get_running_loop().time() + float(data.get("timeoutSeconds") or 8)
     last_meta = None
     while asyncio.get_running_loop().time() < deadline:
-        last_meta = await core.readTaskMeta(task_id)
+        last_meta = await core.read_task_meta(task_id)
         if last_meta and last_meta.get("status") in statuses:
             await refresh_task_state(sandbox, state)
             if required_event and not any(
@@ -90,7 +90,7 @@ async def wait_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, stat
     deadline = asyncio.get_running_loop().time() + float(data.get("timeoutSeconds") or 10)
     last_health = None
     while asyncio.get_running_loop().time() < deadline:
-        last_health = await core.loadHealthCheckTask(task_id)
+        last_health = await core.load_health_check_task(task_id)
         if last_health and (not status or last_health.get("status") == status) and (not require_success or last_health.get("lastSuccessAt")):
             await refresh_task_state(sandbox, state)
             if required_event and not any(
@@ -130,10 +130,10 @@ async def stop_task(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[
 async def create_monitor(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, _config = await ensure_session_config(data, sandbox, state)
     monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": _task_id(data, state), "goal": data.get("goal", "watch task"), "checkIntervalMs": data.get("checkIntervalMs", 2000)})
-    await core.saveMonitor(monitor)
+    await core.save_monitor(monitor)
     metadata = session.setdefault("metadata", {})
     metadata["monitorIds"] = _dedupe([*(metadata.get("monitorIds") or []), monitor["id"]])
-    await core.saveSession(session)
+    await core.save_session(session)
     state.setdefault("monitor_aliases", {})[data.get("alias") or "last"] = monitor["id"]
     state.setdefault("task_driver_results", []).append({"driver": "create_monitor", "status": "passed", "monitorId": monitor["id"], "taskId": monitor["taskId"]})
     await refresh_task_state(sandbox, state)
@@ -153,7 +153,7 @@ async def get_daemon_bootstrap(data: dict[str, Any], sandbox: ScenarioSandbox, s
 async def seed_recovery_task(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, _config = await ensure_session_config(data, sandbox, state)
     task_id = data.get("taskId") or data.get("alias") or "recovery-task"
-    output_file = core.taskOutputPath(task_id)
+    output_file = core.task_output_path(task_id)
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
     Path(output_file).write_text(data.get("output", "still running\n"), encoding="utf-8")
     argv = [sys.executable, "-c", data.get("script", "import time; time.sleep(30)")]
@@ -163,8 +163,8 @@ async def seed_recovery_task(data: dict[str, Any], sandbox: ScenarioSandbox, sta
     created = data.get("createdAt") or "2026-01-01T00:00:00Z"
     identity = await core.captureOwnedProcessIdentity({"pid": proc.pid, "expectedArgv": argv, "spawnedAt": created})
     meta = {"type": data.get("type", "background_command"), "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": data.get("command", "sleep"), "cwd": str(sandbox.workspace), "startedAt": created, "updatedAt": created, "status": "running", "outputFile": output_file, "pid": proc.pid, "processIdentity": identity, "detailStatus": data.get("detailStatus", "running"), "owner": "daemon", "supervisorId": data.get("supervisorId", "previous-supervisor")}
-    await core.writeTaskMeta(task_id, meta)
-    await core.saveTaskRecord({"id": task_id, "sessionId": session["id"], "sourceId": task_id, "kind": "background_command", "status": "running", "title": data.get("title", "recovery task"), "summary": "Background command is running.", "createdAt": created, "updatedAt": created, "startedAt": created, "cwd": str(sandbox.workspace), "command": meta["command"], "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "detailStatus": meta["detailStatus"], "retrieveOnly": True, "owner": "daemon", "supervisorId": meta["supervisorId"], "processIdentity": identity, "metadata": {"pid": proc.pid, "processIdentity": identity}})
+    await core.write_task_meta(task_id, meta)
+    await core.save_task_record({"id": task_id, "sessionId": session["id"], "sourceId": task_id, "kind": "background_command", "status": "running", "title": data.get("title", "recovery task"), "summary": "Background command is running.", "createdAt": created, "updatedAt": created, "startedAt": created, "cwd": str(sandbox.workspace), "command": meta["command"], "outputFile": output_file, "foregroundMode": "background", "taskFamily": "shell", "detailStatus": meta["detailStatus"], "retrieveOnly": True, "owner": "daemon", "supervisorId": meta["supervisorId"], "processIdentity": identity, "metadata": {"pid": proc.pid, "processIdentity": identity}})
     _remember_task(state, data, task_id)
     state.setdefault("task_driver_results", []).append({"driver": "seed_recovery_task", "status": "passed", "taskId": task_id, "pid": proc.pid})
     await refresh_task_state(sandbox, state)
@@ -283,14 +283,14 @@ def assert_bootstrap(state: dict[str, Any], data: dict[str, Any]) -> None:
 
 async def refresh_task_state(sandbox: ScenarioSandbox, state: dict[str, Any]) -> None:
     state["daemon_state"] = _json_safe(await core.getTaskSupervisorDaemonState({"instanceId": HARNESS_DAEMON_INSTANCE}))
-    state["persisted_daemon_events"] = _json_safe(await core.loadDaemonEvents(HARNESS_DAEMON_INSTANCE))
-    state["task_records"] = _json_safe(await core.listTaskRecords())
-    state["health_checks"] = _json_safe(await core.listHealthCheckTasks())
+    state["persisted_daemon_events"] = _json_safe(await core.load_daemon_events(HARNESS_DAEMON_INSTANCE))
+    state["task_records"] = _json_safe(await core.list_task_records())
+    state["health_checks"] = _json_safe(await core.list_health_check_tasks())
     session = state.get("session")
-    state["monitor_records"] = _json_safe(await core.listSessionMonitors(session["id"])) if session and session.get("id") else []
+    state["monitor_records"] = _json_safe(await core.list_session_monitors(session["id"])) if session and session.get("id") else []
     task_ids = set((state.get("task_aliases") or {}).values())
     task_ids.update(record.get("id") for record in state["task_records"] if record.get("id"))
-    metadata = [meta for meta in [await core.readTaskMeta(task_id) for task_id in sorted(task_ids)] if meta]
+    metadata = [meta for meta in [await core.read_task_meta(task_id) for task_id in sorted(task_ids)] if meta]
     state["task_metadata"] = _json_safe(sorted(metadata, key=_metadata_sort_key))
 
 

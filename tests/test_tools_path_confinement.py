@@ -15,7 +15,7 @@ class ToolPathConfinementTests(AgentCoreTestCase):
         if add_dirs:
             options["addDir"] = list(add_dirs)
         config = run(core.resolveConfig(options, str(workspace)))
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"],
             model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode=mode,
         )

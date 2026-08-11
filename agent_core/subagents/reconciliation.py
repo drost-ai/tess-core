@@ -10,15 +10,15 @@ import uuid
 from typing import Any
 
 from .._utils import now_iso
-from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
-from ..storage import sessionArchiveDir, taskOutputPath, withRecordTransaction
-from ..storage.io_executor import runStorageIo as _run_storage_io
+from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
+from ..storage import session_archive_dir, task_output_path, with_record_transaction
+from ..storage.io_executor import run_storage_io as _run_storage_io
 
 
 TERMINAL_RECONCILIATION_STATUSES = {"completed", "failed", "stopped", "timed_out"}
 _SUMMARY_LIMIT = 1200
 def subagentReconciliationLogPath(parentSessionId: str) -> str:
-    return os.path.join(sessionArchiveDir(parentSessionId), "subagent-reconciliations.jsonl")
+    return os.path.join(session_archive_dir(parentSessionId), "subagent-reconciliations.jsonl")
 
 async def readSubagentReconciliations(parentSessionId: str) -> list[dict[str, Any]]:
     return await _read_records(subagentReconciliationLogPath(parentSessionId))
@@ -199,7 +199,7 @@ def buildSubagentReconciliationRecord(
     ) or "background subagent"
     output_ref = _first_string(meta.get("outputFile"), meta.get("output_file"))
     if not output_ref and task_id:
-        output_ref = taskOutputPath(task_id)
+        output_ref = task_output_path(task_id)
     terminal_version = _first_string(meta.get("terminalVersion"), meta.get("terminal_version")) or "v1"
     idempotency_key = ":".join(
         [

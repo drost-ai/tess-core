@@ -9,8 +9,8 @@ class CompactionModelFetchTests(AgentCoreTestCase):
         self.assertEqual(core.resolveEnvironmentProxyForUrl("https://api.openai.com/v1/responses", {"HTTP_PROXY": "http-proxy"}), "http-proxy")
         self.assertIsNone(core.resolveEnvironmentProxyForUrl("file:///tmp/a", {"HTTPS_PROXY": "https-proxy"}))
 
-        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", providerProfileName="openai", model="gpt-5.4", effort="xhigh", systemPrompt="s", permissionMode="default")
-        plan = testing.resolveCompactionExecutionPlan({"config": {}, "session": session})
+        session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", providerProfileName="openai", model="gpt-5.4", effort="xhigh", systemPrompt="s", permissionMode="default")
+        plan = testing.resolve_compaction_execution_plan({"config": {}, "session": session})
         self.assertEqual(plan["synthesis"], {"provider": "openai", "providerProfileName": None, "model": "gpt-5.3-codex-spark", "effort": "high", "selectionSource": "fixed", "purpose": "synthesis"})
         self.assertEqual(plan["verification"], {"provider": "openai", "providerProfileName": None, "model": "gpt-5.3-codex-spark", "effort": "high", "selectionSource": "fixed", "purpose": "verification"})
 
@@ -31,11 +31,11 @@ class CompactionModelFetchTests(AgentCoreTestCase):
             "openaiToken": "codex-token",
             "customHeaders": {},
         }
-        session = core.createEmptySession(cwd="/tmp/workspace", provider="anthropic", providerProfileName="anthropic-console", model="claude-opus-4-8", effort="max", systemPrompt="s", permissionMode="default")
-        plan = testing.resolveCompactionExecutionPlan({"config": {"compactionProviderProfile": profile}, "session": session})
+        session = core.create_empty_session(cwd="/tmp/workspace", provider="anthropic", providerProfileName="anthropic-console", model="claude-opus-4-8", effort="max", systemPrompt="s", permissionMode="default")
+        plan = testing.resolve_compaction_execution_plan({"config": {"compactionProviderProfile": profile}, "session": session})
         self.assertEqual(plan["synthesis"], {"provider": "openai", "providerProfileName": "codex", "model": "gpt-5.3-codex-spark", "effort": "high", "selectionSource": "configured", "purpose": "synthesis"})
         self.assertEqual(plan["verification"], {"provider": "openai", "providerProfileName": "codex", "model": "gpt-5.3-codex-spark", "effort": "high", "selectionSource": "configured", "purpose": "verification"})
-        policy = testing.resolveCompactionTokenPolicy({"config": {"compactionProviderProfile": profile, "providerProfiles": {"codex": profile["profile"]}}, "model": plan["synthesis"]})
+        policy = testing.resolve_compaction_token_policy({"config": {"compactionProviderProfile": profile, "providerProfiles": {"codex": profile["profile"]}}, "model": plan["synthesis"]})
         self.assertEqual(policy["compactionOutputTokens"], 20_000)
         self.assertEqual(policy["profileName"], "codex")
 
@@ -52,7 +52,7 @@ class CompactionModelFetchTests(AgentCoreTestCase):
             "openaiToken": "codex-token",
             "customHeaders": {},
         }
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd="/tmp/workspace",
             provider="anthropic",
             providerProfileName="anthropic-console",
@@ -71,7 +71,7 @@ class CompactionModelFetchTests(AgentCoreTestCase):
             "compactionVerificationModel": "gpt-5.6-terra",
             "compactionVerificationEffort": "medium",
         }
-        plan = testing.resolveCompactionExecutionPlan({"config": config, "session": session})
+        plan = testing.resolve_compaction_execution_plan({"config": config, "session": session})
         self.assertEqual(
             plan["synthesis"],
             {
@@ -96,7 +96,7 @@ class CompactionModelFetchTests(AgentCoreTestCase):
         )
 
     def test_compaction_requests_carry_config_and_session_identity(self):
-        from agent_core.context.compaction_transport import createDefaultCompactionModelClient
+        from agent_core.context.compaction_transport import create_default_compaction_model_client
 
         captured = {}
 
@@ -104,7 +104,7 @@ class CompactionModelFetchTests(AgentCoreTestCase):
             captured.update(args)
             return {"content": [{"type": "text", "text": "summary"}], "usage": {"inputTokens": 1}}
 
-        client = createDefaultCompactionModelClient({"openAiRequestSender": sender})
+        client = create_default_compaction_model_client({"openAiRequestSender": sender})
         config = {"provider": "openai", "openaiToken": "tok", "openaiApiMode": "responses", "openaiTransport": "sdk"}
         result = run(
             client.complete(

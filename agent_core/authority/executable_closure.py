@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Callable
 
 from .repository_trust import resolveRepositoryIdentity
-from ..storage.paths import getStateRoot
+from ..storage.paths import get_state_root
 
 
 EXECUTABLE_CLOSURE_POLICY_VERSION = 1
@@ -330,7 +330,7 @@ async def inspectExecutableClosure(
 
 
 def _ensure_snapshot_base() -> str:
-    base = os.path.join(getStateRoot(), "trust", "snapshots")
+    base = os.path.join(get_state_root(), "trust", "snapshots")
     os.makedirs(base, mode=0o700, exist_ok=True)
     info = os.lstat(base)
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode) or stat.S_IMODE(info.st_mode) & 0o077:

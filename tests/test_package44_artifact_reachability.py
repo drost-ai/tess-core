@@ -14,7 +14,7 @@ from tests.test_package38_interactive_context_relief import _codex_config
 
 class Package44ArtifactReachabilityTests(AgentCoreTestCase):
     def _session(self, workspace: Path) -> dict[str, Any]:
-        return core.createEmptySession(
+        return core.create_empty_session(
             cwd=str(workspace),
             provider="openai",
             providerProfileName="codex",
@@ -48,8 +48,8 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
     def test_pages_reconstruct_unicode_exactly_without_new_artifacts(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             session = self._session(workspace)
             content = ("αβγ artifact evidence\n" * 4_000) + "terminal"
             artifact = run(
@@ -108,8 +108,8 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
     def test_full_loop_page_bypasses_recursive_artifactization(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             config["tools"] = config["allowedTools"] = ["ReadToolArtifact"]
             session = self._session(workspace)
@@ -184,8 +184,8 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
     def test_authority_traversal_and_symlink_edges_fail_closed(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             owner, other = self._session(workspace), self._session(workspace)
             artifact = run(
@@ -268,12 +268,12 @@ class Package44ArtifactReachabilityTests(AgentCoreTestCase):
     def test_unavailable_artifact_returns_one_typed_error_without_replacement(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             session = self._session(workspace)
             config = _codex_config(home, workspace)
             artifact_dir = Path(
-                core.toolArtifactMetaPath(session["id"], "missing-artifact")
+                core.tool_artifact_meta_path(session["id"], "missing-artifact")
             ).parent
             before = list(artifact_dir.iterdir()) if artifact_dir.exists() else []
             result = run(

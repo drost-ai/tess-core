@@ -17,7 +17,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
-from ..storage.paths import getStateRoot
+from ..storage.paths import get_state_root
 
 
 SECRET_STORE_VERSION = 1
@@ -300,7 +300,7 @@ async def _migrate_value(purpose: str, value: str, idempotency_key: str) -> dict
 
 
 def _private_root() -> str:
-    return os.path.join(getStateRoot(), "private-secrets")
+    return os.path.join(get_state_root(), "private-secrets")
 
 
 def _records_dir() -> str:

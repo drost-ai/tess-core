@@ -13,14 +13,14 @@ from typing import Any
 
 from ..storage import (
     MAX_SHALLOW_SESSION_BYTES,
-    fileLock,
-    getStateRoot,
-    listLiveDaemonStates,
-    loadSessionRecordShallow,
-    readJsonFileTolerant,
-    sessionPath,
-    sessionTranscriptLogPath,
-    writeJsonFile,
+    file_lock,
+    get_state_root,
+    list_live_daemon_states,
+    load_session_record_shallow,
+    read_json_file_tolerant,
+    session_path,
+    session_transcript_log_path,
+    write_json_file,
 )
 from ..tasks.supervisor_parts.live_work import (
     _resolve_session_live_work,
@@ -44,7 +44,7 @@ _MAX_STORE_ENTRIES = 100_000
 async def buildSessionHygieneReport(options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     options = {**(options or {}), **kwargs}
     sample_limit = max(1, min(int(options.get("sampleLimit") or _MAX_SAMPLES), _MAX_SAMPLES))
-    directory = os.path.join(getStateRoot(), "sessions")
+    directory = os.path.join(get_state_root(), "sessions")
     report: dict[str, Any] = {
         "sessionCount": 0,
         "storeBytes": 0,
@@ -115,7 +115,7 @@ async def buildSessionHygieneReport(options: dict[str, Any] | None = None, **kwa
         if size > MAX_SHALLOW_SESSION_BYTES:
             _sample(report["oversizedRecords"], {"name": name, "bytes": size}, sample_limit)
             continue
-        record = await loadSessionRecordShallow(session_id)
+        record = await load_session_record_shallow(session_id)
         if record is None:
             _sample(report["malformedRecords"], {"name": name, "bytes": size, "reason": "invalid_json_or_schema"}, sample_limit)
             continue
@@ -157,7 +157,7 @@ async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwarg
     options = {**(options or {}), **kwargs}
     apply = options.get("apply") is True
     if apply and options.get("allowWithDaemonRunning") is not True:
-        live_daemons = await listLiveDaemonStates()
+        live_daemons = await list_live_daemon_states()
         if live_daemons:
             return {
                 "planned": [],
@@ -182,13 +182,13 @@ async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwarg
     # re-read and proven under its record lock.
     await asyncio.sleep(0)
     for candidate in planned:
-        path = sessionPath(candidate["sessionId"])
-        async with fileLock(path):
+        path = session_path(candidate["sessionId"])
+        async with file_lock(path):
             before_raw = _read_raw(path)
             if before_raw is None or _sha256(before_raw) != candidate["beforeHash"]:
                 result["invalidated"].append({"sessionId": candidate["sessionId"], "reason": "record_changed"})
                 continue
-            current = await readJsonFileTolerant(path, None)
+            current = await read_json_file_tolerant(path, None)
             if not isinstance(current, dict):
                 result["invalidated"].append({"sessionId": candidate["sessionId"], "reason": "record_unavailable"})
                 continue
@@ -201,7 +201,7 @@ async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwarg
             repaired["updatedAt"] = damage["repairedUpdatedAt"]
             log = repaired.setdefault("metadata", {}).setdefault("fullTranscriptLog", {})
             log["lastArchivedAt"] = damage["archiveLastPersistedAt"]
-            await writeJsonFile(path, repaired)
+            await write_json_file(path, repaired)
             after_raw = _read_raw(path) or b""
             result["appliedRepairs"].append(
                 {
@@ -214,7 +214,7 @@ async def repairSessionTimestamps(options: dict[str, Any] | None = None, **kwarg
 
 
 async def _collect_repair_candidates() -> list[dict[str, Any]]:
-    directory = os.path.join(getStateRoot(), "sessions")
+    directory = os.path.join(get_state_root(), "sessions")
     try:
         entries, _truncated = _bounded_directory_entries(directory)
     except OSError:
@@ -228,7 +228,7 @@ async def _collect_repair_candidates() -> list[dict[str, Any]]:
                 continue
         except OSError:
             continue
-        record = await loadSessionRecordShallow(entry.name[:-5])
+        record = await load_session_record_shallow(entry.name[:-5])
         if not record:
             continue
         evidence = _timestamp_evidence(record)
@@ -243,7 +243,7 @@ def _timestamp_evidence(record: dict[str, Any]) -> dict[str, Any]:
     stamped = full_log.get("lastArchivedAt")
     if not isinstance(stamped, str) or not stamped:
         return {"archiveInspected": False, "archiveBytesRead": 0}
-    archive = _read_archive_tail(sessionTranscriptLogPath(record["id"]))
+    archive = _read_archive_tail(session_transcript_log_path(record["id"]))
     result: dict[str, Any] = {
         "archiveInspected": True,
         "archiveBytesRead": archive["bytesRead"],
@@ -276,7 +276,7 @@ def _timestamp_evidence(record: dict[str, Any]) -> dict[str, Any]:
         return result
     created = _parse_iso(record.get("createdAt"))
     repaired = actual if created is None or actual_dt >= created else record["createdAt"]
-    raw = _read_raw(sessionPath(record["id"])) or b""
+    raw = _read_raw(session_path(record["id"])) or b""
     result["damage"] = {
         "sessionId": record["id"],
         "updatedAt": record.get("updatedAt"),

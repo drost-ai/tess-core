@@ -21,7 +21,7 @@ from .prompt_cache_diagnostics import (
 )
 from ..runtime.identifiers import parseSessionId
 from ..runtime.paths import RuntimePaths, runWithRuntimePaths
-from ..storage import withRecordTransaction
+from ..storage import with_record_transaction
 
 
 # --- persisted-state schema validation (merged from prompt_cache_state_schema) ---
@@ -298,7 +298,7 @@ async def readPromptCacheState(args: dict[str, Any]) -> dict[str, Any]:
 
 async def commitPromptCacheObservation(candidate: dict[str, Any]) -> dict[str, Any]:
     async def transact() -> dict[str, Any]:
-        async with withRecordTransaction("prompt-cache-state", candidate["sessionId"]):
+        async with with_record_transaction("prompt-cache-state", candidate["sessionId"]):
             current = await readPromptCacheState(candidate)
             if current["status"] == "unavailable":
                 if current.get("reason") in _PROTECTED_UNAVAILABLE:
@@ -361,7 +361,7 @@ async def markPromptCacheEvictionIntent(args: dict[str, Any]) -> dict[str, Any]:
         return {"status": "unavailable", "reason": "invalid_finalization_key"}
 
     async def transact() -> dict[str, Any]:
-        async with withRecordTransaction("prompt-cache-state", args["sessionId"]):
+        async with with_record_transaction("prompt-cache-state", args["sessionId"]):
             current = await readPromptCacheState(args)
             state = current.get("state")
             if not state:

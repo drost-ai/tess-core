@@ -99,7 +99,7 @@ def run_parity_scenario(
         status = "failed" if failure else "passed"
         return ParityResult(resolved.id, status, paths["run_id"], str(paths["run_dir"]), raw_path, normalized_path, comparison_path, golden_result, debug_dir, failure)
     finally:
-        core.resetConfiguredRuntimeHome()
+        core.reset_configured_runtime_home()
         _restore_env(paths["previous_env"])
         if cleanup == "success" and failure is None:
             shutil.rmtree(paths["run_dir"], ignore_errors=True)
@@ -133,7 +133,7 @@ async def _run_python_driver(actions: list[dict[str, Any]], paths: dict[str, Any
     previous_home = os.environ.get("AGENT_CORE_HOME")
     paths["previous_env"]["AGENT_CORE_HOME"] = previous_home
     os.environ["AGENT_CORE_HOME"] = str(paths["python_home"])
-    core.configureRuntimeHome(str(paths["python_home"]))
+    core.configure_runtime_home(str(paths["python_home"]))
     observations: dict[str, Any] = {"implementation": "python", "status": "passed", "cases": []}
     try:
         for action in actions:
@@ -165,7 +165,7 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
         },
         str(paths["python_workspace"]),
     )
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         {
             "cwd": str(paths["python_workspace"]),
             "provider": config["provider"],
@@ -180,8 +180,8 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
     session["createdAt"] = data.get("createdAt") or "2026-01-01T00:00:00.000Z"
     session["updatedAt"] = data.get("updatedAt") or "2026-01-01T00:00:01.000Z"
     session.setdefault("metadata", {})["workspaceName"] = data.get("workspaceName") or "Parity Workspace"
-    await core.saveSession(session)
-    loaded = await core.loadSession(session["id"])
+    await core.save_session(session)
+    loaded = await core.load_session(session["id"])
     events = _python_runtime_events(session, data)
     runtime_state = core.createInitialRuntimeState(session)
     for event in events:
@@ -197,7 +197,7 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
             },
             "config": _project_config(config),
             "session": _project_session(session),
-            "storage": {"loadedSessionId": loaded.get("id") if loaded else None, "listedSessionCount": len(await core.listSessions())},
+            "storage": {"loadedSessionId": loaded.get("id") if loaded else None, "listedSessionCount": len(await core.list_sessions())},
             "runtimeEvents": [_project_runtime_event(event) for event in events],
             "runtimeState": _project_runtime_state(runtime_state),
         }

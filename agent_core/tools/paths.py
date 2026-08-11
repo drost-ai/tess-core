@@ -5,7 +5,7 @@ from ..contracts.context import ToolContext
 import os
 import tempfile
 
-from ..storage import resolveMaybeRelative
+from ..storage import resolve_maybe_relative
 from .permissions import _ensure_path_confinement
 
 
@@ -14,7 +14,7 @@ async def _authorize_path(raw_path: str, context: ToolContext, tool_name: str) -
     the session's allowed roots. Symlinks and dot-segments are resolved before
     the containment check, so a link inside the workspace cannot reach outside
     it; the caller still receives the path shape it asked for."""
-    resolved = os.path.abspath(resolveMaybeRelative(context["session"]["cwd"], raw_path))
+    resolved = os.path.abspath(resolve_maybe_relative(context["session"]["cwd"], raw_path))
     canonical = os.path.realpath(resolved)
     if not any(_contained(root, canonical) for root in _confinement_roots(context)):
         await _ensure_path_confinement(context, tool_name, canonical)

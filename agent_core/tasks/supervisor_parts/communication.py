@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..._utils import maybe_await
-from ...storage import readTaskMeta, taskOutputPath
+from ...storage import read_task_meta, task_output_path
 from .records import _task_event_payload
 from .utils import _require_string
 from typing import Any, Callable
@@ -18,8 +18,8 @@ from ..communication import (
 async def readTaskOutput(task_id: str, tailBytes: int | None = 12000, **kwargs: Any) -> dict[str, Any]:
     if "tail_bytes" in kwargs:
         tailBytes = kwargs["tail_bytes"]
-    meta = await readTaskMeta(task_id)
-    output_file = (meta or {}).get("outputFile") or taskOutputPath(task_id)
+    meta = await read_task_meta(task_id)
+    output_file = (meta or {}).get("outputFile") or task_output_path(task_id)
     effective_tail_bytes = 12000 if tailBytes is None else max(0, int(tailBytes))
     try:
         tail = await _read_file_tail_bounded(filePath=output_file, maxBytes=effective_tail_bytes)
@@ -35,7 +35,7 @@ async def readTaskOutput(task_id: str, tailBytes: int | None = 12000, **kwargs: 
 
 def createTaskCommunicationApi(emit: Callable[[str, dict[str, Any], str | None], Any]) -> dict[str, Any]:
     async def emit_task_update(task_id: str) -> None:
-        meta = await readTaskMeta(task_id)
+        meta = await read_task_meta(task_id)
         if meta:
             await maybe_await(emit("task.updated", _task_event_payload(meta), meta.get("parent_session_id") or meta.get("sessionId")))
 

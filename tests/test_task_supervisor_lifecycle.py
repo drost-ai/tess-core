@@ -65,10 +65,10 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         try:
             run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             task_id = "tail-default-task"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("a" * 13000, encoding="utf-8")
-            run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": "tail-session", "command": "long-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": output_file}))
+            run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": "tail-session", "command": "long-output", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "completed", "outputFile": output_file}))
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
             default_tail = run(supervisor["readTaskOutput"](task_id))
             self.assertTrue(default_tail["truncated"])
@@ -92,8 +92,8 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         supervisor = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             events = []
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(0.4)')}"
@@ -105,7 +105,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertEqual(record["detailStatus"], "launching")
             self.assertEqual(record["taskFamily"], "shell")
             self.assertTrue(record["retrieveOnly"])
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertIn(task_id, persisted["metadata"]["taskIds"])
             start_event = next(event for event in events if event["event"] == "task.updated" and event["data"]["task_id"] == task_id)
             self.assertEqual(start_event["data"]["status"], "backgrounded")
@@ -123,8 +123,8 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         supervisor = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             events = []
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
@@ -133,11 +133,11 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             stopped = run(supervisor["stopTask"](task_id))
             self.assertEqual((stopped["status"], stopped["changed"]), ("stopped", True))
             for _ in range(60):
-                meta = run(core.readTaskMeta(task_id))
+                meta = run(core.read_task_meta(task_id))
                 if meta and meta.get("status") == "terminated":
                     break
                 time.sleep(0.05)
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             self.assertEqual(meta["status"], "terminated")
             self.assertIsNone(meta.get("exitCode"))
             record = run(supervisor["inspectTask"](task_id))
@@ -159,11 +159,11 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         try:
             deep_home = home / ("nested-" + "x" * 80) / ("more-" + "y" * 80)
             deep_home.mkdir(parents=True)
-            core.configureRuntimeHome(str(deep_home))
-            socket_path = core.daemonSocketPath("deep-instance")
+            core.configure_runtime_home(str(deep_home))
+            socket_path = core.daemon_socket_path("deep-instance")
             self.assertLessEqual(len(socket_path.encode("utf-8")), 100)
-            self.assertEqual(socket_path, core.daemonSocketPath("deep-instance"))
-            self.assertNotEqual(socket_path, core.daemonSocketPath("other-instance"))
+            self.assertEqual(socket_path, core.daemon_socket_path("deep-instance"))
+            self.assertNotEqual(socket_path, core.daemon_socket_path("other-instance"))
             self.assertFalse(socket_path.startswith(str(deep_home)))
             self.assertEqual(Path(socket_path).parent, Path(tempfile.gettempdir()))
         finally:
@@ -172,37 +172,37 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
     def test_daemon_event_cursor_reads_tail_and_rotated_log(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.ensureBaseLayout(str(workspace)))
-            events_path = Path(core.daemonEventsPath("sup-life-instance"))
+            run(core.ensure_base_layout(str(workspace)))
+            events_path = Path(core.daemon_events_path("sup-life-instance"))
             events_path.parent.mkdir(parents=True, exist_ok=True)
             records = [{"cursor": index, "event": "daemon.test"} for index in range(1, 40)]
             events_path.write_text("".join(json.dumps(record) + "\n" for record in records), encoding="utf-8")
-            self.assertEqual(run(core.readLastDaemonEventCursor("sup-life-instance")), 39)
+            self.assertEqual(run(core.read_last_daemon_event_cursor("sup-life-instance")), 39)
 
             with events_path.open("a", encoding="utf-8") as handle:
                 handle.write('{"cursor": 999')
-            self.assertEqual(run(core.readLastDaemonEventCursor("sup-life-instance")), 39)
+            self.assertEqual(run(core.read_last_daemon_event_cursor("sup-life-instance")), 39)
 
-            self.assertTrue(run(core.rotateDaemonEventsIfOversized("sup-life-instance", capBytes=1)))
+            self.assertTrue(run(core.rotate_daemon_events_if_oversized("sup-life-instance", capBytes=1)))
             self.assertFalse(events_path.exists())
             self.assertTrue(Path(f"{events_path}.1").exists())
-            self.assertEqual(run(core.readLastDaemonEventCursor("sup-life-instance")), 39)
+            self.assertEqual(run(core.read_last_daemon_event_cursor("sup-life-instance")), 39)
         finally:
             self.restore_home(root, previous)
 
     def test_daemon_connection_rejects_purpose_confused_stale_socket(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.ensureBaseLayout(str(workspace)))
-            socket_path = core.daemonSocketPath("sup-life-instance")
+            run(core.ensure_base_layout(str(workspace)))
+            socket_path = core.daemon_socket_path("sup-life-instance")
             Path(socket_path).parent.mkdir(parents=True, exist_ok=True)
             Path(socket_path).write_text("stale", encoding="utf-8")
-            run(core.saveDaemonState("sup-life-instance", {"pid": 999999999, "socketPath": socket_path, "status": "running"}))
+            run(core.save_daemon_state("sup-life-instance", {"pid": 999999999, "socketPath": socket_path, "status": "running"}))
             with self.assertRaises(DaemonSecurityError) as raised:
                 run(core.connectTaskSupervisorDaemonClient({"instanceId": "sup-life-instance"}))
             self.assertEqual(raised.exception.code, "daemon.security_unsafe")
             self.assertEqual(Path(socket_path).read_text(encoding="utf-8"), "stale")
-            self.assertIsNotNone(run(core.loadDaemonState("sup-life-instance")))
+            self.assertIsNotNone(run(core.load_daemon_state("sup-life-instance")))
         finally:
             self.restore_home(root, previous)
 
@@ -212,7 +212,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         try:
             run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             task_id = "task-recovery"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("still running\n", encoding="utf-8")
             child_argv = [sys.executable, "-c", "import time; time.sleep(10)"]
@@ -245,9 +245,9 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 "owner": "daemon",
                 "supervisorId": "previous-supervisor",
             }
-            run(core.writeTaskMeta(task_id, meta))
+            run(core.write_task_meta(task_id, meta))
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sessionId": "session-recovery",
@@ -285,7 +285,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             self.assertEqual(record["status"], "stopped")
             self.assertEqual(record["detailStatus"], "daemon_lost")
             self.assertIn("process_kill_outcome", record["metadata"])
-            next_meta = run(core.readTaskMeta(task_id))
+            next_meta = run(core.read_task_meta(task_id))
             self.assertEqual(next_meta["status"], "terminated")
             deadline = time.monotonic() + 5
             while proc.poll() is None and time.monotonic() < deadline:
@@ -328,8 +328,8 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             events = []
 
             async def on_event(event):
@@ -340,7 +340,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             started = run(supervisor["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "wedged worker"}))
             task_id = started["taskId"]
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             for _ in range(100):
                 if Path(output_file).exists() and "armed" in Path(output_file).read_text(encoding="utf-8"):
                     break
@@ -364,19 +364,19 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             boot = run(core.bootstrapRuntime({"session": session, "config": config, "cwd": str(workspace)}))
             instance_id = boot["runtimeInstanceId"]
             try:
                 self.assertIsNotNone(boot.get("daemon"))
-                state = run(core.loadDaemonState(instance_id))
+                state = run(core.load_daemon_state(instance_id))
                 self.assertIsNotNone(state)
                 daemon_pid = state["pid"]
                 self.assertTrue(_pid_alive(daemon_pid))
             finally:
                 run(boot["close"]())
-            self.assertIsNone(run(core.loadDaemonState(instance_id)))
+            self.assertIsNone(run(core.load_daemon_state(instance_id)))
             deadline = time.monotonic() + 5
             while _pid_alive(daemon_pid) and time.monotonic() < deadline:
                 time.sleep(0.05)
@@ -389,18 +389,18 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         owner = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             owner = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], start_new_session=True)
             os.environ["AGENT_CORE_DAEMON_OWNER_POLL_MS"] = "200"
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "owner-watch-instance", "cwd": str(workspace), "ownerPid": owner.pid}))
-            daemon_pid = run(core.loadDaemonState("owner-watch-instance"))["pid"]
+            daemon_pid = run(core.load_daemon_state("owner-watch-instance"))["pid"]
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(120)')}"
             started = run(client["startBackgroundCommand"]({"sessionId": session["id"], "command": command, "cwd": str(workspace), "title": "contained worker"}))
             task_id = started["taskId"]
             worker_pid = None
             for _ in range(100):
-                meta = run(core.readTaskMeta(task_id))
+                meta = run(core.read_task_meta(task_id))
                 if meta and isinstance(meta.get("pid"), int):
                     worker_pid = meta["pid"]
                     break
@@ -421,9 +421,9 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
                 time.sleep(0.1)
             self.assertTrue(spawned.poll() is not None if spawned is not None else not _pid_alive(daemon_pid), "daemon must die with its owner")
             self.assertFalse(_pid_alive(worker_pid), "owned workers must die with the daemon")
-            events = run(core.loadDaemonEvents("owner-watch-instance"))
+            events = run(core.load_daemon_events("owner-watch-instance"))
             self.assertTrue(any(event.get("event") == "daemon.owner_lost" for event in events))
-            self.assertIsNone(run(core.loadDaemonState("owner-watch-instance")))
+            self.assertIsNone(run(core.load_daemon_state("owner-watch-instance")))
         finally:
             os.environ.pop("AGENT_CORE_DAEMON_OWNER_POLL_MS", None)
             if owner and owner.poll() is None:
@@ -437,7 +437,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             client = run(core.ensureTaskSupervisorDaemon({"instanceId": "watchdog-instance", "cwd": str(workspace)}))
-            old_state = run(core.loadDaemonState("watchdog-instance"))
+            old_state = run(core.load_daemon_state("watchdog-instance"))
             run(client["close"]())
             emitted = []
             swapped = []
@@ -458,7 +458,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             while spawned is not None and spawned.poll() is None and time.monotonic() < deadline:
                 time.sleep(0.05)
             self.assertEqual(run(check_daemon_once(context)), "restarted")
-            new_state = run(core.loadDaemonState("watchdog-instance"))
+            new_state = run(core.load_daemon_state("watchdog-instance"))
             self.assertNotEqual(new_state["pid"], old_state["pid"])
             self.assertNotEqual(new_state["epoch"], old_state["epoch"])
             self.assertEqual([event for event, _data in emitted], ["daemon.lost", "daemon.restarted"])
@@ -473,8 +473,8 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
         try:
             first = run(core.ensureTaskSupervisorDaemon({"instanceId": "coexist-a", "cwd": str(workspace)}))
             second = run(core.ensureTaskSupervisorDaemon({"instanceId": "coexist-b", "cwd": str(workspace)}))
-            state_a = run(core.loadDaemonState("coexist-a"))
-            state_b = run(core.loadDaemonState("coexist-b"))
+            state_a = run(core.load_daemon_state("coexist-a"))
+            state_b = run(core.load_daemon_state("coexist-b"))
             self.assertEqual(state_a["instanceId"], "coexist-a")
             self.assertEqual(state_b["instanceId"], "coexist-b")
             self.assertNotEqual(state_a["pid"], state_b["pid"])
@@ -483,8 +483,8 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             run(second["close"]())
 
             run(core.stopTaskSupervisorDaemon({"instanceId": "coexist-a"}))
-            self.assertIsNone(run(core.loadDaemonState("coexist-a")))
-            surviving = run(core.loadDaemonState("coexist-b"))
+            self.assertIsNone(run(core.load_daemon_state("coexist-a")))
+            surviving = run(core.load_daemon_state("coexist-b"))
             self.assertIsNotNone(surviving)
             self.assertEqual(surviving["pid"], state_b["pid"])
             client_b = run(core.connectTaskSupervisorDaemonClient({"instanceId": "coexist-b"}))

@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from .._utils import maybe_await
-from ..storage import getStateRoot
+from ..storage import get_state_root
 
 
 def mcpTokenStoreKey(config: dict[str, Any]) -> str:
@@ -25,7 +25,7 @@ class FileMcpTokenStore:
     """Private, atomic runtime-home storage for MCP OAuth token records."""
 
     def __init__(self, root: str | os.PathLike[str] | None = None):
-        self.root = Path(root) if root is not None else Path(getStateRoot()) / "mcp-tokens"
+        self.root = Path(root) if root is not None else Path(get_state_root()) / "mcp-tokens"
 
     async def get(self, server_key: str) -> dict[str, Any] | None:
         return await asyncio.to_thread(self._get_sync, server_key)

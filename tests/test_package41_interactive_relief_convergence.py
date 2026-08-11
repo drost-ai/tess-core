@@ -12,7 +12,7 @@ from tests.test_package38_interactive_context_relief import _codex_config
 
 
 def _working_context(session: dict[str, Any]) -> dict[str, Any]:
-    return core.buildWorkingContextDocumentFromCandidate(
+    return core.build_working_context_document_from_candidate(
         {
             "previous": None,
             "session": session,
@@ -208,12 +208,12 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
     ) -> None:
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = _codex_config(home, workspace)
             system_prompt = "identity and tool guidance " * 5_200
             config["systemPrompt"] = system_prompt
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 providerProfileName="codex",
@@ -249,7 +249,7 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
                 }
             ]
             context_path = (
-                Path(core.getSessionCompactionsDir(session["id"]))
+                Path(core.get_session_compactions_dir(session["id"]))
                 / "live-shaped-working-context.json"
             )
             context_path.parent.mkdir(parents=True, exist_ok=True)
@@ -259,7 +259,7 @@ class Package41InteractiveReliefConvergenceTests(AgentCoreTestCase):
             )
             context_hash = hashlib.sha256(context_path.read_bytes()).hexdigest()
             run(
-                core.saveCompactionManifest(
+                core.save_compaction_manifest(
                     {
                         "sessionId": session["id"],
                         "strategy": "checkpoint-v2",

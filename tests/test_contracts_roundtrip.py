@@ -19,7 +19,7 @@ def _read_bytes(path: str) -> bytes:
 
 
 def _compacted_session() -> dict:
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd="/tmp/workspace",
         provider="openai",
         providerProfileName="codex",
@@ -65,7 +65,7 @@ def _compacted_session() -> dict:
 
 
 def _forked_session() -> dict:
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd="/tmp/workspace",
         provider="anthropic",
         model="claude-sonnet-4-6",
@@ -78,7 +78,7 @@ def _forked_session() -> dict:
 
 
 def _subagent_parent_session() -> dict:
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         cwd="/tmp/workspace",
         provider="anthropic",
         model="claude-opus-4-6",
@@ -188,19 +188,19 @@ class ContractsRoundTripTests(AgentCoreTestCase):
 
     def test_compacted_session_roundtrip(self):
         self._roundtrip(
-            core.saveSession, core.loadSession, core.sessionPath,
+            core.save_session, core.load_session, core.session_path,
             _compacted_session(), SessionRecord, "compacted session", "id",
         )
 
     def test_forked_session_roundtrip(self):
         self._roundtrip(
-            core.saveSession, core.loadSession, core.sessionPath,
+            core.save_session, core.load_session, core.session_path,
             _forked_session(), SessionRecord, "forked session", "id",
         )
 
     def test_subagent_parent_session_roundtrip(self):
         self._roundtrip(
-            core.saveSession, core.loadSession, core.sessionPath,
+            core.save_session, core.load_session, core.session_path,
             _subagent_parent_session(), SessionRecord, "subagent parent session", "id",
         )
 
@@ -209,11 +209,11 @@ class ContractsRoundTripTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             self.assertEqual(validate(record, TaskMeta, strict=True), [])
-            run(core.writeTaskMeta(record["taskId"], record))
-            path = core.taskMetaPath(record["taskId"])
+            run(core.write_task_meta(record["taskId"], record))
+            path = core.task_meta_path(record["taskId"])
             first = _read_bytes(path)
-            loaded = run(core.readTaskMeta(record["taskId"]))
-            run(core.writeTaskMeta(record["taskId"], loaded))
+            loaded = run(core.read_task_meta(record["taskId"]))
+            run(core.write_task_meta(record["taskId"], loaded))
             self.assertEqual(first, _read_bytes(path), "task meta round-trip changed bytes")
             self.assertEqual(loaded.get("taskId"), loaded.get("task_id"))
         finally:
@@ -221,13 +221,13 @@ class ContractsRoundTripTests(AgentCoreTestCase):
 
     def test_mid_finalize_child_agent_roundtrip(self):
         self._roundtrip(
-            core.saveChildAgent, core.loadChildAgent, core.childAgentPath,
+            core.save_child_agent, core.load_child_agent, core.child_agent_path,
             _mid_finalize_child_agent(), ChildAgentRecord, "child agent", "agentId",
         )
 
     def test_monitor_record_roundtrip(self):
         self._roundtrip(
-            core.saveMonitor, core.loadMonitor, core.monitorPath,
+            core.save_monitor, core.load_monitor, core.monitor_path,
             _monitor_record(), MonitorRecord, "monitor", "id",
         )
 
@@ -235,9 +235,9 @@ class ContractsRoundTripTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             session = _compacted_session()
-            run(core.saveSession(session))
+            run(core.save_session(session))
             run(
-                core.appendSessionTranscriptLogEntries(
+                core.append_session_transcript_log_entries(
                     session["id"],
                     [
                         {
@@ -250,7 +250,7 @@ class ContractsRoundTripTests(AgentCoreTestCase):
                     ],
                 )
             )
-            loaded = run(core.loadSession(session["id"]))
+            loaded = run(core.load_session(session["id"]))
             self.assertIn("fullTranscriptLog", loaded["metadata"])
             self.assertEqual(validate(loaded, SessionRecord, strict=True), [])
         finally:

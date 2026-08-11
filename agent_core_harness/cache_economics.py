@@ -235,13 +235,13 @@ async def _run_ttl(ttl: str, *, seed_wasted_slot: bool) -> dict[str, Any]:
 def _runtime_lifecycle_messages() -> list[tuple[str, list[dict[str, Any]]]]:
     initial = _messages("warmup", 24)
     steady = [*copy.deepcopy(initial), *_messages("steady", 2)]
-    compacted = core.applyPartialCompaction(copy.deepcopy(steady), 0)
+    compacted = core.apply_partial_compaction(copy.deepcopy(steady), 0)
     if not compacted.get("applied"):
         raise RuntimeError("Cache lane compaction scenario did not compact")
     compaction_messages = compacted["messages"]
     relief_source = [*copy.deepcopy(compaction_messages), *_messages("relief-source", 16)]
     relief_session = {"id": "cache-relief", "metadata": {}}
-    relieved = core.applyLightweightContextRelief(relief_source, relief_session)
+    relieved = core.apply_lightweight_context_relief(relief_source, relief_session)
     if not relieved.get("summary", {}).get("applied"):
         raise RuntimeError("Cache lane relief scenario did not apply")
     parent = {

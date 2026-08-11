@@ -167,7 +167,7 @@ class FakeProviderRuntime:
     async def _run_anthropic_count_tokens(self, data: dict[str, Any]) -> dict[str, Any]:
         server = FakeProviderHttpServer(provider="anthropic", script=data.get("script"), request_recorder=self.requests).start()
         self.servers.append(server)
-        return await core.measureRequestInputTokens(
+        return await core.measure_request_input_tokens(
             {
                 "config": _anthropic_config(server, data),
                 "request": _request(provider="anthropic", data=data),

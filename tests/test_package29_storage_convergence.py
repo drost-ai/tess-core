@@ -18,7 +18,7 @@ projection_module = importlib.import_module("agent_core.tasks.supervisor_parts.p
 
 class Package29StorageConvergenceTests(AgentCoreTestCase):
     def _session(self, workspace: Path, session_id: str) -> dict:
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace),
             provider="openai",
             model="test-model",
@@ -36,25 +36,25 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "11111111-1111-4111-8111-111111111111")
-            run(core.saveSession(session))
+            run(core.save_session(session))
             config = {"sessionPersistence": True, "cwd": str(workspace)}
 
             run(core.persistSession(session, config, touch=False))
-            first = run(core.loadSessionRecordShallow(session["id"]))
+            first = run(core.load_session_record_shallow(session["id"]))
             first_log = dict(first["metadata"]["fullTranscriptLog"])
-            archive = Path(core.sessionTranscriptLogPath(session["id"]))
+            archive = Path(core.session_transcript_log_path(session["id"]))
             first_archive = archive.read_bytes()
             self.assertEqual(first["updatedAt"], "2026-06-01T00:00:00Z")
             self.assertTrue(first_log["lastArchivedAt"])
 
             run(core.persistSession(session, config, touch=False))
-            second = run(core.loadSessionRecordShallow(session["id"]))
+            second = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(second["updatedAt"], first["updatedAt"])
             self.assertEqual(second["metadata"]["fullTranscriptLog"]["lastArchivedAt"], first_log["lastArchivedAt"])
             self.assertEqual(archive.read_bytes(), first_archive)
 
             run(core.persistSession(session, config))
-            semantic = run(core.loadSessionRecordShallow(session["id"]))
+            semantic = run(core.load_session_record_shallow(session["id"]))
             self.assertGreater(semantic["updatedAt"], first["updatedAt"])
             self.assertEqual(archive.read_bytes(), first_archive)
         finally:
@@ -66,13 +66,13 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         try:
             session = self._session(workspace, "22222222-2222-4222-8222-222222222222")
             session["metadata"]["fullTranscriptLog"] = {
-                "path": core.sessionTranscriptLogPath(session["id"]),
+                "path": core.session_transcript_log_path(session["id"]),
                 "archivedMessageCount": 99,
                 "lastArchivedAt": "2026-06-01T00:00:00Z",
             }
-            run(core.saveSession(session))
+            run(core.save_session(session))
             run(
-                core.appendSessionTranscriptLogEntries(
+                core.append_session_transcript_log_entries(
                     session["id"],
                     [
                         {"type": "message", "message_index": 0, "role": "user", "content": "hello", "persisted_at": "2026-06-01T00:00:01Z"},
@@ -80,7 +80,7 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
                     ],
                 )
             )
-            target = Path(core.sessionPath(session["id"]))
+            target = Path(core.session_path(session["id"]))
             before = target.read_bytes()
             before_mtime = target.stat().st_mtime_ns
             archive_opens = []
@@ -91,20 +91,20 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
                 return original_open(path, *args, **kwargs)
 
             sessions_module.open = tracking_open
-            listed = run(core.listSessions())
+            listed = run(core.list_sessions())
             self.assertEqual([item["id"] for item in listed], [session["id"]])
             self.assertEqual(archive_opens, [])
             self.assertEqual(target.read_bytes(), before)
             self.assertEqual(target.stat().st_mtime_ns, before_mtime)
 
-            first = run(core.loadSessionWithReconciliation(session["id"]))
+            first = run(core.load_session_with_reconciliation(session["id"]))
             self.assertTrue(first["changed"])
             self.assertEqual(len(first["record"]["messages"]), 2)
             self.assertEqual(first["record"]["metadata"]["fullTranscriptLog"]["archivedMessageCount"], 2)
             after_first = target.read_bytes()
             after_first_mtime = target.stat().st_mtime_ns
             time.sleep(0.01)
-            second = run(core.loadSessionWithReconciliation(session["id"]))
+            second = run(core.load_session_with_reconciliation(session["id"]))
             self.assertFalse(second["changed"])
             self.assertEqual(target.read_bytes(), after_first)
             self.assertEqual(target.stat().st_mtime_ns, after_first_mtime)
@@ -117,9 +117,9 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "66666666-6666-4666-8666-666666666666")
-            run(core.saveSession(session))
+            run(core.save_session(session))
             run(
-                core.appendSessionTranscriptLogEntries(
+                core.append_session_transcript_log_entries(
                     session["id"],
                     [
                         {
@@ -134,10 +134,10 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
                     ],
                 )
             )
-            target = Path(core.sessionPath(session["id"]))
+            target = Path(core.session_path(session["id"]))
             for torn in (b"", b'{"id": "66666666-6666-4666-8666-666666666666", "schemaV'):
                 target.write_bytes(torn)
-                recovered = run(core.loadSessionWithReconciliation(session["id"]))
+                recovered = run(core.load_session_with_reconciliation(session["id"]))
                 self.assertTrue(recovered["changed"])
                 self.assertEqual(recovered["reason"], "archive_recovery")
                 self.assertEqual(
@@ -145,7 +145,7 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
                     ["hello", "world"],
                 )
                 self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["schemaVersion"], 2)
-                settled = run(core.loadSessionWithReconciliation(session["id"]))
+                settled = run(core.load_session_with_reconciliation(session["id"]))
                 self.assertFalse(settled["changed"])
                 self.assertEqual(len(settled["record"]["messages"]), 2)
         finally:
@@ -155,13 +155,13 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "77777777-7777-4777-8777-777777777777")
-            run(core.saveSession(session))
-            target = Path(core.sessionPath(session["id"]))
+            run(core.save_session(session))
+            target = Path(core.session_path(session["id"]))
             target.write_bytes(b'{"id": "77777777-7777-4777-8777-777777777777"')
-            result = run(core.loadSessionWithReconciliation(session["id"]))
+            result = run(core.load_session_with_reconciliation(session["id"]))
             self.assertIsNone(result["record"])
             self.assertFalse(result["changed"])
-            self.assertIsNone(run(core.loadSessionRecordShallow(session["id"])))
+            self.assertIsNone(run(core.load_session_record_shallow(session["id"])))
         finally:
             self.restore_home(root, previous)
 
@@ -175,9 +175,9 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
                 fsyncs.append(fd)
                 return real_fsync(fd)
 
-            target = Path(core.sessionPath("88888888-8888-4888-8888-888888888888"))
+            target = Path(core.session_path("88888888-8888-4888-8888-888888888888"))
             with mock.patch("os.fsync", tracking_fsync):
-                run(core.writeJsonFile(str(target), {"probe": True}))
+                run(core.write_json_file(str(target), {"probe": True}))
             self.assertEqual(len(fsyncs), 2)
             self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"probe": True})
         finally:
@@ -191,8 +191,8 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
                 for index in range(3)
             ]
             for session in sessions:
-                run(core.saveSession(session))
-            cache = core.createSessionListCache()
+                run(core.save_session(session))
+            cache = core.create_session_list_cache()
             self.assertEqual(len(run(cache["list"]())), 3)
             first = cache["getStats"]()
             self.assertEqual(first["parsed"], 3)
@@ -203,7 +203,7 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
 
             changed = sessions[1]
             changed["name"] = "changed"
-            run(core.saveSession(changed))
+            run(core.save_session(changed))
             run(cache["list"]())
             third = cache["getStats"]()
             self.assertEqual(third["parsed"] - second["parsed"], 1)
@@ -215,10 +215,10 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "44444444-4444-4444-8444-444444444444")
-            run(core.saveSession(session))
+            run(core.save_session(session))
             run(projection_module._project_session_task_records(session["id"], session))
-            target = Path(core.sessionPath(session["id"]))
-            archive = Path(core.sessionTranscriptLogPath(session["id"]))
+            target = Path(core.session_path(session["id"]))
+            archive = Path(core.session_transcript_log_path(session["id"]))
             first_raw = target.read_bytes()
             first_archive = archive.read_bytes()
             first_mtime = target.stat().st_mtime_ns
@@ -238,15 +238,15 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
         runtime = None
         try:
             session = self._session(workspace, "55555555-5555-4555-8555-555555555555")
-            run(core.saveSession(session))
+            run(core.save_session(session))
             run(projection_module._project_session_task_records(session["id"], session))
             runtime = run(
                 core.createCollaborationRuntime(
                     {"session": session, "config": {"sessionPersistence": True}, "startTicker": False}
                 )
             )
-            session_file = Path(core.sessionPath(session["id"]))
-            archive_file = Path(core.sessionTranscriptLogPath(session["id"]))
+            session_file = Path(core.session_path(session["id"]))
+            archive_file = Path(core.session_transcript_log_path(session["id"]))
             before = (session_file.read_bytes(), session_file.stat().st_mtime_ns, archive_file.read_bytes(), archive_file.stat().st_mtime_ns)
 
             # 400 source-equivalent 1.5 s observations = ten simulated idle minutes.

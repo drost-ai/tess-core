@@ -5,10 +5,10 @@ import math
 import os
 import re
 from ...providers.errors import fallbackEligibleProviderFailure, isProviderRequestError
-from ..compaction_transport import resolveCompactionModelCandidates
-from .evidence import buildCompactionEvidence
-from .parsing import parseCompactionSynthesisResponse, parseCompactionVerificationResponse
-from .prompts import buildCompactionSynthesisPrompt, buildCompactionVerificationPrompt
+from ..compaction_transport import resolve_compaction_model_candidates
+from .evidence import build_compaction_evidence
+from .parsing import parse_compaction_synthesis_response, parse_compaction_verification_response
+from .prompts import build_compaction_synthesis_prompt, build_compaction_verification_prompt
 from .shared import (
     compaction_evidence_fallback_budgets,
     compaction_knob,
@@ -16,17 +16,17 @@ from .shared import (
     COMPACTION_VERIFICATION_SYSTEM_PROMPT,
     MAX_FAILURES,
 )
-from .utils import collapseWhitespace, estimateMessageTokens, truncate
+from .utils import collapse_whitespace, estimateMessageTokens, truncate
 from typing import Any
-from .artifacts import mergeCompactionUsageIntoSession
-from ...storage.message_origin import isGenuineUserRequest as _is_genuine_user_request
+from .artifacts import merge_compaction_usage_into_session
+from ...storage.message_origin import is_genuine_user_request as _is_genuine_user_request
 from ...providers._knob_reader import provider_knob
 from ...providers.token_budget import resolveCompactionRequestOutputTokens
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
-from ..compaction_transport import resolveCompactionTokenPolicy
+from ..compaction_transport import resolve_compaction_token_policy
 
 
-def buildCompactionAttemptStrategies(modelCandidates: list[dict[str, Any]], options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def build_compaction_attempt_strategies(modelCandidates: list[dict[str, Any]], options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     attempts: list[dict[str, Any]] = []
     seen: set[str] = set()
     budget_for_model = (options or {}).get("evidenceTokenBudgetForModel")
@@ -42,27 +42,27 @@ def buildCompactionAttemptStrategies(modelCandidates: list[dict[str, Any]], opti
     return attempts
 
 
-async def runModelBackedCompactionSynthesisWithFallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_model_backed_compaction_synthesis_with_fallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    candidates = resolveCompactionModelCandidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "synthesis"})
+    candidates = resolve_compaction_model_candidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "synthesis"})
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
-    attempts = buildCompactionAttemptStrategies(
+    attempts = build_compaction_attempt_strategies(
         candidates,
         {
             "evidenceTokenBudgetForModel": lambda model: resolveCompactionRequestOutputTokens(
-                {"profile": resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model}), "sourceTokenEstimate": source_token_estimate}
+                {"profile": resolve_compaction_token_policy({"config": args.get("config") or {}, "model": model}), "sourceTokenEstimate": source_token_estimate}
             )
         },
     )
     last_error: Exception | None = None
     for index, attempt in enumerate(attempts):
         try:
-            return await runModelBackedCompactionSynthesis({**args, "model": attempt["model"], "evidenceTokenBudget": attempt["evidenceTokenBudget"]})
+            return await run_model_backed_compaction_synthesis({**args, "model": attempt["model"], "evidenceTokenBudget": attempt["evidenceTokenBudget"]})
         except Exception as exc:
             last_error = exc
-            if not shouldRetryCompactionAttempt(exc, index < len(attempts) - 1):
-                if shouldSkipCompactionSynthesisFailure(exc):
-                    return buildSkippedCompactionSynthesis(
+            if not should_retry_compaction_attempt(exc, index < len(attempts) - 1):
+                if should_skip_compaction_synthesis_failure(exc):
+                    return build_skipped_compaction_synthesis(
                         {
                             "session": args["session"],
                             "previousWorkingContext": args.get("previousWorkingContext"),
@@ -70,14 +70,14 @@ async def runModelBackedCompactionSynthesisWithFallback(args: dict[str, Any] | N
                             "sourceStart": int(args.get("sourceStart") or 0),
                             "model": attempt["model"],
                             "evidenceTokenBudget": attempt["evidenceTokenBudget"],
-                            "reason": describeCompactionSynthesisFailure(exc),
+                            "reason": describe_compaction_synthesis_failure(exc),
                         }
                     )
                 raise
-    if shouldSkipCompactionSynthesisFailure(last_error):
+    if should_skip_compaction_synthesis_failure(last_error):
         final_attempt = attempts[-1] if attempts else None
         if final_attempt:
-            return buildSkippedCompactionSynthesis(
+            return build_skipped_compaction_synthesis(
                 {
                     "session": args["session"],
                     "previousWorkingContext": args.get("previousWorkingContext"),
@@ -85,18 +85,18 @@ async def runModelBackedCompactionSynthesisWithFallback(args: dict[str, Any] | N
                     "sourceStart": int(args.get("sourceStart") or 0),
                     "model": final_attempt["model"],
                     "evidenceTokenBudget": final_attempt["evidenceTokenBudget"],
-                    "reason": describeCompactionSynthesisFailure(last_error),
+                    "reason": describe_compaction_synthesis_failure(last_error),
                 }
             )
     raise last_error or RuntimeError("Compaction synthesis failed.")
 
 
-async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_model_backed_compaction_synthesis(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session = args["session"]
     model = args["model"]
     evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
-    evidence = buildCompactionEvidence(
+    evidence = build_compaction_evidence(
         {
             "sourceMessages": args["sourceMessages"],
             "sourceStart": int(args.get("sourceStart") or 0),
@@ -108,7 +108,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
     last_raw_response_text = ""
     usage: dict[str, Any] = {}
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
-    token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
+    token_policy = resolve_compaction_token_policy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
     target_preservation_tokens = math.ceil(source_token_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
     for attempt in range(1, compaction_knob("compaction.synthesis_max_retries") + 1):
@@ -122,7 +122,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
                 "sessionId": session.get("id"),
                 "system": COMPACTION_SYSTEM_PROMPT,
                 "maxOutputTokens": output_token_budget,
-                "prompt": buildCompactionSynthesisPrompt(
+                "prompt": build_compaction_synthesis_prompt(
                     {
                         "session": session,
                         "model": model,
@@ -141,12 +141,12 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
         raw_response_text = str(response.get("text") or "").strip()
         last_raw_response_text = raw_response_text
         _merge_compaction_model_usage(usage, response.get("usage") or {})
-        mergeCompactionUsageIntoSession(session, response.get("usage") or {})
-        parsed = parseCompactionSynthesisResponse(raw_response_text)
+        merge_compaction_usage_into_session(session, response.get("usage") or {})
+        parsed = parse_compaction_synthesis_response(raw_response_text)
         if parsed:
             return {**parsed, "usage": usage, "rawResponseText": raw_response_text, "evidence": evidence, "evidenceBudgetTokens": evidence_budget, "model": response.get("model") or model}
         last_error = f"Attempt {attempt} returned invalid compaction JSON: {truncate(raw_response_text, 1200)}"
-    return buildEvidenceBackedCompactionSynthesis(
+    return build_evidence_backed_compaction_synthesis(
         {
             "session": session,
             "previousWorkingContext": args.get("previousWorkingContext"),
@@ -162,36 +162,36 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
     )
 
 
-async def runCompactionCheckpointVerificationWithFallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_compaction_checkpoint_verification_with_fallback(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    candidates = resolveCompactionModelCandidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "verification"})
+    candidates = resolve_compaction_model_candidates({"config": args.get("config") or {}, "session": args["session"], "purpose": "verification"})
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
-    attempts = buildCompactionAttemptStrategies(
+    attempts = build_compaction_attempt_strategies(
         candidates,
         {
             "evidenceTokenBudgetForModel": lambda model: resolveCompactionRequestOutputTokens(
-                {"profile": resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model}), "sourceTokenEstimate": source_token_estimate}
+                {"profile": resolve_compaction_token_policy({"config": args.get("config") or {}, "model": model}), "sourceTokenEstimate": source_token_estimate}
             )
         },
     )
     last_error: Exception | None = None
     for index, attempt in enumerate(attempts):
         try:
-            return await runCompactionCheckpointVerification({**args, "model": attempt["model"], "evidenceTokenBudget": attempt["evidenceTokenBudget"]})
+            return await run_compaction_checkpoint_verification({**args, "model": attempt["model"], "evidenceTokenBudget": attempt["evidenceTokenBudget"]})
         except Exception as exc:
             last_error = exc
-            if not shouldRetryCompactionAttempt(exc, index < len(attempts) - 1):
+            if not should_retry_compaction_attempt(exc, index < len(attempts) - 1):
                 raise
     raise last_error or RuntimeError("Compaction verification failed.")
 
 
-async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_compaction_checkpoint_verification(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session = args["session"]
     model = args["model"]
     evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
     source_start = int(args.get("sourceStart") or 0)
-    evidence = buildCompactionEvidence(
+    evidence = build_compaction_evidence(
         {
             "sourceMessages": args["sourceMessages"],
             "sourceStart": source_start,
@@ -204,7 +204,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
     last_invalid_raw_response_text = ""
     usage: dict[str, Any] = {}
     source_token_estimate = estimateMessageTokens(args["sourceMessages"])
-    token_policy = resolveCompactionTokenPolicy({"config": args.get("config") or {}, "model": model})
+    token_policy = resolve_compaction_token_policy({"config": args.get("config") or {}, "model": model})
     output_token_budget = resolveCompactionRequestOutputTokens({"profile": token_policy, "sourceTokenEstimate": source_token_estimate})
     target_preservation_tokens = math.ceil(source_token_estimate * float(provider_knob("provider.compaction_preservation_ratio")))
     for attempt in range(1, compaction_knob("compaction.verification_max_retries") + 1):
@@ -218,7 +218,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
                 "sessionId": session.get("id"),
                 "system": COMPACTION_VERIFICATION_SYSTEM_PROMPT,
                 "maxOutputTokens": output_token_budget,
-                "prompt": buildCompactionVerificationPrompt(
+                "prompt": build_compaction_verification_prompt(
                     {
                         "session": session,
                         "model": model,
@@ -238,8 +238,8 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
         )
         raw_response_text = str(response.get("text") or "").strip()
         _merge_compaction_model_usage(usage, response.get("usage") or {})
-        mergeCompactionUsageIntoSession(session, response.get("usage") or {})
-        parsed = parseCompactionVerificationResponse(raw_response_text)
+        merge_compaction_usage_into_session(session, response.get("usage") or {})
+        parsed = parse_compaction_verification_response(raw_response_text)
         if parsed:
             return {**parsed, "usage": usage, "rawResponseText": raw_response_text, "evidence": evidence, "evidenceBudgetTokens": evidence_budget, "model": response.get("model") or model}
         last_invalid_response = response
@@ -261,13 +261,13 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
     raise RuntimeError(f"Compaction verification failed: {last_error}")
 
 
-def shouldRetryCompactionAttempt(error: BaseException, hasMoreAttempts: bool) -> bool:
+def should_retry_compaction_attempt(error: BaseException, hasMoreAttempts: bool) -> bool:
     if not hasMoreAttempts:
         return False
-    return fallbackEligibleProviderFailure(error) or isCompactionContextSizeFailure(error)
+    return fallbackEligibleProviderFailure(error) or is_compaction_context_size_failure(error)
 
 
-def isCompactionContextSizeFailure(error: BaseException) -> bool:
+def is_compaction_context_size_failure(error: BaseException) -> bool:
     if not isProviderRequestError(error):
         return False
     record = getattr(error, "record", {})
@@ -277,15 +277,15 @@ def isCompactionContextSizeFailure(error: BaseException) -> bool:
     return bool(re.search(r"context|input token|prompt token|max token|too large|too long|context_length|request exceeds|input is too long", detail))
 
 
-def shouldSkipCompactionSynthesisFailure(error: BaseException | None) -> bool:
-    return bool(error and (fallbackEligibleProviderFailure(error) or isCompactionContextSizeFailure(error) or isCompactionSynthesisJsonFailure(error)))
+def should_skip_compaction_synthesis_failure(error: BaseException | None) -> bool:
+    return bool(error and (fallbackEligibleProviderFailure(error) or is_compaction_context_size_failure(error) or is_compaction_synthesis_json_failure(error)))
 
 
-def isCompactionSynthesisJsonFailure(error: BaseException | None) -> bool:
+def is_compaction_synthesis_json_failure(error: BaseException | None) -> bool:
     return isinstance(error, RuntimeError) and str(error).startswith("Compaction synthesis failed:")
 
 
-def describeCompactionSynthesisFailure(error: BaseException | None) -> str:
+def describe_compaction_synthesis_failure(error: BaseException | None) -> str:
     if error is None:
         return "Compaction synthesis failed: unknown error"
     if isProviderRequestError(error):
@@ -297,9 +297,9 @@ def describeCompactionSynthesisFailure(error: BaseException | None) -> str:
     return f"Compaction synthesis failed: {error}"
 
 
-def buildSkippedCompactionSynthesis(args: dict[str, Any]) -> dict[str, Any]:
+def build_skipped_compaction_synthesis(args: dict[str, Any]) -> dict[str, Any]:
     evidence_budget = int(args.get("evidenceTokenBudget") or compaction_knob("compaction.evidence_token_budget"))
-    evidence = buildCompactionEvidence(
+    evidence = build_compaction_evidence(
         {
             "sourceMessages": args["sourceMessages"],
             "sourceStart": int(args.get("sourceStart") or 0),
@@ -312,7 +312,7 @@ def buildSkippedCompactionSynthesis(args: dict[str, Any]) -> dict[str, Any]:
         "shouldCheckpoint": False,
         "qualityClassification": "thin",
         "qualityReason": quality_reason,
-        "workingContext": buildFallbackSynthesizedWorkingContext(args.get("previousWorkingContext"), quality_reason),
+        "workingContext": build_fallback_synthesized_working_context(args.get("previousWorkingContext"), quality_reason),
         "usage": {},
         "rawResponseText": "",
         "evidence": evidence,
@@ -321,7 +321,7 @@ def buildSkippedCompactionSynthesis(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def buildFallbackSynthesizedWorkingContext(previous: dict[str, Any] | None, reason: str) -> dict[str, Any]:
+def build_fallback_synthesized_working_context(previous: dict[str, Any] | None, reason: str) -> dict[str, Any]:
     previous = previous or {}
     previous_state = previous.get("currentState") or {}
     previous_activity = previous.get("activity") or {}
@@ -346,10 +346,10 @@ def buildFallbackSynthesizedWorkingContext(previous: dict[str, Any] | None, reas
     }
 
 
-def buildEvidenceBackedCompactionSynthesis(args: dict[str, Any]) -> dict[str, Any]:
+def build_evidence_backed_compaction_synthesis(args: dict[str, Any]) -> dict[str, Any]:
     source_start = int(args.get("sourceStart") or 0)
     source_end = source_start + len(args.get("sourceMessages") or [])
-    reason = collapseWhitespace(str(args.get("reason") or "Compaction synthesis returned malformed JSON."))
+    reason = collapse_whitespace(str(args.get("reason") or "Compaction synthesis returned malformed JSON."))
     previous = args.get("previousWorkingContext") or {}
     previous_project = previous.get("project") or {}
     previous_goals = previous.get("goals") or {}
@@ -429,10 +429,10 @@ def _dedupe_strings(values: list[Any]) -> list[str]:
 def _extract_message_text(message: dict[str, Any]) -> str | None:
     content = message.get("content")
     if isinstance(content, str):
-        return collapseWhitespace(content) or None
+        return collapse_whitespace(content) or None
     if isinstance(content, list):
         text = "\n\n".join(str(block.get("text") or "") for block in content if isinstance(block, dict) and block.get("type") == "text")
-        return collapseWhitespace(text) or None
+        return collapse_whitespace(text) or None
     return None
 
 

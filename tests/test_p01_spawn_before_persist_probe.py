@@ -37,17 +37,17 @@ def _crashing_launch_worker(
     boundary: str,
     state_dir: str,
 ) -> None:
-    core.configureRuntimeHome(runtime_home)
+    core.configure_runtime_home(runtime_home)
     state_path = Path(state_dir)
 
     async def scenario() -> None:
-        await core.ensureBaseLayout(workspace)
+        await core.ensure_base_layout(workspace)
         reservation = core.createTaskLaunchReservation(
             taskId=task_id,
             sessionId=session_id,
             kind="background_command",
         )
-        output_file = core.taskOutputPath(task_id)
+        output_file = core.task_output_path(task_id)
         meta = {
             "type": "background_command",
             "taskId": task_id,
@@ -89,11 +89,11 @@ def _crashing_launch_worker(
         holder: dict[str, subprocess.Popen[bytes]] = {}
 
         async def reserve() -> None:
-            await core.writeTaskMeta(task_id, meta)
-            await core.saveTaskRecord(record)
+            await core.write_task_meta(task_id, meta)
+            await core.save_task_record(record)
             if boundary == "after_reservation":
                 os._exit(_CRASH_EXIT)
-            updated = await core.mutateSessionRecord(
+            updated = await core.mutate_session_record(
                 session_id,
                 lambda session: _append_task_id(session, task_id),
             )
@@ -132,7 +132,7 @@ def _crashing_launch_worker(
 
         async def attach(identity: dict) -> None:
             attached = core.attachTaskLaunchReservation(reservation)
-            await core.writeTaskMeta(
+            await core.write_task_meta(
                 task_id,
                 {
                     **meta,
@@ -144,7 +144,7 @@ def _crashing_launch_worker(
                     "updatedAt": attached["attachedAt"],
                 },
             )
-            await core.saveTaskRecord(
+            await core.save_task_record(
                 {
                     **record,
                     "status": "backgrounded",
@@ -166,7 +166,7 @@ def _crashing_launch_worker(
 
         async def fail(error: object) -> None:
             failed = core.failTaskLaunchReservation(reservation, error)
-            await core.writeTaskMeta(
+            await core.write_task_meta(
                 task_id,
                 {
                     **meta,
@@ -178,7 +178,7 @@ def _crashing_launch_worker(
                     "launchReservation": failed,
                 },
             )
-            await core.saveTaskRecord(
+            await core.save_task_record(
                 {
                     **record,
                     "status": "failed",
@@ -241,7 +241,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
             for boundary in _CRASH_BOUNDARIES
         }
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -249,7 +249,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
                 permissionMode="bypassPermissions",
                 sessionId="p01-crash-session",
             )
-            run(core.saveSession(session))
+            run(core.save_session(session))
             context = multiprocessing.get_context("spawn")
             for boundary, task_id in task_ids.items():
                 process = context.Process(
@@ -294,8 +294,8 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
                 sentinel_reservation,
             )
             sentinel_record["processIdentity"] = stale_identity
-            run(core.writeTaskMeta(sentinel_task, {"type": "background_command", **sentinel_record}))
-            run(core.saveTaskRecord(sentinel_record))
+            run(core.write_task_meta(sentinel_task, {"type": "background_command", **sentinel_record}))
+            run(core.save_task_record(sentinel_record))
 
             events: list[dict] = []
             supervisor = run(
@@ -335,7 +335,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
             self.assertIsNone(sentinel.poll())
 
             expected_ids = {*task_ids.values(), sentinel_task}
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(set(persisted["metadata"]["taskIds"]), expected_ids)
             self.assertEqual(len(persisted["metadata"]["taskIds"]), len(expected_ids))
             event_keys = [
@@ -362,7 +362,7 @@ class P01SpawnBeforePersistProbeTests(AgentCoreTestCase):
                     for event in restart_events
                 )
             )
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(len(persisted["metadata"]["taskIds"]), len(expected_ids))
 
             for boundary in ("after_spawn", "after_identity", "after_attach", "after_activation"):
@@ -401,7 +401,7 @@ def _starting_record(
         "restorable": True,
         "cwd": workspace,
         "command": "probe-sleep",
-        "outputFile": core.taskOutputPath(task_id),
+        "outputFile": core.task_output_path(task_id),
         "detailStatus": "starting",
         "owner": "daemon",
         "launchReservation": reservation,

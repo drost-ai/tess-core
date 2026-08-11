@@ -12,8 +12,8 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             child["metadata"].update(
                 {
                     "parentSessionId": parent["id"],
@@ -95,7 +95,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                         "task_id": "task-failed-reconcile",
                         "status": "failed",
                         "error": "Worker failed because the provider crashed.",
-                        "outputFile": core.taskOutputPath("task-failed-reconcile"),
+                        "outputFile": core.task_output_path("task-failed-reconcile"),
                     },
                     source="test",
                 )
@@ -200,8 +200,8 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "subagents": {"maxDepth": 1}}, str(workspace)))
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
-            root_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            child_parent = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            root_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            child_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             child_parent["metadata"]["depth"] = 1
 
             async def fake_start(task_args):
@@ -217,7 +217,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                 )["content"]
             )
             self.assertIsNone(allowed["result"])
-            allowed_child = run(core.loadSession(allowed["session_id"]))
+            allowed_child = run(core.load_session(allowed["session_id"]))
             self.assertEqual(allowed_child["metadata"]["depth"], 1)
 
             blocked_events = []
@@ -238,7 +238,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
         previous_env = {name: os.environ.get(name) for name in ("TESS_CHILD_AGENT_ID", "TESS_CHILD_TASK_ID", "TESS_CHILD_SESSION_ID")}
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            child = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            child = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             child["metadata"].update(
                 {
                     "parentSessionId": "parent-finalizer-group",

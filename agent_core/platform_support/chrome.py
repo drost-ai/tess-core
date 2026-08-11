@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .._utils import now_iso
-from ..storage import getStateRoot
+from ..storage import get_state_root
 from .commands import _parse_json_object, _runner_which, quoteShellArg
 from .shared import DEFAULT_CHROME_EXTENSION_ORIGIN, DEFAULT_CHROME_NATIVE_HOST_NAME
 
@@ -201,7 +201,7 @@ async def handleChromeCompanionRpcPayload(payload: str) -> dict[str, Any] | None
 async def _chrome_native_host_wrapper_path(args: dict[str, Any]) -> str:
     system = args.get("platform") or sys.platform
     suffix = ".cmd" if system.startswith("win") else ""
-    root = Path(args.get("stateRoot") or getStateRoot()) / "chrome-native-host"
+    root = Path(args.get("stateRoot") or get_state_root()) / "chrome-native-host"
     return str(root / f"{args.get('hostName') or DEFAULT_CHROME_NATIVE_HOST_NAME}{suffix}")
 
 async def _write_chrome_native_host_wrapper(host_path: str) -> None:

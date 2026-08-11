@@ -25,7 +25,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
     def test_durable_memory_projects_the_first_oversized_record_inside_total_prompt_budget(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-opus-4-8",
@@ -35,7 +35,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             )
             now = "2026-07-17T00:00:00Z"
             run(
-                core.saveProjectMemoryRecords(
+                core.save_project_memory_records(
                     str(workspace),
                     [
                         {
@@ -53,14 +53,14 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                 )
             )
             selected = run(
-                core.retrieveRelevantDurableMemory(
+                core.retrieve_relevant_durable_memory(
                     session=session,
                     prompt="find needle",
                     maxTokenBudget=1_600,
                     maxRecords=8,
                 )
             )
-            prompt = core.renderRetrievedMemoryPrompt(selected)
+            prompt = core.render_retrieved_memory_prompt(selected)
             self.assertIsNotNone(prompt)
             self.assertLessEqual(utf8ByteLength(prompt), 1_600)
             self.assertLessEqual(selected["tokenEstimate"], 1_600)
@@ -70,20 +70,20 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertFalse(hasLoneUtf16Surrogate(prompt))
 
             too_small = run(
-                core.retrieveRelevantDurableMemory(
+                core.retrieve_relevant_durable_memory(
                     session=session, prompt="find needle", maxTokenBudget=100
                 )
             )
             self.assertEqual(too_small["records"], [])
-            self.assertIsNone(core.renderRetrievedMemoryPrompt(too_small))
+            self.assertIsNone(core.render_retrieved_memory_prompt(too_small))
         finally:
             self.restore_home(root, previous)
 
     def test_dispatch_bounds_returned_and_thrown_results_before_provider_reuse(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             config = {
                 "cwd": str(workspace),
                 "runtimeHome": str(home),
@@ -106,7 +106,7 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-opus-4-8",
@@ -202,8 +202,8 @@ class Package31UniversalResultTests(AgentCoreTestCase):
     def test_exit_zero_mutation_stays_successful_when_artifact_metadata_fails(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
 
             async def exercise():
                 async def fail_metadata(_path, _value):
@@ -254,8 +254,8 @@ class Package31UniversalResultTests(AgentCoreTestCase):
     def test_mutating_output_overflow_is_bounded_non_retryable_and_drained(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            core.configureRuntimeHome(str(home))
-            run(core.ensureBaseLayout(str(workspace)))
+            core.configure_runtime_home(str(home))
+            run(core.ensure_base_layout(str(workspace)))
             spool_limit = 32 * 1024
             ring_limit = 2 * 1024
             captured = run(

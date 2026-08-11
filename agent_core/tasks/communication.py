@@ -6,34 +6,34 @@ from typing import Any, Mapping
 
 from .._utils import now_iso
 from ..storage import (
-    appendJsonLine,
-    loadSession,
-    mutateTaskMeta,
-    readJsonFile,
-    readTaskMeta,
-    saveSession,
-    taskDir,
-    writeJsonFile,
+    append_json_line,
+    load_session,
+    mutate_task_meta,
+    read_json_file,
+    read_task_meta,
+    save_session,
+    task_dir,
+    write_json_file,
 )
-from ..storage.json_io import mutateJsonLines, readJsonLines
+from ..storage.json_io import mutate_json_lines, read_json_lines
 from ..session.persistence import persistSession
-from ..storage.message_origin import syntheticUserMessage as _synthetic_user_message
+from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 
 
 def task_mailbox_path(task_id: str) -> str:
-    return os.path.join(taskDir(task_id), "mailbox.jsonl")
+    return os.path.join(task_dir(task_id), "mailbox.jsonl")
 
 
 def task_events_path(task_id: str) -> str:
-    return os.path.join(taskDir(task_id), "events.jsonl")
+    return os.path.join(task_dir(task_id), "events.jsonl")
 
 
 def task_questions_path(task_id: str) -> str:
-    return os.path.join(taskDir(task_id), "questions.jsonl")
+    return os.path.join(task_dir(task_id), "questions.jsonl")
 
 
 async def _read_json_lines(path: str) -> list[dict[str, Any]]:
-    return await readJsonLines(path)
+    return await read_json_lines(path)
 
 
 async def append_task_event(task_id: str, event: Mapping[str, Any]) -> dict[str, Any]:
@@ -43,7 +43,7 @@ async def append_task_event(task_id: str, event: Mapping[str, Any]) -> dict[str,
         "createdAt": event.get("createdAt") or now_iso(),
         **dict(event),
     }
-    await appendJsonLine(task_events_path(task_id), record)
+    await append_json_line(task_events_path(task_id), record)
     return record
 
 
@@ -52,7 +52,7 @@ async def read_task_events(task_id: str) -> list[dict[str, Any]]:
 
 
 async def send_task_message(task_id: str, message: Mapping[str, Any]) -> dict[str, Any]:
-    meta = await readTaskMeta(task_id)
+    meta = await read_task_meta(task_id)
     direction = message.get("direction") or "to_child"
     if direction not in {"to_child", "to_parent"}:
         raise ValueError(f"Unknown task message direction: {direction!r}")
@@ -80,7 +80,7 @@ async def send_task_message(task_id: str, message: Mapping[str, Any]) -> dict[st
         "deliveredAt": None,
         "metadata": dict(message.get("metadata") or {}),
     }
-    await appendJsonLine(task_mailbox_path(task_id), record)
+    await append_json_line(task_mailbox_path(task_id), record)
     await append_task_event(
         task_id,
         {
@@ -128,7 +128,7 @@ async def requeue_task_message(task_id: str, message_id: str) -> dict[str, Any] 
                 break
         return {"records": messages, "result": updated, "changed": updated is not None}
 
-    updated = await mutateJsonLines(task_mailbox_path(task_id), _requeue)
+    updated = await mutate_json_lines(task_mailbox_path(task_id), _requeue)
     if updated:
         await append_task_event(task_id, {"type": "message.requeued", "messageId": message_id})
     return updated
@@ -146,7 +146,7 @@ async def mark_task_message_delivered(task_id: str, message_id: str) -> dict[str
                 break
         return {"records": messages, "result": updated, "changed": updated is not None}
 
-    updated = await mutateJsonLines(task_mailbox_path(task_id), _mark)
+    updated = await mutate_json_lines(task_mailbox_path(task_id), _mark)
     if updated:
         await append_task_event(task_id, {"type": "message.delivered", "messageId": message_id, "deliveredAt": delivered_at})
     return updated
@@ -240,14 +240,14 @@ async def _deliver_mailbox_transaction(
                 if config is not None:
                     await persistSession(session, config)
                 else:
-                    await saveSession(session)
+                    await save_session(session)
         except BaseException:
             if appended:
                 del session["messages"][-appended:]
             raise
         return {"records": messages, "result": claimed, "changed": True}
 
-    return await mutateJsonLines(task_mailbox_path(task_id), _commit)
+    return await mutate_json_lines(task_mailbox_path(task_id), _commit)
 
 
 async def _render_injected_message(message: Mapping[str, Any], session: Mapping[str, Any]) -> str:
@@ -347,7 +347,7 @@ async def create_task_question(task_id: str, question: Mapping[str, Any]) -> dic
         "answer": None,
         "metadata": dict(question.get("metadata") or {}),
     }
-    await appendJsonLine(task_questions_path(task_id), record)
+    await append_json_line(task_questions_path(task_id), record)
     await append_task_event(task_id, {"type": "question.created", "questionId": record["questionId"], "childSessionId": record.get("childSessionId")})
 
     def _mark_awaiting(meta: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -355,7 +355,7 @@ async def create_task_question(task_id: str, question: Mapping[str, Any]) -> dic
             return None
         return {**meta, "status": "awaiting_input", "waitingReason": "child_question", "updatedAt": now}
 
-    await mutateTaskMeta(task_id, _mark_awaiting)
+    await mutate_task_meta(task_id, _mark_awaiting)
     return record
 
 
@@ -382,7 +382,7 @@ async def answer_task_question(task_id: str, question_id: str, answer: str) -> d
                 break
         return {"records": questions, "result": updated, "changed": updated is not None}
 
-    updated = await mutateJsonLines(task_questions_path(task_id), _answer)
+    updated = await mutate_json_lines(task_questions_path(task_id), _answer)
     if not updated:
         return None
     await send_task_message(
@@ -411,7 +411,7 @@ async def skip_task_question(task_id: str, question_id: str, reason: str | None 
                 break
         return {"records": questions, "result": updated, "changed": updated is not None}
 
-    updated = await mutateJsonLines(task_questions_path(task_id), _skip)
+    updated = await mutate_json_lines(task_questions_path(task_id), _skip)
     if not updated:
         return None
     await append_task_event(task_id, {"type": "question.skipped", "questionId": question_id, "reason": reason})
@@ -419,9 +419,9 @@ async def skip_task_question(task_id: str, question_id: str, reason: str | None 
 
 
 async def load_task_session(task_id: str) -> dict[str, Any] | None:
-    meta = await readTaskMeta(task_id)
+    meta = await read_task_meta(task_id)
     session_id = (meta or {}).get("session_id") or (meta or {}).get("sessionId")
-    return await loadSession(session_id) if isinstance(session_id, str) and session_id else None
+    return await load_session(session_id) if isinstance(session_id, str) and session_id else None
 
 
 appendTaskEvent = append_task_event

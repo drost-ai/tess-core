@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 from .._utils import now_iso
-from ..storage import toolArtifactDataPath, toolArtifactMetaPath, writeJsonFile
+from ..storage import tool_artifact_data_path, tool_artifact_meta_path, write_json_file
 from ..payloads.utf8_bounds import normalizeUtf8String, sliceUtf8Prefix, sliceUtf8Suffix, utf8ByteLength
 
 
@@ -87,7 +87,7 @@ class SubprocessOutputCollector:
         }
         self.max_spool_bytes = _positive(max_spool_bytes, int(_knob("process.spool_max_bytes")))
         self.max_ring_bytes = _positive(max_ring_bytes, SUBPROCESS_RING_MAX_BYTES)
-        self.metadata_writer = metadata_writer or writeJsonFile
+        self.metadata_writer = metadata_writer or write_json_file
         per_stream = max(1, self.max_ring_bytes // 2)
         self.rings = {"stdout": _HeadTailRing(per_stream), "stderr": _HeadTailRing(per_stream)}
         self.bytes = {"stdout": 0, "stderr": 0}
@@ -109,7 +109,7 @@ class SubprocessOutputCollector:
             return
         try:
             for kind in ("stdout", "stderr"):
-                path = toolArtifactDataPath(self.session_id, self.ids[kind], f".{kind}.txt")
+                path = tool_artifact_data_path(self.session_id, self.ids[kind], f".{kind}.txt")
                 Path(path).parent.mkdir(parents=True, exist_ok=True)
                 self.paths[kind] = path
                 self.handles[kind] = open(path, "xb")
@@ -186,7 +186,7 @@ class SubprocessOutputCollector:
                 }
                 try:
                     pending = self.metadata_writer(
-                        toolArtifactMetaPath(self.session_id, self.ids[kind]), record
+                        tool_artifact_meta_path(self.session_id, self.ids[kind]), record
                     )
                     if inspect.isawaitable(pending):
                         await pending

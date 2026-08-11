@@ -17,7 +17,7 @@ from .plugin_contracts import (
     validatePluginManifest,
 )
 from .executable_source_policy import loadSelectedPluginRecords
-from ..storage import loadPlugins, resolveMaybeRelative
+from ..storage import load_plugins, resolve_maybe_relative
 
 
 async def loadPluginRuntime(
@@ -98,14 +98,14 @@ async def _resolve_plugin_record_source(record: dict[str, Any], cwd: str) -> dic
     if source.startswith("http://") or source.startswith("https://"):
         return {"id": manifest.get("id"), "manifest": manifest}
 
-    candidate_path = resolveMaybeRelative(cwd, source)
+    candidate_path = resolve_maybe_relative(cwd, source)
     if not os.path.exists(candidate_path):
         return {"id": manifest.get("id"), "manifest": manifest}
     return await _resolve_plugin_path(candidate_path, cwd)
 
 
 async def _resolve_plugin_path(plugin_path: str, cwd: str) -> dict[str, Any]:
-    resolved_path = resolveMaybeRelative(cwd, plugin_path)
+    resolved_path = resolve_maybe_relative(cwd, plugin_path)
     if os.path.isdir(resolved_path):
         manifest_path = _find_first_existing(
             [

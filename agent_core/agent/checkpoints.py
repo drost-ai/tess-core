@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from .._utils import safe_int as _safe_int
 
-from ..context.compaction import runCompaction, shouldAutoCompact
-from ..context.context_policy import decideDurableCheckpoint
+from ..context.compaction import run_compaction, should_auto_compact
+from ..context.context_policy import decide_durable_checkpoint
 from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import resolveCompactionPolicy
 from ..session.persistence import persistProviderFailure, persistSession
 from .cancellation import _now, _safe_emit
 from typing import Any
-from ..context.compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
-from ..context.compaction_transport import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
+from ..context.compaction_state import refresh_compaction_state_from_manifest as _refresh_compaction_state_from_manifest
+from ..context.compaction_transport import resolve_compaction_execution_plan as _resolve_compaction_execution_plan
 
 
 async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] | None:
@@ -33,7 +33,7 @@ async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] 
                 "archive_message_count": state.get("archiveMessageCount"),
             },
         )
-    decision = decideDurableCheckpoint(session, tokenLimit=compaction_policy.get("compactionThresholdTokens"))
+    decision = decide_durable_checkpoint(session, tokenLimit=compaction_policy.get("compactionThresholdTokens"))
     raw_context = decision.get("rawContext") or {}
     _emit_raw_context_pressure(runtime, session["id"], raw_context)
     _safe_emit(runtime, "compaction.decision", _decision_event_payload(session["id"], decision, raw_context))
@@ -56,7 +56,7 @@ async def maybeAutoCompactSession(args: dict[str, Any]) -> dict[str, Any] | None
     session = args["session"]
     compaction_policy = resolveCompactionPolicy(args["config"].get("providerProfile") or {})
     await _refresh_compaction_state_from_manifest(session)
-    decision = shouldAutoCompact(
+    decision = should_auto_compact(
         session,
         args.get("currentInputTokens"),
         compaction_policy.get("compactionThresholdTokens"),
@@ -135,7 +135,7 @@ async def _run_auto_compaction(args: dict[str, Any]) -> dict[str, Any] | None:
         },
     )
     try:
-        outcome = await runCompaction(
+        outcome = await run_compaction(
             {
                 "session": session,
                 "config": config,

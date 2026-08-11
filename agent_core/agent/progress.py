@@ -12,7 +12,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .._utils import now_iso
-from ..storage.message_origin import syntheticUserMessage
+from ..storage.message_origin import synthetic_user_message
 
 
 PROGRESS_LEDGER_SCHEMA_VERSION = 1
@@ -289,7 +289,7 @@ def appendToolResultBatch(
     feeding it to the ledger misattributes those extra blocks as failures."""
     blocks = transcript_blocks if transcript_blocks is not None else tool_results
     session["messages"].append(
-        syntheticUserMessage(
+        synthetic_user_message(
             [block for block in blocks if block is not None],
             actor="tool",
             kind="tool_result_batch",

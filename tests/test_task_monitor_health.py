@@ -49,12 +49,12 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             task_id = "monitor-task"
             session["metadata"]["taskIds"] = [task_id]
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "type": "background_command",
@@ -115,15 +115,15 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         runtime = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            run(core.saveSession(session))
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            run(core.save_session(session))
             task_id = "monitor-runtime-task"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("starting\n", encoding="utf-8")
-            run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "python worker.py", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
+            run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "python worker.py", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch runtime monitor", "checkIntervalMs": 2000})
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             events = []
             runtime = run(core.createMonitorRuntime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 50}))
             self.assertEqual(runtime["getSnapshot"]()["active"], 1)
@@ -131,7 +131,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertTrue(any(event == "monitor.status_changed" and data["task_id"] == task_id for event, data in events))
             self.assertFalse(any(event == "monitor.assistant_update" for event, _ in events))
             self.assertEqual(session["messages"], [])
-            saved = run(core.loadMonitor(monitor["id"]))
+            saved = run(core.load_monitor(monitor["id"]))
             self.assertNotIn("lastAssistantUpdateSummary", saved)
             self.assertIn(monitor["id"], session["metadata"]["monitorIds"])
         finally:
@@ -146,19 +146,19 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             config["openaiToken"] = "test-token"
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"].append({"role": "user", "content": "Please monitor the build."})
-            run(core.saveSession(session))
+            run(core.save_session(session))
             task_id = "monitor-provider-task"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("pytest started\n", encoding="utf-8")
-            run(core.writeTaskMeta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "pytest", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
+            run(core.write_task_meta(task_id, {"type": "background_command", "taskId": task_id, "id": task_id, "sessionId": session["id"], "command": "pytest", "cwd": str(workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z", "status": "running", "outputFile": output_file}))
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": task_id, "goal": "watch provider monitor", "summaryStyle": "brief", "checkIntervalMs": 2000})
             monitor["checkIntervalMs"] = 1
             monitor["createdAt"] = "2026-01-01T00:00:00Z"
             monitor["updatedAt"] = "2026-01-01T00:00:00Z"
-            run(core.saveMonitor(monitor))
+            run(core.save_monitor(monitor))
             calls = {}
 
             async def fake_send(args):
@@ -195,7 +195,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             self.assertEqual(session["metadata"]["usage"]["outputTokens"], 3)
             self.assertEqual(session["metadata"]["usage"]["cacheCreationInputTokens"], 2)
             self.assertEqual(session["metadata"]["usage"]["cacheReadInputTokens"], 1)
-            saved_session = run(core.loadSession(session["id"]))
+            saved_session = run(core.load_session(session["id"]))
             self.assertEqual(saved_session["messages"][-1]["content"], "Provider says the build monitor is live.")
         finally:
             monitors_module.sendOpenAiRequest = original_send
@@ -208,8 +208,8 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
         try:
             async def scenario():
                 config = await core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
-                session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-                await core.saveSession(session)
+                session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+                await core.save_session(session)
                 counter = workspace / "health-count.txt"
                 script = textwrap.dedent(
                     f"""
@@ -245,13 +245,13 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                     task_id = started["taskId"]
                     health = None
                     for _ in range(120):
-                        health = await core.loadHealthCheckTask(task_id)
+                        health = await core.load_health_check_task(task_id)
                         if health and health.get("status") == "active" and health.get("lastSuccessAt"):
                             break
                         await asyncio.sleep(0.05)
                     output = await supervisor["readTaskOutput"](task_id, 12000)
                     task_record = await supervisor["inspectTask"](task_id)
-                    persisted = await core.loadSession(session["id"])
+                    persisted = await core.load_session(session["id"])
                     await supervisor["stopTask"](task_id)
                     return {"health": health, "events": events, "output": output, "taskRecord": task_record, "persisted": persisted, "taskId": task_id}
                 finally:
@@ -309,8 +309,8 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
 
             async def scenario():
                 config = await core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace))
-                session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-                await core.saveSession(session)
+                session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+                await core.save_session(session)
                 events = []
                 supervisor = await core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)})
                 try:
@@ -335,7 +335,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                     http_task_id = http_started["taskId"]
                     http_record = None
                     for _ in range(120):
-                        http_record = await core.loadHealthCheckTask(http_task_id)
+                        http_record = await core.load_health_check_task(http_task_id)
                         if http_record and http_record.get("status") == "active" and http_record.get("lastSuccessAt"):
                             break
                         await asyncio.sleep(0.05)
@@ -357,7 +357,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                     timeout_task_id = timeout_started["taskId"]
                     timeout_record = None
                     for _ in range(80):
-                        timeout_record = await core.loadHealthCheckTask(timeout_task_id)
+                        timeout_record = await core.load_health_check_task(timeout_task_id)
                         if timeout_record and timeout_record.get("status") == "failed":
                             break
                         await asyncio.sleep(0.05)

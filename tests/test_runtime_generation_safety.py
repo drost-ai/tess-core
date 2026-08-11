@@ -17,7 +17,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 str(workspace),
             )
             sessions = {
-                name: core.createEmptySession(
+                name: core.create_empty_session(
                     cwd=str(workspace),
                     provider=config["provider"],
                     providerProfileName=config["providerProfileName"],
@@ -51,7 +51,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
             )
             try:
                 sessions["a"]["metadata"]["childAgentIds"] = ["agent-a"]
-                await core.saveChildAgent(_child_agent("agent-a", "a"))
+                await core.save_child_agent(_child_agent("agent-a", "a"))
                 delayed_a = asyncio.create_task(runtime["refresh"]())
                 await asyncio.wait_for(entered.wait(), 2)
 
@@ -65,7 +65,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 await delayed_a
 
                 sessions["c"]["metadata"]["childAgentIds"] = ["agent-c"]
-                await core.saveChildAgent(_child_agent("agent-c", "c"))
+                await core.save_child_agent(_child_agent("agent-c", "c"))
                 await runtime["refresh"]()
                 self.assertEqual(
                     [worker["id"] for worker in runtime["getSnapshot"]()["workers"]],
@@ -111,7 +111,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 for name in ("a", "b", "c")
             }
             sessions = {
-                name: core.createEmptySession(
+                name: core.create_empty_session(
                     cwd=str(workspaces[name]),
                     provider=config_a["provider"],
                     providerProfileName=config_a["providerProfileName"],
@@ -161,7 +161,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 )
 
                 failed_config = {**configs["c"], "pluginDirs": [str(Path(root.name) / "missing-plugin")]}
-                failed_session = core.createEmptySession(
+                failed_session = core.create_empty_session(
                     cwd=str(workspaces["c"]),
                     provider=config_a["provider"],
                     providerProfileName=config_a["providerProfileName"],

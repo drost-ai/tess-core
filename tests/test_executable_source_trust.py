@@ -27,7 +27,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
     def test_excluded_project_sources_cannot_trigger_mcp_or_plugin_execution(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.saveMcpServers("project", str(workspace), [_stdio_server("project")]))
+            run(core.save_mcp_servers("project", str(workspace), [_stdio_server("project")]))
             marker = workspace / "plugin-ran.txt"
             plugin = workspace / "project-plugin"
             plugin.mkdir()
@@ -38,7 +38,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
                 encoding="utf-8",
             )
             run(
-                core.savePlugins(
+                core.save_plugins(
                     "project",
                     str(workspace),
                     [{"manifest": manifest, "enabled": True, "source": str(plugin)}],
@@ -60,7 +60,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
     def test_selected_project_mcp_requires_external_trust_and_invalidates_on_change(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.saveMcpServers("project", str(workspace), [_stdio_server("approved")]))
+            run(core.save_mcp_servers("project", str(workspace), [_stdio_server("approved")]))
             with self.assertRaises(core.ExecutableSourceTrustError):
                 run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
             before = run(core.inspectMcpSourceTrust(cwd=str(workspace), scope="project"))
@@ -70,7 +70,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
             self.assertEqual([item["name"] for item in config["mcpConfig"]], ["approved"])
             self.assertEqual(config["mcpConfig"][0]["scope"], "project")
 
-            run(core.saveMcpServers("project", str(workspace), [_stdio_server("changed")]))
+            run(core.save_mcp_servers("project", str(workspace), [_stdio_server("changed")]))
             with self.assertRaises(core.ExecutableSourceTrustError):
                 run(core.resolveConfig({"settingSources": "project"}, str(workspace)))
         finally:
@@ -79,8 +79,8 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
     def test_strict_mcp_admits_only_explicit_records_and_excludes_plugin_servers(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            run(core.saveMcpServers("user", str(workspace), [_stdio_server("ambient-user")]))
-            run(core.saveMcpServers("project", str(workspace), [_stdio_server("ambient-project")]))
+            run(core.save_mcp_servers("user", str(workspace), [_stdio_server("ambient-user")]))
+            run(core.save_mcp_servers("project", str(workspace), [_stdio_server("ambient-project")]))
             explicit = home / "explicit.json"
             explicit.write_text(json.dumps(_stdio_server("explicit")), encoding="utf-8")
             config = run(
@@ -118,7 +118,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
 
             (plugin / "entry.py").write_text(source("approved"), encoding="utf-8")
             run(
-                core.savePlugins(
+                core.save_plugins(
                     "project",
                     str(workspace),
                     [{"manifest": manifest, "enabled": True, "source": str(plugin)}],
@@ -144,7 +144,7 @@ class ExecutableSourceTrustTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             run(
-                core.saveSettings(
+                core.save_settings(
                     "local",
                     str(workspace),
                     {

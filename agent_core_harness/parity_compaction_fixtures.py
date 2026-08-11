@@ -12,7 +12,7 @@ def build_compaction_authority_states(
     session: dict[str, Any],
     paths: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
-    compactions_dir = Path(core.getSessionCompactionsDir(session["id"]))
+    compactions_dir = Path(core.get_session_compactions_dir(session["id"]))
     compactions_dir.mkdir(parents=True, exist_ok=True)
     summary = compactions_dir / "summary-primitive.md"
     summary.write_text(

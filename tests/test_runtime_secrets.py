@@ -40,10 +40,10 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
             os.environ.pop(key, None)
         os.environ["TESS_OPENAI_CODEX_AUTH_PATH"] = str(self.home / "missing-codex-auth.json")
         os.environ["TESS_PROVIDER"] = "anthropic"
-        core.configureRuntimeHome(str(self.home))
+        core.configure_runtime_home(str(self.home))
 
     async def asyncTearDown(self) -> None:
-        core.resetConfiguredRuntimeHome()
+        core.reset_configured_runtime_home()
         if self.previous_home is None:
             os.environ.pop("AGENT_CORE_HOME", None)
         else:
@@ -155,7 +155,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
                 "env": {"PUBLIC_VALUE": "visible", "SERVICE_TOKEN": literal},
             },
         ]
-        await core.saveMcpServers("user", str(self.project), records)
+        await core.save_mcp_servers("user", str(self.project), records)
         first = await core.resolveConfig({"settingSources": "user"}, str(self.project))
         by_name = {record["name"]: record for record in first["mcpConfig"]}
         self.assertTrue(isRuntimeSecretRef(by_name["legacy-http"]["headers"]["Authorization"]))
@@ -174,7 +174,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         for path in fragments:
             self.assertNotIn(literal, path.read_text())
 
-        await core.saveMcpServers("project", str(self.project), records[:1])
+        await core.save_mcp_servers("project", str(self.project), records[:1])
         with self.assertRaisesRegex(RuntimeSecretError, "requires a runtime secret reference"):
             await core.resolveConfig({"settingSources": "project"}, str(self.project))
 
@@ -193,7 +193,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_provider_auth_is_persisted_as_refs_and_resolved_just_in_time(self) -> None:
         api_key = "provider-api-key-opaque-481"
         auth_token = "provider-oauth-opaque-927"
-        await core.saveAuth(
+        await core.save_auth(
             {
                 "anthropicApiKey": api_key,
                 "apiKey": api_key,
@@ -204,7 +204,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         persisted = (self.home / "auth.json").read_text()
         self.assertNotIn(api_key, persisted)
         self.assertNotIn(auth_token, persisted)
-        auth = await core.loadAuth()
+        auth = await core.load_auth()
         self.assertTrue(isRuntimeSecretRef(auth["anthropicApiKey"]))
         self.assertEqual(auth["anthropicApiKey"], auth["apiKey"])
         self.assertTrue(isRuntimeSecretRef(auth["anthropicAuthToken"]))

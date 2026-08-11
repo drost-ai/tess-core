@@ -13,7 +13,7 @@ class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
         async def scenario():
             with tempfile.TemporaryDirectory() as tmp:
                 tool = next(tool for tool in core.createBuiltinTools() if tool.name == "TodoWrite")
-                session = core.createEmptySession(
+                session = core.create_empty_session(
                     cwd=tmp,
                     provider="openai",
                     model="gpt-5.4",

@@ -115,7 +115,7 @@ class AgentCoreTestCase(unittest.TestCase):
         from agent_core.config._knobs import resetConfiguredKnobs
         from agent_core.providers.token_budget import resetConfiguredModelLimitRules
 
-        core.resetConfiguredRuntimeHome()
+        core.reset_configured_runtime_home()
         resetConfiguredKnobs()
         resetConfiguredModelLimitRules()
         if previous is None:

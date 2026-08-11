@@ -61,10 +61,10 @@ class ImageTokenEstimationTests(unittest.TestCase):
 
         small_message = message(b"x")
         large_message = message(b"x" * (2 * MIB))
-        small_pressure = core.estimateRawContextPressure(
+        small_pressure = core.estimate_raw_context_pressure(
             {"messages": [small_message]}
         )
-        large_pressure = core.estimateRawContextPressure(
+        large_pressure = core.estimate_raw_context_pressure(
             {"messages": [large_message]}
         )
 
@@ -74,7 +74,7 @@ class ImageTokenEstimationTests(unittest.TestCase):
         )
         self.assertLess(large_pressure["rawTokenEstimate"], 100)
         self.assertFalse(
-            core.decideDurableCheckpoint(
+            core.decide_durable_checkpoint(
                 {"messages": [large_message]},
                 tokenLimit=1_000,
             )["shouldCheckpoint"]
@@ -85,7 +85,7 @@ class ImageTokenEstimationTests(unittest.TestCase):
         )
 
         measurement = run(
-            core.measureRequestInputTokens(
+            core.measure_request_input_tokens(
                 config=image_config(),
                 request={
                     "model": "gpt-5.4",

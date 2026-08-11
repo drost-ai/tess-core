@@ -71,16 +71,16 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
             workspace.mkdir()
 
             async def seed_auth():
-                async with core.scopedRuntimeHome(str(credential_home)):
-                    await core.ensureBaseLayout(str(workspace))
-                    await core.saveAuth(
+                async with core.scoped_runtime_home(str(credential_home)):
+                    await core.ensure_base_layout(str(workspace))
+                    await core.save_auth(
                         {
                             "provider": "claudeai",
                             "source": "test",
                             "authToken": "stale-auth-file-token",
                         }
                     )
-                    await core.saveSettings(
+                    await core.save_settings(
                         "user",
                         str(workspace),
                         {

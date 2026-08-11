@@ -399,7 +399,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
         fixture = OAuthFixtureServer()
         runtime = None
         with tempfile.TemporaryDirectory(prefix="agent-core-p28-injected-") as runtime_home:
-            core.configureRuntimeHome(runtime_home)
+            core.configure_runtime_home(runtime_home)
             try:
                 injected = MemoryTokenStore()
                 runtime = run(
@@ -420,7 +420,7 @@ class Package28McpOAuthTests(AgentCoreTestCase):
             finally:
                 if runtime:
                     run(runtime["close"]())
-                core.resetConfiguredRuntimeHome()
+                core.reset_configured_runtime_home()
                 fixture.close()
 
     def test_oauth_close_settles_in_flight_refresh_waiters(self):

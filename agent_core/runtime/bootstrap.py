@@ -19,7 +19,7 @@ from .support import callMethod as _call_method, closeMany as _close_many, daemo
 from .support import installComponentSurface as _install_component_surface, maybeCall as _maybe_call, runtimePathGraphId as _path_graph_id, taskSnapshotFromState as _task_snapshot_from_state
 from .state import createInitialRuntimeState, createRuntimeStateStore
 from ..session.runtime import createSessionRuntimeController
-from ..storage import configureRuntimeHome, registerStorageLockObserver
+from ..storage import configure_runtime_home, register_storage_lock_observer
 from ..tasks.runtime import createTaskRuntime
 
 
@@ -30,7 +30,7 @@ async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) ->
     values = {**(args or {}), **kwargs}
     config = values.get("config") or {}
     if config.get("runtimeHome"):
-        configureRuntimeHome(config["runtimeHome"])
+        configure_runtime_home(config["runtimeHome"])
     paths = getActiveRuntimePaths()
     return await runWithRuntimePaths(paths, lambda: _bootstrap_runtime(values, paths))
 
@@ -124,7 +124,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             return
         publish(event, dict(payload))
 
-    storage_lock_unsubscribe = registerStorageLockObserver(lambda payload: dispatch("storage.lock_timeout", dict(payload)))
+    storage_lock_unsubscribe = register_storage_lock_observer(lambda payload: dispatch("storage.lock_timeout", dict(payload)))
 
     factories = _default_factories()
 

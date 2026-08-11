@@ -42,10 +42,10 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
         self.home = Path(self.temp.name) / "home"
         self.previous_home = os.environ.get("AGENT_CORE_HOME")
         os.environ["AGENT_CORE_HOME"] = str(self.home)
-        core.configureRuntimeHome(str(self.home))
+        core.configure_runtime_home(str(self.home))
 
     async def asyncTearDown(self) -> None:
-        core.resetConfiguredRuntimeHome()
+        core.reset_configured_runtime_home()
         if self.previous_home is None:
             os.environ.pop("AGENT_CORE_HOME", None)
         else:

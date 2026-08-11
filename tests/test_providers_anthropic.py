@@ -248,10 +248,10 @@ class AnthropicProviderTests(AgentCoreTestCase):
         try:
             request = {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "hello"}], "tools": []}
             config = {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}}
-            measured = run(core.measureRequestInputTokens({"config": config, "request": request, "session": {}, "timeoutSeconds": 2}))
+            measured = run(core.measure_request_input_tokens({"config": config, "request": request, "session": {}, "timeoutSeconds": 2}))
             self.assertEqual(measured["inputTokens"], 77)
             self.assertEqual(measured["source"], "anthropic_count")
-            fallback = run(core.measureRequestInputTokens({"config": config, "request": request, "session": {}, "timeoutSeconds": 2}))
+            fallback = run(core.measure_request_input_tokens({"config": config, "request": request, "session": {}, "timeoutSeconds": 2}))
             self.assertEqual(fallback["source"], "legacy_estimate")
             self.assertGreater(fallback["inputTokens"], 0)
         finally:

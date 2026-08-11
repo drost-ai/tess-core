@@ -11,7 +11,7 @@ from tests.support.agent_core_case import AgentCoreTestCase, core, run
 class Package30MonitorTransitionTests(AgentCoreTestCase):
     def _fixture(self, home: Path, workspace: Path, status: str, suffix: str = "1"):
         config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-        session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+        session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
         stamp = "2026-07-12T22:01:39.608Z"
         monitor = {
             "id": f"monitor-{suffix}",
@@ -30,7 +30,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
             monitor["failureReason"] = "task failed"
         if status == "stopped":
             monitor["stoppedAt"] = stamp
-        run(core.saveMonitor(monitor))
+        run(core.save_monitor(monitor))
         session["metadata"]["monitorIds"] = [monitor["id"]]
         events = []
         persisted = {"count": 0}
@@ -53,8 +53,8 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
                 with self.subTest(status=status):
                     _config, _session, monitor, events, _persisted, context, tool = self._fixture(home, workspace, status, str(index))
                     task = {"type": "background_command", "taskId": monitor["taskId"], "sessionId": monitor["sessionId"], "status": "running", "pid": os.getpid(), "startedAt": "2026-07-12T22:00:00.000Z"}
-                    run(core.writeTaskMeta(monitor["taskId"], task))
-                    task_path = Path(core.taskMetaPath(monitor["taskId"]))
+                    run(core.write_task_meta(monitor["taskId"], task))
+                    task_path = Path(core.task_meta_path(monitor["taskId"]))
                     task_before = task_path.read_bytes()
                     first = json.loads(run(tool.handler({"monitor_id": monitor["id"]}, context))["content"])
                     self.assertEqual((first["previous_status"], first["status"], first["changed"]), (status, "stopped", True))
@@ -62,7 +62,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
                     self.assertFalse(any(event == "task.failed" for event, _ in events))
                     self.assertEqual(task_path.read_bytes(), task_before)
 
-                    stopped_path = Path(core.monitorPath(monitor["id"]))
+                    stopped_path = Path(core.monitor_path(monitor["id"]))
                     stopped_bytes = stopped_path.read_bytes()
                     stopped_mtime = stopped_path.stat().st_mtime_ns
                     events.clear()
@@ -81,7 +81,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
             for index, status in enumerate(("completed", "failed", "stopped"), 10):
                 with self.subTest(status=status):
                     _config, _session, monitor, events, persisted, context, tool = self._fixture(home, workspace, status, str(index))
-                    path = Path(core.monitorPath(monitor["id"]))
+                    path = Path(core.monitor_path(monitor["id"]))
                     before = (path.read_bytes(), path.stat().st_mtime_ns)
                     payload = json.loads(run(tool.handler({"monitor_id": monitor["id"]}, context))["content"])
                     self.assertEqual((payload["status"], payload["previous_status"], payload["changed"]), (status, status, False))
@@ -95,7 +95,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config, session, monitor, _events, _persisted, _context, _tool = self._fixture(home, workspace, "completed", "20")
-            path = Path(core.monitorPath(monitor["id"]))
+            path = Path(core.monitor_path(monitor["id"]))
             before = (path.read_bytes(), path.stat().st_mtime_ns)
             calls = {"persist": 0, "refresh": 0}
             infos = []
@@ -151,7 +151,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             _config, _session, monitor, events, _persisted, context, tool = self._fixture(home, workspace, "active", "40")
-            path = Path(core.monitorPath(monitor["id"]))
+            path = Path(core.monitor_path(monitor["id"]))
             before = path.read_bytes()
             context["session"] = {**context["session"], "id": "different-session"}
             with self.assertRaises(core.TaskOwnershipError) as error:

@@ -28,7 +28,7 @@ from ..tasks.monitor_transactions import (
 from ..tasks.monitors import createMonitorRecord, defaultMonitorCheckIntervalMs, defaultMonitorHeartbeatIntervalMs
 from ..process.identity import processIdentityFromRecord, signalOwnedProcess
 from ..tasks.terminal_store import clearPreparedTaskStop, commitPreparedTaskStop, prepareTaskStop
-from ..storage import listSessionMonitors, loadMonitor, readTaskMeta, saveMonitor, taskOutputPath
+from ..storage import list_session_monitors, load_monitor, read_task_meta, save_monitor, task_output_path
 from ..tasks.ownership import requireModelOwnedMonitor, requireModelOwnedTask
 from ..payloads.tools import getToolPayloadPolicy, shapeTextToolResult
 from .cancellation import _throw_if_tool_cancelled
@@ -48,7 +48,7 @@ def _task_output_tool() -> ToolDefinition:
             timeout = float(input.get("timeout") or 30000) / 1000
             while asyncio.get_running_loop().time() - started < timeout:
                 _throw_if_tool_cancelled(context)
-                meta = await readTaskMeta(task_id)
+                meta = await read_task_meta(task_id)
                 if not meta or meta.get("status") not in ("running", "reconciling"):
                     break
                 from ..config._knobs import knobValue
@@ -70,7 +70,7 @@ def _task_output_tool() -> ToolDefinition:
         if output_result is None:
             try:
                 fallback_output = await readFileTailBounded(
-                    filePath=taskOutputPath(task_id),
+                    filePath=task_output_path(task_id),
                     maxBytes=policy["textInlineBytes"],
                 )
             except (OSError, ValueError):
@@ -102,7 +102,7 @@ def _task_output_tool() -> ToolDefinition:
         )
         execution = createTaskExecutionDescriptor(meta, text)
         output_file = output_result.get("outputFile") if output_result is not None else None
-        output_file = output_file or taskOutputPath(task_id)
+        output_file = output_file or task_output_path(task_id)
         output_manifest = {
             **shaped["view"],
             "originalBytes": original_bytes,
@@ -219,7 +219,7 @@ def _task_stop_tool() -> ToolDefinition:
                     "transition_id": stop_result.get("transitionId"),
                 },
             )
-        committed_meta = await readTaskMeta(task_id) or meta
+        committed_meta = await read_task_meta(task_id) or meta
         execution = _stopped_task_execution_descriptor(task_id, committed_meta)
         return {
             "content": pretty_json(

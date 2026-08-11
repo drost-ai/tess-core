@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from .repository_trust import approveRepositoryContent, checkRepositoryApproval
 from .shell_command_policy import parseSingleShellCommand, splitShellCommandConstituents
-from ..storage import fileOrJson, getProjectRoot, loadSettings
+from ..storage import file_or_json, get_project_root, load_settings
 
 
 _TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z][\w-]*(?:__[\w-]+)*$")
@@ -200,7 +200,7 @@ def _allow_list_hash(allow: list[str]) -> str:
 async def approvePermissionRules(cwd: str, scope: str) -> None:
     if scope not in {"project", "local"}:
         raise ValueError("Permission-rule approval scope must be project or local")
-    settings = await loadSettings(scope, cwd)
+    settings = await load_settings(scope, cwd)
     allow = ((settings.get("permissions") or {}).get("allow") or [])
     await approveRepositoryContent(
         cwd=cwd,
@@ -245,7 +245,7 @@ async def loadPermissionRules(
     scopes = [scope for scope in _SETTINGS_SCOPES if not selected_sources or scope in selected_sources]
     rules: list[dict[str, Any]] = []
     for scope in scopes:
-        settings = await loadSettings(scope, selected_cwd)
+        settings = await load_settings(scope, selected_cwd)
         permissions = settings.get("permissions") if isinstance(settings.get("permissions"), Mapping) else {}
         approved = scope == "user" or await _allow_list_approved(
             selected_cwd,
@@ -255,7 +255,7 @@ async def loadPermissionRules(
         _collect_rules(settings, scope, approved, rules)
     if selected_inline:
         try:
-            inline = fileOrJson(selected_inline)
+            inline = file_or_json(selected_inline)
             _collect_rules(inline, "inline", True, rules)
         except Exception:
             pass
@@ -304,7 +304,7 @@ async def _find_dispatch_rule(effect: str, args: Mapping[str, Any]) -> dict[str,
         rules,
         call,
         effects=(effect,),
-        projectRoot=args.get("projectRoot") or getProjectRoot(args["cwd"]),
+        projectRoot=args.get("projectRoot") or get_project_root(args["cwd"]),
     )
 
 

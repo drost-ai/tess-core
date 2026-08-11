@@ -11,7 +11,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["mcpConfig"] = [{"name": "fake", "transport": "stdio", "commandOrUrl": "fake"}]
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -72,7 +72,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             config["mcpConfig"] = [{"name": "fake", "transport": "stdio", "commandOrUrl": "fake"}]
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -143,7 +143,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -152,7 +152,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="default",
             )
-            other = core.createEmptySession(
+            other = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -194,7 +194,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             subscriptions = []
             unsubscriptions = []
             closed = []
@@ -224,7 +224,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
             self.assertEqual(envelopes[-1]["typedEvent"]["kind"], "task.snapshot")
             self.assertEqual(boot["getTaskSnapshot"]()["total"], 1)
 
-            other = core.createEmptySession(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
+            other = core.create_empty_session(cwd=str(workspace), provider="openai", providerProfileName=config["providerProfileName"], model="gpt-5.4", effort="medium", systemPrompt="s", permissionMode="default")
             boot["setActiveSession"](other, config)
             for _ in range(20):
                 if len(subscriptions) >= 2:

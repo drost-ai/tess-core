@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from ..daemon import connectTaskSupervisorDaemonClient
 from ..storage import (
-    listSessionTaskRecords,
-    loadSession,
-    loadTaskRecord,
+    list_session_task_records,
+    load_session,
+    load_task_record,
 )
 from .common import (
     _compact_tokens,
@@ -24,15 +24,15 @@ from typing import Any
 
 
 async def buildTasksReport(session: dict[str, Any], arg_text: str = "", args: dict[str, Any] | None = None) -> str:
-    records = await listSessionTaskRecords(session.get("id"))
+    records = await list_session_task_records(session.get("id"))
     parts = arg_text.split()
     if not parts:
         return formatTaskListReport(records)
     if parts[0] == "inspect" and len(parts) > 1:
-        record = _resolve_task_record(records, parts[1]) or await loadTaskRecord(parts[1])
+        record = _resolve_task_record(records, parts[1]) or await load_task_record(parts[1])
         return formatTaskInspectReport(record) if record else f"Task not found: {parts[1]}"
     if parts[0] == "result" and len(parts) > 1:
-        record = _resolve_task_record(records, parts[1]) or await loadTaskRecord(parts[1])
+        record = _resolve_task_record(records, parts[1]) or await load_task_record(parts[1])
         if not record:
             return f"Task not found: {parts[1]}"
         output, truncated = await _read_task_output(record, args)
@@ -52,7 +52,7 @@ async def buildTasksReport(session: dict[str, Any], arg_text: str = "", args: di
 
 
 async def _handle_tasks(arg_text: str, session: dict[str, Any], hooks: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
-    records = await listSessionTaskRecords(session.get("id"))
+    records = await list_session_task_records(session.get("id"))
     if not arg_text:
         return _info(hooks, "Tasks", formatTaskListReport(records))
     raw_subcommand, query = _split_subcommand(arg_text)
@@ -70,7 +70,7 @@ async def _handle_tasks(arg_text: str, session: dict[str, Any], hooks: dict[str,
         request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
         if not callable(request_resume):
             return _error(hooks, "/tasks attach is only available in the full-screen TUI.")
-        target_session = await loadSession(record["attachableSessionId"])
+        target_session = await load_session(record["attachableSessionId"])
         if not target_session:
             return _error(hooks, f"Attach target not found: {record['attachableSessionId']}")
         if target_session.get("id") == session.get("id"):

@@ -38,7 +38,7 @@ _read_observer: Callable[[str, int, int], Any] | None = None
 _before_open_observer: Callable[[str], Any] | None = None
 
 
-async def scanPersistedJsonRecords(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def scan_persisted_json_records(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     options = {**(args or {}), **kwargs}
     family = _require_family(options.get("family"))
     directory = os.path.abspath(os.fspath(options["directory"]))
@@ -99,7 +99,7 @@ async def scanPersistedJsonRecords(args: dict[str, Any] | None = None, **kwargs:
                 size=current.st_size,
             ))
             continue
-        max_record_bytes = persistedRecordMaxBytes(family)
+        max_record_bytes = persisted_record_max_bytes(family)
         if current.st_size > max_record_bytes:
             _add_issue(issues, _record_too_large(family, candidate, current.st_size, max_record_bytes))
             continue
@@ -138,7 +138,7 @@ async def scanPersistedJsonRecords(args: dict[str, Any] | None = None, **kwargs:
     }
 
 
-async def readPersistedJsonRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def read_persisted_json_record(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     options = {**(args or {}), **kwargs}
     family = _require_family(options.get("family"))
     candidate = _candidate({"id": options.get("id"), "filePath": options["filePath"]})
@@ -170,7 +170,7 @@ async def readPersistedJsonRecord(args: dict[str, Any] | None = None, **kwargs: 
                 size=current.st_size,
             )
             break
-        maximum = persistedRecordMaxBytes(family)
+        maximum = persisted_record_max_bytes(family)
         if current.st_size > maximum:
             final_issue = _record_too_large(family, candidate, current.st_size, maximum)
             break
@@ -194,7 +194,7 @@ async def readPersistedJsonRecord(args: dict[str, Any] | None = None, **kwargs: 
     return {}
 
 
-def listPersistedRecordIssues(
+def list_persisted_record_issues(
     families: Sequence[str] | None = None,
     root: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -208,22 +208,22 @@ def listPersistedRecordIssues(
     ]
 
 
-def getPersistedRecordIssue(filePath: str) -> dict[str, Any] | None:
+def get_persisted_record_issue(filePath: str) -> dict[str, Any] | None:
     issue = _issue_registry.get(os.path.abspath(filePath))
     return dict(issue) if issue else None
 
 
-def setPersistedRecordReadObserverForTesting(observer: Callable[[str, int, int], Any] | None) -> None:
+def set_persisted_record_read_observer_for_testing(observer: Callable[[str, int, int], Any] | None) -> None:
     global _read_observer
     _read_observer = observer
 
 
-def setPersistedRecordBeforeOpenObserverForTesting(observer: Callable[[str], Any] | None) -> None:
+def set_persisted_record_before_open_observer_for_testing(observer: Callable[[str], Any] | None) -> None:
     global _before_open_observer
     _before_open_observer = observer
 
 
-def persistedRecordMaxBytes(family: str) -> int:
+def persisted_record_max_bytes(family: str) -> int:
     return min(FAMILY_MAX_BYTES[_require_family(family)], GLOBAL_RECORD_HARD_MAX_BYTES)
 
 
@@ -249,7 +249,7 @@ def _read_candidate_sync(family: str, candidate: dict[str, Any], validate: Calla
                 record_id=candidate.get("id"),
                 size=opened.st_size,
             ))
-        maximum = persistedRecordMaxBytes(family)
+        maximum = persisted_record_max_bytes(family)
         if opened.st_size > maximum:
             return _result_issue(_record_too_large(family, candidate, opened.st_size, maximum))
         requested = min(maximum + 1, max(1, opened.st_size + 1))
@@ -445,11 +445,6 @@ def _clear_registered_issues(family: str, directory: str) -> None:
             _issue_registry.pop(file_path, None)
 
 
-scan_persisted_json_records = scanPersistedJsonRecords
-read_persisted_json_record = readPersistedJsonRecord
-list_persisted_record_issues = listPersistedRecordIssues
-get_persisted_record_issue = getPersistedRecordIssue
-persisted_record_max_bytes = persistedRecordMaxBytes
 
 
 __all__ = [
@@ -458,16 +453,16 @@ __all__ = [
     "DEFAULT_READ_CONCURRENCY",
     "FAMILY_MAX_BYTES",
     "GLOBAL_RECORD_HARD_MAX_BYTES",
-    "getPersistedRecordIssue",
     "get_persisted_record_issue",
-    "listPersistedRecordIssues",
+    "get_persisted_record_issue",
     "list_persisted_record_issues",
-    "persistedRecordMaxBytes",
+    "list_persisted_record_issues",
     "persisted_record_max_bytes",
-    "readPersistedJsonRecord",
+    "persisted_record_max_bytes",
     "read_persisted_json_record",
-    "scanPersistedJsonRecords",
+    "read_persisted_json_record",
     "scan_persisted_json_records",
-    "setPersistedRecordBeforeOpenObserverForTesting",
-    "setPersistedRecordReadObserverForTesting",
+    "scan_persisted_json_records",
+    "set_persisted_record_before_open_observer_for_testing",
+    "set_persisted_record_read_observer_for_testing",
 ]

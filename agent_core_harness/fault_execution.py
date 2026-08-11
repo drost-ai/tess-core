@@ -28,7 +28,7 @@ async def executeFaultContractAsync(cells: list[dict[str, Any]]) -> list[dict[st
         root = Path(tmp)
         home = root / "home"
         home.mkdir()
-        async with core.scopedRuntimeHome(str(home)):
+        async with core.scoped_runtime_home(str(home)):
             return [await _execute_cell(cell, root) for cell in cells]
 
 

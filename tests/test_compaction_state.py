@@ -5,7 +5,7 @@ import copy
 from tests.support.agent_core_case import *
 import agent_core.agent.loop as agent_loop_module
 
-from agent_core.context.compaction_state import refreshCompactionStateFromManifest
+from agent_core.context.compaction_state import refresh_compaction_state_from_manifest
 
 
 class CompactionStateTests(AgentCoreTestCase):
@@ -29,7 +29,7 @@ class CompactionStateTests(AgentCoreTestCase):
     def test_session_restore_preserves_newer_live_compaction_state(self):
         import agent_core.agent as agent_module
 
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd="/tmp/agent-core-compaction-state",
             provider="openai",
             model="test-model",
@@ -66,7 +66,7 @@ class CompactionStateTests(AgentCoreTestCase):
     def test_manifest_refresh_repairs_stale_in_memory_compaction_state(self):
         root, _home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="test-model",
@@ -85,7 +85,7 @@ class CompactionStateTests(AgentCoreTestCase):
                 session, 1, "2026-06-27T19:35:40.529Z", 2
             )
             run(
-                core.saveCompactionManifest(
+                core.save_compaction_manifest(
                     {
                         "sessionId": session["id"],
                         "strategy": "checkpoint-v2",
@@ -106,7 +106,7 @@ class CompactionStateTests(AgentCoreTestCase):
                 )
             )
 
-            refreshed = run(refreshCompactionStateFromManifest(session))
+            refreshed = run(refresh_compaction_state_from_manifest(session))
 
             self.assertTrue(refreshed)
             self.assertEqual(session["metadata"]["compactionState"]["latestCompactionGeneration"], 2)

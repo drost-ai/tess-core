@@ -17,9 +17,9 @@ from agent_core.agent.cancellation import (
 )
 from agent_core.storage.io_executor import (
     STORAGE_IO_MAX_WORKERS,
-    resetStorageExecutorPeakForTesting,
-    runStorageIo,
-    storageExecutorSnapshot,
+    reset_storage_executor_peak_for_testing,
+    run_storage_io,
+    storage_executor_snapshot,
 )
 from agent_core.payloads.attachments import stripInMemoryImageData
 from agent_core_harness.performance import (
@@ -32,18 +32,18 @@ from agent_core_harness.performance import (
 class Package46OffLoopStorageTests(AgentCoreTestCase):
     def test_generic_jsonl_appends_are_transactional_and_byte_valid(self):
         async def exercise(path: Path) -> None:
-            from agent_core.storage.json_io import appendJsonLine, readJsonLines
+            from agent_core.storage.json_io import append_json_line, read_json_lines
 
             await asyncio.gather(
                 *(
-                    appendJsonLine(
+                    append_json_line(
                         str(path),
                         {"sequence": index, "payload": str(index) * 50_000},
                     )
                     for index in range(80)
                 )
             )
-            records = await readJsonLines(str(path))
+            records = await read_json_lines(str(path))
             self.assertEqual(len(records), 80)
             self.assertEqual({record["sequence"] for record in records}, set(range(80)))
 
@@ -52,7 +52,7 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
             runtime_home = Path(tmp) / "runtime-home"
 
             async def scoped_exercise() -> None:
-                async with core.scopedRuntimeHome(str(runtime_home)):
+                async with core.scoped_runtime_home(str(runtime_home)):
                     await exercise(path)
 
             run(scoped_exercise())
@@ -65,12 +65,12 @@ class Package46OffLoopStorageTests(AgentCoreTestCase):
 import asyncio
 import sys
 import agent_core as core
-from agent_core.storage.json_io import appendJsonLine
+from agent_core.storage.json_io import append_json_line
 home, path, prefix = sys.argv[1:]
-core.configureRuntimeHome(home)
+core.configure_runtime_home(home)
 async def main():
     await asyncio.gather(*(
-        appendJsonLine(path, {"id": f"{prefix}-{index}", "payload": prefix * 20000})
+        append_json_line(path, {"id": f"{prefix}-{index}", "payload": prefix * 20000})
         for index in range(25)
     ))
 asyncio.run(main())
@@ -104,7 +104,7 @@ asyncio.run(main())
             import agent_core.storage.json_io as json_io
 
             await asyncio.gather(
-                *(runStorageIo(lambda: None) for _ in range(STORAGE_IO_MAX_WORKERS))
+                *(run_storage_io(lambda: None) for _ in range(STORAGE_IO_MAX_WORKERS))
             )
             calls: list[str] = []
 
@@ -124,7 +124,7 @@ asyncio.run(main())
             try:
                 with mock.patch.object(json_io, "_write_json_file_sync", slow_write):
                     for index in range(100):
-                        await core.writeJsonFile(
+                        await core.write_json_file(
                             str(root / f"record-{index}.json"),
                             {"index": index},
                         )
@@ -150,17 +150,17 @@ asyncio.run(main())
             def blocked_io() -> None:
                 release.wait(timeout=5)
 
-            resetStorageExecutorPeakForTesting()
-            tasks = [asyncio.create_task(runStorageIo(blocked_io)) for _ in range(50)]
+            reset_storage_executor_peak_for_testing()
+            tasks = [asyncio.create_task(run_storage_io(blocked_io)) for _ in range(50)]
             deadline = time.monotonic() + 2
-            while storageExecutorSnapshot()["activeOperations"] < STORAGE_IO_MAX_WORKERS:
+            while storage_executor_snapshot()["activeOperations"] < STORAGE_IO_MAX_WORKERS:
                 if time.monotonic() >= deadline:
                     raise AssertionError("storage workers did not start")
                 await asyncio.sleep(0.001)
-            observed = storageExecutorSnapshot()
+            observed = storage_executor_snapshot()
             release.set()
             await asyncio.gather(*tasks)
-            return observed | {"finalActive": storageExecutorSnapshot()["activeOperations"]}
+            return observed | {"finalActive": storage_executor_snapshot()["activeOperations"]}
 
         observed = run(exercise())
         self.assertEqual(observed["maxWorkers"], STORAGE_IO_MAX_WORKERS)
@@ -181,7 +181,7 @@ asyncio.run(main())
                 original(file_path, value)
 
             with mock.patch.object(json_io, "_write_json_file_sync", held_write):
-                task = asyncio.create_task(core.writeJsonFile(str(path), {"committed": True}))
+                task = asyncio.create_task(core.write_json_file(str(path), {"committed": True}))
                 while not started.is_set():
                     await asyncio.sleep(0)
                 task.cancel()
@@ -211,7 +211,7 @@ asyncio.run(main())
                 return handle
 
             async def acquire() -> None:
-                async with core.fileLock(str(path)):
+                async with core.file_lock(str(path)):
                     raise AssertionError("cancelled acquisition entered its critical section")
 
             with mock.patch.object(json_io, "_open_lock_handle", held_open):
@@ -225,7 +225,7 @@ asyncio.run(main())
 
             self.assertEqual(len(handles), 1)
             self.assertTrue(handles[0].closed)
-            async with core.fileLock(str(path), timeoutMs=100):
+            async with core.file_lock(str(path), timeoutMs=100):
                 pass
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,7 +249,7 @@ asyncio.run(main())
                 cleanup_finished.set()
 
             task = asyncio.create_task(
-                runStorageIo(held_operation, cancelCleanup=cleanup)
+                run_storage_io(held_operation, cancelCleanup=cleanup)
             )
             while not started.is_set():
                 await asyncio.sleep(0)
@@ -259,7 +259,7 @@ asyncio.run(main())
             release.set()
             with self.assertRaises(asyncio.CancelledError):
                 await task
-            return task.cancelled(), cleanup_calls, storageExecutorSnapshot()["activeOperations"]
+            return task.cancelled(), cleanup_calls, storage_executor_snapshot()["activeOperations"]
 
         cancelled, cleanup_calls, active = run(exercise())
         self.assertTrue(cancelled)
@@ -276,7 +276,7 @@ asyncio.run(main())
                 release.wait(timeout=5)
                 raise OSError("disk failed after cancellation")
 
-            task = asyncio.create_task(runStorageIo(failing_operation))
+            task = asyncio.create_task(run_storage_io(failing_operation))
             while not started.is_set():
                 await asyncio.sleep(0)
             task.cancel()
@@ -316,7 +316,7 @@ asyncio.run(main())
                 )
                 return (
                     await core.readTaskMailboxMessages("package46-task"),
-                    Path(core.taskDir("package46-task")) / "mailbox.jsonl",
+                    Path(core.task_dir("package46-task")) / "mailbox.jsonl",
                 )
 
             messages, path = run(exercise())
@@ -333,14 +333,14 @@ asyncio.run(main())
             async def exercise() -> Path:
                 await asyncio.gather(
                     *(
-                        core.appendSessionTranscriptLogEntries(
+                        core.append_session_transcript_log_entries(
                             "package46-transcript",
                             [{"type": "probe", "sequence": index}],
                         )
                         for index in range(50)
                     )
                 )
-                return Path(core.sessionTranscriptLogPath("package46-transcript"))
+                return Path(core.session_transcript_log_path("package46-transcript"))
 
             path = run(exercise())
             lines = path.read_text(encoding="utf-8").splitlines()
@@ -356,7 +356,7 @@ asyncio.run(main())
 
 class Package46RollbackRecordTests(AgentCoreTestCase):
     def _session(self, message_count: int = 8) -> dict[str, Any]:
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd="/tmp/package46",
             provider="anthropic",
             model="claude-sonnet-4-6",

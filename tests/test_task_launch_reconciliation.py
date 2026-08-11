@@ -9,7 +9,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         supervisor = None
         try:
             run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.4",
@@ -17,7 +17,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
                 permissionMode="bypassPermissions",
                 sessionId="session-interrupted-launch",
             )
-            run(core.saveSession(session))
+            run(core.save_session(session))
             task_id = "task-interrupted-launch"
             reservation = core.createTaskLaunchReservation(
                 taskId=task_id,
@@ -33,14 +33,14 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
                 "startedAt": reservation["createdAt"],
                 "updatedAt": reservation["createdAt"],
                 "status": "starting",
-                "outputFile": core.taskOutputPath(task_id),
+                "outputFile": core.task_output_path(task_id),
                 "detailStatus": "starting",
                 "owner": "daemon",
                 "launchReservation": reservation,
             }
-            run(core.writeTaskMeta(task_id, {"type": "background_command", **common}))
+            run(core.write_task_meta(task_id, {"type": "background_command", **common}))
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sessionId": session["id"],
@@ -56,7 +56,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
                         "restorable": True,
                         "command": "sleep 30",
                         "cwd": str(workspace),
-                        "outputFile": core.taskOutputPath(task_id),
+                        "outputFile": core.task_output_path(task_id),
                         "detailStatus": "starting",
                         "owner": "daemon",
                         "launchReservation": reservation,
@@ -66,8 +66,8 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
             events = []
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
             record = run(supervisor["inspectTask"](task_id))
-            meta = run(core.readTaskMeta(task_id))
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            meta = run(core.read_task_meta(task_id))
+            persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(record["status"], "failed")
             self.assertEqual(record["launchReservation"]["state"], "failed")
             self.assertEqual(record["metadata"]["launch_recovery_state"], "interrupted_before_attachment")
@@ -78,7 +78,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
 
             run(supervisor["close"]())
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace), "onEvent": lambda event: events.append(event)}))
-            persisted = run(core.loadSessionRecordShallow(session["id"]))
+            persisted = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(persisted["metadata"]["taskIds"], [task_id])
             self.assertEqual(sum(event["event"] == "task.failed" for event in events), 1)
         finally:
@@ -92,18 +92,18 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
         supervisor = None
         try:
             run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
-            parent = core.createEmptySession(
+            parent = core.create_empty_session(
                 cwd=str(workspace), provider="openai", model="gpt-5.4",
                 systemPrompt="parent", permissionMode="bypassPermissions",
                 sessionId="parent-interrupted-subagent",
             )
-            child = core.createEmptySession(
+            child = core.create_empty_session(
                 cwd=str(workspace), provider="openai", model="gpt-5.4",
                 systemPrompt="child", permissionMode="bypassPermissions",
                 sessionId="child-interrupted-subagent",
             )
-            run(core.saveSession(parent))
-            run(core.saveSession(child))
+            run(core.save_session(parent))
+            run(core.save_session(child))
             task_id = "task-interrupted-subagent"
             reservation = core.createTaskLaunchReservation(
                 taskId=task_id,
@@ -113,7 +113,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
             )
             runtime_contract = {"concurrencyGroup": "probe"}
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "type": "subagent",
@@ -131,7 +131,7 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sourceId": "agent-interrupted-subagent",
@@ -150,8 +150,8 @@ class TaskLaunchReconciliationTests(AgentCoreTestCase):
             )
 
             supervisor = run(core.createTaskSupervisor({"cwd": str(workspace)}))
-            parent_record = run(core.loadSessionRecordShallow(parent["id"]))
-            child_record = run(core.loadSessionRecordShallow(child["id"]))
+            parent_record = run(core.load_session_record_shallow(parent["id"]))
+            child_record = run(core.load_session_record_shallow(child["id"]))
             self.assertEqual(parent_record["metadata"]["taskIds"], [task_id])
             self.assertNotIn("subagentTaskId", parent_record["metadata"])
             self.assertEqual(child_record["metadata"]["subagentTaskId"], task_id)

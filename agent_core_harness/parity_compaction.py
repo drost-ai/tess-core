@@ -14,11 +14,11 @@ async def run_compaction_primitives(data: dict[str, Any], paths: dict[str, Any])
     config, session = await _build_session(data, paths)
     compacted_states = build_compaction_authority_states(session, paths)
     compacted = compacted_states["ownedWorkingContext"]
-    plan = core.resolveCompactionExecutionPlan({"config": config, "session": session})
+    plan = core.resolve_compaction_execution_plan({"config": config, "session": session})
     configured = {**config, "compactionModel": data.get("configuredModel", "gpt-5.4"), "compactionVerificationModel": data.get("configuredVerificationModel", "gpt-5.4-mini")}
-    system_none = await core.buildCompactionSystemPromptContext(session)
+    system_none = await core.build_compaction_system_prompt_context(session)
     system_contexts = {
-        name: await core.buildCompactionSystemPromptContext(candidate)
+        name: await core.build_compaction_system_prompt_context(candidate)
         for name, candidate in compacted_states.items()
     }
     return _clean(
@@ -26,27 +26,27 @@ async def run_compaction_primitives(data: dict[str, Any], paths: dict[str, Any])
             "name": data.get("name") or data.get("action"),
             "modelPlan": {
                 "default": _project_plan(plan),
-                "configured": _project_plan(core.resolveCompactionExecutionPlan({"config": configured, "session": session})),
+                "configured": _project_plan(core.resolve_compaction_execution_plan({"config": configured, "session": session})),
             },
             "modelCandidates": {
-                "synthesis": [_project_model(item) for item in core.resolveCompactionModelCandidates({"config": config, "session": session, "purpose": "synthesis"})],
-                "verification": [_project_model(item) for item in core.resolveCompactionModelCandidates({"config": config, "session": session, "purpose": "verification"})],
+                "synthesis": [_project_model(item) for item in core.resolve_compaction_model_candidates({"config": config, "session": session, "purpose": "synthesis"})],
+                "verification": [_project_model(item) for item in core.resolve_compaction_model_candidates({"config": config, "session": session, "purpose": "verification"})],
             },
             "tokenEstimates": {
-                "plain": core.estimateWorkingContextTokens(session),
-                "compacted": core.estimateWorkingContextTokens(compacted),
+                "plain": core.estimate_working_context_tokens(session),
+                "compacted": core.estimate_working_context_tokens(compacted),
                 "messageCount": len(session["messages"]),
                 "recentMessageCount": len(compacted["messages"]) - compacted["metadata"]["compactionState"]["compactedThroughMessageIndex"],
             },
             "autoCompact": {
-                "below": core.shouldAutoCompact(session, 42_000),
-                "soft": core.shouldAutoCompact(session, 151_000),
-                "hard": core.shouldAutoCompact(session, 181_000),
-                "suppressed": core.shouldAutoCompact(compacted, 151_000),
+                "below": core.should_auto_compact(session, 42_000),
+                "soft": core.should_auto_compact(session, 151_000),
+                "hard": core.should_auto_compact(session, 181_000),
+                "suppressed": core.should_auto_compact(compacted, 151_000),
             },
             "workingMessages": {
-                "plain": _project_messages(core.buildMessagesForWorkingContext(session)),
-                "compacted": _project_messages(core.buildMessagesForWorkingContext(compacted)),
+                "plain": _project_messages(core.build_messages_for_working_context(session)),
+                "compacted": _project_messages(core.build_messages_for_working_context(compacted)),
             },
             "systemPromptContext": {
                 "withoutState": _project_system_context(system_none),
@@ -62,7 +62,7 @@ async def run_compaction_primitives(data: dict[str, Any], paths: dict[str, Any])
 async def run_compaction_run(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
     config, session = await _build_session_for(data, paths, default_session_id="compaction-checkpoint-v2-session")
     fake_client = _FakeCompactionModelClient(data.get("script") or {})
-    outcome = await core.runCompaction(
+    outcome = await core.run_compaction(
         {
             "session": session,
             "config": config,
@@ -109,7 +109,7 @@ async def _build_session_for(data: dict[str, Any], paths: dict[str, Any], *, def
         },
         str(paths["python_workspace"]),
     )
-    session = core.createEmptySession(
+    session = core.create_empty_session(
         {
             "cwd": str(paths["python_workspace"]),
             "provider": config["provider"],
@@ -282,6 +282,8 @@ def _working_context_fields() -> dict[str, Any]:
         "discoveries": ["Absolute workspace path length can alter token estimates.", "Checkpoint artifacts include summary, decisions, activity, todos, state, working context, plan, manifest, and checkpoint."],
         "activity": {
             "commands": ["python3 -m agent_core_harness parity parity.compaction-checkpoint-v2-pack"],
+            # Fixture prose compared byte-for-byte against the TS peer — the
+            # runCompaction here is search-command DATA, not this port's API.
             "searches": ["grep -RIn runCompaction agent_core /Users/dev/agents/agent-core/src"],
             "web": [],
             "failures": [],

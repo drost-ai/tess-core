@@ -12,7 +12,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise() -> tuple[list[list[dict[str, Any]]], dict[str, Any], list[dict[str, Any]]]:
-                session = core.createEmptySession(
+                session = core.create_empty_session(
                     cwd=str(workspace),
                     provider="openai",
                     model="gpt-5.4",
@@ -38,7 +38,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
                         session, {"sessionPersistence": True}
                     ),
                 )
-                restored = await core.loadSession(session["id"])
+                restored = await core.load_session(session["id"])
                 mailbox = await core.readTaskMailboxMessages("package46-delivery-task")
                 return deliveries, restored, mailbox
 
@@ -56,7 +56,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
             async def exercise() -> tuple[dict[str, Any], list[dict[str, Any]], int]:
                 import agent_core.tasks.communication as communication
 
-                session = core.createEmptySession(
+                session = core.create_empty_session(
                     cwd=str(workspace),
                     provider="openai",
                     model="gpt-5.4",
@@ -103,17 +103,17 @@ class MailboxDirectionTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                parent = core.createEmptySession(
+                parent = core.create_empty_session(
                     cwd=str(workspace), provider="openai", model="gpt-5.4",
                     systemPrompt="parent", permissionMode="default", sessionId="dir-parent",
                 )
                 parent["metadata"]["taskIds"] = ["dir-task"]
-                child = core.createEmptySession(
+                child = core.create_empty_session(
                     cwd=str(workspace), provider="openai", model="gpt-5.4",
                     systemPrompt="child", permissionMode="default", sessionId="dir-child",
                 )
                 child["metadata"]["subagentTaskId"] = "dir-task"
-                await core.writeTaskMeta("dir-task", {
+                await core.write_task_meta("dir-task", {
                     "type": "subagent", "taskId": "dir-task", "id": "dir-task",
                     "sessionId": child["id"], "session_id": child["id"],
                     "parent_session_id": parent["id"], "status": "running",
@@ -151,14 +151,14 @@ class MailboxDirectionTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                child = core.createEmptySession(
+                child = core.create_empty_session(
                     cwd=str(workspace), provider="openai", model="gpt-5.4",
                     systemPrompt="child", permissionMode="default", sessionId="legacy-child",
                 )
                 child["metadata"]["subagentTaskId"] = "legacy-task"
                 from agent_core.tasks.communication import task_mailbox_path
 
-                await core.appendJsonLine(
+                await core.append_json_line(
                     task_mailbox_path("legacy-task"),
                     {
                         "messageId": "legacy-1", "taskId": "legacy-task",
@@ -178,7 +178,7 @@ class MailboxDirectionTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                await core.writeTaskMeta("val-task", {
+                await core.write_task_meta("val-task", {
                     "type": "subagent", "taskId": "val-task", "id": "val-task",
                     "sessionId": "val-child", "session_id": "val-child",
                     "status": "running", "cwd": str(workspace),

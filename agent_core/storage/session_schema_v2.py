@@ -6,13 +6,13 @@ import uuid
 from typing import Any, Callable
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media
-from .message_origin import isGenuineUserRequest as _is_genuine_user_request
+from .message_origin import is_genuine_user_request as _is_genuine_user_request
 from ..runtime.identifiers import parseSessionId
 from .message_history import (
-    createSessionMessageList as _create_session_message_list,
-    setSessionPersistenceCheckpoint as _set_session_persistence_checkpoint,
+    create_session_message_list as _create_session_message_list,
+    set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
-from .io_executor import runStorageIo as _run_storage_io
+from .io_executor import run_storage_io as _run_storage_io
 from .session_body_v2 import (
     _append_body_sync,
     _body_commit_id,
@@ -22,8 +22,8 @@ from .session_body_v2 import (
     _replace_body_sync,
     _scan_body_bytes,
 )
-from .json_io import readJsonFileTolerant, withRecordTransaction, writeJsonFile
-from .paths import getStateRoot, sessionPath
+from .json_io import read_json_file_tolerant, with_record_transaction, write_json_file
+from .paths import get_state_root, session_path
 
 SESSION_SCHEMA_V2 = 2
 SESSION_BODY_FORMAT = "agent-core.session-messages.jsonl.v1"
@@ -40,21 +40,21 @@ class SessionSchemaVersionError(RuntimeError):
         self.maximum = maximum
 
 
-def sessionMessagesPath(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "sessions", f"{parseSessionId(sessionId)}.messages.jsonl")
+def session_messages_path(sessionId: str) -> str:
+    return os.path.join(get_state_root(), "sessions", f"{parseSessionId(sessionId)}.messages.jsonl")
 
 
-def assertSessionSchemaSupported(record: Any, maximum: int = SESSION_SCHEMA_V2) -> None:
+def assert_session_schema_supported(record: Any, maximum: int = SESSION_SCHEMA_V2) -> None:
     version = record.get("schemaVersion", 1) if isinstance(record, dict) else None
     if not isinstance(version, int) or isinstance(version, bool) or version < 1 or version > maximum:
         raise SessionSchemaVersionError(version, maximum)
 
 
-def isSessionHeadV2(record: Any) -> bool:
+def is_session_head_v2(record: Any) -> bool:
     return isinstance(record, dict) and record.get("schemaVersion") == SESSION_SCHEMA_V2
 
 
-async def hydratePersistedSession(
+async def hydrate_persisted_session(
     sessionId: str,
     raw: dict[str, Any] | None,
     *,
@@ -65,8 +65,8 @@ async def hydratePersistedSession(
         return {"record": None, "changed": False, "reason": None, "bodyCommitId": None}
     if not isinstance(raw, dict) or raw.get("id") != session_id:
         raise ValueError(f"Session record identity mismatch for {session_id}.")
-    assertSessionSchemaSupported(raw)
-    if not isSessionHeadV2(raw):
+    assert_session_schema_supported(raw)
+    if not is_session_head_v2(raw):
         if not isinstance(raw.get("messages"), list):
             raise ValueError(f"Legacy session {session_id} has no message list.")
         return {
@@ -79,7 +79,7 @@ async def hydratePersistedSession(
     body_commit_id = _body_commit_id(raw)
     body = await _run_storage_io(
         _read_body_sync,
-        sessionMessagesPath(session_id),
+        session_messages_path(session_id),
         session_id,
         body_commit_id,
     )
@@ -100,7 +100,7 @@ async def hydratePersistedSession(
                 body_commit_id = str(uuid.uuid4())
                 await _run_storage_io(
                     _append_body_sync,
-                    sessionMessagesPath(session_id),
+                    session_messages_path(session_id),
                     [_commit_entry(session_id, body_commit_id, available_count)],
                     None,
                 )
@@ -108,14 +108,14 @@ async def hydratePersistedSession(
                 record,
                 body_commit_id=body_commit_id,
             )
-            await writeJsonFile(sessionPath(session_id), repaired)
+            await write_json_file(session_path(session_id), repaired)
     elif body["bodyAhead"] or available_count > committed_count:
         reason = "body_ahead"
     elif body["truncatedTail"]:
         reason = "body_tail_ignored"
     _set_session_persistence_checkpoint(
         record,
-        normalizeSessionRevision(record.get("revision")),
+        normalize_session_revision(record.get("revision")),
         len(record.get("messages") or []),
         body_commit_id,
     )
@@ -127,7 +127,7 @@ async def hydratePersistedSession(
     }
 
 
-def hydrateSessionHeadFromBodyBytes(
+def hydrate_session_head_from_body_bytes(
     sessionId: str, head: dict[str, Any], bodyBytes: bytes
 ) -> dict[str, Any]:
     """Hydrate source bytes already captured by a bounded recovery scanner."""
@@ -145,7 +145,7 @@ def hydrateSessionHeadFromBodyBytes(
     record = _hydrate_head(head, body["messages"][:count])
     _set_session_persistence_checkpoint(
         record,
-        normalizeSessionRevision(record.get("revision")),
+        normalize_session_revision(record.get("revision")),
         len(record.get("messages") or []),
         body_commit_id,
     )
@@ -157,7 +157,7 @@ def hydrateSessionHeadFromBodyBytes(
     }
 
 
-async def commitSessionV2(
+async def commit_session_v2(
     sessionId: str,
     previousRaw: dict[str, Any] | None,
     previousSession: dict[str, Any] | None,
@@ -179,7 +179,7 @@ async def commitSessionV2(
         else []
     )
     new_messages = safe["messages"]
-    entries = _body_delta(session_id, old_messages, new_messages, isSessionHeadV2(previousRaw))
+    entries = _body_delta(session_id, old_messages, new_messages, is_session_head_v2(previousRaw))
     previous_commit_id = _body_commit_id(previousRaw)
     body_commit_id = previous_commit_id
     if entries or body_commit_id is None:
@@ -189,18 +189,18 @@ async def commitSessionV2(
     if entries:
         await _run_storage_io(
             _append_body_sync,
-            sessionMessagesPath(session_id),
+            session_messages_path(session_id),
             entries,
             previous_commit_id,
         )
     await _inject(faultInjector, "after_body")
     head = _head_from_session(safe, body_commit_id=body_commit_id)
-    await writeJsonFile(sessionPath(session_id), head)
+    await write_json_file(session_path(session_id), head)
     await _inject(faultInjector, "after_head")
     return {"session": safe, "persistedHead": head, "bodyCommitId": body_commit_id}
 
 
-async def commitSessionV2Delta(
+async def commit_session_v2_delta(
     sessionId: str,
     previousRaw: dict[str, Any],
     nextHead: dict[str, Any],
@@ -243,7 +243,7 @@ async def commitSessionV2Delta(
     if entries:
         await _run_storage_io(
             _append_body_sync,
-            sessionMessagesPath(session_id),
+            session_messages_path(session_id),
             entries,
             previous_commit_id,
         )
@@ -255,7 +255,7 @@ async def commitSessionV2Delta(
         message_count,
         body_commit_id,
     )
-    await writeJsonFile(sessionPath(session_id), head)
+    await write_json_file(session_path(session_id), head)
     await _inject(faultInjector, "after_head")
     return {
         "head": safe_head,
@@ -266,7 +266,7 @@ async def commitSessionV2Delta(
     }
 
 
-def sessionLiveHeadFromV2(sessionId: str, raw: dict[str, Any]) -> dict[str, Any]:
+def session_live_head_from_v2(sessionId: str, raw: dict[str, Any]) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
     _validate_v2_head(raw, session_id)
     return {
@@ -276,21 +276,21 @@ def sessionLiveHeadFromV2(sessionId: str, raw: dict[str, Any]) -> dict[str, Any]
     }
 
 
-async def migrateSessionToV2(
+async def migrate_session_to_v2(
     sessionId: str,
     *,
     faultInjector: Callable[[str], Any] | None = None,
 ) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
-    async with withRecordTransaction("session", session_id):
-        raw = await readJsonFileTolerant(sessionPath(session_id), None)
-        hydrated = await hydratePersistedSession(session_id, raw)
+    async with with_record_transaction("session", session_id):
+        raw = await read_json_file_tolerant(session_path(session_id), None)
+        hydrated = await hydrate_persisted_session(session_id, raw)
         record = hydrated["record"]
         if record is None:
             raise FileNotFoundError(f"Session not found: {session_id}")
-        if isSessionHeadV2(raw):
+        if is_session_head_v2(raw):
             return {"sessionId": session_id, "changed": hydrated["changed"], "schemaVersion": 2}
-        await commitSessionV2(
+        await commit_session_v2(
             session_id,
             raw,
             record,
@@ -300,17 +300,17 @@ async def migrateSessionToV2(
         return {"sessionId": session_id, "changed": True, "schemaVersion": 2}
 
 
-async def writeBackSessionV1(sessionId: str) -> dict[str, Any]:
+async def write_back_session_v1(sessionId: str) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
-    async with withRecordTransaction("session", session_id):
-        raw = await readJsonFileTolerant(sessionPath(session_id), None)
-        hydrated = await hydratePersistedSession(session_id, raw)
+    async with with_record_transaction("session", session_id):
+        raw = await read_json_file_tolerant(session_path(session_id), None)
+        hydrated = await hydrate_persisted_session(session_id, raw)
         record = hydrated["record"]
         if record is None:
             raise FileNotFoundError(f"Session not found: {session_id}")
-        if not isSessionHeadV2(raw):
+        if not is_session_head_v2(raw):
             return {"sessionId": session_id, "changed": False, "schemaVersion": 1}
-        await writeJsonFile(sessionPath(session_id), record)
+        await write_json_file(session_path(session_id), record)
         return {
             "sessionId": session_id,
             "changed": True,
@@ -319,26 +319,26 @@ async def writeBackSessionV1(sessionId: str) -> dict[str, Any]:
         }
 
 
-async def compactSessionMessageBody(sessionId: str) -> dict[str, Any]:
+async def compact_session_message_body(sessionId: str) -> dict[str, Any]:
     session_id = parseSessionId(sessionId)
-    async with withRecordTransaction("session", session_id):
-        raw = await readJsonFileTolerant(sessionPath(session_id), None)
-        hydrated = await hydratePersistedSession(session_id, raw)
+    async with with_record_transaction("session", session_id):
+        raw = await read_json_file_tolerant(session_path(session_id), None)
+        hydrated = await hydrate_persisted_session(session_id, raw)
         record = hydrated["record"]
         if record is None:
             raise FileNotFoundError(f"Session not found: {session_id}")
-        if not isSessionHeadV2(raw):
+        if not is_session_head_v2(raw):
             raise ValueError("Session body compaction requires schema v2.")
         body_commit_id = _body_commit_id(raw) or str(uuid.uuid4())
         entries = [_message_entry(session_id, index, message) for index, message in enumerate(record["messages"])]
         entries.append(
             _commit_entry(session_id, body_commit_id, len(record["messages"]))
         )
-        byte_count = await _run_storage_io(_replace_body_sync, sessionMessagesPath(session_id), entries)
+        byte_count = await _run_storage_io(_replace_body_sync, session_messages_path(session_id), entries)
         if _body_commit_id(raw) is None:
             repaired_head = copy.deepcopy(raw)
             repaired_head["bodyRef"]["commitId"] = body_commit_id
-            await writeJsonFile(sessionPath(session_id), repaired_head)
+            await write_json_file(session_path(session_id), repaired_head)
         return {
             "sessionId": session_id,
             "messageCount": len(record["messages"]),
@@ -431,7 +431,7 @@ def _hydrate_head(head: dict[str, Any], messages: list[dict[str, Any]]) -> dict[
     return dict(items)
 
 
-def normalizeSessionRevision(value: Any) -> int:
+def normalize_session_revision(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 

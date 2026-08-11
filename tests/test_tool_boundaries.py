@@ -4,7 +4,7 @@ import json
 import unittest
 
 import agent_core as core
-from agent_core.context.compaction.projection import buildMessagesForWorkingContext
+from agent_core.context.compaction.projection import build_messages_for_working_context
 from agent_core.session.tool_boundaries import (
     adjustStartToToolBoundary,
     findIncompleteToolExchange,
@@ -66,7 +66,7 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "user", "content": [_tr("a")]},
         ]
         self.assertEqual(findIncompleteToolExchange(messages)["index"], 0)
-        self.assertEqual(core.collectSubstantiveToolExchangeStarts(messages, -1), [])
+        self.assertEqual(core.collect_substantive_tool_exchange_starts(messages, -1), [])
 
     def test_slice_start_adjustment_walks_past_interposed_text(self):
         messages = [
@@ -91,7 +91,7 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             ],
             "metadata": {"compactionState": {"compactedThroughMessageIndex": 2}},
         }
-        working = buildMessagesForWorkingContext(session)
+        working = build_messages_for_working_context(session)
         rendered = json.dumps(working)
         self.assertLess(rendered.find('"tool_use"'), rendered.find('"tool_result"'))
         self.assertEqual(working[0]["role"], "user")

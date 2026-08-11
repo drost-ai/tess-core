@@ -12,7 +12,7 @@ class TraceEmitterTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             async def exercise():
-                await core.writeTaskMeta("trace-task", {
+                await core.write_task_meta("trace-task", {
                     "type": "subagent", "taskId": "trace-task", "id": "trace-task",
                     "sessionId": "trace-child", "session_id": "trace-child",
                     "parent_session_id": "trace-parent", "status": "running",
@@ -65,7 +65,7 @@ class TraceEmitterTests(AgentCoreTestCase):
         async def exercise():
             with mock.patch.object(runner_module, "_prepare_worker", fake_prepare), \
                     mock.patch.object(runner_module, "runAgentPrompt", fake_prompt), \
-                    mock.patch.object(runner_module, "saveSession", fake_save), \
+                    mock.patch.object(runner_module, "save_session", fake_save), \
                     mock.patch.object(runner_module, "_mark_resident_status", fake_mark), \
                     mock.patch.object(runner_module, "_publish_resident_turn_result", fake_publish):
                 with self.assertRaises(asyncio.CancelledError):
@@ -96,12 +96,12 @@ class ResidentSubagentTests(AgentCoreTestCase):
             {"provider": "resident-openai", "settings": str(settings_path), "runtimeHome": str(home), "permissionMode": "bypassPermissions"},
             str(workspace),
         ))
-        parent = core.createEmptySession(
+        parent = core.create_empty_session(
             cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"],
             model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"],
             permissionMode="bypassPermissions",
         )
-        child = core.createEmptySession(
+        child = core.create_empty_session(
             cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"],
             model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"],
             permissionMode="bypassPermissions",
@@ -112,9 +112,9 @@ class ResidentSubagentTests(AgentCoreTestCase):
         child["metadata"]["agentCoreSettingsPath"] = str(settings_path)
         child_authority = run(core.captureAgentAuthority(config=config, session=child, tools=core.createBuiltinTools()))
         child["metadata"]["effectiveAgentAuthority"] = child_authority
-        run(core.saveSession(parent))
-        run(core.saveSession(child))
-        run(core.saveChildAgent({
+        run(core.save_session(parent))
+        run(core.save_session(child))
+        run(core.save_child_agent({
             "agentId": "resident-agent", "sessionId": child["id"], "parentSessionId": parent["id"],
             "name": "Resident", "provider": config["provider"], "model": config["model"],
             "mode": "bypassPermissions", "runInBackground": True, "status": "backgrounded",
@@ -146,15 +146,15 @@ class ResidentSubagentTests(AgentCoreTestCase):
             task_id = started["taskId"]
 
             meta = self._wait_for(
-                lambda: (lambda m: m if m and m.get("status") == "awaiting_input" else None)(run(core.readTaskMeta(task_id))),
+                lambda: (lambda m: m if m and m.get("status") == "awaiting_input" else None)(run(core.read_task_meta(task_id))),
                 label="resident idle after initial turn",
             )
             self.assertEqual(meta["waitingReason"], "resident_idle")
-            child_record = run(core.loadChildAgent("resident-agent"))
+            child_record = run(core.load_child_agent("resident-agent"))
             self.assertEqual(child_record["status"], "awaiting_input")
             self.assertTrue(child_record["stoppable"])
             self.assertIsNone(child_record.get("completedAt"))
-            task_record = run(core.loadTaskRecord(task_id))
+            task_record = run(core.load_task_record(task_id))
             self.assertEqual(task_record["status"], "awaiting_input")
             self.assertEqual(task_record["detailStatus"], "resident_idle")
 
@@ -162,17 +162,17 @@ class ResidentSubagentTests(AgentCoreTestCase):
             self.assertEqual(len(results), 1)
             self.assertIn("provider profile 'resident-openai'", results[0]["content"])
 
-            baseline_messages = len(run(core.loadSession(child["id"]))["messages"])
+            baseline_messages = len(run(core.load_session(child["id"]))["messages"])
             run(send_task_message(task_id, {"direction": "to_child", "content": "follow up please"}))
             self._wait_for(
                 lambda: len([m for m in run(read_task_mailbox_messages(task_id)) if m.get("kind") == "result" and m.get("direction") == "to_parent"]) >= 2,
                 label="second resident turn result",
             )
             meta = self._wait_for(
-                lambda: (lambda m: m if m and m.get("status") == "awaiting_input" else None)(run(core.readTaskMeta(task_id))),
+                lambda: (lambda m: m if m and m.get("status") == "awaiting_input" else None)(run(core.read_task_meta(task_id))),
                 label="idle again after continuation",
             )
-            persisted_child = run(core.loadSession(child["id"]))
+            persisted_child = run(core.load_session(child["id"]))
             self.assertGreater(len(persisted_child["messages"]), baseline_messages)
 
             stopped = run(supervisor["stopTask"](task_id))
@@ -205,17 +205,17 @@ class SubagentCapacityGovernanceTests(AgentCoreTestCase):
             }))
             task_id = started["taskId"]
             seeder._wait_for(
-                lambda: (run(core.readTaskMeta(task_id)) or {}).get("status") == "awaiting_input",
+                lambda: (run(core.read_task_meta(task_id)) or {}).get("status") == "awaiting_input",
                 label="first child resident idle",
             )
 
-            second_child = core.createEmptySession(
+            second_child = core.create_empty_session(
                 cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"],
                 model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"],
                 permissionMode="bypassPermissions",
             )
             second_child["metadata"]["parentSessionId"] = parent["id"]
-            run(core.saveSession(second_child))
+            run(core.save_session(second_child))
             refused = run(supervisor["startSubagentTask"]({
                 "parentSessionId": parent["id"], "sessionId": second_child["id"],
                 "agentId": "resident-agent-2", "cwd": str(workspace), "label": "Second",

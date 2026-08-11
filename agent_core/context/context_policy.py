@@ -8,12 +8,12 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from .continuation.tokens import estimateMessagesTokens, estimateTextTokens
+from .continuation.tokens import estimate_messages_tokens, estimateTextTokens
 
 
 
 
-def estimateRawContextPressure(session: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
+def estimate_raw_context_pressure(session: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
     now_dt = now or datetime.now(timezone.utc)
     messages = list(session.get("messages") or [])
     checkpoint = (session.get("metadata") or {}).get("compactionState") or {}
@@ -41,8 +41,8 @@ def estimateRawContextPressure(session: dict[str, Any], now: datetime | None = N
     }
 
 
-def decideDurableCheckpoint(session: dict[str, Any], pressure: dict[str, Any] | None = None, tokenLimit: int | None = None) -> dict[str, Any]:
-    raw_context = pressure or estimateRawContextPressure(session)
+def decide_durable_checkpoint(session: dict[str, Any], pressure: dict[str, Any] | None = None, tokenLimit: int | None = None) -> dict[str, Any]:
+    raw_context = pressure or estimate_raw_context_pressure(session)
     limit = _safe_int(tokenLimit) or _context_knob("context.raw_checkpoint_token_limit")
     if not raw_context.get("hasDurableCheckpoint"):
         if _safe_int(raw_context.get("rawTokenEstimate")) >= limit:
@@ -88,7 +88,7 @@ def _collect_message_stats(messages: list[dict[str, Any]]) -> dict[str, int]:
     for message in messages:
         if not isinstance(message, dict):
             continue
-        tokens += estimateMessagesTokens([message])
+        tokens += estimate_messages_tokens([message])
         content = message.get("content")
         if not isinstance(content, list):
             continue

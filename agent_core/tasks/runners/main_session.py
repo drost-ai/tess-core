@@ -11,15 +11,15 @@ from ...agent import runAgentPrompt
 from ...runtime.agent_bindings import createAgentRuntimeBindings
 from ...config import resolveConfig
 from ...runtime.generation import createRuntimeSessionBinding
-from ...storage import configureRuntimeHome, loadSession, saveSession
+from ...storage import configure_runtime_home, load_session, save_session
 from ...tools import createBuiltinTools
 
 
 async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
     runtime_home = os.environ.get("AGENT_CORE_HOME")
     if runtime_home:
-        configureRuntimeHome(runtime_home)
-    session = await loadSession(args["sessionId"])
+        configure_runtime_home(runtime_home)
+    session = await load_session(args["sessionId"])
     if not session:
         raise RuntimeError(f"Session not found: {args['sessionId']}")
     config = await resolveConfig(_session_config_options(session, runtime_home), session["cwd"])
@@ -38,7 +38,7 @@ async def run_background_main_session(args: dict[str, Any]) -> dict[str, Any]:
         "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
     })
     result = await runAgentPrompt({"session": session, "config": config, "prompt": args["prompt"], "runtime": runtime})
-    await saveSession(session)
+    await save_session(session)
     return {
         "ok": True,
         "session_id": session["id"],

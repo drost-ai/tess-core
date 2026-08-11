@@ -150,7 +150,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             run(
-                core.saveSettings(
+                core.save_settings(
                     "project",
                     str(workspace),
                     {
@@ -189,7 +189,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
             config["hooks"] = [
                 {"event": "PreToolUse", "command": "unsafe", "blocking": True, "scope": "project", "approved": True}
             ]
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -232,7 +232,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -256,7 +256,7 @@ class AgentAuthorityTests(AgentCoreTestCase):
         root, home, workspace, previous = self.temp_context()
         try:
             config = run(core.resolveConfig({"runtimeHome": str(home)}, str(workspace)))
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],

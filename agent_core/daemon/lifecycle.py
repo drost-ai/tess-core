@@ -12,16 +12,16 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import (
-    clearDaemonState,
-    daemonLogsDir,
-    daemonSocketPath,
-    daemonSpawnLedgerPath,
-    daemonStatePath,
-    ensureBaseLayout,
-    getStateRoot,
-    loadDaemonState,
-    parseDaemonInstanceId,
-    withRecordTransaction,
+    clear_daemon_state,
+    daemon_logs_dir,
+    daemon_socket_path,
+    daemon_spawn_ledger_path,
+    daemon_state_path,
+    ensure_base_layout,
+    get_state_root,
+    load_daemon_state,
+    parse_daemon_instance_id,
+    with_record_transaction,
 )
 from .client import _create_daemon_client
 from .protocol import DaemonProtocolError
@@ -49,7 +49,7 @@ def _required_instance_id(values: dict[str, Any]) -> str:
     instance_id = values.get("instanceId") or values.get("instance_id")
     if not isinstance(instance_id, str) or not instance_id:
         raise ValueError("Daemon operations require an explicit runtime instanceId.")
-    return parseDaemonInstanceId(instance_id)
+    return parse_daemon_instance_id(instance_id)
 
 
 async def connectTaskSupervisorDaemonClient(
@@ -58,7 +58,7 @@ async def connectTaskSupervisorDaemonClient(
 ) -> dict[str, Any] | None:
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
-    state = await loadDaemonState(instance_id)
+    state = await load_daemon_state(instance_id)
     if not state:
         return None
     pid = state.get("pid")
@@ -68,7 +68,7 @@ async def connectTaskSupervisorDaemonClient(
     if state.get("phase") != "running":
         return None
     socket_path = values.get("socketPath") or state.get("socketPath")
-    if socket_path != daemonSocketPath(instance_id):
+    if socket_path != daemon_socket_path(instance_id):
         raise DaemonProtocolError(
             "daemon.auth_failed",
             "Daemon state names an unexpected socket path.",
@@ -96,12 +96,12 @@ async def ensureTaskSupervisorDaemon(
     cwd = values.get("cwd") or os.getcwd()
     owner_pid = values.get("ownerPid") if isinstance(values.get("ownerPid"), int) else os.getpid()
     await prepareDaemonRuntimeSecurity({"instanceId": instance_id, "requireStoppedForMigration": True})
-    await ensureBaseLayout(cwd)
+    await ensure_base_layout(cwd)
     await _reap_dead_daemon_instance_dirs()
     budget = _resolve_startup_timeout_seconds(values)
-    async with withRecordTransaction(
+    async with with_record_transaction(
         f"daemon-ensure-{instance_id}",
-        getStateRoot(),
+        get_state_root(),
         timeoutMs=int((budget + 5) * 1000),
     ):
         client = await _ensure_daemon_under_lock(instance_id, cwd, values, budget, owner_pid)
@@ -119,7 +119,7 @@ async def _ensure_daemon_under_lock(
     existing_client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
     if existing_client is not None:
         return existing_client
-    state = await loadDaemonState(instance_id)
+    state = await load_daemon_state(instance_id)
     pid = (state or {}).get("pid")
     if isinstance(pid, int) and _is_process_alive(pid):
         if _daemon_state_is_still_booting(state):
@@ -160,7 +160,7 @@ async def _ensure_daemon_under_lock(
     # remedy is a daemon restart, never unsupervised in-process execution.
     raise RuntimeError(
         f"Unable to start task supervisor daemon: {last_error}; "
-        f"see {os.path.join(daemonLogsDir(instance_id), 'bootstrap.log')}"
+        f"see {os.path.join(daemon_logs_dir(instance_id), 'bootstrap.log')}"
     )
 
 
@@ -186,7 +186,7 @@ async def stopTaskSupervisorDaemon(
         await client["close"]()
     elif supervisor:
         await supervisor["close"]()
-    state = await loadDaemonState(instance_id)
+    state = await load_daemon_state(instance_id)
     pid = (state or {}).get("pid")
     if isinstance(pid, int) and pid != os.getpid():
         await _wait_for_process_exit(pid, 2)
@@ -212,7 +212,7 @@ async def getTaskSupervisorDaemonState(
 ) -> dict[str, Any] | None:
     values = {**(args or {}), **kwargs}
     instance_id = _required_instance_id(values)
-    state = await loadDaemonState(instance_id)
+    state = await load_daemon_state(instance_id)
     client = await connectTaskSupervisorDaemonClient({"instanceId": instance_id})
     if state and client:
         with contextlib.suppress(Exception):
@@ -223,12 +223,12 @@ async def getTaskSupervisorDaemonState(
 
 
 async def _spawn_detached_daemon(instance_id: str, cwd: str, owner_pid: int) -> subprocess.Popen[Any]:
-    await ensureBaseLayout(cwd)
-    os.makedirs(daemonLogsDir(instance_id), mode=0o700, exist_ok=True)
-    os.chmod(daemonLogsDir(instance_id), 0o700)
-    log_path = os.path.join(daemonLogsDir(instance_id), "bootstrap.log")
+    await ensure_base_layout(cwd)
+    os.makedirs(daemon_logs_dir(instance_id), mode=0o700, exist_ok=True)
+    os.chmod(daemon_logs_dir(instance_id), 0o700)
+    log_path = os.path.join(daemon_logs_dir(instance_id), "bootstrap.log")
     env = dict(os.environ)
-    env["AGENT_CORE_HOME"] = getStateRoot()
+    env["AGENT_CORE_HOME"] = get_state_root()
     repo_root = str(Path(__file__).resolve().parents[2])
     env["PYTHONPATH"] = repo_root if not env.get("PYTHONPATH") else f"{repo_root}{os.pathsep}{env['PYTHONPATH']}"
     fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -261,18 +261,18 @@ async def _spawn_detached_daemon(instance_id: str, cwd: str, owner_pid: int) -> 
 
 
 async def _cleanup_stale_daemon_artifacts(instance_id: str) -> None:
-    async with withRecordTransaction(
+    async with with_record_transaction(
         f"daemon-instance-{instance_id}",
-        getStateRoot(),
+        get_state_root(),
         timeoutMs=_daemon_instance_wait_ms(),
     ):
-        state = await loadDaemonState(instance_id)
+        state = await load_daemon_state(instance_id)
         if state and isinstance(state.get("pid"), int) and _is_process_alive(state["pid"]):
             return
-        current = await loadDaemonState(instance_id)
+        current = await load_daemon_state(instance_id)
         if state != current:
             return
-        socket_path = daemonSocketPath(instance_id)
+        socket_path = daemon_socket_path(instance_id)
         with contextlib.suppress(FileNotFoundError):
             await removeInactiveOwnedDaemonSocket(socket_path)
         token_id = (state or {}).get("authTokenId")
@@ -280,7 +280,7 @@ async def _cleanup_stale_daemon_artifacts(instance_id: str) -> None:
             await removeDaemonAuthMaterialIfOwned(instance_id, token_id)
         else:
             await removeOwnedDaemonAuthMaterial(instance_id)
-        await clearDaemonState(instance_id)
+        await clear_daemon_state(instance_id)
         await _reap_daemon_tmp_artifacts(instance_id)
 
 
@@ -367,7 +367,7 @@ async def _wait_for_process_exit(pid: int, timeout_seconds: float) -> None:
 
 
 def _append_spawn_ledger(instance_id: str, pid: int) -> None:
-    path = daemonSpawnLedgerPath(instance_id)
+    path = daemon_spawn_ledger_path(instance_id)
     payload = json.dumps({"pid": pid, "createdAt": now_iso()}, separators=(",", ":")) + "\n"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:

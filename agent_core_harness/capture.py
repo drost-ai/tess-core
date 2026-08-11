@@ -173,7 +173,7 @@ def collect_observations(
     if "transcript" in selected and state.get("session"):
         observations["transcript"] = core.buildTranscriptSnapshot(state["session"])
     if "tool_artifacts" in selected and state.get("session"):
-        observations["tool_artifacts"] = tree_snapshot(Path(core.getSessionToolArtifactsDir(state["session"]["id"])))
+        observations["tool_artifacts"] = tree_snapshot(Path(core.get_session_tool_artifacts_dir(state["session"]["id"])))
     provider_runtime = state.get("provider_runtime")
     if provider_runtime:
         provider_observations = provider_runtime.observations()
@@ -205,7 +205,7 @@ def tree_snapshot(root: Path) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for path in sorted(root.rglob("*")):
         if path.name.endswith(".json.lock") or (path.parent.name == "locks" and path.suffix == ".lock"):
-            # Transient advisory-lock sidecars (storage_store.fileLock) are
+            # Transient advisory-lock sidecars (storage_store.file_lock) are
             # infrastructure, not observable state; keep goldens stable.
             continue
         rel = path.relative_to(root).as_posix()

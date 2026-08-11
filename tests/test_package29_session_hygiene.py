@@ -20,7 +20,7 @@ _DEAD_PID = 99_999_999
 
 class Package29SessionHygieneTests(AgentCoreTestCase):
     def _record(self, workspace: Path, session_id: str, *, updated_at: str = _OLD) -> dict:
-        record = core.createEmptySession(
+        record = core.create_empty_session(
             cwd=str(workspace), provider="openai", model="test-model", systemPrompt="test",
             permissionMode="default", sessionId=session_id, originalCwd=str(workspace),
         )
@@ -31,7 +31,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
 
     def _write_archive(self, session_id: str, persisted_at: str = _REAL) -> None:
         run(
-            core.appendSessionTranscriptLogEntries(
+            core.append_session_transcript_log_entries(
                 session_id,
                 [{"type": "message", "session_id": session_id, "message_index": 0, "persisted_at": persisted_at, "role": "user", "content": "hello"}],
             )
@@ -39,11 +39,11 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
 
     def _write_stamped(self, record: dict, stamp: str, archive_at: str = _REAL) -> None:
         record["metadata"]["fullTranscriptLog"] = {
-            "path": core.sessionTranscriptLogPath(record["id"]),
+            "path": core.session_transcript_log_path(record["id"]),
             "archivedMessageCount": 1,
             "lastArchivedAt": stamp,
         }
-        run(core.saveSession(record))
+        run(core.save_session(record))
         self._write_archive(record["id"], archive_at)
 
     def _snapshot_files(self, root: Path) -> dict[str, tuple[bytes, int]]:
@@ -63,16 +63,16 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
 
         stale = self._record(workspace, "74444444-4444-4444-8444-444444444444")
         stale["metadata"]["taskIds"] = ["dead-running"]
-        run(core.saveSession(stale))
-        run(core.writeTaskMeta("dead-running", {"type": "background_command", "taskId": "dead-running", "sessionId": stale["id"], "status": "running", "pid": _DEAD_PID, "startedAt": "2026-01-01T00:00:00Z"}))
+        run(core.save_session(stale))
+        run(core.write_task_meta("dead-running", {"type": "background_command", "taskId": "dead-running", "sessionId": stale["id"], "status": "running", "pid": _DEAD_PID, "startedAt": "2026-01-01T00:00:00Z"}))
 
         live = self._record(workspace, "75555555-5555-4555-8555-555555555555")
         live["metadata"]["taskIds"] = ["live-running"]
-        run(core.saveSession(live))
-        run(core.writeTaskMeta("live-running", {"type": "background_command", "taskId": "live-running", "sessionId": live["id"], "status": "running", "pid": os.getpid(), "startedAt": _OLD}))
+        run(core.save_session(live))
+        run(core.write_task_meta("live-running", {"type": "background_command", "taskId": "live-running", "sessionId": live["id"], "status": "running", "pid": os.getpid(), "startedAt": _OLD}))
 
         foreign = self._record(workspace, "smoke-session-record")
-        run(core.saveSession(foreign))
+        run(core.save_session(foreign))
         sessions_dir = home / "sessions"
         (sessions_dir / "broken.json").write_text("{broken", encoding="utf-8")
         oversized = sessions_dir / "oversized.json"
@@ -122,7 +122,7 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
         try:
             damaged = self._record(workspace, "76666666-6666-4666-8666-666666666666", updated_at=_BAD)
             self._write_stamped(damaged, _BAD)
-            target = Path(core.sessionPath(damaged["id"]))
+            target = Path(core.session_path(damaged["id"]))
             before_raw = target.read_bytes()
             before_mtime = target.stat().st_mtime_ns
             before = json.loads(before_raw)
@@ -160,14 +160,14 @@ class Package29SessionHygieneTests(AgentCoreTestCase):
         try:
             damaged = self._record(workspace, "77777777-7777-4777-8777-777777777777", updated_at=_BAD)
             self._write_stamped(damaged, _BAD)
-            target = Path(core.sessionPath(damaged["id"]))
-            run(core.saveDaemonState("hygiene-instance", {"pid": os.getpid(), "phase": "running", "startedAt": now_iso()}))
+            target = Path(core.session_path(damaged["id"]))
+            run(core.save_daemon_state("hygiene-instance", {"pid": os.getpid(), "phase": "running", "startedAt": now_iso()}))
             refused = run(core.repairSessionTimestamps({"apply": True}))
             self.assertTrue(refused["refusedDaemonRunning"])
             self.assertFalse(refused["applied"])
             self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["updatedAt"], _BAD)
             self.assertEqual(len(run(core.repairSessionTimestamps())["planned"]), 1)
-            run(core.clearDaemonState("hygiene-instance"))
+            run(core.clear_daemon_state("hygiene-instance"))
 
             changed = False
 

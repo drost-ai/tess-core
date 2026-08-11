@@ -36,7 +36,7 @@ def _run_in_context(context: contextvars.Context, call: Callable[[], _Result]) -
             _ACTIVE_OPERATIONS -= 1
 
 
-async def runStorageIo(
+async def run_storage_io(
     operation: Callable[..., _Result],
     /,
     *args: Any,
@@ -100,7 +100,7 @@ async def runStorageIo(
         raise asyncio.CancelledError from None
 
 
-def storageExecutorSnapshot() -> dict[str, int]:
+def storage_executor_snapshot() -> dict[str, int]:
     with _STATE_LOCK:
         return {
             "maxWorkers": STORAGE_IO_MAX_WORKERS,
@@ -109,7 +109,7 @@ def storageExecutorSnapshot() -> dict[str, int]:
         }
 
 
-def resetStorageExecutorPeakForTesting() -> None:
+def reset_storage_executor_peak_for_testing() -> None:
     global _PEAK_ACTIVE_OPERATIONS
     with _STATE_LOCK:
         _PEAK_ACTIVE_OPERATIONS = _ACTIVE_OPERATIONS

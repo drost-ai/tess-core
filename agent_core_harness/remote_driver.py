@@ -20,13 +20,13 @@ async def seed_collaboration_fixture(data: dict[str, Any], sandbox: ScenarioSand
     metadata["remoteControlEnabled"] = True
     children = _child_records(session["id"])
     for record in children:
-        await core.saveChildAgent(record)
+        await core.save_child_agent(record)
     metadata["childAgentIds"] = [record["agentId"] for record in children]
     monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-monitor", "goal": "Watch remote tests"})
     monitor.update({"id": "monitor-remote", "updatedAt": "2026-01-01T00:00:06Z", "lastAssistantUpdateSummary": "Remote tests are still running."})
-    await core.saveMonitor(monitor)
-    await core.writeTaskMeta("task-monitor", {"type": "background_command", "taskId": "task-monitor", "id": "task-monitor", "sessionId": session["id"], "command": "pytest", "cwd": str(sandbox.workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:06Z", "status": "running", "outputFile": core.taskOutputPath("task-monitor")})
-    await core.saveSession(session)
+    await core.save_monitor(monitor)
+    await core.write_task_meta("task-monitor", {"type": "background_command", "taskId": "task-monitor", "id": "task-monitor", "sessionId": session["id"], "command": "pytest", "cwd": str(sandbox.workspace), "startedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:06Z", "status": "running", "outputFile": core.task_output_path("task-monitor")})
+    await core.save_session(session)
     state.setdefault("child_agent_aliases", {}).update({record["agentId"].replace("agent-", ""): record["agentId"] for record in children})
     state.setdefault("remote_driver_results", []).append({"driver": "seed_collaboration_fixture", "status": "passed", "childCount": len(children), "monitorId": monitor["id"]})
     await _refresh_remote_state(state)
@@ -44,7 +44,7 @@ async def create_remote_bridge(data: dict[str, Any], sandbox: ScenarioSandbox, s
     runtime = await _create_bridge_runtime(alias, data, session, remote["id"], state, reconnect=False)
     if data.get("attachSession", True):
         session["metadata"]["bridgeId"] = runtime["bridge"]["id"]
-        await core.saveSession(session)
+        await core.save_session(session)
     _remember_bridge(state, alias, remote["id"], runtime)
     state.setdefault("remote_driver_results", []).append({"driver": "create_remote_bridge", "status": "passed", "alias": alias, "remoteId": remote["id"], "bridgeId": runtime["bridge"]["id"]})
     await _refresh_remote_state(state)
@@ -139,12 +139,12 @@ async def update_child_agent_status(data: dict[str, Any], _sandbox: ScenarioSand
     agent_id = (state.get("child_agent_aliases") or {}).get(str(data.get("alias") or ""), data.get("agentId"))
     if not agent_id:
         raise ScenarioAssertionError("No child-agent alias supplied", category="harness")
-    record = await core.loadChildAgent(agent_id)
+    record = await core.load_child_agent(agent_id)
     if not record:
         raise ScenarioAssertionError(f"Child agent not found: {agent_id}", category="driver")
     record.update({key: value for key, value in data.items() if key in {"status", "completionReason", "resultSummary", "latestResultAt", "completedAt", "lastUpdatedAt", "retryable", "stoppable"}})
     record.setdefault("lastUpdatedAt", now_iso())
-    await core.saveChildAgent(record)
+    await core.save_child_agent(record)
     state.setdefault("remote_driver_results", []).append({"driver": "update_child_agent_status", "status": "passed", "agentId": agent_id, "nextStatus": record.get("status")})
     return ["remote_driver_results"]
 
@@ -283,8 +283,8 @@ def _child_records(session_id: str) -> list[dict[str, Any]]:
 
 
 async def _refresh_remote_state(state: dict[str, Any]) -> None:
-    remotes = await core.listRemoteSessions()
-    bridges = await core.listBridges()
+    remotes = await core.list_remote_sessions()
+    bridges = await core.list_bridges()
     state["remote_sessions"] = _json_safe(sorted(remotes, key=lambda item: item.get("id") or ""))
     state["bridge_records"] = _json_safe(
         sorted(
@@ -296,8 +296,8 @@ async def _refresh_remote_state(state: dict[str, Any]) -> None:
             ),
         )
     )
-    state["bridge_inbox"] = _json_safe([{"bridgeId": bridge["id"], "messages": await core.loadBridgeInbox(bridge["id"])} for bridge in state["bridge_records"]])
-    state["bridge_events"] = _json_safe([{"bridgeId": bridge["id"], "events": await core.loadBridgeEvents(bridge["id"])} for bridge in state["bridge_records"]])
+    state["bridge_inbox"] = _json_safe([{"bridgeId": bridge["id"], "messages": await core.load_bridge_inbox(bridge["id"])} for bridge in state["bridge_records"]])
+    state["bridge_events"] = _json_safe([{"bridgeId": bridge["id"], "events": await core.load_bridge_events(bridge["id"])} for bridge in state["bridge_records"]])
 
 
 def _remember_bridge(state: dict[str, Any], alias: str, remote_id: str, runtime: dict[str, Any]) -> None:

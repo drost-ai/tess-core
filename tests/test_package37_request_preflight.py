@@ -9,8 +9,8 @@ import agent_core as core
 import agent_core.agent.context as context_module
 from agent_core.context.request_preflight import (
     RECEIPT_MAX_BYTES,
-    buildRequestPreflight,
-    preflightEventPayload,
+    build_request_preflight,
+    preflight_event_payload,
 )
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 
@@ -106,7 +106,7 @@ def _receipt_fixture(
             }
         },
     }
-    return buildRequestPreflight(
+    return build_request_preflight(
         request=request,
         measurement=measurement,
         outputBudget={
@@ -284,7 +284,7 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
 
     def test_event_projection_is_the_same_content_free_receipt(self):
         receipt = _receipt_fixture()
-        payload = preflightEventPayload("session-1", receipt)
+        payload = preflight_event_payload("session-1", receipt)
         self.assertEqual(payload["categories"], receipt["categories"])
         self.assertEqual(
             payload["request_fingerprint"],
@@ -302,7 +302,7 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
         samples = []
         for _ in range(30):
             started = time.perf_counter()
-            buildRequestPreflight(**fixture)
+            build_request_preflight(**fixture)
             samples.append(time.perf_counter() - started)
         p95 = sorted(samples)[int(len(samples) * 0.95) - 1]
         self.assertLess(p95, 0.250)
@@ -343,7 +343,7 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
                     str(workspace),
                 )
             )
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider=config["provider"],
                 providerProfileName=config["providerProfileName"],
@@ -355,7 +355,7 @@ class Package37RequestPreflightTests(AgentCoreTestCase):
             with (
                 mock.patch.object(
                     context_module,
-                    "measureRequestInputTokens",
+                    "measure_request_input_tokens",
                     measure,
                 ),
                 mock.patch.object(

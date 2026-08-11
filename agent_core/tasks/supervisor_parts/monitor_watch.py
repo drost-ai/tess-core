@@ -19,7 +19,7 @@ import time
 from typing import Any, Callable
 
 from ..._utils import maybe_await
-from ...storage import listMonitors
+from ...storage import list_monitors
 from ..monitor_observation import buildMonitorObservationMutation
 from ..monitor_transactions import (
     MonitorTransactionError,
@@ -37,7 +37,7 @@ async def tick_daemon_monitors(
     Returns the number of event-bearing transitions committed."""
     now_ms = int(time.time() * 1000)
     transitions = 0
-    for monitor in await listMonitors():
+    for monitor in await list_monitors():
         if not _should_check_monitor(monitor, now_ms):
             continue
         monitor_id = monitor.get("id")

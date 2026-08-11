@@ -14,7 +14,7 @@ from typing import Any
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
 from ..runtime.identifiers import parseArtifactId
-from ..storage import toolArtifactDataPath, toolArtifactMetaPath
+from ..storage import tool_artifact_data_path, tool_artifact_meta_path
 from ..payloads.result_guard import (
     non_artifact_tool_result_max_bytes,
     serializedContentBytes,
@@ -53,7 +53,7 @@ def _read_tool_artifact() -> ToolDefinition:
 
         try:
             metadata = _read_registered_artifact_metadata(
-                toolArtifactMetaPath(session_id, artifact_id)
+                tool_artifact_meta_path(session_id, artifact_id)
             )
         except FileNotFoundError:
             metadata = None
@@ -80,7 +80,7 @@ def _read_tool_artifact() -> ToolDefinition:
             )
 
         extension = ".json" if metadata.get("contentType") == "json" else ".txt"
-        expected_path = toolArtifactDataPath(session_id, artifact_id, extension)
+        expected_path = tool_artifact_data_path(session_id, artifact_id, extension)
         recorded_path = metadata.get("filePath")
         if (
             not isinstance(recorded_path, str)

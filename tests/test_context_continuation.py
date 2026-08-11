@@ -6,7 +6,7 @@ import agent_core.agent.context as agent_context_module
 
 class ContextContinuationTests(AgentCoreTestCase):
     def test_continuation_relief_modes_match_reference_policy(self):
-        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+        session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
         session["updatedAt"] = "2026-01-01T00:00:00Z"
         messages = []
         for index in range(18):
@@ -29,30 +29,30 @@ class ContextContinuationTests(AgentCoreTestCase):
             )
         messages.append({"role": "user", "content": "continue from latest file inspection"})
 
-        pressure = core.classifyContextPressure({"session": session, "messages": messages})
+        pressure = core.classify_context_pressure({"session": session, "messages": messages})
         self.assertGreater(pressure["categories"]["currentTurnToolPayloadTokens"], 0)
         self.assertGreater(pressure["categories"]["repeatedFileContentTokens"], 0)
 
-        unscheduled_relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
+        unscheduled_relief = core.apply_context_relief_modes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
         self.assertEqual(unscheduled_relief["summary"]["plannedModes"], [])
         self.assertFalse(unscheduled_relief["summary"]["applied"])
 
         session["updatedAt"] = "2999-01-01T00:00:00Z"
         scheduled_messages = [{"role": "user", "content": "x" * 810_000}, *messages]
-        relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": scheduled_messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
+        relief = core.apply_context_relief_modes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": scheduled_messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}})
         summary = relief["summary"]
         self.assertIn("api_microcompact", summary["plannedModes"])
         self.assertIn("api_microcompact", summary["appliedModes"])
         self.assertGreater(summary["tokensSavedEstimate"], 0)
-        prompt = core.renderContextReliefPrompt(summary)
+        prompt = core.render_context_relief_prompt(summary)
         self.assertIsNone(prompt)
 
-        reactive_relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}, "reactiveAttempt": 1})
+        reactive_relief = core.apply_context_relief_modes({"session": session, "config": {"provider": "openai"}, "prompt": "continue", "messages": messages, "retrievedMemory": {"records": [], "tokenEstimate": 0}, "reactiveAttempt": 1})
         self.assertIn("api_microcompact", reactive_relief["summary"]["plannedModes"])
         self.assertEqual(reactive_relief["summary"]["pressureLevel"], "high")
 
     def test_production_relief_retires_legacy_session_memory_compaction(self):
-        session = core.createEmptySession(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
+        session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
         messages = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"message {index} about /tmp/workspace/app.py and command pytest"} for index in range(44)]
         retrieved = {
             "records": [
@@ -64,7 +64,7 @@ class ContextContinuationTests(AgentCoreTestCase):
             "tokenEstimate": 650,
         }
 
-        relief = core.applyContextReliefModes({"session": session, "config": {"provider": "openai"}, "prompt": "recover", "messages": messages, "retrievedMemory": retrieved, "reactiveAttempt": 2})
+        relief = core.apply_context_relief_modes({"session": session, "config": {"provider": "openai"}, "prompt": "recover", "messages": messages, "retrievedMemory": retrieved, "reactiveAttempt": 2})
         summary = relief["summary"]
         self.assertNotIn("session_memory_compaction", summary["plannedModes"])
         self.assertNotIn("session_memory_compaction", summary["appliedModes"])
@@ -72,7 +72,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         self.assertFalse(any("durable memory:" in line for line in summary["reinjectionLines"]))
         self.assertLess(len(relief["messages"]), len(messages))
 
-        direct_legacy = core.applyContextReliefMode(
+        direct_legacy = core.apply_context_relief_mode(
             {
                 "mode": "session_memory_compaction",
                 "session": session,
@@ -98,14 +98,14 @@ class ContextContinuationTests(AgentCoreTestCase):
         self.assertEqual(historical["payload"]["mode"], "session_memory_compaction")
         self.assertEqual(historical["payload"]["modes"], ["session_memory_compaction"])
 
-        partial = core.applyPartialCompaction(messages, 1)
+        partial = core.apply_partial_compaction(messages, 1)
         self.assertTrue(partial["applied"])
         self.assertEqual(partial["messages"][0]["role"], "user")
         self.assertIn("Partial continuation summary", partial["messages"][0]["content"])
 
     def test_continuation_malformed_tool_results_match_reference_edges(self):
-        self.assertEqual(core.parseStructuredToolResult('{"command":"pytest","exitCode":NaN,"stderr":"bad"}'), {})
-        plain = core.summarizeToolResultForRelief('{"command":"pytest","exitCode":NaN,"stderr":"bad"}', 80)
+        self.assertEqual(core.parse_structured_tool_result('{"command":"pytest","exitCode":NaN,"stderr":"bad"}'), {})
+        plain = core.summarize_tool_result_for_relief('{"command":"pytest","exitCode":NaN,"stderr":"bad"}', 80)
         self.assertEqual(plain, '{"command":"pytest","exitCode":NaN,"stderr":"bad"}')
 
         tool_uses = {}
@@ -131,7 +131,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                 {"type": "tool_result", "tool_use_id": "missing", "content": ["array", "payload"], "is_error": True},
             ],
         }
-        compacted = core.compactMessageForContinuation(
+        compacted = core.compact_message_for_continuation(
             message,
             tool_uses,
             compaction_state,
@@ -143,7 +143,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         self.assertIn('"filePath": "/tmp/app.py"', file_summary)
         self.assertEqual(array_summary, '["array","payload"]')
 
-        pressure = core.classifyContextPressure({"session": {"metadata": {}}, "messages": [message]})
+        pressure = core.classify_context_pressure({"session": {"metadata": {}}, "messages": [message]})
         self.assertGreater(pressure["categories"]["currentTurnToolPayloadTokens"], 0)
         self.assertGreater(pressure["categories"]["repeatedFileContentTokens"], 0)
 
@@ -153,7 +153,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         bridge = None
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             relief_data = {
                 "session_id": session["id"],
                 "mode": "api_microcompact",
@@ -184,7 +184,7 @@ class ContextContinuationTests(AgentCoreTestCase):
 
             bridge = run(core.createBridgeRuntime({"session": session, "emit": lambda *_: None, "startPolling": False}))
             run(bridge["recordEvent"]("context_relief.applied", relief_data))
-            bridge_events = run(core.loadBridgeEvents(bridge["bridge"]["id"]))
+            bridge_events = run(core.load_bridge_events(bridge["bridge"]["id"]))
             self.assertEqual(bridge_events[-1]["data"]["modes"], [])
             typed = core.createRuntimeEvent({"event": bridge_events[-1]["event"], "data": bridge_events[-1]["data"]})
             self.assertEqual(typed["payload"]["tokensSavedEstimate"], 321)
@@ -200,10 +200,10 @@ class ContextContinuationTests(AgentCoreTestCase):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_context_module.measureRequestInputTokens
+        original_measure = agent_context_module.measure_request_input_tokens
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"] = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"older context {index}"} for index in range(22)]
             provider_requests = []
             events = []
@@ -231,7 +231,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                     )
                 return {"model": request["model"], "content": [{"type": "text", "text": "recovered"}], "usage": {}, "stopReason": "end"}
 
-            agent_context_module.measureRequestInputTokens = fake_measure
+            agent_context_module.measure_request_input_tokens = fake_measure
             result = run(core.runAgentPrompt(session=session, config=config, runtime=bind_test_runtime(session, {"interactive": False, "askQuestion": lambda *_: "", "emitEvent": lambda event, data: events.append((event, data)), "tools": []}), prompt="continue", providerOverride={"send": send}))
 
             self.assertEqual(result["text"], "recovered")
@@ -244,17 +244,17 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefReactiveAttempt"], 1)
             self.assertEqual(session["metadata"]["runtimeRestore"]["lastContextReliefKind"], "circuit_breaker")
         finally:
-            agent_context_module.measureRequestInputTokens = original_measure
+            agent_context_module.measure_request_input_tokens = original_measure
             self.restore_home(root, previous)
 
     def test_agent_prompt_cancels_while_rebuilding_reactive_relief_request(self):
         import agent_core.agent as agent_module
 
         root, home, workspace, previous = self.temp_context()
-        original_measure = agent_context_module.measureRequestInputTokens
+        original_measure = agent_context_module.measure_request_input_tokens
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             session["messages"] = [{"role": "user" if index % 2 == 0 else "assistant", "content": f"older context {index}"} for index in range(22)]
             signal = SimpleNamespace(aborted=False, reason=None)
             events = []
@@ -288,7 +288,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                     )
                 )
 
-            agent_context_module.measureRequestInputTokens = fake_measure
+            agent_context_module.measure_request_input_tokens = fake_measure
             result = run(
                 core.runAgentPrompt(
                     session=session,
@@ -306,5 +306,5 @@ class ContextContinuationTests(AgentCoreTestCase):
             self.assertTrue(any(event == "turn.cancelled" for event, _ in events))
             self.assertFalse(any(event == "provider.failed" for event, _ in events))
         finally:
-            agent_context_module.measureRequestInputTokens = original_measure
+            agent_context_module.measure_request_input_tokens = original_measure
             self.restore_home(root, previous)

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 from .shared import MAX_TODOS
-from .utils import summarizeTodo
+from .utils import summarize_todo
 from typing import Any
 from ...payloads.todo_policy import TODO_WRITE_LIMITS as _TODO_WRITE_LIMITS
 from ...payloads.todo_policy import boundTodoViewText as _bound_todo_view_text
 from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
-def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
+def build_compaction_synthesis_prompt(args: dict[str, Any]) -> str:
     session = args["session"]
     evidence = args["evidence"]
     model = args["model"]
@@ -27,8 +27,8 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
             "content": _bound_todo_view_text(active_task.get("content")),
             "activeForm": _bound_todo_view_text(active_task.get("activeForm"), _TODO_WRITE_LIMITS["maxViewActiveFormBytes"]),
         } if isinstance(active_task, dict) else None,
-        "open": [summarizeTodo(todo) for todo in selected_todos["open"]],
-        "completed": [summarizeTodo(todo) for todo in selected_todos["completed"]],
+        "open": [summarize_todo(todo) for todo in selected_todos["open"]],
+        "completed": [summarize_todo(todo) for todo in selected_todos["completed"]],
     }
     lines = [
         "Synthesize the next working context for this session.",
@@ -90,7 +90,7 @@ def buildCompactionSynthesisPrompt(args: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
+def build_compaction_verification_prompt(args: dict[str, Any]) -> str:
     session = args["session"]
     evidence = args["evidence"]
     model = args["model"]
@@ -163,13 +163,13 @@ def buildCompactionVerificationPrompt(args: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def renderWorkingContextPromptContext(
+def render_working_context_prompt_context(
     context: dict[str, Any],
 ) -> str:
-    return _renderFullWorkingContextPromptContext(context)
+    return _render_full_working_context_prompt_context(context)
 
 
-def _renderFullWorkingContextPromptContext(context: dict[str, Any]) -> str:
+def _render_full_working_context_prompt_context(context: dict[str, Any]) -> str:
     session = context.get("session") or {}
     compaction = context.get("compaction") or {}
     project = context.get("project") or {}
@@ -203,35 +203,35 @@ def _renderFullWorkingContextPromptContext(context: dict[str, Any]) -> str:
     current_state = context.get("currentState") or {}
     activity = context.get("activity") or {}
     todos = context.get("todos") or {}
-    appendPromptList(lines, "active_goals", goals.get("active") or [])
-    appendPromptList(lines, "recent_requests", goals.get("recentRequests") or [])
-    appendPromptList(lines, "constraints", goals.get("constraints") or [])
-    appendPromptList(lines, "preferences", goals.get("preferences") or [])
-    appendPromptList(lines, "completed", current_state.get("completed") or [])
-    appendPromptList(lines, "in_progress", current_state.get("inProgress") or [])
-    appendPromptList(lines, "blocked", current_state.get("blocked") or [])
-    appendPromptList(lines, "decisions", context.get("decisions") or [])
-    appendPromptList(lines, "discoveries", context.get("discoveries") or [])
-    appendPromptList(lines, "relevant_files", [_format_relevant_file_prompt(record) for record in project.get("keyFiles", [])])
-    appendPromptList(lines, "project_evidence", facts.get("evidence") or [])
-    appendPromptList(lines, "open_todos", todos.get("open") or [])
+    append_prompt_list(lines, "active_goals", goals.get("active") or [])
+    append_prompt_list(lines, "recent_requests", goals.get("recentRequests") or [])
+    append_prompt_list(lines, "constraints", goals.get("constraints") or [])
+    append_prompt_list(lines, "preferences", goals.get("preferences") or [])
+    append_prompt_list(lines, "completed", current_state.get("completed") or [])
+    append_prompt_list(lines, "in_progress", current_state.get("inProgress") or [])
+    append_prompt_list(lines, "blocked", current_state.get("blocked") or [])
+    append_prompt_list(lines, "decisions", context.get("decisions") or [])
+    append_prompt_list(lines, "discoveries", context.get("discoveries") or [])
+    append_prompt_list(lines, "relevant_files", [_format_relevant_file_prompt(record) for record in project.get("keyFiles", [])])
+    append_prompt_list(lines, "project_evidence", facts.get("evidence") or [])
+    append_prompt_list(lines, "open_todos", todos.get("open") or [])
     if todos.get("originalItemCount") is not None:
         lines.append(
             f"todo_cardinality: total={todos['originalItemCount']} "
             f"returned={todos.get('returnedItemCount', 0)} omitted={todos.get('omittedItemCount', 0)}"
         )
-    appendPromptList(lines, "recent_searches", activity.get("searches") or [])
-    appendPromptList(lines, "recent_commands", activity.get("commands") or [])
-    appendPromptList(lines, "recent_web", activity.get("web") or [])
-    appendPromptList(lines, "recent_failures", activity.get("failures") or [])
-    appendPromptList(lines, "next_steps", context.get("nextSteps") or [])
-    appendPromptList(lines, "critical_context", context.get("criticalContext") or [])
-    appendPreservedTrace(lines, context)
+    append_prompt_list(lines, "recent_searches", activity.get("searches") or [])
+    append_prompt_list(lines, "recent_commands", activity.get("commands") or [])
+    append_prompt_list(lines, "recent_web", activity.get("web") or [])
+    append_prompt_list(lines, "recent_failures", activity.get("failures") or [])
+    append_prompt_list(lines, "next_steps", context.get("nextSteps") or [])
+    append_prompt_list(lines, "critical_context", context.get("criticalContext") or [])
+    append_preserved_trace(lines, context)
     lines.append("</working_context>")
     return "\n".join(lines)
 
 
-def appendPreservedTrace(lines: list[str], context: dict[str, Any]) -> None:
+def append_preserved_trace(lines: list[str], context: dict[str, Any]) -> None:
     traces = context.get("preservedTrace") or []
     if not isinstance(traces, list) or not traces:
         return
@@ -250,7 +250,7 @@ def appendPreservedTrace(lines: list[str], context: dict[str, Any]) -> None:
         lines.append("</trace>")
 
 
-def appendProjectFactsSection(lines: list[str], context: dict[str, Any]) -> None:
+def append_project_facts_section(lines: list[str], context: dict[str, Any]) -> None:
     project = context.get("project") or {}
     facts = project.get("facts") or {}
     if not facts and not project.get("description"):
@@ -270,7 +270,7 @@ def appendProjectFactsSection(lines: list[str], context: dict[str, Any]) -> None
         lines.append(f"- evidence: {', '.join(f'`{value}`' for value in facts['evidence'])}")
 
 
-def appendStringSection(lines: list[str], heading: str, entries: list[str]) -> None:
+def append_string_section(lines: list[str], heading: str, entries: list[str]) -> None:
     values = [entry for entry in entries if entry]
     if not values:
         return
@@ -278,7 +278,7 @@ def appendStringSection(lines: list[str], heading: str, entries: list[str]) -> N
     lines.extend(f"- {entry}" for entry in values)
 
 
-def appendSubsection(lines: list[str], heading: str, entries: list[str]) -> None:
+def append_subsection(lines: list[str], heading: str, entries: list[str]) -> None:
     lines.append(f"### {heading}")
     if not entries:
         lines.extend(["- None.", ""])
@@ -287,7 +287,7 @@ def appendSubsection(lines: list[str], heading: str, entries: list[str]) -> None
     lines.append("")
 
 
-def appendRelevantFilesSection(lines: list[str], files: list[dict[str, Any]]) -> None:
+def append_relevant_files_section(lines: list[str], files: list[dict[str, Any]]) -> None:
     if not files:
         return
     lines.extend(["", "## Relevant Files", ""])
@@ -296,7 +296,7 @@ def appendRelevantFilesSection(lines: list[str], files: list[dict[str, Any]]) ->
         lines.append(f"- `{file_record.get('path')}`{note}")
 
 
-def appendPromptList(lines: list[str], heading: str, entries: list[str]) -> None:
+def append_prompt_list(lines: list[str], heading: str, entries: list[str]) -> None:
     values = [entry for entry in entries if entry]
     if not values:
         return
@@ -304,7 +304,7 @@ def appendPromptList(lines: list[str], heading: str, entries: list[str]) -> None
     lines.extend(f"- {entry}" for entry in values)
 
 
-def appendActivitySection(lines: list[str], heading: str, entries: list[str]) -> None:
+def append_activity_section(lines: list[str], heading: str, entries: list[str]) -> None:
     if not entries:
         return
     lines.extend([f"## {heading}", ""])

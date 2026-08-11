@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from ..compaction.utils import collapseWhitespace, estimateTextTokens, truncate
+from ..compaction.utils import collapse_whitespace, estimateTextTokens, truncate
 from ...payloads.token_estimation import estimateMessageTokens as _estimate_message_tokens
 
-from ..coerce import asRecord
+from ..coerce import as_record
 
 from .shared import LOW_VALUE_TOOL_NAMES, _tool_result_content_string
 
@@ -14,11 +14,11 @@ from ...payloads.image_redaction import redactImagePayloads as _redact_image_pay
 from ...payloads.todo_policy import selectTodoState as _select_todo_state
 
 
-def estimateMessagesTokens(messages: list[dict[str, Any]]) -> int:
+def estimate_messages_tokens(messages: list[dict[str, Any]]) -> int:
     return _estimate_message_tokens(messages)
 
 
-def estimateTodoAndPlanTokens(session: dict[str, Any]) -> int:
+def estimate_todo_and_plan_tokens(session: dict[str, Any]) -> int:
     selected = _select_todo_state(session.get("todos", []), {"maxOpen": 20, "maxCompleted": 8})
     todo_text = "\n".join(
         " ".join(str(part) for part in (todo.get("content"), todo.get("activeForm"), todo.get("status")) if part)
@@ -37,7 +37,7 @@ def estimateTodoAndPlanTokens(session: dict[str, Any]) -> int:
 
 
 
-def classifyContextPressure(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def classify_context_pressure(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session = args.get("session") or {}
     messages = args.get("messages") or []
@@ -47,7 +47,7 @@ def classifyContextPressure(args: dict[str, Any] | None = None, **kwargs: Any) -
         "currentTurnToolPayloadTokens": 0,
         "lowValueTailTokens": 0,
         "repeatedFileContentTokens": 0,
-        "planTodoNoiseTokens": estimateTextTokens(system_context) + estimateTodoAndPlanTokens(session),
+        "planTodoNoiseTokens": estimateTextTokens(system_context) + estimate_todo_and_plan_tokens(session),
     }
 
     tool_uses: dict[str, str] = {}
@@ -73,6 +73,6 @@ def classifyContextPressure(args: dict[str, Any] | None = None, **kwargs: Any) -
                 categories["repeatedFileContentTokens"] += token_estimate
 
     return {
-        "totalTokenEstimate": estimateMessagesTokens(messages) + estimateTextTokens(system_context),
+        "totalTokenEstimate": estimate_messages_tokens(messages) + estimateTextTokens(system_context),
         "categories": categories,
     }

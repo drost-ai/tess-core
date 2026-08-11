@@ -39,7 +39,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 str(workspace),
             )
         )
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace),
             provider=config["provider"],
             providerProfileName=config["providerProfileName"],
@@ -48,7 +48,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             systemPrompt=config["systemPrompt"],
             permissionMode="bypassPermissions",
         )
-        run(core.saveSession(session))
+        run(core.save_session(session))
         return config, session
 
     @staticmethod
@@ -68,7 +68,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
         identity = self._identity()
         stamp = "2026-07-17T00:00:00Z"
         run(
-            core.saveTaskRecord(
+            core.save_task_record(
                 {
                     "id": task_id,
                     "sessionId": session_id,
@@ -88,7 +88,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             )
         )
         run(
-            core.writeTaskMeta(
+            core.write_task_meta(
                 task_id,
                 {
                     "type": "background_command",
@@ -181,8 +181,8 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             }
             self.assertEqual(len(transition_ids), 1)
 
-            record_path = Path(core.taskRecordPath(task_id))
-            meta_path = Path(core.taskMetaPath(task_id))
+            record_path = Path(core.task_record_path(task_id))
+            meta_path = Path(core.task_meta_path(task_id))
             before = (
                 record_path.read_bytes(),
                 record_path.stat().st_mtime_ns,
@@ -247,7 +247,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             self.assertFalse(thread.is_alive())
             self.assertTrue(committed["transition"]["changed"])
             self.assertEqual(finalizer_result[0]["transition"]["changed"], False)
-            self.assertEqual(run(core.loadTaskRecord(task_id))["status"], "stopped")
+            self.assertEqual(run(core.load_task_record(task_id))["status"], "stopped")
         finally:
             setTaskStopCoordinationTestHookForTests(None)
             self.restore_home(root, previous)
@@ -259,9 +259,9 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             task_id = "task-stop-runner-first"
             self._seed_process_task(task_id, session["id"])
             prepared = run(prepareTaskStop(task_id, "SIGTERM"))
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         **meta,
@@ -277,7 +277,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             )
             self.assertTrue(committed["transition"]["changed"])
             self.assertEqual(committed["result"]["transitionId"], prepared["transitionId"])
-            record = run(core.loadTaskRecord(task_id))
+            record = run(core.load_task_record(task_id))
             self.assertEqual(record["status"], "stopped")
             self.assertEqual(
                 record["metadata"]["terminal_transition_id"],
@@ -327,7 +327,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                     }
                     if intent:
                         initial["terminationIntent"] = intent
-                    run(core.writeTaskMeta(task_id, initial))
+                    run(core.write_task_meta(task_id, initial))
                     output_path = workspace / f"{suffix}.log"
                     with mock.patch.object(
                         background_runner_module.subprocess,
@@ -345,7 +345,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                                 }
                             )
                         )
-                    meta = run(core.readTaskMeta(task_id))
+                    meta = run(core.read_task_meta(task_id))
                     self.assertEqual(meta["status"], expected_status)
                     self.assertEqual(meta["terminalEventOwner"], expected_owner)
                     self.assertIsNone(meta.get("exitCode"))
@@ -388,10 +388,10 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 "revision": 1,
                 "generation": 1,
             }
-            run(core.saveHealthCheckTask(health))
-            run(core.writeTaskMeta(task_id, health))
+            run(core.save_health_check_task(health))
+            run(core.write_task_meta(task_id, health))
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sessionId": session["id"],
@@ -407,13 +407,13 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 )
             )
             first = run(supervisor["stopTask"](task_id))
-            stopped_bytes = Path(core.taskRecordPath(task_id)).read_bytes()
+            stopped_bytes = Path(core.task_record_path(task_id)).read_bytes()
             second = run(supervisor["stopTask"](task_id))
             self.assertEqual((first["status"], first["changed"]), ("stopped", True))
             self.assertEqual((second["status"], second["changed"]), ("stopped", False))
-            self.assertEqual(Path(core.taskRecordPath(task_id)).read_bytes(), stopped_bytes)
+            self.assertEqual(Path(core.task_record_path(task_id)).read_bytes(), stopped_bytes)
             self.assertEqual([event["event"] for event in events], ["task.stopped"])
-            self.assertEqual(run(core.loadHealthCheckTask(task_id))["status"], "stopped")
+            self.assertEqual(run(core.load_health_check_task(task_id))["status"], "stopped")
         finally:
             if supervisor:
                 run(supervisor["close"]())
@@ -427,7 +427,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
             stamp = "2026-07-17T00:00:00Z"
             session["metadata"]["taskIds"] = [task_id]
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sessionId": session["id"],
@@ -443,7 +443,7 @@ class Package31TaskStopTerminalTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "type": "background_command",

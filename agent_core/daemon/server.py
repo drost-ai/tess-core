@@ -10,17 +10,17 @@ from typing import Any
 
 from .._utils import now_iso
 from ..storage import (
-    appendDaemonEvent,
-    daemonPidPath,
-    daemonSocketPath,
-    daemonStatePath,
-    ensureBaseLayout,
-    getStateRoot,
-    loadDaemonState,
-    readLastDaemonEventCursor,
-    rotateDaemonEventsIfOversized,
-    saveDaemonState,
-    withRecordTransaction,
+    append_daemon_event,
+    daemon_pid_path,
+    daemon_socket_path,
+    daemon_state_path,
+    ensure_base_layout,
+    get_state_root,
+    load_daemon_state,
+    read_last_daemon_event_cursor,
+    rotate_daemon_events_if_oversized,
+    save_daemon_state,
+    with_record_transaction,
 )
 from ..tasks.supervisor import createTaskSupervisor
 from .events import (
@@ -56,24 +56,24 @@ from .transport import (
 async def runTaskSupervisorDaemon(cwd: str, instanceId: str, ownerPid: int | None = None) -> None:
     await prepareDaemonRuntimeSecurity({"instanceId": instanceId, "requireStoppedForMigration": True})
     wait_ms = _daemon_instance_wait_ms()
-    async with withRecordTransaction(
+    async with with_record_transaction(
         f"daemon-instance-{instanceId}",
-        getStateRoot(),
+        get_state_root(),
         timeoutMs=wait_ms,
     ):
         await _run_task_supervisor_daemon_scoped(cwd, instanceId, ownerPid)
 
 
 async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_pid: int | None = None) -> None:
-    await ensureBaseLayout(cwd)
-    socket_path = daemonSocketPath(instance_id)
-    existing = await loadDaemonState(instance_id)
+    await ensure_base_layout(cwd)
+    socket_path = daemon_socket_path(instance_id)
+    existing = await load_daemon_state(instance_id)
     existing_pid = (existing or {}).get("pid")
     if isinstance(existing_pid, int) and _is_process_alive(existing_pid):
         raise RuntimeError(f"Daemon already running with pid {existing_pid}")
     await _cleanup_stale_daemon_artifacts(instance_id)
-    await rotateDaemonEventsIfOversized(instance_id)
-    cursor = max(await readLastDaemonEventCursor(instance_id), int((existing or {}).get("cursor") or 0))
+    await rotate_daemon_events_if_oversized(instance_id)
+    cursor = max(await read_last_daemon_event_cursor(instance_id), int((existing or {}).get("cursor") or 0))
     daemon_epoch = str(uuid.uuid4())
     daemon_started_at = now_iso()
     daemon_phase = "starting"
@@ -97,7 +97,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
             daemon_phase = phase
         async with state_lock:
             supervisor_state = supervisor["getState"]() if supervisor else {}
-            await saveDaemonState(
+            await save_daemon_state(
                 instance_id,
                 {
                     "instanceId": instance_id,
@@ -128,7 +128,7 @@ async def _run_task_supervisor_daemon_scoped(cwd: str, instance_id: str, owner_p
             "taskId": data.get("task_id") if isinstance(data.get("task_id"), str) else None,
             **event,
         }
-        await appendDaemonEvent(instance_id, payload)
+        await append_daemon_event(instance_id, payload)
         await _publish_daemon_event(subscribers, payload)
         await write_daemon_state()
 
@@ -259,11 +259,11 @@ async def _clear_owned_daemon_instance(
     token_id: str,
     socket_path: str,
 ) -> None:
-    state = await loadDaemonState(instance_id)
+    state = await load_daemon_state(instance_id)
     if state and (state.get("epoch") != epoch or state.get("pid") != pid):
         return
     socket_info = verifyOwnedDaemonSocket(socket_path)
-    for target in (daemonPidPath(instance_id), daemonStatePath(instance_id)):
+    for target in (daemon_pid_path(instance_id), daemon_state_path(instance_id)):
         with contextlib.suppress(FileNotFoundError):
             os.unlink(target)
     await removeDaemonAuthMaterialIfOwned(instance_id, token_id)
@@ -329,7 +329,7 @@ async def _rotate_daemon_events_periodically(instance_id: str, shutdown: asyncio
 
             await asyncio.wait_for(shutdown.wait(), timeout=int(knobValue("daemon.events_rotate_check_ms")) / 1000)
         except asyncio.TimeoutError:
-            await rotateDaemonEventsIfOversized(instance_id)
+            await rotate_daemon_events_if_oversized(instance_id)
 
 
 def _inject_daemon_boot_fault(stage: str, instance_id: str) -> None:
@@ -349,9 +349,9 @@ def _inject_daemon_boot_fault(stage: str, instance_id: str) -> None:
                 payload = json.dumps(
                     {
                         "stage": stage,
-                        "socketExists": os.path.lexists(daemonSocketPath(instance_id)),
+                        "socketExists": os.path.lexists(daemon_socket_path(instance_id)),
                         "tokenExists": os.path.lexists(daemonAuthTokenPath(instance_id)),
-                        "stateExists": os.path.lexists(daemonStatePath(instance_id)),
+                        "stateExists": os.path.lexists(daemon_state_path(instance_id)),
                         "statePhase": state.get("phase") if state else None,
                     },
                     separators=(",", ":"),
@@ -372,7 +372,7 @@ def _inject_daemon_boot_fault(stage: str, instance_id: str) -> None:
 
 def _read_fault_state(instance_id: str) -> dict[str, Any] | None:
     try:
-        with open(daemonStatePath(instance_id), "rb") as handle:
+        with open(daemon_state_path(instance_id), "rb") as handle:
             payload = handle.read(4_097)
         if len(payload) > 4_096:
             return None

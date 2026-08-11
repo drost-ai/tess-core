@@ -5,15 +5,15 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ...storage.message_origin import syntheticUserMessage as _synthetic_user_message
+from ...storage.message_origin import synthetic_user_message as _synthetic_user_message
 from ...session.tool_boundaries import adjustStartToToolBoundary as _adjust_start_to_tool_boundary
-from ...storage import getSessionCompactionsDir
-from .documents import loadWorkingContextArtifact
-from .prompts import renderWorkingContextPromptContext
+from ...storage import get_session_compactions_dir
+from .documents import load_working_context_artifact
+from .prompts import render_working_context_prompt_context
 from .shared import CONTINUATION_BRIDGE_MESSAGE, compaction_knob
 from .utils import estimateMessageTokens, estimateTextTokens
 
-def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
+def estimate_working_context_tokens(session: dict[str, Any]) -> int:
     state = session.get("metadata", {}).get("compactionState")
     if not state:
         return estimateMessageTokens(session.get("messages", []))
@@ -22,13 +22,13 @@ def estimateWorkingContextTokens(session: dict[str, Any]) -> int:
     return int(state.get("compactedContextTokenEstimate") or 0) + estimateMessageTokens(recent_messages)
 
 
-def shouldAutoCompact(
+def should_auto_compact(
     session: dict[str, Any],
     currentInputTokens: int | None = None,
     tokenLimit: int | None = None,
     targetTokenLimit: int | None = None,
 ) -> dict[str, Any]:
-    current_token_estimate = currentInputTokens if currentInputTokens is not None else estimateWorkingContextTokens(session)
+    current_token_estimate = currentInputTokens if currentInputTokens is not None else estimate_working_context_tokens(session)
     limit = int(tokenLimit or compaction_knob("compaction.working_context_token_limit"))
     target = int(targetTokenLimit or limit)
     if current_token_estimate >= limit:
@@ -49,7 +49,7 @@ def shouldAutoCompact(
     }
 
 
-def buildMessagesForWorkingContext(session: dict[str, Any]) -> list[dict[str, Any]]:
+def build_messages_for_working_context(session: dict[str, Any]) -> list[dict[str, Any]]:
     state = session.get("metadata", {}).get("compactionState")
     if not state:
         return list(session.get("messages", []))
@@ -72,12 +72,12 @@ def buildMessagesForWorkingContext(session: dict[str, Any]) -> list[dict[str, An
     ]
 
 
-async def buildCompactionSystemPromptContext(session: dict[str, Any]) -> str | None:
-    projection = await _buildCompactionSystemPromptProjection(session)
+async def build_compaction_system_prompt_context(session: dict[str, Any]) -> str | None:
+    projection = await _build_compaction_system_prompt_projection(session)
     return projection["text"]
 
 
-async def _buildCompactionSystemPromptProjection(
+async def _build_compaction_system_prompt_projection(
     session: dict[str, Any],
 ) -> dict[str, Any]:
     state = session.get("metadata", {}).get("compactionState")
@@ -90,14 +90,14 @@ async def _buildCompactionSystemPromptProjection(
         }
     artifacts = state.get("artifacts") or {}
     working_context_path = artifacts.get("workingContext")
-    if not _isSessionCompactionArtifactPath(session, working_context_path):
+    if not _is_session_compaction_artifact_path(session, working_context_path):
         return {
             "text": None,
             "applied": False,
             "originalTokens": 0,
             "projectedTokens": 0,
         }
-    working_context = await loadWorkingContextArtifact(working_context_path)
+    working_context = await load_working_context_artifact(working_context_path)
     if not working_context or working_context.get("sessionId") != session.get("id"):
         return {
             "text": None,
@@ -105,7 +105,7 @@ async def _buildCompactionSystemPromptProjection(
             "originalTokens": 0,
             "projectedTokens": 0,
         }
-    original = renderWorkingContextPromptContext(working_context)
+    original = render_working_context_prompt_context(working_context)
     original_tokens = estimateTextTokens(original)
     return {
         "text": original,
@@ -115,7 +115,7 @@ async def _buildCompactionSystemPromptProjection(
     }
 
 
-def _isSessionCompactionArtifactPath(
+def _is_session_compaction_artifact_path(
     session: dict[str, Any],
     artifactPath: Any,
 ) -> bool:
@@ -123,7 +123,7 @@ def _isSessionCompactionArtifactPath(
     if not isinstance(session_id, str) or not isinstance(artifactPath, str) or not artifactPath:
         return False
     try:
-        session_dir = os.path.realpath(getSessionCompactionsDir(session_id))
+        session_dir = os.path.realpath(get_session_compactions_dir(session_id))
         resolved_artifact = os.path.realpath(artifactPath)
         return resolved_artifact != session_dir and os.path.commonpath(
             [session_dir, resolved_artifact]

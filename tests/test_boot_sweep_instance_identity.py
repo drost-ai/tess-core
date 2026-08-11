@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 import agent_core as core
-from agent_core.storage.daemon import saveDaemonState
+from agent_core.storage.daemon import save_daemon_state
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
@@ -23,7 +23,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
         supervisor = None
         try:
             task_id = "task-foreign-owned"
-            output_file = core.taskOutputPath(task_id)
+            output_file = core.task_output_path(task_id)
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)
             Path(output_file).write_text("still running\n", encoding="utf-8")
             child_argv = [sys.executable, "-c", "import time; time.sleep(30)"]
@@ -40,7 +40,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
             )
             created_at = "2026-01-01T00:00:00Z"
             run(
-                core.writeTaskMeta(
+                core.write_task_meta(
                     task_id,
                     {
                         "type": "background_command",
@@ -62,7 +62,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
                 )
             )
             run(
-                core.saveTaskRecord(
+                core.save_task_record(
                     {
                         "id": task_id,
                         "sessionId": "session-foreign",
@@ -92,7 +92,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
             # The owning instance is alive: its daemon state records a live
             # pid and the supervisor id stamped on the task.
             run(
-                saveDaemonState(
+                save_daemon_state(
                     "peer-instance-a",
                     {
                         "instanceId": "peer-instance-a",
@@ -109,9 +109,9 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
             self.assertIsNone(
                 proc.poll(), "boot sweep must not kill a live foreign instance's worker"
             )
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             self.assertEqual(meta["status"], "running")
-            record = run(core.loadTaskRecord(task_id))
+            record = run(core.load_task_record(task_id))
             self.assertEqual(record["status"], "running")
 
             # The owning instance dies: the same record is now a dead-epoch
@@ -119,7 +119,7 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
             dead = subprocess.Popen([sys.executable, "-c", "pass"])
             dead.wait()
             run(
-                saveDaemonState(
+                save_daemon_state(
                     "peer-instance-a",
                     {
                         "instanceId": "peer-instance-a",
@@ -138,10 +138,10 @@ class BootSweepInstanceIdentityTests(AgentCoreTestCase):
             self.assertIsNotNone(
                 proc.poll(), "dead-epoch orphan must still be killed by the boot sweep"
             )
-            record = run(core.loadTaskRecord(task_id))
+            record = run(core.load_task_record(task_id))
             self.assertEqual(record["detailStatus"], "daemon_lost")
             self.assertEqual(record["status"], "stopped")
-            meta = run(core.readTaskMeta(task_id))
+            meta = run(core.read_task_meta(task_id))
             self.assertEqual(meta["status"], "terminated")
         finally:
             if supervisor is not None:

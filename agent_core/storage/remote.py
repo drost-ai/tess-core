@@ -5,11 +5,11 @@ import os
 import re
 from typing import Any
 
-from .json_io import withRecordTransaction, writeJsonFile
-from .paths import getStateRoot
-from .records import omitNoneFields
-from .persisted_record_scanner import readPersistedJsonRecord, scanPersistedJsonRecords
-from .persisted_record_validation import isBridgeRecord, isRemoteSessionRecord
+from .json_io import with_record_transaction, write_json_file
+from .paths import get_state_root
+from .records import omit_none_fields
+from .persisted_record_scanner import read_persisted_json_record, scan_persisted_json_records
+from .persisted_record_validation import is_bridge_record, is_remote_session_record
 from ..runtime.identifiers import (
     parseBridgeId,
     parseRemoteSessionId,
@@ -30,70 +30,70 @@ class BridgeStorageError(RuntimeError):
         super().__init__(message)
         self.issue = issue
 
-def remoteSessionPath(remoteSessionId: str) -> str:
+def remote_session_path(remoteSessionId: str) -> str:
     return os.path.join(
-        getStateRoot(),
+        get_state_root(),
         "remote-sessions",
         f"{parseRemoteSessionId(remoteSessionId)}.json",
     )
 
-async def saveRemoteSession(record: dict[str, Any]) -> None:
-    await writeJsonFile(remoteSessionPath(record["id"]), omitNoneFields(record))
+async def save_remote_session(record: dict[str, Any]) -> None:
+    await write_json_file(remote_session_path(record["id"]), omit_none_fields(record))
 
-async def loadRemoteSession(remoteSessionId: str) -> dict[str, Any] | None:
+async def load_remote_session(remoteSessionId: str) -> dict[str, Any] | None:
     remote_id = parseRemoteSessionId(remoteSessionId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="remote_session",
         id=remote_id,
-        filePath=remoteSessionPath(remote_id),
-        validate=isRemoteSessionRecord,
+        filePath=remote_session_path(remote_id),
+        validate=is_remote_session_record,
     )
     return result.get("record")
 
-async def listRemoteSessions() -> list[dict[str, Any]]:
-    directory = os.path.join(getStateRoot(), "remote-sessions")
-    scan = await scanPersistedJsonRecords(
+async def list_remote_sessions() -> list[dict[str, Any]]:
+    directory = os.path.join(get_state_root(), "remote-sessions")
+    scan = await scan_persisted_json_records(
         family="remote_session",
         directory=directory,
         select=lambda entry: _remote_json_candidate(directory, entry, tryParseRemoteSessionId),
-        validate=isRemoteSessionRecord,
+        validate=is_remote_session_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-def bridgePath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.json")
+def bridge_path(bridgeId: str) -> str:
+    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.json")
 
-def bridgeInboxPath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.inbox.json")
+def bridge_inbox_path(bridgeId: str) -> str:
+    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.inbox.json")
 
-def bridgeEventsPath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.events.json")
+def bridge_events_path(bridgeId: str) -> str:
+    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.events.json")
 
-def bridgeLedgerPath(bridgeId: str) -> str:
-    return os.path.join(getStateRoot(), "bridges", f"{parseBridgeId(bridgeId)}.ledger.json")
+def bridge_ledger_path(bridgeId: str) -> str:
+    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.ledger.json")
 
-def bridgeRecoveryPath(sessionId: str) -> str:
-    return os.path.join(getStateRoot(), "bridge-recovery", f"{parseSessionId(sessionId)}.json")
+def bridge_recovery_path(sessionId: str) -> str:
+    return os.path.join(get_state_root(), "bridge-recovery", f"{parseSessionId(sessionId)}.json")
 
-async def saveBridge(record: dict[str, Any]) -> None:
+async def save_bridge(record: dict[str, Any]) -> None:
     _assert_serialized_bound(record, "bridge record", 512 * 1024)
-    await writeJsonFile(bridgePath(record["id"]), omitNoneFields(record))
+    await write_json_file(bridge_path(record["id"]), omit_none_fields(record))
 
-async def loadBridge(bridgeId: str) -> dict[str, Any] | None:
+async def load_bridge(bridgeId: str) -> dict[str, Any] | None:
     bridge_id = parseBridgeId(bridgeId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="bridge",
         id=bridge_id,
-        filePath=bridgePath(bridge_id),
-        validate=isBridgeRecord,
+        filePath=bridge_path(bridge_id),
+        validate=is_bridge_record,
     )
     issue = result.get("issue")
     if issue:
         raise BridgeStorageError(f"bridge {bridge_id} is unavailable: {issue['reason']}.", issue)
     return result.get("record")
 
-async def listBridges() -> list[dict[str, Any]]:
-    directory = os.path.join(getStateRoot(), "bridges")
+async def list_bridges() -> list[dict[str, Any]]:
+    directory = os.path.join(get_state_root(), "bridges")
     def select(entry: os.DirEntry[str]) -> dict[str, str] | None:
         if not entry.name.endswith(".json") or entry.name.endswith(
             (".inbox.json", ".events.json", ".ledger.json")
@@ -101,32 +101,32 @@ async def listBridges() -> list[dict[str, Any]]:
             return None
         return _remote_json_candidate(directory, entry, tryParseBridgeId)
 
-    scan = await scanPersistedJsonRecords(
+    scan = await scan_persisted_json_records(
         family="bridge",
         directory=directory,
         select=select,
-        validate=isBridgeRecord,
+        validate=is_bridge_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
-async def loadBridgeInbox(bridgeId: str) -> list[dict[str, Any]]:
+async def load_bridge_inbox(bridgeId: str) -> list[dict[str, Any]]:
     bridge_id = parseBridgeId(bridgeId)
     return await _load_bridge_array(
         family="bridge_inbox",
         bridge_id=bridge_id,
-        file_path=bridgeInboxPath(bridge_id),
+        file_path=bridge_inbox_path(bridge_id),
         validate_entry=lambda value: _is_bridge_inbox_message(value, bridge_id),
     )
 
-async def appendBridgeInboxMessage(message: dict[str, Any]) -> None:
+async def append_bridge_inbox_message(message: dict[str, Any]) -> None:
     bridge_id = parseBridgeId(message["bridgeId"])
     if not _is_bridge_inbox_message(message, bridge_id):
         raise BridgeStorageError("Bridge inbox message is invalid.")
-    async with withRecordTransaction("bridge-inbox", bridge_id):
-        existing = await loadBridgeInbox(bridge_id)
+    async with with_record_transaction("bridge-inbox", bridge_id):
+        existing = await load_bridge_inbox(bridge_id)
         same_id = next((entry for entry in existing if entry.get("id") == message["id"]), None)
         if same_id is not None:
-            if same_id == omitNoneFields(message):
+            if same_id == omit_none_fields(message):
                 return
             raise BridgeStorageError(
                 f"Bridge inbox message id {message['id']} conflicts with its persisted record."
@@ -139,11 +139,11 @@ async def appendBridgeInboxMessage(message: dict[str, Any]) -> None:
             )
         if len(existing) >= BRIDGE_LOG_MAX_ENTRIES:
             raise BridgeStorageError(f"Bridge inbox exceeds {BRIDGE_LOG_MAX_ENTRIES} entries.")
-        value = omitNoneFields([*existing, message])
+        value = omit_none_fields([*existing, message])
         _assert_serialized_bound(value, "bridge inbox", BRIDGE_STORAGE_MAX_BYTES)
-        await writeJsonFile(bridgeInboxPath(bridge_id), value)
+        await write_json_file(bridge_inbox_path(bridge_id), value)
 
-async def replaceBridgeInbox(bridgeId: str, messages: list[dict[str, Any]]) -> None:
+async def replace_bridge_inbox(bridgeId: str, messages: list[dict[str, Any]]) -> None:
     bridge_id = parseBridgeId(bridgeId)
     if len(messages) > BRIDGE_LOG_MAX_ENTRIES or not all(
         _is_bridge_inbox_message(message, bridge_id) for message in messages
@@ -152,44 +152,44 @@ async def replaceBridgeInbox(bridgeId: str, messages: list[dict[str, Any]]) -> N
     keys = [message.get("idempotencyKey") for message in messages if message.get("idempotencyKey")]
     if len(keys) != len(set(keys)):
         raise BridgeStorageError("Bridge inbox contains duplicate idempotency keys.")
-    value = omitNoneFields(messages)
+    value = omit_none_fields(messages)
     _assert_serialized_bound(value, "bridge inbox", BRIDGE_STORAGE_MAX_BYTES)
-    await writeJsonFile(bridgeInboxPath(bridge_id), value)
+    await write_json_file(bridge_inbox_path(bridge_id), value)
 
-async def loadBridgeEvents(bridgeId: str) -> list[dict[str, Any]]:
+async def load_bridge_events(bridgeId: str) -> list[dict[str, Any]]:
     bridge_id = parseBridgeId(bridgeId)
     return await _load_bridge_array(
         family="bridge_event_log",
         bridge_id=bridge_id,
-        file_path=bridgeEventsPath(bridge_id),
+        file_path=bridge_events_path(bridge_id),
         validate_entry=lambda value: _is_bridge_event_record(value, bridge_id),
     )
 
-async def appendBridgeEvent(record: dict[str, Any]) -> None:
+async def append_bridge_event(record: dict[str, Any]) -> None:
     bridge_id = parseBridgeId(record["bridgeId"])
     if not _is_bridge_event_record(record, bridge_id):
         raise BridgeStorageError("Bridge event record is invalid.")
-    async with withRecordTransaction("bridge-events", bridge_id):
-        existing = await loadBridgeEvents(bridge_id)
+    async with with_record_transaction("bridge-events", bridge_id):
+        existing = await load_bridge_events(bridge_id)
         same_id = next((entry for entry in existing if entry.get("id") == record["id"]), None)
         if same_id is not None:
-            if same_id == omitNoneFields(record):
+            if same_id == omit_none_fields(record):
                 return
             raise BridgeStorageError(
                 f"Bridge event id {record['id']} conflicts with its persisted record."
             )
         if len(existing) >= BRIDGE_LOG_MAX_ENTRIES:
             raise BridgeStorageError(f"Bridge event log exceeds {BRIDGE_LOG_MAX_ENTRIES} entries.")
-        value = omitNoneFields([*existing, record])
+        value = omit_none_fields([*existing, record])
         _assert_serialized_bound(value, "bridge event log", BRIDGE_STORAGE_MAX_BYTES)
-        await writeJsonFile(bridgeEventsPath(bridge_id), value)
+        await write_json_file(bridge_events_path(bridge_id), value)
 
-async def loadBridgeDeliveryLedger(bridgeId: str) -> dict[str, Any] | None:
+async def load_bridge_delivery_ledger(bridgeId: str) -> dict[str, Any] | None:
     bridge_id = parseBridgeId(bridgeId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="bridge_delivery_ledger",
         id=bridge_id,
-        filePath=bridgeLedgerPath(bridge_id),
+        filePath=bridge_ledger_path(bridge_id),
         validate=lambda value, _candidate: _is_bridge_delivery_ledger(value, bridge_id),
     )
     issue = result.get("issue")
@@ -199,20 +199,20 @@ async def loadBridgeDeliveryLedger(bridgeId: str) -> dict[str, Any] | None:
         )
     return result.get("record")
 
-async def saveBridgeDeliveryLedger(ledger: dict[str, Any]) -> None:
+async def save_bridge_delivery_ledger(ledger: dict[str, Any]) -> None:
     bridge_id = parseBridgeId(ledger["bridgeId"])
     if not _is_bridge_delivery_ledger(ledger, bridge_id):
         raise BridgeStorageError("Bridge delivery ledger is invalid.")
-    value = omitNoneFields(ledger)
+    value = omit_none_fields(ledger)
     _assert_serialized_bound(value, "bridge delivery ledger", BRIDGE_STORAGE_MAX_BYTES)
-    await writeJsonFile(bridgeLedgerPath(bridge_id), value)
+    await write_json_file(bridge_ledger_path(bridge_id), value)
 
-async def loadBridgeRecoveryRecord(sessionId: str) -> dict[str, Any] | None:
+async def load_bridge_recovery_record(sessionId: str) -> dict[str, Any] | None:
     session_id = parseSessionId(sessionId)
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family="bridge_recovery_journal",
         id=session_id,
-        filePath=bridgeRecoveryPath(session_id),
+        filePath=bridge_recovery_path(session_id),
         validate=lambda value, _candidate: _is_bridge_recovery_record(value, session_id),
     )
     issue = result.get("issue")
@@ -222,13 +222,13 @@ async def loadBridgeRecoveryRecord(sessionId: str) -> dict[str, Any] | None:
         )
     return result.get("record")
 
-async def saveBridgeRecoveryRecord(sessionId: str, value: dict[str, Any]) -> None:
+async def save_bridge_recovery_record(sessionId: str, value: dict[str, Any]) -> None:
     session_id = parseSessionId(sessionId)
     if not _is_bridge_recovery_record(value, session_id):
         raise BridgeStorageError("Bridge recovery journal is invalid.")
-    compact = omitNoneFields(value)
+    compact = omit_none_fields(value)
     _assert_serialized_bound(compact, "bridge recovery journal", BRIDGE_STORAGE_MAX_BYTES)
-    await writeJsonFile(bridgeRecoveryPath(session_id), compact)
+    await write_json_file(bridge_recovery_path(session_id), compact)
 
 
 def _append_unique_coordination_record(existing: Any, record: dict[str, Any]) -> dict[str, Any]:
@@ -236,7 +236,7 @@ def _append_unique_coordination_record(existing: Any, record: dict[str, Any]) ->
     record_id = record.get("id")
     if record_id and any(isinstance(item, dict) and item.get("id") == record_id for item in records):
         return {"value": records, "changed": False}
-    return {"value": omitNoneFields([*records, record]), "changed": True}
+    return {"value": omit_none_fields([*records, record]), "changed": True}
 
 
 async def _load_bridge_array(
@@ -246,7 +246,7 @@ async def _load_bridge_array(
     file_path: str,
     validate_entry,
 ) -> list[dict[str, Any]]:
-    result = await readPersistedJsonRecord(
+    result = await read_persisted_json_record(
         family=family,
         id=bridge_id,
         filePath=file_path,
@@ -436,7 +436,7 @@ def _valid_recovery_source(item: Any) -> bool:
     if not isinstance(item, dict) or not os.path.isabs(str(item.get("path") or "")):
         return False
     path = os.path.realpath(item["path"])
-    root = os.path.realpath(getStateRoot())
+    root = os.path.realpath(get_state_root())
     if os.path.dirname(path) not in {os.path.join(root, name) for name in ("sessions", "remote-sessions", "bridges")}:
         return False
     return bool(

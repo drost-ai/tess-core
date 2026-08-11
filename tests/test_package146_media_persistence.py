@@ -78,7 +78,7 @@ def _config(root: Path) -> dict:
 
 
 def _session(root: Path, session_id: str) -> dict:
-    return core.createEmptySession(
+    return core.create_empty_session(
         cwd=str(root),
         provider="openai",
         providerProfileName="p146",
@@ -154,10 +154,10 @@ class Package146MediaSanitizerTests(unittest.TestCase):
             ]
 
             async def persist() -> None:
-                async with core.scopedRuntimeHome(str(root)):
-                    await core.ensureBaseLayout(str(root))
-                    await core.saveSession(session)
-                    await core.appendSessionTranscriptLogEntries(
+                async with core.scoped_runtime_home(str(root)):
+                    await core.ensure_base_layout(str(root))
+                    await core.save_session(session)
+                    await core.append_session_transcript_log_entries(
                         session["id"],
                         [
                             {
@@ -167,14 +167,14 @@ class Package146MediaSanitizerTests(unittest.TestCase):
                             }
                         ],
                     )
-                    await core.saveCompactionManifest(
+                    await core.save_compaction_manifest(
                         {
                             "sessionId": session["id"],
                             "latestGeneration": 1,
                             "trace": _image_block(),
                         }
                     )
-                    await core.saveCompactionCheckpoint(
+                    await core.save_compaction_checkpoint(
                         {
                             "sessionId": session["id"],
                             "generation": 1,
@@ -203,12 +203,12 @@ class Package146MediaSanitizerTests(unittest.TestCase):
             ]
 
             async def execute() -> None:
-                async with core.scopedRuntimeHome(str(root)):
-                    await core.ensureBaseLayout(str(root))
-                    path = Path(core.sessionPath(legacy["id"]))
+                async with core.scoped_runtime_home(str(root)):
+                    await core.ensure_base_layout(str(root))
+                    path = Path(core.session_path(legacy["id"]))
                     path.write_text(json.dumps(legacy), encoding="utf-8")
 
-                    loaded = await core.loadSession(legacy["id"])
+                    loaded = await core.load_session(legacy["id"])
                     self.assertIsNotNone(loaded)
                     assert loaded is not None
                     self.assertNotIn(_SENTINEL, json.dumps(loaded))
@@ -218,7 +218,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
                         {"role": "user", "content": "current turn"}
                     )
                     await core.persistSession(loaded, config, touch=False)
-                    reloaded = await core.loadSession(legacy["id"])
+                    reloaded = await core.load_session(legacy["id"])
                     self.assertNotIn(_SENTINEL, json.dumps(reloaded))
                     self.assertNotIn(_SENTINEL, json.dumps(loaded))
                     self.assertNotIn(_SENTINEL, path.read_text(encoding="utf-8"))
@@ -232,9 +232,9 @@ class Package146MediaSanitizerTests(unittest.TestCase):
             recovered["messages"] = []
 
             async def execute() -> None:
-                async with core.scopedRuntimeHome(str(root)):
-                    await core.ensureBaseLayout(str(root))
-                    archive = Path(core.sessionTranscriptLogPath(recovered["id"]))
+                async with core.scoped_runtime_home(str(root)):
+                    await core.ensure_base_layout(str(root))
+                    archive = Path(core.session_transcript_log_path(recovered["id"]))
                     archive.parent.mkdir(parents=True, exist_ok=True)
                     archive.write_text(
                         "\n".join(
@@ -262,13 +262,13 @@ class Package146MediaSanitizerTests(unittest.TestCase):
                         encoding="utf-8",
                     )
 
-                    result = await core.loadSessionWithReconciliation(recovered["id"])
+                    result = await core.load_session_with_reconciliation(recovered["id"])
                     self.assertTrue(result["changed"])
                     self.assertEqual(result["reason"], "archive_recovery")
                     self.assertNotIn(_SENTINEL, json.dumps(result["record"]))
                     session_raw = (
-                        Path(core.sessionPath(recovered["id"])).read_text(encoding="utf-8")
-                        + Path(core.sessionMessagesPath(recovered["id"])).read_text(encoding="utf-8")
+                        Path(core.session_path(recovered["id"])).read_text(encoding="utf-8")
+                        + Path(core.session_messages_path(recovered["id"])).read_text(encoding="utf-8")
                     )
                     self.assertNotIn(_SENTINEL, session_raw)
                     self.assertIn(_SENTINEL, archive.read_text(encoding="utf-8"))
@@ -310,8 +310,8 @@ class Package146TransientOverlayTests(unittest.TestCase):
                 }
 
             async def execute() -> None:
-                async with core.scopedRuntimeHome(str(root)):
-                    await core.ensureBaseLayout(str(root))
+                async with core.scoped_runtime_home(str(root)):
+                    await core.ensure_base_layout(str(root))
                     await core.persistSession(session, config, touch=False)
                     await core.runAgentPrompt(
                         session=session,
@@ -367,8 +367,8 @@ class Package146TransientOverlayTests(unittest.TestCase):
                 )
 
             async def execute() -> None:
-                async with core.scopedRuntimeHome(str(root)):
-                    await core.ensureBaseLayout(str(root))
+                async with core.scoped_runtime_home(str(root)):
+                    await core.ensure_base_layout(str(root))
                     await core.persistSession(session, config, touch=False)
                     await core.runAgentPrompt(
                         session=session,

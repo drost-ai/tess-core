@@ -27,7 +27,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": True,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace), provider="openai", model="gpt-5.4",
                 systemPrompt="test", permissionMode="bypassPermissions",
                 sessionId="cancelled-first-turn",
@@ -48,7 +48,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 prompt="do not retain me",
                 providerOverride={"send": send},
             ))
-            restored = run(core.loadSession(session["id"]))
+            restored = run(core.load_session(session["id"]))
             self.assertEqual(result["stopReason"], "cancelled")
             self.assertEqual(session["messages"], [])
             self.assertEqual(restored["messages"], [])
@@ -78,7 +78,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": True,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace), provider="openai", model="gpt-5.4",
                 systemPrompt="test", permissionMode="bypassPermissions",
                 sessionId="cancelled-after-drain",
@@ -86,8 +86,8 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
             task_id = "task-cancel-drain"
             child_id = "80000000-0000-4000-8000-00000000000c"
             session["metadata"]["taskIds"] = [task_id]
-            run(core.saveSession(session))
-            run(core.writeTaskMeta(task_id, {
+            run(core.save_session(session))
+            run(core.write_task_meta(task_id, {
                 "type": "subagent",
                 "taskId": task_id,
                 "id": task_id,
@@ -97,7 +97,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 "status": "running",
                 "cwd": str(workspace),
                 "startedAt": "2026-01-01T00:00:00Z",
-                "outputFile": core.taskOutputPath(task_id),
+                "outputFile": core.task_output_path(task_id),
             }))
             run(core.sendTaskMessage(
                 task_id, {"direction": "to_parent", "content": "child result 42"}
@@ -120,7 +120,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
             ))
             self.assertEqual(result["stopReason"], "cancelled")
             self.assertIn("child result 42", json.dumps(session["messages"]))
-            restored = run(core.loadSession(session["id"]))
+            restored = run(core.load_session(session["id"]))
             self.assertIn("child result 42", json.dumps(restored["messages"]))
             statuses = [
                 message.get("status")
@@ -161,7 +161,7 @@ class AgentLoopCancellationTests(AgentCoreTestCase):
                 "permissionMode": "bypassPermissions",
                 "sessionPersistence": False,
             }
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=cwd,
                 provider="anthropic",
                 model="claude-sonnet-4-6",

@@ -260,7 +260,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
     def test_interrupted_preview_receipt_is_typed_runtime_state_not_a_user_message(self) -> None:
         root, _home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="openai",
                 model="gpt-5.6-sol",
@@ -309,7 +309,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
                 session["metadata"]["lastAssistantInterruptedPreview"]["type"],
                 "assistant_interrupted_preview",
             )
-            log_path = Path(core.sessionTranscriptLogPath(session["id"]))
+            log_path = Path(core.session_transcript_log_path(session["id"]))
             records = [
                 json.loads(line)
                 for line in log_path.read_text(encoding="utf-8").splitlines()

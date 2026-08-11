@@ -13,16 +13,16 @@ from .bridge.admission import admitBridgeMessage as _admitBridgeMessage
 from .bridge.runtime import createBridgeRuntimeController as _createBridgeRuntimeController
 from ..runtime.paths import runWithRuntimePaths
 from ..storage import (
-    appendBridgeEvent,
-    appendBridgeInboxMessage,
-    loadBridge,
-    loadBridgeEvents,
-    loadBridgeInbox,
-    loadRemoteSession,
-    listBridges,
-    listRemoteSessions,
-    saveBridge,
-    saveRemoteSession,
+    append_bridge_event,
+    append_bridge_inbox_message,
+    load_bridge,
+    load_bridge_events,
+    load_bridge_inbox,
+    load_remote_session,
+    list_bridges,
+    list_remote_sessions,
+    save_bridge,
+    save_remote_session,
 )
 
 
@@ -51,17 +51,17 @@ async def createRemoteSession(args: dict[str, Any] | None = None, **kwargs: Any)
         "unreadBridgeMessages": 0,
         "foregroundSessionId": args.get("sessionId") or session.get("id"),
     }
-    await saveRemoteSession(record)
+    await save_remote_session(record)
     return record
 
 
 async def updateRemoteSession(remoteSessionId: str, updates: dict[str, Any]) -> dict[str, Any] | None:
-    record = await loadRemoteSession(remoteSessionId)
+    record = await load_remote_session(remoteSessionId)
     if not record:
         return None
     record.update(updates)
     record["updatedAt"] = updates.get("updatedAt") if updates.get("updatedAt") is not None else now_iso()
-    await saveRemoteSession(record)
+    await save_remote_session(record)
     return record
 
 
@@ -71,7 +71,7 @@ async def resolveTeleportSession(args: dict[str, Any] | None = None, **kwargs: A
     options = args.get("options") or {}
     if not teleport:
         return None
-    sessions = await listRemoteSessions()
+    sessions = await list_remote_sessions()
     if not sessions:
         raise RuntimeError("No remote sessions are available for teleport.")
     if isinstance(teleport, bool):
@@ -109,7 +109,7 @@ async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -
 
 
 async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:
-    events = await loadBridgeEvents(bridgeId)
+    events = await load_bridge_events(bridgeId)
     if not events:
         return "No bridge events recorded."
     lines = []
@@ -124,10 +124,10 @@ async def formatBridgeTail(bridgeId: str, limit: int = 20) -> str:
 
 
 async def getBridgeDiagnostics(bridgeId: str, limit: int = 20) -> dict[str, Any]:
-    bridge = await loadBridge(bridgeId)
-    events = await loadBridgeEvents(bridgeId)
-    inbox = await loadBridgeInbox(bridgeId)
-    remote = await loadRemoteSession(bridge.get("remoteSessionId")) if bridge and bridge.get("remoteSessionId") else None
+    bridge = await load_bridge(bridgeId)
+    events = await load_bridge_events(bridgeId)
+    inbox = await load_bridge_inbox(bridgeId)
+    remote = await load_remote_session(bridge.get("remoteSessionId")) if bridge and bridge.get("remoteSessionId") else None
     return {
         "bridge": bridge,
         "remote": remote,
@@ -143,7 +143,7 @@ async def getBridgeDiagnostics(bridgeId: str, limit: int = 20) -> dict[str, Any]
 
 async def listActiveBridgeRows() -> list[str]:
     rows = []
-    for bridge in await listBridges():
+    for bridge in await list_bridges():
         if bridge.get("status") != "active":
             continue
         name = bridge.get("name") if bridge.get("name") is not None else os.path.basename(bridge.get("cwd") or "")

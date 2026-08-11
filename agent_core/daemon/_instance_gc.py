@@ -14,26 +14,26 @@ import time
 
 from .._utils import is_process_alive as _is_process_alive
 from ..storage import (
-    daemonInstanceDir,
-    getDaemonInstancesDir,
-    getStateRoot,
-    loadDaemonState,
-    parseDaemonInstanceId,
-    withRecordTransaction,
+    daemon_instance_dir,
+    get_daemon_instances_dir,
+    get_state_root,
+    load_daemon_state,
+    parse_daemon_instance_id,
+    with_record_transaction,
 )
 
 
 
 async def _reap_daemon_tmp_artifacts(instance_id: str) -> None:
     try:
-        names = os.listdir(daemonInstanceDir(instance_id))
+        names = os.listdir(daemon_instance_dir(instance_id))
     except FileNotFoundError:
         return
     cutoff = time.time() - 60 * 60
     for name in names:
         if not re.match(r"^state\.json\..+\.tmp$", name):
             continue
-        path = os.path.join(daemonInstanceDir(instance_id), name)
+        path = os.path.join(daemon_instance_dir(instance_id), name)
         with contextlib.suppress(OSError):
             if os.path.getmtime(path) < cutoff:
                 os.remove(path)
@@ -41,7 +41,7 @@ async def _reap_daemon_tmp_artifacts(instance_id: str) -> None:
 
 async def _reap_dead_daemon_instance_dirs() -> None:
     try:
-        names = os.listdir(getDaemonInstancesDir())
+        names = os.listdir(get_daemon_instances_dir())
     except FileNotFoundError:
         return
     from ..config._knobs import knobValue
@@ -49,22 +49,22 @@ async def _reap_dead_daemon_instance_dirs() -> None:
     cutoff = time.time() - int(knobValue("daemon.instance_reap_ms")) / 1000
     for name in names:
         try:
-            candidate = parseDaemonInstanceId(name)
+            candidate = parse_daemon_instance_id(name)
         except ValueError:
             continue
-        target = daemonInstanceDir(candidate)
+        target = daemon_instance_dir(candidate)
         try:
             if os.path.getmtime(target) >= cutoff:
                 continue
         except OSError:
             continue
         with contextlib.suppress(Exception):
-            async with withRecordTransaction(
+            async with with_record_transaction(
                 f"daemon-instance-{candidate}",
-                getStateRoot(),
+                get_state_root(),
                 timeoutMs=250,
             ):
-                state = await loadDaemonState(candidate)
+                state = await load_daemon_state(candidate)
                 pid = (state or {}).get("pid")
                 if isinstance(pid, int) and _is_process_alive(pid):
                     continue
@@ -72,7 +72,7 @@ async def _reap_dead_daemon_instance_dirs() -> None:
 
 
 async def _remove_daemon_instance_dir(instance_id: str) -> None:
-    root = daemonInstanceDir(instance_id)
+    root = daemon_instance_dir(instance_id)
     for directory, _dirs, files in os.walk(root, topdown=False):
         for file_name in files:
             with contextlib.suppress(OSError):

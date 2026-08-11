@@ -10,7 +10,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
     """Mid-batch tool persists must ride the head/delta commit, repair included."""
 
     def _session(self, workspace, session_id):
-        session = core.createEmptySession(
+        session = core.create_empty_session(
             cwd=str(workspace),
             provider="openai",
             model="test-model",
@@ -40,10 +40,10 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
                 raise AssertionError("mid-batch persist fell back to the full transaction")
 
             with mock.patch.object(
-                persistence_module, "mutateSessionRecordTransaction", side_effect=forbidden_full_transaction
+                persistence_module, "mutate_session_record_transaction", side_effect=forbidden_full_transaction
             ):
                 run(core.persistSession(session, config))
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             # The dangling in-flight tool_use is repaired away on disk...
             self.assertEqual(len(persisted["messages"]), 2)
             # ...while the live session keeps its in-flight tail.
@@ -53,10 +53,10 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
                 {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "done"}]}
             )
             with mock.patch.object(
-                persistence_module, "mutateSessionRecordTransaction", side_effect=forbidden_full_transaction
+                persistence_module, "mutate_session_record_transaction", side_effect=forbidden_full_transaction
             ):
                 run(core.persistSession(session, config))
-            final = run(core.loadSession(session["id"]))
+            final = run(core.load_session(session["id"]))
             self.assertEqual(len(final["messages"]), 4)
             self.assertEqual(final["messages"][2]["content"][0]["id"], "t1")
         finally:
@@ -96,7 +96,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             )
             config = {"sessionPersistence": True, "cwd": str(workspace)}
             run(core.persistSession(session, config))
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             blocks = persisted["messages"][1]["content"]
             self.assertNotIn("QUJD", json.dumps(blocks))
             self.assertEqual(blocks[0], {"type": "text", "text": "look"})
@@ -104,13 +104,13 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_head_delta_transaction_contract_directly(self):
-        from agent_core.storage.session_transactions import mutateSessionHeadDeltaTransaction
+        from agent_core.storage.session_transactions import mutate_session_head_delta_transaction
 
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "33333333-3333-4333-8333-333333333333")
             run(core.persistSession(session, {"sessionPersistence": True, "cwd": str(workspace)}))
-            live = run(core.loadSession(session["id"]))
+            live = run(core.load_session(session["id"]))
             messages = live["messages"]
             base_revision = live["revision"]
             messages.append({"role": "assistant", "content": "delta suffix"})
@@ -118,14 +118,14 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             async def rename(head):
                 return {"changed": True, "session": {**head, "name": "delta-named"}}
 
-            committed = run(mutateSessionHeadDeltaTransaction(session["id"], messages, rename))
+            committed = run(mutate_session_head_delta_transaction(session["id"], messages, rename))
             self.assertTrue(committed["fastPath"])
             self.assertEqual(committed["revision"], base_revision + 1)
             self.assertEqual(committed["session"]["name"], "delta-named")
             self.assertIs(committed["session"]["messages"], messages)
             self.assertEqual(messages.checkpoint().messageCount, 2)
 
-            reloaded = run(core.loadSession(session["id"]))
+            reloaded = run(core.load_session(session["id"]))
             self.assertEqual(reloaded["name"], "delta-named")
             self.assertEqual(len(reloaded["messages"]), 2)
             self.assertEqual(reloaded["messages"][-1]["content"], "delta suffix")
@@ -136,20 +136,20 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
                 return {"changed": False, "session": head}
 
             self.assertIsNone(
-                run(mutateSessionHeadDeltaTransaction(session["id"], list(messages), untouched))
+                run(mutate_session_head_delta_transaction(session["id"], list(messages), untouched))
             )
-            stale = run(core.loadSession(session["id"]))
-            run(mutateSessionHeadDeltaTransaction(session["id"], reloaded["messages"], rename))
+            stale = run(core.load_session(session["id"]))
+            run(mutate_session_head_delta_transaction(session["id"], reloaded["messages"], rename))
             self.assertIsNone(
-                run(mutateSessionHeadDeltaTransaction(session["id"], stale["messages"], rename))
+                run(mutate_session_head_delta_transaction(session["id"], stale["messages"], rename))
             )
 
             # A head mutation may not smuggle a message list past the body.
             async def with_messages(head):
                 return {"changed": True, "session": {**head, "messages": []}}
 
-            fresh = run(core.loadSession(session["id"]))
+            fresh = run(core.load_session(session["id"]))
             with self.assertRaises(TypeError):
-                run(mutateSessionHeadDeltaTransaction(session["id"], fresh["messages"], with_messages))
+                run(mutate_session_head_delta_transaction(session["id"], fresh["messages"], with_messages))
         finally:
             self.restore_home(root, previous)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from .._utils import now_iso
-from ..storage import appendDaemonEvent, loadDaemonEvents
+from ..storage import append_daemon_event, load_daemon_events
 from .protocol import DAEMON_MAX_RESPONSE_FRAME_BYTES, encodeDaemonFrame
 
 async def _publish_daemon_event(subscribers: dict[str, dict[str, Any]], payload: dict[str, Any]) -> None:
@@ -40,7 +40,7 @@ async def _write_daemon_event(target: Any, record: dict[str, Any]) -> None:
     await target.drain()
 
 async def _replay_daemon_events(instance_id: str, target: Any, session_id: str | None, after_cursor: int) -> None:
-    for record in await loadDaemonEvents(instance_id):
+    for record in await load_daemon_events(instance_id):
         cursor = record.get("cursor")
         if not isinstance(cursor, int) or cursor <= after_cursor:
             continue
@@ -133,4 +133,4 @@ def _event_matches_session(payload: dict[str, Any], session_id: str | None) -> b
 
 
 async def _record_daemon_lifecycle_event(instance_id: str, event: str, data: dict[str, Any], next_cursor: Callable[[], int]) -> None:
-    await appendDaemonEvent(instance_id, {"cursor": next_cursor(), "createdAt": now_iso(), "event": event, "data": data})
+    await append_daemon_event(instance_id, {"cursor": next_cursor(), "createdAt": now_iso(), "event": event, "data": data})

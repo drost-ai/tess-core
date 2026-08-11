@@ -17,7 +17,7 @@ def _session_mutation_worker(
     task_id: str,
     barrier_dir: str,
 ) -> None:
-    core.configureRuntimeHome(runtime_home)
+    core.configure_runtime_home(runtime_home)
     Path(barrier_dir, f"ready-{task_id}").write_text("ready\n", encoding="utf-8")
     deadline = time.monotonic() + 15
     while not Path(barrier_dir, "go").exists():
@@ -26,7 +26,7 @@ def _session_mutation_worker(
         time.sleep(0.005)
 
     async def mutate() -> None:
-        await core.mutateSessionRecordTransaction(
+        await core.mutate_session_record_transaction(
             session_id,
             lambda latest: {
                 "changed": task_id not in latest.get("metadata", {}).get("taskIds", []),
@@ -53,7 +53,7 @@ class SessionTransactionTests(AgentCoreTestCase):
         try:
             barrier = Path(root.name, "transaction-barrier")
             barrier.mkdir()
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -63,7 +63,7 @@ class SessionTransactionTests(AgentCoreTestCase):
             )
             session["messages"] = [{"role": "user", "content": "preserve me"}]
             session["metadata"]["remoteSessionId"] = "remote-sentinel"
-            run(core.saveSession(session))
+            run(core.save_session(session))
             task_ids = [str(uuid.UUID(int=index + 1, version=4)) for index in range(25)]
             context = multiprocessing.get_context("spawn")
             processes = [
@@ -84,7 +84,7 @@ class SessionTransactionTests(AgentCoreTestCase):
                 process.join(20)
                 self.assertEqual(process.exitcode, 0)
 
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertIsNotNone(persisted)
             self.assertEqual(set(persisted["metadata"]["taskIds"]), set(task_ids))
             self.assertEqual(len(persisted["metadata"]["taskIds"]), 25)
@@ -102,18 +102,18 @@ class SessionTransactionTests(AgentCoreTestCase):
     def test_transactions_are_reentrant_and_noop_is_mtime_stable(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
                 systemPrompt="test",
                 permissionMode="default",
             )
-            run(core.saveSession(session))
+            run(core.save_session(session))
 
             async def nested_update() -> dict:
-                async with core.withRecordTransaction("session", session["id"]):
-                    return await core.mutateSessionRecordTransaction(
+                async with core.with_record_transaction("session", session["id"]):
+                    return await core.mutate_session_record_transaction(
                         session["id"],
                         lambda latest: {"changed": True, "session": {**latest, "name": "nested"}},
                         requireExisting=True,
@@ -121,9 +121,9 @@ class SessionTransactionTests(AgentCoreTestCase):
 
             committed = run(nested_update())
             self.assertEqual(committed["revision"], 1)
-            path = core.sessionPath(session["id"])
+            path = core.session_path(session["id"])
             before = os.stat(path).st_mtime_ns
-            no_op = run(core.mutateSessionRecordTransaction(
+            no_op = run(core.mutate_session_record_transaction(
                 session["id"],
                 lambda latest: {"changed": False, "session": latest},
                 requireExisting=True,
@@ -137,7 +137,7 @@ class SessionTransactionTests(AgentCoreTestCase):
     def test_torn_head_degrades_to_absent_and_full_save_repairs(self):
         root, _home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -145,26 +145,26 @@ class SessionTransactionTests(AgentCoreTestCase):
                 permissionMode="default",
             )
             session["messages"] = [{"role": "user", "content": "durable"}]
-            run(core.saveSession(session))
-            path = Path(core.sessionPath(session["id"]))
+            run(core.save_session(session))
+            path = Path(core.session_path(session["id"]))
             path.write_bytes(b'{"id": "torn')
 
             with self.assertRaises(core.SessionRecordNotFoundError):
-                run(core.mutateSessionRecordTransaction(
+                run(core.mutate_session_record_transaction(
                     session["id"],
                     lambda latest: {"changed": True, "session": latest},
                     requireExisting=True,
                 ))
-            self.assertIsNone(run(core.loadSession(session["id"])))
+            self.assertIsNone(run(core.load_session(session["id"])))
 
-            run(core.saveSession(session))
-            committed = run(core.mutateSessionRecordTransaction(
+            run(core.save_session(session))
+            committed = run(core.mutate_session_record_transaction(
                 session["id"],
                 lambda latest: {"changed": True, "session": {**latest, "name": "repaired"}},
                 requireExisting=True,
             ))
             self.assertEqual(committed["session"]["name"], "repaired")
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertEqual(persisted["messages"], [{"role": "user", "content": "durable"}])
             self.assertEqual(persisted["name"], "repaired")
         finally:
@@ -173,7 +173,7 @@ class SessionTransactionTests(AgentCoreTestCase):
     def test_stale_foreground_persist_preserves_concurrent_fields_and_revision(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            session = core.createEmptySession(
+            session = core.create_empty_session(
                 cwd=str(workspace),
                 provider="anthropic",
                 model="claude-sonnet-4-6",
@@ -181,10 +181,10 @@ class SessionTransactionTests(AgentCoreTestCase):
                 permissionMode="default",
             )
             session["messages"] = [{"role": "user", "content": "durable"}]
-            run(core.saveSession(session))
-            stale = run(core.loadSession(session["id"]))
+            run(core.save_session(session))
+            stale = run(core.load_session(session["id"]))
             task_id = str(uuid.uuid4())
-            run(core.mutateSessionRecordTransaction(
+            run(core.mutate_session_record_transaction(
                 session["id"],
                 lambda latest: {
                     "changed": True,
@@ -202,7 +202,7 @@ class SessionTransactionTests(AgentCoreTestCase):
             stale["messages"].append({"role": "assistant", "content": "new turn"})
             run(core.persistSession(stale, {"sessionPersistence": True}, touch=False))
 
-            persisted = run(core.loadSession(session["id"]))
+            persisted = run(core.load_session(session["id"]))
             self.assertEqual(persisted["name"], "foreground update")
             self.assertEqual(persisted["metadata"]["taskIds"], [task_id])
             self.assertEqual(persisted["metadata"]["daemonUnavailable"]["reason"], "sentinel")

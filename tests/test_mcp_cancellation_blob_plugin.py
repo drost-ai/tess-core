@@ -143,7 +143,7 @@ class McpCancellationBlobPluginTests(AgentCoreTestCase):
             )
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default", "pluginDir": [str(plugin_dir)]}, str(workspace)))
             config["mcpConfig"] = [{"name": "shared", "transport": "http", "commandOrUrl": "http://127.0.0.1:1/broken", "updatedAt": "now"}]
-            session = core.createEmptySession(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
+            session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
             tools = boot["mcpRuntime"]["listTools"]()
             self.assertEqual([tool["runtimeName"] for tool in tools], ["mcp__shared__plugin_tool"])

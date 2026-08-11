@@ -6,51 +6,51 @@ import os
 import uuid
 from ..._utils import now_iso
 from ...storage import (
-    ensureBaseLayout,
-    getSessionCompactionsDir,
-    loadCompactionManifest,
-    saveCompactionCheckpoint,
-    saveCompactionManifest,
+    ensure_base_layout,
+    get_session_compactions_dir,
+    load_compaction_manifest,
+    save_compaction_checkpoint,
+    save_compaction_manifest,
 )
-from ..compaction_transport import createDefaultCompactionModelClient
-from ..durable_memory import updateDurableMemoryFromWorkingContext
-from .artifacts import _write_json, _write_text, buildArtifactPaths
-from .cutoffs import chooseCompactionCutoff
+from ..compaction_transport import create_default_compaction_model_client
+from ..durable_memory import update_durable_memory_from_working_context
+from .artifacts import _write_json, _write_text, build_artifact_paths
+from .cutoffs import choose_compaction_cutoff
 from .documents import (
-    assertModelBackedCompactionArtifacts,
-    buildCompactionQualityFromCandidate,
-    buildCompactionQualityFromSynthesis,
-    buildModelBackedCompactionStateSnapshot,
-    buildSynthesizedWorkingContextDocument,
-    buildWorkingContextDocumentFromCandidate,
-    loadWorkingContextArtifact,
-    renderActivityMarkdown,
-    renderDecisionsMarkdown,
-    renderSummaryMarkdown,
+    assert_model_backed_compaction_artifacts,
+    build_compaction_quality_from_candidate,
+    build_compaction_quality_from_synthesis,
+    build_model_backed_compaction_state_snapshot,
+    build_synthesized_working_context_document,
+    build_working_context_document_from_candidate,
+    load_working_context_artifact,
+    render_activity_markdown,
+    render_decisions_markdown,
+    render_summary_markdown,
 )
 from .models import (
     _verification_record,
-    runCompactionCheckpointVerificationWithFallback,
-    runModelBackedCompactionSynthesisWithFallback,
+    run_compaction_checkpoint_verification_with_fallback,
+    run_model_backed_compaction_synthesis_with_fallback,
 )
-from .prompts import renderWorkingContextPromptContext
+from .prompts import render_working_context_prompt_context
 from .shared import COMPACTION_STRATEGY
 from .utils import estimateMessageTokens, estimateTextTokens
 from typing import Any
-from ..compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
+from ..compaction_state import refresh_compaction_state_from_manifest as _refresh_compaction_state_from_manifest
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...providers._knob_reader import provider_knob as _provider_knob
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
 
 
-async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def run_compaction(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     session = args["session"]
     config = args.get("config") or {}
     runtime = args.get("runtime") or {}
     trigger = args.get("trigger", "manual")
     force = bool(args.get("force", False))
-    model_client = args.get("modelClient") or args.get("model_client") or createDefaultCompactionModelClient(
+    model_client = args.get("modelClient") or args.get("model_client") or create_default_compaction_model_client(
         {"openaiClientFactory": runtime.get("openaiClientFactory") or config.get("openaiClientFactory")}
     )
     await _refresh_compaction_state_from_manifest(session)
@@ -66,7 +66,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "previousCutoff": previous_cutoff,
         }
 
-    cutoff = chooseCompactionCutoff(messages, force, previous_cutoff)
+    cutoff = choose_compaction_cutoff(messages, force, previous_cutoff)
     if cutoff is None or cutoff <= 0:
         return {
             "status": "skipped",
@@ -125,17 +125,17 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "compactionTargetTokens": compaction_target_tokens,
         }
 
-    await ensureBaseLayout(session.get("cwd") or os.getcwd())
-    os.makedirs(os.path.join(getSessionCompactionsDir(session["id"]), "checkpoints"), exist_ok=True)
+    await ensure_base_layout(session.get("cwd") or os.getcwd())
+    os.makedirs(os.path.join(get_session_compactions_dir(session["id"]), "checkpoints"), exist_ok=True)
 
-    previous_manifest = await loadCompactionManifest(session["id"])
+    previous_manifest = await load_compaction_manifest(session["id"])
     generation = int((previous_manifest or {}).get("latestGeneration") or 0) + 1
     compaction_id = str(uuid.uuid4())
     created_at = now_iso()
-    artifacts = buildArtifactPaths(session["id"], generation)
+    artifacts = build_artifact_paths(session["id"], generation)
 
-    previous_working_context = await loadWorkingContextArtifact(((previous_manifest or {}).get("artifacts") or {}).get("workingContext"))
-    synthesized = await runModelBackedCompactionSynthesisWithFallback(
+    previous_working_context = await load_working_context_artifact(((previous_manifest or {}).get("artifacts") or {}).get("workingContext"))
+    synthesized = await run_model_backed_compaction_synthesis_with_fallback(
         {
             "session": session,
             "config": config,
@@ -157,9 +157,9 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "qualityClassification": synthesized.get("qualityClassification"),
         }
 
-    quality = buildCompactionQualityFromSynthesis(synthesized)
+    quality = build_compaction_quality_from_synthesis(synthesized)
     source_range = {"generation": generation, "start": previous_cutoff, "end": cutoff, "messageCount": len(source_messages), "createdAt": created_at}
-    working_context = buildSynthesizedWorkingContextDocument(
+    working_context = build_synthesized_working_context_document(
         {
             "previous": previous_working_context,
             "session": session,
@@ -169,7 +169,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "synthesized": synthesized,
         }
     )
-    verification = await runCompactionCheckpointVerificationWithFallback(
+    verification = await run_compaction_checkpoint_verification_with_fallback(
         {
             "session": session,
             "config": config,
@@ -192,8 +192,8 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
     if verification.get("verdict") == "repair" and verification.get("repairedCheckpoint"):
         repair_count = 1
         repaired = verification["repairedCheckpoint"]
-        quality = buildCompactionQualityFromCandidate(repaired)
-        working_context = buildWorkingContextDocumentFromCandidate(
+        quality = build_compaction_quality_from_candidate(repaired)
+        working_context = build_working_context_document_from_candidate(
             {
                 "previous": previous_working_context,
                 "session": session,
@@ -204,7 +204,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
                 "preservedTraceEvidence": verification.get("evidence"),
             }
         )
-        repaired_verification = await runCompactionCheckpointVerificationWithFallback(
+        repaired_verification = await run_compaction_checkpoint_verification_with_fallback(
             {
                 "session": session,
                 "config": config,
@@ -242,7 +242,7 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "qualityClassification": quality["classification"],
         }
 
-    state_snapshot = buildModelBackedCompactionStateSnapshot(
+    state_snapshot = build_model_backed_compaction_state_snapshot(
         {
             "session": session,
             "generation": generation,
@@ -258,9 +258,9 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
             "workingContext": working_context,
         }
     )
-    assertModelBackedCompactionArtifacts(state_snapshot, working_context)
+    assert_model_backed_compaction_artifacts(state_snapshot, working_context)
 
-    summary = renderSummaryMarkdown(
+    summary = render_summary_markdown(
         working_context,
         {
             "start": previous_cutoff,
@@ -279,18 +279,18 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         },
     )
     todos = {"sessionId": session["id"], "generatedAt": created_at, "todos": session.get("todos", [])}
-    prompt_context = renderWorkingContextPromptContext(working_context)
+    prompt_context = render_working_context_prompt_context(working_context)
     compacted_context_token_estimate = estimateTextTokens(prompt_context)
     working_context_token_estimate = compacted_context_token_estimate + estimateMessageTokens(recent_messages)
 
     _write_text(artifacts["summary"], summary.rstrip() + "\n")
-    _write_text(artifacts["decisions"], renderDecisionsMarkdown(working_context).rstrip() + "\n")
-    _write_text(artifacts["activity"], renderActivityMarkdown(working_context).rstrip() + "\n")
+    _write_text(artifacts["decisions"], render_decisions_markdown(working_context).rstrip() + "\n")
+    _write_text(artifacts["activity"], render_activity_markdown(working_context).rstrip() + "\n")
     _write_json(artifacts["todos"], todos)
     _write_json(artifacts["state"], state_snapshot)
     _write_json(artifacts["workingContext"], working_context)
 
-    await updateDurableMemoryFromWorkingContext({"session": session, "workingContext": working_context})
+    await update_durable_memory_from_working_context({"session": session, "workingContext": working_context})
 
     verification_record = _verification_record(verification)
     manifest = {
@@ -334,8 +334,8 @@ async def runCompaction(args: dict[str, Any] | None = None, **kwargs: Any) -> di
         "state": state_snapshot,
     }
 
-    await saveCompactionManifest(manifest)
-    await saveCompactionCheckpoint(checkpoint)
+    await save_compaction_manifest(manifest)
+    await save_compaction_checkpoint(checkpoint)
 
     metadata = session.setdefault("metadata", {})
     metadata["compactions"] = int(metadata.get("compactions") or 0) + 1

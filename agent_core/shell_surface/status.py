@@ -18,12 +18,12 @@ from ..config import (
     resolveProviderForModelSelection,
 )
 from ..storage import (
-    getDefaultAutoMode,
-    loadAutoMode,
-    loadSession,
-    loadSettings,
-    saveAutoMode,
-    saveSettings,
+    get_default_auto_mode,
+    load_auto_mode,
+    load_session,
+    load_settings,
+    save_auto_mode,
+    save_settings,
 )
 from .common import (
     _call,
@@ -111,7 +111,7 @@ async def buildPermissionsReport(session: dict[str, Any], config: dict[str, Any]
     parent_session_id = metadata.get("parentSessionId") or metadata.get("leaderSessionId")
     lines = [f"current  {current}"]
     if parent_session_id:
-        parent = await loadSession(parent_session_id)
+        parent = await load_session(parent_session_id)
         parent_mode = (parent or {}).get("permissionMode")
         if parent_mode:
             lines.append(f"inherited {parent_mode} from {_short_id(parent_session_id)}")
@@ -136,8 +136,8 @@ async def _persist_shell_settings(
     scope = config.get("settingsWriteScope") or config.get("settingsScope") or "project"
     if scope not in {"user", "project", "local"}:
         scope = "project"
-    settings = await loadSettings(scope, cwd)
-    await saveSettings(scope, cwd, {**settings, **clean_updates})
+    settings = await load_settings(scope, cwd)
+    await save_settings(scope, cwd, {**settings, **clean_updates})
     persist_choice = hooks.get("persistConfigChoice") if isinstance(hooks, dict) else None
     if callable(persist_choice):
         outcome = persist_choice({"scope": scope, "cwd": cwd, "updates": clean_updates})
@@ -282,12 +282,12 @@ async def _handle_auto_mode_policy(arg_text: str, session: dict[str, Any], confi
     cwd = session.get("cwd") or config.get("cwd") or os.getcwd()
     parts = arg_text.split(None, 2)
     command = parts[0]
-    policy = await loadAutoMode(cwd)
+    policy = await load_auto_mode(cwd)
     if command == "policy":
         return _info(hooks, "Permissions", formatAutoModePolicy(policy))
     if command == "reset":
-        policy = getDefaultAutoMode()
-        await saveAutoMode(cwd, policy)
+        policy = get_default_auto_mode()
+        await save_auto_mode(cwd, policy)
         await _persist(hooks)
         return _info(hooks, "Permissions", "Auto-mode policy reset.\n\n" + formatAutoModePolicy(policy))
     if len(parts) < 3 or parts[1] not in {"add", "remove"}:
@@ -303,7 +303,7 @@ async def _handle_auto_mode_policy(arg_text: str, session: dict[str, Any], confi
     if action == "remove":
         entries = [item for item in entries if item != value]
     policy[bucket] = entries
-    await saveAutoMode(cwd, policy)
+    await save_auto_mode(cwd, policy)
     await _persist(hooks)
     verb = "Added" if action == "add" else "Removed"
     return _info(hooks, "Permissions", f"{verb} auto-mode {bucket} entry: {value}\n\n{formatAutoModePolicy(policy)}")

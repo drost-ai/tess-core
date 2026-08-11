@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ...storage.persisted_record_scanner import listPersistedRecordIssues
-from ...storage import getStateRoot
+from ...storage.persisted_record_scanner import list_persisted_record_issues
+from ...storage import get_state_root
 from typing import Any, Callable
 
 
@@ -9,7 +9,7 @@ async def _report_persisted_record_issues(
     emit: Callable[[str, dict[str, Any], str | None], Any],
     reported: set[str],
 ) -> None:
-    for issue in listPersistedRecordIssues(None, getStateRoot()):
+    for issue in list_persisted_record_issues(None, get_state_root()):
         key = ":".join(
             str(value)
             for value in (

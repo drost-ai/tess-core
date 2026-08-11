@@ -9,21 +9,21 @@ from .._utils import now_iso
 from .agents import _is_related_child_agent
 from ..platform_support import collectDoctorReport
 from ..storage import (
-    compactionCheckpointPath,
-    compactionManifestPath,
-    ensureBaseLayout,
-    getStateRoot,
-    listChildAgents,
-    listSessionMonitors,
-    loadBridge,
-    loadBridgeEvents,
-    loadBridgeInbox,
-    loadCompactionManifest,
-    loadRemoteSession,
-    loadSession,
-    readTaskMeta,
-    sessionPath,
-    sessionTranscriptLogPath,
+    compaction_checkpoint_path,
+    compaction_manifest_path,
+    ensure_base_layout,
+    get_state_root,
+    list_child_agents,
+    list_session_monitors,
+    load_bridge,
+    load_bridge_events,
+    load_bridge_inbox,
+    load_compaction_manifest,
+    load_remote_session,
+    load_session,
+    read_task_meta,
+    session_path,
+    session_transcript_log_path,
 )
 
 
@@ -33,39 +33,39 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
     if not session_id:
         raise RuntimeError("sessionId is required.")
     cwd = args.get("cwd") or (args.get("session") or {}).get("cwd") or os.getcwd()
-    await ensureBaseLayout(cwd)
-    session = await loadSession(session_id) or args.get("session")
+    await ensure_base_layout(cwd)
+    session = await load_session(session_id) or args.get("session")
     if not session:
         raise RuntimeError(f"Session not found: {session_id}")
 
     bundle_dir = os.path.abspath(
         args.get("outputDir")
         or args.get("outputPath")
-        or os.path.join(getStateRoot(), "logs", "debug-bundles", f"{_sanitize_timestamp(now_iso())}-{str(session_id)[:8]}")
+        or os.path.join(get_state_root(), "logs", "debug-bundles", f"{_sanitize_timestamp(now_iso())}-{str(session_id)[:8]}")
     )
     os.makedirs(bundle_dir, exist_ok=True)
 
-    related_agents = [record for record in await listChildAgents() if _is_related_child_agent(session, record)]
-    monitors = await listSessionMonitors(session["id"])
-    remote = await loadRemoteSession(session.get("metadata", {}).get("remoteSessionId")) if session.get("metadata", {}).get("remoteSessionId") else None
-    bridge = await loadBridge(session.get("metadata", {}).get("bridgeId")) if session.get("metadata", {}).get("bridgeId") else None
-    bridge_inbox = await loadBridgeInbox(bridge["id"]) if bridge else []
-    bridge_events = await loadBridgeEvents(bridge["id"]) if bridge else []
+    related_agents = [record for record in await list_child_agents() if _is_related_child_agent(session, record)]
+    monitors = await list_session_monitors(session["id"])
+    remote = await load_remote_session(session.get("metadata", {}).get("remoteSessionId")) if session.get("metadata", {}).get("remoteSessionId") else None
+    bridge = await load_bridge(session.get("metadata", {}).get("bridgeId")) if session.get("metadata", {}).get("bridgeId") else None
+    bridge_inbox = await load_bridge_inbox(bridge["id"]) if bridge else []
+    bridge_events = await load_bridge_events(bridge["id"]) if bridge else []
     doctor = await collectDoctorReport(session.get("cwd") or cwd)
-    compaction_manifest = await loadCompactionManifest(session["id"])
+    compaction_manifest = await load_compaction_manifest(session["id"])
     task_ids = _unique_strings(
         [
             *[record.get("taskId") for record in related_agents if record.get("taskId")],
             *[record.get("taskId") for record in monitors if record.get("taskId")],
         ]
     )
-    tasks = {task_id: await readTaskMeta(task_id) for task_id in task_ids}
+    tasks = {task_id: await read_task_meta(task_id) for task_id in task_ids}
 
     included_files: list[str] = []
     await _write_json_artifact(os.path.join(bundle_dir, "session", "session.json"), session, included_files)
-    await _copy_if_exists(sessionPath(session["id"]), os.path.join(bundle_dir, "session", "session.source.json"), included_files)
+    await _copy_if_exists(session_path(session["id"]), os.path.join(bundle_dir, "session", "session.source.json"), included_files)
     await _copy_if_exists(
-        sessionTranscriptLogPath(session["id"]),
+        session_transcript_log_path(session["id"]),
         os.path.join(bundle_dir, "session", "full-transcript-with-tools.jsonl"),
         included_files,
     )
@@ -83,7 +83,7 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
 
     if compaction_manifest:
         await _write_json_artifact(os.path.join(bundle_dir, "compaction", "manifest.json"), compaction_manifest, included_files)
-        await _copy_if_exists(compactionManifestPath(session["id"]), os.path.join(bundle_dir, "compaction", "manifest.source.json"), included_files)
+        await _copy_if_exists(compaction_manifest_path(session["id"]), os.path.join(bundle_dir, "compaction", "manifest.source.json"), included_files)
         state = session.get("metadata", {}).get("compactionState")
         artifacts = state.get("artifacts") if isinstance(state, dict) and isinstance(state.get("artifacts"), dict) else {}
         generation = state.get("latestCompactionGeneration") if isinstance(state, dict) else None
@@ -94,7 +94,7 @@ async def createDebugBundle(args: dict[str, Any] | None = None, **kwargs: Any) -
         await _copy_if_exists(artifacts.get("checkpoint"), os.path.join(bundle_dir, "compaction", "checkpoint.json"), included_files)
         if isinstance(generation, int):
             await _copy_if_exists(
-                compactionCheckpointPath(session["id"], generation),
+                compaction_checkpoint_path(session["id"], generation),
                 os.path.join(bundle_dir, "compaction", "checkpoint.source.json"),
                 included_files,
             )

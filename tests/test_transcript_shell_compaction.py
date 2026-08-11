@@ -129,7 +129,7 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
                     "session": session,
                     "config": config,
                     "hooks": {
-                        "runCompaction": fake_compaction,
+                        "run_compaction": fake_compaction,
                         "emitRuntimeEvent": lambda event, data: events.append((event, data)),
                         "persist": lambda: counters.__setitem__("persist", counters["persist"] + 1),
                         "refresh": lambda: counters.__setitem__("refresh", counters["refresh"] + 1),

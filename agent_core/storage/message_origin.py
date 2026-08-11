@@ -33,7 +33,7 @@ _HISTORICAL_TOOL_CONTEXT_PREFIX = (
 )
 
 
-def createMessageOrigin(
+def create_message_origin(
     *,
     actor: str,
     kind: str,
@@ -64,7 +64,7 @@ def createMessageOrigin(
     return origin
 
 
-def messageWithOrigin(
+def message_with_origin(
     message: dict[str, Any],
     *,
     actor: str,
@@ -80,7 +80,7 @@ def messageWithOrigin(
         if isinstance(raw_metadata, dict)
         else {}
     )
-    metadata[ORIGIN_METADATA_KEY] = createMessageOrigin(
+    metadata[ORIGIN_METADATA_KEY] = create_message_origin(
         actor=actor,
         kind=kind,
         intentAuthority=intentAuthority,
@@ -91,13 +91,13 @@ def messageWithOrigin(
     return result
 
 
-def userRequestMessage(
+def user_request_message(
     content: Any,
     *,
     kind: str = "user_request",
     lineage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return messageWithOrigin(
+    return message_with_origin(
         {"role": "user", "content": copy.deepcopy(content)},
         actor="user",
         kind=kind,
@@ -107,14 +107,14 @@ def userRequestMessage(
     )
 
 
-def syntheticUserMessage(
+def synthetic_user_message(
     content: Any,
     *,
     kind: str,
     actor: str = "runtime",
     lineage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return messageWithOrigin(
+    return message_with_origin(
         {"role": "user", "content": copy.deepcopy(content)},
         actor=actor,
         kind=kind,
@@ -124,7 +124,7 @@ def syntheticUserMessage(
     )
 
 
-def getMessageOrigin(message: Any) -> dict[str, Any] | None:
+def get_message_origin(message: Any) -> dict[str, Any] | None:
     if not isinstance(message, dict):
         return None
     metadata = message.get("metadata")
@@ -134,38 +134,38 @@ def getMessageOrigin(message: Any) -> dict[str, Any] | None:
     return origin if isinstance(origin, dict) else None
 
 
-def isRuntimeSyntheticMessage(message: Any) -> bool:
+def is_runtime_synthetic_message(message: Any) -> bool:
     if not isinstance(message, dict):
         return False
-    origin = getMessageOrigin(message)
+    origin = get_message_origin(message)
     if origin is not None:
         return origin.get("synthetic") is True
     return _is_legacy_synthetic_message(message)
 
 
-def isGenuineUserRequest(message: Any) -> bool:
+def is_genuine_user_request(message: Any) -> bool:
     if not isinstance(message, dict) or message.get("role") != "user":
         return False
-    origin = getMessageOrigin(message)
+    origin = get_message_origin(message)
     if origin is not None:
         return origin.get("intentAuthority") == "request"
     return not _is_legacy_synthetic_message(message)
 
 
-def isPlainUserTurnAnchor(message: Any) -> bool:
-    return isGenuineUserRequest(message) and not _message_has_tool_results(message)
+def is_plain_user_turn_anchor(message: Any) -> bool:
+    return is_genuine_user_request(message) and not _message_has_tool_results(message)
 
 
-def messageIntentAuthority(message: Any) -> str:
-    origin = getMessageOrigin(message)
+def message_intent_authority(message: Any) -> str:
+    origin = get_message_origin(message)
     if origin is not None:
         authority = origin.get("intentAuthority")
         if authority in _VALID_INTENT_AUTHORITIES:
             return str(authority)
-    return "request" if isGenuineUserRequest(message) else "none"
+    return "request" if is_genuine_user_request(message) else "none"
 
 
-def messageForStableFingerprint(message: dict[str, Any]) -> dict[str, Any]:
+def message_for_stable_fingerprint(message: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(message)
     metadata = result.get("metadata")
     if not isinstance(metadata, dict):

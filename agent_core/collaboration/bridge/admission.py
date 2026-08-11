@@ -7,17 +7,17 @@ import uuid
 from typing import Any
 
 from ..._utils import now_iso
-from ...storage import loadSessionRecordShallow, withRecordTransaction
+from ...storage import load_session_record_shallow, with_record_transaction
 from ...storage.remote import (
-    appendBridgeEvent,
-    appendBridgeInboxMessage,
-    loadBridge,
-    loadBridgeDeliveryLedger,
-    loadBridgeInbox,
-    loadRemoteSession,
-    saveBridge,
-    saveBridgeDeliveryLedger,
-    saveRemoteSession,
+    append_bridge_event,
+    append_bridge_inbox_message,
+    load_bridge,
+    load_bridge_delivery_ledger,
+    load_bridge_inbox,
+    load_remote_session,
+    save_bridge,
+    save_bridge_delivery_ledger,
+    save_remote_session,
 )
 
 MAX_BRIDGE_MESSAGE_BYTES = 256 * 1024
@@ -26,18 +26,18 @@ MAX_IDEMPOTENCY_KEY_BYTES = 4 * 1024
 
 async def admitBridgeMessage(args: dict[str, Any]) -> dict[str, Any]:
     _assert_input(args)
-    initial = await loadBridge(args["bridgeId"])
+    initial = await load_bridge(args["bridgeId"])
     if not initial:
         raise RuntimeError(f"Bridge not found: {args['bridgeId']}")
-    async with withRecordTransaction("bridge-session", initial["sessionId"]):
-        async with withRecordTransaction("bridge-delivery", initial["id"]):
+    async with with_record_transaction("bridge-session", initial["sessionId"]):
+        async with with_record_transaction("bridge-delivery", initial["id"]):
             return await _admit_under_lock(initial, args)
 
 
 async def _admit_under_lock(initial, args):
     bridge = await _require_active_generation(initial, args.get("generation"))
     ledger = await _require_ledger(bridge)
-    inbox = await loadBridgeInbox(bridge["id"])
+    inbox = await load_bridge_inbox(bridge["id"])
     source = args.get("source") if args.get("source") is not None else "bridge"
     requested_key = args.get("idempotencyKey")
     message = _unique_match(inbox, "idempotencyKey", requested_key, "inbox idempotency key") if requested_key else None
@@ -61,7 +61,7 @@ async def _admit_under_lock(initial, args):
             "id": message_id, "bridgeId": bridge["id"], "generation": bridge["generation"],
             "idempotencyKey": key, "createdAt": now_iso(), "source": source, "text": args["text"],
         }
-        await appendBridgeInboxMessage(message)
+        await append_bridge_inbox_message(message)
         inbox = [*inbox, message]
         entry = _pending_entry(key, bridge["id"], message)
         ledger = await _append_ledger(ledger, entry, message["createdAt"])
@@ -70,9 +70,9 @@ async def _admit_under_lock(initial, args):
 
 
 async def _require_active_generation(initial, requested_generation):
-    bridge = await loadBridge(initial["id"])
-    session = await loadSessionRecordShallow(initial["sessionId"])
-    remote = await loadRemoteSession(bridge["remoteSessionId"]) if bridge and bridge.get("remoteSessionId") else None
+    bridge = await load_bridge(initial["id"])
+    session = await load_session_record_shallow(initial["sessionId"])
+    remote = await load_remote_session(bridge["remoteSessionId"]) if bridge and bridge.get("remoteSessionId") else None
     valid = bool(
         bridge and bridge.get("schemaVersion") == 2 and bridge.get("generation")
         and bridge.get("status") == "active" and session
@@ -100,13 +100,13 @@ async def _append_ledger(ledger, entry, updated_at):
         **ledger, "revision": ledger["revision"] + 1,
         "entries": [*ledger["entries"], entry], "updatedAt": updated_at,
     }
-    await saveBridgeDeliveryLedger(next_ledger)
+    await save_bridge_delivery_ledger(next_ledger)
     return next_ledger
 
 
 async def _reconcile_side_effects(identity, message, entry, inbox, ledger):
     key = message["idempotencyKey"]
-    await appendBridgeEvent({
+    await append_bridge_event({
         "id": _queued_event_id(key), "bridgeId": identity["id"],
         "generation": identity["generation"], "idempotencyKey": key,
         "createdAt": message["createdAt"], "event": "bridge.message.queued",
@@ -116,7 +116,7 @@ async def _reconcile_side_effects(identity, message, entry, inbox, ledger):
         },
     })
     pending = max(0, len(inbox) - ledger["cursor"])
-    current = await loadBridge(identity["id"])
+    current = await load_bridge(identity["id"])
     if not current or current.get("status") != "active" or current.get("generation") != identity["generation"]:
         raise RuntimeError("Bridge generation changed while reconciling admitted input.")
     latest = entry["disposition"] == "pending" and (
@@ -132,9 +132,9 @@ async def _reconcile_side_effects(identity, message, entry, inbox, ledger):
                 "lastEventName": "bridge.message.queued", "lastMessageAt": message["createdAt"],
                 "lastMessageSource": message["source"],
             })
-        await saveBridge(updated)
+        await save_bridge(updated)
     if identity.get("remoteSessionId"):
-        remote = await loadRemoteSession(identity["remoteSessionId"])
+        remote = await load_remote_session(identity["remoteSessionId"])
         if not remote or remote.get("sessionId") != identity["sessionId"] or remote.get("bridgeId") != identity["id"] or remote.get("bridgeGeneration") != identity["generation"]:
             raise RuntimeError("Remote-session bridge generation changed while reconciling admitted input.")
         remote.update({"bridgeStatus": "active", "unreadBridgeMessages": pending, "updatedAt": now_iso()})
@@ -144,7 +144,7 @@ async def _reconcile_side_effects(identity, message, entry, inbox, ledger):
                 "lastEventAt": message["createdAt"],
                 "lastEventSummary": _truncate(f"Queued bridge input: {message['text']}"),
             })
-        await saveRemoteSession(remote)
+        await save_remote_session(remote)
 
 
 def _pending_entry(key, source_bridge_id, message):

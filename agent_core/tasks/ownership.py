@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from ..runtime.identifiers import parseMonitorId, parseTaskId
-from ..storage import loadChildAgent, loadMonitor, loadTaskRecord, readTaskMeta
+from ..storage import load_child_agent, load_monitor, load_task_record, read_task_meta
 
 
 class TaskOwnershipError(RuntimeError):
@@ -22,8 +22,8 @@ _ALLOWED_KINDS = {
 
 async def requireModelOwnedTask(context: Mapping[str, Any], rawTaskId: str, operation: str) -> dict[str, Any]:
     task_id = parseTaskId(rawTaskId)
-    record = await loadTaskRecord(task_id)
-    meta = await readTaskMeta(task_id)
+    record = await load_task_record(task_id)
+    meta = await read_task_meta(task_id)
     if not record and not meta:
         raise TaskOwnershipError("task.not_found", f"Task not found: {task_id}")
     _assert_record_identity(task_id, record, meta)
@@ -49,7 +49,7 @@ async def requireModelOwnedTask(context: Mapping[str, Any], rawTaskId: str, oper
 
 async def requireModelOwnedMonitor(context: Mapping[str, Any], rawMonitorId: str) -> dict[str, Any]:
     monitor_id = parseMonitorId(rawMonitorId)
-    monitor = await loadMonitor(monitor_id)
+    monitor = await load_monitor(monitor_id)
     session = context.get("session")
     if (
         not isinstance(monitor, dict)
@@ -107,7 +107,7 @@ async def _load_related_child(meta: Any, record: Any) -> dict[str, Any] | None:
         or _string_field(metadata, "agent_id")
         or (record.get("sourceId") if isinstance(record, Mapping) else None)
     )
-    return await loadChildAgent(agent_id) if isinstance(agent_id, str) and agent_id else None
+    return await load_child_agent(agent_id) if isinstance(agent_id, str) and agent_id else None
 
 
 def _belongs_to_session(session_id: str, kind: str, record: Any, meta: Any, child: Any) -> bool:

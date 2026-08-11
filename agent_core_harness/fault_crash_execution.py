@@ -16,9 +16,9 @@ _CRASH_CHILD = """
 import asyncio, json, os, signal, sys
 import agent_core as core
 home, session_id, provider, model, state = sys.argv[1:]
-core.configureRuntimeHome(home)
+core.configure_runtime_home(home)
 async def main():
-    session = core.createEmptySession(cwd=home, provider=provider, model=model, systemPrompt='crash', permissionMode='default', sessionId=session_id)
+    session = core.create_empty_session(cwd=home, provider=provider, model=model, systemPrompt='crash', permissionMode='default', sessionId=session_id)
     session['messages'] = [{'role': 'user', 'content': 'stable before crash'}]
     await core.persistSession(session, {'sessionPersistence': True})
     state_index = int(state[1:])
@@ -83,9 +83,9 @@ async def executeCrashFaultCell(
         or control.get("volatileMessageCount") != (2 if expected_output else 1)
     ):
         raise RuntimeError(f"Crash probe volatile state diverged: {control!r}")
-    async with core.scopedRuntimeHome(str(crash_home)):
-        restored = await core.loadSession(session_id)
-        restored_again = await core.loadSession(session_id)
+    async with core.scoped_runtime_home(str(crash_home)):
+        restored = await core.load_session(session_id)
+        restored_again = await core.load_session(session_id)
     if not isinstance(restored, dict):
         raise RuntimeError("Crash probe could not reload its stable session")
     repair = core.repairSessionTranscript(restored)
@@ -110,7 +110,7 @@ async def executeCrashFaultCell(
         "volatileState": control,
         "session": {
             "persisted": True,
-            "settledThrough": "SIGKILL then two independent loadSession calls",
+            "settledThrough": "SIGKILL then two independent load_session calls",
             "repairApplied": repair["repaired"],
             "messageCount": len(restored["messages"]),
             "revision": revision,
