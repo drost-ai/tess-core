@@ -6,6 +6,7 @@ import subprocess
 import time
 
 from tests.support.agent_core_case import *
+import agent_core.sandbox as sandbox_module
 import agent_core.tools.processes as processes_module
 
 
@@ -29,6 +30,47 @@ class SandboxTests(AgentCoreTestCase):
         self.assertEqual(bubblewrap[:4], ["bwrap", "--die-with-parent", "--ro-bind", "/"])
         self.assertIn("--unshare-net", bubblewrap)
         self.assertEqual(bubblewrap[-4:], ["--", "sh", "-lc", "echo ok"])
+
+    def test_landlock_shim_is_gone_and_os_required_never_degrades(self):
+        landlock = core.resolveSandboxBackend(
+            {"sandbox": {"mode": "auto", "backend": "landlock"}}, platform="linux", which=lambda _name: None
+        )
+        self.assertEqual(landlock.enforcement, "none")
+        self.assertIn("removed", landlock.reason)
+
+        with self.assertRaises(core.SandboxUnavailableError):
+            core.prepareSandboxedArgv(
+                ["sh", "-lc", "echo never"],
+                config={"sandbox": {"mode": "os-required", "backend": "landlock"}},
+                cwd=os.getcwd(),
+            )
+
+        # Any enforcement below mandatory OS isolation refuses under
+        # os-required; in auto mode it still wraps but downgrades loudly.
+        class AdvisoryBackend(core.SandboxBackend):
+            def __init__(self):
+                super().__init__("advisory-test", "advisory", "advisory only")
+
+            def wrap(self, argv, policy):
+                return ["advisory-wrapper", *argv]
+
+        with mock.patch.object(sandbox_module, "resolveSandboxBackend", return_value=AdvisoryBackend()):
+            with self.assertRaises(core.SandboxUnavailableError):
+                core.prepareSandboxedArgv(
+                    ["sh", "-lc", "echo never"],
+                    config={"sandbox": {"mode": "os-required"}},
+                    cwd=os.getcwd(),
+                )
+            events = []
+            advisory = core.prepareSandboxedArgv(
+                ["sh", "-lc", "echo ok"],
+                config={"sandbox": {"mode": "auto"}},
+                cwd=os.getcwd(),
+                emit=lambda event, data: events.append((event, data)),
+            )
+        self.assertEqual(advisory["argv"][0], "advisory-wrapper")
+        downgrade = next(data for event, data in events if event == "sandbox.downgraded")
+        self.assertEqual(downgrade["actual"], "advisory")
 
     def test_resolve_config_defaults_sandbox_off_and_accepts_overrides(self):
         root, home, workspace, previous = self.temp_context()

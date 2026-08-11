@@ -283,5 +283,4 @@ knob wins over the hardcoded fallback.
 | TESS_WEB_SEARCH_PROVIDER, TESS_ALTERNATE_SCREEN, TESS_SCREEN_MODE, TESS_TMUX_* | behavioral/platform config-keys; out of knob scope |
 | TESS_CHILD_*, TESS_LAUNCH_*, TESS_SESSION_ID/CWD/PROVIDER/MODEL/EFFORT_LEVEL, TESS_PLUGIN_* | worker/launch handshake contract — invariant |
 | AGENT_CORE_HEADLESS_*, AGENT_CORE_TEST_* | test/dev seams — invariant |
-| AGENT_CORE_ENABLE_LANDLOCK | sandbox feature flag — config-key |
 | AGENT_CORE_SUBAGENTS_MAX_LIVE etc. | already canonical knob env overrides |

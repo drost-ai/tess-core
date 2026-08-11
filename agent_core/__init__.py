@@ -196,7 +196,7 @@ from .runtime.state import (
     reduce_background_runtime_state, reduce_mcp_runtime_state, summarizeSessionRecord,
 )
 from .sandbox import (
-    BubblewrapSandboxBackend, LandlockSandboxBackend, SandboxBackend, SandboxPolicy, SandboxUnavailableError,
+    BubblewrapSandboxBackend, SandboxBackend, SandboxPolicy, SandboxUnavailableError,
     SeatbeltSandboxBackend, normalizeSandboxConfig, prepareSandboxedArgv, resolveSandboxBackend, resolveSandboxPolicy,
 )
 from .session.fork import createForkedSession
@@ -428,7 +428,7 @@ __all__ = [
     "FIXED_COMPACTION_PROVIDER", "FetchResponse", "FileMcpTokenStore", "HOOK_EVENTS",
     "HttpMcpClient", "IMAGE_INPUT_UNSUPPORTED_MESSAGE", "JsonRpcClient", "KNOWN_RUNTIME_EVENTS",
     "LEGACY_PROTOCOL_VERSION", "LEGACY_UPDATED_AT", "LOW_VALUE_TAIL_TOOL_NAMES",
-    "LOW_VALUE_TOOL_NAMES", "LandlockSandboxBackend", "LifecycleBarrier", "LifecycleCloseTimeoutError",
+    "LOW_VALUE_TOOL_NAMES", "LifecycleBarrier", "LifecycleCloseTimeoutError",
     "LifecycleClosedError", "LogicalTurnProgressLedger", "LoopbackListener", "MANUAL_MEMORY_RECORD_ID",
     "MAX_ACTIVITY_LINES", "MAX_CODEX_ERROR_SAMPLES", "MAX_DAEMON_SOCKET_PATH_BYTES", "MAX_DAEMON_STATE_BYTES",
     "MAX_DAEMON_TOKEN_BYTES", "MAX_DAEMON_TREE_DEPTH", "MAX_DAEMON_TREE_ENTRIES",

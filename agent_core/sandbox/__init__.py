@@ -50,15 +50,6 @@ class BubblewrapSandboxBackend(SandboxBackend):
         return wrapped
 
 
-class LandlockSandboxBackend(SandboxBackend):
-    def __init__(self) -> None:
-        super().__init__("landlock", "advisory", "landlock launcher shim does not enforce network restrictions")
-
-    def wrap(self, argv: list[str], policy: SandboxPolicy) -> list[str]:
-        encoded = json.dumps(policy, separators=(",", ":"), ensure_ascii=False)
-        return [sys.executable, "-m", "agent_core.sandbox.landlock_exec", "--policy", encoded, "--", *argv]
-
-
 def normalizeSandboxConfig(value: Any = None, cwd: str | None = None) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
     mode = _normalize_mode(raw.get("mode"))
@@ -118,8 +109,6 @@ def resolveSandboxBackend(
         return SeatbeltSandboxBackend()
     if system.startswith("linux") and find("bwrap"):
         return BubblewrapSandboxBackend()
-    if system.startswith("linux") and _landlock_enabled():
-        return LandlockSandboxBackend()
     return SandboxBackend("none", "none", "no supported sandbox backend is available")
 
 
@@ -137,9 +126,14 @@ def prepareSandboxedArgv(
     backend = resolveSandboxBackend({"sandbox": policy})
     if mode == "off":
         return {"argv": list(argv), "policy": policy, "backend": _backend_record(backend)}
+    if mode == "os-required" and backend.enforcement != "os":
+        # Anything below mandatory OS enforcement (including an advisory
+        # backend) is unavailable to a caller that demanded isolation:
+        # refuse loudly, never degrade silently.
+        raise SandboxUnavailableError(
+            f"Sandbox enforcement required but unavailable: {backend.reason or backend.name or 'no backend'}"
+        )
     if backend.enforcement == "none":
-        if mode == "os-required":
-            raise SandboxUnavailableError(f"Sandbox enforcement required but unavailable: {backend.reason or 'no backend'}")
         _emit(
             emit,
             "sandbox.downgraded",
@@ -197,7 +191,7 @@ def _resolve_requested_backend(name: str, which: Callable[[str], str | None]) ->
     if name in {"bubblewrap", "bwrap"}:
         return BubblewrapSandboxBackend() if which("bwrap") else SandboxBackend("none", "none", "bwrap is not available")
     if name == "landlock":
-        return LandlockSandboxBackend() if _landlock_enabled() else SandboxBackend("none", "none", "landlock launcher is not enabled")
+        return SandboxBackend("none", "none", "the landlock launcher shim was removed because it enforced nothing; use bubblewrap")
     return SandboxBackend("none", "none", f"unknown sandbox backend: {name}")
 
 
@@ -238,10 +232,6 @@ def _seatbelt_profile(policy: SandboxPolicy) -> str:
     return "\n".join(lines)
 
 
-def _landlock_enabled() -> bool:
-    return os.environ.get("AGENT_CORE_ENABLE_LANDLOCK") == "1"
-
-
 def _backend_record(backend: SandboxBackend) -> dict[str, Any]:
     return {"name": backend.name, "enforcement": backend.enforcement, "reason": backend.reason}
 
@@ -251,13 +241,8 @@ def _emit(emit: Callable[[str, dict[str, Any]], Any] | None, event: str, data: d
         emit(event, data)
 
 
-resolve_sandbox_backend = resolveSandboxBackend
-resolve_sandbox_policy = resolveSandboxPolicy
-prepare_sandboxed_argv = prepareSandboxedArgv
-
 __all__ = [
     "BubblewrapSandboxBackend",
-    "LandlockSandboxBackend",
     "SandboxBackend",
     "SandboxMode",
     "SandboxPolicy",
@@ -265,9 +250,6 @@ __all__ = [
     "SeatbeltSandboxBackend",
     "normalizeSandboxConfig",
     "prepareSandboxedArgv",
-    "prepare_sandboxed_argv",
     "resolveSandboxBackend",
     "resolveSandboxPolicy",
-    "resolve_sandbox_backend",
-    "resolve_sandbox_policy",
 ]

@@ -217,7 +217,7 @@ def assertHealthCheckExecutionPolicy(spec: dict[str, Any], policy: dict[str, Any
         and isinstance(policy.get("authorityFingerprint"), str)
         and len(policy["authorityFingerprint"]) == 64
         and sandbox.get("mode") in {"disabled", "wrapped"}
-        and sandbox.get("backend") in {"seatbelt", "bubblewrap", "landlock", "none"}
+        and sandbox.get("backend") in {"seatbelt", "bubblewrap", "none"}
         and sandbox.get("filesystem") in {"read-only", "workspace-write", "full"}
         and isinstance(sandbox.get("network"), bool)
         and isinstance(policy.get("maxRedirects"), int)
