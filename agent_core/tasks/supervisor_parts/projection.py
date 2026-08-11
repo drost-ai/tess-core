@@ -281,7 +281,7 @@ async def _collaboration_snapshot(session_id: str) -> dict[str, Any]:
     remote = await load_remote_session(remote_id) if isinstance(remote_id, str) and remote_id else None
     bridge_id = metadata.get("bridgeId") or (remote or {}).get("bridgeId")
     bridge = await load_bridge(bridge_id) if isinstance(bridge_id, str) and bridge_id else None
-    from ...collaboration import buildCollaborationWorkers, createCollaborationSnapshot
+    from ..collaboration import buildCollaborationWorkers, createCollaborationSnapshot
 
     workers = buildCollaborationWorkers(
         {

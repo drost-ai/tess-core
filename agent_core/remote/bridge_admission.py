@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from .generation import requireBridgeLedger as _require_ledger
+from .bridge_generation import requireBridgeLedger as _require_ledger
 
 import hashlib
 import uuid
 from typing import Any
 
-from ..._utils import now_iso
-from ...storage import load_session_record_shallow, with_record_transaction
-from ...storage.remote import (
+from .._utils import now_iso
+from ..storage import load_session_record_shallow, with_record_transaction
+from ..storage.remote import (
     append_bridge_event,
     append_bridge_inbox_message,
     load_bridge,
@@ -22,6 +22,12 @@ from ...storage.remote import (
 
 MAX_BRIDGE_MESSAGE_BYTES = 256 * 1024
 MAX_IDEMPOTENCY_KEY_BYTES = 4 * 1024
+
+
+async def sendBridgeMessage(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Admit one generation-bound, idempotent bridge message."""
+
+    return await admitBridgeMessage({**(args or {}), **kwargs})
 
 
 async def admitBridgeMessage(args: dict[str, Any]) -> dict[str, Any]:
@@ -182,4 +188,4 @@ def _truncate(value, limit=96):
     return value if len(value) <= limit else f"{value[:limit - 1]}…"
 
 
-__all__ = ["admitBridgeMessage"]
+__all__ = ["admitBridgeMessage", "sendBridgeMessage"]

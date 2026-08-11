@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 def _knob(name: str):
-    from ...config._knobs import knobValue
+    from ..config._knobs import knobValue
 
     return knobValue(name)
 
 
-from .generation import requireBridgeLedger as _require_ledger
+from .bridge_generation import requireBridgeLedger as _require_ledger
 
 import asyncio
 import hashlib
@@ -15,18 +15,18 @@ import threading
 import uuid
 from typing import Any
 
-from ..._utils import now_iso
-from .admission import admitBridgeMessage
-from .generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
-from .recovery import activateBridgeGeneration
-from ...runtime.paths import getActiveRuntimePaths
-from ...runtime._ticker import run_scoped_async, start_oneshot, start_ticker
-from ...storage import (
+from .._utils import now_iso
+from .bridge_admission import admitBridgeMessage
+from .bridge_generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
+from .bridge_recovery import activateBridgeGeneration
+from ..runtime.paths import getActiveRuntimePaths
+from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
+from ..storage import (
     load_session_record_shallow,
     save_session,
     with_record_transaction,
 )
-from ...storage.remote import (
+from ..storage.remote import (
     append_bridge_event,
     load_bridge,
     load_bridge_delivery_ledger,
@@ -379,6 +379,12 @@ async def createBridgeRuntimeController(args):
     return await controller.start()
 
 
+async def createBridgeRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Create the selected, durable bridge generation for a session."""
+
+    return await createBridgeRuntimeController({**(args or {}), **kwargs})
+
+
 
 
 async def _commit_ledger(ledger, **updates):
@@ -457,5 +463,5 @@ def _omit_none(value):
 
 __all__ = [
     "BridgeRuntimeController", "LifecycleClosedError", "closeCurrentBridgeGeneration",
-    "createBridgeRuntimeController", "isCurrentBridgeGeneration",
+    "createBridgeRuntime", "createBridgeRuntimeController", "isCurrentBridgeGeneration",
 ]

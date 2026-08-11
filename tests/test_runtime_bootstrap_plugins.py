@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-import agent_core.collaboration.remote as collaboration_remote_module
+import agent_core.remote.bridge_runtime as bridge_runtime_module
 
 
 class RuntimeBootstrapPluginTests(AgentCoreTestCase):
@@ -447,7 +447,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             }
 
             with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp), mock.patch.object(
-                collaboration_remote_module,
+                bridge_runtime_module,
                 "createBridgeRuntime",
                 fake_bridge,
             ):

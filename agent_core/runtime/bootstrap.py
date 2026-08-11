@@ -4,7 +4,7 @@ import asyncio, threading, uuid
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
-from ..collaboration import createCollaborationRuntime
+from ..tasks.collaboration import createCollaborationRuntime
 from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ._daemon_watch import start_daemon_watchdog as _start_daemon_watchdog
 from .exception_groups import aggregateRuntimeFailures as _aggregate_runtime_failures

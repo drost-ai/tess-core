@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from .._utils import now_iso
-from ..collaboration.remote import (
+from ..remote import (
     formatBridgeTail,
     formatRemoteSessionCandidate,
     sendBridgeMessage,
@@ -39,7 +39,7 @@ from .common import (
 from .common import formatMonitorRecord
 from .tasks import formatTaskInspectReport
 from typing import Any
-from ..collaboration.bridge.runtime import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
+from ..remote import closeCurrentBridgeGeneration as _closeCurrentBridgeGeneration
 
 
 async def buildDaemonReport(instanceId: str | None) -> str:

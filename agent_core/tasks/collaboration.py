@@ -14,8 +14,8 @@ import time
 from typing import Any
 
 from .._utils import maybe_await
-from . import updates as _collaboration_updates
-from .updates import appendAssistantCollaborationMessage, staleWorkPayload
+from . import collaboration_narration as _collaboration_narration
+from .collaboration_narration import appendAssistantCollaborationMessage, staleWorkPayload
 from ..session.persistence import persistSession
 from ..storage import list_child_agents, list_session_monitors, load_bridge, load_remote_session
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
@@ -24,16 +24,16 @@ from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 
 # Preserve the historical monkeypatch surface after splitting provider
 # narration into a focused module. Tests and embedders may replace these on
-# ``agent_core.collaboration``; the delegating wrapper installs the current
-# values before each request.
-sendOpenAiRequest = _collaboration_updates.sendOpenAiRequest
-sendAnthropicMessagesRequest = _collaboration_updates.sendAnthropicMessagesRequest
+# ``agent_core.tasks.collaboration``; the delegating wrapper installs the
+# current values before each request.
+sendOpenAiRequest = _collaboration_narration.sendOpenAiRequest
+sendAnthropicMessagesRequest = _collaboration_narration.sendAnthropicMessagesRequest
 
 
 async def authorCollaborationUpdate(args: dict[str, Any]) -> str:
-    _collaboration_updates.sendOpenAiRequest = sendOpenAiRequest
-    _collaboration_updates.sendAnthropicMessagesRequest = sendAnthropicMessagesRequest
-    return await _collaboration_updates.authorCollaborationUpdate(args)
+    _collaboration_narration.sendOpenAiRequest = sendOpenAiRequest
+    _collaboration_narration.sendAnthropicMessagesRequest = sendAnthropicMessagesRequest
+    return await _collaboration_narration.authorCollaborationUpdate(args)
 
 
 async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from tests.support.agent_core_case import AgentCoreTestCase, core, run
 
-import agent_core.collaboration.bridge.recovery as bridge_recovery
+import agent_core.remote.bridge_recovery as bridge_recovery
 from agent_core.storage.remote import (
     append_bridge_event,
     append_bridge_inbox_message,

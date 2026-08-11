@@ -33,18 +33,21 @@ from .authority.agent import (
     enforceSessionAgentAuthority, filterToolsForAgentAuthority, fingerprintAgentAuthority, isNoMorePermissive,
     isPathWithinAuthority, meetPermissionModes, sandboxConfigForAgentAuthority,
 )
-from .collaboration import (
-    appendAssistantCollaborationMessage,
-    authorCollaborationUpdate, authorCollaborationUpdateWithProvider, buildCollaborationWorkers,
-    buildDeterministicCollaborationUpdate, buildSubagentWorkerSummary, buildUpdateCandidates, canPromptForSelection,
-    collaborationSnapshotPayload, createBridgeRuntime, createCollaborationRuntime, createCollaborationSnapshot,
-    createRemoteSession, emptyCollaborationSnapshot, findMatchingRemoteSessions, formatBridgeTail,
-    formatRemoteSessionCandidate, getBridgeDiagnostics, isRelatedChildAgent, listActiveBridgeRows,
-    mapChildAgentStatus, mapMonitorStatus, mapRemoteStatus, mergeUsage, promptToPickRemoteSession,
-    resolveRemoteSelection, resolveTeleportSession, sendAnthropicMessagesRequest, sendBridgeMessage,
-    sendOpenAiRequest, serializeRemote, shouldNarrateWorker, updateRemoteSession, workerEventCandidate,
+from .remote import (
+    BridgeRecoveryBlockedError, createBridgeRuntime, createRemoteSession, findMatchingRemoteSessions,
+    formatBridgeTail, formatRemoteSessionCandidate, getBridgeDiagnostics, inspectBridgeRecovery,
+    listActiveBridgeRows, resolveBridgeRecovery, sendBridgeMessage, updateRemoteSession,
 )
-from .collaboration.bridge.recovery import BridgeRecoveryBlockedError, inspectBridgeRecovery, resolveBridgeRecovery
+from .tasks.collaboration import (
+    buildCollaborationWorkers, buildSubagentWorkerSummary, buildUpdateCandidates, collaborationSnapshotPayload,
+    createCollaborationRuntime, createCollaborationSnapshot, emptyCollaborationSnapshot, isRelatedChildAgent,
+    mapChildAgentStatus, mapMonitorStatus, mapRemoteStatus, sendAnthropicMessagesRequest, sendOpenAiRequest,
+    serializeRemote, shouldNarrateWorker, workerEventCandidate,
+)
+from .tasks.collaboration_narration import (
+    appendAssistantCollaborationMessage, authorCollaborationUpdate, authorCollaborationUpdateWithProvider,
+    buildDeterministicCollaborationUpdate, mergeUsage,
+)
 from .config import (
     BUILTIN_AGENTS, BUILTIN_PROVIDER_PROFILES, DEFAULT_ASSISTANT_DESCRIPTION, DEFAULT_ASSISTANT_NAME, DEFAULT_EFFORT,
     DEFAULT_IMAGE_INPUT_MIME_TYPES,
@@ -223,6 +226,9 @@ from .shell_surface import (
     normalizeModel, truncateAscii,
 )
 from .shell_surface.debug_bundle import createDebugBundle
+from .shell_surface.remote_select import (
+    canPromptForSelection, promptToPickRemoteSession, resolveRemoteSelection, resolveTeleportSession,
+)
 from .authority.shell_command_policy import (
     SHELL_COMMAND_CLASSIFIER_REVISION, classifyReadOnlyShellCommand, parseSingleShellCommand,
 )

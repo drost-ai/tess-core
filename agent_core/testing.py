@@ -10,7 +10,7 @@ from .authority.executable_closure import (
     inspectExecutableClosure,
     snapshotExecutableClosure,
 )
-from .collaboration.bridge.recovery import __setBridgeRecoveryTestHookForTests
+from .remote.bridge_recovery import __setBridgeRecoveryTestHookForTests
 from .context.compaction import (
     build_compaction_system_prompt_context,
     build_messages_for_working_context,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .generation import requireBridgeLedger as _require_ledger
+from .bridge_generation import requireBridgeLedger as _require_ledger
 
 import copy
 import hashlib
@@ -11,16 +11,16 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-from ..._utils import now_iso
-from .recovery_analysis import analyzeBridgeRecovery
-from ...runtime.identifiers import parseBridgeId, parseSessionId
-from ...storage import (
+from .._utils import now_iso
+from .bridge_recovery_analysis import analyzeBridgeRecovery
+from ..runtime.identifiers import parseBridgeId, parseSessionId
+from ..storage import (
     get_state_root,
     load_session_record_shallow,
     mutate_session_record_transaction,
     with_record_transaction,
 )
-from ...storage.remote import (
+from ..storage.remote import (
     load_bridge,
     load_bridge_delivery_ledger,
     load_bridge_inbox,

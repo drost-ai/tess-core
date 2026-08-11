@@ -40,6 +40,12 @@ from .remote_background import (
     buildRemoteReport,
     formatRemoteSessionRecord,
 )
+from .remote_select import (
+    canPromptForSelection,
+    promptToPickRemoteSession,
+    resolveRemoteSelection,
+    resolveTeleportSession,
+)
 from .shared import (
     AVAILABLE_TUI_THEMES,
     PERMISSION_MODES,

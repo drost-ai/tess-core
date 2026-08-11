@@ -148,7 +148,7 @@ def defaultRuntimeComponentFactories() -> dict[str, Any]:
     # which must not load when only the light support helpers are needed.
     from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
     from ..authority.plugins import loadPluginRuntime
-    from ..collaboration.remote import createBridgeRuntime
+    from ..remote.bridge_runtime import createBridgeRuntime
     from ..mcp import createMcpRuntime
     from ..tools import createBuiltinTools
     from .workspace import createWorkspaceController

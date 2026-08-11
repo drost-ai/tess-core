@@ -14,11 +14,11 @@ PUBLIC_API_EXPORTS = ROOT / "tests" / "fixtures" / "public_api" / "exports.json"
 PUBLIC_MODULES = [
     "agent_core",
     "agent_core.agent",
-    "agent_core.collaboration",
     "agent_core.config",
     "agent_core.daemon",
     "agent_core.mcp",
     "agent_core.platform_support",
+    "agent_core.remote",
     "agent_core.shell_surface",
     "agent_core.storage",
     "agent_core.subagents",
