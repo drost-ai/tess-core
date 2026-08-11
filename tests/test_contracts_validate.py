@@ -268,9 +268,9 @@ class ContractSyncTests(unittest.TestCase):
         self.assertEqual(self._literal_values(PermissionMode), set(PERMISSION_MODES))
 
     def test_created_runtime_event_envelope_validates_strict(self) -> None:
-        from agent_core.runtime.events import createRuntimeEvent
+        from agent_core.runtime.events import create_runtime_event
 
-        envelope = createRuntimeEvent(
+        envelope = create_runtime_event(
             {"event": "task.updated", "data": {"task_id": "t-1", "session_id": "s-1"}}
         )
         self.assertEqual(validate(envelope, RuntimeEventEnvelope, strict=True), [])

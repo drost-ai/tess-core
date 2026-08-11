@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ._shared import withSubagentCoordinationTransaction
 
-from ..runtime.events.emit import safeEmit as _emit
+from ..runtime.events.emit import safe_emit as _emit
 
 import json
 import os

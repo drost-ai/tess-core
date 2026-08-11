@@ -3,7 +3,7 @@ from .._utils import drop_none_deep as _without_none_values
 
 from .._utils import signal_aborted as _signal_aborted
 
-from ..runtime.workspace import createGitWorktree
+from ..runtime.workspace import create_git_worktree
 from typing import Any
 
 
@@ -28,7 +28,7 @@ def _subagent_started_payload(prepared: dict[str, Any], args: dict[str, Any], ba
 
 async def _create_subagent_worktree(context: dict[str, Any], agent_id: str, child_name: str) -> str:
     suffix = _slugify(child_name) or agent_id[-8:]
-    result = await createGitWorktree({"cwd": context["session"]["cwd"], "requestedName": suffix})
+    result = await create_git_worktree(cwd=context["session"]["cwd"], name=suffix)
     return result["targetPath"]
 
 

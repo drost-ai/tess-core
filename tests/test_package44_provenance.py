@@ -148,7 +148,7 @@ class Package44ProvenanceTests(AgentCoreTestCase):
         self.assertTrue(is_genuine_user_request(original))
         self.assertFalse(is_genuine_user_request(copied))
         self.assertNotEqual(original["metadata"], copied["metadata"])
-        event = core.createRuntimeEvent(
+        event = core.create_runtime_event(
             {
                 "event": "agent.no_progress",
                 "data": {

@@ -4,11 +4,11 @@ import copy
 from typing import Any, Callable, Mapping
 
 from .._utils import maybe_await
-from .exception_groups import aggregateRuntimeFailures
+from .exception_groups import aggregate_runtime_failures
 from ..authority.executable_source_policy import selectMcpBootstrapServers
 
 
-async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, Any]:
+async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
     binding = args["binding"]
@@ -28,7 +28,7 @@ async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, 
         )
         workspace = bootstrap_args.get("workspaceController")
         if workspace is None and has_session:
-            workspace = factories["createWorkspace"]({"session": session, "config": config})
+            workspace = factories["createWorkspace"](session=session, config=config)
             refresh = getattr(workspace, "refresh", None)
             if callable(refresh):
                 await maybe_await(refresh())
@@ -111,7 +111,7 @@ async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, 
         tools = compose_tools()
         slash_commands = _dedupe_slash_commands(plugins.get("commands") or [])
         if authority is None:
-            factories["augmentConfigTools"](
+            factories["augment_config_tools"](
                 config, [_tool_name(tool) for tool in tools if _tool_name(tool)]
             )
 
@@ -124,7 +124,7 @@ async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, 
                 tools = compose_tools()
                 components["tools"] = tools
                 if authority is None:
-                    factories["augmentConfigTools"](
+                    factories["augment_config_tools"](
                         config, [_tool_name(tool) for tool in tools if _tool_name(tool)]
                     )
             return {**result, "tools": tools if result.get("changed") else None}
@@ -151,7 +151,7 @@ async def prepareRuntimeSessionComponents(args: Mapping[str, Any]) -> dict[str, 
                 except BaseException as exc:
                     failures.append(exc)
             if failures:
-                raise aggregateRuntimeFailures(
+                raise aggregate_runtime_failures(
                     "One or more session runtime components failed to close.", failures
                 )
 

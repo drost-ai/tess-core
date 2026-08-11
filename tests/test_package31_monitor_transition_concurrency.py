@@ -222,7 +222,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
             changed = [data for event, data in events if event == "monitor.status_changed"]
             self.assertEqual((len(created), len(changed)), (1, 1))
             self.assertEqual(changed[0]["transition_id"], next(row["transition_id"] for row in stops if row["changed"]))
-            typed = core.createRuntimeEvent(
+            typed = core.create_runtime_event(
                 {"event": "monitor.status_changed", "data": changed[0]}
             )
             self.assertEqual(typed["payload"]["transitionId"], changed[0]["transition_id"])

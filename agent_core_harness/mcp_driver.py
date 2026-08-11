@@ -191,7 +191,7 @@ async def bootstrap_mcp_plugin_runtime(data: dict[str, Any], sandbox: ScenarioSa
     state["config"] = config
     state["session"] = session
     events = state.setdefault("mcp_events", [])
-    boot = await core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False})
+    boot = await core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False})
     boot["subscribeEvents"](lambda envelope: events.append({"event": envelope.get("event"), "data": _json_safe(envelope.get("data") or {})}))
     runtime = boot.get("mcpRuntime")
     state["mcp_bootstrap_runtime"] = boot

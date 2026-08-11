@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..runtime.identifiers import parseSessionId, tryParseBridgeId, tryParseRemoteSessionId
+from ..runtime.identifiers import parse_session_id, try_parse_bridge_id, try_parse_remote_session_id
 from ..storage import (
     get_state_root,
     hydrate_session_head_from_body_bytes,
@@ -32,7 +32,7 @@ async def analyzeBridgeRecovery(
     excludedBridgeIds: list[str] | None = None,
     logicallySupersededBridgeIds: list[str] | None = None,
 ) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     root = Path(get_state_root()).resolve()
     excluded = set(excludedBridgeIds or [])
     superseded = set(logicallySupersededBridgeIds or [])
@@ -53,7 +53,7 @@ async def analyzeBridgeRecovery(
         raise BridgeRecoveryAnalysisError("Session record failed bridge recovery identity validation.")
 
     remotes, remote_sources, remote_manifest, remote_blocked = _scan_records(
-        root / "remote-sessions", ".json", tryParseRemoteSessionId, MAX_RECORD_BYTES
+        root / "remote-sessions", ".json", try_parse_remote_session_id, MAX_RECORD_BYTES
     )
     sources.extend(remote_sources)
     blocked.extend(remote_blocked)
@@ -204,7 +204,7 @@ def _scan_bridges(directory: Path, excluded: set[str]):
 def _bridge_primary_id(value: str) -> str | None:
     if value.endswith((".inbox", ".events", ".ledger")):
         return None
-    return tryParseBridgeId(value)
+    return try_parse_bridge_id(value)
 
 
 def _read_source(path: Path, max_bytes: int, *, required: bool) -> bytes:
@@ -279,7 +279,7 @@ def _claim(record, owner, owner_id, claims, blocked):
         if generation is not None:
             blocked.append(f"{label}_generation_without_pointer:{owner_id}")
         return
-    if not tryParseBridgeId(bridge_id):
+    if not try_parse_bridge_id(bridge_id):
         blocked.append(f"{label}_pointer_malformed:{owner_id}")
         return
     claim = {"owner": owner, "ownerId": owner_id, "bridgeId": bridge_id}

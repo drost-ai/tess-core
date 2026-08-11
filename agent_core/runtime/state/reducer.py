@@ -7,7 +7,7 @@ from typing import Any
 
 from ..._utils import now_iso
 from .background import BACKGROUND_RUNTIME_STATE_EVENTS, reduce_background_runtime_state
-from .compaction import reduceCompactionHeadroom
+from .compaction import reduce_compaction_headroom
 from .mcp import MCP_RUNTIME_STATE_EVENTS as _MCP_RUNTIME_STATE_EVENTS
 from .mcp import reduce_mcp_runtime_state as _reduce_mcp_runtime_state
 from .shared import (
@@ -20,9 +20,9 @@ from .shared import (
     _normalize_daemon_phase,
     _normalize_pressure_level,
     _session_title_from_summary,
-    summarizeSessionRecord,
+    summarize_session_record,
 )
-def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+def reduce_runtime_state(state: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
     typ = event_kind(event)
     if typ == "provider.prompt_cache":
         return state
@@ -36,7 +36,7 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
 
     if typ == "session.activated":
         summary = data.get("session") or data
-        session_summary = summarizeSessionRecord(summary)
+        session_summary = summarize_session_record(summary)
         session_id = event.get("sessionId") or session_summary.get("id") or _field(data, "sessionId", "session_id") or ""
         session_summary["id"] = session_id
         remote_session_id = _field(summary, "remoteSessionId", "remote_session_id")
@@ -250,7 +250,7 @@ def reduceRuntimeState(state: dict[str, Any], event: dict[str, Any]) -> dict[str
             "updatedAt": timestamp,
         }
     elif typ == "compaction.headroom":
-        next_state["compaction"] = reduceCompactionHeadroom(
+        next_state["compaction"] = reduce_compaction_headroom(
             next_state.get("compaction", {}), data, timestamp
         )
     elif typ == "compaction.started":

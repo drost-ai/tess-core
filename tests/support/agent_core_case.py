@@ -56,16 +56,16 @@ def bind_test_runtime(session, legacy=None):
     refresh = legacy.pop("refreshMcpToolRegistry", lambda: None)
     daemon_binding = (
         {"state": "connected", "client": daemon}
-        if daemon is not None and core.isTaskSupervisorGateway(daemon)
+        if daemon is not None and core.is_task_supervisor_gateway(daemon)
         else {"state": "unavailable", "reason": daemon_reason}
     )
-    return core.createAgentRuntimeBindings(
+    return core.create_agent_runtime_bindings(
         {
             "tools": tools,
             "emitEvent": emit_event,
             "daemon": daemon_binding,
             "refreshMcpToolRegistry": refresh,
-            "sessionBinding": core.createRuntimeSessionBinding(session["id"], 1, 1),
+            "sessionBinding": core.create_runtime_session_binding(session["id"], 1, 1),
             "questionPolicy": {"interactive": interactive, "askQuestion": ask_question},
             **legacy,
         }

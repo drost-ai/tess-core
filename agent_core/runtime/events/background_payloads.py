@@ -18,7 +18,7 @@ from .shared import (
     _task_snapshot_payload,
 )
 
-def backgroundTypedPayload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+def background_typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
     if event == "daemon.snapshot":
         return "daemon.snapshot", {
             "phase": _optional_string(_field(data, "phase")),

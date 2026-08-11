@@ -36,19 +36,19 @@ class RuntimePaths:
 
 
 @dataclass(slots=True)
-class _RuntimePathScope:
+class _runtime_path_scope:
     paths: RuntimePaths
     immutable: bool
 
 
-_active_runtime_paths: contextvars.ContextVar[_RuntimePathScope | None] = contextvars.ContextVar(
+_active_runtime_paths: contextvars.ContextVar[_runtime_path_scope | None] = contextvars.ContextVar(
     "agent_core_runtime_paths",
     default=None,
 )
 _configured_runtime_paths: RuntimePaths | None = None
 
 
-def expandRuntimeHome(rawPath: str) -> str:
+def expand_runtime_home(rawPath: str) -> str:
     if rawPath == "~":
         return str(Path.home())
     if rawPath.startswith("~/"):
@@ -56,9 +56,9 @@ def expandRuntimeHome(rawPath: str) -> str:
     return rawPath
 
 
-def resolveRuntimePaths(cwd: str | None = None, candidate: str | None = None) -> RuntimePaths:
+def resolve_runtime_paths(cwd: str | None = None, candidate: str | None = None) -> RuntimePaths:
     raw = candidate or os.environ.get("AGENT_CORE_HOME") or DEFAULT_RUNTIME_HOME
-    expanded = expandRuntimeHome(raw)
+    expanded = expand_runtime_home(raw)
     home = os.path.normpath(expanded if os.path.isabs(expanded) else os.path.join(cwd or os.getcwd(), expanded))
     trust = os.path.join(home, "trust")
     daemon = os.path.join(home, "daemon")
@@ -86,9 +86,9 @@ def resolveRuntimePaths(cwd: str | None = None, candidate: str | None = None) ->
     )
 
 
-def configureActiveRuntimePaths(runtimeHome: str) -> RuntimePaths:
+def configure_active_runtime_paths(runtimeHome: str) -> RuntimePaths:
     global _configured_runtime_paths
-    next_paths = resolveRuntimePaths(candidate=runtimeHome)
+    next_paths = resolve_runtime_paths(candidate=runtimeHome)
     scoped = _active_runtime_paths.get()
     if scoped is None:
         _configured_runtime_paths = next_paths
@@ -102,17 +102,17 @@ def configureActiveRuntimePaths(runtimeHome: str) -> RuntimePaths:
     return scoped.paths
 
 
-def getActiveRuntimePaths() -> RuntimePaths:
+def get_active_runtime_paths() -> RuntimePaths:
     scoped = _active_runtime_paths.get()
-    return scoped.paths if scoped is not None else _configured_runtime_paths or resolveRuntimePaths()
+    return scoped.paths if scoped is not None else _configured_runtime_paths or resolve_runtime_paths()
 
 
-def getScopedRuntimePaths() -> RuntimePaths | None:
+def get_scoped_runtime_paths() -> RuntimePaths | None:
     scoped = _active_runtime_paths.get()
     return scoped.paths if scoped is not None else None
 
 
-def resetActiveRuntimePaths() -> None:
+def reset_active_runtime_paths() -> None:
     global _configured_runtime_paths
     _configured_runtime_paths = None
 
@@ -121,12 +121,12 @@ class RuntimePathsScope:
     def __init__(self, paths: RuntimePaths, *, immutable: bool = True):
         self.paths = paths
         self.immutable = immutable
-        self._token: contextvars.Token[_RuntimePathScope | None] | None = None
+        self._token: contextvars.Token[_runtime_path_scope | None] | None = None
 
     def __enter__(self) -> RuntimePaths:
         if self._token is not None:
             raise RuntimeError("Runtime path scope is already active.")
-        scope = _RuntimePathScope(self.paths, self.immutable)
+        scope = _runtime_path_scope(self.paths, self.immutable)
         self._token = _active_runtime_paths.set(scope)
         return scope.paths
 
@@ -142,7 +142,7 @@ class RuntimePathsScope:
         self.__exit__(exc_type, exc, tb)
 
 
-def runWithRuntimePaths(
+def run_with_runtime_paths(
     paths: RuntimePaths,
     fn: Callable[[], Any] | None = None,
     options: dict[str, Any] | None = None,

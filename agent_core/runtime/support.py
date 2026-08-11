@@ -39,7 +39,7 @@ class StagedRuntimeSource:
         self._events.clear()
 
 
-def installComponentSurface(runtime: dict[str, Any], components: dict[str, Any]) -> None:
+def install_component_surface(runtime: dict[str, Any], components: dict[str, Any]) -> None:
     runtime.update(
         {
             "tools": components["tools"],
@@ -54,18 +54,18 @@ def installComponentSurface(runtime: dict[str, Any], components: dict[str, Any])
     )
 
 
-async def acquireCommit(lock: threading.Lock) -> None:
+async def acquire_commit(lock: threading.Lock) -> None:
     while not lock.acquire(blocking=False):
         await asyncio.sleep(0.001)
 
 
-async def maybeCall(callableValue: Any) -> Any:
+async def maybe_call(callableValue: Any) -> Any:
     if not callable(callableValue):
         return None
     return await maybe_await(callableValue())
 
 
-async def closeMany(closers: list[Any]) -> list[BaseException]:
+async def close_many(closers: list[Any]) -> list[BaseException]:
     failures: list[BaseException] = []
     for closer in closers:
         if not callable(closer):
@@ -77,29 +77,29 @@ async def closeMany(closers: list[Any]) -> list[BaseException]:
     return failures
 
 
-def hasMethod(value: Any, name: str) -> bool:
-    return callable(getMethod(value, name))
+def has_method(value: Any, name: str) -> bool:
+    return callable(get_method(value, name))
 
 
-def getMethod(value: Any, name: str) -> Any:
+def get_method(value: Any, name: str) -> Any:
     if isinstance(value, Mapping):
         return value.get(name)
     return getattr(value, name, None) if value is not None else None
 
 
-async def callMethod(value: Any, name: str, *args: Any) -> Any:
-    method = getMethod(value, name)
+async def call_method(value: Any, name: str, *args: Any) -> Any:
+    method = get_method(value, name)
     if not callable(method):
         return None
     return await maybe_await(method(*args))
 
 
-def runtimePathGraphId(paths: RuntimePaths) -> str:
+def runtime_path_graph_id(paths: RuntimePaths) -> str:
     raw = "\0".join(str(getattr(paths, field)) for field in paths.__dataclass_fields__)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def augmentConfigTools(config: dict[str, Any], runtimeToolNames: list[str]) -> None:
+def augment_config_tools(config: dict[str, Any], runtimeToolNames: list[str]) -> None:
     tools = config.setdefault("tools", [])
     allowed = config.setdefault("allowedTools", [])
     defaults = set(getDefaultToolList())
@@ -116,7 +116,7 @@ def augmentConfigTools(config: dict[str, Any], runtimeToolNames: list[str]) -> N
             allowed.append(name)
 
 
-def taskSnapshotFromState(getState: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+def task_snapshot_from_state(getState: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     tasks = getState().get("tasks", {})
     return {
         "total": tasks.get("total", 0),
@@ -129,7 +129,7 @@ def taskSnapshotFromState(getState: Callable[[], dict[str, Any]]) -> dict[str, A
     }
 
 
-def daemonSnapshotPayload(status: Mapping[str, Any]) -> dict[str, Any]:
+def daemon_snapshot_payload(status: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "phase": _field(status, "phase"),
         "epoch": _field(status, "epoch"),
@@ -143,7 +143,7 @@ def daemonSnapshotPayload(status: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def defaultRuntimeComponentFactories() -> dict[str, Any]:
+def default_runtime_component_factories() -> dict[str, Any]:
     # Call-time imports: these factories pull in the full component graph,
     # which must not load when only the light support helpers are needed.
     from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
@@ -151,15 +151,15 @@ def defaultRuntimeComponentFactories() -> dict[str, Any]:
     from ..remote.bridge_runtime import createBridgeRuntime
     from ..mcp import createMcpRuntime
     from ..tools import createBuiltinTools
-    from .workspace import createWorkspaceController
+    from .workspace import create_workspace_controller
 
     return {
         "enforceAuthority": enforceSessionAgentAuthority,
         "filterAuthorityTools": filterToolsForAgentAuthority,
-        "createWorkspace": createWorkspaceController,
+        "createWorkspace": create_workspace_controller,
         "load_plugins": loadPluginRuntime,
         "createMcp": createMcpRuntime,
         "createBridge": createBridgeRuntime,
         "createBuiltinTools": createBuiltinTools,
-        "augmentConfigTools": augmentConfigTools,
+        "augment_config_tools": augment_config_tools,
     }

@@ -60,7 +60,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 "createTaskRuntime",
                 fake_tasks,
             ), mock.patch.object(runtime_module, "createCollaborationRuntime", fake_collaboration):
-                boot = run(core.bootstrapRuntime({"session": session, "config": config, "enableBridge": True, "daemonEnabled": False}))
+                boot = run(core.bootstrap_runtime({"session": session, "config": config, "enableBridge": True, "daemonEnabled": False}))
                 run(boot["close"]())
 
             self.assertEqual(close_order, ["collaboration", "tasks", "monitors", "bridge", "mcp"])
@@ -122,7 +122,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 "createBridgeRuntime",
                 fake_bridge,
             ):
-                boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True}))
+                boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True}))
                 run(boot["close"]())
 
             self.assertEqual(close_order, ["unsubscribe", "daemon", "bridge", "mcp"])
@@ -167,7 +167,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 return {"setSession": lambda *_args: order.append(name), "setForegroundBusy": lambda _busy: None}
 
             boot = run(
-                core.bootstrapRuntime(
+                core.bootstrap_runtime(
                     {
                         "session": session,
                         "config": config,
@@ -210,7 +210,7 @@ class RuntimeBootstrapLifecycleTests(AgentCoreTestCase):
                 closed.append(True)
 
             daemon = {"subscribe": subscribe, "getStatus": get_status, "close": close}
-            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonClient": daemon}))
+            boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonClient": daemon}))
             self.assertIsNone(boot["monitors"])
             self.assertIsNone(boot["tasks"])
             self.assertIsNone(boot["collaboration"])

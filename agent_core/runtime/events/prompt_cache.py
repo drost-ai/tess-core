@@ -24,7 +24,7 @@ _PROVIDER_REASONS = PROMPT_CACHE_PROVIDER_REASONS
 _STATE_STATUSES = {"committed", "stale", "unavailable", "recorded"}
 
 
-def promptCacheEventPayload(data: dict[str, Any]) -> dict[str, Any]:
+def prompt_cache_event_payload(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "phase": _closed(data.get("phase"), _PHASES) or "state_error",
         "mode": _closed(data.get("mode"), _MODES),

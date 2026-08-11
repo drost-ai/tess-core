@@ -151,7 +151,7 @@ async def update_child_agent_status(data: dict[str, Any], _sandbox: ScenarioSand
 
 async def bootstrap_remote_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, config = await ensure_session_config(data, sandbox, state)
-    boot = await core.bootstrapRuntime(
+    boot = await core.bootstrap_runtime(
         {
             "session": session,
             "config": config,
@@ -180,12 +180,12 @@ async def bootstrap_remote_runtime(data: dict[str, Any], sandbox: ScenarioSandbo
 
 async def project_remote_events(data: dict[str, Any], sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session, _config = await ensure_session_config(data, sandbox, state)
-    runtime_state = core.createInitialRuntimeState(session)
+    runtime_state = core.create_initial_runtime_state(session)
     projected = []
     records = [*(state.get("remote_events") or []), *(state.get("collaboration_events") or []), *(_bootstrap_event_records(state))]
     for record in records:
-        typed = core.createRuntimeEvent({"event": record.get("event"), "data": record.get("data") or {}, "defaultSessionId": session["id"]})
-        runtime_state = core.reduceRuntimeState(runtime_state, typed)
+        typed = core.create_runtime_event({"event": record.get("event"), "data": record.get("data") or {}, "defaultSessionId": session["id"]})
+        runtime_state = core.reduce_runtime_state(runtime_state, typed)
         projected.append({"event": typed.get("event"), "payload": typed.get("payload")})
     state["remote_runtime_state"] = _json_safe(runtime_state)
     state["remote_projected_events"] = _json_safe(projected)

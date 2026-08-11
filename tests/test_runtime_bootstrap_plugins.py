@@ -11,7 +11,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "default"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
-            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
+            boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False}))
             self.assertEqual(boot["getState"]()["session"]["activeSessionId"], session["id"])
             envelopes = []
             unsubscribe = boot["subscribeEvents"](envelopes.append)
@@ -49,7 +49,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
             dynamic_tool = SimpleNamespace(name="RemoteEcho")
             mcp_runtime = {"createToolDefinitions": lambda: [dynamic_tool], "close": lambda: None}
 
-            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False, "mcpRuntime": mcp_runtime, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))
+            boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False, "mcpRuntime": mcp_runtime, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))
             tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
             self.assertIn("RemoteEcho", tool_names)
             self.assertIn("RemoteEcho", config["tools"])
@@ -342,7 +342,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 return {"createToolDefinitions": lambda: [SimpleNamespace(name="McpFromPlugin")], "close": lambda: None}
 
             with mock.patch.object(mcp_module, "createMcpRuntime", fake_mcp):
-                boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
+                boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False}))
                 tool_names = [getattr(tool, "name", None) or tool.get("name") for tool in boot["tools"]]
                 command_names = [command["name"] for command in boot["slashCommands"]]
                 server_names = [server["name"] for server in captured["servers"]]
@@ -451,7 +451,7 @@ class RuntimeBootstrapPluginTests(AgentCoreTestCase):
                 "createBridgeRuntime",
                 fake_bridge,
             ):
-                boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))
+                boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonClient": daemon, "enableBridge": True, "bridgeName": "qa", "bridgeStartPolling": False}))
                 self.assertIsNotNone(boot["workspace"])
                 self.assertIsNone(boot["monitorRuntime"])
                 self.assertIsNone(boot["taskRuntime"])

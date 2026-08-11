@@ -84,7 +84,7 @@ class ContextContinuationTests(AgentCoreTestCase):
         self.assertFalse(direct_legacy["applied"])
         self.assertEqual(direct_legacy["step"]["mode"], "none")
 
-        historical = core.createRuntimeEvent(
+        historical = core.create_runtime_event(
             {
                 "event": "context_relief.applied",
                 "timestamp": "2026-01-01T00:00:00Z",
@@ -174,7 +174,7 @@ class ContextContinuationTests(AgentCoreTestCase):
                 return lambda: None
 
             daemon = {"subscribe": subscribe, "getStatus": lambda: None, "close": lambda: None}
-            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemon": daemon}))
+            boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemon": daemon}))
             state = boot["getState"]()
             self.assertEqual(state["compaction"]["selectedMode"], "api_microcompact")
             self.assertEqual(state["compaction"]["appliedModes"], [])
@@ -186,7 +186,7 @@ class ContextContinuationTests(AgentCoreTestCase):
             run(bridge["recordEvent"]("context_relief.applied", relief_data))
             bridge_events = run(core.load_bridge_events(bridge["bridge"]["id"]))
             self.assertEqual(bridge_events[-1]["data"]["modes"], [])
-            typed = core.createRuntimeEvent({"event": bridge_events[-1]["event"], "data": bridge_events[-1]["data"]})
+            typed = core.create_runtime_event({"event": bridge_events[-1]["event"], "data": bridge_events[-1]["data"]})
             self.assertEqual(typed["payload"]["tokensSavedEstimate"], 321)
             self.assertEqual(typed["payload"]["reinjectionSectionCount"], 2)
         finally:

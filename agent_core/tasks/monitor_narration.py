@@ -7,7 +7,7 @@ from ..config import ensureProviderForModelSelection, normalizeEffortForModel
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
 from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
-from ..runtime.secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolve_provider_config_secrets
 
 
 async def _author_monitor_update(config: dict[str, Any], session: dict[str, Any], monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
@@ -64,7 +64,7 @@ async def _author_monitor_update_with_provider(config: dict[str, Any], session: 
         ],
         "tools": [],
     }
-    resolved_config = await resolveProviderConfigSecrets(config)
+    resolved_config = await resolve_provider_config_secrets(config)
     if provider == "openai":
         token = resolved_config.get("openaiToken")
         if not token:

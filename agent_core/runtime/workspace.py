@@ -10,7 +10,7 @@ from typing import Any
 from ..storage import find_git_root
 
 
-async def captureWorkspaceSnapshot(cwd: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
+async def capture_workspace_snapshot(cwd: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
     options = options or {}
     git_root = find_git_root(cwd)
     branch = None
@@ -34,25 +34,28 @@ async def captureWorkspaceSnapshot(cwd: str, options: dict[str, Any] | None = No
     return {key: value for key, value in snapshot.items() if value is not None}
 
 
-async def hydrateSessionWorkspaceMetadata(session: dict[str, Any], options: dict[str, Any] | None = None) -> None:
-    snapshot = await captureWorkspaceSnapshot(session["cwd"], options)
+async def hydrate_session_workspace_metadata(session: dict[str, Any], options: dict[str, Any] | None = None) -> None:
+    snapshot = await capture_workspace_snapshot(session["cwd"], options)
     metadata = session.setdefault("metadata", {})
     for key in ("workspaceId", "workspaceName", "workspaceRoot", "mode", "gitRoot", "gitBranch", "prNumber", "prUrl"):
         meta_key = "workspaceMode" if key == "mode" else key
         metadata[meta_key] = snapshot.get(key)
 
 
-async def createGitWorktree(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
-    cwd = args["cwd"]
+async def create_git_worktree(
+    *,
+    cwd: str,
+    name: str | None = None,
+    path: str | None = None,
+    branch_name: str | None = None,
+) -> dict[str, Any]:
     git_root = find_git_root(cwd)
     if not git_root:
         raise RuntimeError("Current directory is not inside a git repository.")
-    requested_name = args.get("requestedName") or args.get("name") or args.get("branch") or "tess"
-    safe_name = _slugify_worktree_name(str(requested_name)) or f"tess-{uuid.uuid4().hex[:6]}"
+    safe_name = _slugify_worktree_name(str(name or "tess")) or f"tess-{uuid.uuid4().hex[:6]}"
     suffix = uuid.uuid4().hex[:6]
-    target_path = args.get("path") or os.path.join(os.path.dirname(git_root), f"{os.path.basename(git_root)}-{safe_name}-{suffix}")
-    branch_name = args.get("branchName") or f"tess/{safe_name}-{suffix}"
+    target_path = path or os.path.join(os.path.dirname(git_root), f"{os.path.basename(git_root)}-{safe_name}-{suffix}")
+    branch_name = branch_name or f"tess/{safe_name}-{suffix}"
     if os.path.exists(target_path):
         raise RuntimeError(f"Worktree target already exists: {target_path}")
     if _git_branch_exists(git_root, branch_name):
@@ -61,13 +64,17 @@ async def createGitWorktree(args: dict[str, Any] | None = None, **kwargs: Any) -
     return {"gitRoot": git_root, "targetPath": target_path, "branchName": branch_name, "requestedName": safe_name}
 
 
-def createWorkspaceController(args: dict[str, Any] | None = None, **kwargs: Any) -> Any:
-    args = {**(args or {}), **kwargs}
-    session = args.get("session") or {"cwd": args.get("cwd"), "metadata": {"originalCwd": args.get("cwd")}}
-    return _WorkspaceController(session, args.get("config") or {})
+def create_workspace_controller(
+    *,
+    session: dict[str, Any] | None = None,
+    config: dict[str, Any] | None = None,
+    cwd: str | None = None,
+) -> Any:
+    session = session or {"cwd": cwd, "metadata": {"originalCwd": cwd}}
+    return _workspace_controller(session, config or {})
 
 
-def parsePullRequestReference(value: str | None) -> dict[str, Any]:
+def parse_pull_request_reference(value: str | None) -> dict[str, Any]:
     if not value:
         return {}
     match = re.search(r"(?:pull/|#)(\d+)|\b(\d+)\b", value)
@@ -79,7 +86,7 @@ def parsePullRequestReference(value: str | None) -> dict[str, Any]:
     return result
 
 
-def summarizeWorkspaceCapabilities(snapshot: dict[str, Any]) -> dict[str, Any]:
+def summarize_workspace_capabilities(snapshot: dict[str, Any]) -> dict[str, Any]:
     integrations = snapshot.get("integrations") if isinstance(snapshot.get("integrations"), dict) else {}
     tmux = integrations.get("tmux") if isinstance(integrations.get("tmux"), dict) else {}
     ide = integrations.get("ide") if isinstance(integrations.get("ide"), dict) else {}
@@ -94,7 +101,7 @@ def summarizeWorkspaceCapabilities(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-class _WorkspaceController:
+class _workspace_controller:
     def __init__(self, session: dict[str, Any], config: dict[str, Any]):
         self.activeSession = session
         self.config = config
@@ -110,7 +117,7 @@ class _WorkspaceController:
     async def refresh(self) -> dict[str, Any]:
         metadata = self.activeSession.setdefault("metadata", {})
         integrations = await _detect_workspace_integrations(self.activeSession)
-        self.snapshot = await captureWorkspaceSnapshot(
+        self.snapshot = await capture_workspace_snapshot(
             self.activeSession["cwd"],
             {
                 "originalCwd": metadata.get("originalCwd"),
@@ -123,11 +130,11 @@ class _WorkspaceController:
 
     async def describe(self) -> dict[str, Any]:
         snapshot = await self.refresh()
-        return {"snapshot": snapshot, "capabilities": summarizeWorkspaceCapabilities(snapshot), "integrations": snapshot.get("integrations") or {}}
+        return {"snapshot": snapshot, "capabilities": summarize_workspace_capabilities(snapshot), "integrations": snapshot.get("integrations") or {}}
 
     async def createWorktree(self, requestedName: str | None = None) -> dict[str, Any]:
         metadata = self.activeSession.setdefault("metadata", {})
-        worktree = await createGitWorktree(cwd=self.activeSession["cwd"], name=requestedName)
+        worktree = await create_git_worktree(cwd=self.activeSession["cwd"], name=requestedName)
         metadata["worktreePath"] = worktree["targetPath"]
         self.activeSession["cwd"] = worktree["targetPath"]
         snapshot = await self.refresh()

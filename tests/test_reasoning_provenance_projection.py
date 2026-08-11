@@ -16,7 +16,7 @@ from tests.test_package43_review_regressions import _Sink, _completed, _request
 
 class ReasoningProvenanceProjectionTests(AgentCoreTestCase):
     def test_projects_only_closed_reasoning_provenance(self):
-        summary = core.createRuntimeEvent(
+        summary = core.create_runtime_event(
             {
                 "event": "message.assistant.thinking.partial",
                 "data": {
@@ -39,7 +39,7 @@ class ReasoningProvenanceProjectionTests(AgentCoreTestCase):
             },
         )
 
-        hidden = core.createRuntimeEvent(
+        hidden = core.create_runtime_event(
             {
                 "event": "message.assistant.thinking.partial",
                 "data": {

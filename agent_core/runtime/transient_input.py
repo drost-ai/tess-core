@@ -7,7 +7,7 @@ from ..payloads.media_persistence import sanitizeMediaForPersistence
 from ..storage.message_origin import is_genuine_user_request as _is_genuine_user_request
 
 
-def createTransientExecutionSession(
+def create_transient_execution_session(
     session: dict[str, Any],
     overlay: Any,
 ) -> dict[str, Any]:
@@ -41,7 +41,7 @@ def createTransientExecutionSession(
     return execution
 
 
-def syncTransientExecutionSession(
+def sync_transient_execution_session(
     canonical_session: dict[str, Any],
     execution_session: dict[str, Any],
 ) -> None:
@@ -49,7 +49,7 @@ def syncTransientExecutionSession(
     canonical_session.update(sanitizeMediaForPersistence(execution_session))
 
 
-def runtimeWithSanitizedEvents(runtime: dict[str, Any]) -> dict[str, Any]:
+def runtime_with_sanitized_events(runtime: dict[str, Any]) -> dict[str, Any]:
     emit = runtime.get("emitEvent")
     if not callable(emit):
         return runtime

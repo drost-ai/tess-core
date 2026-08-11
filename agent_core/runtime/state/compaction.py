@@ -5,7 +5,7 @@ from typing import Any
 from .shared import _field
 
 
-def reduceCompactionHeadroom(
+def reduce_compaction_headroom(
     current: dict[str, Any],
     data: dict[str, Any],
     timestamp: Any,
@@ -42,4 +42,4 @@ def reduceCompactionHeadroom(
     }
 
 
-__all__ = ["reduceCompactionHeadroom"]
+__all__ = ["reduce_compaction_headroom"]

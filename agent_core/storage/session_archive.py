@@ -12,7 +12,7 @@ from .message_history import (
 from .io_executor import run_storage_io as _run_storage_io
 import json
 
-from ..runtime.identifiers import parseSessionId
+from ..runtime.identifiers import parse_session_id
 from .json_io import read_json_file_tolerant, with_record_transaction
 from .paths import session_path, session_transcript_log_path
 from .session_schema_v2 import commit_session_v2, hydrate_persisted_session

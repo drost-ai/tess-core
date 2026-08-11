@@ -6,7 +6,7 @@ from urllib.error import HTTPError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from ..runtime.secrets import resolveMcpServerConfigSecrets
+from ..runtime.secrets import resolve_mcp_server_config_secrets
 
 
 class McpResourceResponse:
@@ -63,7 +63,7 @@ async def fetchMcpResourceWithBoundCredentials(
     _, current_origin = _safe_http_url(resource_uri, "MCP resource")
     if current_origin != configured_origin:
         raise ValueError("MCP resource origin does not match the configured server")
-    resolved = await resolveMcpServerConfigSecrets(server)
+    resolved = await resolve_mcp_server_config_secrets(server)
     redirect_limit = max(0, min(int(values.get("maxRedirects", maxRedirects) if values.get("maxRedirects", maxRedirects) is not None else 5), 10))
     current = resource_uri
     for redirects in range(redirect_limit + 1):

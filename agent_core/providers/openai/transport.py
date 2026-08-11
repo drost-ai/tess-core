@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...runtime.events.emit import safeEmit as _emit
+from ...runtime.events.emit import safe_emit as _emit
 
 import importlib
 from types import SimpleNamespace

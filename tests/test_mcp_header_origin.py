@@ -9,7 +9,7 @@ from pathlib import Path
 
 import agent_core._facade as core
 from agent_core.authority.mcp_origin_policy import fetchMcpResourceWithBoundCredentials
-from agent_core.runtime.secrets import authorizeRuntimeSecretWrite, storeRuntimeSecret
+from agent_core.runtime.secrets import authorize_runtime_secret_write, store_runtime_secret
 
 
 class _Server:
@@ -55,11 +55,11 @@ class McpHeaderOriginTests(unittest.IsolatedAsyncioTestCase):
     async def secret_header(self, value: str) -> dict:
         purpose = "mcp_header"
         key = "origin-test:authorization"
-        return await storeRuntimeSecret(
+        return await store_runtime_secret(
             purpose=purpose,
             idempotencyKey=key,
             secret=value.encode(),
-            authorization=authorizeRuntimeSecretWrite(purpose=purpose, idempotencyKey=key),
+            authorization=authorize_runtime_secret_write(purpose=purpose, idempotencyKey=key),
         )
 
     @staticmethod

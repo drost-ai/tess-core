@@ -106,7 +106,7 @@ class RuntimeActivationSupersededError(RuntimeError):
         self.sessionId = sessionId
 
 
-def createRuntimeSessionBinding(
+def create_runtime_session_binding(
     sessionId: str,
     generation: int,
     configRevision: int,
@@ -131,7 +131,7 @@ def createRuntimeSessionBinding(
     )
 
 
-def createRuntimeActivationContext(args: Mapping[str, Any]) -> RuntimeActivationContext:
+def create_runtime_activation_context(args: Mapping[str, Any]) -> RuntimeActivationContext:
     retired = args["retiredGeneration"]
     retired_generation = (
         retired
@@ -154,7 +154,7 @@ def createRuntimeActivationContext(args: Mapping[str, Any]) -> RuntimeActivation
     )
 
 
-def sameRuntimeBinding(left: Mapping[str, Any] | None, right: Mapping[str, Any] | None) -> bool:
+def same_runtime_binding(left: Mapping[str, Any] | None, right: Mapping[str, Any] | None) -> bool:
     if left is None or right is None:
         return False
     return all(

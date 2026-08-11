@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.runtime.wake import createMailboxWakeController
+from agent_core.runtime.wake import create_mailbox_wake_controller
 from agent_core.tasks.supervisor_parts.mailbox_watch import create_mailbox_watch_loop
 
 
@@ -180,7 +180,7 @@ class WakeControllerTests(AgentCoreTestCase):
         in_flight = {"value": True}
         runtime, listeners = self._runtime(in_flight)
         resumed = []
-        controller = createMailboxWakeController({"runtime": runtime, "resume": lambda: resumed.append(1)})
+        controller = create_mailbox_wake_controller(runtime=runtime, resume=lambda: resumed.append(1))
         envelope = {"event": "subagent.message", "data": {"task_id": "t"}}
 
         listeners[0](envelope)

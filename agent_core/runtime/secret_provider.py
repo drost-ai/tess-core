@@ -7,10 +7,10 @@ from typing import Any, Iterable, Mapping
 
 from .secrets import (
     RuntimeSecretError,
-    authorizeRuntimeSecretWrite,
-    isRuntimeSecretRef,
-    resolveRuntimeSecretString,
-    storeRuntimeSecret,
+    authorize_runtime_secret_write,
+    is_runtime_secret_ref,
+    resolve_runtime_secret_string,
+    store_runtime_secret,
 )
 
 
@@ -34,7 +34,7 @@ def _provider_header_purpose(key: str) -> str:
     return "provider_api_key" if re.search(r"api[-_]?key", key, re.I) else "provider_oauth_token"
 
 
-async def normalizeRuntimeSecretValue(
+async def normalize_runtime_secret_value(
     args: Mapping[str, Any] | None = None,
     *,
     value: Any = None,
@@ -49,7 +49,7 @@ async def normalizeRuntimeSecretValue(
     accepted = tuple(values.get("acceptedPurposes", acceptedPurposes) or (selected_purpose,))
     if selected_value is None or selected_value == "":
         return None
-    if isRuntimeSecretRef(selected_value):
+    if is_runtime_secret_ref(selected_value):
         _assert_purpose(selected_value, accepted)
         return copy.deepcopy(selected_value)
     if not isinstance(selected_value, str) or selected_purpose not in _PROVIDER_SECRET_PURPOSES:
@@ -60,11 +60,11 @@ async def normalizeRuntimeSecretValue(
     idempotency_key = f"{scope}:{digest}"
     secret = bytearray(selected_value.encode("utf-8"))
     try:
-        return await storeRuntimeSecret(
+        return await store_runtime_secret(
             purpose=selected_purpose,
             secret=secret,
             idempotencyKey=idempotency_key,
-            authorization=authorizeRuntimeSecretWrite(
+            authorization=authorize_runtime_secret_write(
                 purpose=selected_purpose,
                 idempotencyKey=idempotency_key,
             ),
@@ -73,7 +73,7 @@ async def normalizeRuntimeSecretValue(
         secret[:] = b"\0" * len(secret)
 
 
-async def normalizeProviderHeaders(
+async def normalize_provider_headers(
     headers: Mapping[str, Any] | None,
     idempotencyScope: str,
 ) -> dict[str, Any]:
@@ -82,7 +82,7 @@ async def normalizeProviderHeaders(
         if not _PROVIDER_SECRET_KEY_PATTERN.search(str(key)):
             normalized[str(key)] = copy.deepcopy(value)
             continue
-        selected = await normalizeRuntimeSecretValue(
+        selected = await normalize_runtime_secret_value(
             value=value,
             purpose=_provider_header_purpose(str(key)),
             idempotencyScope=f"{idempotencyScope}:header:{key}",
@@ -93,32 +93,32 @@ async def normalizeProviderHeaders(
     return normalized
 
 
-async def normalizeCompactionProviderSecrets(
+async def normalize_compaction_provider_secrets(
     binding: Mapping[str, Any] | None,
     idempotencyScope: str,
 ) -> dict[str, Any] | None:
     if binding is None:
         return None
     result = copy.deepcopy(dict(binding))
-    result["customHeaders"] = await normalizeProviderHeaders(
+    result["customHeaders"] = await normalize_provider_headers(
         binding.get("customHeaders") if isinstance(binding.get("customHeaders"), Mapping) else {},
         idempotencyScope,
     )
     profile = binding.get("profile") if isinstance(binding.get("profile"), Mapping) else {}
     if profile.get("kind") == "openai":
-        result["openaiToken"] = await normalizeRuntimeSecretValue(
+        result["openaiToken"] = await normalize_runtime_secret_value(
             value=binding.get("openaiToken"),
             purpose="provider_oauth_token" if profile.get("apiMode") == "codex" else "provider_api_key",
             acceptedPurposes=("provider_api_key", "provider_oauth_token"),
             idempotencyScope=f"{idempotencyScope}:openai",
         )
         return result
-    result["apiKey"] = await normalizeRuntimeSecretValue(
+    result["apiKey"] = await normalize_runtime_secret_value(
         value=binding.get("apiKey"),
         purpose="provider_api_key",
         idempotencyScope=f"{idempotencyScope}:anthropic-api-key",
     )
-    result["authToken"] = await normalizeRuntimeSecretValue(
+    result["authToken"] = await normalize_runtime_secret_value(
         value=binding.get("authToken"),
         purpose="provider_oauth_token",
         acceptedPurposes=("provider_oauth_token", "provider_setup_token"),
@@ -130,13 +130,13 @@ async def normalizeCompactionProviderSecrets(
 async def _resolve_provider_value(value: Any, allowed_purposes: Iterable[str]) -> str | None:
     if value is None or isinstance(value, str):
         return value
-    if not isRuntimeSecretRef(value):
+    if not is_runtime_secret_ref(value):
         raise RuntimeSecretError("secret_store_invalid", "reference purpose or shape is invalid")
     _assert_purpose(value, allowed_purposes)
-    return await resolveRuntimeSecretString(value, value["purpose"])
+    return await resolve_runtime_secret_string(value, value["purpose"])
 
 
-async def resolveCompactionProviderSecrets(binding: Mapping[str, Any]) -> dict[str, Any]:
+async def resolve_compaction_provider_secrets(binding: Mapping[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(dict(binding))
     result["openaiToken"] = await _resolve_provider_value(
         binding.get("openaiToken"),
@@ -154,7 +154,7 @@ async def resolveCompactionProviderSecrets(binding: Mapping[str, Any]) -> dict[s
     return result
 
 
-async def resolveProviderConfigSecrets(config: Mapping[str, Any]) -> dict[str, Any]:
+async def resolve_provider_config_secrets(config: Mapping[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(dict(config))
     result["apiKey"] = await _resolve_provider_value(config.get("apiKey"), ("provider_api_key",))
     result["authToken"] = await _resolve_provider_value(
@@ -172,7 +172,7 @@ async def resolveProviderConfigSecrets(config: Mapping[str, Any]) -> dict[str, A
     return result
 
 
-def assertProviderConfigSecretsResolved(config: Mapping[str, Any]) -> dict[str, Any]:
+def assert_provider_config_secrets_resolved(config: Mapping[str, Any]) -> dict[str, Any]:
     values = [
         config.get("apiKey"),
         config.get("authToken"),
@@ -187,7 +187,7 @@ def assertProviderConfigSecretsResolved(config: Mapping[str, Any]) -> dict[str, 
     return dict(config)
 
 
-async def migrateLegacyStoredAuthSecrets(auth: Mapping[str, Any]) -> dict[str, Any]:
+async def migrate_legacy_stored_auth_secrets(auth: Mapping[str, Any]) -> dict[str, Any]:
     changed = False
     result = copy.deepcopy(dict(auth))
 
@@ -196,7 +196,7 @@ async def migrateLegacyStoredAuthSecrets(auth: Mapping[str, Any]) -> dict[str, A
         if field not in result or result[field] is None:
             return
         value = result[field]
-        result[field] = await normalizeRuntimeSecretValue(
+        result[field] = await normalize_runtime_secret_value(
             value=value,
             purpose=purpose,
             acceptedPurposes=accepted,
@@ -234,7 +234,7 @@ async def migrateLegacyStoredAuthSecrets(auth: Mapping[str, Any]) -> dict[str, A
     )
     if isinstance(result.get("customHeaders"), Mapping):
         original = result["customHeaders"]
-        result["customHeaders"] = await normalizeProviderHeaders(original, "legacy-provider-auth")
+        result["customHeaders"] = await normalize_provider_headers(original, "legacy-provider-auth")
         if any(
             _PROVIDER_SECRET_KEY_PATTERN.search(str(key)) and isinstance(value, str)
             for key, value in original.items()

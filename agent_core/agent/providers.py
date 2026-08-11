@@ -5,14 +5,14 @@ from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.errors import isProviderRequestError
 from ..providers.openai import sendOpenAiRequest
 from ..session.persistence import persist_provider_failure, persist_session
-from ..runtime.events.emit import safeEmit as _safe_emit
+from ..runtime.events.emit import safe_emit as _safe_emit
 from typing import Any
 from ..providers.partial_output_state import (
     createPartialOutputStateStore as _create_partial_output_state_store,
     finalizePartialOutputState as _finalize_partial_output_state,
 )
 from ..providers.timeouts import resolveProviderTimeoutPolicy
-from ..runtime.secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolve_provider_config_secrets
 
 
 async def _record_provider_failure_if_needed(
@@ -94,7 +94,7 @@ def _create_provider(
             }
         async def send_openai(request: dict[str, Any]) -> dict[str, Any]:
             await _heal_partial_output_commit(session, state_store)
-            resolved = await resolveProviderConfigSecrets(config)
+            resolved = await resolve_provider_config_secrets(config)
             return await sendOpenAiRequest(
                 token=resolved["openaiToken"],
                 baseUrl=resolved.get("openaiBaseUrl"),
@@ -113,7 +113,7 @@ def _create_provider(
     if not config.get("apiKey") and not config.get("authToken"):
         return {"send": lambda request: _missing_anthropic_credential_response(config, request)}
     async def send_anthropic(request: dict[str, Any]) -> dict[str, Any]:
-        resolved = await resolveProviderConfigSecrets(config)
+        resolved = await resolve_provider_config_secrets(config)
         return await sendAnthropicMessagesRequest(
             config=resolved,
             request=request,

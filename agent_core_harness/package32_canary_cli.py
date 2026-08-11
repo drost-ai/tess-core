@@ -28,7 +28,7 @@ async def _loadAnthropicCredentialFromRuntimeHome(
             },
             os.getcwd(),
         )
-        resolved = await core.resolveProviderConfigSecrets(config)
+        resolved = await core.resolve_provider_config_secrets(config)
     if resolved.get("provider") != "anthropic":
         raise Package32CanaryError(
             "provider_profile_invalid",

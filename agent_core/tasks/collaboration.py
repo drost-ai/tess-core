@@ -18,7 +18,7 @@ from . import collaboration_narration as _collaboration_narration
 from .collaboration_narration import appendAssistantCollaborationMessage, staleWorkPayload
 from ..session.persistence import persist_session
 from ..storage import list_child_agents, list_session_monitors, load_bridge, load_remote_session
-from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
+from ..runtime.generation import create_runtime_session_binding, same_runtime_binding
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 
 
@@ -40,7 +40,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
     args = {**(args or {}), **kwargs}
     session_ref = args["session"]
     config_ref = args.get("config") or {}
-    runtime_binding = args.get("runtimeBinding") or createRuntimeSessionBinding(
+    runtime_binding = args.get("runtimeBinding") or create_runtime_session_binding(
         session_ref["id"], 1, 1
     )
     runtime_paths = args.get("runtimePaths")
@@ -156,7 +156,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
             return _is_active_locked(binding)
 
     def _is_active_locked(binding: Any) -> bool:
-        return not state["closed"] and sameRuntimeBinding(binding, runtime_binding)
+        return not state["closed"] and same_runtime_binding(binding, runtime_binding)
 
     async def _emit_contained(event: str, data: dict[str, Any]) -> None:
         try:
@@ -192,7 +192,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
 
     def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
         with state_lock:
-            next_binding = createRuntimeSessionBinding(
+            next_binding = create_runtime_session_binding(
                 session["id"],
                 int(runtime_binding.get("generation") or 0) + 1,
                 int(runtime_binding.get("configRevision") or 0) + 1,

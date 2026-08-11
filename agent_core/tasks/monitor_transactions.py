@@ -5,7 +5,7 @@ import re
 from typing import Any, Callable
 
 from .._utils import maybe_await
-from ..runtime.identifiers import parseMonitorId
+from ..runtime.identifiers import parse_monitor_id
 from ..storage import (
     list_session_monitors,
     load_monitor,
@@ -26,7 +26,7 @@ async def commitMonitorMutation(
     expectedSessionId: str,
     mutate: Callable[[dict[str, Any]], Any],
 ) -> dict[str, Any]:
-    monitor_id = parseMonitorId(monitorId)
+    monitor_id = parse_monitor_id(monitorId)
     async with with_record_transaction("monitor-record", monitor_id):
         previous = await load_monitor(monitor_id)
         if not previous:

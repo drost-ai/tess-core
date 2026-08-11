@@ -6,18 +6,18 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ..runtime.agent_bindings import (
-    assertAgentRuntimeBindings,
-    materializeAgentExecutionRuntime,
+    assert_agent_runtime_bindings,
+    materialize_agent_execution_runtime,
 )
 from ..config import (
     ensureProviderForModelSelection,
     resolveFallbackProviderProfileName,
 )
 from ..providers.turn_session import createProviderTurnSession
-from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
+from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths, run_with_runtime_paths
 from ..runtime.transient_input import (
-    createTransientExecutionSession,
-    syncTransientExecutionSession,
+    create_transient_execution_session,
+    sync_transient_execution_session,
 )
 
 
@@ -26,23 +26,23 @@ async def run_with_transient_execution_session(
     run: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]],
 ) -> dict[str, Any]:
     canonical_session = args["session"]
-    assertAgentRuntimeBindings(args.get("runtime"), canonical_session.get("id"))
+    assert_agent_runtime_bindings(args.get("runtime"), canonical_session.get("id"))
     config = args["config"]
     paths = (
-        resolveRuntimePaths(candidate=config.get("runtimeHome"))
+        resolve_runtime_paths(candidate=config.get("runtimeHome"))
         if config.get("runtimeHome")
-        else getActiveRuntimePaths()
+        else get_active_runtime_paths()
     )
-    execution_session = createTransientExecutionSession(
+    execution_session = create_transient_execution_session(
         canonical_session,
         args.get("transientInputOverlay"),
     )
     values = {**args, "session": execution_session}
     try:
-        return await runWithRuntimePaths(paths, lambda: run(values))
+        return await run_with_runtime_paths(paths, lambda: run(values))
     finally:
         if execution_session is not canonical_session:
-            syncTransientExecutionSession(canonical_session, execution_session)
+            sync_transient_execution_session(canonical_session, execution_session)
 
 
 def resolve_effective_provider_turn_binding(
@@ -126,7 +126,7 @@ async def run_in_provider_turn_session(
     session = args["session"]
     config = args["config"]
     runtime_bindings = args.get("runtime")
-    runtime = materializeAgentExecutionRuntime(runtime_bindings)
+    runtime = materialize_agent_execution_runtime(runtime_bindings)
     args = {**args, "materializedRuntime": runtime}
     logical_turn_id = _resolve_logical_turn_id(args.get("logicalTurnId"))
     provider_turn_session = createProviderTurnSession(

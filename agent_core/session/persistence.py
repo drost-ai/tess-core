@@ -30,7 +30,7 @@ from ..storage import (
     mutate_session_record_transaction,
     normalize_session_revision,
 )
-from ..runtime.workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
+from ..runtime.workspace import capture_workspace_snapshot, hydrate_session_workspace_metadata, parse_pull_request_reference
 
 
 async def resolve_session(options: dict[str, Any], config: dict[str, Any], launchContext: dict[str, Any] | None = None) -> SessionRecord:
@@ -56,7 +56,7 @@ async def resolve_session(options: dict[str, Any], config: dict[str, Any], launc
     )
     if launch.get("worktreePath"):
         created.setdefault("metadata", {})["worktreePath"] = launch["worktreePath"]
-    await hydrateSessionWorkspaceMetadata(created)
+    await hydrate_session_workspace_metadata(created)
     return created
 
 
@@ -78,7 +78,7 @@ async def persist_session(
         checkpoint_before = _session_persistence_checkpoint(session)
         snapshot = _copy_session_for_persist(session)
         repair = repair_session_transcript(snapshot)
-        await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
+        await hydrate_session_workspace_metadata(snapshot, {"includePullRequest": False})
         if persist_options.get("touch", True):
             snapshot["updatedAt"] = now_iso()
         transcript_log, _appended = await _persist_session_transcript_log(
@@ -318,7 +318,7 @@ def find_matching_sessions(sessions: list[dict[str, Any]], query: str) -> list[d
     normalized = query.strip().lower()
     if not normalized:
         return sessions
-    pr_ref = parsePullRequestReference(query)
+    pr_ref = parse_pull_request_reference(query)
     scored = [(session, _score_session(session, normalized, pr_ref)) for session in sessions]
     return [item[0] for item in sorted([item for item in scored if item[1] > 0], key=lambda item: (item[1], item[0].get("updatedAt", "")), reverse=True)]
 
@@ -332,7 +332,7 @@ def format_session_candidate(session: dict[str, Any]) -> str:
 
 
 async def find_sessions_for_workspace(sessions: list[dict[str, Any]], cwd: str) -> list[dict[str, Any]]:
-    snapshot = await captureWorkspaceSnapshot(cwd, {"includePullRequest": False})
+    snapshot = await capture_workspace_snapshot(cwd, {"includePullRequest": False})
     resolved_cwd = os.path.abspath(cwd)
     resolved_git = os.path.abspath(snapshot["gitRoot"]) if snapshot.get("gitRoot") else None
     return [session for session in sessions if _matches_workspace(session, resolved_cwd, resolved_git)]

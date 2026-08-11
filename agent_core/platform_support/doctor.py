@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from ..runtime.workspace import captureWorkspaceSnapshot, summarizeWorkspaceCapabilities
+from ..runtime.workspace import capture_workspace_snapshot, summarize_workspace_capabilities
 from ..storage import get_project_root, get_state_root, list_live_daemon_states, load_auth, load_mcp_servers, load_plugins
 from .chrome import detectChromeCompanionStatus
 from .ide import detectIdeTargets
@@ -22,8 +22,8 @@ async def collectDoctorReport(cwd: str, args: dict[str, Any] | None = None, **kw
     chrome = await detectChromeCompanionStatus({**args, "includeNativeHostManifest": True})
     live_daemons = await list_live_daemon_states()
     daemon = live_daemons[0] if live_daemons else None
-    workspace = await captureWorkspaceSnapshot(cwd)
-    capabilities = summarizeWorkspaceCapabilities(workspace)
+    workspace = await capture_workspace_snapshot(cwd)
+    capabilities = summarize_workspace_capabilities(workspace)
     session_hygiene = await buildSessionHygieneReport()
     mcp_records = []
     plugin_records = []

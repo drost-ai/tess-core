@@ -16,9 +16,9 @@ async def load_auth() -> dict[str, Any] | None:
     auth = await read_json_file(os.path.join(get_state_root(), "auth.json"), None)
     if not auth:
         return None
-    from ..runtime.secret_provider import migrateLegacyStoredAuthSecrets
+    from ..runtime.secret_provider import migrate_legacy_stored_auth_secrets
 
-    migration = await migrateLegacyStoredAuthSecrets(auth)
+    migration = await migrate_legacy_stored_auth_secrets(auth)
     if migration["changed"]:
         await write_json_file(os.path.join(get_state_root(), "auth.json"), migration["auth"])
     return migration["auth"]
@@ -43,9 +43,9 @@ def _load_codex_auth_token_sync(auth_path: str) -> str | None:
         return None
 
 async def save_auth(auth: dict[str, Any]) -> None:
-    from ..runtime.secret_provider import migrateLegacyStoredAuthSecrets
+    from ..runtime.secret_provider import migrate_legacy_stored_auth_secrets
 
-    normalized = await migrateLegacyStoredAuthSecrets(auth)
+    normalized = await migrate_legacy_stored_auth_secrets(auth)
     await write_json_file(os.path.join(get_state_root(), "auth.json"), normalized["auth"])
 
 async def clear_auth() -> None:

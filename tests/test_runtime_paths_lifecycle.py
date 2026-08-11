@@ -8,32 +8,32 @@ import agent_core._facade as core
 from agent_core.runtime.lifecycle_barrier import (
     LifecycleCloseTimeoutError,
     LifecycleClosedError,
-    constructWithRollback,
-    createLifecycleBarrier,
+    construct_with_rollback,
+    create_lifecycle_barrier,
 )
 from agent_core.runtime.paths import (
-    getActiveRuntimePaths,
-    resolveRuntimePaths,
-    runWithRuntimePaths,
+    get_active_runtime_paths,
+    resolve_runtime_paths,
+    run_with_runtime_paths,
 )
 from tests.support.agent_core_case import AgentCoreTestCase, run
 
 
 class RuntimePathsLifecycleTests(AgentCoreTestCase):
     def test_async_scope_can_be_created_before_asyncio_run(self):
-        paths = resolveRuntimePaths(candidate="/tmp/agent-core-runtime-paths-task")
+        paths = resolve_runtime_paths(candidate="/tmp/agent-core-runtime-paths-task")
 
         async def read_active_home():
             await asyncio.sleep(0)
-            return getActiveRuntimePaths().home
+            return get_active_runtime_paths().home
 
-        pending = runWithRuntimePaths(paths, read_active_home)
-        self.assertNotEqual(getActiveRuntimePaths().home, paths.home)
+        pending = run_with_runtime_paths(paths, read_active_home)
+        self.assertNotEqual(get_active_runtime_paths().home, paths.home)
         self.assertEqual(asyncio.run(pending), paths.home)
-        self.assertNotEqual(getActiveRuntimePaths().home, paths.home)
+        self.assertNotEqual(get_active_runtime_paths().home, paths.home)
 
     def test_runtime_paths_resolve_one_frozen_complete_graph(self):
-        paths = resolveRuntimePaths("/workspace", "relative-runtime")
+        paths = resolve_runtime_paths("/workspace", "relative-runtime")
         with self.assertRaises(Exception):
             paths.home = "/changed"  # type: ignore[misc]
         self.assertEqual(paths.home, os.path.abspath("/workspace/relative-runtime"))
@@ -48,11 +48,11 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
         home_a = home.parent / "path-a"
         home_b = home.parent / "path-b"
         try:
-            paths_a = resolveRuntimePaths(candidate=str(home_a))
+            paths_a = resolve_runtime_paths(candidate=str(home_a))
 
             async def scenario():
-                async with runWithRuntimePaths(paths_a):
-                    self.assertIs(getActiveRuntimePaths(), paths_a)
+                async with run_with_runtime_paths(paths_a):
+                    self.assertIs(get_active_runtime_paths(), paths_a)
                     self.assertEqual(core.get_state_root(), str(home_a))
                     await asyncio.sleep(0)
                     with self.assertRaisesRegex(RuntimeError, "scope is immutable"):
@@ -65,10 +65,10 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
 
     def test_base_layout_creates_runtime_owned_directories_privately(self):
         root, home, workspace, previous = self.temp_context()
-        paths = resolveRuntimePaths(candidate=str(home.parent / "layout"))
+        paths = resolve_runtime_paths(candidate=str(home.parent / "layout"))
         try:
             async def scenario():
-                async with runWithRuntimePaths(paths):
+                async with run_with_runtime_paths(paths):
                     await core.ensure_base_layout(str(workspace), paths)
 
             run(scenario())
@@ -89,7 +89,7 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
 
     def test_close_rejects_new_work_and_drains_accepted_work(self):
         async def scenario():
-            barrier = createLifecycleBarrier()
+            barrier = create_lifecycle_barrier()
             gate = asyncio.Event()
             trace: list[str] = []
 
@@ -116,14 +116,14 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
 
     def test_close_is_idempotent_escalates_and_timeout_stays_closing(self):
         async def scenario():
-            barrier = createLifecycleBarrier()
+            barrier = create_lifecycle_barrier()
             gate = asyncio.Event()
             escalations: list[int] = []
             barrier.run("blocked finalizer", gate.wait)
             first = barrier.close(
-                escalationAfterMs=10,
-                onEscalation=escalations.append,
-                failAfterMs=30,
+                escalation_after_ms=10,
+                on_escalation=escalations.append,
+                fail_after_ms=30,
             )
             self.assertIs(first, barrier.close())
             with self.assertRaises(LifecycleCloseTimeoutError) as error:
@@ -153,7 +153,7 @@ class RuntimePathsLifecycleTests(AgentCoreTestCase):
                 raise failure
 
             with self.assertRaises(RuntimeError) as error:
-                await constructWithRollback(build)
+                await construct_with_rollback(build)
             self.assertIs(error.exception, failure)
             self.assertEqual(len(error.exception.cleanupErrors), 1)
             self.assertEqual(trace, ["faulty", "second", "first"])

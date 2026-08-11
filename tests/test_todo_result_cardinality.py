@@ -238,7 +238,7 @@ async def test_finalization_records_emits_and_types_cardinality(tmp_path):
     assert event["data"]["returned_item_count"] == completed["cardinality"]["returnedItemCount"]
     assert event["data"]["items_truncated"] is True
     assert recorded[0]["original_item_count"] == completed["cardinality"]["originalItemCount"]
-    typed = core.createRuntimeEvent({"event": event["event"], "data": event["data"]})
+    typed = core.create_runtime_event({"event": event["event"], "data": event["data"]})
     assert typed["kind"] == "tool.completed"
     assert typed["payload"]["originalItemCount"] == completed["cardinality"]["originalItemCount"]
     assert typed["payload"]["returnedItemCount"] == completed["cardinality"]["returnedItemCount"]

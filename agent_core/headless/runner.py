@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from typing import Any, Sequence, TextIO
 
 from ..agent import runAgentPrompt
-from ..runtime.agent_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
+from ..runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
 from ..config import resolveConfig
-from ..runtime.bootstrap import bootstrapRuntime
+from ..runtime.bootstrap import bootstrap_runtime
 from ..session.persistence import resolve_session
 from ..session.runtime import active_session_payload
 from ..storage import scoped_runtime_home, write_back_session_v1
@@ -44,7 +44,7 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
     config = await resolveConfig(_config_options(options), options.cwd)
     session_options = {"resume": options.session} if options.session else {}
     session = await resolve_session(session_options, config, {"cwd": options.cwd, "originalCwd": options.cwd})
-    runtime = await bootstrapRuntime({"session": session, "config": config, "cwd": options.cwd})
+    runtime = await bootstrap_runtime({"session": session, "config": config, "cwd": options.cwd})
     stream_enabled = options.output_format == "stream-json"
     sink = JsonStreamSink(stdout if stream_enabled else None)
     runtime["subscribeEvents"](sink.handle_runtime_envelope)
@@ -53,12 +53,12 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
 
     provider_override = _scripted_provider_override()
     daemon = runtime.get("daemon")
-    runtime_context = createAgentRuntimeBindings(
+    runtime_context = create_agent_runtime_bindings(
         {
             "tools": runtime["tools"],
             "emitEvent": runtime["emitEvent"],
             "daemon": {"state": "connected", "client": daemon}
-            if isTaskSupervisorGateway(daemon)
+            if is_task_supervisor_gateway(daemon)
             else {
                 "state": "unavailable",
                 "reason": {

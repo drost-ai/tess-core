@@ -423,7 +423,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
             ),
             "unknown",
         )
-        event = core.createRuntimeEvent(
+        event = core.create_runtime_event(
             {
                 "event": "provider.prompt_cache",
                 "data": {
@@ -449,9 +449,9 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         self.assertIsNone(event["payload"]["providerReason"])
         self.assertNotIn("responseId", event["payload"])
         self.assertNotIn("semanticPrefixHash", event["payload"])
-        runtime_state = core.createInitialRuntimeState()
-        self.assertIs(core.reduceRuntimeState(runtime_state, event), runtime_state)
-        self.assertIs(core.reduceRuntimeState(runtime_state, event), runtime_state)
+        runtime_state = core.create_initial_runtime_state()
+        self.assertIs(core.reduce_runtime_state(runtime_state, event), runtime_state)
+        self.assertIs(core.reduce_runtime_state(runtime_state, event), runtime_state)
 
     def test_custom_beta_tokens_cannot_activate_compatible_diagnostics_or_scope_fields(self):
         config = {

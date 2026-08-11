@@ -19,7 +19,7 @@ from .._utils import now_iso
 from .bridge_admission import admitBridgeMessage
 from .bridge_generation import closeCurrentBridgeGeneration, isCurrentBridgeGeneration
 from .bridge_recovery import activateBridgeGeneration
-from ..runtime.paths import getActiveRuntimePaths
+from ..runtime.paths import get_active_runtime_paths
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ..storage import (
     load_session_record_shallow,
@@ -366,7 +366,7 @@ async def createBridgeRuntimeController(args):
     requested = args.get("bridgeId") or args.get("bridge_id")
     if requested and not await load_bridge(requested):
         raise RuntimeError(f"Bridge not found for reconnect: {requested}")
-    paths = args.get("runtimePaths") or getActiveRuntimePaths()
+    paths = args.get("runtimePaths") or get_active_runtime_paths()
     activated = await activateBridgeGeneration({
         "sessionId": session["id"], "cwd": args.get("cwd") or session["cwd"],
         "remoteSessionId": args.get("remoteSessionId"), "name": args.get("name"),

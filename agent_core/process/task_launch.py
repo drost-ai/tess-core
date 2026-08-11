@@ -11,7 +11,7 @@ from ..contracts.task_records import TaskLaunchReservation
 
 from .._utils import now_iso
 from .identity import ProcessIdentityError, captureOwnedProcessIdentity, signalOwnedProcess
-from ..runtime.identifiers import parseSessionId, parseTaskId
+from ..runtime.identifiers import parse_session_id, parse_task_id
 
 
 @dataclass(slots=True)
@@ -31,8 +31,8 @@ def createTaskLaunchReservation(
     now: str | None = None,
 ) -> TaskLaunchReservation:
     values = dict(args or {})
-    task_id = parseTaskId(values.get("taskId", taskId))
-    session_id = parseSessionId(values.get("sessionId", sessionId))
+    task_id = parse_task_id(values.get("taskId", taskId))
+    session_id = parse_session_id(values.get("sessionId", sessionId))
     task_kind = values.get("kind", kind)
     if task_kind not in {"background_command", "main_session", "subagent"}:
         raise ValueError(f"Unsupported task launch reservation kind: {task_kind}")
@@ -128,8 +128,8 @@ def _assert_starting_reservation(reservation: Mapping[str, Any]) -> None:
             reservation.get("schemaVersion") == 1
             and reservation.get("state") == "starting"
             and bool(reservation.get("reservationId"))
-            and parseTaskId(reservation.get("taskId")) == reservation.get("taskId")
-            and parseSessionId(reservation.get("sessionId")) == reservation.get("sessionId")
+            and parse_task_id(reservation.get("taskId")) == reservation.get("taskId")
+            and parse_session_id(reservation.get("sessionId")) == reservation.get("sessionId")
         )
     except Exception:
         valid = False

@@ -183,9 +183,9 @@ async def _run_python_action(action: dict[str, Any], paths: dict[str, Any]) -> d
     await core.save_session(session)
     loaded = await core.load_session(session["id"])
     events = _python_runtime_events(session, data)
-    runtime_state = core.createInitialRuntimeState(session)
+    runtime_state = core.create_initial_runtime_state(session)
     for event in events:
-        runtime_state = core.reduceRuntimeState(runtime_state, event)
+        runtime_state = core.reduce_runtime_state(runtime_state, event)
     return _clean(
         {
             "name": data.get("name") or data.get("action"),
@@ -246,11 +246,11 @@ def _python_runtime_events(session: dict[str, Any], data: dict[str, Any]) -> lis
     prompt = data.get("prompt") or "hello parity"
     assistant_text = data.get("assistantText") or "hello from runtime"
     return [
-        core.createRuntimeEvent({"event": "session.activated", "timestamp": "2026-01-01T00:00:02.000Z", "data": {"session_id": session["id"], "cwd": session["cwd"], "provider": session["provider"], "model": session["model"], "permission_mode": session["permissionMode"], "workspace_name": session["metadata"].get("workspaceName")}}),
-        core.createRuntimeEvent({"event": "turn.started", "timestamp": "2026-01-01T00:00:03.000Z", "data": {"session_id": session["id"], "prompt": prompt, "model": session["model"]}}),
-        core.createRuntimeEvent({"event": "message.user", "timestamp": "2026-01-01T00:00:04.000Z", "data": {"session_id": session["id"], "text": prompt}}),
-        core.createRuntimeEvent({"event": "message.assistant", "timestamp": "2026-01-01T00:00:05.000Z", "data": {"session_id": session["id"], "text": assistant_text, "model": session["model"]}}),
-        core.createRuntimeEvent({"event": "turn.completed", "timestamp": "2026-01-01T00:00:06.000Z", "data": {"session_id": session["id"], "stop_reason": data.get("stopReason") or "stop", "message": assistant_text, "model": session["model"]}}),
+        core.create_runtime_event({"event": "session.activated", "timestamp": "2026-01-01T00:00:02.000Z", "data": {"session_id": session["id"], "cwd": session["cwd"], "provider": session["provider"], "model": session["model"], "permission_mode": session["permissionMode"], "workspace_name": session["metadata"].get("workspaceName")}}),
+        core.create_runtime_event({"event": "turn.started", "timestamp": "2026-01-01T00:00:03.000Z", "data": {"session_id": session["id"], "prompt": prompt, "model": session["model"]}}),
+        core.create_runtime_event({"event": "message.user", "timestamp": "2026-01-01T00:00:04.000Z", "data": {"session_id": session["id"], "text": prompt}}),
+        core.create_runtime_event({"event": "message.assistant", "timestamp": "2026-01-01T00:00:05.000Z", "data": {"session_id": session["id"], "text": assistant_text, "model": session["model"]}}),
+        core.create_runtime_event({"event": "turn.completed", "timestamp": "2026-01-01T00:00:06.000Z", "data": {"session_id": session["id"], "stop_reason": data.get("stopReason") or "stop", "message": assistant_text, "model": session["model"]}}),
     ]
 
 

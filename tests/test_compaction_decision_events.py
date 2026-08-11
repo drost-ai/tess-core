@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 
 class CompactionDecisionEventTests(AgentCoreTestCase):
     def test_complete_request_measurement_survives_typed_projection(self):
-        event = core.createRuntimeEvent(
+        event = core.create_runtime_event(
             {
                 "event": "compaction.decision",
                 "createdAt": "t-0d",
@@ -24,6 +24,6 @@ class CompactionDecisionEventTests(AgentCoreTestCase):
         self.assertEqual(event["payload"]["measurementScope"], "provider_request_complete")
         self.assertEqual(event["payload"]["currentTokenEstimate"], 42_000)
         self.assertEqual(event["payload"]["compactionThresholdTokens"], 200_000)
-        state = core.reduceRuntimeState(core.createInitialRuntimeState(), event)
+        state = core.reduce_runtime_state(core.create_initial_runtime_state(), event)
         self.assertEqual(state["compaction"]["lastDecision"]["currentTokenSource"], "codex_estimate")
         self.assertEqual(state["compaction"]["lastDecision"]["maxContextLength"], 272_000)

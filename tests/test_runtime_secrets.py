@@ -8,14 +8,14 @@ import unittest
 from pathlib import Path
 
 import agent_core._facade as core
-from agent_core.runtime.secret_provider import resolveProviderConfigSecrets
+from agent_core.runtime.secret_provider import resolve_provider_config_secrets
 from agent_core.runtime.secrets import (
     RuntimeSecretError,
-    authorizeRuntimeSecretWrite,
-    isRuntimeSecretRef,
-    migrateLegacyMcpServerSecrets,
-    resolveRuntimeSecret,
-    storeRuntimeSecret,
+    authorize_runtime_secret_write,
+    is_runtime_secret_ref,
+    migrate_legacy_mcp_server_secrets,
+    resolve_runtime_secret,
+    store_runtime_secret,
 )
 
 
@@ -58,11 +58,11 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
     async def store_string(self, purpose: str, key: str, value: str) -> dict:
         material = bytearray(value.encode())
         try:
-            return await storeRuntimeSecret(
+            return await store_runtime_secret(
                 purpose=purpose,
                 idempotencyKey=key,
                 secret=material,
-                authorization=authorizeRuntimeSecretWrite(purpose=purpose, idempotencyKey=key),
+                authorization=authorize_runtime_secret_write(purpose=purpose, idempotencyKey=key),
             )
         finally:
             material[:] = b"\0" * len(material)
@@ -73,7 +73,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
             *(self.store_string("mcp_header", "server:authorization", literal) for _ in range(12))
         )
         self.assertTrue(all(ref == refs[0] for ref in refs))
-        self.assertTrue(isRuntimeSecretRef(refs[0]))
+        self.assertTrue(is_runtime_secret_ref(refs[0]))
         self.assertNotIn(literal, json.dumps(refs[0]))
 
         private_root = self.home / "private-secrets"
@@ -87,7 +87,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         raw = files[0].read_text()
         self.assertNotIn(literal, raw)
 
-        resolved = await resolveRuntimeSecret(refs[0], "mcp_header")
+        resolved = await resolve_runtime_secret(refs[0], "mcp_header")
         try:
             self.assertEqual(bytes(resolved).decode(), literal)
         finally:
@@ -96,7 +96,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
     async def test_authority_idempotency_and_purpose_confusion_fail_closed(self) -> None:
         secret = bytearray(b"never-show-this-value")
         with self.assertRaises(RuntimeSecretError) as raised:
-            await storeRuntimeSecret(
+            await store_runtime_secret(
                 purpose="mcp_header",
                 idempotencyKey="fake",
                 secret=secret,
@@ -115,7 +115,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
             await self.store_string("mcp_header", "same-key", "different")
         self.assertEqual(reused.exception.code, "secret_store_unauthorized")
         with self.assertRaises(RuntimeSecretError) as confused:
-            await resolveRuntimeSecret({**ref, "purpose": "mcp_env"}, "mcp_env")
+            await resolve_runtime_secret({**ref, "purpose": "mcp_env"}, "mcp_env")
         self.assertEqual(confused.exception.code, "secret_store_invalid")
 
     async def test_missing_symlinked_and_widened_state_is_rejected(self) -> None:
@@ -123,7 +123,7 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         record = self.home / "private-secrets" / "records" / f"{ref['id']}.json"
         record.chmod(0o644)
         with self.assertRaisesRegex(RuntimeSecretError, "permissions are not owner-only"):
-            await resolveRuntimeSecret(ref, "mcp_env")
+            await resolve_runtime_secret(ref, "mcp_env")
 
         record.chmod(0o600)
         moved = record.with_suffix(".real")
@@ -132,11 +132,11 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         record.unlink()
         record.symlink_to(moved)
         with self.assertRaisesRegex(RuntimeSecretError, "not a regular file"):
-            await resolveRuntimeSecret(ref, "mcp_env")
+            await resolve_runtime_secret(ref, "mcp_env")
 
         record.unlink()
         with self.assertRaises(FileNotFoundError):
-            await resolveRuntimeSecret(ref, "mcp_env")
+            await resolve_runtime_secret(ref, "mcp_env")
 
     async def test_user_mcp_migrates_once_and_project_literals_are_rejected(self) -> None:
         literal = "legacy-bearer-777"
@@ -158,9 +158,9 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         await core.save_mcp_servers("user", str(self.project), records)
         first = await core.resolveConfig({"settingSources": "user"}, str(self.project))
         by_name = {record["name"]: record for record in first["mcpConfig"]}
-        self.assertTrue(isRuntimeSecretRef(by_name["legacy-http"]["headers"]["Authorization"]))
-        self.assertTrue(isRuntimeSecretRef(by_name["legacy-http"]["oauth"]["clientSecret"]))
-        self.assertTrue(isRuntimeSecretRef(by_name["legacy-stdio"]["env"]["SERVICE_TOKEN"]))
+        self.assertTrue(is_runtime_secret_ref(by_name["legacy-http"]["headers"]["Authorization"]))
+        self.assertTrue(is_runtime_secret_ref(by_name["legacy-http"]["oauth"]["clientSecret"]))
+        self.assertTrue(is_runtime_secret_ref(by_name["legacy-stdio"]["env"]["SERVICE_TOKEN"]))
         self.assertEqual(by_name["legacy-stdio"]["env"]["PUBLIC_VALUE"], "visible")
         self.assertNotIn(literal, json.dumps(first))
         files = sorted((self.home / "private-secrets" / "records").iterdir())
@@ -185,8 +185,8 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
             "commandOrUrl": "https://example.test/mcp",
             "headers": {"Authorization": "restart-safe"},
         }]
-        first = await migrateLegacyMcpServerSecrets(records)
-        second = await migrateLegacyMcpServerSecrets(records)
+        first = await migrate_legacy_mcp_server_secrets(records)
+        second = await migrate_legacy_mcp_server_secrets(records)
         self.assertEqual(second["records"], first["records"])
         self.assertEqual(len(list((self.home / "private-secrets" / "records").iterdir())), 1)
 
@@ -205,17 +205,17 @@ class RuntimeSecretStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(api_key, persisted)
         self.assertNotIn(auth_token, persisted)
         auth = await core.load_auth()
-        self.assertTrue(isRuntimeSecretRef(auth["anthropicApiKey"]))
+        self.assertTrue(is_runtime_secret_ref(auth["anthropicApiKey"]))
         self.assertEqual(auth["anthropicApiKey"], auth["apiKey"])
-        self.assertTrue(isRuntimeSecretRef(auth["anthropicAuthToken"]))
+        self.assertTrue(is_runtime_secret_ref(auth["anthropicAuthToken"]))
         self.assertEqual(auth["anthropicAuthToken"], auth["authToken"])
         self.assertEqual(len(list((self.home / "private-secrets" / "records").iterdir())), 2)
 
         config = await core.resolveConfig({"provider": "anthropic-console"}, str(self.project))
-        self.assertTrue(isRuntimeSecretRef(config["apiKey"]))
+        self.assertTrue(is_runtime_secret_ref(config["apiKey"]))
         self.assertNotIn(api_key, json.dumps(config))
         self.assertNotIn(auth_token, json.dumps(config))
-        resolved = await resolveProviderConfigSecrets(config)
+        resolved = await resolve_provider_config_secrets(config)
         self.assertEqual(resolved["apiKey"], api_key)
         self.assertIsNone(resolved["authToken"])
 

@@ -7,7 +7,7 @@ import time
 
 from ...contracts.providers import ProviderResponse
 from ..activity import emitProviderActivity
-from ...runtime.secret_provider import resolveProviderConfigSecrets
+from ...runtime.secret_provider import resolve_provider_config_secrets
 from ..anthropic_async_transport import (
     AnthropicAsyncHttpConnectionOwner as _AnthropicAsyncTransport,
 )
@@ -51,7 +51,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
     from ...config._knobs import knobValue
 
     args = {**(args or {}), **kwargs}
-    config = await resolveProviderConfigSecrets(args["config"])
+    config = await resolve_provider_config_secrets(args["config"])
     request = args["request"]
     runtime = args.get("runtime") or {}
     max_attempts = max(1, int(args.get("maxAttempts") or provider_knob("provider.anthropic_max_attempts")))

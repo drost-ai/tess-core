@@ -18,7 +18,7 @@ from .repository_trust import (
     resolveRepositoryIdentity,
 )
 from ..storage.json_io import resolve_maybe_relative
-from ..runtime.secrets import assertNoLiteralMcpSecrets, migrateLegacyMcpServerSecrets
+from ..runtime.secrets import assert_no_literal_mcp_secrets, migrate_legacy_mcp_server_secrets
 from ..storage.settings import load_mcp_servers, load_plugins, save_mcp_servers
 
 
@@ -94,11 +94,11 @@ def _normalized_mcp_records(scope: str, records: Any) -> list[dict[str, Any]]:
 async def _load_scoped_mcp_records(scope: str, cwd: str) -> list[dict[str, Any]]:
     records = _normalized_mcp_records(scope, await load_mcp_servers(scope, cwd))
     if scope == "user":
-        migration = await migrateLegacyMcpServerSecrets(records)
+        migration = await migrate_legacy_mcp_server_secrets(records)
         if migration["changed"]:
             await save_mcp_servers("user", cwd, migration["records"])
         return migration["records"]
-    assertNoLiteralMcpSecrets(records, scope)
+    assert_no_literal_mcp_secrets(records, scope)
     return records
 
 

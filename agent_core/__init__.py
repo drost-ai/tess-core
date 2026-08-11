@@ -14,6 +14,7 @@ from .config.providers import resolveProviderProfile, resolveProviderProfiles
 from .config.resolution import resolveConfig
 from .contracts.config import ResolvedConfig, RuntimeSecretRef
 from .contracts.context import AskQuestionDetail
+from .contracts.runtime_surface import BootstrappedRuntime
 from .contracts.session_records import SessionRecord
 from .contracts.task_records import ChildAgentRecord
 from .daemon.lifecycle import connectTaskSupervisorDaemonClient, ensureTaskSupervisorDaemon
@@ -22,13 +23,13 @@ from .remote.bridge_admission import sendBridgeMessage
 from .remote.bridge_diagnostics import formatBridgeTail, listActiveBridgeRows
 from .remote.bridge_runtime import createBridgeRuntime
 from .remote.sessions import createRemoteSession, updateRemoteSession
-from .runtime.agent_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
-from .runtime.bootstrap import bootstrapRuntime
-from .runtime.events.factory import createRuntimeEvent
-from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding, createRuntimeSessionBinding
-from .runtime.state.store import createInitialRuntimeState, createRuntimeStateStore
-from .runtime.wake import createMailboxWakeController
-from .runtime.workspace import createGitWorktree
+from .runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
+from .runtime.bootstrap import bootstrap_runtime
+from .runtime.events.factory import create_runtime_event
+from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding, create_runtime_session_binding
+from .runtime.state.store import create_initial_runtime_state, create_runtime_state_store
+from .runtime.wake import create_mailbox_wake_controller
+from .runtime.workspace import create_git_worktree
 from .session.persistence import find_sessions_for_workspace, persist_session, resolve_session
 from .session.runtime import active_session_payload
 from .shell_surface.diagnostics import format_session_candidate
@@ -51,27 +52,28 @@ from .tools.definitions import ToolDefinition
 from .tools.registry import createBuiltinTools
 
 __all__ = [
+    "BootstrappedRuntime",
     "active_session_payload",
     "AskQuestionDetail",
-    "bootstrapRuntime",
+    "bootstrap_runtime",
     "buildSystemPromptForAgent",
     "ChildAgentRecord",
     "clear_auth",
     "configure_runtime_home",
     "connectTaskSupervisorDaemonClient",
     "create_empty_session",
-    "createAgentRuntimeBindings",
+    "create_agent_runtime_bindings",
     "createBridgeRuntime",
     "createBuiltinTools",
     "createCollaborationRuntime",
-    "createGitWorktree",
-    "createInitialRuntimeState",
-    "createMailboxWakeController",
+    "create_git_worktree",
+    "create_initial_runtime_state",
+    "create_mailbox_wake_controller",
     "createMonitorRecord",
     "createRemoteSession",
-    "createRuntimeEvent",
-    "createRuntimeSessionBinding",
-    "createRuntimeStateStore",
+    "create_runtime_event",
+    "create_runtime_session_binding",
+    "create_runtime_state_store",
     "ensure_base_layout",
     "ensureTaskSupervisorDaemon",
     "finalizeBackgroundSubagentFailureFromEnv",
@@ -82,7 +84,7 @@ __all__ = [
     "format_session_candidate",
     "get_default_auto_mode",
     "get_state_root",
-    "isTaskSupervisorGateway",
+    "is_task_supervisor_gateway",
     "list_child_agents",
     "list_sessions",
     "listActiveBridgeRows",

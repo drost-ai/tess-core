@@ -20,16 +20,16 @@ from agent_core.providers.prompt_cache_diagnostics import (
     buildPromptCacheRequestSnapshot,
 )
 from agent_core.runtime.paths import (
-    configureActiveRuntimePaths,
-    resetActiveRuntimePaths,
-    resolveRuntimePaths,
+    configure_active_runtime_paths,
+    reset_active_runtime_paths,
+    resolve_runtime_paths,
 )
 
 
 class PromptCacheStateTests(AgentCoreTestCase):
     def setUp(self):
         self.root, self.home, _, self.previous = self.temp_context()
-        self.paths = resolveRuntimePaths(candidate=str(self.home))
+        self.paths = resolve_runtime_paths(candidate=str(self.home))
         self.session_id = "session-state-test"
 
     def tearDown(self):
@@ -329,12 +329,12 @@ class PromptCacheStateTests(AgentCoreTestCase):
 
         other_home = Path(self.root.name) / "other-home"
         other_home.mkdir()
-        other_paths = resolveRuntimePaths(candidate=str(other_home))
-        configureActiveRuntimePaths(str(other_home))
+        other_paths = resolve_runtime_paths(candidate=str(other_home))
+        configure_active_runtime_paths(str(other_home))
         try:
             self.assertEqual(run(commitPromptCacheObservation(self._candidate()))["status"], "committed")
         finally:
-            resetActiveRuntimePaths()
+            reset_active_runtime_paths()
         self.assertEqual(
             run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))["status"],
             "valid",

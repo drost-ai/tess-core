@@ -11,11 +11,11 @@ from .records import omit_none_fields
 from .persisted_record_scanner import read_persisted_json_record, scan_persisted_json_records
 from .persisted_record_validation import is_bridge_record, is_remote_session_record
 from ..runtime.identifiers import (
-    parseBridgeId,
-    parseRemoteSessionId,
-    parseSessionId,
-    tryParseBridgeId,
-    tryParseRemoteSessionId,
+    parse_bridge_id,
+    parse_remote_session_id,
+    parse_session_id,
+    try_parse_bridge_id,
+    try_parse_remote_session_id,
 )
 
 BRIDGE_LOG_MAX_ENTRIES = 4_096
@@ -34,14 +34,14 @@ def remote_session_path(remoteSessionId: str) -> str:
     return os.path.join(
         get_state_root(),
         "remote-sessions",
-        f"{parseRemoteSessionId(remoteSessionId)}.json",
+        f"{parse_remote_session_id(remoteSessionId)}.json",
     )
 
 async def save_remote_session(record: dict[str, Any]) -> None:
     await write_json_file(remote_session_path(record["id"]), omit_none_fields(record))
 
 async def load_remote_session(remoteSessionId: str) -> dict[str, Any] | None:
-    remote_id = parseRemoteSessionId(remoteSessionId)
+    remote_id = parse_remote_session_id(remoteSessionId)
     result = await read_persisted_json_record(
         family="remote_session",
         id=remote_id,
@@ -55,32 +55,32 @@ async def list_remote_sessions() -> list[dict[str, Any]]:
     scan = await scan_persisted_json_records(
         family="remote_session",
         directory=directory,
-        select=lambda entry: _remote_json_candidate(directory, entry, tryParseRemoteSessionId),
+        select=lambda entry: _remote_json_candidate(directory, entry, try_parse_remote_session_id),
         validate=is_remote_session_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 def bridge_path(bridgeId: str) -> str:
-    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.json")
+    return os.path.join(get_state_root(), "bridges", f"{parse_bridge_id(bridgeId)}.json")
 
 def bridge_inbox_path(bridgeId: str) -> str:
-    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.inbox.json")
+    return os.path.join(get_state_root(), "bridges", f"{parse_bridge_id(bridgeId)}.inbox.json")
 
 def bridge_events_path(bridgeId: str) -> str:
-    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.events.json")
+    return os.path.join(get_state_root(), "bridges", f"{parse_bridge_id(bridgeId)}.events.json")
 
 def bridge_ledger_path(bridgeId: str) -> str:
-    return os.path.join(get_state_root(), "bridges", f"{parseBridgeId(bridgeId)}.ledger.json")
+    return os.path.join(get_state_root(), "bridges", f"{parse_bridge_id(bridgeId)}.ledger.json")
 
 def bridge_recovery_path(sessionId: str) -> str:
-    return os.path.join(get_state_root(), "bridge-recovery", f"{parseSessionId(sessionId)}.json")
+    return os.path.join(get_state_root(), "bridge-recovery", f"{parse_session_id(sessionId)}.json")
 
 async def save_bridge(record: dict[str, Any]) -> None:
     _assert_serialized_bound(record, "bridge record", 512 * 1024)
     await write_json_file(bridge_path(record["id"]), omit_none_fields(record))
 
 async def load_bridge(bridgeId: str) -> dict[str, Any] | None:
-    bridge_id = parseBridgeId(bridgeId)
+    bridge_id = parse_bridge_id(bridgeId)
     result = await read_persisted_json_record(
         family="bridge",
         id=bridge_id,
@@ -99,7 +99,7 @@ async def list_bridges() -> list[dict[str, Any]]:
             (".inbox.json", ".events.json", ".ledger.json")
         ):
             return None
-        return _remote_json_candidate(directory, entry, tryParseBridgeId)
+        return _remote_json_candidate(directory, entry, try_parse_bridge_id)
 
     scan = await scan_persisted_json_records(
         family="bridge",
@@ -110,7 +110,7 @@ async def list_bridges() -> list[dict[str, Any]]:
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 async def load_bridge_inbox(bridgeId: str) -> list[dict[str, Any]]:
-    bridge_id = parseBridgeId(bridgeId)
+    bridge_id = parse_bridge_id(bridgeId)
     return await _load_bridge_array(
         family="bridge_inbox",
         bridge_id=bridge_id,
@@ -119,7 +119,7 @@ async def load_bridge_inbox(bridgeId: str) -> list[dict[str, Any]]:
     )
 
 async def append_bridge_inbox_message(message: dict[str, Any]) -> None:
-    bridge_id = parseBridgeId(message["bridgeId"])
+    bridge_id = parse_bridge_id(message["bridgeId"])
     if not _is_bridge_inbox_message(message, bridge_id):
         raise BridgeStorageError("Bridge inbox message is invalid.")
     async with with_record_transaction("bridge-inbox", bridge_id):
@@ -144,7 +144,7 @@ async def append_bridge_inbox_message(message: dict[str, Any]) -> None:
         await write_json_file(bridge_inbox_path(bridge_id), value)
 
 async def replace_bridge_inbox(bridgeId: str, messages: list[dict[str, Any]]) -> None:
-    bridge_id = parseBridgeId(bridgeId)
+    bridge_id = parse_bridge_id(bridgeId)
     if len(messages) > BRIDGE_LOG_MAX_ENTRIES or not all(
         _is_bridge_inbox_message(message, bridge_id) for message in messages
     ):
@@ -157,7 +157,7 @@ async def replace_bridge_inbox(bridgeId: str, messages: list[dict[str, Any]]) ->
     await write_json_file(bridge_inbox_path(bridge_id), value)
 
 async def load_bridge_events(bridgeId: str) -> list[dict[str, Any]]:
-    bridge_id = parseBridgeId(bridgeId)
+    bridge_id = parse_bridge_id(bridgeId)
     return await _load_bridge_array(
         family="bridge_event_log",
         bridge_id=bridge_id,
@@ -166,7 +166,7 @@ async def load_bridge_events(bridgeId: str) -> list[dict[str, Any]]:
     )
 
 async def append_bridge_event(record: dict[str, Any]) -> None:
-    bridge_id = parseBridgeId(record["bridgeId"])
+    bridge_id = parse_bridge_id(record["bridgeId"])
     if not _is_bridge_event_record(record, bridge_id):
         raise BridgeStorageError("Bridge event record is invalid.")
     async with with_record_transaction("bridge-events", bridge_id):
@@ -185,7 +185,7 @@ async def append_bridge_event(record: dict[str, Any]) -> None:
         await write_json_file(bridge_events_path(bridge_id), value)
 
 async def load_bridge_delivery_ledger(bridgeId: str) -> dict[str, Any] | None:
-    bridge_id = parseBridgeId(bridgeId)
+    bridge_id = parse_bridge_id(bridgeId)
     result = await read_persisted_json_record(
         family="bridge_delivery_ledger",
         id=bridge_id,
@@ -200,7 +200,7 @@ async def load_bridge_delivery_ledger(bridgeId: str) -> dict[str, Any] | None:
     return result.get("record")
 
 async def save_bridge_delivery_ledger(ledger: dict[str, Any]) -> None:
-    bridge_id = parseBridgeId(ledger["bridgeId"])
+    bridge_id = parse_bridge_id(ledger["bridgeId"])
     if not _is_bridge_delivery_ledger(ledger, bridge_id):
         raise BridgeStorageError("Bridge delivery ledger is invalid.")
     value = omit_none_fields(ledger)
@@ -208,7 +208,7 @@ async def save_bridge_delivery_ledger(ledger: dict[str, Any]) -> None:
     await write_json_file(bridge_ledger_path(bridge_id), value)
 
 async def load_bridge_recovery_record(sessionId: str) -> dict[str, Any] | None:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     result = await read_persisted_json_record(
         family="bridge_recovery_journal",
         id=session_id,
@@ -223,7 +223,7 @@ async def load_bridge_recovery_record(sessionId: str) -> dict[str, Any] | None:
     return result.get("record")
 
 async def save_bridge_recovery_record(sessionId: str, value: dict[str, Any]) -> None:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     if not _is_bridge_recovery_record(value, session_id):
         raise BridgeStorageError("Bridge recovery journal is invalid.")
     compact = omit_none_fields(value)
@@ -366,21 +366,21 @@ def _is_bridge_recovery_record(value: Any, session_id: str) -> bool:
         return False
     if not all(_sha256(value_) for value_ in value["authorityDirectoryManifests"]):
         return False
-    if value.get("selectedLegacyBridgeId") is not None and tryParseBridgeId(value["selectedLegacyBridgeId"]) is None:
+    if value.get("selectedLegacyBridgeId") is not None and try_parse_bridge_id(value["selectedLegacyBridgeId"]) is None:
         return False
     destination_id = value.get("destinationBridgeId")
     destination_generation = value.get("destinationGeneration")
     if (destination_id is None) != (destination_generation is None):
         return False
-    if destination_id is not None and (tryParseBridgeId(destination_id) is None or not _positive_integer(destination_generation)):
+    if destination_id is not None and (try_parse_bridge_id(destination_id) is None or not _positive_integer(destination_generation)):
         return False
-    if value.get("destinationRemoteSessionId") is not None and tryParseRemoteSessionId(value["destinationRemoteSessionId"]) is None:
+    if value.get("destinationRemoteSessionId") is not None and try_parse_remote_session_id(value["destinationRemoteSessionId"]) is None:
         return False
     if value.get("warning") not in (None, "legacy_replay_at_least_once"):
         return False
-    if not _unique_valid_ids(value["sourceBridgeIds"], tryParseBridgeId):
+    if not _unique_valid_ids(value["sourceBridgeIds"], try_parse_bridge_id):
         return False
-    if not _unique_valid_ids(value["remoteSessionIds"], tryParseRemoteSessionId):
+    if not _unique_valid_ids(value["remoteSessionIds"], try_parse_remote_session_id):
         return False
     plans = value["messagePlans"]
     plan_keys = [plan.get("key") for plan in plans if isinstance(plan, dict)]
@@ -416,7 +416,7 @@ def _is_bridge_recovery_record(value: Any, session_id: str) -> bool:
 def _valid_recovery_plan(plan: Any) -> bool:
     return bool(
         isinstance(plan, dict) and isinstance(plan.get("key"), str) and plan["key"]
-        and tryParseBridgeId(plan.get("sourceBridgeId")) is not None
+        and try_parse_bridge_id(plan.get("sourceBridgeId")) is not None
         and isinstance(plan.get("messageId"), str) and plan["messageId"]
         and plan.get("disposition") in {"pending", "delivered", "legacy_confirmed", "legacy_acknowledged"}
         and isinstance(plan.get("createdAt"), str)
@@ -428,7 +428,7 @@ def _valid_pointer_baseline(item: Any, session_id: str) -> bool:
     if not isinstance(item, dict) or item.get("owner") not in {"session", "remote_session"}:
         return False
     owner_id = item.get("ownerId")
-    valid_owner = owner_id == session_id if item["owner"] == "session" else tryParseRemoteSessionId(owner_id) is not None
+    valid_owner = owner_id == session_id if item["owner"] == "session" else try_parse_remote_session_id(owner_id) is not None
     return bool(valid_owner and _sha256(item.get("authorityDigest")) and _sha256(item.get("normalizedRecordDigest")))
 
 
@@ -450,7 +450,7 @@ def _valid_recovery_result(value: Any) -> bool:
         return False
     bridge_id, generation = value.get("activeBridgeId"), value.get("generation")
     return (bridge_id is None and generation is None) or (
-        tryParseBridgeId(bridge_id) is not None and _positive_integer(generation)
+        try_parse_bridge_id(bridge_id) is not None and _positive_integer(generation)
     )
 
 

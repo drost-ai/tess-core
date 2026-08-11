@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
-from .generation import RuntimeSessionBinding, createRuntimeSessionBinding
+from .generation import RuntimeSessionBinding, create_runtime_session_binding
 from ..providers.partial_output import (
     assertPartialOutputSink as _assert_partial_output_sink,
     assertPartialOutputStateStore as _assert_partial_output_state_store,
@@ -70,7 +70,7 @@ _EXTENSION_FIELDS = frozenset({
 # legal binding fields (the harness does this).
 AGENT_RUNTIME_BINDING_FIELDS = frozenset(_CONTRACT_FIELDS | _EXTENSION_FIELDS)
 
-def createAgentRuntimeBindings(
+def create_agent_runtime_bindings(
     args: Mapping[str, Any] | None = None, **kwargs: Any
 ) -> Mapping[str, Any]:
     values = {**dict(args or {}), **kwargs}
@@ -92,11 +92,11 @@ def createAgentRuntimeBindings(
             f"Agent runtime bindings contain unknown fields: {', '.join(unknown)}.",
         )
     bindings = MappingProxyType(frozen)
-    assertAgentRuntimeBindings(bindings)
+    assert_agent_runtime_bindings(bindings)
     return bindings
 
 
-def assertAgentRuntimeBindings(
+def assert_agent_runtime_bindings(
     value: Any, expectedSessionId: str | None = None
 ) -> None:
     if value is None:
@@ -147,8 +147,8 @@ def assertAgentRuntimeBindings(
         )
 
 
-def materializeAgentExecutionRuntime(bindings: Mapping[str, Any]) -> dict[str, Any]:
-    assertAgentRuntimeBindings(bindings)
+def materialize_agent_execution_runtime(bindings: Mapping[str, Any]) -> dict[str, Any]:
+    assert_agent_runtime_bindings(bindings)
     policy = bindings["questionPolicy"]
     daemon = bindings["daemon"]
     runtime = {
@@ -181,11 +181,11 @@ def materializeAgentExecutionRuntime(bindings: Mapping[str, Any]) -> dict[str, A
     return runtime
 
 
-def isTaskSupervisorGateway(value: Any) -> bool:
+def is_task_supervisor_gateway(value: Any) -> bool:
     return isinstance(value, Mapping) and all(callable(value.get(name)) for name in _GATEWAY_METHODS)
 
 
-def unavailableDaemonBinding(
+def unavailable_daemon_binding(
     code: str = "runtime.daemon_unavailable",
     message: str = "The task supervisor daemon is unavailable.",
     guidance: str | None = None,
@@ -201,7 +201,7 @@ def _coerce_binding(value: Any) -> RuntimeSessionBinding | Any:
         return value
     if isinstance(value, Mapping):
         try:
-            return createRuntimeSessionBinding(
+            return create_runtime_session_binding(
                 value.get("sessionId"),
                 value.get("generation"),
                 value.get("configRevision"),
@@ -239,7 +239,7 @@ def _is_daemon_binding(value: Any) -> bool:
     if not isinstance(value, Mapping):
         return False
     if value.get("state") == "connected":
-        return isTaskSupervisorGateway(value.get("client"))
+        return is_task_supervisor_gateway(value.get("client"))
     if value.get("state") != "unavailable" or not isinstance(value.get("reason"), Mapping):
         return False
     reason = value["reason"]

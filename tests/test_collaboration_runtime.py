@@ -82,15 +82,15 @@ class CollaborationRuntimeTests(AgentCoreTestCase):
             self.assertTrue(any(event == "remote.status_changed" and data["remote_session_id"] == remote["id"] for event, data in events))
             self.assertTrue(any(event == "bridge.status_changed" and data["pending_messages"] == 1 for event, data in events))
 
-            state = core.createInitialRuntimeState(session)
+            state = core.create_initial_runtime_state(session)
             for event, data in events:
-                state = core.reduceRuntimeState(state, {"event": event, "createdAt": "2026-01-01T00:00:02Z", "data": data})
+                state = core.reduce_runtime_state(state, {"event": event, "createdAt": "2026-01-01T00:00:02Z", "data": data})
             self.assertEqual(state["collaboration"]["backgroundCount"], 2)
             self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
             self.assertNotIn("recentEvents", state["collaboration"])
             self.assertNotIn("lastStatus", state["collaboration"])
 
-            boot = run(core.bootstrapRuntime({"session": session, "config": config, "daemonEnabled": False}))
+            boot = run(core.bootstrap_runtime({"session": session, "config": config, "daemonEnabled": False}))
             self.assertTrue(boot["collaborationRuntime"])
             self.assertTrue(any(tool.name == "Agent" for tool in boot["tools"]))
             self.assertGreaterEqual(boot["stateStore"]["getState"]()["collaboration"]["activeCount"], 2)

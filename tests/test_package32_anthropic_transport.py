@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 import agent_core.providers.anthropic.request as anthropic_request_module
 from agent_core.providers.anthropic_cache import countAnthropicCacheControls
 from agent_core.providers.anthropic.sse import normalizeAnthropicSseResponse
-from agent_core.runtime.paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolve_runtime_paths
 from agent_core.providers.usage_costs import estimateUsageCost
 
 
@@ -37,7 +37,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
 
     def test_json_transport_attaches_terminal_diagnostics_observation(self):
         config = self._config()
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         request = {
             "model": "claude-opus-4-8",
             "system": "stable system",

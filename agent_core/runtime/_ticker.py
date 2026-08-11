@@ -5,7 +5,7 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-from .paths import runWithRuntimePaths
+from .paths import run_with_runtime_paths
 
 
 def run_scoped_async(runtime_paths: Any, work: Callable[[], Any]) -> Any:
@@ -17,7 +17,7 @@ def run_scoped_async(runtime_paths: Any, work: Callable[[], Any]) -> Any:
     that captured them at construction.
     """
     return asyncio.run(
-        runWithRuntimePaths(runtime_paths, work) if runtime_paths else work()
+        run_with_runtime_paths(runtime_paths, work) if runtime_paths else work()
     )
 
 

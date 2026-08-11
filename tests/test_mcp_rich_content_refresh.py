@@ -87,7 +87,7 @@ class BootstrapRefreshContractTests(AgentCoreTestCase):
                 systemPrompt=config["systemPrompt"],
                 permissionMode="default",
             )
-            boot = run(core.bootstrapRuntime(session=session, config=config, daemonEnabled=False))
+            boot = run(core.bootstrap_runtime(session=session, config=config, daemonEnabled=False))
             try:
                 first = run(boot["refreshMcpToolRegistry"]())
                 second = run(boot["refreshMcpToolRegistry"]())

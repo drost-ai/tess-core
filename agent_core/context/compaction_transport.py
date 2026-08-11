@@ -10,7 +10,7 @@ from ..providers.timeouts import resolveProviderTimeoutPolicy
 from ..providers.token_budget import resolveCompactionPolicy
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import DEFAULT_CODEX_BASE_URL, getOpenAiProviderLabel, sendOpenAiRequest
-from ..runtime.secret_provider import resolveCompactionProviderSecrets, resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolve_compaction_provider_secrets, resolve_provider_config_secrets
 from ..storage import load_codex_auth_token
 
 
@@ -238,7 +238,7 @@ def _build_selection_for_profile(
 
 async def _resolve_compaction_openai_transport(config: dict[str, Any], model: dict[str, Any]) -> dict[str, Any]:
     unresolved_binding = _resolve_compaction_provider_binding(config, model)
-    binding = await resolveCompactionProviderSecrets(unresolved_binding) if unresolved_binding else None
+    binding = await resolve_compaction_provider_secrets(unresolved_binding) if unresolved_binding else None
     if binding and (binding.get("profile") or {}).get("kind") == "openai":
         if not binding.get("openaiToken"):
             raise RuntimeError(f"OpenAI credential is required for {binding.get('profileName')}-backed compaction.")
@@ -257,7 +257,7 @@ async def _resolve_compaction_openai_transport(config: dict[str, Any], model: di
         return {"token": token, "baseUrl": DEFAULT_CODEX_BASE_URL, "headers": None, "mode": "codex"}
     if not config.get("openaiToken"):
         raise RuntimeError("OpenAI credential is required for OpenAI-backed compaction.")
-    resolved_config = await resolveProviderConfigSecrets(config)
+    resolved_config = await resolve_provider_config_secrets(config)
     use_selected = config.get("provider") == "openai"
     return {
         "token": resolved_config["openaiToken"],
@@ -269,7 +269,7 @@ async def _resolve_compaction_openai_transport(config: dict[str, Any], model: di
 
 async def _resolve_codex_compaction_token(config: dict[str, Any]) -> str | None:
     if config.get("providerProfileName") == "codex" and config.get("openaiApiMode") == "codex" and config.get("openaiToken"):
-        return (await resolveProviderConfigSecrets(config)).get("openaiToken")
+        return (await resolve_provider_config_secrets(config)).get("openaiToken")
     if not config.get("openaiCodexAuthPath"):
         return None
     return await load_codex_auth_token(config["openaiCodexAuthPath"])

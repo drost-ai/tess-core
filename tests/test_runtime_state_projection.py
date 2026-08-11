@@ -5,8 +5,8 @@ from tests.support.agent_core_case import *
 
 class RuntimeStateProjectionTests(AgentCoreTestCase):
     def test_runtime_state_matches_typed_event_projection_edges(self):
-        state = core.createInitialRuntimeState()
-        activated = core.createRuntimeEvent(
+        state = core.create_initial_runtime_state()
+        activated = core.create_runtime_event(
             {
                 "event": "session.activated",
                 "createdAt": "t-1",
@@ -39,13 +39,13 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
                 "updatedAt": None,
             },
         )
-        state = core.reduceRuntimeState(state, activated)
+        state = core.reduce_runtime_state(state, activated)
         self.assertEqual(state["session"]["activeSessionId"], "s-typed")
         self.assertEqual(state["session"]["summary"]["id"], "s-typed")
         self.assertEqual(state["bridge"]["bridgeId"], "bridge-typed")
-        empty_data_precedence = core.createRuntimeEvent({"event": "message.user", "data": {}, "payload": {"text": "from payload"}})
+        empty_data_precedence = core.create_runtime_event({"event": "message.user", "data": {}, "payload": {"text": "from payload"}})
         self.assertEqual(empty_data_precedence["payload"], {"text": ""})
-        normalized_activation = core.createRuntimeEvent(
+        normalized_activation = core.create_runtime_event(
             {
                 "event": "session.activated",
                 "data": {"session_id": "s-normalized", "cwd": 123, "provider": "unknown", "model": None, "permission_mode": "bad", "workspace_name": "", "bridge_id": ""},
@@ -58,17 +58,17 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertIsNone(normalized_activation["payload"]["workspaceName"])
         self.assertIsNone(normalized_activation["payload"]["bridgeId"])
 
-        user_message = core.createRuntimeEvent({"event": "message.user", "data": {"text": "hello", "session_id": "s-typed", "ignored_extra": "drop me"}})
+        user_message = core.create_runtime_event({"event": "message.user", "data": {"text": "hello", "session_id": "s-typed", "ignored_extra": "drop me"}})
         self.assertEqual(user_message["payload"], {"text": "hello"})
-        self.assertEqual(core.createRuntimeEvent({"event": "message.user", "data": {"text": 123}})["payload"], {"text": ""})
-        assistant_partial = core.createRuntimeEvent(
+        self.assertEqual(core.create_runtime_event({"event": "message.user", "data": {"text": 123}})["payload"], {"text": ""})
+        assistant_partial = core.create_runtime_event(
             {
                 "event": "message.assistant.partial",
                 "data": {"text": "hello", "text_delta": " world", "model": "ignored", "ignored_extra": "drop me"},
             }
         )
         self.assertEqual(assistant_partial["payload"], {"text": "hello", "textDelta": " world"})
-        transcript_repaired = core.createRuntimeEvent(
+        transcript_repaired = core.create_runtime_event(
             {
                 "event": "transcript.repaired",
                 "data": {
@@ -84,7 +84,7 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
             {"truncatedFrom": 4, "removedCount": 2, "missingToolUseIds": ["tool-1", "2"]},
         )
 
-        turn_started = core.createRuntimeEvent(
+        turn_started = core.create_runtime_event(
             {
                 "event": "turn.started",
                 "createdAt": "t-0",
@@ -92,15 +92,15 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
             }
         )
         self.assertEqual(turn_started["payload"], {"prompt": "go", "model": "gpt-5.4", "agentName": "main"})
-        blank_turn_fields = core.createRuntimeEvent(
+        blank_turn_fields = core.create_runtime_event(
             {"event": "turn.completed", "data": {"stop_reason": "", "message": "", "model": ""}}
         )
         self.assertEqual(blank_turn_fields["payload"], {"stopReason": None, "message": None, "model": None})
-        self.assertEqual(core.createRuntimeEvent({"event": "turn.cancelling", "data": {"session_id": "s-typed"}})["payload"], {})
-        self.assertEqual(core.createRuntimeEvent({"event": "status.updated", "data": {"message": "ready", "detail": ""}})["payload"], {"message": "ready", "detail": None})
-        self.assertEqual(core.createRuntimeEvent({"event": "status.cleared", "data": {"session_id": "s-typed"}})["payload"], {})
+        self.assertEqual(core.create_runtime_event({"event": "turn.cancelling", "data": {"session_id": "s-typed"}})["payload"], {})
+        self.assertEqual(core.create_runtime_event({"event": "status.updated", "data": {"message": "ready", "detail": ""}})["payload"], {"message": "ready", "detail": None})
+        self.assertEqual(core.create_runtime_event({"event": "status.cleared", "data": {"session_id": "s-typed"}})["payload"], {})
 
-        provider_failed = core.createRuntimeEvent(
+        provider_failed = core.create_runtime_event(
             {
                 "event": "provider.failed",
                 "createdAt": "t-0p",
@@ -135,7 +135,7 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
             },
         )
 
-        compaction_completed = core.createRuntimeEvent(
+        compaction_completed = core.create_runtime_event(
             {
                 "event": "compaction.completed",
                 "createdAt": "t-0c",
@@ -155,7 +155,7 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(compaction_completed["payload"]["verificationVerdict"], "accept")
         self.assertNotIn("ignoredExtra", compaction_completed["payload"])
 
-        context_selected = core.createRuntimeEvent(
+        context_selected = core.create_runtime_event(
             {
                 "event": "context_relief.selected",
                 "createdAt": "t-0r",
@@ -170,7 +170,7 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         )
         self.assertEqual(context_selected["payload"]["mode"], "microcompact")
         self.assertEqual(context_selected["payload"]["plannedModes"], ["microcompact", "none"])
-        context_applied = core.createRuntimeEvent(
+        context_applied = core.create_runtime_event(
             {
                 "event": "context_relief.applied",
                 "createdAt": "t-0ra",
@@ -191,15 +191,15 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         )
         self.assertEqual(context_applied["payload"]["modes"], [])
         self.assertIsNone(context_applied["payload"]["reinjectionSectionCount"])
-        state = core.reduceRuntimeState(state, context_selected)
-        state = core.reduceRuntimeState(state, context_applied)
+        state = core.reduce_runtime_state(state, context_selected)
+        state = core.reduce_runtime_state(state, context_applied)
         self.assertEqual(state["compaction"]["selectedMode"], "api_microcompact")
         self.assertEqual(state["compaction"]["appliedModes"], [])
         self.assertEqual(state["compaction"]["pressureLevel"], "high")
         self.assertEqual(state["compaction"]["reactiveAttempt"], 0)
         self.assertEqual(state["compaction"]["lastReinjectionSummary"], "summary")
 
-        task_snapshot = core.createRuntimeEvent(
+        task_snapshot = core.create_runtime_event(
             {
                 "event": "task.snapshot",
                 "createdAt": "t-0t",
@@ -230,10 +230,10 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(task_snapshot["payload"]["tasks"][0]["sessionId"], "s-typed")
         self.assertNotIn("ignoredExtra", task_snapshot["payload"])
         self.assertNotIn("ignoredExtra", task_snapshot["payload"]["tasks"][0])
-        task_completed = core.createRuntimeEvent({"event": "task.completed", "data": {"task_id": "task-typed", "status": "completed", "summary": "done"}})
+        task_completed = core.create_runtime_event({"event": "task.completed", "data": {"task_id": "task-typed", "status": "completed", "summary": "done"}})
         self.assertNotIn("status", task_completed["payload"])
 
-        daemon_snapshot = core.createRuntimeEvent(
+        daemon_snapshot = core.create_runtime_event(
             {
                 "event": "daemon.snapshot",
                 "data": {
@@ -248,14 +248,14 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(daemon_snapshot["payload"]["socketPath"], "/tmp/daemon.sock")
         self.assertNotIn("ignoredExtra", daemon_snapshot["payload"])
 
-        budget = core.createRuntimeEvent(
+        budget = core.create_runtime_event(
             {
                 "event": "budget.exceeded",
                 "data": {"estimated_cost_usd": 1.25, "max_budget_usd": 1.0, "model": "gpt-5.4", "ignored_extra": "drop me"},
             }
         )
         self.assertEqual(budget["payload"], {"estimatedCostUsd": 1.25, "maxBudgetUsd": 1.0, "model": "gpt-5.4"})
-        non_finite_budget = core.createRuntimeEvent(
+        non_finite_budget = core.create_runtime_event(
             {
                 "event": "budget.exceeded",
                 "data": {"estimated_cost_usd": math.inf, "max_budget_usd": math.nan},
@@ -264,37 +264,37 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(non_finite_budget["payload"], {"estimatedCostUsd": None, "maxBudgetUsd": None, "model": None})
 
         self.assertNotIn("status", state)
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "status.updated", "createdAt": "t0", "data": {"message": "Working", "detail": "runtime"}}))
         self.assertNotIn("status", state)
         self.assertEqual(state["turn"]["liveStatus"]["message"], "Working")
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "status.cleared", "createdAt": "t0b", "data": {}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "status.cleared", "createdAt": "t0b", "data": {}}))
         self.assertNotIn("status", state)
         self.assertIsNone(state["turn"]["liveStatus"])
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "turn.failed", "createdAt": "t0c", "data": {"message": "custom failure"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "turn.failed", "createdAt": "t0c", "data": {"message": "custom failure"}}))
         self.assertEqual(state["turn"]["lastOutcome"]["message"], "Turn failed. Review the error above.")
 
-        store = core.createRuntimeStateStore(core.createInitialRuntimeState())
+        store = core.create_runtime_state_store(core.create_initial_runtime_state())
         subscriber_calls = []
         unsubscribe = store["subscribe"](lambda: subscriber_calls.append(store["getState"]()["turn"]["status"]))
-        store["dispatch"](core.createRuntimeEvent({"event": "turn.started", "createdAt": "t0d", "data": {"prompt": "go"}}))
+        store["dispatch"](core.create_runtime_event({"event": "turn.started", "createdAt": "t0d", "data": {"prompt": "go"}}))
         unsubscribe()
         self.assertEqual(subscriber_calls, ["running"])
 
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "task.registered", "createdAt": "t1", "data": {"task_id": "health-1", "kind": "health_check", "status": "running", "title": "API health"}}))
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "health_check.unhealthy", "createdAt": "t2", "data": {"task_id": "health-1", "title": "API health", "error": "500"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "task.registered", "createdAt": "t1", "data": {"task_id": "health-1", "kind": "health_check", "status": "running", "title": "API health"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "health_check.unhealthy", "createdAt": "t2", "data": {"task_id": "health-1", "title": "API health", "error": "500"}}))
         self.assertEqual(state["tasks"]["tasks"][0]["status"], "degraded")
         self.assertEqual(state["tasks"]["failedCount"], 1)
         self.assertIn("500", state["tasks"]["tasks"][0]["summary"])
 
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "health_check.recovered", "createdAt": "t3", "data": {"task_id": "health-1", "title": "API health"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "health_check.recovered", "createdAt": "t3", "data": {"task_id": "health-1", "title": "API health"}}))
         self.assertEqual(state["tasks"]["tasks"][0]["status"], "running")
         self.assertEqual(state["tasks"]["failedCount"], 0)
 
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "collaboration.assistant_update", "createdAt": "t4", "data": {"source_kind": "monitor", "source_id": "health-1", "status": "running", "label": "API health", "text": "API recovered."}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "collaboration.assistant_update", "createdAt": "t4", "data": {"source_kind": "monitor", "source_id": "health-1", "status": "running", "label": "API health", "text": "API recovered."}}))
         self.assertEqual(state["collaboration"]["recentAssistantUpdates"][0]["sourceKind"], "monitor")
         self.assertEqual(state["collaboration"]["recentAssistantUpdates"][0]["text"], "API recovered.")
 
-        monitor_status = core.createRuntimeEvent(
+        monitor_status = core.create_runtime_event(
             {
                 "event": "monitor.status_changed",
                 "createdAt": "t4b",
@@ -324,7 +324,7 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
             },
         )
 
-        collaboration_snapshot = core.createRuntimeEvent(
+        collaboration_snapshot = core.create_runtime_event(
             {
                 "event": "collaboration.snapshot",
                 "createdAt": "t4c",
@@ -358,12 +358,12 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(collaboration_snapshot["payload"]["workers"][0]["remoteSessionId"], "remote-1")
         self.assertNotIn("ignoredExtra", collaboration_snapshot["payload"]["workers"][0])
 
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "bridge.message", "createdAt": "t5", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1", "text": "continue"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "bridge.message", "createdAt": "t5", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1", "text": "continue"}}))
         self.assertTrue(state["bridge"]["attached"])
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.message")
         self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 1)
 
-        remote_status = core.createRuntimeEvent(
+        remote_status = core.create_runtime_event(
             {
                 "event": "remote.status_changed",
                 "createdAt": "t5b",
@@ -384,13 +384,13 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(remote_status["kind"], "remote.status_changed")
         self.assertEqual(remote_status["payload"]["unreadBridgeMessages"], 4)
         self.assertNotIn("ignoredExtra", remote_status["payload"])
-        state = core.reduceRuntimeState(state, remote_status)
+        state = core.reduce_runtime_state(state, remote_status)
         self.assertEqual(state["collaboration"]["remoteStatus"], "awaiting_input")
         self.assertEqual(state["collaboration"]["remoteTitle"], "Remote QA")
         self.assertEqual(state["collaboration"]["bridgeStatus"], "active")
         self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 4)
 
-        bridge_status = core.createRuntimeEvent(
+        bridge_status = core.create_runtime_event(
             {
                 "event": "bridge.status_changed",
                 "createdAt": "t5c",
@@ -409,18 +409,18 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         self.assertEqual(bridge_status["kind"], "bridge.status_changed")
         self.assertEqual(bridge_status["payload"]["pendingMessages"], 3)
         self.assertNotIn("ignoredExtra", bridge_status["payload"])
-        state = core.reduceRuntimeState(state, bridge_status)
+        state = core.reduce_runtime_state(state, bridge_status)
         self.assertTrue(state["bridge"]["attached"])
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.message.queued")
         self.assertEqual(state["collaboration"]["bridgeStatus"], "active")
         self.assertEqual(state["collaboration"]["pendingBridgeMessages"], 3)
 
-        state = core.reduceRuntimeState(state, core.createRuntimeEvent({"event": "bridge.closed", "createdAt": "t6", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1"}}))
+        state = core.reduce_runtime_state(state, core.create_runtime_event({"event": "bridge.closed", "createdAt": "t6", "data": {"bridge_id": "bridge-1", "remote_session_id": "remote-1"}}))
         self.assertFalse(state["bridge"]["attached"])
         self.assertEqual(state["bridge"]["lastEventName"], "bridge.closed")
         self.assertEqual(state["collaboration"]["bridgeStatus"], "closed")
 
-        bridge_message = core.createRuntimeEvent(
+        bridge_message = core.create_runtime_event(
             {
                 "event": "bridge.message",
                 "createdAt": "t7",
@@ -436,7 +436,7 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
         )
         self.assertEqual(bridge_message["kind"], "bridge.message")
         self.assertEqual(bridge_message["payload"], {"bridgeId": "bridge-1", "remoteSessionId": "remote-1", "text": "hello", "source": "remote"})
-        malformed_bridge_message = core.createRuntimeEvent(
+        malformed_bridge_message = core.create_runtime_event(
             {
                 "event": "bridge.message",
                 "data": {"bridge_id": 1, "remote_session_id": 2, "text": 3, "source": 4},
@@ -446,18 +446,18 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
             malformed_bridge_message["payload"],
             {"bridgeId": None, "remoteSessionId": None, "text": None, "source": None},
         )
-        malformed_generic = core.createRuntimeEvent(
+        malformed_generic = core.create_runtime_event(
             {"event": "mcp.connection", "data": {"channel_name": 123, "ignored_extra": "drop me"}}
         )
         self.assertEqual(malformed_generic["payload"], {"eventName": "mcp.connection", "channelName": None})
-        malformed_bridge_generic = core.createRuntimeEvent(
+        malformed_bridge_generic = core.create_runtime_event(
             {"event": "bridge.closed", "data": {"bridge_id": 123, "remote_session_id": False}}
         )
         self.assertEqual(
             malformed_bridge_generic["payload"],
             {"eventName": "bridge.closed", "bridgeId": None, "remoteSessionId": None},
         )
-        malformed_remote_generic = core.createRuntimeEvent(
+        malformed_remote_generic = core.create_runtime_event(
             {"event": "remote.session_created", "data": {"remote_session_id": 123}}
         )
         self.assertEqual(
@@ -465,9 +465,9 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
             {"eventName": "remote.session_created", "remoteSessionId": None},
         )
 
-        state = core.reduceRuntimeState(
+        state = core.reduce_runtime_state(
             state,
-            core.createRuntimeEvent(
+            core.create_runtime_event(
                 {
                     "event": "subagent.status_changed",
                     "createdAt": "t8",
@@ -475,9 +475,9 @@ class RuntimeStateProjectionTests(AgentCoreTestCase):
                 }
             ),
         )
-        state = core.reduceRuntimeState(
+        state = core.reduce_runtime_state(
             state,
-            core.createRuntimeEvent(
+            core.create_runtime_event(
                 {
                     "event": "monitor.status_changed",
                     "createdAt": "t9",

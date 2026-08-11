@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .._utils import signal_aborted as _signal_aborted
 
-from ..runtime.events.emit import safeEmit as _safe_emit
+from ..runtime.events.emit import safe_emit as _safe_emit
 
 from dataclasses import dataclass as _dataclass
 

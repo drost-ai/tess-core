@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .background_payloads import backgroundTypedPayload
-from .progress_payloads import progressTypedPayload
-from .provider_payloads import providerTypedPayload
+from .background_payloads import background_typed_payload
+from .progress_payloads import progress_typed_payload
+from .provider_payloads import provider_typed_payload
 from .shared import (
     KNOWN_RUNTIME_EVENTS,
     _bounded_optional_string,
@@ -21,7 +21,7 @@ from .shared import (
     _string_field,
 )
 def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    progress_payload = progressTypedPayload(event, data)
+    progress_payload = progress_typed_payload(event, data)
     if progress_payload is not None:
         return progress_payload
     payload = _camelize_record(data)
@@ -77,7 +77,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
         return "status.updated", {"message": _string_field(_field(data, "message")), "detail": _optional_string(_field(data, "detail"))}
     if event == "status.cleared":
         return "status.cleared", {}
-    provider_payload = providerTypedPayload(event, data)
+    provider_payload = provider_typed_payload(event, data)
     if provider_payload is not None:
         return provider_payload
     if event == "tool.started":
@@ -313,7 +313,7 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "compactions": _optional_number(_field(data, "compactions")),
             "reliefWithoutCheckpoint": _optional_boolean(_field(data, "relief_without_checkpoint", "reliefWithoutCheckpoint")),
         }
-    background_payload = backgroundTypedPayload(event, data)
+    background_payload = background_typed_payload(event, data)
     if background_payload is not None:
         return background_payload
     if event in KNOWN_RUNTIME_EVENTS:

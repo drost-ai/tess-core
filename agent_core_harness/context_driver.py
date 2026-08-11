@@ -111,7 +111,7 @@ async def apply_context_relief(data: dict[str, Any], sandbox: ScenarioSandbox, s
 
 async def project_context_events(data: dict[str, Any], _sandbox: ScenarioSandbox, state: dict[str, Any]) -> list[str]:
     session = _current_session(state)
-    runtime_state = core.createInitialRuntimeState(session)
+    runtime_state = core.create_initial_runtime_state(session)
     raw_events = [
         {"event": "compaction.completed", "data": {"generation": 3, "trigger": "threshold", "compacted_message_count": 4, "working_context_token_estimate": 1200, "verification_verdict": "accept", "checkpoint_path": "/tmp/checkpoint.json"}},
         {"event": "context_relief.selected", "data": {"mode": "microcompact", "pressure_level": "high", "planned_modes": ["microcompact", "bad_mode"], "reactive_attempt": 1}},
@@ -119,8 +119,8 @@ async def project_context_events(data: dict[str, Any], _sandbox: ScenarioSandbox
     ]
     projected = []
     for raw in raw_events:
-        typed = core.createRuntimeEvent(raw)
-        runtime_state = core.reduceRuntimeState(runtime_state, typed)
+        typed = core.create_runtime_event(raw)
+        runtime_state = core.reduce_runtime_state(runtime_state, typed)
         projected.append({"event": typed["event"], "payload": typed["payload"]})
     state.setdefault("context_events", []).extend(projected)
     state["context_runtime_state"] = runtime_state

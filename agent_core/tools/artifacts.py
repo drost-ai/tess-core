@@ -13,7 +13,7 @@ from typing import Any
 
 from ..contracts.context import ToolContext
 from ..contracts.tools import ToolResult
-from ..runtime.identifiers import parseArtifactId
+from ..runtime.identifiers import parse_artifact_id
 from ..storage import tool_artifact_data_path, tool_artifact_meta_path
 from ..payloads.result_guard import (
     non_artifact_tool_result_max_bytes,
@@ -41,7 +41,7 @@ def _read_tool_artifact() -> ToolDefinition:
                 "The active session identity is unavailable.",
             )
         try:
-            artifact_id = parseArtifactId(input.get("artifact_id"))
+            artifact_id = parse_artifact_id(input.get("artifact_id"))
             offset = _bounded_nonnegative_integer(
                 input.get("offset_bytes"),
                 default=0,

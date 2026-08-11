@@ -19,7 +19,7 @@ from agent_core.providers.anthropic.payloads import (
     buildAnthropicMessagesEnvelope,
 )
 from agent_core.providers.anthropic.request import sendAnthropicMessagesRequest
-from agent_core.runtime.paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolve_runtime_paths
 from agent_core.storage import ensure_base_layout
 from agent_core.context.token_accounting import measure_request_input_tokens
 from agent_core.providers.usage_costs import estimateUsageCost
@@ -92,7 +92,7 @@ async def _run_canary(
     measure_tokens: MeasureTokens,
 ) -> dict[str, Any]:
     runtime_home = preflight["runtimeHome"]
-    paths = resolveRuntimePaths(candidate=runtime_home)
+    paths = resolve_runtime_paths(candidate=runtime_home)
     workspace = os.path.join(runtime_home, "workspace")
     os.mkdir(workspace, 0o700)
     await ensure_base_layout(workspace, paths)

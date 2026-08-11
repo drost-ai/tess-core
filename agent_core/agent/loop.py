@@ -53,19 +53,19 @@ from .turn_session import (
     run_with_transient_execution_session as _run_with_transient_execution_session,
 )
 from ..authority.agent import enforceSessionAgentAuthority, filterToolsForAgentAuthority
-from ..runtime.agent_bindings import assertAgentRuntimeBindings, materializeAgentExecutionRuntime
+from ..runtime.agent_bindings import assert_agent_runtime_bindings, materialize_agent_execution_runtime
 from ..authority.hooks import fireToolHooks as fireToolHooks
 from ..payloads.image_budget import ImageBudgetError as _ImageBudgetError
 from ..payloads.image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..storage.message_origin import user_request_message as _user_request_message
 from ..authority.permission_rules import findDispatchDenyRule
 from ..providers.prompt_cache_orchestration import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
-from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths, runWithRuntimePaths
+from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths, run_with_runtime_paths
 from ..subagents.contract import filter_tools_for_subagent
 from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits
 from ..tasks.communication import deliver_queued_task_messages_to_session
 from ._question_gate import _knob as _question_knob, backstop_open_questions_on_turn_exit as _backstop_open_questions_on_turn_exit, build_question_reminder as _build_question_reminder, inject_open_question_reminders as _inject_open_question_reminders, read_open_child_questions as _read_open_child_questions, resolve_open_questions_with_backstop as _resolve_open_questions_with_backstop
-from ..runtime.transient_input import runtimeWithSanitizedEvents as _runtime_with_sanitized_events
+from ..runtime.transient_input import runtime_with_sanitized_events as _runtime_with_sanitized_events
 from ..payloads.attachments import (
     imageAttachmentReservationOrder as _image_attachment_reservation_order,
     resolveRuntimeProviderCapabilities as _resolve_runtime_provider_capabilities,
@@ -85,13 +85,13 @@ async def runAgentPrompt(args: dict[str, Any] | None = None, **kwargs: Any) -> d
 async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
-    paths = getActiveRuntimePaths()
+    paths = get_active_runtime_paths()
     prompt_content, prompt_text = _normalize_agent_prompt(args["prompt"])
     runtime_bindings = args.get("runtime")
     materialized = args.get("materializedRuntime")
     if materialized is None:
-        assertAgentRuntimeBindings(runtime_bindings, session.get("id"))
-        materialized = materializeAgentExecutionRuntime(runtime_bindings)
+        assert_agent_runtime_bindings(runtime_bindings, session.get("id"))
+        materialized = materialize_agent_execution_runtime(runtime_bindings)
     runtime = _runtime_with_sanitized_events(materialized)
     provider_override = args.get("providerOverride")
     authority = await enforceSessionAgentAuthority(session=session, config=config)

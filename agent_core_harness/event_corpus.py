@@ -115,7 +115,7 @@ def _contract(identifier: str, events: list[dict[str, Any]], source: str) -> dic
 
 
 def _runtime_event(event: str, data: dict[str, Any], *, scenario: str) -> dict[str, Any]:
-    typed = core.createRuntimeEvent({"event": event, "data": data, "createdAt": "<timestamp>"})
+    typed = core.create_runtime_event({"event": event, "data": data, "createdAt": "<timestamp>"})
     return {"event": event, "data": data, "typedEvent": typed, "scenario": scenario}
 
 

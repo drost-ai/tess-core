@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .prompt_cache import promptCacheEventPayload
+from .prompt_cache import prompt_cache_event_payload
 from .shared import (
     _bounded_optional_string,
     _field,
@@ -12,7 +12,7 @@ from .shared import (
 )
 
 
-def providerTypedPayload(
+def provider_typed_payload(
     event: str,
     data: dict[str, Any],
 ) -> tuple[str, dict[str, Any]] | None:
@@ -237,7 +237,7 @@ def providerTypedPayload(
             ),
         }
     if event == "provider.prompt_cache":
-        return event, promptCacheEventPayload(data)
+        return event, prompt_cache_event_payload(data)
     if event == "provider.fallback":
         return event, {
             "provider": _optional_string(_field(data, "provider")),
@@ -301,4 +301,4 @@ def _closed_reasoning_provider_event_type(value: Any) -> str | None:
     return value if value in allowed else None
 
 
-__all__ = ["providerTypedPayload"]
+__all__ = ["provider_typed_payload"]

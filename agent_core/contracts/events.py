@@ -1,6 +1,6 @@
 """Runtime event envelope contract.
 
-Producer: ``agent_core/runtime/events/factory.py`` (``createRuntimeEvent``).
+Producer: ``agent_core/runtime/events/factory.py`` (``create_runtime_event``).
 Consumers: ``runtime/state/reducer.py``, collaboration/monitor runtimes,
 daemon replay (``runtime.py``), shell transcript rendering.
 
@@ -19,7 +19,7 @@ from typing import Any, Literal, Mapping, TypedDict
 
 # Mirrors KNOWN_RUNTIME_EVENTS in runtime/events/shared.py; a sync test
 # asserts the two sets are identical. The envelope's name fields stay ``str``
-# because createRuntimeEvent accepts arbitrary event names.
+# because create_runtime_event accepts arbitrary event names.
 RuntimeEventName = Literal[
     "system.init",
     "session.activated",
@@ -158,7 +158,7 @@ ContextReliefMode = Literal[
 
 
 class RuntimeEventEnvelope(TypedDict):
-    """The exact shape emitted by createRuntimeEvent — every key always present."""
+    """The exact shape emitted by create_runtime_event — every key always present."""
 
     event: str | None       # canonical raw event name
     kind: str                # typed payload kind ("" when the event is unknown)
@@ -169,7 +169,7 @@ class RuntimeEventEnvelope(TypedDict):
 
 
 class RuntimeSubscriberEnvelope(TypedDict):
-    """What ``bootstrapRuntime``'s ``subscribeEvents`` subscribers receive.
+    """What ``bootstrap_runtime``'s ``subscribeEvents`` subscribers receive.
 
     The full typed envelope is nested under ``typedEvent``; ``event``/``data``
     repeat the raw name and body for legacy subscribers (runtime.py
@@ -211,7 +211,7 @@ def event_kind(event: Mapping[str, Any]) -> str:
 def event_name(event: Mapping[str, Any]) -> str:
     """Raw event name, preferring the raw spelling.
 
-    Mirrors createRuntimeEvent's input coalescing (event, type, kind) exactly.
+    Mirrors create_runtime_event's input coalescing (event, type, kind) exactly.
     """
     value = event.get("event") or event.get("kind")
     return value if isinstance(value, str) else ""

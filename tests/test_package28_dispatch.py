@@ -310,32 +310,32 @@ class Package28DispatchTests(AgentCoreTestCase):
         run(exercise())
 
     def test_new_mcp_events_have_bounded_typed_payloads_and_runtime_projection(self):
-        state = core.createInitialRuntimeState()
-        authorization = core.createRuntimeEvent(
-            event="mcp.authorization_required",
-            data={
+        state = core.create_initial_runtime_state()
+        authorization = core.create_runtime_event({
+            "event": "mcp.authorization_required",
+            "data": {
                 "server": "fake",
                 "transport": "http",
                 "authorization_url": "https://auth.example/authorize?" + "x" * 10_000,
                 "continuation_id": "continuation",
                 "arguments": {"must": "not project"},
             },
-        )
+        })
         self.assertEqual(authorization["kind"], "mcp.authorization_required")
         self.assertLessEqual(len(authorization["payload"]["authorizationUrl"].encode("utf-8")), 4096)
         self.assertNotIn("arguments", authorization["payload"])
-        state = core.reduceRuntimeState(state, authorization)
+        state = core.reduce_runtime_state(state, authorization)
         self.assertEqual(state["mcp"]["servers"]["fake"]["state"], "authorization_required")
         self.assertEqual(
             state["mcp"]["servers"]["fake"]["authorizationUrl"],
             "https://auth.example/authorize",
         )
 
-        applied = core.createRuntimeEvent(
-            event="mcp.catalog_changed_applied",
-            data={"servers": ["fake"], "generation": 3, "tools_changed": True, "resources_changed": False},
-        )
-        state = core.reduceRuntimeState(state, applied)
+        applied = core.create_runtime_event({
+            "event": "mcp.catalog_changed_applied",
+            "data": {"servers": ["fake"], "generation": 3, "tools_changed": True, "resources_changed": False},
+        })
+        state = core.reduce_runtime_state(state, applied)
         self.assertEqual(state["mcp"]["catalogGeneration"], 3)
 
 

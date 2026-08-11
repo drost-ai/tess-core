@@ -21,7 +21,7 @@ from ..authority.executable_source_policy import (
     parseSettingSources,
 )
 from ..authority.repository_trust import getRepositoryTrustStatus, revokeRepositoryApproval
-from ..runtime.secrets import authorizeRuntimeSecretWrite, isRuntimeSecretRef, storeRuntimeSecret
+from ..runtime.secrets import authorize_runtime_secret_write, is_runtime_secret_ref, store_runtime_secret
 from .chrome import (
     buildChromeNativeHostManifest,
     detectChromeCompanionStatus,

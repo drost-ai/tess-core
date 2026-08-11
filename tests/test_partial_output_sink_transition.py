@@ -89,7 +89,7 @@ class PartialOutputSinkTransitionTests(AgentCoreTestCase):
             {"partialOutputRecoveryPolicy": "discard_if_sink_unavailable"},
         )
 
-        runtime = core.materializeAgentExecutionRuntime(bindings)
+        runtime = core.materialize_agent_execution_runtime(bindings)
 
         self.assertEqual(
             runtime["partialOutputRecoveryPolicy"],

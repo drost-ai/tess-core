@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ..contracts.records import SessionRecord
-from ..runtime.identifiers import parseSessionId
+from ..runtime.identifiers import parse_session_id
 from .message_history import (
     SessionMessageList,
     set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
@@ -37,7 +37,7 @@ async def mutate_session_record_transaction(
     ``requireExisting=True`` raises SessionRecordNotFoundError for a missing
     record before the mutation runs, so the mutation always receives a dict.
     """
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     settings = {**(options or {}), **kwargs}
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
     require_existing = bool(settings.get("requireExisting"))
@@ -131,7 +131,7 @@ async def mutate_session_head_delta_transaction(
     checkpoint = messages.checkpoint()
     if checkpoint is None:
         return None
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     settings = {**(options or {}), **kwargs}
     timeout_ms = int(settings.get("timeoutMs") or _storage_lock_timeout_ms())
     async with with_record_transaction("session", session_id, timeoutMs=timeout_ms):

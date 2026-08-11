@@ -55,7 +55,7 @@ _store_locks_guard = threading.Lock()
 _store_locks: dict[str, threading.Lock] = {}
 
 
-def authorizeRuntimeSecretWrite(
+def authorize_runtime_secret_write(
     args: Mapping[str, Any] | None = None,
     *,
     purpose: str | None = None,
@@ -79,7 +79,7 @@ def authorizeRuntimeSecretWrite(
     return authorization
 
 
-async def storeRuntimeSecret(
+async def store_runtime_secret(
     args: Mapping[str, Any] | None = None,
     *,
     purpose: str | None = None,
@@ -113,7 +113,7 @@ async def storeRuntimeSecret(
         ref = {"kind": "runtime_secret", "id": secret_id, "purpose": selected_purpose, "version": 1}
         target = os.path.join(_records_dir(), f"{secret_id}.json")
         try:
-            existing = await resolveRuntimeSecret(ref, selected_purpose)
+            existing = await resolve_runtime_secret(ref, selected_purpose)
         except FileNotFoundError:
             existing = None
         if existing is not None:
@@ -127,7 +127,7 @@ async def storeRuntimeSecret(
         record = {**unsigned, "mac": _hmac(integrity_key, _record_mac_input(unsigned))}
         installed = _atomic_private_write_exclusive(target, f"{json.dumps(record, separators=(',', ':'))}\n".encode("utf-8"))
         if not installed:
-            existing = await resolveRuntimeSecret(ref, selected_purpose)
+            existing = await resolve_runtime_secret(ref, selected_purpose)
             try:
                 if not hmac.compare_digest(bytes(existing), secret_bytes):
                     raise RuntimeSecretError("secret_store_unauthorized", "idempotency key was reused for another value")
@@ -139,7 +139,7 @@ async def storeRuntimeSecret(
         _zero(integrity_key)
 
 
-def isRuntimeSecretRef(value: Any) -> bool:
+def is_runtime_secret_ref(value: Any) -> bool:
     return bool(
         isinstance(value, dict)
         and value.get("kind") == "runtime_secret"
@@ -150,8 +150,8 @@ def isRuntimeSecretRef(value: Any) -> bool:
     )
 
 
-async def resolveRuntimeSecret(ref: Mapping[str, Any], expectedPurpose: str) -> bytearray:
-    if not isRuntimeSecretRef(ref) or ref.get("purpose") != expectedPurpose:
+async def resolve_runtime_secret(ref: Mapping[str, Any], expectedPurpose: str) -> bytearray:
+    if not is_runtime_secret_ref(ref) or ref.get("purpose") != expectedPurpose:
         raise RuntimeSecretError("secret_store_invalid", "reference purpose or shape is invalid")
     _ensure_private_store()
     raw = bytearray(_read_bounded_regular_file(os.path.join(_records_dir(), f"{ref['id']}.json"), MAX_RECORD_BYTES))
@@ -193,10 +193,10 @@ async def resolveRuntimeSecret(ref: Mapping[str, Any], expectedPurpose: str) -> 
         _zero(integrity_key)
 
 
-async def resolveRuntimeSecretString(value: Any, purpose: str) -> str:
+async def resolve_runtime_secret_string(value: Any, purpose: str) -> str:
     if isinstance(value, str):
         return value
-    resolved = await resolveRuntimeSecret(value, purpose)
+    resolved = await resolve_runtime_secret(value, purpose)
     try:
         return resolved.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -205,11 +205,11 @@ async def resolveRuntimeSecretString(value: Any, purpose: str) -> str:
         _zero(resolved)
 
 
-def mcpFieldIsSecret(key: str) -> bool:
+def mcp_field_is_secret(key: str) -> bool:
     return bool(_SECRET_KEY_PATTERN.search(key))
 
 
-def assertNoLiteralMcpSecrets(records: Iterable[Mapping[str, Any]], source: str) -> None:
+def assert_no_literal_mcp_secrets(records: Iterable[Mapping[str, Any]], source: str) -> None:
     for record in records:
         for key, value in (record.get("headers") or {}).items():
             if isinstance(value, str):
@@ -218,7 +218,7 @@ def assertNoLiteralMcpSecrets(records: Iterable[Mapping[str, Any]], source: str)
                     f"{source} MCP header {key} requires a runtime secret reference",
                 )
         for key, value in (record.get("env") or {}).items():
-            if mcpFieldIsSecret(str(key)) and isinstance(value, str):
+            if mcp_field_is_secret(str(key)) and isinstance(value, str):
                 raise RuntimeSecretError(
                     "secret_store_invalid",
                     f"{source} MCP env {key} requires a runtime secret reference",
@@ -231,7 +231,7 @@ def assertNoLiteralMcpSecrets(records: Iterable[Mapping[str, Any]], source: str)
             )
 
 
-async def migrateLegacyMcpServerSecrets(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+async def migrate_legacy_mcp_server_secrets(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     changed = False
     migrated: list[dict[str, Any]] = []
     for source_record in records:
@@ -239,7 +239,7 @@ async def migrateLegacyMcpServerSecrets(records: Iterable[Mapping[str, Any]]) ->
         headers = record.get("headers") if isinstance(record.get("headers"), dict) else None
         env = record.get("env") if isinstance(record.get("env"), dict) else None
         for key, value in list((headers or {}).items()):
-            if mcpFieldIsSecret(key) and isinstance(value, str):
+            if mcp_field_is_secret(key) and isinstance(value, str):
                 headers[key] = await _migrate_value(
                     "mcp_header",
                     value,
@@ -247,7 +247,7 @@ async def migrateLegacyMcpServerSecrets(records: Iterable[Mapping[str, Any]]) ->
                 )
                 changed = True
         for key, value in list((env or {}).items()):
-            if mcpFieldIsSecret(key) and isinstance(value, str):
+            if mcp_field_is_secret(key) and isinstance(value, str):
                 env[key] = await _migrate_value(
                     "mcp_env",
                     value,
@@ -267,20 +267,20 @@ async def migrateLegacyMcpServerSecrets(records: Iterable[Mapping[str, Any]]) ->
     return {"records": migrated, "changed": changed}
 
 
-async def resolveMcpServerConfigSecrets(record: Mapping[str, Any]) -> dict[str, Any]:
+async def resolve_mcp_server_config_secrets(record: Mapping[str, Any]) -> dict[str, Any]:
     resolved = _deep_copy(record)
     resolved["headers"] = {
-        key: await resolveRuntimeSecretString(value, "mcp_header")
+        key: await resolve_runtime_secret_string(value, "mcp_header")
         for key, value in (record.get("headers") or {}).items()
     }
     resolved["env"] = {
-        key: await resolveRuntimeSecretString(value, "mcp_env")
+        key: await resolve_runtime_secret_string(value, "mcp_env")
         for key, value in (record.get("env") or {}).items()
     }
     if isinstance(record.get("oauth"), dict):
         resolved["oauth"] = _deep_copy(record["oauth"])
         if record["oauth"].get("clientSecret") is not None:
-            resolved["oauth"]["clientSecret"] = await resolveRuntimeSecretString(
+            resolved["oauth"]["clientSecret"] = await resolve_runtime_secret_string(
                 record["oauth"]["clientSecret"], "mcp_oauth"
             )
     return resolved
@@ -289,11 +289,11 @@ async def resolveMcpServerConfigSecrets(record: Mapping[str, Any]) -> dict[str, 
 async def _migrate_value(purpose: str, value: str, idempotency_key: str) -> dict[str, Any]:
     material = bytearray(value.encode("utf-8"))
     try:
-        return await storeRuntimeSecret(
+        return await store_runtime_secret(
             purpose=purpose,
             secret=material,
             idempotencyKey=idempotency_key,
-            authorization=authorizeRuntimeSecretWrite(purpose=purpose, idempotencyKey=idempotency_key),
+            authorization=authorize_runtime_secret_write(purpose=purpose, idempotencyKey=idempotency_key),
         )
     finally:
         _zero(material)

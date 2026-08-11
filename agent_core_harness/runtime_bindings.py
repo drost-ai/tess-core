@@ -17,7 +17,7 @@ def bind_agent_runtime(
     gateway = overrides.get("daemon", source.get("daemon"))
     daemon = (
         {"state": "connected", "client": gateway}
-        if core.isTaskSupervisorGateway(gateway)
+        if core.is_task_supervisor_gateway(gateway)
         else {
             "state": "unavailable",
             "reason": values.get("daemonUnavailableReason")
@@ -32,7 +32,7 @@ def bind_agent_runtime(
         get_binding() if callable(get_binding) else source.get("sessionBinding")
     )
     if not isinstance(binding, Mapping):
-        binding = core.createRuntimeSessionBinding(session["id"], 1, 1)
+        binding = core.create_runtime_session_binding(session["id"], 1, 1)
     emit = values.get("emitEvent") if callable(values.get("emitEvent")) else lambda *_args: None
     refresh = values.get("refreshMcpToolRegistry")
     if not callable(refresh):
@@ -44,7 +44,7 @@ def bind_agent_runtime(
         for key, value in values.items()
         if key in core.AGENT_RUNTIME_BINDING_FIELDS
     }
-    return core.createAgentRuntimeBindings(
+    return core.create_agent_runtime_bindings(
         {
             **filtered,
             "tools": values.get("tools") or [],

@@ -28,7 +28,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
             tool = core.ToolDefinition(
                 "BoundaryProbe", "must never run", {"type": "object"}, handler
             )
-            valid = core.createAgentRuntimeBindings(
+            valid = core.create_agent_runtime_bindings(
                 {
                     "tools": [tool],
                     "emitEvent": lambda *_: boundary.__setitem__(
@@ -36,7 +36,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
                     ),
                     "daemon": {"state": "connected", "client": _gateway(boundary)},
                     "refreshMcpToolRegistry": refresh,
-                    "sessionBinding": core.createRuntimeSessionBinding(session["id"], 1, 1),
+                    "sessionBinding": core.create_runtime_session_binding(session["id"], 1, 1),
                     "questionPolicy": {"interactive": False, "askQuestion": lambda *_: ""},
                 }
             )
@@ -75,7 +75,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
                     "wrong session",
                     {
                         **valid,
-                        "sessionBinding": core.createRuntimeSessionBinding("other", 1, 1),
+                        "sessionBinding": core.create_runtime_session_binding("other", 1, 1),
                     },
                     "runtime_bindings_invalid",
                 ),
@@ -118,7 +118,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
             )
             config = _config(cwd)
             provider_calls = 0
-            bindings = core.createAgentRuntimeBindings(
+            bindings = core.create_agent_runtime_bindings(
                 {
                     "tools": [],
                     "emitEvent": lambda *_: None,
@@ -130,7 +130,7 @@ class RuntimeBindingsContractTests(AgentCoreTestCase):
                         },
                     },
                     "refreshMcpToolRegistry": lambda: None,
-                    "sessionBinding": core.createRuntimeSessionBinding(session["id"], 4, 7),
+                    "sessionBinding": core.create_runtime_session_binding(session["id"], 4, 7),
                     "questionPolicy": {"interactive": False, "askQuestion": lambda *_: ""},
                 }
             )

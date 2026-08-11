@@ -7,17 +7,18 @@ from .._utils import maybe_await
 from ..tasks.collaboration import createCollaborationRuntime
 from ..daemon import ensureTaskSupervisorDaemon, stopTaskSupervisorDaemon
 from ._daemon_watch import start_daemon_watchdog as _start_daemon_watchdog
-from .exception_groups import aggregateRuntimeFailures as _aggregate_runtime_failures
-from .lifecycle_barrier import createLifecycleBarrier
+from .exception_groups import aggregate_runtime_failures as _aggregate_runtime_failures
+from .lifecycle_barrier import create_lifecycle_barrier
 from ..tasks.monitors import createMonitorRuntime
-from .events import createRuntimeEvent
-from .generation import RuntimeActivationSupersededError, createRuntimeActivationContext, createRuntimeSessionBinding, sameRuntimeBinding
-from .paths import RuntimePaths, getActiveRuntimePaths, runWithRuntimePaths
-from .session_components import prepareRuntimeSessionComponents
-from .support import StagedRuntimeSource as _StagedRuntimeSource, acquireCommit as _acquire_commit, defaultRuntimeComponentFactories as _default_factories
-from .support import callMethod as _call_method, closeMany as _close_many, daemonSnapshotPayload as _daemon_snapshot_payload, getMethod as _get_method, hasMethod as _has_method
-from .support import installComponentSurface as _install_component_surface, maybeCall as _maybe_call, runtimePathGraphId as _path_graph_id, taskSnapshotFromState as _task_snapshot_from_state
-from .state import createInitialRuntimeState, createRuntimeStateStore
+from .events import create_runtime_event
+from .generation import RuntimeActivationSupersededError, create_runtime_activation_context, create_runtime_session_binding, same_runtime_binding
+from ..contracts.runtime_surface import BootstrappedRuntime
+from .paths import RuntimePaths, get_active_runtime_paths, run_with_runtime_paths
+from .session_components import prepare_runtime_session_components
+from .support import StagedRuntimeSource as _StagedRuntimeSource, acquire_commit as _acquire_commit, default_runtime_component_factories as _default_factories
+from .support import call_method as _call_method, close_many as _close_many, daemon_snapshot_payload as _daemon_snapshot_payload, get_method as _get_method, has_method as _has_method
+from .support import install_component_surface as _install_component_surface, maybe_call as _maybe_call, runtime_path_graph_id as _path_graph_id, task_snapshot_from_state as _task_snapshot_from_state
+from .state import create_initial_runtime_state, create_runtime_state_store
 from ..session.runtime import create_session_runtime_controller
 from ..storage import configure_runtime_home, register_storage_lock_observer
 from ..tasks.runtime import createTaskRuntime
@@ -26,13 +27,13 @@ from ..tasks.runtime import createTaskRuntime
 MAX_STALE_DIAGNOSTICS = 128
 
 
-async def bootstrapRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def bootstrap_runtime(args: dict[str, Any] | None = None, **kwargs: Any) -> BootstrappedRuntime:
     values = {**(args or {}), **kwargs}
     config = values.get("config") or {}
     if config.get("runtimeHome"):
         configure_runtime_home(config["runtimeHome"])
-    paths = getActiveRuntimePaths()
-    return await runWithRuntimePaths(paths, lambda: _bootstrap_runtime(values, paths))
+    paths = get_active_runtime_paths()
+    return await run_with_runtime_paths(paths, lambda: _bootstrap_runtime(values, paths))
 
 
 async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[str, Any]:
@@ -41,14 +42,14 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     runtime_instance_id = str(uuid.uuid4())
     path_graph_id = _path_graph_id(paths)
     initial_session_id = (session or {}).get("id") or args.get("sessionId") or "runtime-unbound"
-    active_binding = createRuntimeSessionBinding(initial_session_id, 1, 1, runtimeInstanceId=runtime_instance_id, pathGraphId=path_graph_id)
+    active_binding = create_runtime_session_binding(initial_session_id, 1, 1, runtimeInstanceId=runtime_instance_id, pathGraphId=path_graph_id)
     generation = 1
     latest_activation_request = 1
     activation_counter_lock = threading.Lock()
     commit_lock = threading.Lock()
     state_lock = threading.RLock()
-    lifecycle = createLifecycleBarrier()
-    state_store = createRuntimeStateStore(createInitialRuntimeState(session) if session else None)
+    lifecycle = create_lifecycle_barrier()
+    state_store = create_runtime_state_store(create_initial_runtime_state(session) if session else None)
     legacy_subscribers: list[Callable[[str, dict[str, Any]], Any]] = []
     event_subscribers: list[Callable[[dict[str, Any]], Any]] = []
     stale_diagnostics: set[str] = set()
@@ -68,7 +69,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     owned_collaboration = collaboration_runtime is None
 
     def publish(event: str, data: dict[str, Any]) -> None:
-        typed_event = createRuntimeEvent({"event": event, "data": data, "defaultSessionId": active_binding.get("sessionId")})
+        typed_event = create_runtime_event({"event": event, "data": data, "defaultSessionId": active_binding.get("sessionId")})
         state_store["dispatch"](typed_event)
         envelope = {"event": event, "data": data, "typedEvent": typed_event}
         for listener in list(event_subscribers):
@@ -102,10 +103,10 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     def dispatch_bound(binding: Mapping[str, Any], event: str, data: dict[str, Any] | None = None) -> None:
         normalized = {**(data or {}), "session_id": binding.get("sessionId")}
         with state_lock:
-            if pending_commit and sameRuntimeBinding(binding, pending_commit["binding"]):
+            if pending_commit and same_runtime_binding(binding, pending_commit["binding"]):
                 pending_commit["events"].append((event, normalized))
                 return
-            stale = not sameRuntimeBinding(binding, active_binding)
+            stale = not same_runtime_binding(binding, active_binding)
         if stale:
             report_stale(binding, event)
             return
@@ -129,7 +130,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     factories = _default_factories()
 
     async def prepare_components(next_session: dict[str, Any], next_config: dict[str, Any], binding: Mapping[str, Any], source: _StagedRuntimeSource, *, has_session: bool = True) -> dict[str, Any]:
-        return await prepareRuntimeSessionComponents(
+        return await prepare_runtime_session_components(
             {"binding": binding, "session": next_session, "config": next_config, "emit": source.emit, "factories": factories, "bootstrapArgs": {**args, "runtimePaths": paths}, "hasSession": has_session}
         )
 
@@ -295,7 +296,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                 active_binding = prepared["binding"]
                 active_components = prepared["components"]
                 daemon_unsubscribe = prepared.get("daemonUnsubscribe")
-            state_store["setState"](createInitialRuntimeState(prepared["session"]))
+            state_store["setState"](create_initial_runtime_state(prepared["session"]))
             if session_runtime:
                 session_runtime["setActiveSession"](
                     prepared["session"], prepared["config"], prepared["binding"]
@@ -326,7 +327,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
                         "reason": str(exc)[:2_048],
                     },
                 )
-            return createRuntimeActivationContext(
+            return create_runtime_activation_context(
                 {
                     "binding": prepared["binding"],
                     "session": prepared["session"],
@@ -355,7 +356,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
             generation += 1
             latest_activation_request += 1
             request = latest_activation_request
-            binding = createRuntimeSessionBinding(
+            binding = create_runtime_session_binding(
                 next_session["id"],
                 generation,
                 request,
@@ -375,7 +376,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
         async def tracked() -> Any:
             return await lifecycle.run(
                 "set active runtime session",
-                lambda: runWithRuntimePaths(paths, operation),
+                lambda: run_with_runtime_paths(paths, operation),
             )
 
         coroutine = tracked()
@@ -388,8 +389,8 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     async def apply_pending_mcp_catalog_changes() -> dict[str, Any]:
         captured_components = active_components
         captured_binding = active_binding
-        result = await runWithRuntimePaths(paths, captured_components["refreshMcpTools"])
-        if not sameRuntimeBinding(captured_binding, active_binding):
+        result = await run_with_runtime_paths(paths, captured_components["refreshMcpTools"])
+        if not same_runtime_binding(captured_binding, active_binding):
             report_stale(captured_binding, "mcp.tool_registry_refreshed")
             return {"changed": False, "servers": [], "generation": 0}
         if result.get("changed"):
@@ -451,9 +452,9 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
 
         from ..config._knobs import knobValue
 
-        await runWithRuntimePaths(
+        await run_with_runtime_paths(
             paths,
-            lambda: lifecycle.close({"cleanup": cleanup, "failAfterMs": int(knobValue("runtime.close_failure_ms"))}),
+            lambda: lifecycle.close(cleanup=cleanup, fail_after_ms=int(knobValue("runtime.close_failure_ms"))),
         )
     runtime_api.update(
         {

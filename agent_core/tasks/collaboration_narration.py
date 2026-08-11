@@ -6,7 +6,7 @@ from typing import Any
 from ..config import ensureProviderForModelSelection, normalizeEffortForModel
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.openai import sendOpenAiRequest
-from ..runtime.secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolve_provider_config_secrets
 from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
 
 
@@ -54,7 +54,7 @@ async def authorCollaborationUpdateWithProvider(args: dict[str, Any]) -> str:
         ],
         "tools": [],
     }
-    resolved_config = await resolveProviderConfigSecrets(config)
+    resolved_config = await resolve_provider_config_secrets(config)
     if provider == "openai":
         token = resolved_config.get("openaiToken")
         if not token:

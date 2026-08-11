@@ -16,7 +16,7 @@ from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import computeProviderTokenBudget, resolveCompactionPolicy
 from ..session.persistence import persist_session
 from .._utils import now_iso as _now
-from ..runtime.events.emit import safeEmit as _safe_emit
+from ..runtime.events.emit import safe_emit as _safe_emit
 from .shared import modelSupportsImageInputs, requestHasImageInputs
 from typing import Any
 from .checkpoints import maybeAutoCheckpointRawSession, maybeAutoCompactSession

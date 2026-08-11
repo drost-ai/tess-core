@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
-from ..runtime.secrets import isRuntimeSecretRef
+from ..runtime.secrets import is_runtime_secret_ref
 
 
 LEGACY_UPDATED_AT = "1970-01-01T00:00:00.000Z"
@@ -85,7 +85,7 @@ def _string_array(value: Any, field: str) -> list[str] | None:
 
 
 def _secret_value(value: Any, field: str) -> Any:
-    if isinstance(value, str) or isRuntimeSecretRef(value):
+    if isinstance(value, str) or is_runtime_secret_ref(value):
         return copy.deepcopy(value)
     return _fail(field, "expected a string or runtime secret reference")
 

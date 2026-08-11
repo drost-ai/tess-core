@@ -9,12 +9,12 @@ from ..contracts.records import (
 )
 from ..runtime.identifiers import (
     RuntimeIdentifierError,
-    parseAgentId,
-    parseMonitorId,
-    parseTaskId,
-    tryParseAgentId,
-    tryParseMonitorId,
-    tryParseTaskId,
+    parse_agent_id,
+    parse_monitor_id,
+    parse_task_id,
+    try_parse_agent_id,
+    try_parse_monitor_id,
+    try_parse_task_id,
 )
 from .persisted_record_scanner import read_persisted_json_record, scan_persisted_json_records
 from .persisted_record_validation import (
@@ -39,10 +39,10 @@ from .paths import get_state_root
 # these writers compose with an enclosing transaction instead of deadlocking.
 
 def task_dir(taskId: str) -> str:
-    return os.path.join(get_state_root(), "tasks", parseTaskId(taskId))
+    return os.path.join(get_state_root(), "tasks", parse_task_id(taskId))
 
 def task_record_path(taskId: str) -> str:
-    return os.path.join(get_state_root(), "task-records", f"{parseTaskId(taskId)}.json")
+    return os.path.join(get_state_root(), "task-records", f"{parse_task_id(taskId)}.json")
 
 def task_meta_path(taskId: str) -> str:
     return os.path.join(task_dir(taskId), "meta.json")
@@ -54,10 +54,10 @@ def health_check_meta_path(taskId: str) -> str:
     return os.path.join(task_dir(taskId), "health-check.json")
 
 def monitor_path(monitorId: str) -> str:
-    return os.path.join(get_state_root(), "monitors", f"{parseMonitorId(monitorId)}.json")
+    return os.path.join(get_state_root(), "monitors", f"{parse_monitor_id(monitorId)}.json")
 
 def child_agent_path(agentId: str) -> str:
-    return os.path.join(get_state_root(), "agents", f"{parseAgentId(agentId)}.json")
+    return os.path.join(get_state_root(), "agents", f"{parse_agent_id(agentId)}.json")
 
 async def _load_by_path(path: str) -> dict[str, Any] | None:
     return await read_json_file(path, None)
@@ -130,7 +130,7 @@ def _json_candidate(directory: str, entry: os.DirEntry[str], parse_id) -> dict[s
     return {"id": record_id, "filePath": os.path.join(directory, entry.name)}
 
 async def save_child_agent(record: ChildAgentRecord) -> None:
-    agent_id = parseAgentId(record["agentId"])
+    agent_id = parse_agent_id(record["agentId"])
     path = child_agent_path(agent_id)
     async with with_record_transaction("agent-record", agent_id):
         current = await _load_by_path(path)
@@ -146,7 +146,7 @@ async def mutate_child_agent(agentId: str, mutate) -> ChildAgentRecord | None:
     The persisted value passes through the same ``None``-field omission as
     ``save_child_agent``.
     """
-    agent_id = parseAgentId(agentId)
+    agent_id = parse_agent_id(agentId)
     path = child_agent_path(agent_id)
     async with with_record_transaction("agent-record", agent_id):
         current = await _load_by_path(path)
@@ -159,7 +159,7 @@ async def mutate_child_agent(agentId: str, mutate) -> ChildAgentRecord | None:
         return updated
 
 async def load_child_agent(agentId: str) -> ChildAgentRecord | None:
-    agent_id = parseAgentId(agentId)
+    agent_id = parse_agent_id(agentId)
     result = await read_persisted_json_record(
         family="agent",
         id=agent_id,
@@ -173,13 +173,13 @@ async def list_child_agents() -> list[ChildAgentRecord]:
     scan = await scan_persisted_json_records(
         family="agent",
         directory=directory,
-        select=lambda entry: _json_candidate(directory, entry, tryParseAgentId),
+        select=lambda entry: _json_candidate(directory, entry, try_parse_agent_id),
         validate=is_child_agent_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("startedAt", ""), reverse=True)
 
 async def write_task_meta(taskId: str, value: TaskMeta) -> None:
-    task_id = parseTaskId(taskId)
+    task_id = parse_task_id(taskId)
     async with with_record_transaction("task-lifecycle", task_id):
         await write_json_file(task_meta_path(task_id), value)
 
@@ -192,7 +192,7 @@ async def mutate_task_meta(taskId: str, mutate, fallback: TaskMeta | None = None
     nothing was loaded, or persists the received value after in-place
     mutation.
     """
-    task_id = parseTaskId(taskId)
+    task_id = parse_task_id(taskId)
     path = task_meta_path(task_id)
     async with with_record_transaction("task-lifecycle", task_id):
         current = await read_json_file(path, fallback)
@@ -205,7 +205,7 @@ async def mutate_task_meta(taskId: str, mutate, fallback: TaskMeta | None = None
         return updated
 
 async def read_task_meta(taskId: str) -> TaskMeta | None:
-    task_id = parseTaskId(taskId)
+    task_id = parse_task_id(taskId)
     result = await read_persisted_json_record(
         family="task_meta",
         id=task_id,
@@ -215,12 +215,12 @@ async def read_task_meta(taskId: str) -> TaskMeta | None:
     return result.get("record")
 
 async def save_task_record(record: TaskRecord) -> None:
-    task_id = parseTaskId(record["id"])
+    task_id = parse_task_id(record["id"])
     async with with_record_transaction("task-lifecycle", task_id):
         await write_json_file(task_record_path(task_id), omit_none_fields(record))
 
 async def load_task_record(taskId: str) -> TaskRecord | None:
-    task_id = parseTaskId(taskId)
+    task_id = parse_task_id(taskId)
     result = await read_persisted_json_record(
         family="task_record",
         id=task_id,
@@ -234,7 +234,7 @@ async def list_task_records() -> list[TaskRecord]:
     scan = await scan_persisted_json_records(
         family="task_record",
         directory=directory,
-        select=lambda entry: _json_candidate(directory, entry, tryParseTaskId),
+        select=lambda entry: _json_candidate(directory, entry, try_parse_task_id),
         validate=is_task_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
@@ -243,12 +243,12 @@ async def list_session_task_records(sessionId: str) -> list[TaskRecord]:
     return [task for task in await list_task_records() if task.get("sessionId") == sessionId]
 
 async def save_monitor(record: MonitorRecord) -> None:
-    monitor_id = parseMonitorId(record["id"])
+    monitor_id = parse_monitor_id(record["id"])
     async with with_record_transaction("monitor-record", monitor_id):
         await write_json_file(monitor_path(monitor_id), record)
 
 async def load_monitor(monitorId: str) -> MonitorRecord | None:
-    monitor_id = parseMonitorId(monitorId)
+    monitor_id = parse_monitor_id(monitorId)
     result = await read_persisted_json_record(
         family="monitor",
         id=monitor_id,
@@ -262,7 +262,7 @@ async def list_monitors() -> list[MonitorRecord]:
     scan = await scan_persisted_json_records(
         family="monitor",
         directory=directory,
-        select=lambda entry: _json_candidate(directory, entry, tryParseMonitorId),
+        select=lambda entry: _json_candidate(directory, entry, try_parse_monitor_id),
         validate=is_monitor_record,
     )
     return sorted(scan["records"], key=lambda item: item.get("updatedAt", ""), reverse=True)
@@ -271,14 +271,14 @@ async def list_session_monitors(sessionId: str) -> list[MonitorRecord]:
     return [monitor for monitor in await list_monitors() if monitor.get("sessionId") == sessionId]
 
 async def save_health_check_task(record: TaskMeta) -> None:
-    task_id = parseTaskId(record["taskId"])
+    task_id = parse_task_id(record["taskId"])
     async with with_record_transaction("task-lifecycle", task_id):
         await write_json_file(health_check_meta_path(task_id), record)
 
 
 async def mutate_health_check_task(taskId: str, mutate) -> TaskMeta | None:
     """Locked read-modify-write for the health-check meta record."""
-    task_id = parseTaskId(taskId)
+    task_id = parse_task_id(taskId)
     path = health_check_meta_path(task_id)
     async with with_record_transaction("task-lifecycle", task_id):
         current = await read_json_file(path, None)
@@ -291,7 +291,7 @@ async def mutate_health_check_task(taskId: str, mutate) -> TaskMeta | None:
         return updated
 
 async def load_health_check_task(taskId: str) -> TaskMeta | None:
-    task_id = parseTaskId(taskId)
+    task_id = parse_task_id(taskId)
     result = await read_persisted_json_record(
         family="health_check",
         id=task_id,
@@ -303,7 +303,7 @@ async def load_health_check_task(taskId: str) -> TaskMeta | None:
 async def list_health_check_tasks() -> list[TaskMeta]:
     directory = os.path.join(get_state_root(), "tasks")
     def select(entry: os.DirEntry[str]) -> dict[str, str] | None:
-        task_id = tryParseTaskId(entry.name)
+        task_id = try_parse_task_id(entry.name)
         if task_id is None or not entry.is_dir(follow_symlinks=False):
             return None
         return {"id": task_id, "filePath": health_check_meta_path(task_id)}

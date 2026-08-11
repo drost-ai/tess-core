@@ -12,7 +12,7 @@ from agent_core.providers.prompt_cache_orchestration import (
     isPromptCacheEvictionTerminalSuccess,
     recordPromptCacheEvictionIntentAtFinalization,
 )
-from agent_core.runtime.paths import resolveRuntimePaths
+from agent_core.runtime.paths import resolve_runtime_paths
 
 
 class PromptCacheLifecycleTests(AgentCoreTestCase):
@@ -111,7 +111,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         self._run_turn(session, config, send, events)
         self._run_turn(session, config, send, events)
         self.assertEqual(sent_ids, [None, "msg_1"])
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(state["revision"], 2)
         self.assertEqual(state["response"]["id"], "msg_2")
@@ -133,7 +133,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
             }
 
         self._run_turn(session, config, send, events)
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertTrue(state["eviction"]["pending"])
         self.assertEqual(
@@ -181,7 +181,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         self._run_turn(session, config, send, events)
         self.assertEqual(attempts, [0, 1])
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(state["revision"], 1)
         self.assertEqual(state["request"]["preparation"], "reactive_relief")
@@ -209,7 +209,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
             with self.subTest(kind=kind), self.assertRaises(Exception):
                 self._run_turn(session, config, fail, events)
-            paths = resolveRuntimePaths(candidate=str(self.home))
+            paths = resolve_runtime_paths(candidate=str(self.home))
             self.assertEqual(
                 run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["status"],
                 "missing",
@@ -234,7 +234,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         result = self._run_turn(session, config, send, events)
         self.assertEqual((result["stopReason"], result["text"]), ("end_turn", "retried"))
         self.assertEqual(result["usage"]["cache_creation_input_tokens"], 3)
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual((state["revision"], state["response"]["id"]), (2, "empty-2"))
         observed = [data for event, data in events if event == "provider.prompt_cache" and data.get("phase") == "observed"]
@@ -267,7 +267,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
             [(item["attempt"], item["retrying"]) for item in empty_events],
             [(1, True), (2, False)],
         )
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(state["revision"], 2)
         self.assertNotIn("eviction", state)
@@ -289,7 +289,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         result = self._run_turn(session, config, send, events, {"abortSignal": signal})
         self.assertEqual(result["stopReason"], "cancelled")
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual((state["revision"], state["response"]["id"]), (1, "terminal-id"))
         observed = [data for event, data in events if event == "provider.prompt_cache" and data.get("phase") == "observed"]
@@ -308,7 +308,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         result = self._run_turn(session, config, send, events, {"abortSignal": signal})
         self.assertEqual(result["stopReason"], "cancelled")
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         self.assertEqual(
             run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["status"],
             "missing",
@@ -316,7 +316,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
     def test_state_and_event_callback_failures_cannot_change_provider_success(self):
         session, config, events = self._session(), self._config(), []
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         Path(promptCacheStatePath(session["id"], paths)).mkdir(parents=True)
 
         async def send(request):
@@ -375,7 +375,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
             }
 
         self._run_turn(session, config, send, events)
-        paths = resolveRuntimePaths(candidate=str(self.home))
+        paths = resolve_runtime_paths(candidate=str(self.home))
         before = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
         run(
             recordPromptCacheEvictionIntentAtFinalization(

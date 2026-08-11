@@ -3,22 +3,22 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable
 
-from .reducer import reduceRuntimeState
-from .shared import _extract_last_assistant_text, summarizeSessionRecord
+from .reducer import reduce_runtime_state
+from .shared import _extract_last_assistant_text, summarize_session_record
 
-def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str, Any]:
+def create_initial_runtime_state(session: dict[str, Any] | None = None) -> dict[str, Any]:
     metadata = session.get("metadata", {}) if session else {}
     return {
         "session": (
             {
                 "activeSessionId": session.get("id"),
-                "summary": summarizeSessionRecord(session),
+                "summary": summarize_session_record(session),
                 "lastActivatedAt": session.get("updatedAt"),
             }
             if session
             else {}
         ),
-        "turn": {"status": "idle", "lastOutcome": deriveStoredTurnOutcome(session) if session else None},
+        "turn": {"status": "idle", "lastOutcome": derive_stored_turn_outcome(session) if session else None},
         "provider": {"phase": "idle"},
         "compaction": {"status": "idle"},
         "sandbox": {},
@@ -39,8 +39,8 @@ def createInitialRuntimeState(session: dict[str, Any] | None = None) -> dict[str
         },
     }
 
-def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[str, Any]:
-    state = copy.deepcopy(initialState or createInitialRuntimeState())
+def create_runtime_state_store(initialState: dict[str, Any] | None = None) -> dict[str, Any]:
+    state = copy.deepcopy(initialState or create_initial_runtime_state())
     subscribers: list[Callable[[], None]] = []
 
     def get_state():
@@ -48,7 +48,7 @@ def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[
 
     def dispatch(event):
         nonlocal state
-        next_state = reduceRuntimeState(state, event)
+        next_state = reduce_runtime_state(state, event)
         if next_state == state:
             return
         state = next_state
@@ -67,7 +67,7 @@ def createRuntimeStateStore(initialState: dict[str, Any] | None = None) -> dict[
 
     return {"getState": get_state, "setState": set_state, "dispatch": dispatch, "subscribe": subscribe, "applyEvent": dispatch}
 
-def deriveStoredTurnOutcome(session: dict[str, Any]) -> dict[str, Any] | None:
+def derive_stored_turn_outcome(session: dict[str, Any]) -> dict[str, Any] | None:
     text = _extract_last_assistant_text(session)
     if not text:
         return None

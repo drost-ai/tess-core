@@ -4,7 +4,7 @@ import json
 from typing import Any, TextIO
 
 from ..payloads.media_persistence import sanitizeMediaForPersistence
-from ..runtime.events import createRuntimeEvent
+from ..runtime.events import create_runtime_event
 
 
 class JsonStreamSink:
@@ -17,11 +17,11 @@ class JsonStreamSink:
     def handle_runtime_envelope(self, envelope: dict[str, Any]) -> None:
         typed = envelope.get("typedEvent") if isinstance(envelope, dict) else None
         if not isinstance(typed, dict):
-            typed = createRuntimeEvent({"event": envelope.get("event"), "data": envelope.get("data") or {}})
+            typed = create_runtime_event({"event": envelope.get("event"), "data": envelope.get("data") or {}})
         self.write(typed)
 
     def emit(self, event: str, data: dict[str, Any], *, default_session_id: str | None = None) -> dict[str, Any]:
-        typed = createRuntimeEvent({"event": event, "data": data, "defaultSessionId": default_session_id})
+        typed = create_runtime_event({"event": event, "data": data, "defaultSessionId": default_session_id})
         self.write(typed)
         return typed
 

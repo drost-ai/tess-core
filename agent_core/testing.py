@@ -44,4 +44,4 @@ from .providers.openai import (
     sendOpenAiChatCompletionsRequest,
     sendOpenAiResponsesRequest,
 )
-from .runtime.secrets import resolveRuntimeSecretString
+from .runtime.secrets import resolve_runtime_secret_string

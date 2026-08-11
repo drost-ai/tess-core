@@ -7,7 +7,7 @@ from collections.abc import Sequence
 RuntimeExceptionGroup = ExceptionGroup
 
 
-def aggregateRuntimeFailures(message: str, failures: Sequence[BaseException]) -> BaseException:
+def aggregate_runtime_failures(message: str, failures: Sequence[BaseException]) -> BaseException:
     """Build the aggregate for a batch of close/activation failures.
 
     ExceptionGroup refuses BaseExceptions such as KeyboardInterrupt, and a
@@ -19,4 +19,4 @@ def aggregateRuntimeFailures(message: str, failures: Sequence[BaseException]) ->
     return RuntimeExceptionGroup(message, list(failures))
 
 
-__all__ = ["RuntimeExceptionGroup", "aggregateRuntimeFailures"]
+__all__ = ["RuntimeExceptionGroup", "aggregate_runtime_failures"]

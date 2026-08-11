@@ -39,56 +39,56 @@ def _parse_runtime_id(value: Any, family: str) -> str:
     return value
 
 
-def parseSessionId(value: Any) -> str:
+def parse_session_id(value: Any) -> str:
     return _parse_runtime_id(value, "session")
 
 
-def parseTaskId(value: Any) -> str:
+def parse_task_id(value: Any) -> str:
     return _parse_runtime_id(value, "task")
 
 
-def parseMonitorId(value: Any) -> str:
+def parse_monitor_id(value: Any) -> str:
     return _parse_runtime_id(value, "monitor")
 
 
-def parseAgentId(value: Any) -> str:
+def parse_agent_id(value: Any) -> str:
     return _parse_runtime_id(value, "agent")
 
 
-def parseBridgeId(value: Any) -> str:
+def parse_bridge_id(value: Any) -> str:
     return _parse_runtime_id(value, "bridge")
 
 
-def parseRemoteSessionId(value: Any) -> str:
+def parse_remote_session_id(value: Any) -> str:
     return _parse_runtime_id(value, "remote session")
 
 
-def parseArtifactId(value: Any) -> str:
+def parse_artifact_id(value: Any) -> str:
     return _parse_runtime_id(value, "artifact")
 
 
-def parseTaskReference(value: Any) -> dict[str, str]:
+def parse_task_reference(value: Any) -> dict[str, str]:
     if not isinstance(value, str):
         raise RuntimeIdentifierError("task reference", value, "expected a string")
     if value.startswith("monitor:"):
-        return {"family": "monitor", "id": parseMonitorId(value[len("monitor:") :])}
+        return {"family": "monitor", "id": parse_monitor_id(value[len("monitor:") :])}
     if ":" in value:
         prefix = value.split(":", 1)[0]
         raise RuntimeIdentifierError("task reference", value, f"unsupported family prefix {prefix!r}")
-    return {"family": "task", "id": parseTaskId(value)}
+    return {"family": "task", "id": parse_task_id(value)}
 
 
-def formatMonitorTaskReference(monitorId: Any) -> str:
-    return f"monitor:{parseMonitorId(monitorId)}"
+def format_monitor_task_reference(monitorId: Any) -> str:
+    return f"monitor:{parse_monitor_id(monitorId)}"
 
 
-def formatTaskReference(reference: dict[str, Any]) -> str:
+def format_task_reference(reference: dict[str, Any]) -> str:
     family = reference.get("family")
     if family == "monitor":
-        return formatMonitorTaskReference(reference.get("id"))
+        return format_monitor_task_reference(reference.get("id"))
     if family != "task":
         raise RuntimeIdentifierError("task reference", reference, "unsupported reference family")
-    return parseTaskId(reference.get("id"))
+    return parse_task_id(reference.get("id"))
 
 
 _T = TypeVar("_T")
@@ -101,32 +101,32 @@ def _try_parse(value: Any, parser: Callable[[Any], _T]) -> _T | None:
         return None
 
 
-def tryParseSessionId(value: Any) -> str | None:
-    return _try_parse(value, parseSessionId)
+def try_parse_session_id(value: Any) -> str | None:
+    return _try_parse(value, parse_session_id)
 
 
-def tryParseTaskId(value: Any) -> str | None:
-    return _try_parse(value, parseTaskId)
+def try_parse_task_id(value: Any) -> str | None:
+    return _try_parse(value, parse_task_id)
 
 
-def tryParseTaskReference(value: Any) -> dict[str, str] | None:
-    return _try_parse(value, parseTaskReference)
+def try_parse_task_reference(value: Any) -> dict[str, str] | None:
+    return _try_parse(value, parse_task_reference)
 
 
-def tryParseMonitorId(value: Any) -> str | None:
-    return _try_parse(value, parseMonitorId)
+def try_parse_monitor_id(value: Any) -> str | None:
+    return _try_parse(value, parse_monitor_id)
 
 
-def tryParseAgentId(value: Any) -> str | None:
-    return _try_parse(value, parseAgentId)
+def try_parse_agent_id(value: Any) -> str | None:
+    return _try_parse(value, parse_agent_id)
 
 
-def tryParseBridgeId(value: Any) -> str | None:
-    return _try_parse(value, parseBridgeId)
+def try_parse_bridge_id(value: Any) -> str | None:
+    return _try_parse(value, parse_bridge_id)
 
 
-def tryParseRemoteSessionId(value: Any) -> str | None:
-    return _try_parse(value, parseRemoteSessionId)
+def try_parse_remote_session_id(value: Any) -> str | None:
+    return _try_parse(value, parse_remote_session_id)
 
 
 

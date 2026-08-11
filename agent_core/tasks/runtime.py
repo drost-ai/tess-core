@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from .supervisor_parts.mappers import _task_record_event_payload
 from .supervisor_parts.projection import _is_active_task_status, _project_session_task_records
-from ..runtime.identifiers import tryParseTaskId
+from ..runtime.identifiers import try_parse_task_id
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 from ..storage import save_task_record  # retained as a compatibility export
 from .terminal_store import saveProjectedTaskRecord as _save_projected_task_record
@@ -66,7 +66,7 @@ async def createTaskRuntime(args: dict[str, Any] | None = None, **kwargs: Any) -
                 # Monitor/remote rows use virtual display references. They are
                 # projected from their owning stores and must never become
                 # task-record filenames.
-                if tryParseTaskId(record.get("id")) is not None:
+                if try_parse_task_id(record.get("id")) is not None:
                     record = await _save_projected_task_record(record)
                 committed_records.append(record)
             records = committed_records

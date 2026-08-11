@@ -8,7 +8,7 @@ from typing import Any, Callable
 from ..contracts.session_records import PersistedSessionHeadV2
 from ..payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media
 from .message_origin import is_genuine_user_request as _is_genuine_user_request
-from ..runtime.identifiers import parseSessionId
+from ..runtime.identifiers import parse_session_id
 from .message_history import (
     create_session_message_list as _create_session_message_list,
     set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
@@ -42,7 +42,7 @@ class SessionSchemaVersionError(RuntimeError):
 
 
 def session_messages_path(sessionId: str) -> str:
-    return os.path.join(get_state_root(), "sessions", f"{parseSessionId(sessionId)}.messages.jsonl")
+    return os.path.join(get_state_root(), "sessions", f"{parse_session_id(sessionId)}.messages.jsonl")
 
 
 def assert_session_schema_supported(record: Any, maximum: int = SESSION_SCHEMA_V2) -> None:
@@ -61,7 +61,7 @@ async def hydrate_persisted_session(
     *,
     repairHead: bool = True,
 ) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     if raw is None:
         return {"record": None, "changed": False, "reason": None, "bodyCommitId": None}
     if not isinstance(raw, dict) or raw.get("id") != session_id:
@@ -132,7 +132,7 @@ def hydrate_session_head_from_body_bytes(
     sessionId: str, head: dict[str, Any], bodyBytes: bytes
 ) -> dict[str, Any]:
     """Hydrate source bytes already captured by a bounded recovery scanner."""
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     _validate_v2_head(head, session_id)
     body_commit_id = _body_commit_id(head)
     body = _scan_body_bytes(bodyBytes, session_id, body_commit_id)
@@ -167,7 +167,7 @@ async def commit_session_v2(
     faultInjector: Callable[[str], Any] | None = None,
     presanitized: bool = False,
 ) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     # sanitizeMediaForPersistence rebuilds every container, so a caller that
     # just sanitized may hand its decoupled output over without paying for a
     # second deepcopy-and-walk of the full history.
@@ -211,7 +211,7 @@ async def commit_session_v2_delta(
 ) -> dict[str, Any]:
     """Commit an authority-checked append suffix without hydrating its prefix."""
 
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     _validate_v2_head(previousRaw, session_id)
     previous_commit_id = _body_commit_id(previousRaw)
     if previous_commit_id is None:
@@ -268,7 +268,7 @@ async def commit_session_v2_delta(
 
 
 def session_live_head_from_v2(sessionId: str, raw: dict[str, Any]) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     _validate_v2_head(raw, session_id)
     return {
         key: copy.deepcopy(value)
@@ -282,7 +282,7 @@ async def migrate_session_to_v2(
     *,
     faultInjector: Callable[[str], Any] | None = None,
 ) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     async with with_record_transaction("session", session_id):
         raw = await read_json_file_tolerant(session_path(session_id), None)
         hydrated = await hydrate_persisted_session(session_id, raw)
@@ -302,7 +302,7 @@ async def migrate_session_to_v2(
 
 
 async def write_back_session_v1(sessionId: str) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     async with with_record_transaction("session", session_id):
         raw = await read_json_file_tolerant(session_path(session_id), None)
         hydrated = await hydrate_persisted_session(session_id, raw)
@@ -321,7 +321,7 @@ async def write_back_session_v1(sessionId: str) -> dict[str, Any]:
 
 
 async def compact_session_message_body(sessionId: str) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     async with with_record_transaction("session", session_id):
         raw = await read_json_file_tolerant(session_path(session_id), None)
         hydrated = await hydrate_persisted_session(session_id, raw)
@@ -374,7 +374,7 @@ def _validate_v2_head(head: dict[str, Any], session_id: str) -> None:
 def _head_from_session(
     session: dict[str, Any], *, body_commit_id: str | None = None
 ) -> PersistedSessionHeadV2:
-    session_id = parseSessionId(session["id"])
+    session_id = parse_session_id(session["id"])
     keys = [key for key in session if key not in _HEAD_FIELDS]
     message_index = keys.index("messages") if "messages" in keys else len(keys)
     head = {key: copy.deepcopy(session[key]) for key in keys if key != "messages"}

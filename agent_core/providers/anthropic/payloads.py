@@ -76,9 +76,9 @@ def buildAnthropicHeaders(
     options: dict[str, Any] | None = None,
     features: dict[str, Any] | None = None,
 ) -> dict[str, str]:
-    from ...runtime.secret_provider import assertProviderConfigSecretsResolved
+    from ...runtime.secret_provider import assert_provider_config_secrets_resolved
 
-    config = assertProviderConfigSecretsResolved(config)
+    config = assert_provider_config_secrets_resolved(config)
     options = options or {}
     custom_headers = config.get("customHeaders") or {}
     unrelated_custom_headers = {
@@ -117,9 +117,9 @@ def buildAnthropicHeaders(
 def buildAnthropicBetaHeader(
     config: dict[str, Any], features: dict[str, Any] | None = None
 ) -> str:
-    from ...runtime.secret_provider import assertProviderConfigSecretsResolved
+    from ...runtime.secret_provider import assert_provider_config_secrets_resolved
 
-    config = assertProviderConfigSecretsResolved(config)
+    config = assert_provider_config_secrets_resolved(config)
     features = features or {}
     values = list(DEFAULT_OAUTH_BETAS if config.get("authToken") else DEFAULT_API_KEY_BETAS)
     if not config.get("authToken") and _is_kimi_anthropic_coding_backend(config):

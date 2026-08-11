@@ -55,11 +55,11 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
             existing_target = Path(root.name) / "existing-worktree"
             existing_target.mkdir()
             with self.assertRaisesRegex(RuntimeError, "Worktree target already exists"):
-                run(core.createGitWorktree(cwd=str(workspace), name="collision", path=str(existing_target), branchName="tess/collision"))
+                run(core.create_git_worktree(cwd=str(workspace), name="collision", path=str(existing_target), branch_name="tess/collision"))
 
             subprocess.run(["git", "branch", "tess/collision"], cwd=workspace, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
             with self.assertRaisesRegex(RuntimeError, "Worktree branch already exists"):
-                run(core.createGitWorktree(cwd=str(workspace), name="collision", path=str(Path(root.name) / "new-worktree"), branchName="tess/collision"))
+                run(core.create_git_worktree(cwd=str(workspace), name="collision", path=str(Path(root.name) / "new-worktree"), branch_name="tess/collision"))
         finally:
             self.restore_home(root, previous)
 
@@ -229,12 +229,12 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
         try:
             worktree = Path(root.name) / "workspace-slice-5"
             worktree.mkdir()
-            snapshot = run(core.captureWorkspaceSnapshot(str(worktree), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
+            snapshot = run(core.capture_workspace_snapshot(str(worktree), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
             self.assertEqual(snapshot["mode"], "worktree")
             self.assertEqual(snapshot["worktreePath"], str(worktree))
             self.assertEqual(snapshot["workspaceId"], re.sub(r"[^a-zA-Z0-9]+", "_", str(worktree)).strip("_").lower())
 
-            exited = run(core.captureWorkspaceSnapshot(str(workspace), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
+            exited = run(core.capture_workspace_snapshot(str(workspace), {"originalCwd": str(workspace), "worktreePath": str(worktree)}))
             self.assertEqual(exited["mode"], "directory")
             self.assertEqual(exited["worktreePath"], str(worktree))
         finally:

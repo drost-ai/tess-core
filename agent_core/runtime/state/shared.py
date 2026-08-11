@@ -8,7 +8,7 @@ from typing import Any
 
 ACTIVE_TASK_STATUSES = {"queued", "running", "backgrounded", "awaiting_input", "reconciling", "degraded"}
 
-def summarizeSessionRecord(session: dict[str, Any]) -> dict[str, Any]:
+def summarize_session_record(session: dict[str, Any]) -> dict[str, Any]:
     metadata = session.get("metadata", {}) if isinstance(session.get("metadata"), dict) else {}
     return {
         "id": _field(session, "id", "sessionId", "session_id"),

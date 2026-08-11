@@ -22,10 +22,7 @@ from typing import Any, Callable
 _PENDING_RESUME_EXPIRY_SECONDS = 10.0
 
 
-def createMailboxWakeController(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    values = {**(args or {}), **kwargs}
-    runtime = values["runtime"]
-    resume: Callable[[], Any] = values["resume"]
+def create_mailbox_wake_controller(*, runtime: dict[str, Any], resume: Callable[[], Any]) -> dict[str, Any]:
     is_turn_in_flight = runtime.get("isTurnInFlight") or (lambda: False)
     guard = threading.Lock()
     closed = False

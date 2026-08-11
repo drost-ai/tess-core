@@ -3,14 +3,14 @@ provider call, commit the observation after it, and record eviction intent
 at turn finalization."""
 from __future__ import annotations
 
-from ..runtime.events.emit import safeEmit
+from ..runtime.events.emit import safe_emit
 import hashlib
 import json
 from typing import Any
 from .prompt_cache import resolvePromptCachePolicy
 from .prompt_cache_state import markPromptCacheEvictionIntent
-from ..runtime.paths import getActiveRuntimePaths, resolveRuntimePaths
-from ..runtime.events.emit import safeEmit as _emit
+from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths
+from ..runtime.events.emit import safe_emit as _emit
 import copy
 from .prompt_cache_state import (
     commitPromptCacheObservation,
@@ -171,9 +171,9 @@ async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) ->
         if not policy.get("enabled") or not policy.get("evictOnComplete"):
             return
         paths = (
-            resolveRuntimePaths(candidate=config.get("runtimeHome"))
+            resolve_runtime_paths(candidate=config.get("runtimeHome"))
             if config.get("runtimeHome")
-            else getActiveRuntimePaths()
+            else get_active_runtime_paths()
         )
         result = await markPromptCacheEvictionIntent(
             {
@@ -183,11 +183,11 @@ async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) ->
             }
         )
         if result["status"] == "unavailable":
-            safeEmit(runtime, "provider.prompt_cache", {
+            safe_emit(runtime, "provider.prompt_cache", {
                 "session_id": session.get("id"), "phase": "state_error", "state_status": "unavailable"
             })
         elif result["status"] == "recorded":
-            safeEmit(runtime, "provider.prompt_cache", {
+            safe_emit(runtime, "provider.prompt_cache", {
                 "session_id": session.get("id"),
                 "phase": "eviction_intent",
                 "mode": policy.get("mode"),
@@ -197,7 +197,7 @@ async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) ->
                 "intent_status": "recorded",
             })
     except Exception:
-        safeEmit(runtime, "provider.prompt_cache", {
+        safe_emit(runtime, "provider.prompt_cache", {
             "session_id": session.get("id"), "phase": "state_error", "state_status": "unavailable"
         })
 

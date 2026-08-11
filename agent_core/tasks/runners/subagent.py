@@ -9,14 +9,14 @@ from typing import Any
 
 from ...agent import runAgentPrompt
 from ...authority.agent import assertMatchingPersistedChildAuthorities, enforceSessionAgentAuthority
-from ...runtime.agent_bindings import createAgentRuntimeBindings
+from ...runtime.agent_bindings import create_agent_runtime_bindings
 from ...config import resolveConfig
 from ...storage import configure_runtime_home, load_child_agent, load_session, load_task_record, mutate_child_agent, mutate_task_meta, save_session, save_task_record, with_record_transaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
 from ...subagents import finalizeBackgroundSubagentFailureFromEnv, finalizeBackgroundSubagentSuccessFromEnv
 from ...subagents.finalizers import _background_structured_result_fields
 from ...tools import createBuiltinTools
-from ...runtime.generation import createRuntimeSessionBinding
+from ...runtime.generation import create_runtime_session_binding
 from ..._utils import now_iso
 
 
@@ -70,12 +70,12 @@ async def _prepare_worker(args: dict[str, Any]) -> tuple[dict[str, Any], dict[st
     config = await resolveConfig(_session_config_options(session, runtime_home), session["cwd"])
     _apply_session_overrides(config, session)
     await enforceSessionAgentAuthority(session=session, config=config)
-    runtime = createAgentRuntimeBindings({
+    runtime = create_agent_runtime_bindings({
         "emitEvent": _create_trace_emitter(args["taskId"]),
         "tools": createBuiltinTools(),
         "daemon": {"state": "unavailable", "reason": {"code": "subagent.daemon_unavailable", "message": "No task daemon is attached to this background subagent runner."}},
         "refreshMcpToolRegistry": lambda: None,
-        "sessionBinding": createRuntimeSessionBinding(session["id"], 1, 1),
+        "sessionBinding": create_runtime_session_binding(session["id"], 1, 1),
         "questionPolicy": {"interactive": False, "askQuestion": lambda *_args: ""},
     })
     return session, config, runtime

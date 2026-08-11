@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 
-def safeEmit(runtime: Any, event: str, data: dict[str, Any]) -> None:
+def safe_emit(runtime: Any, event: str, data: dict[str, Any]) -> None:
     if not isinstance(runtime, dict):
         return
     emitter = runtime.get("emitEvent")

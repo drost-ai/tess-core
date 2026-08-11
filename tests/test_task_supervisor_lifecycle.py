@@ -366,7 +366,7 @@ class TaskSupervisorLifecycleTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             run(core.save_session(session))
-            boot = run(core.bootstrapRuntime({"session": session, "config": config, "cwd": str(workspace)}))
+            boot = run(core.bootstrap_runtime({"session": session, "config": config, "cwd": str(workspace)}))
             instance_id = boot["runtimeInstanceId"]
             try:
                 self.assertIsNotNone(boot.get("daemon"))

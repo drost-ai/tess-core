@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from ..contracts.config import ResolvedConfig
 from ..runtime.secret_provider import (
-    normalizeCompactionProviderSecrets,
-    normalizeProviderHeaders,
-    normalizeRuntimeSecretValue,
+    normalize_compaction_provider_secrets,
+    normalize_provider_headers,
+    normalize_runtime_secret_value,
 )
 from ..sandbox import normalizeSandboxConfig
 
@@ -290,13 +290,13 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         "storedAnthropicAuthToken": stored_anthropic_auth_token,
         "anthropicHeaders": anthropic_headers,
     }
-    compaction_provider_profile = await normalizeCompactionProviderSecrets(
+    compaction_provider_profile = await normalize_compaction_provider_secrets(
         resolveCompactionProviderProfileBinding(
             {"requestedProfileName": compaction["profileName"], **profile_binding_inputs}
         ),
         f"config:{selected_name}:compaction",
     )
-    compaction_verification_provider_profile = await normalizeCompactionProviderSecrets(
+    compaction_verification_provider_profile = await normalize_compaction_provider_secrets(
         resolveCompactionProviderProfileBinding(
             {"requestedProfileName": verification["profileName"], **profile_binding_inputs}
         ),
@@ -321,18 +321,18 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
             "codexToken": openai_codex_token,
         }
     )
-    normalized_api_key = await normalizeRuntimeSecretValue(
+    normalized_api_key = await normalize_runtime_secret_value(
         value=anthropic_creds.get("apiKey"),
         purpose="provider_api_key",
         idempotencyScope=f"config:{selected_name}:api-key",
     )
-    normalized_auth_token = await normalizeRuntimeSecretValue(
+    normalized_auth_token = await normalize_runtime_secret_value(
         value=anthropic_creds.get("authToken"),
         purpose="provider_oauth_token",
         acceptedPurposes=("provider_oauth_token", "provider_setup_token"),
         idempotencyScope=f"config:{selected_name}:auth-token",
     )
-    normalized_openai_token = await normalizeRuntimeSecretValue(
+    normalized_openai_token = await normalize_runtime_secret_value(
         value=openai_token,
         purpose="provider_oauth_token"
         if isinstance(openai_token, str) and openai_token == openai_codex_token
@@ -340,7 +340,7 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
         acceptedPurposes=("provider_api_key", "provider_oauth_token"),
         idempotencyScope=f"config:{selected_name}:openai-token",
     )
-    normalized_custom_headers = await normalizeProviderHeaders(
+    normalized_custom_headers = await normalize_provider_headers(
         custom_headers,
         f"config:{selected_name}",
     )

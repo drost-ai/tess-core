@@ -45,12 +45,12 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
 
     def test_runtime_ids_accept_opaque_ids_and_reject_path_bearing_forms(self):
         parsers = (
-            (core.parseSessionId, ACCEPTED["session"]),
-            (core.parseTaskId, ACCEPTED["task"]),
-            (core.parseMonitorId, ACCEPTED["monitor"]),
-            (core.parseAgentId, ACCEPTED["agent"]),
-            (core.parseBridgeId, ACCEPTED["bridge"]),
-            (core.parseRemoteSessionId, ACCEPTED["remote"]),
+            (core.parse_session_id, ACCEPTED["session"]),
+            (core.parse_task_id, ACCEPTED["task"]),
+            (core.parse_monitor_id, ACCEPTED["monitor"]),
+            (core.parse_agent_id, ACCEPTED["agent"]),
+            (core.parse_bridge_id, ACCEPTED["bridge"]),
+            (core.parse_remote_session_id, ACCEPTED["remote"]),
         )
         for parser, accepted in parsers:
             for value in accepted:
@@ -63,15 +63,15 @@ class TaskIdentityOwnershipTests(AgentCoreTestCase):
     def test_monitor_task_reference_has_one_explicit_grammar(self):
         monitor_id = ACCEPTED["monitor"][0]
         self.assertEqual(
-            core.parseTaskReference(f"monitor:{monitor_id}"),
+            core.parse_task_reference(f"monitor:{monitor_id}"),
             {"family": "monitor", "id": monitor_id},
         )
-        self.assertEqual(core.formatMonitorTaskReference(monitor_id), f"monitor:{monitor_id}")
-        self.assertEqual(core.parseTaskReference("task-1"), {"family": "task", "id": "task-1"})
+        self.assertEqual(core.format_monitor_task_reference(monitor_id), f"monitor:{monitor_id}")
+        self.assertEqual(core.parse_task_reference("task-1"), {"family": "task", "id": "task-1"})
         with self.assertRaises(core.RuntimeIdentifierError):
-            core.parseTaskReference("remote:uuid")
+            core.parse_task_reference("remote:uuid")
         with self.assertRaises(core.RuntimeIdentifierError):
-            core.parseTaskReference("monitor:../escape")
+            core.parse_task_reference("monitor:../escape")
 
     def test_every_record_path_constructor_rejects_traversal_before_join(self):
         root, home, workspace, previous = self.temp_context()

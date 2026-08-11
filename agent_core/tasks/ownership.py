@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ..runtime.identifiers import parseMonitorId, parseTaskId
+from ..runtime.identifiers import parse_monitor_id, parse_task_id
 from ..storage import load_child_agent, load_monitor, load_task_record, read_task_meta
 
 
@@ -21,7 +21,7 @@ _ALLOWED_KINDS = {
 
 
 async def requireModelOwnedTask(context: Mapping[str, Any], rawTaskId: str, operation: str) -> dict[str, Any]:
-    task_id = parseTaskId(rawTaskId)
+    task_id = parse_task_id(rawTaskId)
     record = await load_task_record(task_id)
     meta = await read_task_meta(task_id)
     if not record and not meta:
@@ -48,7 +48,7 @@ async def requireModelOwnedTask(context: Mapping[str, Any], rawTaskId: str, oper
 
 
 async def requireModelOwnedMonitor(context: Mapping[str, Any], rawMonitorId: str) -> dict[str, Any]:
-    monitor_id = parseMonitorId(rawMonitorId)
+    monitor_id = parse_monitor_id(rawMonitorId)
     monitor = await load_monitor(monitor_id)
     session = context.get("session")
     if (

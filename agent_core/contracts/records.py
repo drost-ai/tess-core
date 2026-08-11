@@ -8,6 +8,7 @@ owned by one record family.
 from __future__ import annotations
 
 from .monitor_records import MonitorRecord, MonitorStatus
+from .runtime_surface import BootstrappedRuntime
 from .session_records import (
     CompactionState,
     FullTranscriptLog,

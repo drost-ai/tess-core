@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from .._utils import now_iso
 from .bridge_recovery_analysis import analyzeBridgeRecovery
-from ..runtime.identifiers import parseBridgeId, parseSessionId
+from ..runtime.identifiers import parse_bridge_id, parse_session_id
 from ..storage import (
     get_state_root,
     load_session_record_shallow,
@@ -55,7 +55,7 @@ def __setBridgeRecoveryTestHookForTests(hook) -> None:
 
 
 async def inspectBridgeRecovery(sessionId: str) -> dict[str, Any]:
-    session_id = parseSessionId(sessionId)
+    session_id = parse_session_id(sessionId)
     async with with_record_transaction("bridge-session", session_id):
         journal = await _resume_pending(session_id)
         analysis = await _analyze_with_journal(session_id, journal)
@@ -71,7 +71,7 @@ async def resolveBridgeRecovery(
     **kwargs: Any,
 ) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
-    session_id = parseSessionId(args["sessionId"])
+    session_id = parse_session_id(args["sessionId"])
     async with with_record_transaction("bridge-session", session_id):
         existing = await _resume_pending(session_id)
         analysis = await _analyze_with_journal(session_id, existing)
@@ -85,7 +85,7 @@ async def resolveBridgeRecovery(
                 raise RuntimeError("Close-all bridge recovery does not accept delivery decisions.")
             journal = _create_journal(analysis, revision, None, {})
         else:
-            selected_id = parseBridgeId(selected_id)
+            selected_id = parse_bridge_id(selected_id)
             selected = next(
                 (bridge for bridge in analysis["activeSources"] if bridge["id"] == selected_id and bridge.get("schemaVersion") != 2),
                 None,
@@ -101,7 +101,7 @@ async def resolveBridgeRecovery(
 
 
 async def activateBridgeGeneration(args: dict[str, Any]) -> dict[str, Any]:
-    session_id = parseSessionId(args["sessionId"])
+    session_id = parse_session_id(args["sessionId"])
     async with with_record_transaction("bridge-session", session_id):
         existing = await _resume_pending(session_id)
         analysis = await _analyze_with_journal(session_id, existing)

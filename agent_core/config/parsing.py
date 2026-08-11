@@ -9,7 +9,7 @@ from typing import Any
 from ..storage import file_or_json, load_settings_by_sources
 from ..authority.executable_config import parseMcpServerConfigList
 from ..authority.executable_source_policy import loadSelectedMcpServers, parseSettingSources
-from ..runtime.secrets import assertNoLiteralMcpSecrets
+from ..runtime.secrets import assert_no_literal_mcp_secrets
 
 def _parse_setting_sources(raw: str | None) -> list[str]:
     return parseSettingSources(raw)
@@ -77,6 +77,6 @@ async def _load_mcp_config(cwd: str, inputs: list[str] | None, sources: list[str
     for item in inputs or []:
         parsed = file_or_json(item)
         records = parseMcpServerConfigList(parsed, "explicitMcpConfig") if parsed else []
-        assertNoLiteralMcpSecrets(records, "explicit")
+        assert_no_literal_mcp_secrets(records, "explicit")
         inline.extend(records)
     return [{**item, "commandOrUrl": os.path.expanduser(item.get("commandOrUrl", ""))} for item in [*existing, *inline]]

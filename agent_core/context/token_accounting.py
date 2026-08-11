@@ -25,7 +25,7 @@ from ..providers.errors import (
 from ..providers.watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
 from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
 from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
-from ..runtime.secret_provider import resolveProviderConfigSecrets
+from ..runtime.secret_provider import resolve_provider_config_secrets
 
 MAX_CODEX_ERROR_SAMPLES = 12
 
@@ -38,7 +38,7 @@ async def measure_request_input_tokens(args: dict[str, Any] | None = None, **kwa
     image_fields = _image_measurement_fields(images)
     if config.get("provider") == "anthropic":
         try:
-            resolved_config = await resolveProviderConfigSecrets(config)
+            resolved_config = await resolve_provider_config_secrets(config)
             input_tokens = await _run_exact_token_count(
                 config=config,
                 model=request["model"],
@@ -86,7 +86,7 @@ async def measure_request_input_tokens(args: dict[str, Any] | None = None, **kwa
             }
     mode = config.get("openaiApiMode", "responses")
     exact_count_fallback = False
-    resolved_config = await resolveProviderConfigSecrets(config)
+    resolved_config = await resolve_provider_config_secrets(config)
     if mode == "responses" and resolved_config.get("openaiToken"):
         try:
             exact = await _run_exact_token_count(

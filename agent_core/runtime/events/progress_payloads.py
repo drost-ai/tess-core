@@ -9,7 +9,7 @@ from .shared import (
 )
 
 
-def progressTypedPayload(
+def progress_typed_payload(
     event: str,
     data: dict[str, Any],
 ) -> tuple[str, dict[str, Any]] | None:

@@ -44,7 +44,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 {
                     "session": sessions["a"],
                     "config": config,
-                    "runtimeBinding": core.createRuntimeSessionBinding("a", 1, 1),
+                    "runtimeBinding": core.create_runtime_session_binding("a", 1, 1),
                     "startTicker": False,
                     "emit": emit,
                 }
@@ -56,10 +56,10 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 await asyncio.wait_for(entered.wait(), 2)
 
                 await runtime["activateSession"](
-                    sessions["b"], config, core.createRuntimeSessionBinding("b", 2, 2)
+                    sessions["b"], config, core.create_runtime_session_binding("b", 2, 2)
                 )
                 await runtime["activateSession"](
-                    sessions["c"], config, core.createRuntimeSessionBinding("c", 3, 3)
+                    sessions["c"], config, core.create_runtime_session_binding("c", 3, 3)
                 )
                 release.set()
                 await delayed_a
@@ -124,7 +124,7 @@ class RuntimeGenerationSafetyTests(AgentCoreTestCase):
                 for name in ("a", "b", "c")
             }
             daemon = _DaemonHarness("b")
-            runtime = await core.bootstrapRuntime(
+            runtime = await core.bootstrap_runtime(
                 {"session": sessions["a"], "config": configs["a"], "daemonClient": daemon.client}
             )
             observed = []

@@ -7,8 +7,9 @@ from ..._utils import now_iso
 from .payloads import _typed_payload
 from .shared import _field
 
-def createRuntimeEvent(args: dict[str, Any] | None = None, **kwargs: Any) -> RuntimeEventEnvelope:
-    args = {**(args or {}), **kwargs}
+def create_runtime_event(envelope: dict[str, Any]) -> RuntimeEventEnvelope:
+    """Normalize one envelope-shaped record (wire-adjacent: alias keys accepted)."""
+    args = envelope
     legacy_event = args.get("event") or args.get("type") or args.get("kind")
     raw_data = args["data"] if "data" in args and args.get("data") is not None else args.get("payload")
     data = raw_data if isinstance(raw_data, dict) else {}

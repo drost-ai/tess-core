@@ -53,34 +53,46 @@ class LifecycleBarrier:
 
         return self.track(invoke())
 
-    def close(self, args: dict[str, Any] | None = None, **kwargs: Any) -> asyncio.Task[None]:
+    def close(
+        self,
+        *,
+        cleanup: Any = None,
+        fail_after_ms: int | None = None,
+        escalation_after_ms: int | None = None,
+        on_escalation: Any = None,
+    ) -> asyncio.Task[None]:
         if self._close_task is not None:
             return self._close_task
-        values = {**(args or {}), **kwargs}
         self.state = "closing"
-        self._close_task = asyncio.create_task(self._close_and_drain(values))
+        self._close_task = asyncio.create_task(
+            self._close_and_drain(cleanup, fail_after_ms, escalation_after_ms, on_escalation)
+        )
         return self._close_task
 
-    async def _close_and_drain(self, args: dict[str, Any]) -> None:
+    async def _close_and_drain(
+        self,
+        cleanup: Any,
+        fail_after_ms: int | None,
+        escalation_after_ms: int | None,
+        on_escalation: Any,
+    ) -> None:
         cleanup_error: BaseException | None = None
         escalation_task: asyncio.Task[Any] | None = None
 
         async def escalate_after() -> None:
-            delay = max(1, int(args["escalationAfterMs"])) / 1000
+            delay = max(1, int(escalation_after_ms)) / 1000
             await asyncio.sleep(delay)
-            callback = args.get("onEscalation")
-            if callback is not None:
-                result = callback(len(self._in_flight))
+            if on_escalation is not None:
+                result = on_escalation(len(self._in_flight))
                 if inspect.isawaitable(result):
                     await result
 
-        if args.get("escalationAfterMs") is not None and args.get("onEscalation") is not None:
+        if escalation_after_ms is not None and on_escalation is not None:
             escalation_task = asyncio.create_task(escalate_after())
 
         async def close_work() -> None:
             nonlocal cleanup_error
             try:
-                cleanup = args.get("cleanup")
                 if cleanup is not None:
                     result = cleanup()
                     if inspect.isawaitable(result):
@@ -94,7 +106,7 @@ class LifecycleBarrier:
 
         work = asyncio.create_task(close_work())
         try:
-            fail_after = args.get("failAfterMs")
+            fail_after = fail_after_ms
             if fail_after is None:
                 await work
             else:
@@ -113,7 +125,7 @@ class LifecycleBarrier:
                 escalation_task.cancel()
 
 
-def createLifecycleBarrier() -> LifecycleBarrier:
+def create_lifecycle_barrier() -> LifecycleBarrier:
     return LifecycleBarrier()
 
 
@@ -125,7 +137,7 @@ class ConstructionCleanup:
         self.entries.append((label, cleanup))
 
 
-async def constructWithRollback(build: Callable[[ConstructionCleanup], Awaitable[Any]]) -> Any:
+async def construct_with_rollback(build: Callable[[ConstructionCleanup], Awaitable[Any]]) -> Any:
     cleanups = ConstructionCleanup()
     try:
         return await build(cleanups)

@@ -19,8 +19,8 @@ from .prompt_cache_diagnostics import (
     MAX_RESPONSE_ID_BYTES,
     diagnosePromptCache,
 )
-from ..runtime.identifiers import parseSessionId
-from ..runtime.paths import RuntimePaths, runWithRuntimePaths
+from ..runtime.identifiers import parse_session_id
+from ..runtime.paths import RuntimePaths, run_with_runtime_paths
 from ..storage import with_record_transaction
 
 
@@ -202,7 +202,7 @@ _PROTECTED_UNAVAILABLE = {"future_schema", "session_mismatch", "unsafe_path", "c
 
 
 def promptCacheStatePath(sessionId: str, paths: RuntimePaths) -> str:
-    return os.path.join(paths.sessionsDir, parseSessionId(sessionId), "prompt-cache-state.json")
+    return os.path.join(paths.sessionsDir, parse_session_id(sessionId), "prompt-cache-state.json")
 
 
 def createPromptCacheDispatchOrder(args: dict[str, Any]) -> dict[str, Any]:
@@ -350,7 +350,7 @@ async def commitPromptCacheObservation(candidate: dict[str, Any]) -> dict[str, A
             return {"status": "committed", "state": state}
 
     try:
-        return await runWithRuntimePaths(candidate["paths"], transact)
+        return await run_with_runtime_paths(candidate["paths"], transact)
     except Exception:
         return {"status": "unavailable", "reason": "state_write_failed"}
 
@@ -381,7 +381,7 @@ async def markPromptCacheEvictionIntent(args: dict[str, Any]) -> dict[str, Any]:
             return {"status": "recorded", "state": state}
 
     try:
-        return await runWithRuntimePaths(args["paths"], transact)
+        return await run_with_runtime_paths(args["paths"], transact)
     except Exception:
         return {"status": "unavailable", "reason": "state_write_failed"}
 

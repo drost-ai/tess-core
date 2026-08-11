@@ -195,7 +195,7 @@ class Package28McpProtocolTests(AgentCoreTestCase):
                     {"provider": "openai", "runtimeHome": cwd, "permissionMode": "bypassPermissions"},
                     cwd,
                 )
-                runtime = await core.bootstrapRuntime(cwd=cwd, config=config, mcpRuntime=mcp_runtime, daemonEnabled=False)
+                runtime = await core.bootstrap_runtime(cwd=cwd, config=config, mcpRuntime=mcp_runtime, daemonEnabled=False)
                 self.assertIn("mcp__fake__old", [tool.name for tool in runtime["tools"]])
                 self.assertNotIn("mcp__fake__new", [tool.name for tool in runtime["tools"]])
                 applied = await runtime["applyPendingMcpCatalogChanges"]()

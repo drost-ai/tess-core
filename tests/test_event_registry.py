@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Emission callables whose first (or second, for bound runtimes) argument is
 # the event name. Collected statically so a new emit site cannot ship an
 # unregistered event name.
-_EMIT_CALLEES = {"safeEmit", "_safe_emit", "_emit", "emitEvent", "emit", "_emit_runtime"}
+_EMIT_CALLEES = {"safe_emit", "_safe_emit", "_emit", "emitEvent", "emit", "_emit_runtime"}
 
 # Dynamic or non-runtime channels the registry deliberately does not cover:
 # daemon wire frames, harness-internal events, and prefix-bucketed families.
