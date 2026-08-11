@@ -12,7 +12,7 @@ from ...storage import (
     saveCompactionCheckpoint,
     saveCompactionManifest,
 )
-from ..compaction_models import createDefaultCompactionModelClient
+from ..compaction_transport import createDefaultCompactionModelClient
 from ..durable_memory import updateDurableMemoryFromWorkingContext
 from .artifacts import _write_json, _write_text, buildArtifactPaths
 from .cutoffs import chooseCompactionCutoff

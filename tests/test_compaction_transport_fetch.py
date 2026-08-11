@@ -94,3 +94,30 @@ class CompactionModelFetchTests(AgentCoreTestCase):
                 "purpose": "verification",
             },
         )
+
+    def test_compaction_requests_carry_config_and_session_identity(self):
+        from agent_core.context.compaction_transport import createDefaultCompactionModelClient
+
+        captured = {}
+
+        async def sender(args):
+            captured.update(args)
+            return {"content": [{"type": "text", "text": "summary"}], "usage": {"inputTokens": 1}}
+
+        client = createDefaultCompactionModelClient({"openAiRequestSender": sender})
+        config = {"provider": "openai", "openaiToken": "tok", "openaiApiMode": "responses", "openaiTransport": "sdk"}
+        result = run(
+            client.complete(
+                config=config,
+                model={"provider": "openai", "model": "gpt-5.4", "effort": "high", "purpose": "synthesis"},
+                system="compact",
+                prompt="please compact",
+                sessionId="session-under-compaction",
+            )
+        )
+        self.assertEqual(result["text"], "summary")
+        # The transport preference reads config: without it, openaiTransport
+        # "sdk" applied to turns but silently never to compaction.
+        self.assertIs(captured["config"], config)
+        # Codex-mode partial-output delivery keys off the request's session id.
+        self.assertEqual(captured["request"]["sessionId"], "session-under-compaction")

@@ -57,14 +57,14 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.restore_home(root, previous)
 
     def test_compaction_model_client_timeout_uses_provider_failure(self):
-        import agent_core.context.compaction_models as compaction_models
+        import agent_core.context.compaction_transport as compaction_transport
 
         async def slow_request():
             await asyncio.sleep(0.05)
             return {}
 
         with self.assertRaises(core.ProviderRequestError) as raised:
-            run(compaction_models._run_compaction_request_with_timeout(provider="openai", providerLabel="OpenAI", attempt=1, timeoutMs=1, run=slow_request))
+            run(compaction_transport._run_compaction_request_with_timeout(provider="openai", providerLabel="OpenAI", attempt=1, timeoutMs=1, run=slow_request))
         self.assertEqual(raised.exception.record["category"], "timeout")
         self.assertTrue(raised.exception.record["retryable"])
         self.assertEqual(raised.exception.record["phase"], "response_complete")

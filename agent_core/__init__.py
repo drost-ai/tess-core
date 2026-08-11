@@ -345,7 +345,7 @@ from .context.compaction import (
     runModelBackedCompactionSynthesisWithFallback, shouldAutoCompact, shouldRetryCompactionAttempt,
     shouldSkipCompactionSynthesisFailure, summarizeTodo, summarizeToolResultForCompaction, trimPathEvidence, truncate,
 )
-from .context.compaction_models import (
+from .context.compaction_transport import (
     CODEX_SPARK_COMPACTION_MODEL, CompactionModelClient,
     FIXED_COMPACTION_EFFORT, FIXED_COMPACTION_PROVIDER,
     createDefaultCompactionModelClient, resolveCompactionExecutionPlan, resolveCompactionModelCandidates,

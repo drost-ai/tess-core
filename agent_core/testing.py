@@ -18,7 +18,7 @@ from .context.compaction import (
     runCompaction,
     shouldAutoCompact,
 )
-from .context.compaction_models import (
+from .context.compaction_transport import (
     createDefaultCompactionModelClient,
     resolveCompactionExecutionPlan,
     resolveCompactionModelCandidates,

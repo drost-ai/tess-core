@@ -15,7 +15,7 @@ DOMAIN_TEST_MODULES = [
     "tests.test_provider_prompt_cache",
     "tests.test_provider_errors",
     "tests.test_agent_loop",
-    "tests.test_compaction_models_fetch",
+    "tests.test_compaction_transport_fetch",
     "tests.test_runtime_state_core",
     "tests.test_runtime_state_projection",
     "tests.test_runtime_bootstrap_plugins",

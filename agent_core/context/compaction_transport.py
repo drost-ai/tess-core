@@ -59,7 +59,11 @@ def createDefaultCompactionModelClient(options: dict[str, Any] | None = None) ->
                         "baseUrl": transport.get("baseUrl"),
                         "headers": transport.get("headers"),
                         "mode": transport["mode"],
-                        "request": {"model": model["model"], "effort": model.get("effort"), "maxOutputTokens": max_output_tokens, "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []},
+                        # config drives the transport preference (openaiTransport:
+                        # "sdk") — without it compaction silently ignored the
+                        # user's transport choice that every turn honors.
+                        "config": config,
+                        "request": {"model": model["model"], "effort": model.get("effort"), "maxOutputTokens": max_output_tokens, "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": [], "sessionId": args.get("sessionId")},
                         "requestOptions": (profile_resolution.get("profile") or {}).get("requestOptions") or {},
                         "runtime": runtime,
                         "clientFactory": client_factory,

@@ -221,7 +221,7 @@ class ContextKnobWiringTests(unittest.TestCase):
             os.environ.pop(name, None)
 
     def test_compaction_model_timeouts_read_knob_with_legacy_tess_alias(self):
-        from agent_core.context.compaction_models import _resolve_compaction_timeout_ms
+        from agent_core.context.compaction_transport import _resolve_compaction_timeout_ms
 
         self.assertEqual(_resolve_compaction_timeout_ms("synthesis"), 300_000)
         configureKnobs({"compaction": {"synthesis_timeout_ms": 45_000, "verification_timeout_ms": 55_000}})

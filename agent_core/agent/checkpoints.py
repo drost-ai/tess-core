@@ -10,7 +10,7 @@ from ..session.persistence import persistProviderFailure, persistSession
 from .cancellation import _now, _safe_emit
 from typing import Any
 from ..context.compaction_state import refreshCompactionStateFromManifest as _refresh_compaction_state_from_manifest
-from ..context.compaction_models import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
+from ..context.compaction_transport import resolveCompactionExecutionPlan as _resolve_compaction_execution_plan
 
 
 async def maybeAutoCheckpointRawSession(args: dict[str, Any]) -> dict[str, Any] | None:

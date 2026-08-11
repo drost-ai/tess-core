@@ -5,7 +5,7 @@ import math
 import os
 import re
 from ...providers.errors import fallbackEligibleProviderFailure, isProviderRequestError
-from ..compaction_models import resolveCompactionModelCandidates
+from ..compaction_transport import resolveCompactionModelCandidates
 from .evidence import buildCompactionEvidence
 from .parsing import parseCompactionSynthesisResponse, parseCompactionVerificationResponse
 from .prompts import buildCompactionSynthesisPrompt, buildCompactionVerificationPrompt
@@ -23,7 +23,7 @@ from ...storage.message_origin import isGenuineUserRequest as _is_genuine_user_r
 from ...providers._knob_reader import provider_knob
 from ...providers.token_budget import resolveCompactionRequestOutputTokens
 from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
-from ..compaction_models import resolveCompactionTokenPolicy
+from ..compaction_transport import resolveCompactionTokenPolicy
 
 
 def buildCompactionAttemptStrategies(modelCandidates: list[dict[str, Any]], options: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -119,6 +119,7 @@ async def runModelBackedCompactionSynthesis(args: dict[str, Any] | None = None, 
                 "runtime": args.get("runtime") or {},
                 "abortSignal": args.get("abortSignal"),
                 "model": model,
+                "sessionId": session.get("id"),
                 "system": COMPACTION_SYSTEM_PROMPT,
                 "maxOutputTokens": output_token_budget,
                 "prompt": buildCompactionSynthesisPrompt(
@@ -214,6 +215,7 @@ async def runCompactionCheckpointVerification(args: dict[str, Any] | None = None
                 "runtime": args.get("runtime") or {},
                 "abortSignal": args.get("abortSignal"),
                 "model": model,
+                "sessionId": session.get("id"),
                 "system": COMPACTION_VERIFICATION_SYSTEM_PROMPT,
                 "maxOutputTokens": output_token_budget,
                 "prompt": buildCompactionVerificationPrompt(
