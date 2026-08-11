@@ -187,7 +187,10 @@ class SubagentV2Tests(AgentCoreTestCase):
                 )
             )
             self.assertEqual(calls["tool"], 1)
-            self.assertEqual(result["text"], "finished")
+            # The limit ends the turn at the next loop top instead of buying
+            # further provider calls (TS agent-core parity).
+            self.assertEqual(calls["provider"], 1)
+            self.assertEqual(result["stopReason"], "max_tool_calls")
             tool_results = session["messages"][2]["content"]
             self.assertFalse(tool_results[0]["is_error"])
             self.assertTrue(tool_results[1]["is_error"])

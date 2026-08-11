@@ -203,7 +203,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             if _is_turn_cancelled(runtime):
                 return await cancel_turn()
             exceeded = check_subagent_runtime_limits(subagent_limits, state.limit_state())
-            if exceeded and exceeded.get("reason") != "max_tool_calls":
+            if exceeded:  # every limit ends the turn here, max_tool_calls included
                 return await finish_subagent_limit(exceeded)
             await drain_mailboxes()
             await _inject_open_question_reminders(session, reminded_question_ids)
@@ -480,7 +480,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                 ledger=progress_ledger,
                 logical_turn_id=parent_turn_id,
                 tool_uses=tool_uses,
-                tool_results=tool_results,
+                tool_results=batch["results"], transcript_blocks=tool_results,
                 provider_call_index=state.provider_call_index,
             )
             await persistSession(session, config)

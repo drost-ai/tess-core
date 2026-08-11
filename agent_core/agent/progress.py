@@ -280,11 +280,17 @@ def appendToolResultBatch(
     logical_turn_id: str,
     tool_uses: list[dict[str, Any]],
     tool_results: list[dict[str, Any] | None],
+    transcript_blocks: list[dict[str, Any] | None] | None = None,
     provider_call_index: int,
 ) -> dict[str, Any] | None:
+    """tool_results must align pairwise with tool_uses — the ledger indexes
+    them against each other. transcript_blocks may additionally interleave
+    non-result blocks (image attachments) and is what the conversation sees;
+    feeding it to the ledger misattributes those extra blocks as failures."""
+    blocks = transcript_blocks if transcript_blocks is not None else tool_results
     session["messages"].append(
         syntheticUserMessage(
-            [result for result in tool_results if result is not None],
+            [block for block in blocks if block is not None],
             actor="tool",
             kind="tool_result_batch",
             lineage={"logicalTurnId": logical_turn_id},

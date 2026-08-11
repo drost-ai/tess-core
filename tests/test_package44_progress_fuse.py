@@ -6,7 +6,7 @@ from typing import Any
 from unittest.mock import patch
 
 import agent_core as core
-from agent_core.agent.progress import LogicalTurnProgressLedger
+from agent_core.agent.progress import LogicalTurnProgressLedger, appendToolResultBatch
 from tests.support.agent_core_case import AgentCoreTestCase, bind_test_runtime, run
 from tests.test_package38_interactive_context_relief import _codex_config
 
@@ -285,6 +285,44 @@ class Package44ProgressFuseTests(AgentCoreTestCase):
             ledger.observe([next_use], [next_result], provider_call_index=3)
         )
         self.assertEqual(ledger.receipt["consecutiveNoProgress"], 0)
+
+    def test_interleaved_image_blocks_do_not_shift_ledger_alignment(self):
+        session: dict[str, Any] = {"messages": [], "metadata": {}}
+        ledger = LogicalTurnProgressLedger(session, "turn-image-alignment")
+        tool_uses = [
+            {"id": "shot-1", "name": "Screenshot", "input": {}},
+            {
+                "id": "art-1",
+                "name": "ReadToolArtifact",
+                "input": {"artifact_id": "artifact-1", "offset_bytes": 0},
+            },
+        ]
+        screenshot_result = {"type": "tool_result", "tool_use_id": "shot-1", "content": "captured"}
+        image_block = {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}}
+        artifact_result = {
+            "type": "tool_result",
+            "tool_use_id": "art-1",
+            "content": '{"type":"tool_artifact_page","artifactId":"artifact-1","nextOffsetBytes":100,"complete":false}',
+        }
+        outcome = appendToolResultBatch(
+            session=session,
+            ledger=ledger,
+            logical_turn_id="turn-image-alignment",
+            tool_uses=tool_uses,
+            tool_results=[screenshot_result, artifact_result],
+            transcript_blocks=[screenshot_result, image_block, artifact_result],
+            provider_call_index=1,
+        )
+        self.assertIsNone(outcome)
+        # The artifact page advanced the cursor; the interleaved image block
+        # must not be misread as that tool's (failed) result.
+        self.assertEqual(ledger.receipt["artifactOffsets"], {"artifact-1": 100})
+        self.assertEqual(ledger.receipt["artifactFailures"], {"artifact-1": 0})
+        # The conversation still carries all three blocks, image included.
+        self.assertEqual(
+            [block.get("type") for block in session["messages"][-1]["content"]],
+            ["tool_result", "image", "tool_result"],
+        )
 
     def test_general_fuse_is_bounded_and_durable(self):
         session: dict[str, Any] = {"metadata": {}}
