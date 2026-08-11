@@ -32,7 +32,7 @@ from .validation import _require_optional_number, _require_string
 def _glob_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         cwd = context.get("cwd") or context["session"]["cwd"]
-        query = _resolve_glob_search(_require_string(input.get("pattern"), "pattern"), input.get("path"), context)
+        query = await _resolve_glob_search(_require_string(input.get("pattern"), "pattern"), input.get("path"), context)
         pattern = query["pattern"]
         search_path = query["searchPath"]
         rg_path = await _facade_resolve_ripgrep_binary()
@@ -94,7 +94,7 @@ def _grep_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         pattern = _require_string(input.get("pattern"), "pattern")
         cwd = context.get("cwd") or context["session"]["cwd"]
-        search_path = _authorize_path(_require_string(input.get("path"), "path"), context) if input.get("path") else cwd
+        search_path = await _authorize_path(_require_string(input.get("path"), "path"), context, "Grep") if input.get("path") else cwd
         rg_path = await _facade_resolve_ripgrep_binary()
         if not rg_path:
             return {"content": "ripgrep is required for Grep and was not found.", "isError": True}
@@ -280,13 +280,13 @@ def _require_matching_search_snapshot(cursor: dict[str, Any], fingerprint: str, 
         raise ValueError(f"{tool_name} results changed after the cursor was issued; restart pagination.")
 
 
-def _resolve_glob_search(pattern: str, requested_path: Any, context: ToolContext) -> dict[str, str]:
+async def _resolve_glob_search(pattern: str, requested_path: Any, context: ToolContext) -> dict[str, str]:
     if os.path.isabs(pattern):
         split = _split_absolute_glob_pattern(pattern)
-        return {"pattern": split["pattern"], "searchPath": _authorize_path(split["searchPath"], context)}
+        return {"pattern": split["pattern"], "searchPath": await _authorize_path(split["searchPath"], context, "Glob")}
     return {
         "pattern": pattern,
-        "searchPath": _authorize_path(_require_string(requested_path, "path"), context) if requested_path else (context.get("cwd") or context["session"]["cwd"]),
+        "searchPath": await _authorize_path(_require_string(requested_path, "path"), context, "Glob") if requested_path else (context.get("cwd") or context["session"]["cwd"]),
     }
 
 

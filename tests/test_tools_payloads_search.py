@@ -47,9 +47,9 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             self.assertEqual(payload["totalMatches"], 2)
             self.assertEqual(sorted(payload["matches"]), sorted([str(plan_dir / "README.md"), str(plan_dir / "tier1.md")]))
 
-            root_result = run(tool.handler({"pattern": "**/*", "path": os.path.abspath(os.path.sep)}, context))
-            self.assertTrue(root_result.get("isError"))
-            self.assertIn("refuses to search the filesystem root", root_result["content"])
+            with self.assertRaises(PermissionError) as root_refusal:
+                run(tool.handler({"pattern": "**/*", "path": os.path.abspath(os.path.sep)}, context))
+            self.assertIn("outside this session's allowed roots", str(root_refusal.exception))
         finally:
             self.restore_home(root, previous)
 

@@ -17,7 +17,7 @@ from .validation import _require_string
 
 def _notebook_edit_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        notebook_path = _authorize_path(_require_string(input.get("notebook_path"), "notebook_path"), context)
+        notebook_path = await _authorize_path(_require_string(input.get("notebook_path"), "notebook_path"), context, "NotebookEdit")
         edit_mode = input.get("edit_mode") if isinstance(input.get("edit_mode"), str) else "replace"
         await _ensure_tool_permission(context, "NotebookEdit", "edit", f"{edit_mode} notebook cell in {_display_path(context, notebook_path)}", path=notebook_path)
         notebook = json.loads(Path(notebook_path).read_text(encoding="utf-8"))

@@ -106,6 +106,51 @@ async def _ensure_tool_permission(
     raise PermissionError(f"Permission denied for {tool_name}. Use /permissions to change modes.")
 
 
+async def _ensure_path_confinement(context: ToolContext, tool_name: str, path: str) -> None:
+    """A tool asked for a path outside the session's allowed roots. Prompting
+    modes surface an approval; pinned children, containment modes
+    (bypassPermissions, an os-required sandbox), and non-interactive auto
+    modes refuse outright — no human gate exists there to widen filesystem
+    authority, so confinement must be structural."""
+    mode = await _get_effective_permission_mode(context)
+    output_json = context.get("outputJson", lambda *_: None)
+    summary = f"{tool_name} {path}"
+    outside = f"{tool_name} path {path} is outside this session's allowed roots"
+
+    def refuse(reason: str, source: str) -> None:
+        output_json("permission.decided", {"tool": tool_name, "mode": mode, "decision": "deny", "summary": summary, "source": source, "reason": reason})
+        raise PermissionError(reason)
+
+    authority = _pinned_child_authority(context.get("session", {}))
+    if authority:
+        refuse(f"{outside}; child authority cannot be widened after launch.", "authority")
+    sandbox = context.get("config", {}).get("sandbox") or {}
+    if mode == "bypassPermissions" or sandbox.get("mode") == "os-required":
+        refuse(f"{outside}; containment sessions cannot widen filesystem access. Launch with --add-dir to include it.", "containment")
+    if mode in ("auto", "dontAsk"):
+        refuse(f"{outside}; non-interactive modes cannot approve new roots.", "mode")
+    if not context.get("interactive"):
+        refuse(f"{outside}. Re-run with --add-dir {path} or approve interactively.", "non_interactive")
+    approve_label = "Approve once"
+    deny_label = "Deny"
+    options = [approve_label, deny_label]
+    prompt = "\n".join((f"{tool_name} wants to access a path outside the allowed roots", "", path, "", f"mode: {mode}"))
+    output_json("permission.requested", {"tool": tool_name, "mode": mode, "summary": summary, "options": options})
+    detail = {
+        "kind": "permission",
+        "tool": tool_name,
+        "mode": mode,
+        "summary": summary,
+        "reason": "Path is outside the session's allowed roots.",
+        "category": "path",
+    }
+    answer = await _ask_question_with_detail(context, prompt, options, detail, deny_label)
+    if answer == approve_label:
+        output_json("permission.decided", {"tool": tool_name, "mode": mode, "decision": "allow", "summary": summary, "source": "prompt"})
+        return
+    refuse(f"Permission denied for {tool_name} on {path}.", "prompt")
+
+
 async def _get_effective_permission_mode(context: ToolContext) -> str:
     mode = context["session"].get("permissionMode") or context["config"].get("permissionMode", "default")
     metadata = context["session"].get("metadata", {})

@@ -32,7 +32,7 @@ from .validation import _require_string
 
 def _read_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context)
+        file_path = await _authorize_path(_require_string(input.get("file_path"), "file_path"), context, "Read")
         ext = Path(file_path).suffix.lower()
         stat = _inspect_regular_file(file_path)
         if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
@@ -335,7 +335,7 @@ def _file_snapshot(stat: os.stat_result) -> dict[str, int]:
 
 def _write_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context, True)
+        file_path = await _authorize_path(_require_string(input.get("file_path"), "file_path"), context, "Write")
         content = _require_string(input.get("content"), "content")
         await _ensure_tool_permission(context, "Write", "edit", f"Write {_display_path(context, file_path)} ({len(content)} bytes)", path=file_path)
         previous = Path(file_path).read_text(encoding="utf-8") if Path(file_path).exists() else None
@@ -355,7 +355,7 @@ def _write_tool() -> ToolDefinition:
 
 def _edit_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
-        file_path = _authorize_path(_require_string(input.get("file_path"), "file_path"), context)
+        file_path = await _authorize_path(_require_string(input.get("file_path"), "file_path"), context, "Edit")
         old = _require_string(input.get("old_string"), "old_string")
         new = _require_string(input.get("new_string"), "new_string")
         replace_all = bool(input.get("replace_all"))
