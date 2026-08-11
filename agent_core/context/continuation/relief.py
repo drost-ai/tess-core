@@ -172,8 +172,6 @@ def chooseContextReliefModes(args: dict[str, Any]) -> list[str]:
         or high_pressure
     ):
         modes.append("api_microcompact" if supportsApiMicrocompact(args.get("config") or {}) else "microcompact")
-    elif scheduled or pressure["categories"]["lowValueTailTokens"] >= 2_000:
-        modes.append("microcompact")
 
     if (
         scheduled

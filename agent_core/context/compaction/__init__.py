@@ -82,7 +82,6 @@ from .projection import (
 )
 from .prompts import (
     appendActivitySection,
-    appendPlanSection,
     appendPreservedTrace,
     appendProjectFactsSection,
     appendPromptList,
@@ -125,7 +124,6 @@ __all__ = [
     "MAX_TODOS",
     "MIN_PRESERVED_TOOL_EXCHANGE_PAIRS",
     "appendActivitySection",
-    "appendPlanSection",
     "appendPreservedTrace",
     "appendProjectFactsSection",
     "appendPromptList",

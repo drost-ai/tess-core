@@ -57,10 +57,6 @@ def _latest_archived_timestamp(raw: str) -> str | None:
     return latest
 
 
-def parseLatestArchivedTimestamp(raw: str) -> str | None:
-    return _latest_archived_timestamp(raw)
-
-
 async def loadSessionWithReconciliation(sessionId: str) -> dict[str, Any]:
     """Full selected-session load with an explicit, convergent repair verdict."""
     path = sessionPath(sessionId)

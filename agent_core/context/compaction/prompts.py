@@ -214,13 +214,6 @@ def _renderFullWorkingContextPromptContext(context: dict[str, Any]) -> str:
     appendPromptList(lines, "discoveries", context.get("discoveries") or [])
     appendPromptList(lines, "relevant_files", [_format_relevant_file_prompt(record) for record in project.get("keyFiles", [])])
     appendPromptList(lines, "project_evidence", facts.get("evidence") or [])
-    plan = context.get("plan") or {}
-    if plan.get("filePath") or plan.get("status"):
-        lines.append("plan_state:")
-        if plan.get("status"):
-            lines.append(f"- status: {plan['status']}")
-        if plan.get("filePath"):
-            lines.append(f"- file: {plan['filePath']}")
     appendPromptList(lines, "open_todos", todos.get("open") or [])
     if todos.get("originalItemCount") is not None:
         lines.append(
@@ -301,17 +294,6 @@ def appendRelevantFilesSection(lines: list[str], files: list[dict[str, Any]]) ->
     for file_record in files:
         note = f" — {file_record['note']}" if file_record.get("note") else ""
         lines.append(f"- `{file_record.get('path')}`{note}")
-
-
-def appendPlanSection(lines: list[str], context: dict[str, Any]) -> None:
-    plan = context.get("plan") or {}
-    if not plan.get("filePath") and not plan.get("status"):
-        return
-    lines.extend(["", "## Plan State", ""])
-    if plan.get("status"):
-        lines.append(f"- status: `{plan['status']}`")
-    if plan.get("filePath"):
-        lines.append(f"- file: `{plan['filePath']}`")
 
 
 def appendPromptList(lines: list[str], heading: str, entries: list[str]) -> None:

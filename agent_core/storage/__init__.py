@@ -152,7 +152,6 @@ from .session_archive import (
     loadSession,
     loadSessionWithReconciliation,
     mutateSessionRecord,
-    parseLatestArchivedTimestamp,
 )
 from .session_schema_v2 import (
     SESSION_BODY_FORMAT,
@@ -344,7 +343,6 @@ __all__ = [
     "mutateTaskMeta",
     "normalizeSessionRevision",
     "parseJsonString",
-    "parseLatestArchivedTimestamp",
     "persistenceObserversActive",
     "readJsonFile",
     "readJsonFileTolerant",

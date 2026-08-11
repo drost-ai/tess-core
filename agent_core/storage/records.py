@@ -58,9 +58,6 @@ def monitorPath(monitorId: str) -> str:
 def childAgentPath(agentId: str) -> str:
     return os.path.join(getStateRoot(), "agents", f"{parseAgentId(agentId)}.json")
 
-async def _save_by_path(path: str, record: dict[str, Any]) -> None:
-    await writeJsonFile(path, record)
-
 async def _load_by_path(path: str) -> dict[str, Any] | None:
     return await readJsonFile(path, None)
 
@@ -126,22 +123,6 @@ def _merge_child_agent_for_full_save(current: dict[str, Any] | None, incoming: d
             if incoming.get(key) is None and current.get(key) is not None:
                 merged[key] = current[key]
     return merged
-
-async def _list_json_records(directory: str, loader) -> list[dict[str, Any]]:
-    try:
-        names = [name for name in os.listdir(directory) if name.endswith(".json")]
-    except FileNotFoundError:
-        return []
-    records = []
-    for name in names:
-        try:
-            value = await loader(name[:-5])
-        except RuntimeIdentifierError:
-            continue
-        if value:
-            records.append(value)
-    return records
-
 
 def _json_candidate(directory: str, entry: os.DirEntry[str], parse_id) -> dict[str, str] | None:
     if not entry.name.endswith(".json"):

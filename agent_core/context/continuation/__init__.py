@@ -7,7 +7,6 @@ from __future__ import annotations
 from .compaction import (
     applyCompactPrefix,
     applyPartialCompaction,
-    applySessionMemoryCompaction,
     choosePreservedRawStart,
     compactHistoricalTail,
     compactMessageForContinuation,
@@ -64,7 +63,6 @@ __all__ = [
     "applyContextReliefModes",
     "applyLightweightContextRelief",
     "applyPartialCompaction",
-    "applySessionMemoryCompaction",
     "asRecord",
     "buildContinuationContext",
     "chooseContextReliefModes",

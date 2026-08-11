@@ -125,38 +125,6 @@ def compactMessageForContinuation(message: dict[str, Any], toolUses: dict[str, s
     return {**message, "content": next_blocks} if next_blocks else None
 
 
-def applySessionMemoryCompaction(messages: list[dict[str, Any]], retrievedMemory: dict[str, Any], reactiveAttempt: int = 0) -> dict[str, Any]:
-    if not retrievedMemory.get("records") or len(messages) <= relief_knob("context.relief_preserve_min_messages"):
-        return emptyCompactionResult(messages)
-    keep_count = max(4, max(8, relief_knob("context.relief_preserve_min_messages") // 2) - (reactiveAttempt * 2))
-    preserved_raw_start_index = _adjust_start_to_tool_boundary(messages, max(0, len(messages) - keep_count))
-    if preserved_raw_start_index <= 0:
-        return emptyCompactionResult(messages)
-    removed_region = messages[:preserved_raw_start_index]
-    next_messages = messages[preserved_raw_start_index:]
-    region_summary = summarizeContinuationRegion(removed_region)
-    reinjection_lines = normalizeReinjectionLines(
-        [
-            "Older raw context was reduced and replaced by retrieved durable memory plus the latest raw tail.",
-            *renderRegionSummaryReinjectionLines(region_summary),
-            *[
-                f"durable memory: {truncate(collapseWhitespace(record.get('text') or ''), 180)}"
-                for record in (retrievedMemory.get("records") or [])[:3]
-            ],
-        ]
-    )
-    return {
-        "applied": True,
-        "messages": next_messages,
-        "preservedRawStartIndex": preserved_raw_start_index,
-        "compactedMessageCount": 0,
-        "droppedMessageCount": preserved_raw_start_index,
-        "tokensSavedEstimate": max(0, estimateMessagesTokens(messages) - estimateMessagesTokens(next_messages)),
-        "reinjectionLines": reinjection_lines,
-        "reinjectionSummary": " | ".join(reinjection_lines[:4]),
-    }
-
-
 def applyPartialCompaction(messages: list[dict[str, Any]], reactiveAttempt: int = 0) -> dict[str, Any]:
     if len(messages) <= relief_knob("context.relief_preserve_min_messages") + 4:
         return emptyCompactionResult(messages)

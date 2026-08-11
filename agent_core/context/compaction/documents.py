@@ -11,7 +11,6 @@ from .parsing import (
 )
 from .prompts import (
     appendActivitySection,
-    appendPlanSection,
     appendProjectFactsSection,
     appendRelevantFilesSection,
     appendStringSection,
@@ -264,7 +263,6 @@ def renderSummaryMarkdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
     appendSubsection(lines, "Blocked", context["currentState"]["blocked"])
     appendStringSection(lines, "Key Decisions", context["decisions"])
     appendStringSection(lines, "Verification Notes", [*verification.get("notes", []), *[f"Issue: {entry}" for entry in verification.get("issues", [])]])
-    appendPlanSection(lines, context)
     activity = context["activity"]
     appendStringSection(
         lines,
@@ -291,11 +289,6 @@ def renderSummaryMarkdown(context: dict[str, Any], meta: dict[str, Any]) -> str:
 
 def renderDecisionsMarkdown(context: dict[str, Any]) -> str:
     lines = ["# Assistant Decisions", ""]
-    plan = context.get("plan") or {}
-    if plan.get("filePath"):
-        lines.append(f"- Use `{plan['filePath']}` as the latest saved plan reference.")
-    if plan.get("status"):
-        lines.append(f"- Current plan status is `{plan['status']}`.")
     for decision in context.get("decisions", [])[:12]:
         lines.append(f"- {decision}")
     if len(lines) == 2:

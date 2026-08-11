@@ -12,7 +12,6 @@ from .._utils import is_process_alive as _is_process_alive
 from .json_io import withRecordTransaction
 from .paths import (
     daemonEventsPath,
-    daemonInstanceDir,
     daemonPidPath,
     daemonSocketPath,
     daemonStatePath,

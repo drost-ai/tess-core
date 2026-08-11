@@ -9,14 +9,6 @@ from ...payloads.token_estimation import (
 )
 
 
-def _estimate_text_tokens(value: str) -> int:
-    return estimateTextTokens(value)
-
-
-def _estimate_messages_tokens(messages: list[dict[str, Any]]) -> int:
-    return estimateMessageTokens(messages)
-
-
 def collapseWhitespace(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value)).strip()
 

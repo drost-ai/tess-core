@@ -85,8 +85,6 @@ def isSafeWorkingSetStart(messages: list[dict[str, Any]], index: int) -> bool:
     if not current:
         return False
     if _is_plain_user_turn_anchor(current):
-        if messageHasToolResults(current):
-            return False
         previous = messages[index - 1] if index > 0 else None
         return not (previous and previous.get("role") == "assistant" and messageHasToolUses(previous))
     if current.get("role") != "assistant":
