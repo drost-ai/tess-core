@@ -44,7 +44,7 @@ class OpenAiRetryPolicyTests(AgentCoreTestCase):
     def test_openai_backoff_ladder_caps_at_thirty_seconds_with_bounded_jitter(self) -> None:
         ladder = [1_000, 3_000, 5_000, 10_000, 30_000, 30_000, 30_000]
         for attempt, base in enumerate(ladder, start=1):
-            delay = openai_module.shared.providerRetryDelayMs(attempt)
+            delay = openai_module.shared.openai_retry_delay_ms(attempt)
             self.assertGreaterEqual(delay, base)
             self.assertLessEqual(delay, base + 119)
 
@@ -68,7 +68,7 @@ class OpenAiRetryPolicyTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=_request(),
@@ -105,7 +105,7 @@ class OpenAiRetryPolicyTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     token="test",
                     baseUrl="https://api.openai.com/v1",
                     request=_request(),

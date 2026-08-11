@@ -32,7 +32,7 @@ class AnthropicProviderStreamingTests(AgentCoreTestCase):
         try:
             with self.assertRaises(core.ProviderIncompleteResponseError) as raised:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         {
                             "config": {
                                 "provider": "anthropic",

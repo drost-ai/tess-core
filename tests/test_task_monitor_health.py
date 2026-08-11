@@ -142,7 +142,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
     def test_monitor_runtime_uses_provider_authored_update_and_usage(self):
         root, home, workspace, previous = self.temp_context()
         runtime = None
-        original_send = monitors_module.sendOpenAiRequest
+        original_send = monitors_module.send_openai_request
         try:
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             config["openaiToken"] = "test-token"
@@ -165,7 +165,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 calls["args"] = args
                 return {"content": [{"type": "text", "text": "Provider says the build monitor is live."}], "usage": {"input_tokens": 7, "output_tokens": 3, "cache_creation_input_tokens": 2, "cache_read_input_tokens": 1}}
 
-            monitors_module.sendOpenAiRequest = fake_send
+            monitors_module.send_openai_request = fake_send
             events = []
             async def exercise_runtime():
                 created = await core.create_monitor_runtime({"session": session, "config": config, "emit": lambda event, data: events.append((event, data)), "tickIntervalMs": 10})
@@ -198,7 +198,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
             saved_session = run(core.load_session(session["id"]))
             self.assertEqual(saved_session["messages"][-1]["content"], "Provider says the build monitor is live.")
         finally:
-            monitors_module.sendOpenAiRequest = original_send
+            monitors_module.send_openai_request = original_send
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)

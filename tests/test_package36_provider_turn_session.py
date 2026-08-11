@@ -177,7 +177,7 @@ class Package36ProviderTurnSessionTests(AgentCoreTestCase):
             "tools": [],
         }
         run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="responses",
                 request=first_request,
@@ -215,7 +215,7 @@ class Package36ProviderTurnSessionTests(AgentCoreTestCase):
             ],
         }
         run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="responses",
                 request=second_request,
@@ -404,7 +404,7 @@ class Package36ProviderTurnSessionTests(AgentCoreTestCase):
                 runtime={},
             )
             with self.assertRaises(core.ProviderRequestError):
-                await testing.sendOpenAiResponsesRequest(
+                await testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request={

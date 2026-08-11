@@ -16,13 +16,13 @@ from ..token_budget import resolve_request_max_output_tokens as _resolve_max_out
 from typing import Any
 from urllib.parse import urlparse
 
-def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def build_responses_create_params(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     request = args["request"]
     is_codex = bool(args.get("isCodexBackend"))
     params: dict[str, Any] = {
         "model": request["model"],
-        "input": convertMessagesToInput(request.get("messages", [])),
+        "input": convert_messages_to_input(request.get("messages", [])),
         "instructions": _resolve_instructions(request.get("system", ""), is_codex),
         "store": False,
         "stream": True,
@@ -47,12 +47,12 @@ def buildResponsesCreateParams(args: dict[str, Any] | None = None, **kwargs: Any
         _remove_codex_native_resume_options(merged)
     return merged
 
-def buildChatCompletionsCreateParams(request: dict[str, Any] | None = None, options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+def build_chat_completions_create_params(request: dict[str, Any] | None = None, options: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     request = {**(request or {}), **kwargs}
     options = options or {}
     params: dict[str, Any] = {
         "model": request["model"],
-        "messages": convertMessagesToChatCompletions(request.get("system", ""), request.get("messages", [])),
+        "messages": convert_messages_to_chat_completions(request.get("system", ""), request.get("messages", [])),
         "max_tokens": _resolve_max_output_tokens(request),
         "stream": True,
         "stream_options": {"include_usage": True},
@@ -178,26 +178,26 @@ def _remove_codex_native_resume_options(params: dict[str, Any]) -> None:
     if not extra_body:
         params.pop("extra_body", None)
 
-def resolveOpenAiBaseUrl(mode: str, baseUrl: str | None) -> str | None:
+def resolve_openai_base_url(mode: str, baseUrl: str | None) -> str | None:
     trimmed = baseUrl.strip() if isinstance(baseUrl, str) else ""
     if trimmed:
         return trimmed
     return DEFAULT_CODEX_BASE_URL if mode == "codex" else None
 
-def getOpenAiProviderLabel(mode: str, _baseUrl: str | None = None) -> str:
+def get_openai_provider_label(mode: str, _baseUrl: str | None = None) -> str:
     if mode == "codex":
         return "OpenAI/Codex"
     if mode == "chat_completions":
         return "OpenAI Chat Completions"
     return "OpenAI Responses"
 
-def isCodexBaseUrl(baseUrl: str | None) -> bool:
+def is_codex_base_url(baseUrl: str | None) -> bool:
     # No base URL is NOT codex: the stock default is api.openai.com responses
     # mode; the codex backend is reachable only by explicit URL or mode.
     trimmed = baseUrl.strip() if isinstance(baseUrl, str) else ""
     return bool(trimmed) and trimmed.rstrip("/") == DEFAULT_CODEX_BASE_URL
 
-def supportsOpenAiChatCompletionsReasoningEffort(baseUrl: str | None) -> bool:
+def supports_openai_chat_completions_reasoning_effort(baseUrl: str | None) -> bool:
     if not baseUrl or not baseUrl.strip():
         return True
     try:
@@ -205,7 +205,7 @@ def supportsOpenAiChatCompletionsReasoningEffort(baseUrl: str | None) -> bool:
     except Exception:
         return False
 
-def convertMessagesToInput(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def convert_messages_to_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for message in messages:
         content = message.get("content")
@@ -295,7 +295,7 @@ def _valid_base64_image_payload(value: str) -> bool:
         return False
     return True
 
-def convertMessagesToChatCompletions(system: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def convert_messages_to_chat_completions(system: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     if system.strip():
         out.append({"role": "system", "content": system.strip()})

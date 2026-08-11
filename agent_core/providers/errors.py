@@ -10,26 +10,26 @@ import typing as _typing
 
 from .._utils import now_iso
 from .error_diagnostics import (
-    boundDiagnosticCount as _bound_diagnostic_count,
-    boundedInterruptedPreview as _bounded_interrupted_preview,
-    boundDiagnosticText as _bound_diagnostic_text,
-    boundOptionalDiagnosticText as _bound_optional_diagnostic_text,
-    looksLikeAuth as _looks_like_auth,
-    looksLikeQuota as _looks_like_quota,
-    looksLikeTimeout as _looks_like_timeout,
-    looksLikeTransport as _looks_like_transport,
-    nonnegativeOptionalInteger as _nonnegative_optional_integer,
-    partialOutputMode as _partial_output_mode,
-    positiveOptionalInteger as _positive_optional_integer,
-    validHttpStatus as _valid_http_status,
+    bound_diagnostic_count as _bound_diagnostic_count,
+    bounded_interrupted_preview as _bounded_interrupted_preview,
+    bound_diagnostic_text as _bound_diagnostic_text,
+    bound_optional_diagnostic_text as _bound_optional_diagnostic_text,
+    looks_like_auth as _looks_like_auth,
+    looks_like_quota as _looks_like_quota,
+    looks_like_timeout as _looks_like_timeout,
+    looks_like_transport as _looks_like_transport,
+    nonnegative_optional_integer as _nonnegative_optional_integer,
+    partial_output_mode as _partial_output_mode,
+    positive_optional_integer as _positive_optional_integer,
+    valid_http_status as _valid_http_status,
 )
 from .error_evidence import (
     ProviderWireError,
-    extractProviderWireEvidence as _extract_provider_wire_evidence,
+    extract_provider_wire_evidence as _extract_provider_wire_evidence,
 )
 from .error_sdk import (
-    classifyOpenAiSdkEvidence as _classify_openai_sdk_evidence,
-    extractOpenAiSdkException as _extract_openai_sdk_exception,
+    classify_openai_sdk_evidence as _classify_openai_sdk_evidence,
+    extract_openai_sdk_exception as _extract_openai_sdk_exception,
 )
 
 if _typing.TYPE_CHECKING:
@@ -50,11 +50,11 @@ class ProviderIncompleteResponseError(ProviderRequestError):
         self.details = details
 
 
-def isProviderRequestError(error: BaseException | Any) -> bool:
+def is_provider_request_error(error: BaseException | Any) -> bool:
     return isinstance(error, ProviderRequestError)
 
 
-def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderFailureRecord:
+def create_provider_failure_record(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderFailureRecord:
     args = {**(args or {}), **kwargs}
     record: ProviderFailureRecord = {
         "provider": _bound_diagnostic_text(str(args["provider"]), 64),
@@ -78,7 +78,7 @@ def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: An
         "requestId": _bound_optional_diagnostic_text(args.get("requestId"), 256),
         "logicalCallId": _bound_optional_diagnostic_text(args.get("logicalCallId"), 128),
         "generation": _positive_optional_integer(args.get("generation")),
-        "partialOutputMode": _partial_output_mode(args.get("partialOutputMode")),
+        "partial_output_mode": _partial_output_mode(args.get("partial_output_mode")),
         "responseId": _bound_optional_diagnostic_text(args.get("responseId"), 256),
         "sequenceNumber": _nonnegative_optional_integer(args.get("sequenceNumber")),
         "recoveryFailure": _bound_optional_diagnostic_text(args.get("recoveryFailure"), 128),
@@ -91,11 +91,11 @@ def createProviderFailureRecord(args: dict[str, Any] | None = None, **kwargs: An
     return record
 
 
-def createProviderRequestError(record: dict[str, Any]) -> ProviderRequestError:
+def create_provider_request_error(record: dict[str, Any]) -> ProviderRequestError:
     return ProviderRequestError(record)
 
 
-def createProviderIncompleteResponseError(
+def create_provider_incomplete_response_error(
     args: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> ProviderIncompleteResponseError:
@@ -118,7 +118,7 @@ def createProviderIncompleteResponseError(
         f"tool_arguments={details['partialToolArgumentBytes']}; "
         f"open_items={details['openItems']}."
     )
-    record = createProviderFailureRecord(
+    record = create_provider_failure_record(
         provider=args["provider"],
         providerLabel=args["providerLabel"],
         phase=args["phase"],
@@ -132,7 +132,7 @@ def createProviderIncompleteResponseError(
     return ProviderIncompleteResponseError(record, details)
 
 
-def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestError:
+def classify_provider_http_failure(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestError:
     args = {**(args or {}), **kwargs}
     text = f"{args.get('body') or ''} {args.get('errorType') or ''} {args.get('code') or ''}".lower()
     status = int(args["status"])
@@ -151,8 +151,8 @@ def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: An
         retryable = True
     elif status >= 400:
         category = "quota" if _looks_like_quota(text) else "client_request"
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             {
                 **args,
                 "category": category,
@@ -165,7 +165,7 @@ def classifyProviderHttpFailure(args: dict[str, Any] | None = None, **kwargs: An
     )
 
 
-def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestError:
+def normalize_unknown_provider_failure(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestError:
     args = {**(args or {}), **kwargs}
     error = args["error"]
     if isinstance(error, ProviderIncompleteResponseError):
@@ -195,7 +195,7 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
                 "streamEventType": record.get("streamEventType") or args.get("streamEventType"),
             }
         )
-        return createProviderRequestError(record)
+        return create_provider_request_error(record)
     raw = str(error)
     lower = raw.lower()
     wire_evidence = _extract_provider_wire_evidence(error)
@@ -211,7 +211,7 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
         return _classify_openai_sdk_exception(args, sdk_evidence)
     sdk_http = _parse_openai_sdk_http_error(raw)
     if sdk_http is not None and args.get("provider") == "openai":
-        return classifyProviderHttpFailure(
+        return classify_provider_http_failure(
             {
                 "provider": args["provider"],
                 "providerLabel": args["providerLabel"],
@@ -239,8 +239,8 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
         category = "protocol"
     elif _looks_like_auth(lower):
         category = "auth"
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             {
                 "provider": args["provider"],
                 "providerLabel": args["providerLabel"],
@@ -257,7 +257,7 @@ def normalizeUnknownProviderFailure(args: dict[str, Any] | None = None, **kwargs
     )
 
 
-def canRetryProviderFailure(error: ProviderRequestError, maxAttempts: int) -> bool:
+def can_retry_provider_failure(error: ProviderRequestError, maxAttempts: int) -> bool:
     return bool(
         error.record.get("retryable")
         and error.record.get("attempt", 0) < maxAttempts
@@ -266,7 +266,7 @@ def canRetryProviderFailure(error: ProviderRequestError, maxAttempts: int) -> bo
     )
 
 
-def fallbackEligibleProviderFailure(error: Any) -> bool:
+def fallback_eligible_provider_failure(error: Any) -> bool:
     # A failure after committed output or tool use must not silently re-run
     # the turn on a fallback path — same policy as retry eligibility.
     return (
@@ -277,7 +277,7 @@ def fallbackEligibleProviderFailure(error: Any) -> bool:
     )
 
 
-def providerRetryDelayMs(attempt: int, failure: Any = None) -> int:
+def anthropic_retry_delay_ms(attempt: int, failure: Any = None) -> int:
     # Call-time imports: config and _core both import this module at load.
     from ..config._knobs import knobValue
     from ._core import provider_retry_delay_ms
@@ -286,7 +286,7 @@ def providerRetryDelayMs(attempt: int, failure: Any = None) -> int:
     return provider_retry_delay_ms(attempt, ladder=ladder, failure=failure)
 
 
-def retryDelayFromLadder(ladder: tuple[int, ...], attempt: int) -> int:
+def retry_delay_from_ladder(ladder: tuple[int, ...], attempt: int) -> int:
     index = min(max(int(attempt), 1), len(ladder)) - 1
     return ladder[index]
 
@@ -352,10 +352,10 @@ def _classify_openai_sdk_exception(
         ),
     }
     if evidence.get("status") is not None:
-        return classifyProviderHttpFailure(common)
+        return classify_provider_http_failure(common)
     category, retryable = _classify_openai_sdk_evidence(evidence)
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             {
                 **common,
                 "category": category,

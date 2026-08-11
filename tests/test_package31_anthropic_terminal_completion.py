@@ -45,7 +45,7 @@ class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
             ]
         )
         with self.assertRaises(core.ProviderIncompleteResponseError) as raised:
-            testing.normalizeAnthropicSseResponse(raw, REQUEST)
+            testing.normalize_anthropic_sse_response(raw, REQUEST)
         self.assert_incomplete(raised.exception, 7)
 
     def test_rejects_message_stop_with_open_tool_block(self):
@@ -70,7 +70,7 @@ class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
             ]
         )
         with self.assertRaises(core.ProviderIncompleteResponseError) as raised:
-            testing.normalizeAnthropicSseResponse(raw, REQUEST)
+            testing.normalize_anthropic_sse_response(raw, REQUEST)
         self.assert_incomplete(raised.exception, 0)
         self.assertEqual(raised.exception.details["openItems"], 1)
         self.assertEqual(raised.exception.details["partialToolArgumentBytes"], 8)
@@ -132,7 +132,7 @@ class Package31AnthropicTerminalCompletionTests(AgentCoreTestCase):
             },
             {"type": "message_stop"},
         ]
-        response = testing.normalizeAnthropicSseResponse(
+        response = testing.normalize_anthropic_sse_response(
             _sse(events),
             REQUEST,
             {

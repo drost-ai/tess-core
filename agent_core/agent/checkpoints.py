@@ -4,7 +4,7 @@ from .._utils import safe_int as _safe_int
 
 from ..context.compaction import run_compaction, should_auto_compact
 from ..context.context_policy import decide_durable_checkpoint
-from ..providers.errors import isProviderRequestError
+from ..providers.errors import is_provider_request_error
 from ..providers.token_budget import resolveCompactionPolicy
 from ..session.persistence import persist_provider_failure, persist_session
 from .._utils import now_iso as _now
@@ -202,7 +202,7 @@ async def _handle_auto_compaction_failure(
     decision: dict[str, Any],
     error: BaseException,
 ) -> None:
-    provider_failure = error.record if isProviderRequestError(error) else None
+    provider_failure = error.record if is_provider_request_error(error) else None
     _safe_emit(
         runtime,
         "compaction.failed",

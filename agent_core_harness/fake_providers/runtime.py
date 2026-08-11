@@ -7,7 +7,7 @@ from typing import Any
 import agent_core._facade as core
 import agent_core.providers.anthropic as anthropic_module
 import agent_core.providers.openai as openai_module
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 
 from ..model import ScenarioAssertionError
 from .model import get_path, json_safe
@@ -123,15 +123,15 @@ class FakeProviderRuntime:
             fake = FakeOpenAIClientFactory(api=api, script=data.get("script"), request_recorder=self.requests, abort_signal=signal)
             args["clientFactory"] = fake.client_factory
         _copy_timeout_options(data, args)
-        original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        original_delay = openai_module.shared.openai_retry_delay_ms
+        [setattr(_m, 'openai_retry_delay_ms', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             if api == "chat_completions":
-                return await core.sendOpenAiChatCompletionsRequest(args)
+                return await core.send_openai_chat_completions_request(args)
             args["mode"] = "codex" if api == "codex" else data.get("mode", "responses")
-            return await core.sendOpenAiResponsesRequest(args)
+            return await core.send_openai_responses_request(args)
         finally:
-            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+            [setattr(_m, 'openai_retry_delay_ms', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
 
     async def _run_anthropic_messages(self, data: dict[str, Any], runtime: dict[str, Any]) -> dict[str, Any]:
         server = FakeProviderHttpServer(provider="anthropic", script=data.get("script"), request_recorder=self.requests).start()
@@ -140,7 +140,7 @@ class FakeProviderRuntime:
         turn_session = data.get("_turnSession")
         owns_turn_session = turn_session is None
         if owns_turn_session:
-            turn_session = createProviderTurnSession(
+            turn_session = create_provider_turn_session(
                 logical_turn_id="harness-anthropic-turn",
                 session={"id": "harness-anthropic-session", "provider": "anthropic"},
                 config=config,
@@ -155,12 +155,12 @@ class FakeProviderRuntime:
             "turnSession": turn_session,
         }
         _copy_timeout_options(data, args)
-        original_delay = anthropic_module.request.providerRetryDelayMs
-        anthropic_module.request.providerRetryDelayMs = lambda _attempt, *_a, **_kw: 0
+        original_delay = anthropic_module.request.anthropic_retry_delay_ms
+        anthropic_module.request.anthropic_retry_delay_ms = lambda _attempt, *_a, **_kw: 0
         try:
-            return await core.sendAnthropicMessagesRequest(args)
+            return await core.send_anthropic_messages_request(args)
         finally:
-            anthropic_module.request.providerRetryDelayMs = original_delay
+            anthropic_module.request.anthropic_retry_delay_ms = original_delay
             if owns_turn_session:
                 await turn_session.close()
 

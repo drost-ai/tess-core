@@ -236,7 +236,7 @@ def _rule(max_context: int, max_output: int, predicate: Callable[[dict[str, Any]
 _configured_model_limit_rules: list[dict[str, Any]] = []
 
 
-def configureModelLimitRules(rules: Any) -> None:
+def configure_model_limit_rules(rules: Any) -> None:
     """Install providers.yaml ``modelLimitRules`` process-wide.
 
     Each rule: {match: <substring>, maxContextLength and/or maxOutputTokens}.
@@ -266,7 +266,7 @@ def configureModelLimitRules(rules: Any) -> None:
     _configured_model_limit_rules[:] = validated
 
 
-def resetConfiguredModelLimitRules() -> None:
+def reset_configured_model_limit_rules() -> None:
     _configured_model_limit_rules.clear()
 
 

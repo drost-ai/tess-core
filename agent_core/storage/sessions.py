@@ -14,7 +14,7 @@ from .message_history import (
     create_session_message_list as _create_session_message_list,
     set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
-from ..providers.usage_costs import createUsageTotals
+from ..providers.usage_costs import create_usage_totals
 from .io_executor import run_storage_io as _run_storage_io
 import json
 import os
@@ -429,7 +429,7 @@ def create_empty_session(params: dict[str, Any] | None = None, **kwargs: Any) ->
             "originalCwd": params.get("originalCwd") or params["cwd"],
             "assistantName": params.get("assistantName"),
             "assistantDescription": params.get("assistantDescription"),
-            "usage": createUsageTotals(),
+            "usage": create_usage_totals(),
             "compactions": 0,
             "depth": 0,
             "childSessionIds": [],

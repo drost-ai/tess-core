@@ -4,10 +4,10 @@ import json
 from typing import Any
 
 from ..config import ensureProviderForModelSelection, normalizeEffortForModel
-from ..providers.anthropic import sendAnthropicMessagesRequest
-from ..providers.openai import sendOpenAiRequest
+from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.openai import send_openai_request
 from ..runtime.secret_provider import resolve_provider_config_secrets
-from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
+from ..providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
 
 
 async def author_collaboration_update(args: dict[str, Any]) -> str:
@@ -59,7 +59,7 @@ async def author_collaboration_update_with_provider(args: dict[str, Any]) -> str
         token = resolved_config.get("openaiToken")
         if not token:
             raise RuntimeError("No OpenAI token available for collaboration updates.")
-        response = await sendOpenAiRequest(
+        response = await send_openai_request(
             {
                 "token": token,
                 "baseUrl": resolved_config.get("openaiBaseUrl"),
@@ -71,7 +71,7 @@ async def author_collaboration_update_with_provider(args: dict[str, Any]) -> str
             }
         )
     else:
-        response = await sendAnthropicMessagesRequest(
+        response = await send_anthropic_messages_request(
             {
                 "request": request,
                 "config": resolved_config,

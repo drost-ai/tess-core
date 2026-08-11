@@ -4,7 +4,7 @@ import copy
 from typing import Any
 
 from ..contracts.records import SessionRecord
-from ..providers.usage_costs import createUsageTotals
+from ..providers.usage_costs import create_usage_totals
 from ..storage.message_history import create_session_message_list as _create_session_message_list
 
 
@@ -70,7 +70,7 @@ SESSION_FORK_METADATA_DISPOSITIONS = {
 
 
 def _empty_usage() -> dict[str, Any]:
-    return createUsageTotals()
+    return create_usage_totals()
 
 
 def create_forked_session(

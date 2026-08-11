@@ -79,7 +79,7 @@ class StatelessProviderTurnSession(ProviderTurnSession):
     pass
 
 
-def createProviderTurnSession(
+def create_provider_turn_session(
     *,
     logical_turn_id: str,
     session: dict[str, Any],

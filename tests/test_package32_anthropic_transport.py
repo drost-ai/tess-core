@@ -3,10 +3,10 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 import agent_core.providers.anthropic.request as anthropic_request_module
-from agent_core.providers.anthropic_cache import countAnthropicCacheControls
-from agent_core.providers.anthropic.sse import normalizeAnthropicSseResponse
+from agent_core.providers.anthropic_cache import count_anthropic_cache_controls
+from agent_core.providers.anthropic.sse import normalize_anthropic_sse_response
 from agent_core.runtime.paths import resolve_runtime_paths
-from agent_core.providers.usage_costs import estimateUsageCost
+from agent_core.providers.usage_costs import estimate_usage_cost
 
 
 class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
@@ -90,7 +90,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
 
         with mock.patch.object(anthropic_request_module, "_send_anthropic_messages_async", fake_send):
             response = run(
-                anthropic_request_module.sendAnthropicMessagesRequest(
+                anthropic_request_module.send_anthropic_messages_request(
                     {"config": config, "request": request, "runtime": {}, "maxAttempts": 1}
                 )
             )
@@ -111,7 +111,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
                 'event: message_stop\ndata: {"type":"message_stop"}',
             ]
         )
-        internal = normalizeAnthropicSseResponse(
+        internal = normalize_anthropic_sse_response(
             raw,
             {"model": "claude-opus-4-8", "messages": [], "tools": []},
             {"_capturePromptCacheMetadata": True},
@@ -121,7 +121,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         self.assertTrue(internal["usage"]["cache_creation_ttl_detail_complete"])
         self.assertEqual(internal["_anthropicResponseId"], "msg_stream")
         self.assertTrue(internal["_anthropicDiagnosticsFieldPresent"])
-        public = normalizeAnthropicSseResponse(
+        public = normalize_anthropic_sse_response(
             raw,
             {"model": "claude-opus-4-8", "messages": [], "tools": []},
         )
@@ -190,10 +190,10 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
             },
         }
         transport = FixtureTransport()
-        first = run(anthropic_request_module.sendAnthropicMessagesRequest(
+        first = run(anthropic_request_module.send_anthropic_messages_request(
             {"config": kimi, "request": base_request, "runtime": {}, "maxAttempts": 1, "transport": transport}
         ))
-        second = run(anthropic_request_module.sendAnthropicMessagesRequest(
+        second = run(anthropic_request_module.send_anthropic_messages_request(
             {"config": compatible, "request": base_request, "runtime": {}, "maxAttempts": 1, "transport": transport}
         ))
         self.assertEqual(
@@ -211,9 +211,9 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
             captures[1]["headers"]["anthropic-beta"],
             "cache-diagnosis-2026-04-07,cache-scope-future-token",
         )
-        self.assertEqual(countAnthropicCacheControls(captures[0]["payload"]), 0)
+        self.assertEqual(count_anthropic_cache_controls(captures[0]["payload"]), 0)
         self.assertNotIn("diagnostics", captures[0]["payload"])
-        self.assertEqual(countAnthropicCacheControls(captures[1]["payload"]), 1)
+        self.assertEqual(count_anthropic_cache_controls(captures[1]["payload"]), 1)
         self.assertNotIn("diagnostics", captures[1]["payload"])
         self.assertNotIn("global", json.dumps(captures[1]["payload"]))
         self.assertIn("cache-scope-future-token", captures[1]["headers"]["anthropic-beta"])
@@ -221,7 +221,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         self.assertFalse(second["usage"]["cache_creation_ttl_detail_complete"])
         self.assertNotIn("unknown_provider_usage", second["usage"])
         self.assertNotIn("unknown_response_field", second)
-        pricing = estimateUsageCost(second["usage"], "claude-sonnet-4-6")
+        pricing = estimate_usage_cost(second["usage"], "claude-sonnet-4-6")
         self.assertEqual(pricing["cacheWriteUsd"], 0.000375)
         self.assertEqual(pricing["totalUsd"], 0.000435)
         self.assertTrue(pricing["cacheWriteEstimated"])
@@ -318,7 +318,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
                 },
             }
             first = run(
-                anthropic_request_module.sendAnthropicMessagesRequest(
+                anthropic_request_module.send_anthropic_messages_request(
                     {
                         "config": suppressed,
                         "request": request,
@@ -328,7 +328,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
                 )
             )
             second = run(
-                anthropic_request_module.sendAnthropicMessagesRequest(
+                anthropic_request_module.send_anthropic_messages_request(
                     {
                         "config": explicit,
                         "request": request,
@@ -355,9 +355,9 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
             captures[1]["headers"]["anthropic-beta"],
             "cache-diagnosis-2026-04-07,cache-scope-future-token",
         )
-        self.assertEqual(countAnthropicCacheControls(captures[0]["payload"]), 0)
+        self.assertEqual(count_anthropic_cache_controls(captures[0]["payload"]), 0)
         self.assertNotIn("diagnostics", captures[0]["payload"])
-        self.assertEqual(countAnthropicCacheControls(captures[1]["payload"]), 1)
+        self.assertEqual(count_anthropic_cache_controls(captures[1]["payload"]), 1)
         self.assertNotIn("diagnostics", captures[1]["payload"])
         self.assertNotIn("global", json.dumps(captures[1]["payload"]))
         self.assertIn(
@@ -370,7 +370,7 @@ class AnthropicPromptCacheTransportTests(AgentCoreTestCase):
         self.assertEqual(second["usage"]["cache_creation_input_tokens"], 100)
         self.assertNotIn("unknown_provider_usage", second["usage"])
         self.assertNotIn("unknown_response_field", second)
-        pricing = estimateUsageCost(second["usage"], "claude-sonnet-4-6")
+        pricing = estimate_usage_cost(second["usage"], "claude-sonnet-4-6")
         self.assertEqual(pricing["cacheWriteUsd"], 0.000375)
         self.assertEqual(pricing["totalUsd"], 0.000435)
         self.assertTrue(pricing["cacheWriteEstimated"])

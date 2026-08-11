@@ -29,7 +29,7 @@ class ThinkingDisplayTests(unittest.TestCase):
         server, requests = _server()
         try:
             run(
-                core.sendAnthropicMessagesRequest(
+                core.send_anthropic_messages_request(
                     config=_config(
                         server,
                         providerProfile={"anthropicThinkingDisplay": "summarized"},
@@ -51,7 +51,7 @@ class ThinkingDisplayTests(unittest.TestCase):
         server, requests = _server()
         try:
             run(
-                core.sendAnthropicMessagesRequest(
+                core.send_anthropic_messages_request(
                     config=_config(server),
                     request=_request(effort="high"),
                     runtime={},

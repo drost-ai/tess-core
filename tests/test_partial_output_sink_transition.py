@@ -62,7 +62,7 @@ class PartialOutputSinkTransitionTests(AgentCoreTestCase):
             return await PartialOutputDelivery(
                 {
                     "partialOutputStateStore": store,
-                    "partialOutputRecoveryPolicy": "discard_if_sink_unavailable",
+                    "partial_output_recovery_policy": "discard_if_sink_unavailable",
                 },
                 "new-logical-call",
                 session_id="session-sink-transition",
@@ -79,19 +79,19 @@ class PartialOutputSinkTransitionTests(AgentCoreTestCase):
     def test_unknown_recovery_policy_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "recovery policy"):
             PartialOutputDelivery(
-                {"partialOutputRecoveryPolicy": "silently_ignore_everything"},
+                {"partial_output_recovery_policy": "silently_ignore_everything"},
                 "logical-call",
             )
 
     def test_runtime_bindings_preserve_validated_recovery_policy(self) -> None:
         bindings = bind_test_runtime(
             {"id": "session-sink-transition"},
-            {"partialOutputRecoveryPolicy": "discard_if_sink_unavailable"},
+            {"partial_output_recovery_policy": "discard_if_sink_unavailable"},
         )
 
         runtime = core.materialize_agent_execution_runtime(bindings)
 
         self.assertEqual(
-            runtime["partialOutputRecoveryPolicy"],
+            runtime["partial_output_recovery_policy"],
             "discard_if_sink_unavailable",
         )

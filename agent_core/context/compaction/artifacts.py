@@ -9,7 +9,7 @@ from ...storage import (
 )
 from typing import Any
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
-from ...providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
+from ...providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
 
 
 def merge_compaction_usage_into_session(session: dict[str, Any], usage: dict[str, Any]) -> None:

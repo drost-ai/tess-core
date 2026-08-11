@@ -12,7 +12,7 @@ from ..context.token_accounting import (
     measure_request_input_tokens,
     record_preflight_token_measurement,
 )
-from ..providers.errors import isProviderRequestError
+from ..providers.errors import is_provider_request_error
 from ..providers.token_budget import computeProviderTokenBudget, resolveCompactionPolicy
 from ..session.persistence import persist_session
 from .._utils import now_iso as _now
@@ -343,7 +343,7 @@ def recordContinuationRelief(session: dict[str, Any], continuity: dict[str, Any]
         metadata["compactionState"]["lastReinjectionSummary"] = relief.get("reinjectionSummary")
 
 def isContextWindowFailure(error: BaseException) -> bool:
-    if not isProviderRequestError(error):
+    if not is_provider_request_error(error):
         return False
     record = getattr(error, "record", {})
     detail = f"{record.get('rawMessage') or ''} {record.get('rawBody') or ''} {error}".lower()

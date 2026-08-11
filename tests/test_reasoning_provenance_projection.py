@@ -72,7 +72,7 @@ class ReasoningProvenanceProjectionTests(AgentCoreTestCase):
             )
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request=_request(),

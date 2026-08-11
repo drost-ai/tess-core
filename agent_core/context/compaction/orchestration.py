@@ -40,7 +40,7 @@ from typing import Any
 from ..compaction_state import refresh_compaction_state_from_manifest as _refresh_compaction_state_from_manifest
 from ...payloads.media_persistence import sanitizeMediaForPersistence as _sanitize_media_for_persistence
 from ...providers._knob_reader import provider_knob as _provider_knob
-from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
+from ...providers.usage_costs import merge_provider_usage as _merge_provider_usage
 
 
 async def run_compaction(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:

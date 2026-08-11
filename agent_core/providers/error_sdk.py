@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from .error_diagnostics import (
-    boundDiagnosticText as _bound,
-    boundOptionalDiagnosticText as _bound_optional,
-    looksLikeAuth as _looks_like_auth,
-    looksLikeQuota as _looks_like_quota,
-    looksLikeTimeout as _looks_like_timeout,
-    looksLikeTransport as _looks_like_transport,
-    validHttpStatus as _valid_http_status,
+    bound_diagnostic_text as _bound,
+    bound_optional_diagnostic_text as _bound_optional,
+    looks_like_auth as _looks_like_auth,
+    looks_like_quota as _looks_like_quota,
+    looks_like_timeout as _looks_like_timeout,
+    looks_like_transport as _looks_like_transport,
+    valid_http_status as _valid_http_status,
 )
 
 import json
@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 
 
-def extractOpenAiSdkException(error: Any, provider: Any) -> dict[str, Any] | None:
+def extract_openai_sdk_exception(error: Any, provider: Any) -> dict[str, Any] | None:
     if provider != "openai":
         return None
     error_type = type(error)
@@ -55,7 +55,7 @@ def extractOpenAiSdkException(error: Any, provider: Any) -> dict[str, Any] | Non
     }
 
 
-def classifyOpenAiSdkEvidence(evidence: Mapping[str, Any]) -> tuple[str, bool]:
+def classify_openai_sdk_evidence(evidence: Mapping[str, Any]) -> tuple[str, bool]:
     text = " ".join(
         str(evidence.get(key) or "")
         for key in ("errorType", "code", "message", "rawMessage", "className")

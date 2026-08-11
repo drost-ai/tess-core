@@ -26,7 +26,7 @@ class Package42OpenAiSdkStreamErrorTests(AgentCoreTestCase):
             "hadAssistantOutput": False,
             "hadToolUse": False,
         }
-        sdk_stream = core.normalizeUnknownProviderFailure(
+        sdk_stream = core.normalize_unknown_provider_failure(
             {
                 **base,
                 "error": _OpenAiSdkStreamError(
@@ -44,9 +44,9 @@ class Package42OpenAiSdkStreamErrorTests(AgentCoreTestCase):
         self.assertEqual(sdk_stream.record["errorType"], "server_error")
         self.assertEqual(sdk_stream.record["streamEventType"], "error")
         self.assertIn('"message": "The response failed', sdk_stream.record["rawBody"])
-        self.assertTrue(core.canRetryProviderFailure(sdk_stream, 2))
+        self.assertTrue(core.can_retry_provider_failure(sdk_stream, 2))
 
-        sdk_invalid = core.normalizeUnknownProviderFailure(
+        sdk_invalid = core.normalize_unknown_provider_failure(
             {
                 **base,
                 "error": _OpenAiSdkStreamError(
@@ -60,11 +60,11 @@ class Package42OpenAiSdkStreamErrorTests(AgentCoreTestCase):
         )
         self.assertEqual(sdk_invalid.record["category"], "client_request")
         self.assertFalse(sdk_invalid.record["retryable"])
-        self.assertFalse(core.canRetryProviderFailure(sdk_invalid, 2))
+        self.assertFalse(core.can_retry_provider_failure(sdk_invalid, 2))
 
     def test_sdk_server_stream_error_recovers_on_second_bounded_attempt(self):
-        original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        original_delay = openai_module.shared.openai_retry_delay_ms
+        [setattr(_m, 'openai_retry_delay_ms', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             attempts = {"count": 0}
             events = []
@@ -106,7 +106,7 @@ class Package42OpenAiSdkStreamErrorTests(AgentCoreTestCase):
                 )
 
             response = run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -142,4 +142,4 @@ class Package42OpenAiSdkStreamErrorTests(AgentCoreTestCase):
             self.assertEqual(retry["streamEventType"], "error")
             self.assertIn('"type": "server_error"', retry["rawBody"])
         finally:
-            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+            [setattr(_m, 'openai_retry_delay_ms', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]

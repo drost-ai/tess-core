@@ -84,16 +84,16 @@ class Package31MultimodalWireTests(unittest.TestCase):
             "messages": [{"role": "user", "content": [{"type": "text", "text": "inspect"}, block]}],
             "tools": [],
         }
-        responses = testing.buildResponsesCreateParams({"request": request})
+        responses = testing.build_responses_create_params({"request": request})
         response_image = responses["input"][0]["content"][1]
         self.assertEqual(response_image["type"], "input_image")
         self.assertEqual(response_image["image_url"], "data:image/png;base64,aW1n")
-        chat = testing.buildChatCompletionsCreateParams(request)
+        chat = testing.build_chat_completions_create_params(request)
         self.assertEqual(
             chat["messages"][1]["content"][1]["image_url"]["url"],
             "data:image/png;base64,aW1n",
         )
-        anthropic = testing.buildAnthropicMessagesPayload({**request, "model": "claude-sonnet-4-6"})
+        anthropic = testing.build_anthropic_messages_payload({**request, "model": "claude-sonnet-4-6"})
         self.assertEqual(anthropic["messages"][0]["content"][1], block)
 
     def test_token_preflight_and_serialization_use_the_same_four_image_set(self):
@@ -125,7 +125,7 @@ class Package31MultimodalWireTests(unittest.TestCase):
                 prompt=[{"type": "text", "text": "compare all four"}, *blocks],
                 providerOverride={"send": send},
             ))
-            serialized = json.dumps(testing.buildResponsesCreateParams({"request": captured["request"]}))
+            serialized = json.dumps(testing.build_responses_create_params({"request": captured["request"]}))
             for block in blocks:
                 self.assertEqual(serialized.count(block["source"]["data"]), 1)
             measurement = next(data for event, data in events if event == "provider.input_tokens")

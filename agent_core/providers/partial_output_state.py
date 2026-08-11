@@ -28,10 +28,10 @@ class PartialOutputStateStore:
 
     async def load(self) -> dict[str, Any] | None:
         value = await read_json_file(self.path, None)
-        return sanitizePartialOutputState(value, expected_session_id=self.session_id)
+        return sanitize_partial_output_state(value, expected_session_id=self.session_id)
 
     async def save(self, value: Mapping[str, Any]) -> bool:
-        sanitized = sanitizePartialOutputState(
+        sanitized = sanitize_partial_output_state(
             value,
             expected_session_id=self.session_id,
         )
@@ -42,29 +42,29 @@ class PartialOutputStateStore:
         return True
 
 
-def createPartialOutputStateStore(session_id: str) -> PartialOutputStateStore:
+def create_partial_output_state_store(session_id: str) -> PartialOutputStateStore:
     return PartialOutputStateStore(session_id)
 
 
-def assertPartialOutputStateStore(value: Any) -> None:
+def assert_partial_output_state_store(value: Any) -> None:
     if value is None:
         return
     if (
-        stateStoreValue(value, "schemaVersion")
+        state_store_value(value, "schemaVersion")
         != PARTIAL_OUTPUT_STATE_STORE_SCHEMA_VERSION
-        or not callable(stateStoreValue(value, "load"))
-        or not callable(stateStoreValue(value, "save"))
+        or not callable(state_store_value(value, "load"))
+        or not callable(state_store_value(value, "save"))
     ):
         raise ValueError("Partial output state store is incomplete or incompatible.")
 
 
-def stateStoreValue(store: Any, name: str) -> Any:
+def state_store_value(store: Any, name: str) -> Any:
     if isinstance(store, Mapping):
         return store.get(name)
     return getattr(store, name, None)
 
 
-def partialOutputRuntimeAuthority(value: Any) -> dict[str, Any] | None:
+def partial_output_runtime_authority(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, Mapping):
         return None
     binding = value.get("sessionBinding")
@@ -79,11 +79,11 @@ def partialOutputRuntimeAuthority(value: Any) -> dict[str, Any] | None:
     return out or None
 
 
-def isTerminalPartialOutputState(value: Mapping[str, Any] | None) -> bool:
+def is_terminal_partial_output_state(value: Mapping[str, Any] | None) -> bool:
     return bool(value and value.get("terminalState") in _TERMINAL_STATES)
 
 
-def sanitizePartialOutputState(
+def sanitize_partial_output_state(
     value: Any,
     *,
     expected_session_id: str | None = None,
@@ -130,28 +130,28 @@ def sanitizePartialOutputState(
     }
 
 
-def clonePartialOutputState(value: Mapping[str, Any]) -> dict[str, Any]:
+def clone_partial_output_state(value: Mapping[str, Any]) -> dict[str, Any]:
     return copy.deepcopy(dict(value))
 
 
-async def finalizePartialOutputState(
+async def finalize_partial_output_state(
     store: Any,
     receipt: Any,
 ) -> bool:
-    assertPartialOutputStateStore(store)
+    assert_partial_output_state_store(store)
     if store is None or not isinstance(receipt, Mapping):
         return False
     try:
-        state = await stateStoreValue(store, "load")()
+        state = await state_store_value(store, "load")()
     except Exception:
         return False
-    state = sanitizePartialOutputState(state)
+    state = sanitize_partial_output_state(state)
     if state is None or not _receipt_matches_state(receipt, state):
         return False
     state["terminalState"] = "committed"
     state["updatedAt"] = now_iso()
     try:
-        return bool(await stateStoreValue(store, "save")(state))
+        return bool(await state_store_value(store, "save")(state))
     except Exception:
         return False
 
@@ -211,18 +211,18 @@ PARTIAL_OUTPUT_RECOVERY_POLICIES = frozenset(
 )
 
 
-def assertPartialOutputRecoveryPolicy(value: Any) -> None:
+def assert_partial_output_recovery_policy(value: Any) -> None:
     if value is not None and value not in PARTIAL_OUTPUT_RECOVERY_POLICIES:
         raise ValueError("Partial output recovery policy is invalid.")
 
 
-def partialOutputRecoveryPolicy(runtime: Mapping[str, Any]) -> str:
-    value = runtime.get("partialOutputRecoveryPolicy")
-    assertPartialOutputRecoveryPolicy(value)
+def partial_output_recovery_policy(runtime: Mapping[str, Any]) -> str:
+    value = runtime.get("partial_output_recovery_policy")
+    assert_partial_output_recovery_policy(value)
     return str(value or "fail_closed")
 
 
-async def recoverAbandonedPartialOutput(
+async def recover_abandoned_partial_output(
     *,
     state_store: Any,
     sink: Any,
@@ -236,14 +236,14 @@ async def recoverAbandonedPartialOutput(
     if state_store is None:
         return _result(True, "no_state_store")
     try:
-        existing = await maybe_await(stateStoreValue(state_store, "load")())
+        existing = await maybe_await(state_store_value(state_store, "load")())
     except Exception:
         return _result(False, "state_load_failed")
-    state = sanitizePartialOutputState(
+    state = sanitize_partial_output_state(
         existing,
         expected_session_id=session_id,
     )
-    if state is None or isTerminalPartialOutputState(state):
+    if state is None or is_terminal_partial_output_state(state):
         return _result(True, "no_abandoned_state")
     discard_without_sink = (
         sink is None
@@ -256,7 +256,7 @@ async def recoverAbandonedPartialOutput(
         state["terminalState"] = "interrupted"
         state["updatedAt"] = now_iso()
         try:
-            saved = await maybe_await(stateStoreValue(state_store, "save")(state))
+            saved = await maybe_await(state_store_value(state_store, "save")(state))
         except Exception:
             return _result(False, "state_persist_failed")
         reason = (
@@ -272,7 +272,7 @@ async def recoverAbandonedPartialOutput(
         {
             "logicalCallId": logical_call_id,
             "deliveryMode": mode,
-            "abandoned": clonePartialOutputState(state),
+            "abandoned": clone_partial_output_state(state),
             "runtimeAuthority": runtime_authority,
             "sameTurnAuthority": _same_turn_authority(
                 state.get("runtimeAuthority"), runtime_authority
@@ -289,7 +289,7 @@ async def recoverAbandonedPartialOutput(
     state["terminalState"] = "interrupted"
     state["updatedAt"] = now_iso()
     try:
-        saved = await maybe_await(stateStoreValue(state_store, "save")(state))
+        saved = await maybe_await(state_store_value(state_store, "save")(state))
     except Exception:
         return _result(False, "state_persist_failed")
     return result if saved else _result(False, "state_persist_failed")

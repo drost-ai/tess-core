@@ -5,7 +5,7 @@ from tests.support.agent_core_case import *
 
 class OpenAIChatProviderTests(AgentCoreTestCase):
     def test_openai_chat_completions_params_and_streaming(self):
-        params = testing.buildChatCompletionsCreateParams(
+        params = testing.build_chat_completions_create_params(
             {
                 "model": "gpt-5.4",
                 "effort": "xhigh",
@@ -20,10 +20,10 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
         self.assertEqual(params["reasoning_effort"], "xhigh")
         self.assertEqual(params["messages"][1]["tool_calls"][0]["function"]["arguments"], '{"path":"a.txt"}')
 
-        params_no_effort = testing.buildChatCompletionsCreateParams({"model": "zai", "effort": "xhigh", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, {"includeReasoningEffort": False})
+        params_no_effort = testing.build_chat_completions_create_params({"model": "zai", "effort": "xhigh", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, {"includeReasoningEffort": False})
         self.assertNotIn("reasoning_effort", params_no_effort)
 
-        params_with_options = testing.buildChatCompletionsCreateParams(
+        params_with_options = testing.build_chat_completions_create_params(
             {"model": "deepseek-v4-pro", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
             {
                 "requestOptions": {
@@ -56,7 +56,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
             )
 
         response = run(
-            testing.sendOpenAiChatCompletionsRequest(
+            testing.send_openai_chat_completions_request(
                 {
                     "token": "test-token",
                     "baseUrl": "https://api.fireworks.ai/inference/v1",
@@ -87,7 +87,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
             )
 
         response = run(
-            testing.sendOpenAiChatCompletionsRequest(
+            testing.send_openai_chat_completions_request(
                 {
                     "token": "test-token",
                     "request": {"model": "gpt-5.4", "effort": "high", "system": "s", "messages": [{"role": "user", "content": "Read"}], "tools": []},
@@ -114,7 +114,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test-token",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Read"}], "tools": []},
@@ -136,7 +136,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -162,7 +162,7 @@ class OpenAIChatProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 from agent_core.providers.watchdog import AbortSignal
 from agent_core_harness.fake_providers.server import FakeProviderHttpServer
 from agent_core_harness.performance import (
@@ -33,7 +33,7 @@ def _request():
 
 
 def _turn(config, runtime, suffix="one"):
-    return createProviderTurnSession(
+    return create_provider_turn_session(
         logical_turn_id=f"package45-{suffix}",
         session={"id": f"package45-{suffix}", "provider": "anthropic"},
         config=config,
@@ -43,7 +43,7 @@ def _turn(config, runtime, suffix="one"):
 
 
 async def _send(config, runtime, turn, **kwargs):
-    return await core.sendAnthropicMessagesRequest(
+    return await core.send_anthropic_messages_request(
         config=config,
         request=_request(),
         runtime=runtime,

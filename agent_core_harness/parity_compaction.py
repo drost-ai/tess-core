@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core._facade as core
-from agent_core.providers.errors import createProviderFailureRecord, createProviderRequestError
+from agent_core.providers.errors import create_provider_failure_record, create_provider_request_error
 
 from .parity_compaction_fixtures import build_compaction_authority_states
 
@@ -312,7 +312,7 @@ def _provider_error(category: str, raw_message: str) -> Exception:
         "rawMessage": raw_message,
         "rawBody": raw_message,
     }
-    return createProviderRequestError(createProviderFailureRecord(record))
+    return create_provider_request_error(create_provider_failure_record(record))
 
 
 def _project_prompt(prompt: str, system: str) -> dict[str, Any]:

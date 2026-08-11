@@ -22,7 +22,7 @@ class _Headers(dict[str, str]):
         return super().get(str(key).lower(), default)
 
 
-class _AsyncResponseBody:
+class _async_response_body:
     def __init__(self, reader: asyncio.StreamReader, headers: _Headers) -> None:
         self._reader = reader
         self._buffer = bytearray()
@@ -114,7 +114,7 @@ class AsyncAnthropicHttpResponse:
             or version.upper() == "HTTP/1.0"
             or (headers.get("content-length") is None and "chunked" not in str(headers.get("transfer-encoding", "")).lower())
         )
-        self._body = _AsyncResponseBody(reader, headers)
+        self._body = _async_response_body(reader, headers)
 
     @property
     def complete(self) -> bool:
@@ -211,7 +211,7 @@ class AnthropicAsyncHttpConnectionOwner:
                 if response.status >= 400:
                     error_body = await response.read()
                     self._finish_response(response)
-                    raise HTTPError(url, response.status, response.reason, response.headers, _BytesReader(error_body))
+                    raise HTTPError(url, response.status, response.reason, response.headers, _bytes_reader(error_body))
                 result = await consume(response)
                 if not response.complete:
                     await response.read()
@@ -318,7 +318,7 @@ class AnthropicAsyncHttpConnectionOwner:
                 self._observe(event, fields)
 
 
-class _BytesReader:
+class _bytes_reader:
     def __init__(self, value: bytes) -> None:
         self._value = value
 

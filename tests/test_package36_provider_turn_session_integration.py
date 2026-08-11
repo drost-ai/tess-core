@@ -262,7 +262,7 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
                 "tools": [],
             }
             for _ in range(2):
-                await testing.sendOpenAiResponsesRequest(
+                await testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=request,
@@ -318,7 +318,7 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
                 runtime={},
             )
             with self.assertRaises(core.ProviderRequestError):
-                await testing.sendOpenAiResponsesRequest(
+                await testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request={
@@ -431,7 +431,7 @@ class Package36ProviderTurnSessionIntegrationTests(AgentCoreTestCase):
                 return client
 
             for _ in range(2):
-                await testing.sendOpenAiResponsesRequest(
+                await testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=request,

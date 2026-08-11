@@ -12,10 +12,10 @@ from agent_core.providers._core import (
 )
 from agent_core.providers.errors import (
     ProviderRequestError,
-    createProviderFailureRecord,
-    createProviderRequestError,
-    fallbackEligibleProviderFailure,
-    providerRetryDelayMs,
+    create_provider_failure_record,
+    create_provider_request_error,
+    fallback_eligible_provider_failure,
+    anthropic_retry_delay_ms,
 )
 from agent_core.providers.watchdog import AbortSignal
 
@@ -83,8 +83,8 @@ class CoreRaceTests(unittest.TestCase):
         self.assertTrue(record["retryable"])
         self.assertTrue(record["hadAssistantOutput"])
         self.assertEqual(record["code"], "provider_stream_idle_timeout")
-        self.assertFalse(core.canRetryProviderFailure(failure, 5))
-        self.assertFalse(fallbackEligibleProviderFailure(failure))
+        self.assertFalse(core.can_retry_provider_failure(failure, 5))
+        self.assertFalse(fallback_eligible_provider_failure(failure))
 
     def test_timeout_without_output_is_retryable(self):
         async def exercise():
@@ -181,8 +181,8 @@ class CoreRetryPolicyTests(unittest.TestCase):
             self.assertLessEqual(delay, base + 119)
 
     def test_retry_after_extends_the_delay(self):
-        failure = createProviderRequestError(
-            createProviderFailureRecord(
+        failure = create_provider_request_error(
+            create_provider_failure_record(
                 provider="openai",
                 providerLabel="OpenAI Responses",
                 phase="request_start",
@@ -199,8 +199,8 @@ class CoreRetryPolicyTests(unittest.TestCase):
         self.assertEqual(delay, 15_000)
 
     def test_retry_after_is_capped(self):
-        failure = createProviderRequestError(
-            createProviderFailureRecord(
+        failure = create_provider_request_error(
+            create_provider_failure_record(
                 provider="openai",
                 providerLabel="OpenAI Responses",
                 phase="request_start",
@@ -217,8 +217,8 @@ class CoreRetryPolicyTests(unittest.TestCase):
         self.assertEqual(delay, 60_000)
 
     def test_short_retry_after_never_shrinks_the_ladder(self):
-        failure = createProviderRequestError(
-            createProviderFailureRecord(
+        failure = create_provider_request_error(
+            create_provider_failure_record(
                 provider="openai",
                 providerLabel="OpenAI Responses",
                 phase="request_start",
@@ -238,12 +238,12 @@ class CoreRetryPolicyTests(unittest.TestCase):
         deltas = set()
         ladder_one = 1_000
         for _ in range(40):
-            deltas.add(openai_module.shared.providerRetryDelayMs(1) - ladder_one)
+            deltas.add(openai_module.shared.openai_retry_delay_ms(1) - ladder_one)
         self.assertTrue(all(0 <= delta <= 119 for delta in deltas))
 
     def test_anthropic_delay_honors_retry_after_failure(self):
-        failure = createProviderRequestError(
-            createProviderFailureRecord(
+        failure = create_provider_request_error(
+            create_provider_failure_record(
                 provider="anthropic",
                 providerLabel="Anthropic",
                 phase="request_start",
@@ -256,14 +256,14 @@ class CoreRetryPolicyTests(unittest.TestCase):
             )
         )
         with mock.patch.object(_core.random, "randint", return_value=0):
-            delay = providerRetryDelayMs(1, failure=failure)
+            delay = anthropic_retry_delay_ms(1, failure=failure)
         self.assertEqual(delay, 20_000)
 
 
 class FallbackEligibilityTests(unittest.TestCase):
     def _failure(self, category, had_output=False, had_tool_use=False):
-        return createProviderRequestError(
-            createProviderFailureRecord(
+        return create_provider_request_error(
+            create_provider_failure_record(
                 provider="openai",
                 providerLabel="OpenAI Responses",
                 phase="stream_read",
@@ -276,22 +276,22 @@ class FallbackEligibilityTests(unittest.TestCase):
         )
 
     def test_clean_timeout_is_fallback_eligible(self):
-        self.assertTrue(fallbackEligibleProviderFailure(self._failure("timeout")))
+        self.assertTrue(fallback_eligible_provider_failure(self._failure("timeout")))
 
     def test_timeout_after_partial_output_is_not_fallback_eligible(self):
         self.assertFalse(
-            fallbackEligibleProviderFailure(self._failure("timeout", had_output=True))
+            fallback_eligible_provider_failure(self._failure("timeout", had_output=True))
         )
 
     def test_transport_after_tool_use_is_not_fallback_eligible(self):
         self.assertFalse(
-            fallbackEligibleProviderFailure(
+            fallback_eligible_provider_failure(
                 self._failure("transport", had_tool_use=True)
             )
         )
 
     def test_quota_stays_ineligible(self):
-        self.assertFalse(fallbackEligibleProviderFailure(self._failure("quota")))
+        self.assertFalse(fallback_eligible_provider_failure(self._failure("quota")))
 
 
 class SignalSetTests(unittest.TestCase):

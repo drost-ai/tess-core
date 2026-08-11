@@ -4,9 +4,9 @@ from collections.abc import Mapping
 from typing import Any
 
 from .error_diagnostics import (
-    boundOptionalDiagnosticText as _bound_optional,
-    nonnegativeOptionalInteger as _nonnegative_optional_integer,
-    validHttpStatus as _valid_http_status,
+    bound_optional_diagnostic_text as _bound_optional,
+    nonnegative_optional_integer as _nonnegative_optional_integer,
+    valid_http_status as _valid_http_status,
 )
 
 
@@ -43,7 +43,7 @@ class ProviderWireError(Exception):
         }
 
 
-def extractProviderWireEvidence(error: BaseException) -> dict[str, Any] | None:
+def extract_provider_wire_evidence(error: BaseException) -> dict[str, Any] | None:
     """Validated wire evidence from any exception that opts into the protocol."""
     raw_evidence = getattr(error, "provider_error_evidence", None)
     if not isinstance(raw_evidence, Mapping):

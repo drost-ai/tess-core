@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import agent_core._facade as core
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 
 from .fake_providers.server import FakeProviderHttpServer
 
@@ -130,7 +130,7 @@ async def _run_ttl(ttl: str, *, seed_wasted_slot: bool) -> dict[str, Any]:
             "messageTailBreakpoints": True,
         },
     }
-    turn = createProviderTurnSession(
+    turn = create_provider_turn_session(
         logical_turn_id=f"package47-cache-{ttl}",
         session={"id": f"package47-cache-{ttl}", "provider": "anthropic"},
         config=config,
@@ -159,7 +159,7 @@ async def _run_ttl(ttl: str, *, seed_wasted_slot: bool) -> dict[str, Any]:
                     "messageTailPreviousAnchor": previous_anchor,
                 },
             }
-            response = await core.sendAnthropicMessagesRequest(
+            response = await core.send_anthropic_messages_request(
                 config=stage_config,
                 request=request,
                 runtime=runtime,

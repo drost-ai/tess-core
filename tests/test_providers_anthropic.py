@@ -14,7 +14,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             "messages": [{"role": "user", "content": "hello"}],
             "tools": [{"name": "Read", "description": "Read files", "input_schema": {"type": "object"}}],
         }
-        payload = testing.buildAnthropicMessagesPayload(request)
+        payload = testing.build_anthropic_messages_payload(request)
         self.assertEqual(payload["max_tokens"], 16384)
         self.assertEqual(payload["thinking"], {"type": "adaptive"})
         self.assertEqual(payload["output_config"], {"effort": "high"})
@@ -23,7 +23,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             {"type": "text", "text": "system prompt", "cache_control": {"type": "ephemeral"}},
         )
 
-        nullable_tool_payload = testing.buildAnthropicMessagesPayload(
+        nullable_tool_payload = testing.build_anthropic_messages_payload(
             {
                 "model": "kimi-k2.6",
                 "system": "s",
@@ -54,7 +54,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertEqual(normalized_schema["properties"]["limit"]["type"], "integer")
         self.assertEqual(normalized_schema["additionalProperties"], False)
 
-        multimodal_payload = testing.buildAnthropicMessagesPayload(
+        multimodal_payload = testing.build_anthropic_messages_payload(
             {
                 "model": "claude-sonnet-4-6",
                 "system": "s",
@@ -73,7 +73,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
         image_block = multimodal_payload["messages"][0]["content"][1]
         self.assertEqual(image_block["type"], "image")
         self.assertEqual(image_block["source"], {"type": "base64", "media_type": "image/jpeg", "data": "aW1n"})
-        redacted_image_payload = testing.buildAnthropicMessagesPayload(
+        redacted_image_payload = testing.build_anthropic_messages_payload(
             {
                 "model": "claude-sonnet-4-6",
                 "system": "s",
@@ -94,7 +94,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             }
         )
         self.assertEqual(redacted_image_payload["messages"][0]["content"], [{"type": "text", "text": "describe"}])
-        tool_result_payload = testing.buildAnthropicMessagesPayload(
+        tool_result_payload = testing.build_anthropic_messages_payload(
             {
                 "model": "claude-sonnet-4-6",
                 "system": "s",
@@ -115,29 +115,29 @@ class AnthropicProviderTests(AgentCoreTestCase):
         self.assertNotIn("is_error", tool_result_blocks[0])
         self.assertIs(tool_result_blocks[1]["is_error"], False)
         self.assertIs(tool_result_blocks[2]["is_error"], True)
-        count_payload = testing.buildAnthropicCountTokensPayload(request)
+        count_payload = testing.build_anthropic_count_tokens_payload(request)
         self.assertNotIn("max_tokens", count_payload)
         self.assertNotIn("stream", count_payload)
         self.assertNotIn("output_config", count_payload)
         self.assertEqual(count_payload["thinking"], {"type": "adaptive"})
-        self.assertEqual(testing.resolveAnthropicMessagesUrl("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages")
-        self.assertEqual(testing.resolveAnthropicCountTokensUrl("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages/count_tokens")
-        self.assertEqual(testing.resolveAnthropicMessagesUrl("https://api.kimi.com/coding/"), "https://api.kimi.com/coding/v1/messages?beta=true")
-        self.assertEqual(testing.resolveAnthropicCountTokensUrl("https://api.kimi.com/coding/"), "https://api.kimi.com/coding/v1/messages/count_tokens")
-        api_key_headers = testing.buildAnthropicHeaders({"apiKey": "api-key", "customHeaders": {"x-test": "1"}}, {"stream": True})
+        self.assertEqual(testing.resolve_anthropic_messages_url("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages")
+        self.assertEqual(testing.resolve_anthropic_count_tokens_url("https://anthropic.example.test/v1/"), "https://anthropic.example.test/v1/messages/count_tokens")
+        self.assertEqual(testing.resolve_anthropic_messages_url("https://api.kimi.com/coding/"), "https://api.kimi.com/coding/v1/messages?beta=true")
+        self.assertEqual(testing.resolve_anthropic_count_tokens_url("https://api.kimi.com/coding/"), "https://api.kimi.com/coding/v1/messages/count_tokens")
+        api_key_headers = testing.build_anthropic_headers({"apiKey": "api-key", "customHeaders": {"x-test": "1"}}, {"stream": True})
         self.assertEqual(api_key_headers["accept"], "text/event-stream")
         self.assertEqual(api_key_headers["x-api-key"], "api-key")
         self.assertEqual(api_key_headers["x-test"], "1")
         self.assertNotIn("authorization", api_key_headers)
         self.assertNotIn("anthropic-beta", api_key_headers)
-        oauth_headers = testing.buildAnthropicHeaders({"authToken": "oauth-token", "customHeaders": {}})
+        oauth_headers = testing.build_anthropic_headers({"authToken": "oauth-token", "customHeaders": {}})
         self.assertEqual(oauth_headers["accept"], "application/json")
         self.assertEqual(oauth_headers["authorization"], "Bearer oauth-token")
         self.assertNotIn("x-api-key", oauth_headers)
         self.assertIn("claude-code-20250219", oauth_headers["anthropic-beta"])
         self.assertIn("oauth-2025-04-20", oauth_headers["anthropic-beta"])
         self.assertEqual(oauth_headers["user-agent"], "tess/0.1.0 (sdk-cli)")
-        kimi_headers = testing.buildAnthropicHeaders(
+        kimi_headers = testing.build_anthropic_headers(
             {
                 "apiKey": "kimi-key",
                 "anthropicBaseUrl": "https://api.kimi.com/coding/",
@@ -164,7 +164,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
                 'event: message_stop\ndata: {"type":"message_stop"}',
             ]
         )
-        normalized = testing.normalizeAnthropicSseResponse(raw, request, {"includePartialMessages": True, "emitEvent": lambda event, data: emitted.append((event, data))})
+        normalized = testing.normalize_anthropic_sse_response(raw, request, {"includePartialMessages": True, "emitEvent": lambda event, data: emitted.append((event, data))})
         self.assertEqual(normalized["content"][0], {"type": "text", "text": "Hi "})
         self.assertEqual(normalized["content"][1], {"type": "tool_use", "id": "toolu_1", "name": "Read", "input": {"file_path": "a.txt"}})
         self.assertEqual(
@@ -178,9 +178,9 @@ class AnthropicProviderTests(AgentCoreTestCase):
             },
         )
         self.assertTrue(any(event == "message.assistant.partial" for event, _ in emitted))
-        self.assertNotIn("stream", testing.buildAnthropicMessagesPayload({**request, "effort": None}))
+        self.assertNotIn("stream", testing.build_anthropic_messages_payload({**request, "effort": None}))
         self.assertEqual(
-            testing.buildAnthropicMessagesPayload({"model": "claude-sonnet-4-6", "messages": [], "tools": []})["system"],
+            testing.build_anthropic_messages_payload({"model": "claude-sonnet-4-6", "messages": [], "tools": []})["system"],
             [
                 {
                     "type": "text",
@@ -190,12 +190,12 @@ class AnthropicProviderTests(AgentCoreTestCase):
         )
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
-            testing.normalizeAnthropicSseResponse('event: error\ndata: {"type":"error","error":{"type":"rate_limit_error","message":"rate limit"}}', request)
+            testing.normalize_anthropic_sse_response('event: error\ndata: {"type":"error","error":{"type":"rate_limit_error","message":"rate limit"}}', request)
         self.assertEqual(ctx.exception.record["category"], "rate_limit")
         self.assertTrue(ctx.exception.record["retryable"])
 
         with self.assertRaises(core.ProviderRequestError) as malformed_ctx:
-            testing.normalizeAnthropicSseResponse('event: content_block_delta\ndata: {"type":"content_block_delta"', request, attempt=2)
+            testing.normalize_anthropic_sse_response('event: content_block_delta\ndata: {"type":"content_block_delta"', request, attempt=2)
         self.assertEqual(malformed_ctx.exception.record["phase"], "parse")
         self.assertEqual(malformed_ctx.exception.record["category"], "protocol")
         self.assertEqual(malformed_ctx.exception.record["attempt"], 2)
@@ -213,7 +213,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             ]
         )
         with self.assertRaises(core.ProviderIncompleteResponseError) as bad_tool_ctx:
-            testing.normalizeAnthropicSseResponse(bad_tool_raw, request)
+            testing.normalize_anthropic_sse_response(bad_tool_raw, request)
         self.assertEqual(bad_tool_ctx.exception.record["category"], "protocol")
         self.assertEqual(bad_tool_ctx.exception.details["partialToolArgumentBytes"], 12)
 
@@ -270,7 +270,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         {
                             "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
                             "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -333,7 +333,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             def run_request():
                 try:
                     result["response"] = run(
-                        core.sendAnthropicMessagesRequest(
+                        core.send_anthropic_messages_request(
                             {
                                 "config": {
                                     "provider": "anthropic",
@@ -407,7 +407,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
         try:
             emitted: list[tuple[str, dict[str, Any]]] = []
             response = run(
-                core.sendAnthropicMessagesRequest(
+                core.send_anthropic_messages_request(
                     {
                         "config": {
                             "provider": "anthropic",
@@ -459,7 +459,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         {
                             "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
                             "request": {
@@ -479,7 +479,7 @@ class AnthropicProviderTests(AgentCoreTestCase):
             # The record flags the fault class as retryable; the retry decision
             # blocks the re-run because output was already streamed.
             self.assertTrue(ctx.exception.record["retryable"])
-            self.assertFalse(core.canRetryProviderFailure(ctx.exception, 2))
+            self.assertFalse(core.can_retry_provider_failure(ctx.exception, 2))
             self.assertEqual(calls["count"], 1)
         finally:
             anthropic_module.request._send_anthropic_messages_streaming_async = original_stream

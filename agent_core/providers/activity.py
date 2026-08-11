@@ -126,7 +126,7 @@ class ProviderActivityEmitter:
         return True
 
 
-def emitProviderActivity(
+def emit_provider_activity(
     runtime: dict[str, Any],
     activityKind: str,
     *,
@@ -153,5 +153,5 @@ def _bounded(value: Any, maximum: int) -> str:
 __all__ = [
     "PROVIDER_ACTIVITY_KINDS",
     "ProviderActivityEmitter",
-    "emitProviderActivity",
+    "emit_provider_activity",
 ]

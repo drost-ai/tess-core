@@ -14,6 +14,7 @@ from .config.providers import resolveProviderProfile, resolveProviderProfiles
 from .config.resolution import resolveConfig
 from .contracts.config import ResolvedConfig, RuntimeSecretRef
 from .contracts.context import AskQuestionDetail
+from .contracts.providers import AnthropicMessage, AnthropicUsage
 from .contracts.runtime_surface import BootstrappedRuntime
 from .contracts.session_records import SessionRecord
 from .contracts.task_records import ChildAgentRecord
@@ -52,6 +53,8 @@ from .tools.definitions import ToolDefinition
 from .tools.registry import createBuiltinTools
 
 __all__ = [
+    "AnthropicMessage",
+    "AnthropicUsage",
     "BootstrappedRuntime",
     "active_session_payload",
     "AskQuestionDetail",

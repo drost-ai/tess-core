@@ -3,7 +3,7 @@ from __future__ import annotations
 from .._knob_reader import provider_knob
 from ...contracts.providers import ProviderResponse
 from ..partial_output import PartialOutputDelivery
-from ..activity import emitProviderActivity
+from ..activity import emit_provider_activity
 from .reconcile import close_openai_output_item as _close_openai_output_item
 from .recovery import (
     append_openai_partial,
@@ -27,11 +27,11 @@ from .responses_session import (
 from .responses_failures import response_terminal_failure
 from ._attempt_state import ResponsesAttemptState
 from ..._utils import get_value, to_async_iter
-from ..errors import createProviderIncompleteResponseError
-from ..prompt_cache import openAiPromptCacheRequestOptions
-from .chat import sendOpenAiChatCompletionsRequest
+from ..errors import create_provider_incomplete_response_error
+from ..prompt_cache import open_ai_prompt_cache_request_options
+from .chat import send_openai_chat_completions_request
 from .normalization import _append_text_block, _parse_complete_json_object
-from .params import buildResponsesCreateParams, getOpenAiProviderLabel, resolveOpenAiBaseUrl
+from .params import build_responses_create_params, get_openai_provider_label, resolve_openai_base_url
 from .transport import (
     _acquire_openai_client,
     _emit,
@@ -43,20 +43,20 @@ from typing import Any
 
 
 
-async def sendOpenAiRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
+async def send_openai_request(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     args = {**(args or {}), **kwargs}
     mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
     if mode == "chat_completions":
-        return await sendOpenAiChatCompletionsRequest(args)
-    return await sendOpenAiResponsesRequest({**args, "mode": mode})
-async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+        return await send_openai_chat_completions_request(args)
+    return await send_openai_responses_request({**args, "mode": mode})
+async def send_openai_responses_request(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     # Call-time import: the config package imports providers at module load.
     from ...config._knobs import knobValue
 
     args = {**(args or {}), **kwargs}
     mode = args.get("mode") or _infer_openai_responses_mode(args.get("baseUrl"))
-    base_url = resolveOpenAiBaseUrl(mode, args.get("baseUrl"))
-    provider_label = getOpenAiProviderLabel(mode, base_url)
+    base_url = resolve_openai_base_url(mode, args.get("baseUrl"))
+    provider_label = get_openai_provider_label(mode, base_url)
     max_attempts = max(
         1,
         int(args.get("maxAttempts") or provider_knob("provider.openai_max_attempts")),
@@ -81,11 +81,11 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
         # A fresh state object per attempt is the reset: nothing from a
         # failed stream survives into the retry.
         state = ResponsesAttemptState()
-        generation_lineage = {"logicalCallId": logical_call_id, "generation": attempt, "partialOutputMode": delivery.mode if delivery else None} if mode == "codex" else {}
+        generation_lineage = {"logicalCallId": logical_call_id, "generation": attempt, "partial_output_mode": delivery.mode if delivery else None} if mode == "codex" else {}
         request_start_timeout_ms = int(args.get("requestStartTimeoutMs") or knobValue("provider.request_start_timeout_ms"))
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms"))
         def incomplete_response(reason: str) -> Any:
-            return createProviderIncompleteResponseError(
+            return create_provider_incomplete_response_error(
                 provider="openai",
                 providerLabel=provider_label,
                 mode=mode,
@@ -117,18 +117,18 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                     )
             _raise_openai_cancelled(runtime, provider_label, state.phase, attempt, state.had_output, state.had_tool_use)
             client, connection_reused = await _acquire_openai_client(args, base_url)
-            emitProviderActivity(runtime, "request_started", attempt=attempt)
+            emit_provider_activity(runtime, "request_started", attempt=attempt)
             responses = get_value(client, "responses")
             if not responses:
                 raise RuntimeError("OpenAI Responses client is unavailable.")
-            logical_params = buildResponsesCreateParams(
+            logical_params = build_responses_create_params(
                 {
                     "isCodexBackend": mode == "codex",
                     "request": args["request"],
                     "reasoningSummary": (
                         (args.get("config") or {}).get("providerProfile") or {}
                     ).get("openAiChatReasoningSummary"),
-                    "requestOptions": openAiPromptCacheRequestOptions(
+                    "requestOptions": open_ai_prompt_cache_request_options(
                         mode=mode,
                         base_url=base_url,
                         config=args.get("config") or {},
@@ -175,7 +175,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 turn_session.bind_stream(response)
                 turn_session.mark_provider_activity("response_headers")
             state.completed_turn_state = _extract_turn_state(response)
-            emitProviderActivity(runtime, "response_headers", attempt=attempt)
+            emit_provider_activity(runtime, "response_headers", attempt=attempt)
             state.phase = "stream_open"
             iterator = to_async_iter(response).__aiter__()
             while True:
@@ -195,7 +195,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 except StopAsyncIteration:
                     break
                 state.phase = "stream_read"
-                emitProviderActivity(runtime, "stream_frame", attempt=attempt)
+                emit_provider_activity(runtime, "stream_frame", attempt=attempt)
                 typ = str(get_value(event, "type", "") or "")
                 state.completed_turn_state = (
                     _extract_turn_state(event)
@@ -205,7 +205,7 @@ async def sendOpenAiResponsesRequest(args: dict[str, Any] | None = None, **kwarg
                 if turn_session is not None:
                     activity_kind = _responses_activity_kind(typ)
                     turn_session.mark_provider_activity(activity_kind)
-                emitProviderActivity(
+                emit_provider_activity(
                     runtime,
                     _responses_activity_kind(typ),
                     attempt=attempt,

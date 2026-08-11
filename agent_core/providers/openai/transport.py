@@ -11,12 +11,12 @@ from .._core import (
     raise_if_provider_aborted as _raise_if_provider_aborted,
     signal_aborted as _signal_aborted,
 )
-from .params import isCodexBaseUrl
+from .params import is_codex_base_url
 from .shared import OPENAI_ABORT_POLL_INTERVAL_MS
 from typing import Any
 
 def _infer_openai_responses_mode(base_url: str | None) -> str:
-    return "codex" if isCodexBaseUrl(base_url) else "responses"
+    return "codex" if is_codex_base_url(base_url) else "responses"
 
 def _create_openai_client(args: dict[str, Any], base_url: str | None) -> Any:
     _assert_openai_transport_secrets(args)
@@ -65,7 +65,7 @@ def _assert_openai_transport_secrets(args: dict[str, Any]) -> None:
         )
 
 
-class _OpenAiResponsesSdkAdapter:
+class _openai_responses_sdk_adapter:
     def __init__(self, client: Any) -> None:
         self._client = client
 
@@ -73,7 +73,7 @@ class _OpenAiResponsesSdkAdapter:
         return await maybe_await(self._client.responses.create(**params))
 
 
-class _OpenAiChatCompletionsSdkAdapter:
+class _openai_chat_completions_sdk_adapter:
     def __init__(self, client: Any) -> None:
         self._client = client
 
@@ -98,8 +98,8 @@ def _create_openai_sdk_client(options: dict[str, Any]) -> Any:
         kwargs["default_headers"] = options["defaultHeaders"]
     client = async_openai(**kwargs)
     return SimpleNamespace(
-        responses=_OpenAiResponsesSdkAdapter(client),
-        chat=SimpleNamespace(completions=_OpenAiChatCompletionsSdkAdapter(client)),
+        responses=_openai_responses_sdk_adapter(client),
+        chat=SimpleNamespace(completions=_openai_chat_completions_sdk_adapter(client)),
         capabilities={},
         close=getattr(client, "close", None),
     )
@@ -141,7 +141,7 @@ async def _race_openai_activity(
     )
 
 
-class _ClientFactoryIdentity:
+class _client_factory_identity:
     """Identity token for a clientFactory in the turn-session client cache.
 
     Pins a strong reference so a recycled ``id()`` can never alias two
@@ -155,12 +155,12 @@ class _ClientFactoryIdentity:
         self.factory = factory
 
     def __eq__(self, other: Any) -> bool:
-        return isinstance(other, _ClientFactoryIdentity) and self.factory is other.factory
+        return isinstance(other, _client_factory_identity) and self.factory is other.factory
 
     def __hash__(self) -> int:
         return id(self.factory)
 
-    def __deepcopy__(self, _memo: Any) -> _ClientFactoryIdentity:
+    def __deepcopy__(self, _memo: Any) -> _client_factory_identity:
         return self
 
 
@@ -175,7 +175,7 @@ async def _acquire_openai_client(
         args.get("token"),
         base_url,
         tuple(sorted((args.get("headers") or {}).items())),
-        _ClientFactoryIdentity(factory) if factory is not None else None,
+        _client_factory_identity(factory) if factory is not None else None,
         _openai_transport_preference(args),
     )
     return await turn_session.acquire_client(

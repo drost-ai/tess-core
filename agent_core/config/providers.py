@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from .._utils import clone
-from ..providers.openai import isCodexBaseUrl
+from ..providers.openai import is_codex_base_url
 from .defaults import (
     listProviderProfilesForKind,
     normalizeEffortLevel,
@@ -41,7 +41,7 @@ def resolveOpenAiApiMode(args: dict[str, Any] | None = None, **kwargs: Any) -> s
     requested = args.get("requestedMode")
     if requested and requested != "auto":
         return requested
-    if args.get("baseUrl") and isCodexBaseUrl(args.get("baseUrl")):
+    if args.get("baseUrl") and is_codex_base_url(args.get("baseUrl")):
         return "codex"
     if args.get("loadedCodexToken") or args.get("storedTokenSource") == "codex-oauth":
         return "codex"

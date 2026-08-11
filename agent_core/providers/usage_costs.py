@@ -22,7 +22,7 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
 }
 
 
-def createUsageTotals() -> dict[str, Any]:
+def create_usage_totals() -> dict[str, Any]:
     return {
         "turns": 0,
         "toolCalls": 0,
@@ -36,11 +36,11 @@ def createUsageTotals() -> dict[str, Any]:
     }
 
 
-def ensureUsageTotals(session: dict[str, Any]) -> dict[str, Any]:
+def ensure_usage_totals(session: dict[str, Any]) -> dict[str, Any]:
     metadata = session.setdefault("metadata", {})
     usage = metadata.get("usage")
     if not isinstance(usage, dict):
-        usage = createUsageTotals()
+        usage = create_usage_totals()
         metadata["usage"] = usage
         return usage
     legacy_detail = any(
@@ -68,7 +68,7 @@ def ensureUsageTotals(session: dict[str, Any]) -> dict[str, Any]:
     return usage
 
 
-def cacheCreationUsageDetail(usage: Mapping[str, Any]) -> dict[str, Any]:
+def cache_creation_usage_detail(usage: Mapping[str, Any]) -> dict[str, Any]:
     aggregate = _finite_nonnegative(usage.get("cache_creation_input_tokens"))
     five_present = _finite_optional(usage.get("cache_creation_5m_input_tokens")) is not None
     one_hour_present = _finite_optional(usage.get("cache_creation_1h_input_tokens")) is not None
@@ -88,9 +88,9 @@ def cacheCreationUsageDetail(usage: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def mergeProviderUsage(target: dict[str, Any], nextUsage: Mapping[str, Any]) -> None:
-    target_complete = cacheCreationUsageDetail(target)["complete"]
-    next_complete = cacheCreationUsageDetail(nextUsage)["complete"]
+def merge_provider_usage(target: dict[str, Any], nextUsage: Mapping[str, Any]) -> None:
+    target_complete = cache_creation_usage_detail(target)["complete"]
+    next_complete = cache_creation_usage_detail(nextUsage)["complete"]
     for field in (
         "input_tokens",
         "output_tokens",
@@ -105,8 +105,8 @@ def mergeProviderUsage(target: dict[str, Any], nextUsage: Mapping[str, Any]) -> 
     target["cache_creation_ttl_detail_complete"] = target_complete and next_complete
 
 
-def mergeUsageIntoSession(session: dict[str, Any], usage: Mapping[str, Any]) -> None:
-    totals = ensureUsageTotals(session)
+def merge_usage_into_session(session: dict[str, Any], usage: Mapping[str, Any]) -> None:
+    totals = ensure_usage_totals(session)
     totals["inputTokens"] += _finite_nonnegative(usage.get("input_tokens"))
     totals["outputTokens"] += _finite_nonnegative(usage.get("output_tokens"))
     totals["cacheCreationInputTokens"] += _finite_nonnegative(
@@ -121,11 +121,11 @@ def mergeUsageIntoSession(session: dict[str, Any], usage: Mapping[str, Any]) -> 
     )
     totals["cacheCreationTtlDetailComplete"] = (
         totals.get("cacheCreationTtlDetailComplete") is True
-        and cacheCreationUsageDetail(usage)["complete"]
+        and cache_creation_usage_detail(usage)["complete"]
     )
 
 
-def resolveModelPricing(model: str) -> dict[str, float] | None:
+def resolve_model_pricing(model: str) -> dict[str, float] | None:
     key = str(model or "").strip().lower()
     if key in MODEL_PRICING:
         return MODEL_PRICING[key]
@@ -149,9 +149,9 @@ def resolveModelPricing(model: str) -> dict[str, float] | None:
     return None
 
 
-def estimateUsageCost(usage: Mapping[str, Any], model: str) -> dict[str, Any]:
-    detail = cacheCreationUsageDetail(usage)
-    pricing = resolveModelPricing(model)
+def estimate_usage_cost(usage: Mapping[str, Any], model: str) -> dict[str, Any]:
+    detail = cache_creation_usage_detail(usage)
+    pricing = resolve_model_pricing(model)
     if pricing is None:
         return {
             "totalUsd": 0.0,
@@ -177,11 +177,11 @@ def estimateUsageCost(usage: Mapping[str, Any], model: str) -> dict[str, Any]:
     }
 
 
-def estimateUsageCostUsd(usage: Mapping[str, Any], model: str) -> float:
-    return float(estimateUsageCost(usage, model)["totalUsd"])
+def estimate_usage_cost_usd(usage: Mapping[str, Any], model: str) -> float:
+    return float(estimate_usage_cost(usage, model)["totalUsd"])
 
 
-def roundUsd(value: float) -> float:
+def round_usd(value: float) -> float:
     """Round USD values with JavaScript ``Math.round`` semantics."""
     numeric = float(value)
     if not math.isfinite(numeric):

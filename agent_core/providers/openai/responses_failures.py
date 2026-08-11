@@ -4,8 +4,8 @@ from typing import Any
 
 from ..errors import (
     ProviderRequestError,
-    createProviderFailureRecord,
-    createProviderRequestError,
+    create_provider_failure_record,
+    create_provider_request_error,
 )
 from ..._utils import get_value
 from .normalization import _response_error_text
@@ -73,8 +73,8 @@ def _failure(
     stream_event_type: str,
     code: str | None = None,
 ) -> ProviderRequestError:
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider="openai",
             providerLabel=provider_label,
             phase=phase,

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from tests.support.agent_core_case import *
 
-from agent_core.providers.openai.responses import sendOpenAiRequest
+from agent_core.providers.openai.responses import send_openai_request
 from agent_core.providers.openai.transport import (
     _acquire_openai_client,
     _create_openai_client,
 )
 from agent_core.providers.openai._wire import OpenAiWireClient
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 from agent_core.providers.watchdog import AbortSignal
 from agent_core_harness.fake_providers.server import (
     FakeProviderHttpServer,
@@ -54,7 +54,7 @@ class OpenAiWireResponsesTests(unittest.TestCase):
     def test_responses_mode_completes_over_real_socket_without_factory(self):
         server, requests = _server()
         try:
-            response = run(core.sendOpenAiResponsesRequest(_args(server)))
+            response = run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "ok"}])
@@ -74,7 +74,7 @@ class OpenAiWireResponsesTests(unittest.TestCase):
     def test_chat_mode_completes_over_real_socket_without_factory(self):
         server, requests = _server()
         try:
-            response = run(core.sendOpenAiChatCompletionsRequest(_args(server)))
+            response = run(core.send_openai_chat_completions_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "ok"}])
@@ -88,7 +88,7 @@ class OpenAiWireResponsesTests(unittest.TestCase):
         try:
             args = _args(server)
             del args["mode"]
-            response = run(sendOpenAiRequest(args))
+            response = run(send_openai_request(args))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "ok"}])
@@ -140,7 +140,7 @@ class OpenAiWireResponsesTests(unittest.TestCase):
         }
         server, _requests = _server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_args(server)))
+            response = run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["stopReason"], "tool_calls")
@@ -163,9 +163,9 @@ class OpenAiWireErrorClassificationTests(unittest.TestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 if api == "chat_completions":
-                    run(core.sendOpenAiChatCompletionsRequest(_args(server)))
+                    run(core.send_openai_chat_completions_request(_args(server)))
                 else:
-                    run(core.sendOpenAiResponsesRequest(_args(server)))
+                    run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         return ctx.exception.record

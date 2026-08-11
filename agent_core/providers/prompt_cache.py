@@ -9,7 +9,7 @@ _VALID_COMPATIBILITY = {"auto", "official", "claude_code", "compatible"}
 _VALID_SCOPES = {"ephemeral", "global", "bedrock"}
 
 
-def resolvePromptCachePolicy(
+def resolve_prompt_cache_policy(
     *,
     config: dict[str, Any] | None = None,
     request: dict[str, Any] | None = None,
@@ -78,8 +78,8 @@ def resolvePromptCachePolicy(
     }
 
 
-def anthropicExplicitCacheEnabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
-    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+def anthropic_explicit_cache_enabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
+    policy = resolve_prompt_cache_policy(config=config, request=request, options=options)
     if not policy["enabled"] or policy.get("compatibilitySuppressedReason"):
         return False
     if policy["explicit"] is False:
@@ -87,8 +87,8 @@ def anthropicExplicitCacheEnabled(config: dict[str, Any], request: dict[str, Any
     return policy["mode"] in {"auto", "explicit"}
 
 
-def anthropicAutomaticCacheEnabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
-    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+def anthropic_automatic_cache_enabled(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> bool:
+    policy = resolve_prompt_cache_policy(config=config, request=request, options=options)
     if (
         not policy["enabled"]
         or policy["mode"] != "auto"
@@ -98,7 +98,7 @@ def anthropicAutomaticCacheEnabled(config: dict[str, Any], request: dict[str, An
     return True
 
 
-def anthropicMessageTailCacheEnabled(policy: dict[str, Any] | None) -> bool:
+def anthropic_message_tail_cache_enabled(policy: dict[str, Any] | None) -> bool:
     if not _anthropic_explicit_policy_enabled(policy):
         return False
     explicit = (policy or {}).get("messageTailBreakpoints")
@@ -107,7 +107,7 @@ def anthropicMessageTailCacheEnabled(policy: dict[str, Any] | None) -> bool:
     return (policy or {}).get("compatibility") in {"official", "claude_code"}
 
 
-def anthropicToolDefinitionCacheEnabled(policy: dict[str, Any] | None) -> bool:
+def anthropic_tool_definition_cache_enabled(policy: dict[str, Any] | None) -> bool:
     if not _anthropic_explicit_policy_enabled(policy):
         return False
     explicit = (policy or {}).get("toolDefinitionBreakpoint")
@@ -116,15 +116,15 @@ def anthropicToolDefinitionCacheEnabled(policy: dict[str, Any] | None) -> bool:
     return (policy or {}).get("compatibility") in {"official", "claude_code"}
 
 
-def anthropicCacheControl(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
-    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+def anthropic_cache_control(config: dict[str, Any], request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, str]:
+    policy = resolve_prompt_cache_policy(config=config, request=request, options=options)
     control = {"type": "ephemeral"}
     if policy.get("ttl") in {"5m", "1h"}:
         control["ttl"] = str(policy["ttl"])
     return control
 
 
-def providerAffinityKey(
+def provider_affinity_key(
     *,
     provider: str,
     base_url: str | None = None,
@@ -146,7 +146,7 @@ def providerAffinityKey(
     return f"agent-core-{digest}"
 
 
-def openAiPromptCacheRequestOptions(
+def open_ai_prompt_cache_request_options(
     *,
     mode: str,
     base_url: str | None,
@@ -154,11 +154,11 @@ def openAiPromptCacheRequestOptions(
     request: dict[str, Any],
     request_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    policy = resolvePromptCachePolicy(config=config, request=request, options=request_options)
+    policy = resolve_prompt_cache_policy(config=config, request=request, options=request_options)
     if not policy["enabled"]:
         return dict(request_options or {})
     out = dict(request_options or {})
-    key = providerAffinityKey(provider="openai", base_url=base_url, config=config, request=request)
+    key = provider_affinity_key(provider="openai", base_url=base_url, config=config, request=request)
     if _supports_openai_prompt_cache_key(mode, base_url):
         out.setdefault("prompt_cache_key", key)
     if _supports_openai_prompt_cache_retention(mode, base_url) and policy.get("retention") in {"in_memory", "24h"}:
@@ -176,7 +176,7 @@ def openAiPromptCacheRequestOptions(
     return out
 
 
-def normalizeCacheUsageFields(usage: dict[str, Any], raw_usage: Any) -> None:
+def normalize_cache_usage_fields(usage: dict[str, Any], raw_usage: Any) -> None:
     cached = _first_int(
         _get_path(raw_usage, ("prompt_tokens_details", "cached_tokens")),
         _get_path(raw_usage, ("input_tokens_details", "cached_tokens")),
@@ -194,7 +194,7 @@ def normalizeCacheUsageFields(usage: dict[str, Any], raw_usage: Any) -> None:
         usage["cache_miss_input_tokens"] = miss
 
 
-def isKimiAnthropicCodingBackend(config: dict[str, Any] | None) -> bool:
+def is_kimi_anthropic_coding_backend(config: dict[str, Any] | None) -> bool:
     base = str((config or {}).get("anthropicBaseUrl") or "").strip().rstrip("/").lower()
     return "api.kimi.com/coding" in base
 

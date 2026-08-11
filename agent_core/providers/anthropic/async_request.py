@@ -6,13 +6,13 @@ from ..anthropic_async_transport import (
     AnthropicAsyncHttpConnectionOwner as _AnthropicAsyncTransport,
     AsyncAnthropicHttpResponse as _AsyncAnthropicHttpResponse,
 )
-from .payloads import buildAnthropicHeaders, resolveAnthropicMessagesUrl
+from .payloads import build_anthropic_headers, resolve_anthropic_messages_url
 import json
-from .sse import AnthropicSseAccumulator, parseAnthropicSseEvents
+from .sse import AnthropicSseAccumulator, parse_anthropic_sse_events
 from .stream_consume import _normalize_anthropic_json_response
 
 
-async def sendAnthropicMessagesViaAsyncTransport(
+async def send_anthropic_messages_via_async_transport(
     config: dict[str, Any],
     payload: dict[str, Any],
     timeout_ms: int,
@@ -20,9 +20,9 @@ async def sendAnthropicMessagesViaAsyncTransport(
     header_features: dict[str, Any] | None,
     transport: _AnthropicAsyncTransport,
 ) -> tuple[str, str]:
-    url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
+    url = resolve_anthropic_messages_url(config.get("anthropicBaseUrl"))
     body = json.dumps(payload).encode("utf-8")
-    headers = buildAnthropicHeaders(config, {"stream": stream}, header_features)
+    headers = build_anthropic_headers(config, {"stream": stream}, header_features)
 
     async def consume(response: _AsyncAnthropicHttpResponse) -> tuple[str, str]:
         return (
@@ -39,7 +39,7 @@ async def sendAnthropicMessagesViaAsyncTransport(
     )
 
 
-async def sendAnthropicMessagesStreamingViaAsyncTransport(
+async def send_anthropic_messages_streaming_via_async_transport(
     config: dict[str, Any],
     payload: dict[str, Any],
     timeout_ms: int,
@@ -50,9 +50,9 @@ async def sendAnthropicMessagesStreamingViaAsyncTransport(
     on_activity: Any | None,
     transport: _AnthropicAsyncTransport,
 ) -> dict[str, Any]:
-    url = resolveAnthropicMessagesUrl(config.get("anthropicBaseUrl"))
+    url = resolve_anthropic_messages_url(config.get("anthropicBaseUrl"))
     body = json.dumps(payload).encode("utf-8")
-    headers = buildAnthropicHeaders(config, {"stream": True}, header_features)
+    headers = build_anthropic_headers(config, {"stream": True}, header_features)
 
     async def consume(response: _AsyncAnthropicHttpResponse) -> dict[str, Any]:
         content_type = response.headers.get("content-type", "")
@@ -61,7 +61,7 @@ async def sendAnthropicMessagesStreamingViaAsyncTransport(
                 json.loads((await response.read()).decode("utf-8")),
                 request,
             )
-        return await readAnthropicSseResponseAsync(
+        return await read_anthropic_sse_response_async(
             response,
             request=request,
             runtime=runtime,
@@ -78,7 +78,7 @@ async def sendAnthropicMessagesStreamingViaAsyncTransport(
     )
 
 
-async def readAnthropicSseResponseAsync(
+async def read_anthropic_sse_response_async(
     response: _AsyncAnthropicHttpResponse,
     *,
     request: dict[str, Any],
@@ -113,7 +113,7 @@ def _mark_activity(target: Any, accumulator: Any) -> None:
 def _process_frame(frame_lines: list[str], accumulator: Any) -> None:
     if not frame_lines:
         return
-    for raw_event in parseAnthropicSseEvents("".join(frame_lines)):
+    for raw_event in parse_anthropic_sse_events("".join(frame_lines)):
         accumulator.process_raw_event(raw_event)
 
 

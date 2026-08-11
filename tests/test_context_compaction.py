@@ -260,8 +260,8 @@ class ContextCompactionTests(AgentCoreTestCase):
             async def complete(self, args):
                 self.calls += 1
                 if self.calls == 1:
-                    raise core.createProviderRequestError(
-                        core.createProviderFailureRecord(
+                    raise core.create_provider_request_error(
+                        core.create_provider_failure_record(
                             {
                                 "provider": "openai",
                                 "providerLabel": "OpenAI",

@@ -8,11 +8,11 @@ from typing import Any
 
 from .generation import RuntimeSessionBinding, create_runtime_session_binding
 from ..providers.partial_output import (
-    assertPartialOutputSink as _assert_partial_output_sink,
-    assertPartialOutputStateStore as _assert_partial_output_state_store,
+    assert_partial_output_sink as _assert_partial_output_sink,
+    assert_partial_output_state_store as _assert_partial_output_state_store,
 )
 from ..providers.partial_output_state import (
-    assertPartialOutputRecoveryPolicy as _assert_partial_output_recovery_policy,
+    assert_partial_output_recovery_policy as _assert_partial_output_recovery_policy,
 )
 
 
@@ -62,7 +62,7 @@ _CONTRACT_FIELDS = frozenset({
 # only meaningful if unknown keys fail loudly instead of passing through.
 _EXTENSION_FIELDS = frozenset({
     "openaiClientFactory",
-    "partialOutputRecoveryPolicy",
+    "partial_output_recovery_policy",
     "repositoryIdentity",
 })
 
@@ -123,7 +123,7 @@ def assert_agent_runtime_bindings(
     try:
         _assert_partial_output_sink(value.get("partialOutputSink"))
         _assert_partial_output_state_store(value.get("partialOutputStateStore"))
-        _assert_partial_output_recovery_policy(value.get("partialOutputRecoveryPolicy"))
+        _assert_partial_output_recovery_policy(value.get("partial_output_recovery_policy"))
     except ValueError as exc:
         raise _error("runtime_bindings_invalid", str(exc)) from exc
     if (

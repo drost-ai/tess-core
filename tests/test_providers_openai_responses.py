@@ -13,7 +13,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             ],
         }
 
-        response_params = testing.buildResponsesCreateParams(
+        response_params = testing.build_responses_create_params(
             {
                 "isCodexBackend": False,
                 "request": {"model": "gpt-5.5", "system": "s", "messages": [message], "tools": []},
@@ -28,7 +28,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(response_content[1]["detail"], "auto")
         self.assertEqual(response_content[1]["image_url"], "data:image/png;base64,aW1n")
 
-        chat_params = testing.buildChatCompletionsCreateParams(
+        chat_params = testing.build_chat_completions_create_params(
             {"model": "gpt-5.5", "system": "s", "messages": [message], "tools": []}
         )
         chat_content = chat_params["messages"][1]["content"]
@@ -48,7 +48,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
                 },
             ],
         }
-        redacted_params = testing.buildResponsesCreateParams(
+        redacted_params = testing.build_responses_create_params(
             {"request": {"model": "gpt-5.5", "system": "s", "messages": [redacted_message], "tools": []}}
         )
         self.assertEqual(redacted_params["input"][0]["content"], "Follow-up")
@@ -75,7 +75,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             return SimpleNamespace(responses=SimpleNamespace(create=create_codex))
 
         codex_response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 {
                     "token": "codex-token",
                     "mode": "codex",
@@ -110,8 +110,8 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertNotIn("max_output_tokens", codex_captured["params"])
         self.assertEqual(codex_captured["params"]["tools"][0]["parameters"]["properties"]["path"], {"type": "string"})
 
-        original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        original_delay = openai_module.shared.openai_retry_delay_ms
+        [setattr(_m, 'openai_retry_delay_ms', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             compatible_attempts = {"count": 0}
             compatible_captured = {}
@@ -129,7 +129,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
                 return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create_compatible)))
 
             compatible_response = run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "compatible-token",
                         "baseUrl": "https://api.deepinfra.com/v1/openai",
@@ -151,11 +151,11 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.retrying" and data["category"] == "transport" and data["providerLabel"] == "OpenAI Chat Completions" for event, data in events))
             self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in events))
         finally:
-            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+            [setattr(_m, 'openai_retry_delay_ms', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
 
     def test_openai_responses_error_event_retry_and_protocol_edges(self):
-        original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        original_delay = openai_module.shared.openai_retry_delay_ms
+        [setattr(_m, 'openai_retry_delay_ms', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             attempts = {"count": 0}
             events = []
@@ -167,7 +167,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
                 return AsyncChunks([{"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "retry-ok"}]}]}}])
 
             response = run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -183,7 +183,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.retrying" and data["category"] == "rate_limit" and data["streamEventType"] == "error" for event, data in events))
             self.assertTrue(any(event == "provider.recovered" and data["category"] == "rate_limit" for event, data in events))
         finally:
-            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+            [setattr(_m, 'openai_retry_delay_ms', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
 
         incomplete_calls = {"count": 0}
 
@@ -193,7 +193,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -227,7 +227,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as response_ctx:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -261,7 +261,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as chat_ctx:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -280,7 +280,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
     def test_openai_reasoning_and_base_url(self):
         response = run(
-            testing.sendOpenAiChatCompletionsRequest(
+            testing.send_openai_chat_completions_request(
                 {
                     "token": "test-token",
                     "baseUrl": "https://api.deepseek.com",
@@ -315,7 +315,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
             return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
 
-        run(testing.sendOpenAiChatCompletionsRequest({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "request": {"model": "m", "effort": "xhigh", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": factory}))
+        run(testing.send_openai_chat_completions_request({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "request": {"model": "m", "effort": "xhigh", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": factory}))
         self.assertEqual(captured["base"], "http://127.0.0.1:8000/v1")
         self.assertNotIn("reasoning_effort", captured["params"])
 
@@ -324,7 +324,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             raise RuntimeError("401 You have insufficient permissions for this operation. Missing scopes: api.responses.write.")
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
-            run(testing.sendOpenAiResponsesRequest({"token": "test", "mode": "codex", "request": {"model": "gpt-5.4", "effort": "high", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_error))}))
+            run(testing.send_openai_responses_request({"token": "test", "mode": "codex", "request": {"model": "gpt-5.4", "effort": "high", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": lambda _options: SimpleNamespace(responses=SimpleNamespace(create=create_error))}))
         self.assertEqual(ctx.exception.record["category"], "auth")
         self.assertIn("authentication", str(ctx.exception).lower())
 
@@ -337,7 +337,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             captured["base"] = options.get("baseURL")
             return SimpleNamespace(responses=SimpleNamespace(create=create_ok))
 
-        run(testing.sendOpenAiResponsesRequest({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "mode": "responses", "request": {"model": "m", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": response_factory}))
+        run(testing.send_openai_responses_request({"token": "test", "baseUrl": "http://127.0.0.1:8000/v1", "mode": "responses", "request": {"model": "m", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []}, "runtime": {}, "maxAttempts": 1, "clientFactory": response_factory}))
         self.assertEqual(captured["base"], "http://127.0.0.1:8000/v1")
 
     def test_openai_responses_streaming_tool_edges(self):
@@ -368,7 +368,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             )
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 {
                     "token": "test",
                     "mode": "responses",
@@ -405,7 +405,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as ctx:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -423,8 +423,8 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
         self.assertEqual(ctx.exception.record["streamEventType"], "response.failed")
 
     def test_openai_retry_events_for_responses_and_chat(self):
-        original_delay = openai_module.shared.providerRetryDelayMs
-        [setattr(_m, 'providerRetryDelayMs', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+        original_delay = openai_module.shared.openai_retry_delay_ms
+        [setattr(_m, 'openai_retry_delay_ms', lambda _attempt, *_a, **_kw: 0) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
         try:
             response_attempts = {"count": 0}
             response_events = []
@@ -436,7 +436,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
                 return AsyncChunks([{"type": "response.completed", "response": {"output": [{"type": "message", "content": [{"type": "output_text", "text": "ok"}]}]}}])
 
             response = run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -463,7 +463,7 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
                 return AsyncChunks([{"choices": [{"delta": {"content": "chat-ok"}, "finish_reason": "stop"}]}])
 
             chat_response = run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -479,4 +479,4 @@ class OpenAIResponsesProviderTests(AgentCoreTestCase):
             self.assertTrue(any(event == "provider.recovered" and data["attempts"] == 2 for event, data in chat_events))
             self.assertTrue(any(event == "provider.stream_event" and data["stream_event"] == "chat.completion.chunk" for event, data in chat_events))
         finally:
-            [setattr(_m, 'providerRetryDelayMs', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]
+            [setattr(_m, 'openai_retry_delay_ms', original_delay) for _m in (openai_module.shared, openai_module.chat, openai_module.responses, openai_module.recovery_attempt)]

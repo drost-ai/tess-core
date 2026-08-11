@@ -114,8 +114,8 @@ async def _measure_representative_persistence_iteration() -> dict[str, Any]:
             }
             config = _representative_config(workspace, home, profile)
             runtime = bind_agent_runtime(session)
-            failure = core.createProviderRequestError(
-                core.createProviderFailureRecord(
+            failure = core.create_provider_request_error(
+                core.create_provider_failure_record(
                     provider="openai",
                     providerLabel="OpenAI",
                     phase="request_start",

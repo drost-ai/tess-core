@@ -153,7 +153,7 @@ class ProviderRequestWatchdog:
         await self._deadline_changed.wait()
 
 
-def createProviderRequestWatchdog(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestWatchdog:
+def create_provider_request_watchdog(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderRequestWatchdog:
     args = {**(args or {}), **kwargs}
     return ProviderRequestWatchdog(
         parentSignal=args.get("parentSignal"),
@@ -167,4 +167,4 @@ def _consume_task_result(task: asyncio.Future[Any]) -> None:
         task.result()
 
 
-__all__ = ["AbortError", "AbortSignal", "ProviderRequestWatchdog", "createProviderRequestWatchdog"]
+__all__ = ["AbortError", "AbortSignal", "ProviderRequestWatchdog", "create_provider_request_watchdog"]

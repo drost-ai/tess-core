@@ -11,8 +11,8 @@ from unittest import mock
 from tests.support.agent_core_case import AgentCoreTestCase
 
 import agent_core._facade as core
-from agent_core.providers.anthropic.payloads import buildAnthropicMessagesEnvelope
-from agent_core.providers.errors import createProviderFailureRecord, createProviderRequestError
+from agent_core.providers.anthropic.payloads import build_anthropic_messages_envelope
+from agent_core.providers.errors import create_provider_failure_record, create_provider_request_error
 from agent_core_harness.package32_canary import main, runPackage32AnthropicCanary
 from agent_core_harness.package32_canary_cli import runPackage32CanaryCli
 from agent_core_harness.package32_canary_evidence import (
@@ -25,8 +25,8 @@ from agent_core_harness.package32_canary_evidence import (
 
 class Package32CanaryRunnerTests(AgentCoreTestCase):
     def test_provider_failure_evidence_is_closed_and_content_free(self):
-        error = createProviderRequestError(
-            createProviderFailureRecord(
+        error = create_provider_request_error(
+            create_provider_failure_record(
                 provider="anthropic",
                 providerLabel="official",
                 phase="token_count",
@@ -155,7 +155,7 @@ class Package32CanaryRunnerTests(AgentCoreTestCase):
                 return {"source": "anthropic_count", "inputTokens": 4_096}
 
             async def send(config, request, stream):
-                envelope = buildAnthropicMessagesEnvelope(
+                envelope = build_anthropic_messages_envelope(
                     request,
                     config,
                     {"stream": stream},

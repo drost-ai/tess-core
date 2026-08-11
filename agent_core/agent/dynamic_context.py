@@ -7,11 +7,11 @@ from ..storage.message_origin import (
     is_genuine_user_request as _is_genuine_user_request,
     synthetic_user_message as _synthetic_user_message,
 )
-from ..providers.prompt_cache import resolvePromptCachePolicy
+from ..providers.prompt_cache import resolve_prompt_cache_policy
 
 
 def dynamicContextBelongsInMessages(config: dict[str, Any]) -> bool:
-    return bool(resolvePromptCachePolicy(config=config).get("enabled"))
+    return bool(resolve_prompt_cache_policy(config=config).get("enabled"))
 
 
 def injectSystemContextIntoMessages(

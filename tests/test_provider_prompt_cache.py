@@ -4,46 +4,46 @@ from tests.support.agent_core_case import *
 
 import agent_core.agent.context as context_module
 from agent_core.providers.prompt_cache import (
-    anthropicAutomaticCacheEnabled,
-    anthropicExplicitCacheEnabled,
-    normalizeCacheUsageFields,
-    openAiPromptCacheRequestOptions,
-    providerAffinityKey,
-    resolvePromptCachePolicy,
+    anthropic_automatic_cache_enabled,
+    anthropic_explicit_cache_enabled,
+    normalize_cache_usage_fields,
+    open_ai_prompt_cache_request_options,
+    provider_affinity_key,
+    resolve_prompt_cache_policy,
 )
-from agent_core.providers.anthropic.payloads import buildAnthropicMessagesPayload
+from agent_core.providers.anthropic.payloads import build_anthropic_messages_payload
 
 
 class ProviderPromptCacheTests(AgentCoreTestCase):
     def test_prompt_cache_policy_defaults_and_overrides(self):
         self.assertEqual(
-            resolvePromptCachePolicy()["enabled"],
+            resolve_prompt_cache_policy()["enabled"],
             True,
         )
-        self.assertFalse(resolvePromptCachePolicy(config={"promptCache": {"mode": "off"}})["enabled"])
+        self.assertFalse(resolve_prompt_cache_policy(config={"promptCache": {"mode": "off"}})["enabled"])
         self.assertEqual(
-            resolvePromptCachePolicy(
+            resolve_prompt_cache_policy(
                 config={"providerProfile": {"promptCache": {"ttl": "1h"}}},
                 request={"promptCache": {"ttl": "5m"}},
             )["ttl"],
             "5m",
         )
-        self.assertTrue(anthropicExplicitCacheEnabled({}, {"model": "claude-opus-4-7"}))
-        self.assertTrue(anthropicAutomaticCacheEnabled({}, {"model": "claude-opus-4-7"}))
+        self.assertTrue(anthropic_explicit_cache_enabled({}, {"model": "claude-opus-4-7"}))
+        self.assertTrue(anthropic_automatic_cache_enabled({}, {"model": "claude-opus-4-7"}))
         self.assertFalse(
-            anthropicExplicitCacheEnabled(
+            anthropic_explicit_cache_enabled(
                 {"anthropicBaseUrl": "https://api.kimi.com/coding/"},
                 {"model": "kimi-k2.6"},
             )
         )
         self.assertFalse(
-            anthropicAutomaticCacheEnabled(
+            anthropic_automatic_cache_enabled(
                 {"anthropicBaseUrl": "https://api.kimi.com/coding/"},
                 {"model": "kimi-k2.6"},
             )
         )
         self.assertTrue(
-            anthropicExplicitCacheEnabled(
+            anthropic_explicit_cache_enabled(
                 {
                     "anthropicBaseUrl": "https://api.kimi.com/coding/",
                     "promptCache": {"explicit": True},
@@ -52,7 +52,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
             )
         )
         self.assertFalse(
-            anthropicAutomaticCacheEnabled(
+            anthropic_automatic_cache_enabled(
                 {"promptCache": {"mode": "explicit"}},
                 {"model": "claude-opus-4-7"},
             )
@@ -61,7 +61,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
     def test_openai_prompt_cache_options_are_provider_specific(self):
         request = {"model": "gpt-5.5", "sessionId": "session-123"}
         config = {"providerProfileName": "owner"}
-        codex_options = openAiPromptCacheRequestOptions(
+        codex_options = open_ai_prompt_cache_request_options(
             mode="codex",
             base_url="https://chatgpt.com/backend-api/codex",
             config=config,
@@ -71,15 +71,15 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
         self.assertTrue(codex_options["prompt_cache_key"].startswith("agent-core-"))
         self.assertEqual(codex_options["prompt_cache_retention"], "24h")
 
-        xai_options = openAiPromptCacheRequestOptions(
+        xai_options = open_ai_prompt_cache_request_options(
             mode="chat_completions",
             base_url="https://api.x.ai/v1",
             config=config,
             request=request,
         )
-        self.assertEqual(xai_options["extra_headers"]["x-grok-conv-id"], providerAffinityKey(provider="openai", base_url="https://api.x.ai/v1", config=config, request=request))
+        self.assertEqual(xai_options["extra_headers"]["x-grok-conv-id"], provider_affinity_key(provider="openai", base_url="https://api.x.ai/v1", config=config, request=request))
 
-        disabled = openAiPromptCacheRequestOptions(
+        disabled = open_ai_prompt_cache_request_options(
             mode="responses",
             base_url=None,
             config={"promptCache": {"enabled": False}},
@@ -90,7 +90,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
 
     def test_openai_compatible_cache_usage_normalization(self):
         usage: dict[str, int] = {}
-        normalizeCacheUsageFields(
+        normalize_cache_usage_fields(
             usage,
             {"prompt_tokens_details": {"cached_tokens": 120}, "prompt_cache_miss_tokens": 30},
         )
@@ -104,7 +104,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
         )
 
     def test_anthropic_payload_combines_system_and_automatic_conversation_cache(self):
-        payload = buildAnthropicMessagesPayload(
+        payload = build_anthropic_messages_payload(
             {
                 "model": "claude-opus-4-7",
                 "system": "stable system",
@@ -122,7 +122,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
         self.assertNotIn("cache_control", payload["messages"][-1]["content"][-1])
 
     def test_anthropic_payload_respects_explicit_and_kimi_cache_modes(self):
-        explicit_payload = buildAnthropicMessagesPayload(
+        explicit_payload = build_anthropic_messages_payload(
             {
                 "model": "claude-opus-4-7",
                 "system": "stable system",
@@ -133,7 +133,7 @@ class ProviderPromptCacheTests(AgentCoreTestCase):
         self.assertNotIn("cache_control", explicit_payload)
         self.assertEqual(explicit_payload["system"][-1]["cache_control"], {"type": "ephemeral"})
 
-        kimi_payload = buildAnthropicMessagesPayload(
+        kimi_payload = build_anthropic_messages_payload(
             {
                 "model": "kimi-k2.6",
                 "system": "stable system",

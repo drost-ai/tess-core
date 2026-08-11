@@ -351,8 +351,8 @@ class Package146TransientOverlayTests(unittest.TestCase):
 
             async def send(_request: dict) -> dict:
                 _assert_runtime_clean(self, root)
-                raise core.createProviderRequestError(
-                    core.createProviderFailureRecord(
+                raise core.create_provider_request_error(
+                    core.create_provider_failure_record(
                         provider="openai",
                         providerLabel="p146",
                         phase="request",

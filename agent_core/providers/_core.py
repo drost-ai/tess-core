@@ -19,9 +19,9 @@ from typing import Any
 from .._utils import signal_aborted
 from .errors import (
     ProviderRequestError,
-    createProviderFailureRecord,
-    createProviderRequestError,
-    retryDelayFromLadder,
+    create_provider_failure_record,
+    create_provider_request_error,
+    retry_delay_from_ladder,
 )
 
 DEFAULT_ABORT_POLL_INTERVAL_MS = 50
@@ -102,8 +102,8 @@ def create_provider_cancelled_error(
     had_output: bool,
     had_tool_use: bool,
 ) -> ProviderRequestError:
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider=provider,
             providerLabel=provider_label,
             phase=phase,
@@ -132,8 +132,8 @@ def create_provider_timeout_error(
     # blocks a re-run is the retry/fallback decision's call — those sites know
     # the sink capabilities (a replaceable codex sink may supersede partial
     # output; plain modes and fallback never re-run after output).
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider=provider,
             providerLabel=provider_label,
             phase=phase,
@@ -335,7 +335,7 @@ def provider_retry_delay_ms(
     Server guidance can only extend the ladder delay, never shrink it, and is
     capped so a hostile header cannot park a turn for minutes.
     """
-    base = retryDelayFromLadder(ladder, attempt)
+    base = retry_delay_from_ladder(ladder, attempt)
     record = getattr(failure, "record", None)
     retry_after = record.get("retryAfterMs") if isinstance(record, dict) else None
     if isinstance(retry_after, int) and not isinstance(retry_after, bool) and retry_after > 0:

@@ -136,7 +136,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
             return _completed("authoritative answer")
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request=_request(),
@@ -200,7 +200,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
 
                 with self.assertRaises(core.ProviderRequestError) as raised:
                     run(
-                        testing.sendOpenAiResponsesRequest(
+                        testing.send_openai_responses_request(
                             token="test",
                             mode="codex",
                             request=_request(),
@@ -235,7 +235,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=_request(),
@@ -310,7 +310,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
                     return streams.pop(0)
 
                 response = run(
-                    testing.sendOpenAiResponsesRequest(
+                    testing.send_openai_responses_request(
                         token="test",
                         mode="codex",
                         request=_request(),
@@ -344,7 +344,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError):
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=_request(),
@@ -372,7 +372,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=_request(),
@@ -403,7 +403,7 @@ class Package43CodexSupersessionTests(AgentCoreTestCase):
             return _failed_after_text() if attempts == 1 else _completed("buffered success")
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request=_request(),

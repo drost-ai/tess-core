@@ -5,12 +5,12 @@ from pathlib import Path
 from tests.support.agent_core_case import *
 
 import agent_core.agent.context as context_module
-from agent_core.providers.prompt_cache_state import promptCacheStatePath, readPromptCacheState
-from agent_core.providers.anthropic.payloads import buildAnthropicMessagesEnvelope
-from agent_core.providers.anthropic.sse import normalizeAnthropicSseResponse
+from agent_core.providers.prompt_cache_state import prompt_cache_state_path, read_prompt_cache_state
+from agent_core.providers.anthropic.payloads import build_anthropic_messages_envelope
+from agent_core.providers.anthropic.sse import normalize_anthropic_sse_response
 from agent_core.providers.prompt_cache_orchestration import (
-    isPromptCacheEvictionTerminalSuccess,
-    recordPromptCacheEvictionIntentAtFinalization,
+    is_prompt_cache_eviction_terminal_success,
+    record_prompt_cache_eviction_intent_at_finalization,
 )
 from agent_core.runtime.paths import resolve_runtime_paths
 
@@ -85,7 +85,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         session, config, events, sent_ids = self._session(), self._config(), [], []
 
         async def send(request):
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             sent_ids.append(envelope["payload"]["diagnostics"]["previous_message_id"])
             observation = {
                 **envelope["promptCache"],
@@ -112,7 +112,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         self._run_turn(session, config, send, events)
         self.assertEqual(sent_ids, [None, "msg_1"])
         paths = resolve_runtime_paths(candidate=str(self.home))
-        state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        state = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(state["revision"], 2)
         self.assertEqual(state["response"]["id"], "msg_2")
         observed = [data for event, data in events if event == "provider.prompt_cache" and data.get("phase") == "observed"]
@@ -123,7 +123,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         session, config, events = self._session(), self._config(evict=True), []
 
         async def send(request):
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             return {
                 "model": request["model"],
                 "stopReason": "end_turn",
@@ -134,7 +134,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         self._run_turn(session, config, send, events)
         paths = resolve_runtime_paths(candidate=str(self.home))
-        state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        state = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertTrue(state["eviction"]["pending"])
         self.assertEqual(
             [data["phase"] for event, data in events if event == "provider.prompt_cache"],
@@ -148,7 +148,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         with self.assertRaises(RuntimeError):
             self._run_turn(failed_session, config, fail, failed_events)
-        missing = run(readPromptCacheState({"sessionId": failed_session["id"], "paths": paths}))
+        missing = run(read_prompt_cache_state({"sessionId": failed_session["id"], "paths": paths}))
         self.assertEqual(missing["status"], "missing")
 
     def test_context_failure_commits_only_the_reactive_relief_success(self):
@@ -157,8 +157,8 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         async def send(request):
             attempts.append(request["promptCache"]["dispatchContext"]["dispatchOrder"]["reactiveAttempt"])
             if len(attempts) == 1:
-                raise core.createProviderRequestError(
-                    core.createProviderFailureRecord(
+                raise core.create_provider_request_error(
+                    core.create_provider_failure_record(
                         provider="anthropic",
                         providerLabel="Anthropic",
                         phase="request_start",
@@ -170,7 +170,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
                         rawMessage="maximum context length exceeded",
                     )
                 )
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             return {
                 "model": request["model"],
                 "stopReason": "end_turn",
@@ -182,7 +182,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         self._run_turn(session, config, send, events)
         self.assertEqual(attempts, [0, 1])
         paths = resolve_runtime_paths(candidate=str(self.home))
-        state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        state = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(state["revision"], 1)
         self.assertEqual(state["request"]["preparation"], "reactive_relief")
         observed = [data for event, data in events if event == "provider.prompt_cache" and data.get("phase") == "observed"]
@@ -194,12 +194,12 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
             async def fail(_request, failure=kind):
                 if failure == "partial_stream":
-                    return normalizeAnthropicSseResponse(
+                    return normalize_anthropic_sse_response(
                         'event: message_start\ndata: {"type":"message_start","message":{"id":"partial","usage":{}}}\n\n',
                         {"model": "claude-opus-4-8", "messages": [], "tools": []},
                     )
-                raise core.createProviderRequestError(
-                    core.createProviderFailureRecord(
+                raise core.create_provider_request_error(
+                    core.create_provider_failure_record(
                         provider="anthropic", providerLabel="Anthropic", phase="request_start",
                         category="client_request", retryable=False, attempt=1,
                         hadAssistantOutput=False, hadToolUse=False,
@@ -211,7 +211,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
                 self._run_turn(session, config, fail, events)
             paths = resolve_runtime_paths(candidate=str(self.home))
             self.assertEqual(
-                run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["status"],
+                run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["status"],
                 "missing",
             )
             self.assertFalse(any(event == "provider.prompt_cache" for event, _ in events))
@@ -223,7 +223,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         async def send(request):
             nonlocal calls
             calls += 1
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             return {
                 "model": request["model"], "stopReason": "end_turn",
                 "content": [] if calls == 1 else [{"type": "text", "text": "retried"}],
@@ -235,7 +235,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         self.assertEqual((result["stopReason"], result["text"]), ("end_turn", "retried"))
         self.assertEqual(result["usage"]["cache_creation_input_tokens"], 3)
         paths = resolve_runtime_paths(candidate=str(self.home))
-        state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        state = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual((state["revision"], state["response"]["id"]), (2, "empty-2"))
         observed = [data for event, data in events if event == "provider.prompt_cache" and data.get("phase") == "observed"]
         self.assertEqual(len(observed), 2)
@@ -249,7 +249,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         async def send(request):
             nonlocal calls
             calls += 1
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             if calls == 2:
                 self.assertIn("[Continuation required]", json.dumps(request["messages"]))
             return {
@@ -268,7 +268,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
             [(1, True), (2, False)],
         )
         paths = resolve_runtime_paths(candidate=str(self.home))
-        state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        state = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(state["revision"], 2)
         self.assertNotIn("eviction", state)
 
@@ -277,7 +277,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         signal = SimpleNamespace(aborted=False, reason=None)
 
         async def send(request):
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             signal.aborted = True
             signal.reason = RuntimeError("cancelled after terminal response")
             return {
@@ -290,7 +290,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         result = self._run_turn(session, config, send, events, {"abortSignal": signal})
         self.assertEqual(result["stopReason"], "cancelled")
         paths = resolve_runtime_paths(candidate=str(self.home))
-        state = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        state = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual((state["revision"], state["response"]["id"]), (1, "terminal-id"))
         observed = [data for event, data in events if event == "provider.prompt_cache" and data.get("phase") == "observed"]
         self.assertEqual(len(observed), 1)
@@ -310,17 +310,17 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         self.assertEqual(result["stopReason"], "cancelled")
         paths = resolve_runtime_paths(candidate=str(self.home))
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["status"],
+            run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["status"],
             "missing",
         )
 
     def test_state_and_event_callback_failures_cannot_change_provider_success(self):
         session, config, events = self._session(), self._config(), []
         paths = resolve_runtime_paths(candidate=str(self.home))
-        Path(promptCacheStatePath(session["id"], paths)).mkdir(parents=True)
+        Path(prompt_cache_state_path(session["id"], paths)).mkdir(parents=True)
 
         async def send(request):
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             return {
                 "model": request["model"], "stopReason": "end_turn",
                 "content": [{"type": "text", "text": "provider success"}],
@@ -341,7 +341,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         result = self._run_turn(other_session, config, send, ExplodingEvents())
         self.assertEqual(result["text"], "provider success")
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": other_session["id"], "paths": paths}))["state"]["revision"],
+            run(read_prompt_cache_state({"sessionId": other_session["id"], "paths": paths}))["state"]["revision"],
             1,
         )
 
@@ -360,13 +360,13 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
         )
         for args, expected in cases:
             with self.subTest(args=args):
-                self.assertEqual(isPromptCacheEvictionTerminalSuccess(args), expected)
+                self.assertEqual(is_prompt_cache_eviction_terminal_success(args), expected)
 
     def test_finalization_intent_is_idempotent_and_observer_safe(self):
         session, config, events = self._session(), self._config(evict=True), []
 
         async def send(request):
-            envelope = buildAnthropicMessagesEnvelope(request, config)
+            envelope = build_anthropic_messages_envelope(request, config)
             return {
                 "model": request["model"], "stopReason": "end_turn",
                 "usage": {"input_tokens": 1, "output_tokens": 1},
@@ -376,9 +376,9 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
 
         self._run_turn(session, config, send, events)
         paths = resolve_runtime_paths(candidate=str(self.home))
-        before = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        before = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         run(
-            recordPromptCacheEvictionIntentAtFinalization(
+            record_prompt_cache_eviction_intent_at_finalization(
                 {
                     "session": session, "config": config,
                     "runtime": {"emitEvent": lambda *_: (_ for _ in ()).throw(RuntimeError("observer"))},
@@ -386,7 +386,7 @@ class PromptCacheLifecycleTests(AgentCoreTestCase):
                 }
             )
         )
-        after = run(readPromptCacheState({"sessionId": session["id"], "paths": paths}))["state"]
+        after = run(read_prompt_cache_state({"sessionId": session["id"], "paths": paths}))["state"]
         self.assertEqual(after["revision"], before["revision"])
         self.assertEqual(after["eviction"]["finalizationKey"], before["eviction"]["finalizationKey"])
 

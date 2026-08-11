@@ -40,21 +40,21 @@ PROMPT_CACHE_PROVIDER_REASONS = PROMPT_CACHE_MISS_REASONS | {
 }
 
 
-def buildPromptCacheRequestSnapshot(input: dict[str, Any]) -> dict[str, Any]:
+def build_prompt_cache_request_snapshot(input: dict[str, Any]) -> dict[str, Any]:
     messages = input.get("normalizedMessages") or []
     tools = input.get("normalizedTools") or []
     system = input.get("normalizedSystem") or []
     betas = [str(token) for token in input.get("betaTokens") or []]
     message_hashes = [
-        hashPromptCacheValue("message", _semantic_message(message)) for message in messages
+        hash_prompt_cache_value("message", _semantic_message(message)) for message in messages
     ]
     block_hashes = [
-        hashPromptCacheValue("block", _strip_decoration(block))
+        hash_prompt_cache_value("block", _strip_decoration(block))
         for message in messages
         for block in message.get("content") or []
     ]
-    tool_hashes = [hashPromptCacheValue("tool", _strip_decoration(tool)) for tool in tools]
-    beta_hashes = [hashPromptCacheValue("beta", token) for token in betas]
+    tool_hashes = [hash_prompt_cache_value("tool", _strip_decoration(tool)) for tool in tools]
+    beta_hashes = [hash_prompt_cache_value("beta", token) for token in betas]
     omitted = message_hashes[: max(0, len(message_hashes) - MAX_MESSAGE_HASHES)]
     semantic_prefix = {
         "tools": [_strip_decoration(tool) for tool in tools],
@@ -67,24 +67,24 @@ def buildPromptCacheRequestSnapshot(input: dict[str, Any]) -> dict[str, Any]:
     policy = input.get("policy") or {}
     snapshot = {
         "schemaVersion": 1,
-        "providerProfileNameHash": hashPromptCacheValue(
+        "providerProfileNameHash": hash_prompt_cache_value(
             "profile", str(input.get("providerProfileName") or "")
         ),
         "routeClass": input.get("routeClass") or "official",
-        "endpointIdentityHash": hashPromptCacheValue(
+        "endpointIdentityHash": hash_prompt_cache_value(
             "endpoint", _normalize_endpoint_identity(input.get("baseUrl"))
         ),
-        "modelHash": hashPromptCacheValue("model", str(input.get("model") or "")),
-        "betasHash": hashPromptCacheValue("betas", betas),
-        "toolsHash": hashPromptCacheValue("tools", semantic_prefix["tools"]),
-        "systemHash": hashPromptCacheValue("system", semantic_prefix["system"]),
-        "messagesHash": hashPromptCacheValue("messages", semantic_prefix["messages"]),
-        "toolChoiceHash": hashPromptCacheValue("tool-choice", input.get("toolChoice")),
-        "outputConfigHash": hashPromptCacheValue("output-config", input.get("outputConfig")),
-        "cachePolicyHash": hashPromptCacheValue(
+        "modelHash": hash_prompt_cache_value("model", str(input.get("model") or "")),
+        "betasHash": hash_prompt_cache_value("betas", betas),
+        "toolsHash": hash_prompt_cache_value("tools", semantic_prefix["tools"]),
+        "systemHash": hash_prompt_cache_value("system", semantic_prefix["system"]),
+        "messagesHash": hash_prompt_cache_value("messages", semantic_prefix["messages"]),
+        "toolChoiceHash": hash_prompt_cache_value("tool-choice", input.get("toolChoice")),
+        "outputConfigHash": hash_prompt_cache_value("output-config", input.get("outputConfig")),
+        "cachePolicyHash": hash_prompt_cache_value(
             "policy", _semantic_policy(policy, plan)
         ),
-        "semanticPrefixHash": hashPromptCacheValue("semantic-prefix", semantic_prefix),
+        "semanticPrefixHash": hash_prompt_cache_value("semantic-prefix", semantic_prefix),
         "messageCount": len(messages),
         "blockCount": len(block_hashes),
         "toolCount": len(tools),
@@ -97,7 +97,7 @@ def buildPromptCacheRequestSnapshot(input: dict[str, Any]) -> dict[str, Any]:
         "reactiveAttempt": max(0, int(input.get("reactiveAttempt") or 0)),
     }
     if omitted:
-        snapshot["omittedPrefixHash"] = hashPromptCacheValue(
+        snapshot["omittedPrefixHash"] = hash_prompt_cache_value(
             "omitted-message-prefix", omitted
         )
     if isinstance(plan.get("tailA"), dict):
@@ -107,7 +107,7 @@ def buildPromptCacheRequestSnapshot(input: dict[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
-def diagnosePromptCache(args: dict[str, Any]) -> dict[str, Any]:
+def diagnose_prompt_cache(args: dict[str, Any]) -> dict[str, Any]:
     previous = args.get("previous")
     current = args["current"]
     if not isinstance(previous, dict):
@@ -171,7 +171,7 @@ def diagnosePromptCache(args: dict[str, Any]) -> dict[str, Any]:
     return _diagnosis("no_cache_usage_reported", "inconclusive")
 
 
-def normalizePromptCacheProviderReason(args: dict[str, Any]) -> str:
+def normalize_prompt_cache_provider_reason(args: dict[str, Any]) -> str:
     if not args.get("requested"):
         return "not_requested"
     if not args.get("fieldPresent"):
@@ -188,7 +188,7 @@ def normalizePromptCacheProviderReason(args: dict[str, Any]) -> str:
     return kind if kind in PROMPT_CACHE_MISS_REASONS else "unknown"
 
 
-def canonicalPromptCacheJson(value: Any) -> str:
+def canonical_prompt_cache_json(value: Any) -> str:
     return json.dumps(
         _canonical_value(value),
         ensure_ascii=False,
@@ -197,8 +197,8 @@ def canonicalPromptCacheJson(value: Any) -> str:
     )
 
 
-def hashPromptCacheValue(domain: str, value: Any) -> str:
-    payload = f"agent-core:prompt-cache:{domain}:v1\0{canonicalPromptCacheJson(value)}"
+def hash_prompt_cache_value(domain: str, value: Any) -> str:
+    payload = f"agent-core:prompt-cache:{domain}:v1\0{canonical_prompt_cache_json(value)}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 

@@ -4,10 +4,10 @@ from tests.support.agent_core_case import *
 
 from agent_core.providers.anthropic.payloads import (
     _normalize_anthropic_tool_definition,
-    normalizeAnthropicContentBlocks,
+    normalize_anthropic_content_blocks,
 )
-from agent_core.providers.anthropic.sse import normalizeAnthropicSseResponse
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.anthropic.sse import normalize_anthropic_sse_response
+from agent_core.providers.turn_session import create_provider_turn_session
 from agent_core_harness.fake_providers.server import FakeProviderHttpServer
 
 
@@ -73,7 +73,7 @@ def _messages_sse(content_events, stop_reason="end_turn"):
 
 class ThinkingRoundTripTests(unittest.TestCase):
     def test_thinking_blocks_survive_payload_normalization(self):
-        blocks = normalizeAnthropicContentBlocks(
+        blocks = normalize_anthropic_content_blocks(
             [
                 {"type": "thinking", "thinking": "chain", "signature": "sig=="},
                 {"type": "redacted_thinking", "data": "opaque=="},
@@ -90,13 +90,13 @@ class ThinkingRoundTripTests(unittest.TestCase):
         )
 
     def test_signatureless_thinking_still_round_trips(self):
-        blocks = normalizeAnthropicContentBlocks(
+        blocks = normalize_anthropic_content_blocks(
             [{"type": "thinking", "thinking": "compat backend"}]
         )
         self.assertEqual(blocks, [{"type": "thinking", "thinking": "compat backend"}])
 
     def test_internal_keys_are_stripped_from_passthrough_blocks(self):
-        blocks = normalizeAnthropicContentBlocks(
+        blocks = normalize_anthropic_content_blocks(
             [
                 {
                     "type": "server_tool_use",
@@ -123,7 +123,7 @@ class ThinkingRoundTripTests(unittest.TestCase):
         server, requests = _server()
         try:
             run(
-                core.sendAnthropicMessagesRequest(
+                core.send_anthropic_messages_request(
                     config=_config(server),
                     request=_request(
                         messages=[
@@ -197,7 +197,7 @@ class ToolDefinitionPassthroughTests(unittest.TestCase):
         server, requests = _server()
         try:
             run(
-                core.sendAnthropicMessagesRequest(
+                core.send_anthropic_messages_request(
                     config=_config(server),
                     request=_request(
                         tools=[
@@ -307,7 +307,7 @@ class ServerBlockPreservationTests(unittest.TestCase):
                 {"type": "content_block_stop", "index": 4},
             ]
         )
-        response = normalizeAnthropicSseResponse(
+        response = normalize_anthropic_sse_response(
             raw, {"model": "claude-sonnet-4-6"}, {}, attempt=1
         )
         types = [block["type"] for block in response["content"]]
@@ -353,7 +353,7 @@ class RetryAfterCaptureTests(unittest.TestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         config=_config(server),
                         request=_request(),
                         runtime={},
@@ -414,7 +414,7 @@ class SocketLifetimeTests(unittest.TestCase):
                 "emitEvent": lambda *_: None,
                 "streamProviderMessages": True,
             }
-            turn = createProviderTurnSession(
+            turn = create_provider_turn_session(
                 logical_turn_id="contract-lifetime",
                 session={"id": "contract-lifetime", "provider": "anthropic"},
                 config=config,
@@ -422,7 +422,7 @@ class SocketLifetimeTests(unittest.TestCase):
                 model="claude-sonnet-4-6",
             )
             try:
-                return await core.sendAnthropicMessagesRequest(
+                return await core.send_anthropic_messages_request(
                     config=config,
                     request=_request(),
                     runtime=runtime,

@@ -374,7 +374,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "test",
                         "mode": "responses",
@@ -433,7 +433,7 @@ class Package35CompactionLivenessTests(AgentCoreTestCase):
             coalesceIntervalMs=0,
         )
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 {
                     "token": "test",
                     "mode": "responses",

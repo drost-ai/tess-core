@@ -49,8 +49,8 @@ class ContextLimitFallbackClient:
     async def complete(self, args: dict[str, Any]) -> dict[str, Any]:
         self.calls.append(_client_call_summary(args))
         if len(self.calls) == 1:
-            raise self.core.createProviderRequestError(
-                self.core.createProviderFailureRecord(
+            raise self.core.create_provider_request_error(
+                self.core.create_provider_failure_record(
                     {
                         "provider": "openai",
                         "providerLabel": "OpenAI",

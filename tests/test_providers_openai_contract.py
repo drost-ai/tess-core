@@ -3,7 +3,7 @@ from __future__ import annotations
 from tests.support.agent_core_case import *
 
 from agent_core.agent.provider_turn import isEmptyAssistantResponse
-from agent_core.providers.openai.params import isCodexBaseUrl
+from agent_core.providers.openai.params import is_codex_base_url
 from agent_core.providers.openai.transport import _infer_openai_responses_mode
 from agent_core_harness.fake_providers.server import (
     FakeProviderHttpServer,
@@ -33,7 +33,7 @@ class ResponseIncompleteTests(unittest.TestCase):
         }
         server, _requests = _server(script)
         try:
-            return run(core.sendOpenAiResponsesRequest(_args(server)))
+            return run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
 
@@ -153,7 +153,7 @@ class ResponseIncompleteTests(unittest.TestCase):
         server, _requests = _server(script)
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
-                run(core.sendOpenAiResponsesRequest(_args(server)))
+                run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(ctx.exception.record["category"], "protocol")
@@ -207,7 +207,7 @@ class TrailingEventTests(unittest.TestCase):
         }
         server, _requests = _server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_args(server)))
+            response = run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "done"}])
@@ -244,7 +244,7 @@ class TrailingEventTests(unittest.TestCase):
         server, _requests = _server(script)
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
-                run(core.sendOpenAiResponsesRequest(_args(server)))
+                run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(ctx.exception.record["category"], "protocol")
@@ -263,7 +263,7 @@ class ChatInBandErrorTests(unittest.TestCase):
         server, _requests = _server(script)
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
-                run(core.sendOpenAiChatCompletionsRequest(_args(server)))
+                run(core.send_openai_chat_completions_request(_args(server)))
         finally:
             server.close()
         return ctx.exception.record
@@ -349,7 +349,7 @@ class RefusalSurfacingTests(unittest.TestCase):
         }
         server, _requests = _server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_args(server)))
+            response = run(core.send_openai_responses_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["stopReason"], "refusal")
@@ -395,7 +395,7 @@ class RefusalSurfacingTests(unittest.TestCase):
         }
         server, _requests = _server(script)
         try:
-            response = run(core.sendOpenAiChatCompletionsRequest(_args(server)))
+            response = run(core.send_openai_chat_completions_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["stopReason"], "refusal")
@@ -407,11 +407,11 @@ class RefusalSurfacingTests(unittest.TestCase):
 
 class CodexDefaultTrapTests(unittest.TestCase):
     def test_no_base_url_is_not_codex(self):
-        self.assertFalse(isCodexBaseUrl(None))
-        self.assertFalse(isCodexBaseUrl(""))
-        self.assertFalse(isCodexBaseUrl("   "))
-        self.assertTrue(isCodexBaseUrl("https://chatgpt.com/backend-api/codex"))
-        self.assertTrue(isCodexBaseUrl("https://chatgpt.com/backend-api/codex/"))
+        self.assertFalse(is_codex_base_url(None))
+        self.assertFalse(is_codex_base_url(""))
+        self.assertFalse(is_codex_base_url("   "))
+        self.assertTrue(is_codex_base_url("https://chatgpt.com/backend-api/codex"))
+        self.assertTrue(is_codex_base_url("https://chatgpt.com/backend-api/codex/"))
 
     def test_mode_inference_defaults_to_responses(self):
         self.assertEqual(_infer_openai_responses_mode(None), "responses")

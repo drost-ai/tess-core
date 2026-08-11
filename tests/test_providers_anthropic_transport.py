@@ -32,7 +32,7 @@ class AnthropicProviderTransportTests(AgentCoreTestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         {
                             "config": {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}},
                             "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -52,8 +52,8 @@ class AnthropicProviderTransportTests(AgentCoreTestCase):
             server.server_close()
 
     def test_anthropic_http_retry_and_non_retry_classification(self):
-        original_delay = anthropic_module.request.providerRetryDelayMs
-        anthropic_module.request.providerRetryDelayMs = lambda _attempt, *_a, **_kw: 0
+        original_delay = anthropic_module.request.anthropic_retry_delay_ms
+        anthropic_module.request.anthropic_retry_delay_ms = lambda _attempt, *_a, **_kw: 0
         retry_calls = {"count": 0, "accept": None, "payload": None}
 
         class RetryHandler(http.server.BaseHTTPRequestHandler):
@@ -87,7 +87,7 @@ class AnthropicProviderTransportTests(AgentCoreTestCase):
             events = []
             request = {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "hello"}], "tools": []}
             config = {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{retry_server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}}
-            response = run(core.sendAnthropicMessagesRequest({"config": config, "request": request, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}, "maxAttempts": 2}))
+            response = run(core.send_anthropic_messages_request({"config": config, "request": request, "runtime": {"emitEvent": lambda event, data: events.append((event, data))}, "maxAttempts": 2}))
             self.assertEqual(response["content"], [{"type": "text", "text": "ok"}])
             self.assertEqual(retry_calls["count"], 2)
             self.assertEqual(retry_calls["accept"], "application/json")
@@ -120,10 +120,10 @@ class AnthropicProviderTransportTests(AgentCoreTestCase):
             request = {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "hello"}], "tools": []}
             config = {"provider": "anthropic", "anthropicBaseUrl": f"http://127.0.0.1:{auth_server.server_address[1]}/v1", "apiKey": "test-key", "customHeaders": {}}
             with self.assertRaises(core.ProviderRequestError) as auth_ctx:
-                run(core.sendAnthropicMessagesRequest({"config": config, "request": request, "runtime": {}, "maxAttempts": 2}))
+                run(core.send_anthropic_messages_request({"config": config, "request": request, "runtime": {}, "maxAttempts": 2}))
             self.assertEqual(auth_ctx.exception.record["category"], "auth")
             self.assertEqual(auth_calls["count"], 1)
         finally:
             auth_server.shutdown()
             auth_server.server_close()
-            anthropic_module.request.providerRetryDelayMs = original_delay
+            anthropic_module.request.anthropic_retry_delay_ms = original_delay

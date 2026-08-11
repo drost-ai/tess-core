@@ -118,7 +118,7 @@ class Package43AgentLoopSafetyTests(AgentCoreTestCase):
                             }
                         ],
                     }
-                return await testing.sendOpenAiResponsesRequest(
+                return await testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=request,

@@ -9,14 +9,14 @@ from typing import Any
 
 from .._utils import maybe_await, now_iso
 from .partial_output_state import (
-    partialOutputRecoveryPolicy,
-    recoverAbandonedPartialOutput,
+    partial_output_recovery_policy,
+    recover_abandoned_partial_output,
 )
 from .partial_output_state import (
-    assertPartialOutputStateStore,
-    clonePartialOutputState,
-    partialOutputRuntimeAuthority,
-    stateStoreValue,
+    assert_partial_output_state_store,
+    clone_partial_output_state,
+    partial_output_runtime_authority,
+    state_store_value,
 )
 
 PARTIAL_OUTPUT_SINK_SCHEMA_VERSION = 2
@@ -38,14 +38,14 @@ class PartialOutputDelivery:
         self.session_id = session_id
         self.sink = runtime.get("partialOutputSink")
         self.state_store = runtime.get("partialOutputStateStore")
-        assertPartialOutputStateStore(self.state_store)
-        self.mode = partialOutputMode(runtime)
-        self.recovery_policy = partialOutputRecoveryPolicy(runtime)
+        assert_partial_output_state_store(self.state_store)
+        self.mode = partial_output_mode(runtime)
+        self.recovery_policy = partial_output_recovery_policy(runtime)
         self.timeout_ms = _positive_timeout(
             runtime.get("partialOutputAckTimeoutMs"),
             int(provider_knob("provider.partial_output_ack_timeout_ms")),
         )
-        self.runtime_authority = partialOutputRuntimeAuthority(runtime)
+        self.runtime_authority = partial_output_runtime_authority(runtime)
         self.active_generation: int | None = None
         self._terminal_generation: int | None = None
         self._state: dict[str, Any] | None = None
@@ -324,7 +324,7 @@ class PartialOutputDelivery:
         }
 
     async def _recover_abandoned(self) -> dict[str, Any]:
-        return await recoverAbandonedPartialOutput(
+        return await recover_abandoned_partial_output(
             state_store=self.state_store,
             sink=self.sink,
             recovery_policy=self.recovery_policy,
@@ -371,15 +371,15 @@ class PartialOutputDelivery:
         try:
             return bool(
                 await maybe_await(
-                    stateStoreValue(self.state_store, "save")(
-                        clonePartialOutputState(self._state)
+                    state_store_value(self.state_store, "save")(
+                        clone_partial_output_state(self._state)
                     )
                 )
             )
         except Exception:
             return False
 
-def assertPartialOutputSink(value: Any) -> None:
+def assert_partial_output_sink(value: Any) -> None:
     if value is None:
         return
     version = _sink_value(value, "schemaVersion")
@@ -391,15 +391,15 @@ def assertPartialOutputSink(value: Any) -> None:
     ):
         raise ValueError("Partial output sink is incomplete or incompatible.")
 
-def partialOutputMode(runtime: Mapping[str, Any]) -> str:
+def partial_output_mode(runtime: Mapping[str, Any]) -> str:
     sink = runtime.get("partialOutputSink")
     if sink is not None:
-        assertPartialOutputSink(sink)
+        assert_partial_output_sink(sink)
         return str(_sink_value(sink, "mode"))
     return "append_only" if runtime.get("includePartialMessages") else "buffered"
 
 
-def interruptedPreviewReceipt(
+def interrupted_preview_receipt(
     *,
     logical_call_id: str,
     generation: int,

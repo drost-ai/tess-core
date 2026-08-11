@@ -199,9 +199,9 @@ async def resolveConfig(options: dict[str, Any] | None, cwd: str) -> ResolvedCon
     sources = _parse_setting_sources(options.get("settingSources"))
     merged_settings = await _load_merged_settings(sources, cwd, options.get("settings"))
     configureKnobs(merged_settings.get("knobs"))
-    from ..providers.token_budget import configureModelLimitRules
+    from ..providers.token_budget import configure_model_limit_rules
 
-    configureModelLimitRules(merged_settings.get("modelLimitRules"))
+    configure_model_limit_rules(merged_settings.get("modelLimitRules"))
     auth = await load_auth()
     settings_env = merged_settings.get("env") or {}
     helper_auth_value = await _resolve_api_key_from_helper(merged_settings)

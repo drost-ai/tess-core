@@ -10,7 +10,7 @@ from ..payloads.token_estimation import (
     estimateTextTokens,
     stringifyValueForTokenEstimate,
 )
-from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams
+from ..providers.openai import build_chat_completions_create_params, build_responses_create_params
 
 
 def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 0) -> int:
@@ -28,7 +28,7 @@ def _estimate_request_tokens(request: dict[str, Any], image_input_tokens: int = 
 
 def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_input_tokens: int = 0) -> int:
     if mode == "chat_completions":
-        params = buildChatCompletionsCreateParams(request)
+        params = build_chat_completions_create_params(request)
         total = 0
         for message in params.get("messages") or []:
             total += estimateTextTokens(stringifyValueForTokenEstimate(message))
@@ -40,7 +40,7 @@ def _estimate_openai_request_tokens(request: dict[str, Any], mode: str, image_in
             total += estimateTextTokens(json.dumps(params["stream_options"], ensure_ascii=False))
         return total + image_input_tokens
     params = _sanitize_openai_count_params(
-        buildResponsesCreateParams({"isCodexBackend": mode == "codex", "request": request})
+        build_responses_create_params({"isCodexBackend": mode == "codex", "request": request})
     )
     total = 0
     if isinstance(params.get("instructions"), str):

@@ -5,25 +5,25 @@ The facade re-exports exactly the public names its submodules define.
 from __future__ import annotations
 
 from .async_request import (
-    readAnthropicSseResponseAsync,
-    sendAnthropicMessagesStreamingViaAsyncTransport,
-    sendAnthropicMessagesViaAsyncTransport,
+    read_anthropic_sse_response_async,
+    send_anthropic_messages_streaming_via_async_transport,
+    send_anthropic_messages_via_async_transport,
 )
 from .payloads import (
     DEFAULT_API_KEY_BETAS,
     DEFAULT_OAUTH_BETAS,
-    anthropicCacheBreakpointMessageIndices,
-    buildAnthropicBetaHeader,
-    buildAnthropicCountTokensPayload,
-    buildAnthropicHeaders,
-    buildAnthropicMessagesEnvelope,
-    buildAnthropicMessagesPayload,
-    normalizeAnthropicContentBlocks,
-    planAnthropicCacheBreakpoints,
-    resolveAnthropicCountTokensUrl,
-    resolveAnthropicMessagesUrl,
+    anthropic_cache_breakpoint_message_indices,
+    build_anthropic_beta_header,
+    build_anthropic_count_tokens_payload,
+    build_anthropic_headers,
+    build_anthropic_messages_envelope,
+    build_anthropic_messages_payload,
+    normalize_anthropic_content_blocks,
+    plan_anthropic_cache_breakpoints,
+    resolve_anthropic_count_tokens_url,
+    resolve_anthropic_messages_url,
 )
-from .request import sendAnthropicMessagesRequest
+from .request import send_anthropic_messages_request
 from .shared import (
     ANTHROPIC_ABORT_POLL_INTERVAL_MS,
     MESSAGES_API_URL,
@@ -31,9 +31,9 @@ from .shared import (
 )
 from .sse import (
     AnthropicSseAccumulator,
-    normalizeAnthropicSseResponse,
-    normalizeProviderBlocks,
-    parseAnthropicSseEvents,
+    normalize_anthropic_sse_response,
+    normalize_provider_blocks,
+    parse_anthropic_sse_events,
 )
 from .transport import applyAnthropicUsageSnapshot
 
@@ -44,22 +44,22 @@ __all__ = [
     "DEFAULT_OAUTH_BETAS",
     "MESSAGES_API_URL",
     "MESSAGES_COUNT_TOKENS_API_URL",
-    "anthropicCacheBreakpointMessageIndices",
+    "anthropic_cache_breakpoint_message_indices",
     "applyAnthropicUsageSnapshot",
-    "buildAnthropicBetaHeader",
-    "buildAnthropicCountTokensPayload",
-    "buildAnthropicHeaders",
-    "buildAnthropicMessagesEnvelope",
-    "buildAnthropicMessagesPayload",
-    "normalizeAnthropicContentBlocks",
-    "normalizeAnthropicSseResponse",
-    "normalizeProviderBlocks",
-    "parseAnthropicSseEvents",
-    "planAnthropicCacheBreakpoints",
-    "readAnthropicSseResponseAsync",
-    "resolveAnthropicCountTokensUrl",
-    "resolveAnthropicMessagesUrl",
-    "sendAnthropicMessagesRequest",
-    "sendAnthropicMessagesStreamingViaAsyncTransport",
-    "sendAnthropicMessagesViaAsyncTransport",
+    "build_anthropic_beta_header",
+    "build_anthropic_count_tokens_payload",
+    "build_anthropic_headers",
+    "build_anthropic_messages_envelope",
+    "build_anthropic_messages_payload",
+    "normalize_anthropic_content_blocks",
+    "normalize_anthropic_sse_response",
+    "normalize_provider_blocks",
+    "parse_anthropic_sse_events",
+    "plan_anthropic_cache_breakpoints",
+    "read_anthropic_sse_response_async",
+    "resolve_anthropic_count_tokens_url",
+    "resolve_anthropic_messages_url",
+    "send_anthropic_messages_request",
+    "send_anthropic_messages_streaming_via_async_transport",
+    "send_anthropic_messages_via_async_transport",
 ]

@@ -4,11 +4,11 @@ import hashlib
 import uuid
 from typing import Any
 
-from ..partial_output import PartialOutputDelivery, interruptedPreviewReceipt
+from ..partial_output import PartialOutputDelivery, interrupted_preview_receipt
 from ..errors import (
     ProviderRequestError,
-    createProviderFailureRecord,
-    createProviderRequestError,
+    create_provider_failure_record,
+    create_provider_request_error,
 )
 from .transport import _emit
 
@@ -33,7 +33,7 @@ def attach_openai_failure_lineage(
         {
             "logicalCallId": logical_call_id,
             "generation": generation,
-            "partialOutputMode": delivery_mode,
+            "partial_output_mode": delivery_mode,
             "responseId": _bounded_identifier(response_id),
             "sequenceNumber": _sequence_number(sequence_number),
         }
@@ -100,8 +100,8 @@ def sink_failure(
     operation: str,
     response_id: str | None = None,
 ) -> ProviderRequestError:
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider="openai",
             providerLabel=provider_label,
             phase=phase,
@@ -115,7 +115,7 @@ def sink_failure(
             operation=operation,
             logicalCallId=logical_call_id,
             generation=attempt,
-            partialOutputMode=delivery_mode,
+            partial_output_mode=delivery_mode,
             responseId=_bounded_identifier(response_id),
             recoveryFailure=reason,
         )
@@ -140,7 +140,7 @@ def attach_interrupted_preview(
     acknowledged: bool,
     reason: str,
 ) -> ProviderRequestError:
-    failure.record["interruptedPreview"] = interruptedPreviewReceipt(
+    failure.record["interruptedPreview"] = interrupted_preview_receipt(
         logical_call_id=logical_call_id,
         generation=generation,
         mode=delivery_mode,

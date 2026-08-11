@@ -5,7 +5,7 @@ from tests.support.agent_core_case import AgentCoreTestCase
 from agent_core.agent.turn_session import (
     resolve_effective_provider_turn_binding,
 )
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 from agent_core.providers.openai_turn_session import OpenAiProviderTurnSession
 
 
@@ -45,7 +45,7 @@ class Package36ProviderBindingTests(AgentCoreTestCase):
                 "modelOverride": "gpt-5.6-sol",
             }
         )
-        turn_session = createProviderTurnSession(
+        turn_session = create_provider_turn_session(
             logical_turn_id="turn-provider-selection",
             session=session,
             config=bound["config"],

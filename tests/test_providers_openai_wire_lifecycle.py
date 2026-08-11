@@ -7,7 +7,7 @@ from agent_core.providers.openai.transport import (
     _create_openai_client,
 )
 from agent_core.providers.openai._wire import OpenAiWireClient
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 from agent_core.providers.watchdog import AbortSignal
 from agent_core_harness.fake_providers.server import (
     openaiChatSseBody,
@@ -61,7 +61,7 @@ class OpenAiWireAbortTests(unittest.TestCase):
             abort_task = asyncio.create_task(abort_soon())
             try:
                 with self.assertRaises(core.ProviderRequestError) as ctx:
-                    await core.sendOpenAiResponsesRequest(
+                    await core.send_openai_responses_request(
                         _args(server, runtime=runtime)
                     )
             finally:
@@ -113,7 +113,7 @@ class OpenAiWireClientSelectionTests(unittest.TestCase):
 
     def test_factory_identity_uses_object_not_id(self):
         async def exercise():
-            turn = createProviderTurnSession(
+            turn = create_provider_turn_session(
                 logical_turn_id="wire-identity",
                 session={"id": "wire-identity", "provider": "openai"},
                 config={"provider": "openai"},
@@ -156,7 +156,7 @@ class OpenAiWireClientSelectionTests(unittest.TestCase):
         server, requests = _server(script)
         try:
             run(
-                core.sendOpenAiResponsesRequest(
+                core.send_openai_responses_request(
                     _args(
                         server,
                         requestOptions={
@@ -267,7 +267,7 @@ class OpenAiWireChatStreamShapeTests(unittest.TestCase):
         }
         server, _requests = _server(script)
         try:
-            response = run(core.sendOpenAiChatCompletionsRequest(_args(server)))
+            response = run(core.send_openai_chat_completions_request(_args(server)))
         finally:
             server.close()
         self.assertEqual(response["stopReason"], "tool_calls")

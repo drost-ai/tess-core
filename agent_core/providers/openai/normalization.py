@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from ..._utils import get_value
-from ..prompt_cache import normalizeCacheUsageFields
+from ..prompt_cache import normalize_cache_usage_fields
 from .shared import DEFAULT_CODEX_INSTRUCTIONS
 from typing import Any
 
@@ -39,14 +39,14 @@ def _apply_openai_usage(usage: dict[str, Any], next_usage: Any) -> None:
         usage["input_tokens"] = get_value(next_usage, "input_tokens")
     if get_value(next_usage, "output_tokens") is not None:
         usage["output_tokens"] = get_value(next_usage, "output_tokens")
-    normalizeCacheUsageFields(usage, next_usage)
+    normalize_cache_usage_fields(usage, next_usage)
 
 def _apply_chat_completion_usage(usage: dict[str, Any], next_usage: Any) -> None:
     if get_value(next_usage, "prompt_tokens") is not None:
         usage["input_tokens"] = get_value(next_usage, "prompt_tokens")
     if get_value(next_usage, "completion_tokens") is not None:
         usage["output_tokens"] = get_value(next_usage, "completion_tokens")
-    normalizeCacheUsageFields(usage, next_usage)
+    normalize_cache_usage_fields(usage, next_usage)
 
 def _emit_pending_chat_tool_calls(blocks: list[dict[str, Any]], pending: dict[int, dict[str, str]], emitted_ids: set[str], reasoning: str = "") -> bool:
     assembled: list[dict[str, Any]] = []

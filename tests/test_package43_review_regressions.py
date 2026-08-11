@@ -7,8 +7,8 @@ from typing import Any
 
 from agent_core.providers.partial_output import PartialOutputDelivery
 from agent_core.providers.partial_output_state import (
-    createPartialOutputStateStore,
-    finalizePartialOutputState,
+    create_partial_output_state_store,
+    finalize_partial_output_state,
 )
 from tests.support.agent_core_case import AgentCoreTestCase, AsyncChunks, core, run, testing
 
@@ -109,7 +109,7 @@ def _completed(text: str) -> AsyncChunks:
 
 class Package43ReviewRegressionTests(AgentCoreTestCase):
     def test_official_api_connection_error_is_retryable_transport(self) -> None:
-        failure = core.normalizeUnknownProviderFailure(
+        failure = core.normalize_unknown_provider_failure(
             error=_OpenAiConnectionError("Connection error."),
             provider="openai",
             providerLabel="OpenAI/Codex",
@@ -138,7 +138,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
             },
         }
 
-        failure = core.normalizeUnknownProviderFailure(
+        failure = core.normalize_unknown_provider_failure(
             error=error,
             provider="openai",
             providerLabel="OpenAI/Codex",
@@ -180,7 +180,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
             return _completed("recovered")
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request=_request(),
@@ -228,7 +228,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
             return _DeltaThenHang("tentative") if calls == 1 else _completed("recovered")
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request=_request(),
@@ -275,7 +275,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
             )
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request=_request(),
@@ -311,7 +311,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request=_request(),
@@ -340,7 +340,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
     def test_durable_state_requires_recovery_ack_after_abandoned_preview(self) -> None:
         root, _home, _workspace, previous = self.temp_context()
         try:
-            store = createPartialOutputStateStore("session-package43-review")
+            store = create_partial_output_state_store("session-package43-review")
             first_sink = _Sink()
 
             async def abandon() -> None:
@@ -419,7 +419,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
         root, _home, _workspace, previous = self.temp_context()
         try:
             session_id = "session-package43-ack-gap"
-            store = createPartialOutputStateStore(session_id)
+            store = create_partial_output_state_store(session_id)
             run(
                 store.save(
                     {
@@ -458,7 +458,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
         root, _home, _workspace, previous = self.temp_context()
         try:
             session_id = "session-package43-transcript-fence"
-            store = createPartialOutputStateStore(session_id)
+            store = create_partial_output_state_store(session_id)
             sink = _Sink()
 
             async def stage() -> None:
@@ -492,7 +492,7 @@ class Package43ReviewRegressionTests(AgentCoreTestCase):
                 "assistantTextHash": staged["assistantTextHash"],
                 "reasoningTextHash": staged["reasoningTextHash"],
             }
-            self.assertTrue(run(finalizePartialOutputState(store, receipt)))
+            self.assertTrue(run(finalize_partial_output_state(store, receipt)))
             committed = run(store.load())
             self.assertEqual(committed["terminalState"], "committed")
         finally:

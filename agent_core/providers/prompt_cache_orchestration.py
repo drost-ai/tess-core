@@ -7,42 +7,42 @@ from ..runtime.events.emit import safe_emit
 import hashlib
 import json
 from typing import Any
-from .prompt_cache import resolvePromptCachePolicy
-from .prompt_cache_state import markPromptCacheEvictionIntent
+from .prompt_cache import resolve_prompt_cache_policy
+from .prompt_cache_state import mark_prompt_cache_eviction_intent
 from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths
 from ..runtime.events.emit import safe_emit as _emit
 import copy
 from .prompt_cache_state import (
-    commitPromptCacheObservation,
-    createPromptCacheDispatchOrder,
-    readPromptCacheState,
+    commit_prompt_cache_observation,
+    create_prompt_cache_dispatch_order,
+    read_prompt_cache_state,
 )
-from .usage_costs import cacheCreationUsageDetail
+from .usage_costs import cache_creation_usage_detail
 
 
-async def loadPreviousPromptCacheState(args: dict[str, Any]) -> dict[str, Any] | None:
-    policy = resolvePromptCachePolicy(config=args.get("config") or {})
+async def load_previous_prompt_cache_state(args: dict[str, Any]) -> dict[str, Any] | None:
+    policy = resolve_prompt_cache_policy(config=args.get("config") or {})
     session = args.get("session") or {}
     provider = session.get("provider") or (args.get("config") or {}).get("provider")
     if provider != "anthropic" or not policy.get("enabled"):
         return None
-    return (await readPromptCacheState(
+    return (await read_prompt_cache_state(
         {"sessionId": session.get("id"), "paths": args.get("paths")}
     )).get("state")
 
 
-async def createPromptCacheTurnContext(args: dict[str, Any]) -> dict[str, Any]:
+async def create_prompt_cache_turn_context(args: dict[str, Any]) -> dict[str, Any]:
     return {
-        "previousState": await loadPreviousPromptCacheState(args),
+        "previousState": await load_previous_prompt_cache_state(args),
         "compactionsBefore": int((args.get("session") or {}).get("metadata", {}).get("compactions") or 0),
     }
 
 
-def attachPreparedPromptCacheContext(args: dict[str, Any]) -> dict[str, Any]:
+def attach_prepared_prompt_cache_context(args: dict[str, Any]) -> dict[str, Any]:
     prepared = args["prepared"]
     continuity = prepared.get("continuity") or {}
     session = args["session"]
-    preparation = resolvePromptCachePreparation(
+    preparation = resolve_prompt_cache_preparation(
         {
             "reactiveAttempt": args.get("reactiveAttempt"),
             "durableCompactionApplied": int(session.get("metadata", {}).get("compactions") or 0) > args["turnContext"]["compactionsBefore"],
@@ -50,7 +50,7 @@ def attachPreparedPromptCacheContext(args: dict[str, Any]) -> dict[str, Any]:
             "repaired": bool((args.get("repair") or {}).get("repaired") or (continuity.get("protocolRepair") or {}).get("changed")),
         }
     )
-    prepared["request"] = attachPromptCacheDispatchContext(
+    prepared["request"] = attach_prompt_cache_dispatch_context(
         {
             "request": prepared["request"],
             "config": args["config"],
@@ -66,12 +66,12 @@ def attachPreparedPromptCacheContext(args: dict[str, Any]) -> dict[str, Any]:
     return prepared
 
 
-def attachPromptCacheDispatchContext(args: dict[str, Any]) -> dict[str, Any]:
+def attach_prompt_cache_dispatch_context(args: dict[str, Any]) -> dict[str, Any]:
     request = args["request"]
     config = args.get("config") or {}
     session = args.get("session") or {}
     provider = session.get("provider") or config.get("provider")
-    policy = resolvePromptCachePolicy(config=config, request=request)
+    policy = resolve_prompt_cache_policy(config=config, request=request)
     if provider != "anthropic" or not policy.get("enabled"):
         return request
     previous = args.get("previousState")
@@ -83,7 +83,7 @@ def attachPromptCacheDispatchContext(args: dict[str, Any]) -> dict[str, Any]:
     policy["dispatchContext"] = {
         "sessionId": session.get("id"),
         "paths": args.get("paths"),
-        "dispatchOrder": createPromptCacheDispatchOrder(
+        "dispatchOrder": create_prompt_cache_dispatch_order(
             {
                 "runtimeGeneration": binding.get("generation"),
                 "messageCount": len(request.get("messages") or []),
@@ -100,7 +100,7 @@ def attachPromptCacheDispatchContext(args: dict[str, Any]) -> dict[str, Any]:
     return {**request, "promptCache": policy}
 
 
-def resolvePromptCachePreparation(args: dict[str, Any]) -> str:
+def resolve_prompt_cache_preparation(args: dict[str, Any]) -> str:
     if args.get("repaired"):
         return "repaired"
     if int(args.get("reactiveAttempt") or 0) > 0:
@@ -110,13 +110,13 @@ def resolvePromptCachePreparation(args: dict[str, Any]) -> str:
     return "normal"
 
 
-async def commitProviderPromptCacheObservation(
+async def commit_provider_prompt_cache_observation(
     response: dict[str, Any], runtime: dict[str, Any] | None = None
 ) -> None:
     observation = response.get("promptCache")
     if not isinstance(observation, dict):
         return
-    result = await commitPromptCacheObservation(
+    result = await commit_prompt_cache_observation(
         {**observation, "usage": response.get("usage") or {}}
     )
     if result["status"] == "unavailable":
@@ -126,7 +126,7 @@ async def commitProviderPromptCacheObservation(
             "state_status": "unavailable",
         })
         return
-    detail = cacheCreationUsageDetail(response.get("usage") or {})
+    detail = cache_creation_usage_detail(response.get("usage") or {})
     event = {
         "session_id": observation.get("sessionId"),
         "phase": "observed",
@@ -151,7 +151,7 @@ async def commitProviderPromptCacheObservation(
 _TERMINAL_SUCCESS_REASONS = {"end_turn", "stop", "completed"}
 
 
-def isPromptCacheEvictionTerminalSuccess(args: dict[str, Any]) -> bool:
+def is_prompt_cache_eviction_terminal_success(args: dict[str, Any]) -> bool:
     return bool(
         not args.get("signal")
         and not args.get("error")
@@ -159,15 +159,15 @@ def isPromptCacheEvictionTerminalSuccess(args: dict[str, Any]) -> bool:
     )
 
 
-async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) -> None:
+async def record_prompt_cache_eviction_intent_at_finalization(args: dict[str, Any]) -> None:
     session = args.get("session") or {}
     config = args.get("config") or {}
     runtime = args.get("runtime") or {}
     try:
         provider = session.get("provider") or config.get("provider")
-        if provider != "anthropic" or not isPromptCacheEvictionTerminalSuccess(args):
+        if provider != "anthropic" or not is_prompt_cache_eviction_terminal_success(args):
             return
-        policy = resolvePromptCachePolicy(config=config)
+        policy = resolve_prompt_cache_policy(config=config)
         if not policy.get("enabled") or not policy.get("evictOnComplete"):
             return
         paths = (
@@ -175,7 +175,7 @@ async def recordPromptCacheEvictionIntentAtFinalization(args: dict[str, Any]) ->
             if config.get("runtimeHome")
             else get_active_runtime_paths()
         )
-        result = await markPromptCacheEvictionIntent(
+        result = await mark_prompt_cache_eviction_intent(
             {
                 "sessionId": session.get("id"),
                 "paths": paths,

@@ -54,7 +54,7 @@ async def verifyFaultSessionIntegrity(
             error.name = "AbortError"  # type: ignore[attr-defined]
             signal.update({"aborted": True, "reason": error})
             raise error
-        record = core.createProviderFailureRecord(
+        record = core.create_provider_failure_record(
             provider=provider,
             providerLabel="Anthropic" if provider == "anthropic" else "OpenAI",
             phase="request_start" if cell["state"] in {"S0", "S1", "S2"} else "stream_read",
@@ -65,7 +65,7 @@ async def verifyFaultSessionIntegrity(
             hadToolUse=bool(actual["hadToolUse"]),
             rawMessage=f"fault-matrix {cell['id']}",
         )
-        raise core.createProviderRequestError(record)
+        raise core.create_provider_request_error(record)
 
     raised: BaseException | None = None
     result: dict[str, Any] | None = None

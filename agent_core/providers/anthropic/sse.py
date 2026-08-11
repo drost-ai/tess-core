@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 import re
 from ..errors import (
-    createProviderFailureRecord,
-    createProviderIncompleteResponseError,
-    createProviderRequestError,
+    create_provider_failure_record,
+    create_provider_incomplete_response_error,
+    create_provider_request_error,
 )
 from .transport import _apply_usage_snapshot
 from typing import Any
-from ..activity import emitProviderActivity
+from ..activity import emit_provider_activity
 
-def parseAnthropicSseEvents(raw: str) -> list[dict[str, Any]]:
+def parse_anthropic_sse_events(raw: str) -> list[dict[str, Any]]:
     normalized = raw.replace("\r\n", "\n")
     events = []
     for frame in normalized.split("\n\n"):
@@ -55,7 +55,7 @@ class AnthropicSseAccumulator:
             for block in self.blocks
             if block and block.get("type") in {"text", "thinking"}
         )
-        return createProviderIncompleteResponseError(
+        return create_provider_incomplete_response_error(
             provider="anthropic",
             providerLabel="Anthropic",
             mode="messages",
@@ -92,15 +92,15 @@ class AnthropicSseAccumulator:
         event_type = payload.get("type") or raw_event.get("event")
         if not event_type or event_type == "ping":
             return
-        emitProviderActivity(self.runtime, "stream_frame", attempt=self.attempt)
+        emit_provider_activity(self.runtime, "stream_frame", attempt=self.attempt)
         if self.runtime.get("streamProviderMessages"):
             self.runtime.get("emitEvent", lambda *_: None)("provider.stream_event", {"stream_event": event_type, "model": self.model, "payload": payload})
         if event_type == "error":
             error = payload.get("error") or {}
             combined = f"{error.get('type') or ''} {error.get('message') or ''}".lower() if isinstance(error, dict) else json.dumps(payload).lower()
             category = "rate_limit" if re.search(r"rate|limit|throttle", combined) else "quota" if re.search(r"quota|billing|credit", combined) else "auth" if re.search(r"auth|unauthor|forbidden", combined) else "server"
-            raise createProviderRequestError(
-                createProviderFailureRecord(
+            raise create_provider_request_error(
+                create_provider_failure_record(
                     provider="anthropic",
                     providerLabel="Anthropic",
                     phase="stream_read",
@@ -115,7 +115,7 @@ class AnthropicSseAccumulator:
                 )
             )
         if event_type == "message_start":
-            emitProviderActivity(self.runtime, "response_headers", attempt=self.attempt)
+            emit_provider_activity(self.runtime, "response_headers", attempt=self.attempt)
             message = payload.get("message") or {}
             if isinstance(message.get("id"), str):
                 self.response_id = message["id"]
@@ -140,7 +140,7 @@ class AnthropicSseAccumulator:
             )
             self.open_block_indexes.add(index)
             if self.blocks[index].get("type") == "tool_use":
-                emitProviderActivity(self.runtime, "tool_boundary", attempt=self.attempt)
+                emit_provider_activity(self.runtime, "tool_boundary", attempt=self.attempt)
                 self.had_tool_use = True
             if self.blocks[index].get("type") == "text" and self.blocks[index].get("text"):
                 self.had_assistant_output = True
@@ -162,14 +162,14 @@ class AnthropicSseAccumulator:
                 text_delta = delta.get("text") if isinstance(delta.get("text"), str) else ""
                 block["text"] += text_delta
                 if text_delta:
-                    emitProviderActivity(self.runtime, "output_delta", attempt=self.attempt)
+                    emit_provider_activity(self.runtime, "output_delta", attempt=self.attempt)
                     self.had_assistant_output = True
                 if self.runtime.get("includePartialMessages") and text_delta:
                     self.runtime.get("emitEvent", lambda *_: None)("message.assistant.partial", {"model": self.model, "text_delta": text_delta, "text": "".join(item.get("text", "") for item in self.blocks if item and item.get("type") == "text")})
             elif block["type"] == "thinking" and delta.get("type") == "thinking_delta":
                 thinking_delta = delta.get("thinking") if isinstance(delta.get("thinking"), str) else ""
                 if thinking_delta:
-                    emitProviderActivity(self.runtime, "reasoning", attempt=self.attempt)
+                    emit_provider_activity(self.runtime, "reasoning", attempt=self.attempt)
                 block["thinking"] += thinking_delta
                 if self.runtime.get("includePartialMessages") and thinking_delta:
                     self.runtime.get("emitEvent", lambda *_: None)(
@@ -243,9 +243,9 @@ class AnthropicSseAccumulator:
         }
 
 
-def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: dict[str, Any] | None = None, attempt: int = 1) -> dict[str, Any]:
+def normalize_anthropic_sse_response(raw: str, request: dict[str, Any], runtime: dict[str, Any] | None = None, attempt: int = 1) -> dict[str, Any]:
     accumulator = AnthropicSseAccumulator(request, runtime, attempt)
-    for raw_event in parseAnthropicSseEvents(raw):
+    for raw_event in parse_anthropic_sse_events(raw):
         accumulator.process_raw_event(raw_event)
     response = accumulator.finalize()
     if not (runtime or {}).get("_capturePromptCacheMetadata"):
@@ -254,7 +254,7 @@ def normalizeAnthropicSseResponse(raw: str, request: dict[str, Any], runtime: di
         response.pop("_anthropicDiagnostics", None)
     return response
 
-def normalizeProviderBlocks(blocks: Any) -> list[dict[str, Any]]:
+def normalize_provider_blocks(blocks: Any) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
     if not isinstance(blocks, list):
         return normalized
@@ -333,8 +333,8 @@ def _finalize_tool_block(
     block["input"] = parsed
 
 def _create_anthropic_protocol_error(rawMessage: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, streamEventType: str | None = None) -> Any:
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider="anthropic",
             providerLabel="Anthropic",
             phase="parse",
@@ -350,8 +350,8 @@ def _create_anthropic_protocol_error(rawMessage: str, attempt: int, hadAssistant
 
 
 def _create_anthropic_transport_error(rawMessage: str, attempt: int, hadAssistantOutput: bool, hadToolUse: bool, streamEventType: str | None = None) -> Any:
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider="anthropic",
             providerLabel="Anthropic",
             phase="stream_read",

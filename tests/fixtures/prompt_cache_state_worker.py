@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from agent_core.providers.prompt_cache_state import commitPromptCacheObservation
+from agent_core.providers.prompt_cache_state import commit_prompt_cache_observation
 from agent_core.runtime.paths import resolve_runtime_paths
 
 
@@ -22,7 +22,7 @@ async def main() -> None:
         if time.monotonic() >= deadline:
             raise TimeoutError("prompt-cache state worker barrier timed out")
         await asyncio.sleep(0.01)
-    result = await commitPromptCacheObservation(candidate)
+    result = await commit_prompt_cache_observation(candidate)
     result_path.write_text(json.dumps({"status": result["status"]}) + "\n", encoding="utf-8")
 
 

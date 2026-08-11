@@ -315,9 +315,9 @@ class ContractSyncTests(unittest.TestCase):
 
     def test_provider_failure_record_validates_strict(self) -> None:
         from agent_core.contracts import ProviderFailureRecord
-        from agent_core.providers.errors import classifyProviderHttpFailure, createProviderFailureRecord
+        from agent_core.providers.errors import classify_provider_http_failure, create_provider_failure_record
 
-        record = createProviderFailureRecord(
+        record = create_provider_failure_record(
             provider="anthropic",
             providerLabel="Anthropic",
             phase="request_start",
@@ -330,7 +330,7 @@ class ContractSyncTests(unittest.TestCase):
         )
         self.assertEqual(validate(record, ProviderFailureRecord, strict=True), [])
 
-        error = classifyProviderHttpFailure(
+        error = classify_provider_http_failure(
             provider="openai",
             providerLabel="OpenAI",
             phase="request_start",

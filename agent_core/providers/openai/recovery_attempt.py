@@ -4,10 +4,10 @@ import asyncio
 from typing import Any
 
 from ..partial_output import PartialOutputDelivery
-from ..activity import emitProviderActivity
+from ..activity import emit_provider_activity
 from ..errors import (
     ProviderRequestError,
-    normalizeUnknownProviderFailure,
+    normalize_unknown_provider_failure,
 )
 from .recovery import (
     attach_openai_failure_lineage,
@@ -17,7 +17,7 @@ from .recovery import (
     supersede_openai_generation,
 )
 from .transport import _emit, _raise_openai_cancelled
-from .shared import providerRetryDelayMs
+from .shared import openai_retry_delay_ms
 
 
 async def recover_openai_attempt(
@@ -42,7 +42,7 @@ async def recover_openai_attempt(
     sequence_number: int | None,
 ) -> tuple[ProviderRequestError, bool]:
     runtime = args.get("runtime") or {}
-    failure = normalizeUnknownProviderFailure(
+    failure = normalize_unknown_provider_failure(
         error=error,
         provider="openai",
         providerLabel=provider_label,
@@ -98,7 +98,7 @@ async def recover_openai_attempt(
                 {**failure.record, "next_generation": attempt + 1},
             )
     if can_retry:
-        delay_ms = openai_retry_delay_ms(args, attempt, failure)
+        delay_ms = _recovery_retry_delay_ms(args, attempt, failure)
         _raise_openai_cancelled(
             runtime,
             provider_label,
@@ -117,7 +117,7 @@ async def recover_openai_attempt(
                 "delay_ms": delay_ms,
             },
         )
-        emitProviderActivity(
+        emit_provider_activity(
             runtime,
             "retry_wait",
             attempt=attempt,
@@ -151,11 +151,11 @@ async def recover_openai_attempt(
     return failure, False
 
 
-def openai_retry_delay_ms(args: dict[str, Any], attempt: int, failure: Any = None) -> int:
+def _recovery_retry_delay_ms(args: dict[str, Any], attempt: int, failure: Any = None) -> int:
     override = args.get("retryDelay")
     if callable(override):
         try:
             return max(0, int(override(attempt)))
         except (TypeError, ValueError):
             pass
-    return int(providerRetryDelayMs(attempt, failure))
+    return int(openai_retry_delay_ms(attempt, failure))

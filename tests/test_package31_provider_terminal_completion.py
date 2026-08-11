@@ -38,7 +38,7 @@ def _responses_factory(events):
 
 def _send_chat(events):
     return run(
-        testing.sendOpenAiChatCompletionsRequest(
+        testing.send_openai_chat_completions_request(
             {
                 "token": "test-token",
                 "request": OPENAI_REQUEST,
@@ -52,7 +52,7 @@ def _send_chat(events):
 
 def _send_responses(events):
     return run(
-        testing.sendOpenAiResponsesRequest(
+        testing.send_openai_responses_request(
             {
                 "token": "test-token",
                 "mode": "responses",

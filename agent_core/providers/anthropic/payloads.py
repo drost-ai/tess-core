@@ -6,18 +6,18 @@ import base64
 import binascii
 import re
 from ..anthropic_cache import (
-    applyAnthropicCachePlan,
-    countAnthropicCacheControls,
-    planAnthropicCache,
-    sanitizeAnthropicCountPayload,
+    apply_anthropic_cache_plan,
+    count_anthropic_cache_controls,
+    plan_anthropic_cache,
+    sanitize_anthropic_count_payload,
 )
-from ..prompt_cache import isKimiAnthropicCodingBackend, resolvePromptCachePolicy
+from ..prompt_cache import is_kimi_anthropic_coding_backend, resolve_prompt_cache_policy
 from .shared import MESSAGES_API_URL, MESSAGES_COUNT_TOKENS_API_URL
 from ..token_budget import resolve_request_max_output_tokens as _resolve_max_output_tokens
 from typing import Any
 from urllib.parse import urlparse
 from ..prompt_cache_diagnostics import (
-    buildPromptCacheRequestSnapshot,
+    build_prompt_cache_request_snapshot,
 )
 
 
@@ -33,10 +33,10 @@ def _normalize_anthropic_api_base_url(baseUrl: str | None) -> str | None:
 
 
 def _is_kimi_anthropic_coding_backend(config: dict[str, Any]) -> bool:
-    return isKimiAnthropicCodingBackend(config)
+    return is_kimi_anthropic_coding_backend(config)
 
 
-def resolveAnthropicMessagesUrl(baseUrl: str | None) -> str:
+def resolve_anthropic_messages_url(baseUrl: str | None) -> str:
     base = _normalize_anthropic_api_base_url(baseUrl)
     if not base:
         return MESSAGES_API_URL
@@ -55,7 +55,7 @@ def _messages_beta_query(base: str) -> str:
         return "?beta=true"
     return ""
 
-def resolveAnthropicCountTokensUrl(baseUrl: str | None) -> str:
+def resolve_anthropic_count_tokens_url(baseUrl: str | None) -> str:
     base = _normalize_anthropic_api_base_url(baseUrl)
     if not base:
         return MESSAGES_COUNT_TOKENS_API_URL
@@ -71,7 +71,7 @@ DEFAULT_OAUTH_BETAS = [
 ]
 
 
-def buildAnthropicHeaders(
+def build_anthropic_headers(
     config: dict[str, Any],
     options: dict[str, Any] | None = None,
     features: dict[str, Any] | None = None,
@@ -86,7 +86,7 @@ def buildAnthropicHeaders(
         for name, value in custom_headers.items()
         if str(name).lower() not in {"anthropic-beta", "authorization", "x-api-key"}
     }
-    beta_header = buildAnthropicBetaHeader(config, features or {})
+    beta_header = build_anthropic_beta_header(config, features or {})
     headers = {
         "accept": "text/event-stream" if options.get("stream") else "application/json",
         "content-type": "application/json",
@@ -114,7 +114,7 @@ def buildAnthropicHeaders(
     return headers
 
 
-def buildAnthropicBetaHeader(
+def build_anthropic_beta_header(
     config: dict[str, Any], features: dict[str, Any] | None = None
 ) -> str:
     from ...runtime.secret_provider import assert_provider_config_secrets_resolved
@@ -141,21 +141,21 @@ def buildAnthropicBetaHeader(
         merged.append(normalized)
     return ",".join(merged)
 
-def buildAnthropicCountTokensPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
-    payload = buildAnthropicMessagesPayload(request, {"stream": False, **(options or {})})
+def build_anthropic_count_tokens_payload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = build_anthropic_messages_payload(request, {"stream": False, **(options or {})})
     payload.pop("max_tokens", None)
     payload.pop("stream", None)
     payload.pop("output_config", None)
-    return sanitizeAnthropicCountPayload(payload)
+    return sanitize_anthropic_count_payload(payload)
 
-def buildAnthropicMessagesPayload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_anthropic_messages_payload(request: dict[str, Any], options: dict[str, Any] | None = None) -> dict[str, Any]:
     built = _build_anthropic_payload_parts(request, options)
     if _anthropic_provider_diagnostics_enabled(built["policy"]):
         built["payload"]["diagnostics"] = {"previous_message_id": None}
     return built["payload"]
 
 
-def buildAnthropicMessagesEnvelope(
+def build_anthropic_messages_envelope(
     request: dict[str, Any],
     config: dict[str, Any],
     options: dict[str, Any] | None = None,
@@ -175,13 +175,13 @@ def buildAnthropicMessagesEnvelope(
         if diagnostics_requested:
             built["payload"]["diagnostics"] = {"previous_message_id": None}
         return envelope
-    snapshot = buildPromptCacheRequestSnapshot(
+    snapshot = build_prompt_cache_request_snapshot(
         {
             "providerProfileName": config.get("providerProfileName") or config.get("provider") or "anthropic",
             "routeClass": _prompt_cache_route_class(policy.get("compatibility")),
             "baseUrl": config.get("anthropicBaseUrl"),
             "model": request.get("model"),
-            "betaTokens": [token.strip() for token in buildAnthropicBetaHeader(config, header_features).split(",") if token.strip()],
+            "betaTokens": [token.strip() for token in build_anthropic_beta_header(config, header_features).split(",") if token.strip()],
             "normalizedTools": built["normalizedTools"],
             "normalizedSystem": built["normalizedSystem"],
             "normalizedMessages": built["normalizedMessages"],
@@ -218,7 +218,7 @@ def _build_anthropic_payload_parts(
 ) -> dict[str, Any]:
     options = options or {}
     config = options.get("config") if isinstance(options.get("config"), dict) else {}
-    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+    policy = resolve_prompt_cache_policy(config=config, request=request, options=options)
     system_blocks = [{
         "type": "text",
         "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
@@ -228,14 +228,14 @@ def _build_anthropic_payload_parts(
     if system_text:
         system_blocks.append({"type": "text", "text": system_text})
     normalized_messages = [
-        {"role": message.get("role"), "content": normalizeAnthropicContentBlocks(message.get("content"))}
+        {"role": message.get("role"), "content": normalize_anthropic_content_blocks(message.get("content"))}
         for message in request.get("messages", [])
     ]
     normalized_tools = [
         _normalize_anthropic_tool_definition(tool) for tool in request.get("tools") or []
     ]
     prior = request.get("promptCache") or request.get("prompt_cache") or {}
-    plan = planAnthropicCache(
+    plan = plan_anthropic_cache(
         {
             "policy": policy,
             "normalizedSystem": system_blocks,
@@ -246,7 +246,7 @@ def _build_anthropic_payload_parts(
             else None,
         }
     )
-    marked = applyAnthropicCachePlan(
+    marked = apply_anthropic_cache_plan(
         {"system": system_blocks, "tools": normalized_tools, "messages": normalized_messages},
         plan,
     )
@@ -272,7 +272,7 @@ def _build_anthropic_payload_parts(
             thinking["display"] = display
         payload["thinking"] = thinking
         payload["output_config"] = {"effort": effort}
-    if countAnthropicCacheControls(payload) != plan["usedBreakpoints"]:
+    if count_anthropic_cache_controls(payload) != plan["usedBreakpoints"]:
         raise RuntimeError("Anthropic cache plan does not match serialized controls.")
     return {
         "payload": payload,
@@ -315,12 +315,12 @@ def _prompt_cache_route_class(compatibility: Any) -> str:
     return compatibility if compatibility in {"official", "claude_code", "compatible", "bedrock"} else "official"
 
 
-def planAnthropicCacheBreakpoints(
+def plan_anthropic_cache_breakpoints(
     request: dict[str, Any], options: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     options = options or {}
     config = options.get("config") if isinstance(options.get("config"), dict) else {}
-    policy = resolvePromptCachePolicy(config=config, request=request, options=options)
+    policy = resolve_prompt_cache_policy(config=config, request=request, options=options)
     system = [{
         "type": "text",
         "text": "x-anthropic-billing-header: cc_version=0.1.0; cc_entrypoint=tess; cch=00000;",
@@ -329,12 +329,12 @@ def planAnthropicCacheBreakpoints(
     if str(request.get("system") or "").strip():
         system.append({"type": "text", "text": str(request["system"]).strip()})
     messages = [
-        {"role": item.get("role"), "content": normalizeAnthropicContentBlocks(item.get("content"))}
+        {"role": item.get("role"), "content": normalize_anthropic_content_blocks(item.get("content"))}
         for item in request.get("messages") or []
     ]
     tools = [_normalize_anthropic_tool_definition(item) for item in request.get("tools") or []]
     prior = request.get("promptCache") or request.get("prompt_cache") or {}
-    return planAnthropicCache(
+    return plan_anthropic_cache(
         {
             "policy": policy,
             "normalizedSystem": system,
@@ -347,7 +347,7 @@ def planAnthropicCacheBreakpoints(
     )
 
 
-def anthropicCacheBreakpointMessageIndices(plan: dict[str, Any]) -> list[int]:
+def anthropic_cache_breakpoint_message_indices(plan: dict[str, Any]) -> list[int]:
     return [
         int(anchor["messageIndex"])
         for anchor in (plan.get("tailA"), plan.get("tailB"))
@@ -398,7 +398,7 @@ def _normalize_anthropic_tool_schema(schema: Any) -> Any:
         out[key] = _normalize_anthropic_tool_schema(value)
     return out
 
-def normalizeAnthropicContentBlocks(content: Any) -> list[dict[str, Any]]:
+def normalize_anthropic_content_blocks(content: Any) -> list[dict[str, Any]]:
     if isinstance(content, str):
         return [{"type": "text", "text": content}]
     if isinstance(content, list):

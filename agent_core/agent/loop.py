@@ -26,10 +26,10 @@ from .cancellation import (
 )
 from ._turn_state import TurnState
 from ..providers.usage_costs import (
-    ensureUsageTotals as _ensure_usage_totals,
-    estimateUsageCostUsd as _estimate_usage_cost,
-    mergeUsageIntoSession as _merge_usage_into_session,
-    roundUsd as _round_usd,
+    ensure_usage_totals as _ensure_usage_totals,
+    estimate_usage_cost_usd as _estimate_usage_cost,
+    merge_usage_into_session as _merge_usage_into_session,
+    round_usd as _round_usd,
 )
 from typing import Any
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit
@@ -59,7 +59,7 @@ from ..payloads.image_budget import ImageBudgetError as _ImageBudgetError
 from ..payloads.image_budget import createImageBudgetReservation as _create_image_budget_reservation
 from ..storage.message_origin import user_request_message as _user_request_message
 from ..authority.permission_rules import findDispatchDenyRule
-from ..providers.prompt_cache_orchestration import recordPromptCacheEvictionIntentAtFinalization as _record_prompt_cache_eviction_intent_at_finalization
+from ..providers.prompt_cache_orchestration import record_prompt_cache_eviction_intent_at_finalization as _record_prompt_cache_eviction_intent_at_finalization
 from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths, run_with_runtime_paths
 from ..subagents.contract import filter_tools_for_subagent
 from ..subagents.limits import build_subagent_tool_limit_result, check_subagent_runtime_limits, resolve_subagent_runtime_limits

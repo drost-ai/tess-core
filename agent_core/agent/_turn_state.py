@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..providers.usage_costs import roundUsd as _round_usd
+from ..providers.usage_costs import round_usd as _round_usd
 
 
 @dataclass

@@ -214,8 +214,8 @@ class ContextContinuationTests(AgentCoreTestCase):
             async def send(request):
                 provider_requests.append(request)
                 if len(provider_requests) == 1:
-                    raise core.createProviderRequestError(
-                        core.createProviderFailureRecord(
+                    raise core.create_provider_request_error(
+                        core.create_provider_failure_record(
                             {
                                 "provider": "openai",
                                 "providerLabel": "OpenAI",
@@ -272,8 +272,8 @@ class ContextContinuationTests(AgentCoreTestCase):
 
             async def send(request):
                 provider_requests.append(request)
-                raise core.createProviderRequestError(
-                    core.createProviderFailureRecord(
+                raise core.create_provider_request_error(
+                    core.create_provider_failure_record(
                         {
                             "provider": "openai",
                             "providerLabel": "OpenAI",

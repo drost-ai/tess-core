@@ -8,7 +8,7 @@ class ProviderErrorTests(AgentCoreTestCase):
     def test_provider_request_watchdog_parity_surface(self):
         import agent_core.providers.watchdog as provider_watchdog
 
-        watchdog = provider_watchdog.createProviderRequestWatchdog(
+        watchdog = provider_watchdog.create_provider_request_watchdog(
             {"initialTimeoutMs": 1, "buildTimeoutError": lambda: TimeoutError("timed out")}
         )
         with self.assertRaises(TimeoutError):
@@ -20,7 +20,7 @@ class ProviderErrorTests(AgentCoreTestCase):
 
         parent_reason = RuntimeError("cancelled by parent")
         parent = SimpleNamespace(aborted=True, reason=parent_reason)
-        cancelled = provider_watchdog.createProviderRequestWatchdog(
+        cancelled = provider_watchdog.create_provider_request_watchdog(
             {"parentSignal": parent, "initialTimeoutMs": 1000, "buildTimeoutError": lambda: TimeoutError("unused")}
         )
         with self.assertRaisesRegex(RuntimeError, "cancelled by parent"):
@@ -42,7 +42,7 @@ class ProviderErrorTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as openai_ctx:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -68,7 +68,7 @@ class ProviderErrorTests(AgentCoreTestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as anthropic_ctx:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         {
                             "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
                             "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -96,7 +96,7 @@ class ProviderErrorTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as openai_ctx:
             run(
-                testing.sendOpenAiChatCompletionsRequest(
+                testing.send_openai_chat_completions_request(
                     {
                         "token": "test",
                         "request": {"model": "gpt-5.4", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -124,7 +124,7 @@ class ProviderErrorTests(AgentCoreTestCase):
         try:
             with self.assertRaises(core.ProviderRequestError) as anthropic_ctx:
                 run(
-                    core.sendAnthropicMessagesRequest(
+                    core.send_anthropic_messages_request(
                         {
                             "config": {"provider": "anthropic", "apiKey": "test-key", "customHeaders": {}},
                             "request": {"model": "claude-sonnet-4-6", "system": "s", "messages": [{"role": "user", "content": "Hello"}], "tools": []},
@@ -154,24 +154,24 @@ class ProviderErrorTests(AgentCoreTestCase):
         ]
         for status, body, error_type, category, retryable in cases:
             with self.subTest(status=status, category=category):
-                failure = core.classifyProviderHttpFailure({**base, "status": status, "body": body, "errorType": error_type})
+                failure = core.classify_provider_http_failure({**base, "status": status, "body": body, "errorType": error_type})
                 self.assertEqual(failure.record["category"], category)
                 self.assertEqual(failure.record["retryable"], retryable)
                 self.assertEqual(failure.record["status"], status)
                 self.assertEqual(failure.record["rawBody"], body)
 
-        transport = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("socket hang up")})
+        transport = core.normalize_unknown_provider_failure({**base, "error": RuntimeError("socket hang up")})
         self.assertEqual(transport.record["category"], "transport")
-        self.assertTrue(core.canRetryProviderFailure(transport, 2))
-        partial = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("ECONNRESET"), "hadAssistantOutput": True})
+        self.assertTrue(core.can_retry_provider_failure(transport, 2))
+        partial = core.normalize_unknown_provider_failure({**base, "error": RuntimeError("ECONNRESET"), "hadAssistantOutput": True})
         self.assertEqual(partial.record["category"], "transport")
-        self.assertFalse(core.canRetryProviderFailure(partial, 2))
-        protocol = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("Unexpected end of JSON input")})
+        self.assertFalse(core.can_retry_provider_failure(partial, 2))
+        protocol = core.normalize_unknown_provider_failure({**base, "error": RuntimeError("Unexpected end of JSON input")})
         self.assertEqual(protocol.record["category"], "protocol")
         self.assertFalse(protocol.record["retryable"])
-        auth = core.normalizeUnknownProviderFailure({**base, "error": RuntimeError("invalid API key")})
+        auth = core.normalize_unknown_provider_failure({**base, "error": RuntimeError("invalid API key")})
         self.assertEqual(auth.record["category"], "auth")
-        sdk_400 = core.normalizeUnknownProviderFailure(
+        sdk_400 = core.normalize_unknown_provider_failure(
             {
                 **base,
                 "error": RuntimeError(

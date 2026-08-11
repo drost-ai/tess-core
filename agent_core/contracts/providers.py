@@ -47,6 +47,18 @@ class ToolUseBlock(_ToolUseBlockRequired, total=False):
 
 NormalizedBlock = Union[TextBlock, ToolUseBlock]
 
+# Anthropic content blocks round-trip verbatim (thinking, redacted_thinking,
+# and server-tool blocks included since Epic G) — the open dict alias is the
+# truthful type until the payload plane narrows it.
+AnthropicBlock = dict[str, Any]
+
+
+class AnthropicMessage(TypedDict):
+    """One conversation message in Anthropic wire shape."""
+
+    role: str
+    content: str | list[AnthropicBlock]
+
 
 class ProviderUsage(TypedDict, total=False):
     """Normalized usage (snake_case on both providers; cache keys Anthropic-only)."""
@@ -58,6 +70,11 @@ class ProviderUsage(TypedDict, total=False):
     cache_creation_1h_input_tokens: int | None
     cache_creation_ttl_detail_complete: bool
     cache_read_input_tokens: int | None
+
+
+# Anthropic usage arrives in this same normalized shape (the cache keys are
+# Anthropic-only); the alias is the contract name shared with other runtimes.
+AnthropicUsage = ProviderUsage
 
 
 class _ProviderResponseRequired(TypedDict):
@@ -111,7 +128,7 @@ class ProviderFailureRecord(_ProviderFailureRequired, total=False):
     requestId: str | None
     logicalCallId: str | None
     generation: int | None
-    partialOutputMode: Literal["buffered", "replaceable", "append_only"] | None
+    partial_output_mode: Literal["buffered", "replaceable", "append_only"] | None
     responseId: str | None
     sequenceNumber: int | None
     recoveryFailure: str | None

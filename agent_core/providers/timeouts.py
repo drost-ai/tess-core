@@ -5,8 +5,8 @@ from ._knob_reader import provider_knob
 import time
 from typing import Any, Mapping
 
-from .errors import createProviderFailureRecord, createProviderRequestError
-from .watchdog import ProviderRequestWatchdog, createProviderRequestWatchdog
+from .errors import create_provider_failure_record, create_provider_request_error
+from .watchdog import ProviderRequestWatchdog, create_provider_request_watchdog
 
 
 
@@ -106,11 +106,11 @@ def create_turn_deadline_context(
     )
     stream_idle_timeout_ms = transport.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms")
     total_deadline_at = time.monotonic() + (total_request_timeout_ms / 1000)
-    watchdog = createProviderRequestWatchdog(
+    watchdog = create_provider_request_watchdog(
         parentSignal=args.get("parentSignal"),
         initialTimeoutMs=total_request_timeout_ms,
-        buildTimeoutError=lambda: createProviderRequestError(
-            createProviderFailureRecord(
+        buildTimeoutError=lambda: create_provider_request_error(
+            create_provider_failure_record(
                 provider=config.get("provider"),
                 providerLabel=config.get("providerProfileName") or config.get("provider"),
                 phase="request_start",

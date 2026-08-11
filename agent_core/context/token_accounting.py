@@ -18,13 +18,13 @@ from .request_estimation import (
 )
 from ..payloads.token_estimation import estimateTextTokens
 from ..providers.errors import (
-    createProviderFailureRecord as _create_provider_failure_record,
-    createProviderRequestError as _create_provider_request_error,
-    isProviderRequestError as _is_provider_request_error,
+    create_provider_failure_record as _create_provider_failure_record,
+    create_provider_request_error as _create_provider_request_error,
+    is_provider_request_error as _is_provider_request_error,
 )
-from ..providers.watchdog import createProviderRequestWatchdog as _create_provider_request_watchdog
-from ..providers.anthropic import buildAnthropicCountTokensPayload, buildAnthropicHeaders, resolveAnthropicCountTokensUrl
-from ..providers.openai import buildChatCompletionsCreateParams, buildResponsesCreateParams, resolveOpenAiBaseUrl as _resolve_openai_base_url
+from ..providers.watchdog import create_provider_request_watchdog as _create_provider_request_watchdog
+from ..providers.anthropic import build_anthropic_count_tokens_payload, build_anthropic_headers, resolve_anthropic_count_tokens_url
+from ..providers.openai import build_chat_completions_create_params, build_responses_create_params, resolve_openai_base_url as _resolve_openai_base_url
 from ..runtime.secret_provider import resolve_provider_config_secrets
 
 MAX_CODEX_ERROR_SAMPLES = 12
@@ -206,13 +206,13 @@ async def _measure_anthropic_count_tokens(
     timeout_seconds: float,
     _abort_signal: Any = None,
 ) -> int:
-    payload = buildAnthropicCountTokensPayload(request, {"config": config})
+    payload = build_anthropic_count_tokens_payload(request, {"config": config})
 
     def send() -> int:
         req = Request(
-            resolveAnthropicCountTokensUrl(config.get("anthropicBaseUrl")),
+            resolve_anthropic_count_tokens_url(config.get("anthropicBaseUrl")),
             data=json.dumps(payload).encode("utf-8"),
-            headers=buildAnthropicHeaders(config),
+            headers=build_anthropic_headers(config),
             method="POST",
         )
         with urlopen(req, timeout=timeout_seconds) as response:
@@ -261,7 +261,7 @@ async def _measure_openai_exact_tokens(
     if not callable(count):
         raise RuntimeError("OpenAI input-token count endpoint is unavailable.")
     params = _sanitize_openai_count_params(
-        buildResponsesCreateParams({"isCodexBackend": False, "request": request})
+        build_responses_create_params({"isCodexBackend": False, "request": request})
     )
     if callable(factory):
         response = await _maybe_await(count(params))

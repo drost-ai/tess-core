@@ -7,7 +7,7 @@ import asyncio
 import contextlib
 import time
 
-from .sse import normalizeProviderBlocks
+from .sse import normalize_provider_blocks
 from .transport import _apply_usage_snapshot
 
 
@@ -40,7 +40,7 @@ def _normalize_anthropic_json_response(parsed: dict[str, Any], request: dict[str
     usage: dict[str, Any] = {}
     _apply_usage_snapshot(usage, parsed.get("usage") or {})
     response = {
-        "content": normalizeProviderBlocks(parsed.get("content", [])),
+        "content": normalize_provider_blocks(parsed.get("content", [])),
         "usage": usage,
         "model": parsed.get("model") or request["model"],
         "stopReason": parsed.get("stop_reason"),

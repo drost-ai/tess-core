@@ -5,11 +5,11 @@ import os
 from typing import Any
 
 from ..config import getDefaultEffortForProvider, getDefaultModelForProvider, normalizeEffortForModel, normalizeModelName
-from ..providers.errors import createProviderFailureRecord, createProviderRequestError
+from ..providers.errors import create_provider_failure_record, create_provider_request_error
 from ..providers.timeouts import resolveProviderTimeoutPolicy
 from ..providers.token_budget import resolveCompactionPolicy
-from ..providers.anthropic import sendAnthropicMessagesRequest
-from ..providers.openai import DEFAULT_CODEX_BASE_URL, getOpenAiProviderLabel, sendOpenAiRequest
+from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.openai import DEFAULT_CODEX_BASE_URL, get_openai_provider_label, send_openai_request
 from ..runtime.secret_provider import resolve_compaction_provider_secrets, resolve_provider_config_secrets
 from ..storage import load_codex_auth_token
 
@@ -46,11 +46,11 @@ def create_default_compaction_model_client(options: dict[str, Any] | None = None
         max_output_tokens = int(args.get("maxOutputTokens") or token_policy["compactionOutputTokens"])
         if model["provider"] == "openai":
             transport = await _resolve_compaction_openai_transport(config, model)
-            sender = options.get("openAiRequestSender") or sendOpenAiRequest
+            sender = options.get("openAiRequestSender") or send_openai_request
             client_factory = _resolve_openai_client_factory(args, runtime, options, config)
             response = await _run_compaction_request_with_timeout(
                 provider="openai",
-                providerLabel=getOpenAiProviderLabel(transport["mode"], transport.get("baseUrl")),
+                providerLabel=get_openai_provider_label(transport["mode"], transport.get("baseUrl")),
                 attempt=1,
                 timeoutMs=_resolve_compaction_timeout_ms(model.get("purpose")),
                 run=lambda: sender(
@@ -80,7 +80,7 @@ def create_default_compaction_model_client(options: dict[str, Any] | None = None
             providerLabel="Anthropic",
             attempt=1,
             timeoutMs=_resolve_compaction_timeout_ms(model.get("purpose")),
-            run=lambda: sendAnthropicMessagesRequest(config=anthropic_config, request={"model": model["model"], "effort": model.get("effort"), "maxOutputTokens": max_output_tokens, "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime=runtime, **timeout_policy),
+            run=lambda: send_anthropic_messages_request(config=anthropic_config, request={"model": model["model"], "effort": model.get("effort"), "maxOutputTokens": max_output_tokens, "system": args["system"], "messages": [{"role": "user", "content": args["prompt"]}], "tools": []}, runtime=runtime, **timeout_policy),
         )
         return {"text": _extract_text(response.get("content", [])), "usage": response.get("usage", {}), "model": model}
 
@@ -314,8 +314,8 @@ async def _run_compaction_request_with_timeout(provider: str, providerLabel: str
     try:
         return await asyncio.wait_for(run(), timeout=timeoutMs / 1000)
     except asyncio.TimeoutError:
-        raise createProviderRequestError(
-            createProviderFailureRecord(
+        raise create_provider_request_error(
+            create_provider_failure_record(
                 {
                     "provider": provider,
                     "providerLabel": providerLabel,

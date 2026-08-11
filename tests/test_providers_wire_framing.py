@@ -48,7 +48,7 @@ def _send_anthropic(server, **overrides):
         "maxAttempts": 1,
     }
     args.update(overrides)
-    return run(core.sendAnthropicMessagesRequest(args))
+    return run(core.send_anthropic_messages_request(args))
 
 
 def _anthropic_sse(events):
@@ -284,7 +284,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         }
         server, _requests = _openai_server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+            response = run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "framed"}])
@@ -304,7 +304,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         server, _requests = _openai_server(script)
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
-                run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+                run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         self.assertEqual(ctx.exception.record["category"], "transport")
@@ -324,7 +324,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         }
         server, _requests = _openai_server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+            response = run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "framed"}])
@@ -336,7 +336,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         }
         server, _requests = _openai_server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+            response = run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "framed"}])
@@ -358,7 +358,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         }
         server, _requests = _openai_server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+            response = run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "framed"}])
@@ -376,7 +376,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         }
         server, _requests = _openai_server(script)
         try:
-            response = run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+            response = run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         self.assertEqual(response["content"], [{"type": "text", "text": "framed"}])
@@ -396,7 +396,7 @@ class OpenAiWireFramingTests(unittest.TestCase):
         server, _requests = _openai_server(script)
         try:
             with self.assertRaises(core.ProviderRequestError) as ctx:
-                run(core.sendOpenAiResponsesRequest(_openai_args(server)))
+                run(core.send_openai_responses_request(_openai_args(server)))
         finally:
             server.close()
         record = ctx.exception.record

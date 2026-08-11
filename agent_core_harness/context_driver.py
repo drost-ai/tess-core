@@ -202,8 +202,8 @@ async def _run_agent_reactive_case(sandbox: ScenarioSandbox, state: dict[str, An
     async def send(request: dict[str, Any]) -> dict[str, Any]:
         provider_requests.append({"systemHasRelief": "<context_relief>" in str(request.get("system") or ""), "messageCount": len(request.get("messages") or [])})
         if len(provider_requests) == 1:
-            raise core.createProviderRequestError(
-                core.createProviderFailureRecord(
+            raise core.create_provider_request_error(
+                core.create_provider_failure_record(
                     {"provider": "openai", "providerLabel": "OpenAI", "phase": "request_start", "category": "client_request", "retryable": False, "attempt": 1, "hadAssistantOutput": False, "hadToolUse": False, "rawMessage": "maximum context length exceeded"}
                 )
             )

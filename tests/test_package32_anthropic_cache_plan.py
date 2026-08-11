@@ -4,18 +4,18 @@ import copy
 
 from tests.support.agent_core_case import *
 
-from agent_core.providers.anthropic_cache import countAnthropicCacheControls
+from agent_core.providers.anthropic_cache import count_anthropic_cache_controls
 from agent_core.providers.anthropic.payloads import (
-    buildAnthropicBetaHeader,
-    buildAnthropicCountTokensPayload,
-    buildAnthropicHeaders,
-    buildAnthropicMessagesEnvelope,
-    buildAnthropicMessagesPayload,
-    planAnthropicCacheBreakpoints,
+    build_anthropic_beta_header,
+    build_anthropic_count_tokens_payload,
+    build_anthropic_headers,
+    build_anthropic_messages_envelope,
+    build_anthropic_messages_payload,
+    plan_anthropic_cache_breakpoints,
 )
 from agent_core.providers.anthropic.transport import applyAnthropicUsageSnapshot
-from agent_core.providers.usage_costs import estimateUsageCost, resolveModelPricing
-from agent_core.providers.prompt_cache_diagnostics import normalizePromptCacheProviderReason
+from agent_core.providers.usage_costs import estimate_usage_cost, resolve_model_pricing
+from agent_core.providers.prompt_cache_diagnostics import normalize_prompt_cache_provider_reason
 
 
 def _policy(**overrides):
@@ -77,7 +77,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
                         for reuse_previous in (False, True):
                             prior = None
                             if reuse_previous and message_count >= 2:
-                                prior = planAnthropicCacheBreakpoints(
+                                prior = plan_anthropic_cache_breakpoints(
                                     _request(messages=_messages(2), tools=_tools() if has_tools else [], prompt_cache=_policy(mode="explicit"))
                                 )["tailA"]
                             policy = _policy(
@@ -92,43 +92,43 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
                             )
                             request["system"] = "stable system" if has_system else ""
                             with self.subTest(mode=mode, system=has_system, tools=has_tools, messages=message_count, reuse=reuse_previous):
-                                plan = planAnthropicCacheBreakpoints(request)
-                                payload = buildAnthropicMessagesPayload(request)
+                                plan = plan_anthropic_cache_breakpoints(request)
+                                payload = build_anthropic_messages_payload(request)
                                 self.assertLessEqual(plan["usedBreakpoints"], 4)
-                                self.assertEqual(countAnthropicCacheControls(payload), plan["usedBreakpoints"])
+                                self.assertEqual(count_anthropic_cache_controls(payload), plan["usedBreakpoints"])
                                 expected_order = [name for name in ("automatic", "system", "tools", "tail_a", "tail_b") if name in plan["placements"]]
                                 self.assertEqual(plan["placements"], expected_order)
 
     def test_four_slot_priority_and_automatic_displacement(self):
-        previous = planAnthropicCacheBreakpoints(
+        previous = plan_anthropic_cache_breakpoints(
             _request(messages=_messages(2), prompt_cache=_policy(mode="auto"))
         )["tailA"]
         request = _request(
             prompt_cache=_policy(mode="auto", messageTailPreviousAnchor=previous)
         )
-        plan = planAnthropicCacheBreakpoints(request)
-        payload = buildAnthropicMessagesPayload(request)
+        plan = plan_anthropic_cache_breakpoints(request)
+        payload = build_anthropic_messages_payload(request)
         self.assertEqual(plan["placements"], ["automatic", "system", "tools", "tail_a"])
         self.assertIsNone(plan["tailB"])
         self.assertEqual(plan["omitted"], [{"placement": "tail_b", "reason": "budget"}])
         self.assertEqual(plan["usedBreakpoints"], 4)
-        self.assertEqual(countAnthropicCacheControls(payload), 4)
+        self.assertEqual(count_anthropic_cache_controls(payload), 4)
 
     def test_explicit_allocates_system_tools_a_and_identity_valid_b(self):
-        previous = planAnthropicCacheBreakpoints(_request(messages=_messages(2)))["tailA"]
+        previous = plan_anthropic_cache_breakpoints(_request(messages=_messages(2)))["tailA"]
         request = _request(prompt_cache=_policy(messageTailPreviousAnchor=previous))
-        plan = planAnthropicCacheBreakpoints(request)
-        payload = buildAnthropicMessagesPayload(request)
+        plan = plan_anthropic_cache_breakpoints(request)
+        payload = build_anthropic_messages_payload(request)
         self.assertEqual(plan["placements"], ["system", "tools", "tail_a", "tail_b"])
         self.assertEqual((plan["tailA"]["messageIndex"], plan["tailB"]["messageIndex"]), (2, 0))
-        self.assertEqual(countAnthropicCacheControls(payload), 4)
+        self.assertEqual(count_anthropic_cache_controls(payload), 4)
         self.assertEqual(payload["tools"][-1]["cache_control"], {"type": "ephemeral", "ttl": "1h"})
 
     def test_without_tools_b_uses_released_automatic_slot(self):
-        previous = planAnthropicCacheBreakpoints(
+        previous = plan_anthropic_cache_breakpoints(
             _request(messages=_messages(2), tools=[], prompt_cache=_policy(mode="auto"))
         )["tailA"]
-        plan = planAnthropicCacheBreakpoints(
+        plan = plan_anthropic_cache_breakpoints(
             _request(tools=[], prompt_cache=_policy(mode="auto", messageTailPreviousAnchor=previous))
         )
         self.assertEqual(plan["placements"], ["automatic", "system", "tail_a", "tail_b"])
@@ -147,7 +147,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         ]
         for block in legal + illegal:
             with self.subTest(kind=block["type"], legal=block in legal):
-                plan = planAnthropicCacheBreakpoints(
+                plan = plan_anthropic_cache_breakpoints(
                     _request(messages=[{"role": "user", "content": [block]}, {"role": "user", "content": "volatile"}], tools=[])
                 )
                 self.assertEqual(plan["tailA"] is not None, block in legal)
@@ -164,21 +164,21 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
             },
             {"role": "user", "content": "volatile"},
         ]
-        plan = planAnthropicCacheBreakpoints(_request(messages=transcript, tools=[]))
+        plan = plan_anthropic_cache_breakpoints(_request(messages=transcript, tools=[]))
         self.assertEqual((plan["tailA"]["messageIndex"], plan["tailA"]["blockIndex"]), (1, 0))
 
     def test_identity_rejects_same_coordinate_after_earlier_rewrite(self):
-        previous = planAnthropicCacheBreakpoints(_request(messages=_messages(2), tools=[]))["tailA"]
+        previous = plan_anthropic_cache_breakpoints(_request(messages=_messages(2), tools=[]))["tailA"]
         rewritten = _messages(4)
         rewritten[0]["content"][0]["text"] = "rewritten-prefix"
-        plan = planAnthropicCacheBreakpoints(
+        plan = plan_anthropic_cache_breakpoints(
             _request(messages=rewritten, tools=[], prompt_cache=_policy(messageTailPreviousAnchor=previous))
         )
         self.assertIsNone(plan["tailB"])
         self.assertEqual(plan["omitted"], [{"placement": "tail_b", "reason": "identity_mismatch"}])
 
     def test_previous_anchor_omission_reasons_are_closed_and_identity_bound(self):
-        previous = planAnthropicCacheBreakpoints(_request(messages=_messages(2), tools=[]))["tailA"]
+        previous = plan_anthropic_cache_breakpoints(_request(messages=_messages(2), tools=[]))["tailA"]
         changed_block = _messages(4)
         changed_block[previous["messageIndex"]]["content"][previous["blockIndex"]]["text"] = "changed-block"
         cases = (
@@ -191,7 +191,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         )
         for anchor, messages, reason in cases:
             with self.subTest(reason=reason):
-                plan = planAnthropicCacheBreakpoints(
+                plan = plan_anthropic_cache_breakpoints(
                     _request(
                         messages=messages,
                         tools=[],
@@ -201,8 +201,8 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
                 self.assertIsNone(plan["tailB"])
                 self.assertEqual(plan["omitted"], [{"placement": "tail_b", "reason": reason}])
 
-        current = planAnthropicCacheBreakpoints(_request(messages=_messages(4), tools=[]))["tailA"]
-        same_coordinate = planAnthropicCacheBreakpoints(
+        current = plan_anthropic_cache_breakpoints(_request(messages=_messages(4), tools=[]))["tailA"]
+        same_coordinate = plan_anthropic_cache_breakpoints(
             _request(
                 messages=_messages(4), tools=[],
                 prompt_cache=_policy(messageTailPreviousAnchor=current),
@@ -216,13 +216,13 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
     def test_marker_application_does_not_mutate_registry(self):
         tools = _tools()
         before = copy.deepcopy(tools)
-        payload = buildAnthropicMessagesPayload(_request(tools=tools))
+        payload = build_anthropic_messages_payload(_request(tools=tools))
         self.assertEqual(tools, before)
         self.assertNotIn("cache_control", payload["tools"][0])
         self.assertIn("cache_control", payload["tools"][-1])
 
     def test_count_payload_removes_authority_but_preserves_user_fields(self):
-        payload = buildAnthropicCountTokensPayload(
+        payload = build_anthropic_count_tokens_payload(
             _request(
                 messages=[
                     {
@@ -240,7 +240,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
                 ]
             )
         )
-        self.assertEqual(countAnthropicCacheControls(payload), 0)
+        self.assertEqual(count_anthropic_cache_controls(payload), 0)
         self.assertEqual(
             payload["tools"][-1]["input_schema"]["properties"]["cache_control"],
             {"type": "string"},
@@ -251,12 +251,12 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         )
 
     def test_compatible_tool_and_tail_breakpoints_require_opt_in(self):
-        default = buildAnthropicMessagesPayload(
+        default = build_anthropic_messages_payload(
             _request(prompt_cache=_policy(compatibility="compatible"))
         )
         self.assertNotIn("cache_control", default["tools"][-1])
         self.assertNotIn("cache_control", default["messages"][2]["content"][0])
-        opted = buildAnthropicMessagesPayload(
+        opted = build_anthropic_messages_payload(
             _request(
                 prompt_cache=_policy(
                     compatibility="compatible",
@@ -279,11 +279,11 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         )
         for policy, expected in cases:
             with self.subTest(policy=policy):
-                payload = buildAnthropicMessagesPayload(_request(prompt_cache=policy))
-                self.assertEqual(countAnthropicCacheControls(payload), expected)
+                payload = build_anthropic_messages_payload(_request(prompt_cache=policy))
+                self.assertEqual(count_anthropic_cache_controls(payload), expected)
 
     def test_cross_provider_24h_ttl_is_never_serialized_to_anthropic(self):
-        payload = buildAnthropicMessagesPayload(
+        payload = build_anthropic_messages_payload(
             _request(prompt_cache=_policy(ttl="24h"))
         )
         controls = []
@@ -303,19 +303,19 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
                 "X-API-Key": "attacker-key",
             },
         }
-        beta = buildAnthropicBetaHeader(config, {"providerDiagnostics": True})
+        beta = build_anthropic_beta_header(config, {"providerDiagnostics": True})
         self.assertEqual(
             beta,
             "cache-diagnosis-2026-04-07,Custom-Beta,second-beta",
         )
-        headers = buildAnthropicHeaders(config, features={"providerDiagnostics": True})
+        headers = build_anthropic_headers(config, features={"providerDiagnostics": True})
         self.assertEqual(headers["anthropic-beta"], beta)
         self.assertEqual(headers["x-api-key"], "real-key")
         self.assertNotIn("Authorization", headers)
         self.assertNotIn("X-API-Key", headers)
         self.assertEqual(headers["x-extra"], "ok")
 
-        oauth = buildAnthropicHeaders(
+        oauth = build_anthropic_headers(
             {
                 "authToken": "oauth-token",
                 "customHeaders": {
@@ -350,7 +350,7 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
         self.assertEqual(usage["output_tokens"], 7)
 
     def test_ttl_pricing_uses_detail_or_single_five_minute_fallback(self):
-        detailed = estimateUsageCost(
+        detailed = estimate_usage_cost(
             {
                 "cache_creation_input_tokens": 30,
                 "cache_creation_5m_input_tokens": 10,
@@ -359,10 +359,10 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
             },
             "claude-opus-4-8-20260701",
         )
-        self.assertEqual(resolveModelPricing("claude-opus-4-8-20260701")["cacheWrite1hUsdPerMtok"], 10)
+        self.assertEqual(resolve_model_pricing("claude-opus-4-8-20260701")["cacheWrite1hUsdPerMtok"], 10)
         self.assertAlmostEqual(detailed["cacheWriteUsd"], 0.0002625)
         self.assertFalse(detailed["cacheWriteEstimated"])
-        fallback = estimateUsageCost(
+        fallback = estimate_usage_cost(
             {"cache_creation_input_tokens": 30}, "claude-opus-4-8"
         )
         self.assertAlmostEqual(fallback["cacheWriteUsd"], 0.0001875)
@@ -391,29 +391,29 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
             "apiKey": "test-key",
             "customHeaders": {},
         }
-        warmup = buildAnthropicMessagesEnvelope(request, config)
+        warmup = build_anthropic_messages_envelope(request, config)
         self.assertEqual(warmup["payload"]["diagnostics"], {"previous_message_id": None})
-        self.assertIn("cache-diagnosis-2026-04-07", warmup["headerFeatures"] and buildAnthropicBetaHeader(config, warmup["headerFeatures"]))
+        self.assertIn("cache-diagnosis-2026-04-07", warmup["headerFeatures"] and build_anthropic_beta_header(config, warmup["headerFeatures"]))
         request["promptCache"]["dispatchContext"]["previous"] = {
             "request": warmup["promptCache"]["snapshot"],
             "responseId": "msg_previous",
         }
-        hit = buildAnthropicMessagesEnvelope(request, config)
+        hit = build_anthropic_messages_envelope(request, config)
         self.assertEqual(hit["payload"]["diagnostics"], {"previous_message_id": "msg_previous"})
         self.assertTrue(hit["diagnostics"]["previousMessageIdSent"])
         request["model"] = "claude-opus-4-8"
-        mismatch = buildAnthropicMessagesEnvelope(request, config)
+        mismatch = build_anthropic_messages_envelope(request, config)
         self.assertEqual(mismatch["payload"]["diagnostics"], {"previous_message_id": None})
 
     def test_provider_diagnosis_is_closed_and_runtime_event_drops_identifiers(self):
         self.assertEqual(
-            normalizePromptCacheProviderReason(
+            normalize_prompt_cache_provider_reason(
                 {"requested": True, "previousMessageIdSent": True, "fieldPresent": True, "diagnostics": None}
             ),
             "no_divergence",
         )
         self.assertEqual(
-            normalizePromptCacheProviderReason(
+            normalize_prompt_cache_provider_reason(
                 {
                     "requested": True,
                     "previousMessageIdSent": True,
@@ -476,13 +476,13 @@ class AnthropicCachePlanTests(AgentCoreTestCase):
                 },
             )
         )
-        envelope = buildAnthropicMessagesEnvelope(request, config)
+        envelope = build_anthropic_messages_envelope(request, config)
         self.assertFalse(envelope["diagnostics"]["requested"])
         self.assertNotIn("diagnostics", envelope["payload"])
         serialized = json.dumps(envelope["payload"])
         self.assertNotIn("global", serialized)
         self.assertNotIn("cache-scope", serialized)
-        count = buildAnthropicCountTokensPayload(request, {"config": config})
+        count = build_anthropic_count_tokens_payload(request, {"config": config})
         self.assertNotIn("diagnostics", count)
 
 

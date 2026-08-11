@@ -28,20 +28,20 @@ from .context.compaction_transport import (
 from .context.continuation import apply_context_relief_modes, apply_lightweight_context_relief, classify_context_pressure
 from .context.token_accounting import measure_request_input_tokens
 from .providers.anthropic import (
-    buildAnthropicCountTokensPayload,
-    buildAnthropicHeaders,
-    buildAnthropicMessagesPayload,
-    normalizeAnthropicSseResponse,
-    resolveAnthropicCountTokensUrl,
-    resolveAnthropicMessagesUrl,
-    sendAnthropicMessagesRequest,
+    build_anthropic_count_tokens_payload,
+    build_anthropic_headers,
+    build_anthropic_messages_payload,
+    normalize_anthropic_sse_response,
+    resolve_anthropic_count_tokens_url,
+    resolve_anthropic_messages_url,
+    send_anthropic_messages_request,
 )
-from .providers.errors import createProviderFailureRecord, createProviderRequestError, isProviderRequestError
+from .providers.errors import create_provider_failure_record, create_provider_request_error, is_provider_request_error
 from .providers.openai import (
     DEFAULT_CODEX_BASE_URL,
-    buildChatCompletionsCreateParams,
-    buildResponsesCreateParams,
-    sendOpenAiChatCompletionsRequest,
-    sendOpenAiResponsesRequest,
+    build_chat_completions_create_params,
+    build_responses_create_params,
+    send_openai_chat_completions_request,
+    send_openai_responses_request,
 )
 from .runtime.secrets import resolve_runtime_secret_string

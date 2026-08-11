@@ -8,10 +8,10 @@ from ..openai_turn_session import (
     websocket_fallback_safe,
 )
 
-from .params import convertMessagesToInput
+from .params import convert_messages_to_input
 import json
 from ..._utils import get_value, maybe_await
-from .params import getOpenAiProviderLabel, resolveOpenAiBaseUrl
+from .params import get_openai_provider_label, resolve_openai_base_url
 from typing import Any
 from .transport import _emit, _race_openai_activity
 
@@ -223,7 +223,7 @@ async def finalize_responses_success(
     partial_output_commit: dict[str, Any] | None,
     reconciliation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    canonical_output = convertMessagesToInput(
+    canonical_output = convert_messages_to_input(
         [{"role": "assistant", "content": blocks}]
     )
     if turn_session is not None and hasattr(
@@ -243,9 +243,9 @@ async def finalize_responses_success(
             "provider.recovered",
             {
                 "provider": "openai",
-                "provider_label": getOpenAiProviderLabel(
+                "provider_label": get_openai_provider_label(
                     mode,
-                    resolveOpenAiBaseUrl(mode, args.get("baseUrl")),
+                    resolve_openai_base_url(mode, args.get("baseUrl")),
                 ),
                 "model": args["request"]["model"],
                 "attempts": attempt,

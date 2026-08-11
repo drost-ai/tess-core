@@ -6,6 +6,7 @@ live in other planes (transcript entry builders, image budget estimation).
 """
 from __future__ import annotations
 
+from ..contracts.providers import AnthropicBlock
 from ..payloads.image_budget import estimateEncodedImageRequestBytes
 from ..session.transcript import (
     build_transcript_snapshot,

@@ -13,7 +13,7 @@ from ..config import (
     ensureProviderForModelSelection,
     resolveFallbackProviderProfileName,
 )
-from ..providers.turn_session import createProviderTurnSession
+from ..providers.turn_session import create_provider_turn_session
 from ..runtime.paths import get_active_runtime_paths, resolve_runtime_paths, run_with_runtime_paths
 from ..runtime.transient_input import (
     create_transient_execution_session,
@@ -129,7 +129,7 @@ async def run_in_provider_turn_session(
     runtime = materialize_agent_execution_runtime(runtime_bindings)
     args = {**args, "materializedRuntime": runtime}
     logical_turn_id = _resolve_logical_turn_id(args.get("logicalTurnId"))
-    provider_turn_session = createProviderTurnSession(
+    provider_turn_session = create_provider_turn_session(
         logical_turn_id=logical_turn_id,
         session=session,
         config=config,

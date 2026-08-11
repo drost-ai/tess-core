@@ -4,7 +4,7 @@ import math
 
 import os
 import re
-from ...providers.errors import fallbackEligibleProviderFailure, isProviderRequestError
+from ...providers.errors import fallback_eligible_provider_failure, is_provider_request_error
 from ..compaction_transport import resolve_compaction_model_candidates
 from .evidence import build_compaction_evidence
 from .parsing import parse_compaction_synthesis_response, parse_compaction_verification_response
@@ -22,7 +22,7 @@ from .artifacts import merge_compaction_usage_into_session
 from ...storage.message_origin import is_genuine_user_request as _is_genuine_user_request
 from ...providers._knob_reader import provider_knob
 from ...providers.token_budget import resolveCompactionRequestOutputTokens
-from ...providers.usage_costs import mergeProviderUsage as _merge_provider_usage
+from ...providers.usage_costs import merge_provider_usage as _merge_provider_usage
 from ..compaction_transport import resolve_compaction_token_policy
 
 
@@ -264,11 +264,11 @@ async def run_compaction_checkpoint_verification(args: dict[str, Any] | None = N
 def should_retry_compaction_attempt(error: BaseException, hasMoreAttempts: bool) -> bool:
     if not hasMoreAttempts:
         return False
-    return fallbackEligibleProviderFailure(error) or is_compaction_context_size_failure(error)
+    return fallback_eligible_provider_failure(error) or is_compaction_context_size_failure(error)
 
 
 def is_compaction_context_size_failure(error: BaseException) -> bool:
-    if not isProviderRequestError(error):
+    if not is_provider_request_error(error):
         return False
     record = getattr(error, "record", {})
     if record.get("category") not in {"client_request", "protocol"}:
@@ -278,7 +278,7 @@ def is_compaction_context_size_failure(error: BaseException) -> bool:
 
 
 def should_skip_compaction_synthesis_failure(error: BaseException | None) -> bool:
-    return bool(error and (fallbackEligibleProviderFailure(error) or is_compaction_context_size_failure(error) or is_compaction_synthesis_json_failure(error)))
+    return bool(error and (fallback_eligible_provider_failure(error) or is_compaction_context_size_failure(error) or is_compaction_synthesis_json_failure(error)))
 
 
 def is_compaction_synthesis_json_failure(error: BaseException | None) -> bool:
@@ -288,7 +288,7 @@ def is_compaction_synthesis_json_failure(error: BaseException | None) -> bool:
 def describe_compaction_synthesis_failure(error: BaseException | None) -> str:
     if error is None:
         return "Compaction synthesis failed: unknown error"
-    if isProviderRequestError(error):
+    if is_provider_request_error(error):
         record = getattr(error, "record", {})
         detail = f"{record.get('providerLabel', 'Provider')} compaction synthesis failed with {record.get('category')}: {record.get('message')}"
         if record.get("rawMessage"):

@@ -277,7 +277,7 @@ def _provider_recovery_lineage(data: dict[str, Any]) -> dict[str, Any]:
                 _field(data, "request_id", "requestId")
             ),
             "deliveryMode": _optional_string(
-                _field(data, "partial_output_mode", "partialOutputMode")
+                _field(data, "partial_output_mode", "partial_output_mode")
             ),
         }
     )

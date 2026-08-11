@@ -4,12 +4,12 @@ from tests.support.agent_core_case import *
 
 from agent_core.providers.errors import (
     ProviderWireError,
-    normalizeUnknownProviderFailure,
+    normalize_unknown_provider_failure,
 )
 
 
 def _normalize(error, provider="openai"):
-    return normalizeUnknownProviderFailure(
+    return normalize_unknown_provider_failure(
         error=error,
         provider=provider,
         providerLabel="Test Provider",

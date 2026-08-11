@@ -6,7 +6,7 @@ import copy
 import time
 
 from ...contracts.providers import ProviderResponse
-from ..activity import emitProviderActivity
+from ..activity import emit_provider_activity
 from ...runtime.secret_provider import resolve_provider_config_secrets
 from ..anthropic_async_transport import (
     AnthropicAsyncHttpConnectionOwner as _AnthropicAsyncTransport,
@@ -20,33 +20,33 @@ from urllib.error import HTTPError
 
 from .._core import retry_after_ms_from_headers as _retry_after_ms_from_headers
 from ..errors import (
-    canRetryProviderFailure,
-    classifyProviderHttpFailure,
-    normalizeUnknownProviderFailure,
-    providerRetryDelayMs,
+    can_retry_provider_failure,
+    classify_provider_http_failure,
+    normalize_unknown_provider_failure,
+    anthropic_retry_delay_ms,
 )
-from ..prompt_cache_diagnostics import normalizePromptCacheProviderReason
+from ..prompt_cache_diagnostics import normalize_prompt_cache_provider_reason
 from .payloads import (
-    buildAnthropicHeaders,
-    buildAnthropicMessagesEnvelope,
-    resolveAnthropicMessagesUrl,
+    build_anthropic_headers,
+    build_anthropic_messages_envelope,
+    resolve_anthropic_messages_url,
 )
 from .stream_consume import (
     _normalize_anthropic_json_response,
     _record_anthropic_turn_activity,
 )
-from .sse import _safe_json_parse, normalizeAnthropicSseResponse
+from .sse import _safe_json_parse, normalize_anthropic_sse_response
 from .transport import (
     _activity_state_bool,
     _race_anthropic_activity,
     _raise_anthropic_cancelled,
 )
 from .async_request import (
-    sendAnthropicMessagesStreamingViaAsyncTransport as _send_anthropic_messages_streaming_via_async_transport,
-    sendAnthropicMessagesViaAsyncTransport as _send_anthropic_messages_via_async_transport,
+    send_anthropic_messages_streaming_via_async_transport as _send_anthropic_messages_streaming_via_async_transport,
+    send_anthropic_messages_via_async_transport as _send_anthropic_messages_via_async_transport,
 )
 
-async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
+async def send_anthropic_messages_request(args: dict[str, Any] | None = None, **kwargs: Any) -> ProviderResponse:
     # Call-time import: the config package imports providers at module load.
     from ...config._knobs import knobValue
 
@@ -61,7 +61,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
         or args.get("requestStartTimeoutMs")
         or knobValue("provider.stream_idle_timeout_ms" if stream else "provider.json_response_timeout_ms")
     )
-    envelope = buildAnthropicMessagesEnvelope(request, config, {"stream": stream})
+    envelope = build_anthropic_messages_envelope(request, config, {"stream": stream})
     last_failure = None
     turn_session = args.get("turnSession") or args.get("turn_session")
 
@@ -76,7 +76,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 "provider.request_started",
                 {"provider": "anthropic", "provider_label": "Anthropic", "model": request["model"], "attempt": attempt},
             )
-            emitProviderActivity(runtime, "request_started", attempt=attempt)
+            emit_provider_activity(runtime, "request_started", attempt=attempt)
             payload = envelope["payload"]
             if stream:
                 activity_loop = asyncio.get_running_loop()
@@ -134,10 +134,10 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                     abortSignal=runtime.get("abortSignal"),
                     turnSession=turn_session,
                 )
-                emitProviderActivity(runtime, "response_headers", attempt=attempt)
+                emit_provider_activity(runtime, "response_headers", attempt=attempt)
                 phase = "parse"
                 if "text/event-stream" in content_type:
-                    response = normalizeAnthropicSseResponse(
+                    response = normalize_anthropic_sse_response(
                         raw,
                         request,
                         {**runtime, "_capturePromptCacheMetadata": True},
@@ -165,7 +165,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
             parsed = _safe_json_parse(body) or {}
             error_payload = parsed.get("error") if isinstance(parsed.get("error"), dict) else {}
             error_type = error_payload.get("type") if isinstance(error_payload.get("type"), str) else parsed.get("type") if isinstance(parsed.get("type"), str) else None
-            failure = classifyProviderHttpFailure(
+            failure = classify_provider_http_failure(
                 {
                     "provider": "anthropic",
                     "providerLabel": "Anthropic",
@@ -180,7 +180,7 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 }
             )
         except Exception as exc:
-            failure = normalizeUnknownProviderFailure(
+            failure = normalize_unknown_provider_failure(
                 {
                     "error": exc,
                     "provider": "anthropic",
@@ -192,11 +192,11 @@ async def sendAnthropicMessagesRequest(args: dict[str, Any] | None = None, **kwa
                 }
             )
         last_failure = failure
-        if canRetryProviderFailure(failure, max_attempts):
-            delay_ms = providerRetryDelayMs(attempt, failure)
+        if can_retry_provider_failure(failure, max_attempts):
+            delay_ms = anthropic_retry_delay_ms(attempt, failure)
             _raise_anthropic_cancelled(runtime, phase, attempt, had_assistant_output, had_tool_use)
             runtime.get("emitEvent", lambda *_: None)("provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
-            emitProviderActivity(
+            emit_provider_activity(
                 runtime,
                 "retry_wait",
                 attempt=attempt,
@@ -281,7 +281,7 @@ def _attach_prompt_cache_observation(
     requested = bool(envelope.get("diagnostics", {}).get("requested"))
     if requested and isinstance(response_id, str):
         observation["responseId"] = response_id
-    observation["providerDiagnosis"] = normalizePromptCacheProviderReason(
+    observation["providerDiagnosis"] = normalize_prompt_cache_provider_reason(
         {
             "requested": requested,
             "previousMessageIdSent": bool(envelope.get("diagnostics", {}).get("previousMessageIdSent")),

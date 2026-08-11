@@ -163,7 +163,7 @@ def _run_stream(
     if events_collector is not None:
         runtime["emitEvent"] = lambda event, data: events_collector.append((event, data))
     return run(
-        testing.sendOpenAiResponsesRequest(
+        testing.send_openai_responses_request(
             token="test",
             mode="codex",
             request=_request(),

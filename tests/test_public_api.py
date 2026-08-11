@@ -15,7 +15,7 @@ class PublicApiTests(AgentCoreTestCase):
         import agent_core.platform_support as platform_common
         import agent_core.providers.watchdog as provider_watchdog
 
-        self.assertTrue(callable(provider_watchdog.createProviderRequestWatchdog))
+        self.assertTrue(callable(provider_watchdog.create_provider_request_watchdog))
         self.assertEqual(platform_common.buildShellCommand("echo", ["hello world"], {"FOO": "bar baz"}), "FOO='bar baz' echo 'hello world'")
         self.assertEqual(
             subagents_module.sanitize_permission_mode("bogus"),

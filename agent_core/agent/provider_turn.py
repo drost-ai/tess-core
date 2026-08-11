@@ -7,15 +7,15 @@ from typing import Any
 from .._utils import maybe_await, merge_usage
 from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 from ..providers.prompt_cache_orchestration import (
-    attachPreparedPromptCacheContext,
-    commitProviderPromptCacheObservation,
-    createPromptCacheTurnContext,
+    attach_prepared_prompt_cache_context,
+    commit_provider_prompt_cache_observation,
+    create_prompt_cache_turn_context,
 )
-from ..providers.activity import ProviderActivityEmitter, emitProviderActivity
+from ..providers.activity import ProviderActivityEmitter, emit_provider_activity
 from ..providers.timeouts import createTurnDeadlineContext
 from ..session.persistence import persist_session
 from ..context.token_accounting import record_actual_token_usage
-from ..providers.usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
+from ..providers.usage_costs import estimate_usage_cost_usd, merge_usage_into_session, round_usd
 from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled, _safe_emit
 from .context import isContextWindowFailure, prepareProviderRequest
 from .providers import _create_provider, _record_provider_failure_if_needed
@@ -77,12 +77,12 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         session,
         args.get("providerTurnSession"),
     )
-    turn_context = await createPromptCacheTurnContext(
+    turn_context = await create_prompt_cache_turn_context(
         {"config": config, "session": session, "paths": args["paths"]}
     )
 
     async def prepare(reactive_attempt: int) -> dict[str, Any]:
-        emitProviderActivity(
+        emit_provider_activity(
             deadline_runtime,
             "request_preparing",
             attempt=reactive_attempt + 1,
@@ -104,7 +104,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                 }
             )
         )
-        return attachPreparedPromptCacheContext(
+        return attach_prepared_prompt_cache_context(
             {
                 "prepared": prepared,
                 "config": config,
@@ -128,20 +128,20 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
                 ):
                     response = unsupportedImageInputResponse(args["activeModel"])
                 else:
-                    emitProviderActivity(
+                    emit_provider_activity(
                         deadline_runtime,
                         "request_started",
                         attempt=int(prepared.get("reactiveAttempt") or 0) + 1,
                     )
                     response = await deadlines.race(maybe_await(provider["send"](request)))
-                await commitProviderPromptCacheObservation(response, deadline_runtime)
+                await commit_provider_prompt_cache_observation(response, deadline_runtime)
                 return prepared, response
             except Exception as error:
                 if _is_turn_abort_error(error, runtime.get("abortSignal")):
                     raise
                 attempt = int(prepared.get("reactiveAttempt") or 0)
                 if attempt < 2 and isContextWindowFailure(error):
-                    emitProviderActivity(
+                    emit_provider_activity(
                         deadline_runtime,
                         "retry_wait",
                         attempt=attempt + 1,
@@ -176,7 +176,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
             "emptyResponseAttempts": empty_attempts,
             "emptyResponseCostUsd": empty_cost,
         }
-        emitProviderActivity(
+        emit_provider_activity(
             deadline_runtime,
             "terminal",
             attempt=int(prepared.get("reactiveAttempt") or 0) + 1,
@@ -184,7 +184,7 @@ async def requestProviderResponse(args: dict[str, Any]) -> dict[str, Any]:
         )
         return result
     except Exception as error:
-        emitProviderActivity(deadline_runtime, "terminal", force=True)
+        emit_provider_activity(deadline_runtime, "terminal", force=True)
         await _record_provider_failure_if_needed(session, config, runtime, error)
         raise
     finally:
@@ -220,7 +220,7 @@ def recordEmptyResponseUsage(args: dict[str, Any] | None = None, **kwargs: Any) 
     response, session = values["response"], values["session"]
     usage = response.get("usage") or {}
     merge_usage(values["totalUsage"], usage)
-    mergeUsageIntoSession(session, usage)
+    merge_usage_into_session(session, usage)
     record_actual_token_usage(session, usage)
     _safe_emit(
         values["runtime"],
@@ -234,7 +234,7 @@ def recordEmptyResponseUsage(args: dict[str, Any] | None = None, **kwargs: Any) 
             **({"final_stop_reason": "empty_response"} if not values.get("retrying") else {}),
         },
     )
-    return estimateUsageCostUsd(usage, response.get("model") or "")
+    return estimate_usage_cost_usd(usage, response.get("model") or "")
 
 
 async def completeEmptyProviderResponse(args: dict[str, Any]) -> dict[str, Any] | None:
@@ -255,7 +255,7 @@ async def completeEmptyProviderResponse(args: dict[str, Any]) -> dict[str, Any] 
         "toolCount": int(args.get("toolCount") or 0),
         "usage": args["totalUsage"],
         "model": response.get("model"),
-        "estimatedCostUsd": roundUsd(cost),
+        "estimatedCostUsd": round_usd(cost),
         "stopReason": "empty_response",
     }
 

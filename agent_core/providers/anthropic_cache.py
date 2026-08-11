@@ -6,17 +6,17 @@ import copy
 from typing import Any, Mapping
 
 from .prompt_cache import (
-    anthropicMessageTailCacheEnabled,
-    anthropicToolDefinitionCacheEnabled,
+    anthropic_message_tail_cache_enabled,
+    anthropic_tool_definition_cache_enabled,
 )
-from .prompt_cache_diagnostics import hashPromptCacheValue
+from .prompt_cache_diagnostics import hash_prompt_cache_value
 
 
 MAX_ANTHROPIC_CACHE_BREAKPOINTS = 4
 _PLACEMENTS = ("system", "tools", "tail_a", "tail_b")
 
 
-def planAnthropicCache(input: Mapping[str, Any]) -> dict[str, Any]:
+def plan_anthropic_cache(input: Mapping[str, Any]) -> dict[str, Any]:
     policy = input.get("policy") if isinstance(input.get("policy"), Mapping) else {}
     system = _records(input.get("normalizedSystem"))
     tools = _records(input.get("normalizedTools"))
@@ -38,10 +38,10 @@ def planAnthropicCache(input: Mapping[str, Any]) -> dict[str, Any]:
     }
 
     system_candidate = explicit and _find_last_eligible_block(system) is not None
-    tools_candidate = anthropicToolDefinitionCacheEnabled(dict(policy)) and bool(tools)
+    tools_candidate = anthropic_tool_definition_cache_enabled(dict(policy)) and bool(tools)
     tail_a = (
         _find_newest_stable_anchor(system, tools, messages)
-        if anthropicMessageTailCacheEnabled(dict(policy))
+        if anthropic_message_tail_cache_enabled(dict(policy))
         else None
     )
     tail_b, omission = _resolve_previous_anchor(
@@ -63,9 +63,9 @@ def planAnthropicCache(input: Mapping[str, Any]) -> dict[str, Any]:
     return plan
 
 
-def applyAnthropicCachePlan(parts: Mapping[str, Any], plan: Mapping[str, Any]) -> dict[str, Any]:
+def apply_anthropic_cache_plan(parts: Mapping[str, Any], plan: Mapping[str, Any]) -> dict[str, Any]:
     system_index = _find_last_eligible_block(_records(parts.get("system")))
-    marked = stripAnthropicCacheControls(parts)
+    marked = strip_anthropic_cache_controls(parts)
     control = copy.deepcopy(plan.get("cacheControl") or {"type": "ephemeral"})
     if plan.get("system"):
         if system_index is not None:
@@ -86,7 +86,7 @@ def applyAnthropicCachePlan(parts: Mapping[str, Any], plan: Mapping[str, Any]) -
     return marked
 
 
-def stripAnthropicCacheControls(parts: Mapping[str, Any]) -> dict[str, Any]:
+def strip_anthropic_cache_controls(parts: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "system": [_strip_marker(value) for value in _records(parts.get("system"))],
         "tools": [_strip_marker(value) for value in _records(parts.get("tools"))],
@@ -100,7 +100,7 @@ def stripAnthropicCacheControls(parts: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def sanitizeAnthropicCountPayload(payload: Mapping[str, Any]) -> dict[str, Any]:
+def sanitize_anthropic_count_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     sanitized = copy.deepcopy(dict(payload))
     sanitized.pop("cache_control", None)
     sanitized.pop("diagnostics", None)
@@ -124,7 +124,7 @@ def sanitizeAnthropicCountPayload(payload: Mapping[str, Any]) -> dict[str, Any]:
     return sanitized
 
 
-def countAnthropicCacheControls(payload: Mapping[str, Any]) -> int:
+def count_anthropic_cache_controls(payload: Mapping[str, Any]) -> int:
     count = 1 if "cache_control" in payload else 0
     for key in ("tools", "system"):
         values = payload.get(key)
@@ -145,7 +145,7 @@ def countAnthropicCacheControls(payload: Mapping[str, Any]) -> int:
     return count
 
 
-def buildAnthropicMessageAnchorIdentity(
+def build_anthropic_message_anchor_identity(
     *,
     normalizedSystem: list[dict[str, Any]],
     normalizedTools: list[dict[str, Any]],
@@ -161,7 +161,7 @@ def buildAnthropicMessageAnchorIdentity(
         prefix_messages.append(
             {"role": message["role"], "content": [_strip_marker(block) for block in content]}
         )
-    return hashPromptCacheValue(
+    return hash_prompt_cache_value(
         "anthropic-anchor",
         {
             "tools": [_strip_marker(value) for value in normalizedTools],
@@ -171,7 +171,7 @@ def buildAnthropicMessageAnchorIdentity(
     )
 
 
-def isAnthropicCacheableBlock(block: Mapping[str, Any] | None) -> bool:
+def is_anthropic_cacheable_block(block: Mapping[str, Any] | None) -> bool:
     if not isinstance(block, Mapping) or not isinstance(block.get("type"), str):
         return False
     if block.get("_cache_target") is False:
@@ -204,7 +204,7 @@ def _find_newest_stable_anchor(
         return {
             "messageIndex": message_index,
             "blockIndex": block_index,
-            "identity": buildAnthropicMessageAnchorIdentity(
+            "identity": build_anthropic_message_anchor_identity(
                 normalizedSystem=system,
                 normalizedTools=tools,
                 normalizedMessages=messages,
@@ -232,11 +232,11 @@ def _resolve_previous_anchor(
         block = messages[message_index]["content"][block_index]
     except (IndexError, KeyError, TypeError):
         return None, {"placement": "tail_b", "reason": "out_of_range"}
-    if not isAnthropicCacheableBlock(block):
+    if not is_anthropic_cacheable_block(block):
         return None, {"placement": "tail_b", "reason": "illegal_block"}
     if not tail_a or _compare_anchors(previous, tail_a) >= 0:
         return None, {"placement": "tail_b", "reason": "not_strict_prefix"}
-    identity = buildAnthropicMessageAnchorIdentity(
+    identity = build_anthropic_message_anchor_identity(
         normalizedSystem=system,
         normalizedTools=tools,
         normalizedMessages=messages,
@@ -287,7 +287,7 @@ def _cache_control(policy: Mapping[str, Any]) -> dict[str, str]:
 
 def _find_last_eligible_block(blocks: list[dict[str, Any]]) -> int | None:
     for index in range(len(blocks) - 1, -1, -1):
-        if isAnthropicCacheableBlock(blocks[index]):
+        if is_anthropic_cacheable_block(blocks[index]):
             return index
     return None
 

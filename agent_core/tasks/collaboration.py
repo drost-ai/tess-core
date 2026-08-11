@@ -26,13 +26,13 @@ from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
 # narration into a focused module. Tests and embedders may replace these on
 # ``agent_core.tasks.collaboration``; the delegating wrapper installs the
 # current values before each request.
-sendOpenAiRequest = _collaboration_narration.sendOpenAiRequest
-sendAnthropicMessagesRequest = _collaboration_narration.sendAnthropicMessagesRequest
+send_openai_request = _collaboration_narration.send_openai_request
+send_anthropic_messages_request = _collaboration_narration.send_anthropic_messages_request
 
 
 async def author_collaboration_update(args: dict[str, Any]) -> str:
-    _collaboration_narration.sendOpenAiRequest = sendOpenAiRequest
-    _collaboration_narration.sendAnthropicMessagesRequest = sendAnthropicMessagesRequest
+    _collaboration_narration.send_openai_request = send_openai_request
+    _collaboration_narration.send_anthropic_messages_request = send_anthropic_messages_request
     return await _collaboration_narration.author_collaboration_update(args)
 
 

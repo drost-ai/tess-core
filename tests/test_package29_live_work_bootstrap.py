@@ -145,7 +145,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
     def test_collaboration_bootstrap_is_silent_and_later_transition_narrates(self):
         root, _home, workspace, previous = self.temp_context()
         runtime = None
-        original_send = collaboration_runtime_module.sendOpenAiRequest
+        original_send = collaboration_runtime_module.send_openai_request
         try:
             session = core.create_empty_session(cwd=str(workspace), provider="openai", model="test-model", systemPrompt="test", permissionMode="default", sessionId="66666666-6666-4666-8666-666666666666")
             session["messages"] = [{"role": "user", "content": "delegate"}]
@@ -159,7 +159,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
                 calls.append(args)
                 return {"content": [{"type": "text", "text": "The researcher finished."}], "usage": {}}
 
-            collaboration_runtime_module.sendOpenAiRequest = fake_send
+            collaboration_runtime_module.send_openai_request = fake_send
             target = Path(core.session_path(session["id"]))
             before = (target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"]))
             events = []
@@ -174,7 +174,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             self.assertTrue(any(event == "collaboration.assistant_update" for event, _ in events))
             self.assertEqual(session["messages"][-1]["content"], "The researcher finished.")
         finally:
-            collaboration_runtime_module.sendOpenAiRequest = original_send
+            collaboration_runtime_module.send_openai_request = original_send
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)
@@ -182,7 +182,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
     def test_monitor_bootstrap_is_silent_and_later_output_narrates(self):
         root, _home, workspace, previous = self.temp_context()
         runtime = None
-        original_send = monitors_module.sendOpenAiRequest
+        original_send = monitors_module.send_openai_request
         try:
             session = core.create_empty_session(cwd=str(workspace), provider="openai", model="test-model", systemPrompt="test", permissionMode="default", sessionId="67777777-7777-4777-8777-777777777777")
             session["messages"] = [{"role": "user", "content": "monitor"}]
@@ -203,7 +203,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
                 calls.append(args)
                 return {"content": [{"type": "text", "text": "There is new output."}], "usage": {}}
 
-            monitors_module.sendOpenAiRequest = fake_send
+            monitors_module.send_openai_request = fake_send
             target = Path(core.session_path(session["id"]))
             before = (target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"]))
             events = []
@@ -223,7 +223,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
             self.assertTrue(any(event == "monitor.assistant_update" for event, _ in events))
             self.assertEqual(session["messages"][-1]["content"], "There is new output.")
         finally:
-            monitors_module.sendOpenAiRequest = original_send
+            monitors_module.send_openai_request = original_send
             if runtime:
                 run(runtime["close"]())
             self.restore_home(root, previous)

@@ -41,7 +41,7 @@ class ProviderTimeoutPolicyTests(AgentCoreTestCase):
 
     def test_agent_loop_provider_receives_subagent_runtime_contract_deadlines(self):
         captured: dict[str, Any] = {}
-        original = loop_providers.sendAnthropicMessagesRequest
+        original = loop_providers.send_anthropic_messages_request
 
         async def fake_send(*_args, **kwargs):
             captured.update(kwargs)
@@ -52,7 +52,7 @@ class ProviderTimeoutPolicyTests(AgentCoreTestCase):
                 "stopReason": "end_turn",
             }
 
-        loop_providers.sendAnthropicMessagesRequest = fake_send
+        loop_providers.send_anthropic_messages_request = fake_send
         try:
             provider = loop_providers._create_provider(
                 {
@@ -85,4 +85,4 @@ class ProviderTimeoutPolicyTests(AgentCoreTestCase):
             self.assertEqual(captured["streamIdleTimeoutMs"], 7_200_000)
             self.assertEqual(captured["jsonResponseTimeoutMs"], 7_200_000)
         finally:
-            loop_providers.sendAnthropicMessagesRequest = original
+            loop_providers.send_anthropic_messages_request = original

@@ -118,9 +118,9 @@ def pretty_json(value: Any) -> str:
 def merge_usage(target: dict[str, Any], next_usage: dict[str, Any]) -> None:
     # Call-time import: _utils is foundational and must not import provider
     # modules at load (providers import _utils).
-    from .providers.usage_costs import mergeProviderUsage
+    from .providers.usage_costs import merge_provider_usage
 
-    mergeProviderUsage(target, next_usage)
+    merge_provider_usage(target, next_usage)
 
 
 def truthy_string(value: Any) -> str | None:

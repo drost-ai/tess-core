@@ -13,7 +13,7 @@ class ResponsesAttemptState:
     Constructing a fresh instance at the top of each retry attempt is what
     guarantees no stream state leaks between attempts; every field here is
     attempt-scoped. Attempt-invariant request context (mode, delivery,
-    logical call id, timeouts) stays in sendOpenAiResponsesRequest locals.
+    logical call id, timeouts) stays in send_openai_responses_request locals.
     """
 
     phase: str = "request_start"

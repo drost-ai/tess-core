@@ -91,7 +91,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
                     },
                     request_id=request_id,
                 )
-                failure = core.normalizeUnknownProviderFailure(_base(error=error))
+                failure = core.normalize_unknown_provider_failure(_base(error=error))
 
                 self.assertEqual(failure.record["category"], "server")
                 self.assertTrue(failure.record["retryable"])
@@ -122,7 +122,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
         )
         for status, body, error_type, code, category, retryable in cases:
             with self.subTest(status=status, error_type=error_type, category=category):
-                failure = core.normalizeUnknownProviderFailure(
+                failure = core.normalize_unknown_provider_failure(
                     _base(
                         error=_OpenAiSdkError(
                             status_code=status,
@@ -150,7 +150,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
         )
         error.headers = {"authorization": "Bearer secret"}
         error.request = {"input": "private prompt"}
-        failure = core.normalizeUnknownProviderFailure(_base(error=error))
+        failure = core.normalize_unknown_provider_failure(_base(error=error))
         serialized = json.dumps(failure.record, sort_keys=True)
 
         self.assertLessEqual(len(failure.record["rawMessage"]), 2_048)
@@ -161,10 +161,10 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
         self.assertNotIn("private prompt", serialized)
 
     def test_similar_prose_from_unrelated_provider_or_exception_is_not_retryable(self) -> None:
-        unrelated = core.normalizeUnknownProviderFailure(
+        unrelated = core.normalize_unknown_provider_failure(
             _base(error=RuntimeError(_PROCESSING_MESSAGE))
         )
-        anthropic = core.normalizeUnknownProviderFailure(
+        anthropic = core.normalize_unknown_provider_failure(
             _base(
                 provider="anthropic",
                 providerLabel="Anthropic",
@@ -193,7 +193,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
             return _completed()
 
         response = run(
-            testing.sendOpenAiResponsesRequest(
+            testing.send_openai_responses_request(
                 token="test",
                 mode="codex",
                 request={
@@ -234,7 +234,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
 
         with self.assertRaises(core.ProviderRequestError) as raised:
             run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     token="test",
                     mode="codex",
                     request={
@@ -279,7 +279,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
                 "deliveryAcknowledged": True,
                 "reason": "generation_attempts_exhausted",
             }
-            failure = core.createProviderFailureRecord(
+            failure = core.create_provider_failure_record(
                 provider="openai",
                 providerLabel="OpenAI/Codex",
                 phase="stream_read",
@@ -290,7 +290,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
                 hadToolUse=False,
                 logicalCallId="logical-receipt",
                 generation=2,
-                partialOutputMode="replaceable",
+                partial_output_mode="replaceable",
                 interruptedPreview=receipt,
             )
 

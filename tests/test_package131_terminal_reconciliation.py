@@ -160,7 +160,7 @@ def _run_stream(
     if runtime_extra:
         runtime.update(runtime_extra)
     return run(
-        testing.sendOpenAiResponsesRequest(
+        testing.send_openai_responses_request(
             token="test",
             mode="codex",
             request=_request(),

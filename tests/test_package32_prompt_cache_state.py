@@ -8,16 +8,16 @@ from tests.support.agent_core_case import *
 
 import agent_core.providers.prompt_cache_state as prompt_cache_state_module
 from agent_core.providers.prompt_cache_state import (
-    commitPromptCacheObservation,
-    createPromptCacheDispatchOrder,
-    markPromptCacheEvictionIntent,
-    promptCacheStatePath,
-    readPromptCacheState,
+    commit_prompt_cache_observation,
+    create_prompt_cache_dispatch_order,
+    mark_prompt_cache_eviction_intent,
+    prompt_cache_state_path,
+    read_prompt_cache_state,
 )
-from agent_core.providers.anthropic.payloads import planAnthropicCacheBreakpoints
+from agent_core.providers.anthropic.payloads import plan_anthropic_cache_breakpoints
 from agent_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
-    buildPromptCacheRequestSnapshot,
+    build_prompt_cache_request_snapshot,
 )
 from agent_core.runtime.paths import (
     configure_active_runtime_paths,
@@ -50,12 +50,12 @@ class PromptCacheStateTests(AgentCoreTestCase):
             "tools": [],
             "promptCache": policy,
         }
-        plan = planAnthropicCacheBreakpoints(request)
+        plan = plan_anthropic_cache_breakpoints(request)
         normalized_messages = [
             {"role": item["role"], "content": [{"type": "text", "text": item["content"]}]}
             for item in request["messages"]
         ]
-        snapshot = buildPromptCacheRequestSnapshot(
+        snapshot = build_prompt_cache_request_snapshot(
             {
                 "providerProfileName": "anthropic",
                 "routeClass": "official",
@@ -72,7 +72,7 @@ class PromptCacheStateTests(AgentCoreTestCase):
         return {
             "sessionId": self.session_id,
             "paths": self.paths,
-            "dispatchOrder": order or createPromptCacheDispatchOrder(
+            "dispatchOrder": order or create_prompt_cache_dispatch_order(
                 {"runtimeGeneration": 2, "messageCount": 2, "reactiveAttempt": 0}
             ),
             "plan": plan,
@@ -90,17 +90,17 @@ class PromptCacheStateTests(AgentCoreTestCase):
         }
 
     def test_private_atomic_commit_and_eviction_idempotency(self):
-        committed = run(commitPromptCacheObservation(self._candidate()))
+        committed = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(committed["status"], "committed")
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-        loaded = run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))
+        loaded = run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))
         self.assertEqual(loaded["status"], "valid")
         self.assertEqual(loaded["state"]["response"]["id"], "msg_diagnostic")
-        first = run(markPromptCacheEvictionIntent({
+        first = run(mark_prompt_cache_eviction_intent({
             "sessionId": self.session_id, "paths": self.paths, "finalizationKey": "final-key"
         }))
-        second = run(markPromptCacheEvictionIntent({
+        second = run(mark_prompt_cache_eviction_intent({
             "sessionId": self.session_id, "paths": self.paths, "finalizationKey": "final-key"
         }))
         self.assertEqual((first["status"], second["status"]), ("recorded", "already_recorded"))
@@ -115,27 +115,27 @@ class PromptCacheStateTests(AgentCoreTestCase):
         snapshot["boundedToolHashes"] = ["c" * 64] * 128
         snapshot["boundedBetaHashes"] = ["d" * 64] * 32
         candidate["responseId"] = None
-        self.assertEqual(run(commitPromptCacheObservation(candidate))["status"], "committed")
-        payload = Path(promptCacheStatePath(self.session_id, self.paths)).read_bytes()
+        self.assertEqual(run(commit_prompt_cache_observation(candidate))["status"], "committed")
+        payload = Path(prompt_cache_state_path(self.session_id, self.paths)).read_bytes()
         self.assertLessEqual(len(payload), MAX_PROMPT_CACHE_STATE_BYTES)
         self.assertNotIn(sentinel.encode("utf-8"), payload)
 
     def test_newest_dispatch_wins_across_concurrent_commits(self):
-        old = createPromptCacheDispatchOrder(
+        old = create_prompt_cache_dispatch_order(
             {"runtimeGeneration": 3, "messageCount": 2, "reactiveAttempt": 0, "nowMs": 100}
         )
-        new = createPromptCacheDispatchOrder(
+        new = create_prompt_cache_dispatch_order(
             {"runtimeGeneration": 3, "messageCount": 3, "reactiveAttempt": 0, "nowMs": 90}
         )
 
         async def compete():
             return await asyncio.gather(
-                commitPromptCacheObservation(self._candidate(order=new, text="new")),
-                commitPromptCacheObservation(self._candidate(order=old, text="old")),
+                commit_prompt_cache_observation(self._candidate(order=new, text="new")),
+                commit_prompt_cache_observation(self._candidate(order=old, text="old")),
             )
 
         results = run(compete())
-        loaded = run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))
+        loaded = run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))
         self.assertEqual(loaded["state"]["dispatchOrder"], new)
         self.assertIn("stale", {item["status"] for item in results})
 
@@ -178,7 +178,7 @@ class PromptCacheStateTests(AgentCoreTestCase):
         for process in processes:
             stdout, stderr = process.communicate(timeout=10)
             self.assertEqual(process.returncode, 0, stdout + stderr)
-        loaded = run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))
+        loaded = run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))
         self.assertEqual(loaded["state"]["dispatchOrder"]["messageCount"], 3)
         statuses = {json.loads((work / f"{name}.result").read_text())["status"] for name, _ in candidates}
         self.assertTrue(statuses.issubset({"committed", "stale"}))
@@ -225,60 +225,60 @@ class PromptCacheStateTests(AgentCoreTestCase):
                 statuses[name] = json.loads(
                     (work / f"{scenario}-{name}.result").read_text(encoding="utf-8")
                 )["status"]
-            loaded = run(readPromptCacheState({"sessionId": session_id, "paths": self.paths}))
+            loaded = run(read_prompt_cache_state({"sessionId": session_id, "paths": self.paths}))
             self.assertEqual(loaded["state"]["dispatchOrder"]["messageCount"], 3)
             self.assertEqual(statuses["new"], "committed")
             self.assertEqual(statuses["old"], "committed" if scenario == "old-first" else "stale")
 
     def test_malformed_state_is_quarantined_but_future_schema_is_immutable(self):
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         path.parent.mkdir(parents=True)
         path.write_text("{broken", encoding="utf-8")
-        result = run(commitPromptCacheObservation(self._candidate()))
+        result = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(result["status"], "committed")
         self.assertEqual(len(list(path.parent.glob("prompt-cache-state.json.invalid-*"))), 1)
 
         future = b'{"schemaVersion":2,"future":"preserve exactly"}\n'
         path.write_bytes(future)
-        refused = run(commitPromptCacheObservation(self._candidate()))
+        refused = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(refused, {"status": "unavailable", "reason": "future_schema"})
         self.assertEqual(path.read_bytes(), future)
 
     def test_oversized_state_is_quarantined_and_session_mismatch_is_immutable(self):
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         path.parent.mkdir(parents=True)
         path.write_bytes(b"x" * (128 * 1024 + 1))
-        recovered = run(commitPromptCacheObservation(self._candidate()))
+        recovered = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(recovered["status"], "committed")
         self.assertEqual(len(list(path.parent.glob("prompt-cache-state.json.invalid-*"))), 1)
         mismatched = json.loads(path.read_text(encoding="utf-8"))
         mismatched["sessionId"] = "different-session"
         exact = (json.dumps(mismatched, separators=(",", ":")) + "\n").encode("utf-8")
         path.write_bytes(exact)
-        refused = run(commitPromptCacheObservation(self._candidate()))
+        refused = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(refused, {"status": "unavailable", "reason": "session_mismatch"})
         self.assertEqual(path.read_bytes(), exact)
 
     def test_exact_bound_is_readable_and_one_byte_over_is_oversized(self):
-        run(commitPromptCacheObservation(self._candidate()))
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        run(commit_prompt_cache_observation(self._candidate()))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         compact = path.read_bytes().rstrip()
         exact = compact + (b" " * (MAX_PROMPT_CACHE_STATE_BYTES - len(compact) - 1)) + b"\n"
         self.assertEqual(len(exact), MAX_PROMPT_CACHE_STATE_BYTES)
         path.write_bytes(exact)
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))["status"],
+            run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))["status"],
             "valid",
         )
         path.write_bytes(exact + b" ")
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths})),
+            run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths})),
             {"status": "unavailable", "reason": "oversized"},
         )
 
     def test_inode_switch_during_bounded_read_is_rejected(self):
-        run(commitPromptCacheObservation(self._candidate()))
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        run(commit_prompt_cache_observation(self._candidate()))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         replacement = path.with_name("replacement.json")
         replacement.write_bytes(path.read_bytes())
         original_read = os.read
@@ -293,35 +293,35 @@ class PromptCacheStateTests(AgentCoreTestCase):
             return chunk
 
         with mock.patch.object(prompt_cache_state_module.os, "read", read_and_switch):
-            result = run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))
+            result = run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))
         self.assertEqual(result, {"status": "unavailable", "reason": "changed_during_read"})
 
     def test_invalid_v1_is_quarantined_and_resume_fork_are_isolated(self):
-        committed = run(commitPromptCacheObservation(self._candidate()))
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        committed = run(commit_prompt_cache_observation(self._candidate()))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         invalid = copy.deepcopy(committed["state"])
         invalid["request"]["modelHash"] = "not-a-hash"
         path.write_text(json.dumps(invalid), encoding="utf-8")
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))["reason"],
+            run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))["reason"],
             "invalid_schema",
         )
-        repaired = run(commitPromptCacheObservation(self._candidate()))
+        repaired = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(repaired["status"], "committed")
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))["status"],
+            run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))["status"],
             "valid",
         )
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": f"{self.session_id}-fork", "paths": self.paths})),
+            run(read_prompt_cache_state({"sessionId": f"{self.session_id}-fork", "paths": self.paths})),
             {"status": "missing", "reason": "missing"},
         )
 
     def test_dispatch_factory_and_captured_runtime_home_are_stable(self):
-        left = createPromptCacheDispatchOrder(
+        left = create_prompt_cache_dispatch_order(
             {"runtimeGeneration": 3, "messageCount": 4, "reactiveAttempt": 0, "nowMs": 100}
         )
-        right = createPromptCacheDispatchOrder(
+        right = create_prompt_cache_dispatch_order(
             {"runtimeGeneration": 3, "messageCount": 4, "reactiveAttempt": 0, "nowMs": 100}
         )
         self.assertGreater(right["localSequence"], left["localSequence"])
@@ -332,38 +332,38 @@ class PromptCacheStateTests(AgentCoreTestCase):
         other_paths = resolve_runtime_paths(candidate=str(other_home))
         configure_active_runtime_paths(str(other_home))
         try:
-            self.assertEqual(run(commitPromptCacheObservation(self._candidate()))["status"], "committed")
+            self.assertEqual(run(commit_prompt_cache_observation(self._candidate()))["status"], "committed")
         finally:
             reset_active_runtime_paths()
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))["status"],
+            run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))["status"],
             "valid",
         )
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": self.session_id, "paths": other_paths}))["status"],
+            run(read_prompt_cache_state({"sessionId": self.session_id, "paths": other_paths}))["status"],
             "missing",
         )
 
     def test_invalid_identifier_and_directory_target_degrade_safely(self):
         self.assertEqual(
-            run(readPromptCacheState({"sessionId": "../escape", "paths": self.paths})),
+            run(read_prompt_cache_state({"sessionId": "../escape", "paths": self.paths})),
             {"status": "unavailable", "reason": "unsafe_path"},
         )
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         path.mkdir(parents=True)
-        result = run(commitPromptCacheObservation(self._candidate()))
+        result = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(result["status"], "unavailable")
         self.assertIn(result["reason"], {"unsafe_path", "state_write_failed"})
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlink support required")
     def test_symlink_state_is_refused_without_touching_target(self):
-        path = Path(promptCacheStatePath(self.session_id, self.paths))
+        path = Path(prompt_cache_state_path(self.session_id, self.paths))
         path.parent.mkdir(parents=True)
         target = Path(self.root.name) / "outside.json"
         target.write_text('{"outside":true}\n', encoding="utf-8")
         path.symlink_to(target)
-        loaded = run(readPromptCacheState({"sessionId": self.session_id, "paths": self.paths}))
-        refused = run(commitPromptCacheObservation(self._candidate()))
+        loaded = run(read_prompt_cache_state({"sessionId": self.session_id, "paths": self.paths}))
+        refused = run(commit_prompt_cache_observation(self._candidate()))
         self.assertEqual(loaded, {"status": "unavailable", "reason": "unsafe_path"})
         self.assertEqual(refused, {"status": "unavailable", "reason": "unsafe_path"})
         self.assertEqual(target.read_text(encoding="utf-8"), '{"outside":true}\n')

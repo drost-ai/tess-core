@@ -9,13 +9,13 @@ from typing import Any
 
 import agent_core._facade as core
 from agent_core.providers.errors import (
-    canRetryProviderFailure,
-    createProviderRequestError,
-    normalizeUnknownProviderFailure,
+    can_retry_provider_failure,
+    create_provider_request_error,
+    normalize_unknown_provider_failure,
 )
 from agent_core.providers.anthropic.sse import (
     AnthropicSseAccumulator,
-    parseAnthropicSseEvents,
+    parse_anthropic_sse_events,
 )
 from agent_core.providers.openai.transport import _raise_openai_cancelled
 
@@ -110,7 +110,7 @@ async def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, An
         },
         1,
     )
-    for event in parseAnthropicSseEvents(_anthropic_state_prefix(state)):
+    for event in parse_anthropic_sse_events(_anthropic_state_prefix(state)):
         accumulator.process_raw_event(event)
     error = None
     response = None
@@ -149,7 +149,7 @@ async def _execute_anthropic_adapter(cell: dict[str, Any]) -> tuple[dict[str, An
                 accumulator.had_tool_use,
             )
     except Exception as exc:
-        error = normalizeUnknownProviderFailure(
+        error = normalize_unknown_provider_failure(
             error=exc,
             provider="anthropic",
             providerLabel="Anthropic",
@@ -178,7 +178,7 @@ async def _execute_openai_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any],
     error = None
     response = None
     event_names: list[str] = []
-    invocation = "sendOpenAiResponsesRequest(FakeOpenAIClientFactory)"
+    invocation = "send_openai_responses_request(FakeOpenAIClientFactory)"
     if fault in {"F3", "F5", "F6", "F7", "F8", "F9"}:
         data: dict[str, Any] = {
             "provider": "openai",
@@ -231,7 +231,7 @@ async def _execute_openai_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any],
                 data["script"] = {"responses": [{"contentType": "text/event-stream", "chunks": chunks}]}
                 data["streamIdleTimeoutMs"] = 80
         return await _run_wire_fault_cell(
-            cell, data, "sendOpenAiResponsesRequest(FakeProviderHttpServer wire)"
+            cell, data, "send_openai_responses_request(FakeProviderHttpServer wire)"
         )
     elif fault == "F13":
         try:
@@ -285,7 +285,7 @@ async def _execute_openai_adapter(cell: dict[str, Any]) -> tuple[dict[str, Any],
             )
             event_names = [item["event"] for item in runtime.events]
             if result["status"] == "failed":
-                error = createProviderRequestError(result["failure"])
+                error = create_provider_request_error(result["failure"])
             else:
                 response = result.get("response") or {}
         finally:
@@ -319,7 +319,7 @@ def _actual_from_result(
     return {
         "classification": record.get("category"),
         "retryable": bool(record.get("retryable")),
-        "retry": canRetryProviderFailure(error, 2),
+        "retry": can_retry_provider_failure(error, 2),
         "hadAssistantOutput": bool(record.get("hadAssistantOutput")),
         "hadToolUse": bool(record.get("hadToolUse")),
         "eventSequence": [],
@@ -367,7 +367,7 @@ async def _execute_anthropic_wire_cell(cell: dict[str, Any]) -> tuple[dict[str, 
         ]
         data["script"] = {"messages": [{"contentType": "text/event-stream", "chunks": chunks}]}
         data["streamIdleTimeoutMs"] = 80
-    return await _run_wire_fault_cell(cell, data, "sendAnthropicMessagesRequest(FakeProviderHttpServer)")
+    return await _run_wire_fault_cell(cell, data, "send_anthropic_messages_request(FakeProviderHttpServer)")
 
 
 async def _run_wire_fault_cell(
@@ -382,7 +382,7 @@ async def _run_wire_fault_cell(
     finally:
         runtime.close()
     error = (
-        createProviderRequestError(result["failure"])
+        create_provider_request_error(result["failure"])
         if result["status"] == "failed"
         else None
     )

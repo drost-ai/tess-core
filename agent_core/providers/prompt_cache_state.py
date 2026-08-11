@@ -17,7 +17,7 @@ from .._utils import now_iso
 from .prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
     MAX_RESPONSE_ID_BYTES,
-    diagnosePromptCache,
+    diagnose_prompt_cache,
 )
 from ..runtime.identifiers import parse_session_id
 from ..runtime.paths import RuntimePaths, run_with_runtime_paths
@@ -34,7 +34,7 @@ from typing import Any
 _HASH = re.compile(r"^[a-f0-9]{64}$")
 
 
-def isPromptCacheStateV1(value: Any) -> bool:
+def is_prompt_cache_state_v1(value: Any) -> bool:
     state = _record(value)
     if not _only(state, {"schemaVersion", "sessionId", "revision", "committedAt", "dispatchOrder", "request", "placement", "response", "diagnosis", "eviction"}):
         return False
@@ -201,11 +201,11 @@ _local_dispatch_sequence = 0
 _PROTECTED_UNAVAILABLE = {"future_schema", "session_mismatch", "unsafe_path", "changed_during_read", "io_error"}
 
 
-def promptCacheStatePath(sessionId: str, paths: RuntimePaths) -> str:
+def prompt_cache_state_path(sessionId: str, paths: RuntimePaths) -> str:
     return os.path.join(paths.sessionsDir, parse_session_id(sessionId), "prompt-cache-state.json")
 
 
-def createPromptCacheDispatchOrder(args: dict[str, Any]) -> dict[str, Any]:
+def create_prompt_cache_dispatch_order(args: dict[str, Any]) -> dict[str, Any]:
     global _local_dispatch_sequence
     _local_dispatch_sequence = (_local_dispatch_sequence + 1) % ((1 << 53) - 1)
     return {
@@ -230,7 +230,7 @@ def _read_bounded(descriptor: int) -> bytes:
     return b"".join(chunks)
 
 
-def comparePromptCacheDispatchOrder(left: dict[str, Any], right: dict[str, Any]) -> int:
+def compare_prompt_cache_dispatch_order(left: dict[str, Any], right: dict[str, Any]) -> int:
     for key in ("runtimeGeneration", "messageCount", "reactiveAttempt", "startedAtMs", "localSequence"):
         if left.get(key) != right.get(key):
             return -1 if left.get(key, -1) < right.get(key, -1) else 1
@@ -238,10 +238,10 @@ def comparePromptCacheDispatchOrder(left: dict[str, Any], right: dict[str, Any])
     return -1 if left_nonce < right_nonce else 1 if left_nonce > right_nonce else 0
 
 
-async def readPromptCacheState(args: dict[str, Any]) -> dict[str, Any]:
+async def read_prompt_cache_state(args: dict[str, Any]) -> dict[str, Any]:
     session_id, paths = args.get("sessionId"), args.get("paths")
     try:
-        path = promptCacheStatePath(session_id, paths)
+        path = prompt_cache_state_path(session_id, paths)
     except Exception:
         return {"status": "unavailable", "reason": "unsafe_path"}
     if not _safe_parent(path, paths.sessionsDir):
@@ -284,7 +284,7 @@ async def readPromptCacheState(args: dict[str, Any]) -> dict[str, Any]:
         schema = parsed.get("schemaVersion") if isinstance(parsed, dict) else None
         if isinstance(schema, (int, float)) and not isinstance(schema, bool) and schema > 1:
             return {"status": "unavailable", "reason": "future_schema"}
-        if not isPromptCacheStateV1(parsed):
+        if not is_prompt_cache_state_v1(parsed):
             return {"status": "unavailable", "reason": "invalid_schema"}
         if parsed["sessionId"] != session_id:
             return {"status": "unavailable", "reason": "session_mismatch"}
@@ -296,19 +296,19 @@ async def readPromptCacheState(args: dict[str, Any]) -> dict[str, Any]:
             os.close(descriptor)
 
 
-async def commitPromptCacheObservation(candidate: dict[str, Any]) -> dict[str, Any]:
+async def commit_prompt_cache_observation(candidate: dict[str, Any]) -> dict[str, Any]:
     async def transact() -> dict[str, Any]:
         async with with_record_transaction("prompt-cache-state", candidate["sessionId"]):
-            current = await readPromptCacheState(candidate)
+            current = await read_prompt_cache_state(candidate)
             if current["status"] == "unavailable":
                 if current.get("reason") in _PROTECTED_UNAVAILABLE:
                     return {"status": "unavailable", "reason": current.get("reason")}
                 await _quarantine_invalid_state(candidate["sessionId"], candidate["paths"])
                 current = {"status": "missing", "reason": "missing"}
             current_state = current.get("state")
-            if current_state and comparePromptCacheDispatchOrder(current_state["dispatchOrder"], candidate["dispatchOrder"]) >= 0:
+            if current_state and compare_prompt_cache_dispatch_order(current_state["dispatchOrder"], candidate["dispatchOrder"]) >= 0:
                 return {"status": "stale", "state": current_state, "reason": "newer_dispatch_committed"}
-            local = diagnosePromptCache({
+            local = diagnose_prompt_cache({
                 "previous": current_state.get("request") if current_state else None,
                 "current": candidate["snapshot"],
                 "usage": candidate.get("usage") or {},
@@ -346,7 +346,7 @@ async def commitPromptCacheObservation(candidate: dict[str, Any]) -> dict[str, A
                 state["response"]["providerDiagnosis"] = candidate["providerDiagnosis"]
             if len(_serialized(state)) > MAX_PROMPT_CACHE_STATE_BYTES:
                 return {"status": "unavailable", "reason": "state_size_limit"}
-            await _write_private_state(promptCacheStatePath(candidate["sessionId"], candidate["paths"]), state, candidate["paths"])
+            await _write_private_state(prompt_cache_state_path(candidate["sessionId"], candidate["paths"]), state, candidate["paths"])
             return {"status": "committed", "state": state}
 
     try:
@@ -355,14 +355,14 @@ async def commitPromptCacheObservation(candidate: dict[str, Any]) -> dict[str, A
         return {"status": "unavailable", "reason": "state_write_failed"}
 
 
-async def markPromptCacheEvictionIntent(args: dict[str, Any]) -> dict[str, Any]:
+async def mark_prompt_cache_eviction_intent(args: dict[str, Any]) -> dict[str, Any]:
     key = args.get("finalizationKey")
     if not isinstance(key, str) or not key or len(key.encode("utf-8")) > 256:
         return {"status": "unavailable", "reason": "invalid_finalization_key"}
 
     async def transact() -> dict[str, Any]:
         async with with_record_transaction("prompt-cache-state", args["sessionId"]):
-            current = await readPromptCacheState(args)
+            current = await read_prompt_cache_state(args)
             state = current.get("state")
             if not state:
                 return {"status": "unavailable", "reason": current.get("reason", "missing")}
@@ -377,7 +377,7 @@ async def markPromptCacheEvictionIntent(args: dict[str, Any]) -> dict[str, Any]:
                 "reason": "terminal_session_completion",
                 "finalizationKey": key,
             }
-            await _write_private_state(promptCacheStatePath(args["sessionId"], args["paths"]), state, args["paths"])
+            await _write_private_state(prompt_cache_state_path(args["sessionId"], args["paths"]), state, args["paths"])
             return {"status": "recorded", "state": state}
 
     try:
@@ -415,7 +415,7 @@ async def _write_private_state(path: str, value: dict[str, Any], paths: RuntimeP
 
 
 async def _quarantine_invalid_state(session_id: str, paths: RuntimePaths) -> None:
-    source = promptCacheStatePath(session_id, paths)
+    source = prompt_cache_state_path(session_id, paths)
     try:
         os.replace(source, f"{source}.invalid-{int(time.time() * 1000)}-{uuid.uuid4()}")
     except FileNotFoundError:

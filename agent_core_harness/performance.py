@@ -14,7 +14,7 @@ from typing import Any
 
 import agent_core._facade as core
 from agent_core.storage.persistence_metrics import register_persistence_observer
-from agent_core.providers.turn_session import createProviderTurnSession
+from agent_core.providers.turn_session import create_provider_turn_session
 from agent_core.providers.watchdog import AbortSignal
 from agent_core.agent.cancellation import _capture_session_rollback
 
@@ -335,7 +335,7 @@ async def _measure_anthropic_transport_turn(
     ).start()
     runtime = {"emitEvent": lambda *_: None}
     config = _benchmark_anthropic_config(server, enabled)
-    turn = createProviderTurnSession(
+    turn = create_provider_turn_session(
         logical_turn_id="package45-benchmark",
         session={"id": "package45-benchmark", "provider": "anthropic"},
         config=config,
@@ -345,7 +345,7 @@ async def _measure_anthropic_transport_turn(
     started = time.perf_counter()
     try:
         for _ in range(calls_per_turn):
-            await core.sendAnthropicMessagesRequest(
+            await core.send_anthropic_messages_request(
                 config=config,
                 request=_benchmark_anthropic_request(),
                 runtime=runtime,
@@ -376,7 +376,7 @@ async def _measure_anthropic_cancel() -> dict[str, Any]:
     signal = AbortSignal()
     runtime = {"abortSignal": signal, "streamProviderMessages": True, "emitEvent": lambda *_: None}
     config = _benchmark_anthropic_config(server, False)
-    turn = createProviderTurnSession(
+    turn = create_provider_turn_session(
         logical_turn_id="package45-cancel",
         session={"id": "package45-cancel", "provider": "anthropic"},
         config=config,
@@ -396,7 +396,7 @@ async def _measure_anthropic_cancel() -> dict[str, Any]:
     abort_task = asyncio.create_task(abort_after_headers())
     category = None
     try:
-        await core.sendAnthropicMessagesRequest(
+        await core.send_anthropic_messages_request(
             config=config,
             request=_benchmark_anthropic_request(),
             runtime=runtime,

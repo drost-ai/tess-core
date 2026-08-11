@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from ..errors import createProviderFailureRecord, createProviderRequestError
+from ..errors import create_provider_failure_record, create_provider_request_error
 from ._attempt_state import ResponsesAttemptState
 from .normalization import _parse_complete_json_object
 from ..._utils import get_value
@@ -249,8 +249,8 @@ def reconciliation_conflict_failure(
     logical_call_id: str,
     response_id: str | None,
 ) -> Any:
-    return createProviderRequestError(
-        createProviderFailureRecord(
+    return create_provider_request_error(
+        create_provider_failure_record(
             provider="openai",
             providerLabel=provider_label,
             phase=phase,

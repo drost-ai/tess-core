@@ -38,7 +38,7 @@ class OpenAISdkTransportTests(AgentCoreTestCase):
             return_value=SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
         ):
             response = run(
-                testing.sendOpenAiResponsesRequest(
+                testing.send_openai_responses_request(
                     {
                         "token": "sdk-token",
                         "mode": "codex",

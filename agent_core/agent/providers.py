@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import copy
-from ..providers.anthropic import sendAnthropicMessagesRequest
-from ..providers.errors import isProviderRequestError
-from ..providers.openai import sendOpenAiRequest
+from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.errors import is_provider_request_error
+from ..providers.openai import send_openai_request
 from ..session.persistence import persist_provider_failure, persist_session
 from ..runtime.events.emit import safe_emit as _safe_emit
 from typing import Any
 from ..providers.partial_output_state import (
-    createPartialOutputStateStore as _create_partial_output_state_store,
-    finalizePartialOutputState as _finalize_partial_output_state,
+    create_partial_output_state_store as _create_partial_output_state_store,
+    finalize_partial_output_state as _finalize_partial_output_state,
 )
 from ..providers.timeouts import resolveProviderTimeoutPolicy
 from ..runtime.secret_provider import resolve_provider_config_secrets
@@ -21,7 +21,7 @@ async def _record_provider_failure_if_needed(
     runtime: dict[str, Any],
     error: BaseException,
 ) -> None:
-    if not isProviderRequestError(error):
+    if not is_provider_request_error(error):
         return
     metadata = session.setdefault("metadata", {})
     if metadata.get("lastProviderFailure") == error.record:
@@ -95,7 +95,7 @@ def _create_provider(
         async def send_openai(request: dict[str, Any]) -> dict[str, Any]:
             await _heal_partial_output_commit(session, state_store)
             resolved = await resolve_provider_config_secrets(config)
-            return await sendOpenAiRequest(
+            return await send_openai_request(
                 token=resolved["openaiToken"],
                 baseUrl=resolved.get("openaiBaseUrl"),
                 headers=resolved.get("customHeaders"),
@@ -114,7 +114,7 @@ def _create_provider(
         return {"send": lambda request: _missing_anthropic_credential_response(config, request)}
     async def send_anthropic(request: dict[str, Any]) -> dict[str, Any]:
         resolved = await resolve_provider_config_secrets(config)
-        return await sendAnthropicMessagesRequest(
+        return await send_anthropic_messages_request(
             config=resolved,
             request=request,
             runtime=runtime,

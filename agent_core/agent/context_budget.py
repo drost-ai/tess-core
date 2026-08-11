@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..providers.errors import createProviderFailureRecord, createProviderRequestError
+from ..providers.errors import create_provider_failure_record, create_provider_request_error
 
 
 def assessContextHeadroom(
@@ -61,8 +61,8 @@ def enforceContextHeadroom(
     if assessment.get("status") != "context_capacity_exhausted":
         return
     reason = str(assessment.get("reason") or "context_capacity_exhausted")
-    raise createProviderRequestError(
-        createProviderFailureRecord(
+    raise create_provider_request_error(
+        create_provider_failure_record(
             provider=config.get("provider"),
             providerLabel=config.get("providerProfileName") or config.get("provider"),
             phase="request_build",
@@ -89,8 +89,8 @@ def applyProviderTokenBudget(
     config: dict[str, Any],
 ) -> dict[str, Any]:
     if budget.get("insufficient"):
-        raise createProviderRequestError(
-            createProviderFailureRecord(
+        raise create_provider_request_error(
+            create_provider_failure_record(
                 {
                     "provider": config.get("provider"),
                     "providerLabel": config.get("providerProfileName"),

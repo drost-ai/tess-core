@@ -110,7 +110,7 @@ class KnobWiringTests(unittest.TestCase):
             resetConfiguredKnobs()
 
     def test_openai_retry_ladder_reads_knob_with_jitter(self):
-        delay = openai_module.shared.providerRetryDelayMs
+        delay = openai_module.shared.openai_retry_delay_ms
         self.assertTrue(1_000 <= delay(1) <= 1_119, delay(1))
         self.assertTrue(30_000 <= delay(5) <= 30_119, delay(5))
         self.assertTrue(30_000 <= delay(9) <= 30_119, delay(9))
@@ -119,13 +119,13 @@ class KnobWiringTests(unittest.TestCase):
         self.assertTrue(7 <= delay(3) <= 126, delay(3))
 
     def test_anthropic_quick_retry_reads_knob_with_jitter(self):
-        from agent_core.providers.errors import providerRetryDelayMs
+        from agent_core.providers.errors import anthropic_retry_delay_ms
 
-        first, second = providerRetryDelayMs(1), providerRetryDelayMs(2)
+        first, second = anthropic_retry_delay_ms(1), anthropic_retry_delay_ms(2)
         self.assertTrue(350 <= first <= 469, first)
         self.assertTrue(700 <= second <= 819, second)
         configureKnobs({"provider": {"anthropic_retry_delays_ms": [0]}})
-        self.assertTrue(0 <= providerRetryDelayMs(3) <= 119)
+        self.assertTrue(0 <= anthropic_retry_delay_ms(3) <= 119)
 
     def test_turn_deadline_context_timeout_fallbacks_read_knobs(self):
         from agent_core.providers.timeouts import createTurnDeadlineContext

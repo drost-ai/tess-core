@@ -42,9 +42,9 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
 
     def test_provider_payloads_use_request_output_budget(self):
         request = {"model": "gpt-5.4", "maxOutputTokens": 4_321, "system": "s", "messages": [{"role": "user", "content": "hi"}], "tools": []}
-        self.assertEqual(testing.buildResponsesCreateParams({"request": request})["max_output_tokens"], 4_321)
-        self.assertEqual(testing.buildChatCompletionsCreateParams(request)["max_tokens"], 4_321)
-        self.assertEqual(testing.buildAnthropicMessagesPayload({**request, "model": "claude-opus-4-8"})["max_tokens"], 4_321)
+        self.assertEqual(testing.build_responses_create_params({"request": request})["max_output_tokens"], 4_321)
+        self.assertEqual(testing.build_chat_completions_create_params(request)["max_tokens"], 4_321)
+        self.assertEqual(testing.build_anthropic_messages_payload({**request, "model": "claude-opus-4-8"})["max_tokens"], 4_321)
 
     def test_unmatched_profile_output_limit_falls_back_to_knob(self):
         from agent_core.config._knobs import configureKnobs, resetConfiguredKnobs
@@ -92,22 +92,22 @@ class ProviderTokenBudgetTests(AgentCoreTestCase):
             )
             self.assertEqual(request["maxOutputTokens"], 128_000)
 
-            self.assertEqual(testing.buildResponsesCreateParams({"request": request})["max_output_tokens"], 128_000)
-            self.assertEqual(testing.buildChatCompletionsCreateParams(request)["max_tokens"], 128_000)
-            self.assertEqual(testing.buildAnthropicMessagesPayload(request)["max_tokens"], 128_000)
+            self.assertEqual(testing.build_responses_create_params({"request": request})["max_output_tokens"], 128_000)
+            self.assertEqual(testing.build_chat_completions_create_params(request)["max_tokens"], 128_000)
+            self.assertEqual(testing.build_anthropic_messages_payload(request)["max_tokens"], 128_000)
         finally:
             self.restore_home(root, previous)
 
 
 class ModelLimitRulesTests(AgentCoreTestCase):
     def tearDown(self):
-        from agent_core.providers.token_budget import resetConfiguredModelLimitRules
+        from agent_core.providers.token_budget import reset_configured_model_limit_rules
 
-        resetConfiguredModelLimitRules()
+        reset_configured_model_limit_rules()
 
     def test_configured_rules_beat_builtin_inference_and_lose_to_explicit_fields(self):
         from agent_core.providers.token_budget import (
-            configureModelLimitRules,
+            configure_model_limit_rules,
             resolve_provider_token_limits,
         )
 
@@ -115,7 +115,7 @@ class ModelLimitRulesTests(AgentCoreTestCase):
         builtin = resolve_provider_token_limits(profile)
         self.assertEqual(builtin["maxContextLength"], 1_000_000)  # builtin deepseek-v4 rule
 
-        configureModelLimitRules([{"match": "deepseek-v4", "maxContextLength": 65_536, "maxOutputTokens": 16_384}])
+        configure_model_limit_rules([{"match": "deepseek-v4", "maxContextLength": 65_536, "maxOutputTokens": 16_384}])
         ruled = resolve_provider_token_limits(profile)
         self.assertEqual(ruled, {"maxContextLength": 65_536, "maxOutputTokens": 16_384})
 
@@ -123,13 +123,13 @@ class ModelLimitRulesTests(AgentCoreTestCase):
         self.assertEqual(explicit["maxContextLength"], 9_999)  # explicit profile field still wins
 
         # A partial rule only supplies what it declares; the rest falls through.
-        configureModelLimitRules([{"match": "my-endpoint", "maxContextLength": 32_000}])
+        configure_model_limit_rules([{"match": "my-endpoint", "maxContextLength": 32_000}])
         partial = resolve_provider_token_limits({"kind": "openai", "profileName": "my-endpoint", "model": "unknown-model"})
         self.assertEqual(partial["maxContextLength"], 32_000)
         self.assertEqual(partial["maxOutputTokens"], 16_384)  # provider.max_output_tokens knob default
 
     def test_malformed_rules_fail_loud(self):
-        from agent_core.providers.token_budget import configureModelLimitRules
+        from agent_core.providers.token_budget import configure_model_limit_rules
 
         for bad in (
             [{"maxContextLength": 1000}],
@@ -139,7 +139,7 @@ class ModelLimitRulesTests(AgentCoreTestCase):
             [{"match": "x", "maxContextLength": 1000, "surprise": 1}],
         ):
             with self.assertRaises(ValueError):
-                configureModelLimitRules(bad)
+                configure_model_limit_rules(bad)
 
     def test_rules_load_from_providers_yaml_via_resolve_config(self):
         root, home, workspace, previous = self.temp_context()

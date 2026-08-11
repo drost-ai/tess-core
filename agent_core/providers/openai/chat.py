@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from .._knob_reader import provider_knob
 
-from ..activity import emitProviderActivity
-from .recovery_attempt import openai_retry_delay_ms as _openai_retry_delay_ms
+from ..activity import emit_provider_activity
+from .recovery_attempt import _recovery_retry_delay_ms as _openai_retry_delay_ms
 import asyncio
 import json
 from ..._utils import get_value, maybe_await, to_async_iter
 from ..error_evidence import ProviderWireError
 from ..errors import (
-    canRetryProviderFailure,
-    createProviderIncompleteResponseError,
-    normalizeUnknownProviderFailure,
+    can_retry_provider_failure,
+    create_provider_incomplete_response_error,
+    normalize_unknown_provider_failure,
 )
-from ..prompt_cache import openAiPromptCacheRequestOptions
+from ..prompt_cache import open_ai_prompt_cache_request_options
 from .normalization import (
     _append_text_block,
     _apply_chat_completion_usage,
@@ -21,10 +21,10 @@ from .normalization import (
     _merge_tool_call_name,
 )
 from .params import (
-    buildChatCompletionsCreateParams,
-    getOpenAiProviderLabel,
-    resolveOpenAiBaseUrl,
-    supportsOpenAiChatCompletionsReasoningEffort,
+    build_chat_completions_create_params,
+    get_openai_provider_label,
+    resolve_openai_base_url,
+    supports_openai_chat_completions_reasoning_effort,
 )
 from .transport import (
     _acquire_openai_client,
@@ -36,13 +36,13 @@ from typing import Any
 
 
 
-async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
+async def send_openai_chat_completions_request(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     # Call-time import: the config package imports providers at module load.
     from ...config._knobs import knobValue
 
     args = {**(args or {}), **kwargs}
-    base_url = resolveOpenAiBaseUrl("chat_completions", args.get("baseUrl"))
-    provider_label = getOpenAiProviderLabel("chat_completions", base_url)
+    base_url = resolve_openai_base_url("chat_completions", args.get("baseUrl"))
+    provider_label = get_openai_provider_label("chat_completions", base_url)
     max_attempts = max(
         1,
         int(args.get("maxAttempts") or provider_knob("provider.openai_max_attempts")),
@@ -69,7 +69,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         stream_idle_timeout_ms = int(args.get("streamIdleTimeoutMs") or knobValue("provider.stream_idle_timeout_ms"))
 
         def incomplete_response(reason: str) -> Any:
-            return createProviderIncompleteResponseError(
+            return create_provider_incomplete_response_error(
                 provider="openai",
                 providerLabel=provider_label,
                 mode="chat_completions",
@@ -93,17 +93,17 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
         try:
             _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
             client, connection_reused = await _acquire_openai_client(args, base_url)
-            emitProviderActivity(runtime, "request_started", attempt=attempt)
+            emit_provider_activity(runtime, "request_started", attempt=attempt)
             chat = get_value(client, "chat")
             completions = get_value(chat, "completions") if chat else None
             if not completions:
                 raise RuntimeError("OpenAI Chat Completions client is unavailable.")
-            params = buildChatCompletionsCreateParams(
+            params = build_chat_completions_create_params(
                 args["request"],
                 {
-                    "includeReasoningEffort": supportsOpenAiChatCompletionsReasoningEffort(base_url),
-                    "includeStore": not base_url or supportsOpenAiChatCompletionsReasoningEffort(base_url),
-                    "requestOptions": openAiPromptCacheRequestOptions(
+                    "includeReasoningEffort": supports_openai_chat_completions_reasoning_effort(base_url),
+                    "includeStore": not base_url or supports_openai_chat_completions_reasoning_effort(base_url),
+                    "requestOptions": open_ai_prompt_cache_request_options(
                         mode="chat_completions",
                         base_url=base_url,
                         config=args.get("config") or {},
@@ -151,7 +151,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             active_stream = response
             if turn_session is not None:
                 turn_session.bind_stream(response)
-            emitProviderActivity(runtime, "response_headers", attempt=attempt)
+            emit_provider_activity(runtime, "response_headers", attempt=attempt)
             if turn_session is not None:
                 turn_session.mark_provider_activity("response_headers")
             phase = "stream_open"
@@ -173,7 +173,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 except StopAsyncIteration:
                     break
                 phase = "stream_read"
-                emitProviderActivity(runtime, "stream_frame", attempt=attempt)
+                emit_provider_activity(runtime, "stream_frame", attempt=attempt)
                 if turn_session is not None:
                     turn_session.mark_provider_activity("stream_frame")
                 if runtime.get("streamProviderMessages"):
@@ -195,7 +195,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     delta = get_value(choice, "delta", {}) or {}
                     content_delta = get_value(delta, "content", "")
                     if isinstance(content_delta, str) and content_delta:
-                        emitProviderActivity(runtime, "output_delta", attempt=attempt)
+                        emit_provider_activity(runtime, "output_delta", attempt=attempt)
                         if turn_session is not None:
                             turn_session.mark_provider_activity("output_delta")
                         had_output = True
@@ -208,7 +208,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                         refusal_text += refusal_delta
                     reasoning_delta = get_value(delta, "reasoning_content", "")
                     if isinstance(reasoning_delta, str) and reasoning_delta:
-                        emitProviderActivity(runtime, "reasoning", attempt=attempt)
+                        emit_provider_activity(runtime, "reasoning", attempt=attempt)
                         if turn_session is not None:
                             turn_session.mark_provider_activity("reasoning")
                         reasoning_content += reasoning_delta
@@ -229,7 +229,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                     raw_tool_calls = get_value(delta, "tool_calls", [])
                     tool_calls = raw_tool_calls if isinstance(raw_tool_calls, list) else []
                     for default_index, tool_call in enumerate(tool_calls):
-                        emitProviderActivity(runtime, "tool_boundary", attempt=attempt)
+                        emit_provider_activity(runtime, "tool_boundary", attempt=attempt)
                         raw_index = get_value(tool_call, "index")
                         index = raw_index if isinstance(raw_index, int) and not isinstance(raw_index, bool) else default_index
                         pending = pending_tool_calls.setdefault(index, {"arguments": ""})
@@ -299,7 +299,7 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
             if turn_session is not None and active_stream is not None:
                 await turn_session.release_stream(active_stream)
                 active_stream = None
-            failure = normalizeUnknownProviderFailure(
+            failure = normalize_unknown_provider_failure(
                 error=exc,
                 provider="openai",
                 providerLabel=provider_label,
@@ -309,11 +309,11 @@ async def sendOpenAiChatCompletionsRequest(args: dict[str, Any] | None = None, *
                 hadToolUse=had_tool_use,
             )
             last_failure = failure
-            if canRetryProviderFailure(failure, max_attempts):
+            if can_retry_provider_failure(failure, max_attempts):
                 delay_ms = _openai_retry_delay_ms(args, attempt, failure)
                 _raise_openai_cancelled(runtime, provider_label, phase, attempt, had_output, had_tool_use)
                 _emit(runtime, "provider.retrying", {**failure.record, "next_attempt": attempt + 1, "delay_ms": delay_ms})
-                emitProviderActivity(
+                emit_provider_activity(
                     runtime,
                     "retry_wait",
                     attempt=attempt,

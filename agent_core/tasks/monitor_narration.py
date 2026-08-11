@@ -4,9 +4,9 @@ import json
 from typing import Any
 
 from ..config import ensureProviderForModelSelection, normalizeEffortForModel
-from ..providers.anthropic import sendAnthropicMessagesRequest
-from ..providers.openai import sendOpenAiRequest
-from ..providers.usage_costs import mergeUsageIntoSession as _merge_usage_into_session
+from ..providers.anthropic import send_anthropic_messages_request
+from ..providers.openai import send_openai_request
+from ..providers.usage_costs import merge_usage_into_session as _merge_usage_into_session
 from ..runtime.secret_provider import resolve_provider_config_secrets
 
 
@@ -69,9 +69,9 @@ async def _author_monitor_update_with_provider(config: dict[str, Any], session: 
         token = resolved_config.get("openaiToken")
         if not token:
             raise RuntimeError("No OpenAI token available for monitor updates.")
-        response = await sendOpenAiRequest({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
+        response = await send_openai_request({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
     else:
-        response = await sendAnthropicMessagesRequest({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
+        response = await send_anthropic_messages_request({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
     text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
     if not text:
         raise RuntimeError("Provider returned an empty monitor update.")

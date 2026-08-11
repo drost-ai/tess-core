@@ -9,20 +9,20 @@ from typing import Any, Awaitable, Callable
 
 from agent_core._utils import now_iso
 from agent_core.providers.prompt_cache_orchestration import (
-    attachPromptCacheDispatchContext,
-    commitProviderPromptCacheObservation,
+    attach_prompt_cache_dispatch_context,
+    commit_provider_prompt_cache_observation,
 )
-from agent_core.providers.prompt_cache_state import readPromptCacheState
-from agent_core.providers.anthropic_cache import countAnthropicCacheControls
+from agent_core.providers.prompt_cache_state import read_prompt_cache_state
+from agent_core.providers.anthropic_cache import count_anthropic_cache_controls
 from agent_core.providers.anthropic.payloads import (
-    buildAnthropicHeaders,
-    buildAnthropicMessagesEnvelope,
+    build_anthropic_headers,
+    build_anthropic_messages_envelope,
 )
-from agent_core.providers.anthropic.request import sendAnthropicMessagesRequest
+from agent_core.providers.anthropic.request import send_anthropic_messages_request
 from agent_core.runtime.paths import resolve_runtime_paths
 from agent_core.storage import ensure_base_layout
 from agent_core.context.token_accounting import measure_request_input_tokens
-from agent_core.providers.usage_costs import estimateUsageCost
+from agent_core.providers.usage_costs import estimate_usage_cost
 
 from .package32_canary_evidence import (
     Package32CanaryError,
@@ -216,9 +216,9 @@ async def _interaction(
     stream: bool,
     send_request: SendRequest,
 ) -> tuple[dict[str, Any], float]:
-    previous_read = await readPromptCacheState({"sessionId": session_id, "paths": paths})
+    previous_read = await read_prompt_cache_state({"sessionId": session_id, "paths": paths})
     previous = previous_read.get("state")
-    prepared = attachPromptCacheDispatchContext(
+    prepared = attach_prompt_cache_dispatch_context(
         {
             "request": request,
             "config": config,
@@ -230,11 +230,11 @@ async def _interaction(
             "previousState": previous,
         }
     )
-    envelope = buildAnthropicMessagesEnvelope(prepared, config, {"stream": stream})
+    envelope = build_anthropic_messages_envelope(prepared, config, {"stream": stream})
     plan = envelope["cachePlan"]
-    if countAnthropicCacheControls(envelope["payload"]) != plan["usedBreakpoints"]:
+    if count_anthropic_cache_controls(envelope["payload"]) != plan["usedBreakpoints"]:
         raise Package32CanaryError("placement_mismatch", "Local cache placement count changed.")
-    headers = buildAnthropicHeaders(
+    headers = build_anthropic_headers(
         config,
         {"stream": stream},
         envelope.get("headerFeatures"),
@@ -253,14 +253,14 @@ async def _interaction(
         not diagnostics_requested or sent_previous_id == previous_id
     )
     response = await send_request(config, prepared, stream)
-    await commitProviderPromptCacheObservation(response)
-    current = (await readPromptCacheState({"sessionId": session_id, "paths": paths})).get("state")
+    await commit_provider_prompt_cache_observation(response)
+    current = (await read_prompt_cache_state({"sessionId": session_id, "paths": paths})).get("state")
     expected_revision = int((previous or {}).get("revision") or 0) + 1
     if not current or current.get("revision") != expected_revision:
         raise Package32CanaryError("commit_count_mismatch", "Terminal response did not commit exactly once.")
     usage = response.get("usage") or {}
     detail_complete = usage.get("cache_creation_ttl_detail_complete") is True
-    cost = estimateUsageCost(usage, MODEL)
+    cost = estimate_usage_cost(usage, MODEL)
     record = {
         "scenario": scenario,
         "request": index,
@@ -354,8 +354,8 @@ def _assert_stream_trace(records: list[dict[str, Any]]) -> None:
 
 async def _assert_fork_is_fresh(config: dict[str, Any], paths: Any, shape: tuple[list[dict[str, Any]], str]) -> None:
     fork_id = f"pc32-fork-{uuid.uuid4().hex}"
-    state = await readPromptCacheState({"sessionId": fork_id, "paths": paths})
-    prepared = attachPromptCacheDispatchContext(
+    state = await read_prompt_cache_state({"sessionId": fork_id, "paths": paths})
+    prepared = attach_prompt_cache_dispatch_context(
         {
             "request": _request(MODEL, shape[1], shape[0]),
             "config": config,
@@ -367,7 +367,7 @@ async def _assert_fork_is_fresh(config: dict[str, Any], paths: Any, shape: tuple
             "previousState": None,
         }
     )
-    envelope = buildAnthropicMessagesEnvelope(prepared, config)
+    envelope = build_anthropic_messages_envelope(prepared, config)
     if state.get("status") != "missing" or envelope["diagnostics"]["previousMessageIdSent"]:
         raise Package32CanaryError("fork_inherited_state", "C4 fork inherited cache state.")
 
@@ -437,7 +437,7 @@ def _append_exchange(messages: list[dict[str, Any]], index: int) -> list[dict[st
 
 
 def _request_upper_cost(request: dict[str, Any], config: dict[str, Any]) -> float:
-    payload = buildAnthropicMessagesEnvelope(request, config)["payload"]
+    payload = build_anthropic_messages_envelope(request, config)["payload"]
     maximum_input_tokens = len(json.dumps(payload, separators=(",", ":")).encode("utf-8")) + 512
     return maximum_input_tokens * 10 / 1_000_000 + MAX_OUTPUT_TOKENS * 25 / 1_000_000
 
@@ -456,7 +456,7 @@ def _assert_remaining_cost(actual: float, remaining_upper: float, ceiling: float
 
 
 async def _live_send(config: dict[str, Any], request: dict[str, Any], stream: bool) -> dict[str, Any]:
-    return await sendAnthropicMessagesRequest(
+    return await send_anthropic_messages_request(
         {
             "config": config,
             "request": request,

@@ -4,25 +4,25 @@ from datetime import datetime, timezone
 
 from tests.support.agent_core_case import *
 
-from agent_core.providers.anthropic.payloads import planAnthropicCacheBreakpoints
-from agent_core.providers.prompt_cache_orchestration import resolvePromptCachePreparation
+from agent_core.providers.anthropic.payloads import plan_anthropic_cache_breakpoints
+from agent_core.providers.prompt_cache_orchestration import resolve_prompt_cache_preparation
 from agent_core.providers.prompt_cache_diagnostics import (
     MAX_PROMPT_CACHE_STATE_BYTES,
-    buildPromptCacheRequestSnapshot,
-    canonicalPromptCacheJson,
-    diagnosePromptCache,
-    hashPromptCacheValue,
-    normalizePromptCacheProviderReason,
+    build_prompt_cache_request_snapshot,
+    canonical_prompt_cache_json,
+    diagnose_prompt_cache,
+    hash_prompt_cache_value,
+    normalize_prompt_cache_provider_reason,
 )
 from agent_core.shell_surface.status import formatUsageBreakdown, formatUsageSummary
 from agent_core.providers.usage_costs import (
-    cacheCreationUsageDetail,
-    createUsageTotals,
-    ensureUsageTotals,
-    estimateUsageCost,
-    mergeProviderUsage,
-    mergeUsageIntoSession,
-    roundUsd,
+    cache_creation_usage_detail,
+    create_usage_totals,
+    ensure_usage_totals,
+    estimate_usage_cost,
+    merge_provider_usage,
+    merge_usage_into_session,
+    round_usd,
 )
 
 
@@ -71,8 +71,8 @@ def _snapshot(**overrides):
         "tools": tools,
         "promptCache": policy,
     }
-    plan = planAnthropicCacheBreakpoints(request)
-    return buildPromptCacheRequestSnapshot(
+    plan = plan_anthropic_cache_breakpoints(request)
+    return build_prompt_cache_request_snapshot(
         {
             "providerProfileName": overrides.get("providerProfileName", "anthropic-console"),
             "routeClass": overrides.get("routeClass", "official"),
@@ -103,14 +103,14 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
         )
         for args, expected in cases:
             with self.subTest(args=args):
-                self.assertEqual(resolvePromptCachePreparation(args), expected)
+                self.assertEqual(resolve_prompt_cache_preparation(args), expected)
 
     def test_canonical_hashing_and_bounded_snapshot_are_content_free(self):
         left = {"z": 3, "nested": {"b": 2, "a": 1}, "array": [3, 2, 1]}
         right = {"array": [3, 2, 1], "nested": {"a": 1, "b": 2}, "z": 3}
-        self.assertEqual(canonicalPromptCacheJson(left), canonicalPromptCacheJson(right))
-        self.assertEqual(hashPromptCacheValue("one", left), hashPromptCacheValue("one", right))
-        self.assertNotEqual(hashPromptCacheValue("one", left), hashPromptCacheValue("two", left))
+        self.assertEqual(canonical_prompt_cache_json(left), canonical_prompt_cache_json(right))
+        self.assertEqual(hash_prompt_cache_value("one", left), hash_prompt_cache_value("one", right))
+        self.assertNotEqual(hash_prompt_cache_value("one", left), hash_prompt_cache_value("two", left))
         snapshot = _snapshot(
             messages=_messages(180, "PRIVATE_MESSAGE_SENTINEL"),
             tools=_tools(180),
@@ -146,7 +146,7 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
         )
         for reason, current in cases:
             with self.subTest(reason=reason):
-                self.assertEqual(diagnosePromptCache({"previous": baseline, "current": current, "ttl": "5m"})["reason"], reason)
+                self.assertEqual(diagnose_prompt_cache({"previous": baseline, "current": current, "ttl": "5m"})["reason"], reason)
         all_changed = {
             **baseline,
             "schemaVersion": 2,
@@ -154,7 +154,7 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
             "modelHash": "b" * 64,
         }
         self.assertEqual(
-            diagnosePromptCache({"previous": baseline, "current": all_changed, "ttl": "5m"})["reason"],
+            diagnose_prompt_cache({"previous": baseline, "current": all_changed, "ttl": "5m"})["reason"],
             "state_schema_changed",
         )
 
@@ -163,17 +163,17 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
         appended_policy = _policy(messageTailPreviousAnchor=previous["tailA"])
         appended = _snapshot(messages=_messages(4), tools=[], policy=appended_policy)
         self.assertEqual(appended["tailB"]["identity"], previous["tailA"]["identity"])
-        self.assertEqual(diagnosePromptCache({"previous": previous, "current": appended, "usage": {"cache_read_input_tokens": 10}, "ttl": "5m"})["reason"], "cache_read_observed")
+        self.assertEqual(diagnose_prompt_cache({"previous": previous, "current": appended, "usage": {"cache_read_input_tokens": 10}, "ttl": "5m"})["reason"], "cache_read_observed")
         rewritten = _messages(4)
         rewritten[0]["content"][0]["text"] = "rewritten"
         current = _snapshot(messages=rewritten, tools=[], policy=appended_policy)
-        self.assertEqual(diagnosePromptCache({"previous": previous, "current": current, "ttl": "5m"})["reason"], "anchor_identity_changed")
+        self.assertEqual(diagnose_prompt_cache({"previous": previous, "current": current, "ttl": "5m"})["reason"], "anchor_identity_changed")
         compacted = {**current, "preparation": "compacted"}
-        self.assertEqual(diagnosePromptCache({"previous": previous, "current": compacted, "ttl": "5m"})["reason"], "compaction_or_relief_rewrite")
+        self.assertEqual(diagnose_prompt_cache({"previous": previous, "current": compacted, "ttl": "5m"})["reason"], "compaction_or_relief_rewrite")
         unchanged = _snapshot()
         before = "2026-07-17T00:00:00Z"
-        self.assertEqual(diagnosePromptCache({"previous": unchanged, "current": unchanged, "usage": {}, "previousCommittedAt": before, "now": datetime(2026, 7, 17, 0, 6, tzinfo=timezone.utc), "ttl": "5m"})["reason"], "ttl_5m_may_have_expired")
-        self.assertEqual(diagnosePromptCache({"previous": unchanged, "current": unchanged, "usage": {}, "previousCommittedAt": before, "now": datetime(2026, 7, 17, 1, 1, tzinfo=timezone.utc), "ttl": "1h"})["reason"], "ttl_1h_may_have_expired")
+        self.assertEqual(diagnose_prompt_cache({"previous": unchanged, "current": unchanged, "usage": {}, "previousCommittedAt": before, "now": datetime(2026, 7, 17, 0, 6, tzinfo=timezone.utc), "ttl": "5m"})["reason"], "ttl_5m_may_have_expired")
+        self.assertEqual(diagnose_prompt_cache({"previous": unchanged, "current": unchanged, "usage": {}, "previousCommittedAt": before, "now": datetime(2026, 7, 17, 1, 1, tzinfo=timezone.utc), "ttl": "1h"})["reason"], "ttl_1h_may_have_expired")
 
     def test_provider_reason_matrix_is_closed(self):
         cases = (
@@ -189,21 +189,21 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
         )
         for args, expected in cases:
             with self.subTest(expected=expected):
-                self.assertEqual(normalizePromptCacheProviderReason(args), expected)
+                self.assertEqual(normalize_prompt_cache_provider_reason(args), expected)
 
     def test_accumulation_pricing_and_reports_use_complete_detail_once(self):
         aggregate = {}
-        mergeProviderUsage(aggregate, {"cache_creation_input_tokens": 100, "cache_creation_5m_input_tokens": 100})
-        mergeProviderUsage(aggregate, {"cache_creation_input_tokens": 200, "cache_creation_1h_input_tokens": 200})
-        self.assertEqual(cacheCreationUsageDetail(aggregate), {"aggregate": 300, "fiveMinutes": 100, "oneHour": 200, "present": True, "reconciled": True, "complete": True})
+        merge_provider_usage(aggregate, {"cache_creation_input_tokens": 100, "cache_creation_5m_input_tokens": 100})
+        merge_provider_usage(aggregate, {"cache_creation_input_tokens": 200, "cache_creation_1h_input_tokens": 200})
+        self.assertEqual(cache_creation_usage_detail(aggregate), {"aggregate": 300, "fiveMinutes": 100, "oneHour": 200, "present": True, "reconciled": True, "complete": True})
         session = {"metadata": {}}
-        self.assertEqual(ensureUsageTotals(session), createUsageTotals())
-        mergeUsageIntoSession(session, aggregate)
+        self.assertEqual(ensure_usage_totals(session), create_usage_totals())
+        merge_usage_into_session(session, aggregate)
         totals = session["metadata"]["usage"]
         self.assertTrue(totals["cacheCreationTtlDetailComplete"])
         self.assertIn("written: 5m 100, 1h 200", formatUsageSummary(totals))
         self.assertIn("cache written by TTL", formatUsageBreakdown(totals))
-        mergeUsageIntoSession(session, {"cache_creation_input_tokens": 1})
+        merge_usage_into_session(session, {"cache_creation_input_tokens": 1})
         self.assertFalse(totals["cacheCreationTtlDetailComplete"])
         self.assertNotIn("written: 5m", formatUsageSummary(totals))
         legacy = {
@@ -215,12 +215,12 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
                 }
             }
         }
-        normalized = ensureUsageTotals(legacy)
+        normalized = ensure_usage_totals(legacy)
         self.assertEqual(normalized["cacheCreation5mInputTokens"], 0)
         self.assertEqual(normalized["cacheCreation1hInputTokens"], 0)
         self.assertFalse(normalized["cacheCreationTtlDetailComplete"])
-        detailed = estimateUsageCost({"cache_creation_input_tokens": 1_000_000, "cache_creation_5m_input_tokens": 500_000, "cache_creation_1h_input_tokens": 500_000}, "claude-sonnet-4-6")
-        fallback = estimateUsageCost({"cache_creation_input_tokens": 1_000_000, "cache_creation_5m_input_tokens": 600_000, "cache_creation_1h_input_tokens": 600_000}, "claude-sonnet-4-6")
+        detailed = estimate_usage_cost({"cache_creation_input_tokens": 1_000_000, "cache_creation_5m_input_tokens": 500_000, "cache_creation_1h_input_tokens": 500_000}, "claude-sonnet-4-6")
+        fallback = estimate_usage_cost({"cache_creation_input_tokens": 1_000_000, "cache_creation_5m_input_tokens": 600_000, "cache_creation_1h_input_tokens": 600_000}, "claude-sonnet-4-6")
         self.assertEqual(detailed["cacheWriteUsd"], 4.875)
         self.assertEqual(fallback["cacheWriteUsd"], 3.75)
         self.assertTrue(fallback["cacheWriteEstimated"])
@@ -239,16 +239,16 @@ class PromptCacheDiagnosticsTests(AgentCoreTestCase):
         )
         for usage, complete, expected_cost, estimated in cases:
             with self.subTest(usage=usage):
-                detail = cacheCreationUsageDetail(usage)
-                cost = estimateUsageCost(usage, "claude-sonnet-4-6")
+                detail = cache_creation_usage_detail(usage)
+                cost = estimate_usage_cost(usage, "claude-sonnet-4-6")
                 self.assertEqual(detail["complete"], complete)
                 self.assertAlmostEqual(cost["cacheWriteUsd"], expected_cost)
                 self.assertEqual(cost["cacheWriteEstimated"], estimated)
 
     def test_usd_rounding_matches_typescript_math_round_at_half_boundary(self):
-        self.assertEqual(roundUsd(0.0000325), 0.000033)
-        self.assertEqual(roundUsd(0.000032499999), 0.000032)
-        self.assertEqual(roundUsd(-0.0000325), -0.000032)
+        self.assertEqual(round_usd(0.0000325), 0.000033)
+        self.assertEqual(round_usd(0.000032499999), 0.000032)
+        self.assertEqual(round_usd(-0.0000325), -0.000032)
 
 
 if __name__ == "__main__":

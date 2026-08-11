@@ -11,7 +11,7 @@ class ReasoningVisibilityTests(unittest.TestCase):
         server, requests = _server()
         try:
             run(
-                core.sendOpenAiResponsesRequest(
+                core.send_openai_responses_request(
                     _args(
                         server,
                         config={
@@ -31,7 +31,7 @@ class ReasoningVisibilityTests(unittest.TestCase):
         server, requests = _server()
         try:
             run(
-                core.sendOpenAiResponsesRequest(
+                core.send_openai_responses_request(
                     _args(
                         server,
                         request={**_args(server)["request"], "effort": "high"},
@@ -89,7 +89,7 @@ class ReasoningVisibilityTests(unittest.TestCase):
         }
         try:
             response = run(
-                core.sendOpenAiChatCompletionsRequest(_args(server, runtime=runtime))
+                core.send_openai_chat_completions_request(_args(server, runtime=runtime))
             )
         finally:
             server.close()
