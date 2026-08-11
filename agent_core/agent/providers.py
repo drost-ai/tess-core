@@ -4,7 +4,7 @@ import copy
 from ..providers.anthropic import sendAnthropicMessagesRequest
 from ..providers.errors import isProviderRequestError
 from ..providers.openai import sendOpenAiRequest
-from ..session.persistence import persistProviderFailure, persistSession
+from ..session.persistence import persist_provider_failure, persist_session
 from ..runtime.events.emit import safeEmit as _safe_emit
 from typing import Any
 from ..providers.partial_output_state import (
@@ -28,7 +28,7 @@ async def _record_provider_failure_if_needed(
         return
     metadata["lastProviderFailure"] = copy.deepcopy(error.record)
     _safe_emit(runtime, "provider.failed", {"session_id": session["id"], **error.record})
-    await persistProviderFailure(session, config, error.record)
+    await persist_provider_failure(session, config, error.record)
 
 
 def _emit_provider_response_completed(
@@ -140,7 +140,7 @@ async def _persist_partial_output_commit(
     if not isinstance(receipt, dict):
         return False
     session.setdefault("metadata", {})["partialOutputCommit"] = copy.deepcopy(receipt)
-    await persistSession(session, config)
+    await persist_session(session, config)
     store = _partial_output_state_store(config, runtime, session)
     if store is not None:
         await _finalize_partial_output_state(store, receipt)

@@ -10,7 +10,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
-            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
             foreground = run(bash.handler({"command": "printf foreground-ok"}, base_context))
             foreground_payload = json.loads(foreground["content"])
             self.assertEqual(foreground_payload["exitCode"], 0)
@@ -73,7 +73,7 @@ class TaskSupervisorCoreTests(AgentCoreTestCase):
             script = 'print("hello from background")'
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote(script)}"
             events = []
-            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}))
+            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}))
             start_payload = json.loads(result["content"])
             task_id = start_payload["task_id"]
             self.assertEqual(start_payload["execution"]["kind"], "task")

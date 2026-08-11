@@ -301,14 +301,14 @@ async def _measure_message_count(
     serialized_bytes: list[int] = []
     for sample_index in range(sample_count):
         session = _synthetic_session(workspace, message_count, content_bytes, sample_index)
-        await core.persistSession(session, {"sessionPersistence": True}, touch=False)
+        await core.persist_session(session, {"sessionPersistence": True}, touch=False)
         collector = PersistenceMeasurementCollector()
         unsubscribe = register_persistence_observer(collector.observe)
         started_ns = time.perf_counter_ns()
         try:
             for invocation in range(persists_per_sample):
                 session["metadata"]["benchmarkSequence"] = invocation + 1
-                await core.persistSession(session, {"sessionPersistence": True}, touch=False)
+                await core.persist_session(session, {"sessionPersistence": True}, touch=False)
         finally:
             wall_elapsed_ns = time.perf_counter_ns() - started_ns
             unsubscribe()

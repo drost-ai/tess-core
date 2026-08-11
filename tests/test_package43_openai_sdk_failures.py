@@ -295,7 +295,7 @@ class Package43OpenAiSdkFailureTests(AgentCoreTestCase):
             )
 
             run(
-                core.persistProviderFailure(
+                core.persist_provider_failure(
                     session,
                     {"sessionPersistence": True},
                     failure,

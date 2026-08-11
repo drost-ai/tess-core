@@ -7,7 +7,7 @@ from .parsing import (
     as_string_array,
     coerce_relevant_files,
     coerce_working_context_document,
-    parseMaybeJson,
+    parse_maybe_json,
 )
 from .prompts import (
     append_activity_section,
@@ -323,7 +323,7 @@ async def load_working_context_artifact(filePath: str | None) -> dict[str, Any] 
     raw = _read_text(filePath)
     if not raw.strip():
         return None
-    return coerce_working_context_document(parseMaybeJson(raw))
+    return coerce_working_context_document(parse_maybe_json(raw))
 
 
 def assert_model_backed_compaction_artifacts(stateSnapshot: dict[str, Any], workingContext: dict[str, Any]) -> None:

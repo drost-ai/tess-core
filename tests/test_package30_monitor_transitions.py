@@ -41,7 +41,7 @@ class Package30MonitorTransitionTests(AgentCoreTestCase):
             "askQuestion": lambda *_: "",
             "outputJson": lambda event, data: events.append((event, data)),
             "cwd": str(workspace),
-            "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1),
+            "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1),
         }
         tool = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskMonitorStop")
         return config, session, monitor, events, persisted, context, tool

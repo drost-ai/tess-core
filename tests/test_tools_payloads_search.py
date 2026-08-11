@@ -66,7 +66,7 @@ class ToolPayloadSearchTests(AgentCoreTestCase):
             }, str(workspace)))
             config.update({"providerKind": "openai", "openaiBaseUrl": "http://compatible.test", "openaiApiMode": "chat", "model": "small-model"})
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
             long_output = "\n".join(f"line-{index:03} {'x' * 40}" for index in range(220)) + "\n"
 
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")

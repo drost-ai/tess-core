@@ -100,7 +100,7 @@ async def _ensure_tool_permission(
     if switch_label and answer == switch_label:
         context["config"]["permissionMode"] = resolution["switchMode"]
         context["session"]["permissionMode"] = resolution["switchMode"]
-        await maybe_await(context.get("persistSession", lambda: None)())
+        await maybe_await(context.get("persist_session", lambda: None)())
         output_json("permission.decided", {"tool": tool_name, "mode": resolution["switchMode"], "decision": "allow", "summary": summary, "source": "prompt-switch"})
         return
     output_json("permission.decided", {"tool": tool_name, "mode": mode, "decision": "deny", "summary": summary, "source": "prompt"})
@@ -161,7 +161,7 @@ async def _get_effective_permission_mode(context: ToolContext) -> str:
         if mode != authority["mode"]:
             context["session"]["permissionMode"] = authority["mode"]
             context["config"]["permissionMode"] = authority["mode"]
-            await maybe_await(context.get("persistSession", lambda: None)())
+            await maybe_await(context.get("persist_session", lambda: None)())
         return authority["mode"]
     if not metadata.get("parentSessionId"):
         return mode

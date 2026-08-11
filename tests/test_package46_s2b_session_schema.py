@@ -59,7 +59,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             session = self._session(workspace, "package46-first-persist", 2)
             run(core.write_json_file(core.session_path(session["id"]), session))
             run(
-                core.persistSession(session, {"sessionPersistence": True}, touch=False)
+                core.persist_session(session, {"sessionPersistence": True}, touch=False)
             )
             head = run(core.read_json_file(core.session_path(session["id"]), None))
             self.assertEqual(head["schemaVersion"], 2)
@@ -210,15 +210,15 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             self.assertNotIn("messages", shallow)
             self.assertTrue(shallow["hasPersistableContent"])
 
-            child = core.createForkedSession(
+            child = core.create_forked_session(
                 parent=restored_parent,
                 id="package46-child",
                 cwd=str(workspace),
-                originalCwd=str(workspace),
+                original_cwd=str(workspace),
                 now="2026-08-01T00:00:00Z",
                 model=parent["model"],
-                systemPrompt=parent["systemPrompt"],
-                permissionMode=parent["permissionMode"],
+                system_prompt=parent["systemPrompt"],
+                permission_mode=parent["permissionMode"],
             )
             run(core.save_session(child))
             self.assertEqual(run(core.load_session(child["id"]))["messages"], restored_parent["messages"])
@@ -231,7 +231,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
         original_read = schema._read_body_sync
         try:
             session = self._session(workspace, "package46-fast-watermark", 3)
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             session = run(core.load_session(session["id"]))
             events: list[dict] = []
             session["messages"].append({"role": "assistant", "content": "delta"})
@@ -243,7 +243,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             unsubscribe = register_persistence_observer(events.append)
             try:
                 run(
-                    core.persistSession(
+                    core.persist_session(
                         session, {"sessionPersistence": True}, touch=False
                     )
                 )
@@ -264,7 +264,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
         original_read = schema._read_body_sync
         try:
             session = self._session(workspace, "package46-delta-race", 1)
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             session = run(core.load_session(session["id"]))
             session["messages"].append({"role": "assistant", "content": "committed"})
             raced = {"role": "user", "content": "raced append"}
@@ -279,7 +279,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             schema._read_body_sync = forbidden_read
             try:
                 run(
-                    core.persistSession(
+                    core.persist_session(
                         session,
                         {"sessionPersistence": True},
                         touch=False,
@@ -306,7 +306,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
                 ["message-0", "committed"],
             )
 
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             final = run(core.load_session(session["id"]))
             self.assertEqual(len(final["messages"]), 3)
             self.assertEqual(final["messages"][-1], raced)
@@ -321,9 +321,9 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             session["messages"][0]["content"] = [
                 {"type": "text", "text": "original"}
             ]
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             session["messages"][0]["content"][0]["text"] = "edited"
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             restored = run(core.load_session(session["id"]))
             self.assertEqual(
                 restored["messages"][0]["content"][0]["text"], "edited"
@@ -359,13 +359,13 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
                     ],
                 },
             ]
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
-            repair = core.repairSessionTranscript(session)
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
+            repair = core.repair_session_transcript(session)
             self.assertTrue(repair["repaired"])
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
 
             session["messages"][0]["content"][0]["text"] = "edited after repair"
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             restored = run(core.load_session(session["id"]))
             self.assertEqual(
                 restored["messages"][0]["content"][0]["text"],
@@ -378,7 +378,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "package46-same-length-crash", 2)
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             original = run(core.load_session(session["id"]))
 
             async def replace_prefix(latest):
@@ -398,7 +398,7 @@ class Package46S2bSchemaTests(AgentCoreTestCase):
             self.assertEqual(run(core.load_session(session["id"])), original)
 
             session["messages"].append({"role": "assistant", "content": "retry"})
-            run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             restored = run(core.load_session(session["id"]))
             self.assertEqual(restored["messages"][-1]["content"], "retry")
             self.assertNotIn("uncommitted replacement", json.dumps(restored))

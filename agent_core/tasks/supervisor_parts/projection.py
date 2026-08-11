@@ -216,10 +216,10 @@ async def _sync_projected_task_metadata(session: dict[str, Any], records: list[d
     metadata["runtimeRestore"] = restore
     # Observer projection is bookkeeping, not semantic session activity.
     # Import locally to avoid a package initialization cycle.
-    from ...session.persistence import persistSession
+    from ...session.persistence import persist_session
 
     if has_persistable_session_messages(session):
-        await persistSession(session, {"sessionPersistence": True}, touch=False)
+        await persist_session(session, {"sessionPersistence": True}, touch=False)
     else:
         # Empty child/bootstrap sessions still need their restore projection,
         # and save_session already preserves their semantic timestamp.

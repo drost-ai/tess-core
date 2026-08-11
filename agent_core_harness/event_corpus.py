@@ -90,7 +90,7 @@ def _contracts() -> list[dict[str, Any]]:
         _contract(
             "turn-sessions",
             captured["turn_sessions"],
-            "isolated:createSessionRuntimeController/cancelled+completed",
+            "isolated:create_session_runtime_controller/cancelled+completed",
         ),
     ]
 
@@ -333,10 +333,10 @@ def _capture_turn_sessions() -> list[dict[str, Any]]:
     captured: list[dict[str, Any]] = []
 
     def controller(scenario: str) -> dict[str, Any]:
-        return core.createSessionRuntimeController(
+        return core.create_session_runtime_controller(
             session={"id": f"turn-{scenario}", "model": "gpt-5.4"},
             config={},
-            emitRuntimeEvent=lambda event, data: captured.append(
+            emit=lambda event, data: captured.append(
                 _runtime_event(event, data, scenario=scenario)
             ),
         )

@@ -33,7 +33,7 @@ class SubagentWorktreeIsolationTests(AgentCoreTestCase):
             result = run(
                 next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
                     {"description": "Worktree child", "prompt": "go", "isolation": "worktree"},
-                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
                 )
             )
             payload = json.loads(result["content"])

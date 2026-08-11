@@ -19,7 +19,7 @@ def _todo_tool() -> ToolDefinition:
         todos = requireTodoItems(input.get("todos"))
         context["session"]["todos"] = todos
         updateActiveTaskFromTodos(context["session"], todos)
-        await maybe_await(context.get("persistSession", lambda: None)())
+        await maybe_await(context.get("persist_session", lambda: None)())
         return {"content": serializeTodoStateSummary(todos)}
 
     return builtin_tool("TodoWrite", handler)
@@ -71,7 +71,7 @@ def _ask_user_question_tool() -> ToolDefinition:
                     )
                 )
             if created:
-                await maybe_await(context.get("persistSession", lambda: None)())
+                await maybe_await(context.get("persist_session", lambda: None)())
             return {
                 "content": pretty_json(
                     {

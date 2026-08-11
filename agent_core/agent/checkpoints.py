@@ -6,7 +6,7 @@ from ..context.compaction import run_compaction, should_auto_compact
 from ..context.context_policy import decide_durable_checkpoint
 from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import resolveCompactionPolicy
-from ..session.persistence import persistProviderFailure, persistSession
+from ..session.persistence import persist_provider_failure, persist_session
 from .._utils import now_iso as _now
 from ..runtime.events.emit import safeEmit as _safe_emit
 from typing import Any
@@ -169,7 +169,7 @@ async def _run_auto_compaction(args: dict[str, Any]) -> dict[str, Any] | None:
     result = outcome
     _record_successful_auto_compaction(session)
     _safe_emit(runtime, "compaction.completed", _completion_event_payload(session["id"], result))
-    await persistSession(session, config)
+    await persist_session(session, config)
     return result
 
 
@@ -226,7 +226,7 @@ async def _handle_auto_compaction_failure(
         },
     )
     if provider_failure:
-        await persistProviderFailure(session, config, provider_failure)
+        await persist_provider_failure(session, config, provider_failure)
 
 
 def _emit_auto_compaction_skip(

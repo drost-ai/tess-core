@@ -135,7 +135,7 @@ async def call_mcp_generated_tool(data: dict[str, Any], sandbox: ScenarioSandbox
         "abortSignal": _abort_signal(data.get("abortMode"), int(data.get("abortAfterChecks") or 2)),
         "outputJson": lambda *_args: None,
         "askQuestion": lambda *_args: "",
-        "persistSession": lambda: None,
+        "persist_session": lambda: None,
     }
     try:
         result = await tool.handler(dict(data.get("input") or {}), context)

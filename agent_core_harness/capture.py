@@ -171,7 +171,7 @@ def collect_observations(
     if "slash_results" in selected:
         observations["slash_results"] = state.get("slash_results") or []
     if "transcript" in selected and state.get("session"):
-        observations["transcript"] = core.buildTranscriptSnapshot(state["session"])
+        observations["transcript"] = core.build_transcript_snapshot(state["session"])
     if "tool_artifacts" in selected and state.get("session"):
         observations["tool_artifacts"] = tree_snapshot(Path(core.get_session_tool_artifacts_dir(state["session"]["id"])))
     provider_runtime = state.get("provider_runtime")

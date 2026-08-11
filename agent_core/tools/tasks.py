@@ -258,7 +258,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
         monitor_ids = context["session"].setdefault("metadata", {}).get("monitorIds") or []
         if record["id"] not in monitor_ids:
             _append_unique_metadata_list(context["session"], "monitorIds", record["id"])
-            await maybe_await(context.get("persistSession", lambda: None)())
+            await maybe_await(context.get("persist_session", lambda: None)())
         if not started["changed"]:
             return {
                 "content": pretty_json(
@@ -403,7 +403,7 @@ def _task_health_check_start_tool() -> ToolDefinition:
         )
         task_id = launch_task_id(started)
         _append_unique_metadata_list(context["session"], "taskIds", task_id)
-        await maybe_await(context.get("persistSession", lambda: None)())
+        await maybe_await(context.get("persist_session", lambda: None)())
         context.get("outputJson", lambda *_: None)("task.registered", {"session_id": context["session"]["id"], "task_id": task_id, "kind": "health_check", "status": "running", "title": spec["title"], "owner": "daemon"})
         return {"content": pretty_json({"task_id": task_id, "status": "running", "kind": "health_check", "title": spec["title"]})}
 

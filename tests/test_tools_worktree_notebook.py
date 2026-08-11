@@ -25,7 +25,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
                 cwd_updates.append(next_cwd)
                 session["cwd"] = next_cwd
 
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "updateCwd": update_cwd}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "updateCwd": update_cwd}
             entered = json.loads(run(tools["EnterWorktree"].handler({"name": " Feature Work "}, context))["content"])
             self.assertRegex(entered["branch"], r"^tess/feature-work-[0-9a-f]{6}$")
             self.assertRegex(Path(entered["cwd"]).name, rf"^{re.escape(workspace.name)}-feature-work-[0-9a-f]{{6}}$")
@@ -85,7 +85,7 @@ class ToolWorktreeNotebookTests(AgentCoreTestCase):
                 cwd_updates.append(next_cwd)
                 session["cwd"] = next_cwd
 
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "updateCwd": update_cwd}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "updateCwd": update_cwd}
             entered = json.loads(run(tools["EnterWorktree"].handler({"name": "Raw"}, context))["content"])
             self.assertEqual(entered, {"cwd": str(worktree), "branch": "tess/Raw", "created": True})
             self.assertEqual(session["metadata"], {"worktreePath": str(worktree)})

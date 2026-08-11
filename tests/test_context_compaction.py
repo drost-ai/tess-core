@@ -233,8 +233,8 @@ class ContextCompactionTests(AgentCoreTestCase):
         malformed = core.build_compaction_evidence({"sourceMessages": [{"role": "assistant", "content": {"unexpected": True}}], "sourceStart": 0, "cwd": "/tmp", "tokenBudget": 10_000})
         self.assertEqual(malformed["entryCount"], 0)
         self.assertEqual(malformed["transcript"], "")
-        self.assertEqual(core.parseMaybeJson('"scalar"'), '"scalar"')
-        self.assertEqual(core.parseMaybeJson('{"ok":true}'), {"ok": True})
+        self.assertEqual(core.parse_maybe_json('"scalar"'), '"scalar"')
+        self.assertEqual(core.parse_maybe_json('{"ok":true}'), {"ok": True})
 
     def test_compaction_fallback_retry_matches_provider_failure_policy(self):
         session = core.create_empty_session(cwd="/tmp/workspace", provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from ..contracts.records import SessionRecord
 from ..providers.usage_costs import createUsageTotals
 from ..storage.message_history import create_session_message_list as _create_session_message_list
 
@@ -72,44 +73,60 @@ def _empty_usage() -> dict[str, Any]:
     return createUsageTotals()
 
 
-def createForkedSession(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    values = {**(args or {}), **kwargs}
-    parent = values["parent"]
+def create_forked_session(
+    *,
+    parent: SessionRecord,
+    id: str,
+    cwd: str,
+    now: str,
+    model: str,
+    system_prompt: str,
+    permission_mode: str,
+    original_cwd: str,
+    name: str | None = None,
+    effort: str | None = None,
+    assistant_name: str | None = None,
+    assistant_description: str | None = None,
+    worktree_path: str | None = None,
+    tmux_session_name: str | None = None,
+    tmux_window_name: str | None = None,
+    tmux_mode: str | None = None,
+) -> SessionRecord:
     metadata = {
-        "originalCwd": values["originalCwd"],
-        "assistantName": values.get("assistantName"),
-        "assistantDescription": values.get("assistantDescription"),
-        "worktreePath": values.get("worktreePath"),
+        "originalCwd": original_cwd,
+        "assistantName": assistant_name,
+        "assistantDescription": assistant_description,
+        "worktreePath": worktree_path,
         "forkedFromSessionId": parent["id"],
         "usage": _empty_usage(),
         "compactions": 0,
         "depth": 0,
         "childSessionIds": [],
         "childAgentIds": [],
-        "tmuxSessionName": values.get("tmuxSessionName"),
-        "tmuxWindowName": values.get("tmuxWindowName"),
-        "tmuxMode": values.get("tmuxMode"),
+        "tmuxSessionName": tmux_session_name,
+        "tmuxWindowName": tmux_window_name,
+        "tmuxMode": tmux_mode,
     }
     metadata = {key: value for key, value in metadata.items() if value is not None}
     return {
-        "id": values["id"],
-        "cwd": values["cwd"],
-        "createdAt": values["now"],
-        "updatedAt": values["now"],
-        "name": values.get("name"),
+        "id": id,
+        "cwd": cwd,
+        "createdAt": now,
+        "updatedAt": now,
+        "name": name,
         "provider": parent["provider"],
         "providerProfileName": parent.get("providerProfileName"),
-        "model": values["model"],
-        "effort": values.get("effort"),
-        "systemPrompt": values["systemPrompt"],
-        "permissionMode": values["permissionMode"],
+        "model": model,
+        "effort": effort,
+        "systemPrompt": system_prompt,
+        "permissionMode": permission_mode,
         "messages": _create_session_message_list(copy.deepcopy(parent.get("messages") or [])),
         "todos": [],
         "metadata": metadata,
     }
 
 
-def createForkArchiveHeader(session: dict[str, Any], persistedAt: str) -> dict[str, Any] | None:
+def create_fork_archive_header(session: dict[str, Any], persistedAt: str) -> dict[str, Any] | None:
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     if metadata.get("fullTranscriptLog") or not metadata.get("forkedFromSessionId"):
         return None

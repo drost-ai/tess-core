@@ -16,7 +16,7 @@ from ..storage import (
     write_json_file,
 )
 from ..storage.json_io import mutate_json_lines, read_json_lines
-from ..session.persistence import persistSession
+from ..session.persistence import persist_session
 from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 
 
@@ -238,7 +238,7 @@ async def _deliver_mailbox_transaction(
         try:
             if appended:
                 if config is not None:
-                    await persistSession(session, config)
+                    await persist_session(session, config)
                 else:
                     await save_session(session)
         except BaseException:

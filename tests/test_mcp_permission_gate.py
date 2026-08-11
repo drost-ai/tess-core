@@ -89,7 +89,7 @@ class McpPermissionGateIntegrationTests(AgentCoreTestCase):
             "askQuestion": lambda *_: "",
             "outputJson": lambda *_: None,
             "cwd": str(workspace),
-            "persistSession": lambda: None,
+            "persist_session": lambda: None,
             **overrides,
         }
 

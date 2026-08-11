@@ -11,7 +11,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
 
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
             with self.assertRaises(PermissionError):
                 run(write.handler({"file_path": str(workspace / "blocked.txt"), "content": "blocked"}, context))
 
@@ -46,7 +46,7 @@ class ToolPermissionTests(AgentCoreTestCase):
                 "interactive": True,
                 "askQuestion": lambda _prompt, options=None: "Switch to acceptEdits",
                 "outputJson": lambda event, data: events.append((event, data)),
-                "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1),
+                "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1),
             }
             run(write.handler({"file_path": str(workspace / "switched.txt"), "content": "yes"}, interactive_context))
             self.assertEqual(session["permissionMode"], "acceptEdits")
@@ -81,7 +81,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             context = {
                 "session": session, "config": config, "interactive": True,
                 "askQuestion": ask, "outputJson": lambda *_: None,
-                "cwd": str(workspace), "persistSession": lambda: None,
+                "cwd": str(workspace), "persist_session": lambda: None,
             }
             run(_ensure_tool_permission(context, "Bash", "shell", "Run shell command", False, "python3 -c 'print(1)'"))
             self.assertIn("Switch to bypassPermissions", seen_options[0])
@@ -101,7 +101,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             child_context = {
                 "session": child, "config": child_config, "interactive": True,
                 "askQuestion": child_ask, "outputJson": lambda *_: None,
-                "cwd": str(workspace), "persistSession": lambda: None,
+                "cwd": str(workspace), "persist_session": lambda: None,
             }
             run(_ensure_tool_permission(child_context, "Bash", "shell", "Run shell command", False, "python3 -c 'print(1)'"))
             self.assertEqual(child_options[0], ["Approve once", "Deny"])  # no mode escalation offered
@@ -148,7 +148,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             run(core.save_auto_mode(str(workspace), {"allow": ["echo"], "deny": [sys.executable], "environment": {}}))
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
             events = []
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "Deny", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
 
             allowed = run(bash.handler({"command": "echo auto-ok"}, context))
             allowed_payload = json.loads(allowed["content"])
@@ -177,7 +177,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             run(core.save_session(parent))
             write = next(tool for tool in core.createBuiltinTools() if tool.name == "Write")
             persisted = {"count": 0}
-            context = {"session": child, "config": config, "interactive": True, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
+            context = {"session": child, "config": config, "interactive": True, "askQuestion": lambda *_: "Deny", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1)}
             with self.assertRaises(core.AgentAuthorityError) as error:
                 run(write.handler({"file_path": str(workspace / "inherited.txt"), "content": "ok"}, context))
             self.assertEqual(error.exception.code, "child_authority_missing")
@@ -193,7 +193,7 @@ class ToolPermissionTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             session["metadata"]["depth"] = 2
             agent = next(tool for tool in core.createBuiltinTools() if tool.name == "Agent")
-            result = run(agent.handler({}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            result = run(agent.handler({}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}))
             self.assertTrue(result["isError"])
             self.assertEqual(result["content"], "Delegation depth limit reached.")
         finally:
@@ -215,7 +215,7 @@ class ToolPermissionTests(AgentCoreTestCase):
                 run(
                     agent.handler(
                         {"description": "Depth one", "prompt": "go"},
-                        {"session": depth_one_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
+                        {"session": depth_one_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": supervisor},
                     )
                 )["content"]
             )
@@ -225,14 +225,14 @@ class ToolPermissionTests(AgentCoreTestCase):
 
             depth_two_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             depth_two_parent["metadata"]["depth"] = 2
-            blocked = run(agent.handler({"description": "Blocked", "prompt": "no"}, {"session": depth_two_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor}))
+            blocked = run(agent.handler({"description": "Blocked", "prompt": "no"}, {"session": depth_two_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": supervisor}))
             self.assertTrue(blocked["isError"])
             self.assertEqual(depth_two_parent["metadata"].get("childAgentIds"), [])
             self.assertEqual(depth_two_parent["metadata"].get("childSessionIds"), [])
 
             already_cancelled_parent = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             with self.assertRaises(RuntimeError) as abort_ctx:
-                run(agent.handler({"description": "Already cancelled", "prompt": "no"}, {"session": already_cancelled_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor, "abortSignal": {"aborted": True}}))
+                run(agent.handler({"description": "Already cancelled", "prompt": "no"}, {"session": already_cancelled_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": supervisor, "abortSignal": {"aborted": True}}))
             self.assertEqual(getattr(abort_ctx.exception, "name", None), "AbortError")
             self.assertEqual(already_cancelled_parent["metadata"]["childAgentIds"], [])
             self.assertEqual(already_cancelled_parent["metadata"]["childSessionIds"], [])

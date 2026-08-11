@@ -452,7 +452,7 @@ class Package31PayloadPaginationTests(AgentCoreTestCase):
     def _context(self, home, workspace, session_id):
         config = run(core.resolveConfig({"provider": "anthropic", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
         session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions", sessionId=session_id)
-        return {"session": session, "config": {**config, "providerKind": "anthropic"}, "interactive": False, "cwd": str(workspace), "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "persistSession": lambda: None}
+        return {"session": session, "config": {**config, "providerKind": "anthropic"}, "interactive": False, "cwd": str(workspace), "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "persist_session": lambda: None}
 
     def _collect_pages(self, tool, initial, context):
         matches = []

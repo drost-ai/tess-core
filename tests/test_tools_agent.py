@@ -25,7 +25,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 "askQuestion": lambda *_: "",
                 "outputJson": lambda *_: None,
                 "cwd": str(workspace),
-                "persistSession": lambda: persisted.__setitem__("count", persisted["count"] + 1),
+                "persist_session": lambda: persisted.__setitem__("count", persisted["count"] + 1),
             }
             prepared = run(prepareSubagent({
                 "context": context,
@@ -97,7 +97,7 @@ class ToolAgentTests(AgentCoreTestCase):
                 run(
                     agent.handler(
                         {"description": "No daemon", "prompt": "Run without a supervisor", "run_in_background": True},
-                        {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None},
+                        {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None},
                     )
                 )
             self.assertIn("task supervisor daemon", str(raised.exception))
@@ -158,7 +158,7 @@ class ToolAgentTests(AgentCoreTestCase):
             result = run(
                 agent.handler(
                     {"description": "Run async", "prompt": "Work in the background", "name": "Async worker"},
-                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": supervisor},
                 )
             )
             payload = json.loads(result["content"])
@@ -376,7 +376,7 @@ class NonBlockingSpawnTests(AgentCoreTestCase):
             result = run(
                 next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
                     {"description": "No wait", "prompt": "go"},
-                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": {"startSubagentTask": fake_start}},
                 )
             )
             self.assertLess(time.monotonic() - started_at, 2.0, "default spawn must not block on the child")
@@ -410,7 +410,7 @@ class NonBlockingSpawnTests(AgentCoreTestCase):
             result = run(
                 next(tool for tool in core.createBuiltinTools() if tool.name == "Agent").handler(
                     {"description": "Refused", "prompt": "go"},
-                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": {"startSubagentTask": refuse_start}},
+                    {"session": parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": {"startSubagentTask": refuse_start}},
                 )
             )
             payload = json.loads(result["content"])

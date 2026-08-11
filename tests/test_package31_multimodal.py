@@ -271,7 +271,7 @@ class Package31MultimodalIntegrationTests(AgentCoreTestCase):
             "interactive": False,
             "outputJson": lambda event, data: events.append((event, data)),
             "askQuestion": lambda *_: "",
-            "persistSession": lambda: None,
+            "persist_session": lambda: None,
             "getTools": core.createBuiltinTools,
         }
 

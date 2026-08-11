@@ -190,7 +190,7 @@ class Package31MonitorTransitionConcurrencyTests(AgentCoreTestCase):
                     "askQuestion": lambda *_: "",
                     "outputJson": lambda event, data: events.append((event, data)),
                     "cwd": str(workspace),
-                    "persistSession": lambda: None,
+                    "persist_session": lambda: None,
                 }
 
             async def scenario():

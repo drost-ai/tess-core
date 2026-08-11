@@ -84,7 +84,7 @@ async def verifyFaultSessionIntegrity(
     restored = await core.load_session(session["id"])
     if not isinstance(restored, dict):
         raise RuntimeError("Fault-matrix loop session did not reload")
-    repair = core.repairSessionTranscript(restored)
+    repair = core.repair_session_transcript(restored)
     if repair["repaired"]:
         raise RuntimeError(f"Fault-matrix loop persisted an invalid transcript: {cell['id']}")
     expected_messages = 2 if actual["classification"] == "success" else 0 if actual["classification"] == "cancelled" else 1

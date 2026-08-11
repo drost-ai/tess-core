@@ -139,7 +139,7 @@ def _bash_tool() -> ToolDefinition:
                     await write_task_meta(task_id, starting_meta)
                     await save_task_record(record)
                     _append_unique_metadata_list(context["session"], "taskIds", task_id)
-                    await maybe_await(context.get("persistSession", lambda: None)())
+                    await maybe_await(context.get("persist_session", lambda: None)())
                     session_registered = True
 
                 def spawn():
@@ -239,7 +239,7 @@ def _bash_tool() -> ToolDefinition:
             }
             if not session_registered:
                 _append_unique_metadata_list(context["session"], "taskIds", task_id)
-                await maybe_await(context.get("persistSession", lambda: None)())
+                await maybe_await(context.get("persist_session", lambda: None)())
             context.get("outputJson", lambda *_: None)(
                 "task.registered",
                 {

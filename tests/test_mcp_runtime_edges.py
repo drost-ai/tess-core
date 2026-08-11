@@ -186,7 +186,7 @@ class McpRuntimeEdgeTests(AgentCoreTestCase):
             # mcp__* permission gate (covered in test_mcp_permission_gate.py).
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
-            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             with self.assertRaises(RuntimeError) as pre_ctx:
                 run(generated_tool.handler({}, {**base_context, "abortSignal": {"aborted": True}}))

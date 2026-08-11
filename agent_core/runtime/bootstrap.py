@@ -18,7 +18,7 @@ from .support import StagedRuntimeSource as _StagedRuntimeSource, acquireCommit 
 from .support import callMethod as _call_method, closeMany as _close_many, daemonSnapshotPayload as _daemon_snapshot_payload, getMethod as _get_method, hasMethod as _has_method
 from .support import installComponentSurface as _install_component_surface, maybeCall as _maybe_call, runtimePathGraphId as _path_graph_id, taskSnapshotFromState as _task_snapshot_from_state
 from .state import createInitialRuntimeState, createRuntimeStateStore
-from ..session.runtime import createSessionRuntimeController
+from ..session.runtime import create_session_runtime_controller
 from ..storage import configure_runtime_home, register_storage_lock_observer
 from ..tasks.runtime import createTaskRuntime
 
@@ -138,7 +138,7 @@ async def _bootstrap_runtime(args: dict[str, Any], paths: RuntimePaths) -> dict[
     try:
         active_components = await prepare_components(component_session, config, active_binding, initial_source, has_session=session is not None)
         if session:
-            session_runtime = createSessionRuntimeController({"session": session, "config": config, "binding": active_binding, "emitRuntimeEvent": dispatch})
+            session_runtime = create_session_runtime_controller(session=session, config=config, binding=active_binding, emit=dispatch)
         for event, data in initial_source.activate():
             dispatch_bound(active_binding, event, data)
 

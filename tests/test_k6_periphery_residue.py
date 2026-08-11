@@ -40,7 +40,7 @@ class K6PeripheryResidueTests(AgentCoreTestCase):
                 {"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "Bash", "input": {}}]},
             ]
             config = {"sessionPersistence": True, "cwd": str(workspace)}
-            run(core.persistProviderFailure(session, config, {"category": "timeout"}))
+            run(core.persist_provider_failure(session, config, {"category": "timeout"}))
             persisted = run(core.load_session(session["id"]))
             # The dangling in-flight tool_use is repaired away, exactly like
             # an ordinary persist; it used to slip through and wobble the

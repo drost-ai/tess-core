@@ -22,7 +22,7 @@ class ToolPathConfinementTests(AgentCoreTestCase):
         return {
             "session": session, "config": config, "interactive": interactive,
             "askQuestion": ask or (lambda *_: "Deny"), "outputJson": lambda *_: None,
-            "cwd": str(workspace), "persistSession": lambda: None, "abortSignal": None,
+            "cwd": str(workspace), "persist_session": lambda: None, "abortSignal": None,
             "allowedRoots": config.get("allowedRoots", []),
         }
 

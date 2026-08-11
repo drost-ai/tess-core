@@ -219,7 +219,7 @@ async def start_health_check(data: dict[str, Any], sandbox: ScenarioSandbox, sta
                 "config": config,
                 "interactive": False,
                 "outputJson": lambda *_args: None,
-                "persistSession": lambda: None,
+                "persist_session": lambda: None,
             },
             spec,
         )

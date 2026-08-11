@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..coerce import as_record, as_string_array
 
-from ...session.transcript import parseMaybeJson
+from ...session.transcript import parse_maybe_json
 
 import math
 
@@ -24,7 +24,7 @@ def parse_compaction_synthesis_response(value: str) -> dict[str, Any] | None:
     candidate = extract_json_object_candidate(value)
     if not candidate:
         return None
-    parsed = parseMaybeJson(candidate)
+    parsed = parse_maybe_json(candidate)
     record = as_record(parsed)
     if not record:
         return None
@@ -46,7 +46,7 @@ def parse_compaction_verification_response(value: str) -> dict[str, Any] | None:
     candidate = extract_json_object_candidate(value)
     if not candidate:
         return None
-    parsed = parseMaybeJson(candidate)
+    parsed = parse_maybe_json(candidate)
     record = as_record(parsed)
     if not record:
         return None

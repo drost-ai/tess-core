@@ -24,7 +24,7 @@ def buildToolContext(
         "interactive": runtime.get("interactive", False),
         "outputJson": runtime.get("emitEvent", lambda *_: None),
         "askQuestion": runtime.get("askQuestion", lambda *_: ""),
-        "persistSession": persist,
+        "persist_session": persist,
         "updateCwd": lambda next_cwd: session.__setitem__("cwd", next_cwd),
         "getTools": lambda: runtime.get("tools", []),
         "daemon": runtime.get("daemon"),

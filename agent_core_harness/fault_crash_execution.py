@@ -20,7 +20,7 @@ core.configure_runtime_home(home)
 async def main():
     session = core.create_empty_session(cwd=home, provider=provider, model=model, systemPrompt='crash', permissionMode='default', sessionId=session_id)
     session['messages'] = [{'role': 'user', 'content': 'stable before crash'}]
-    await core.persistSession(session, {'sessionPersistence': True})
+    await core.persist_session(session, {'sessionPersistence': True})
     state_index = int(state[1:])
     if state_index >= 3:
         content = (
@@ -88,7 +88,7 @@ async def executeCrashFaultCell(
         restored_again = await core.load_session(session_id)
     if not isinstance(restored, dict):
         raise RuntimeError("Crash probe could not reload its stable session")
-    repair = core.repairSessionTranscript(restored)
+    repair = core.repair_session_transcript(restored)
     if repair["repaired"] or len(restored.get("messages") or []) != 1:
         raise RuntimeError("Crash probe recovery changed its stable transcript")
     revision = restored.get("revision")

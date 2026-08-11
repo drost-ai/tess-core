@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from ..payloads.image_budget import estimateEncodedImageRequestBytes
 from ..session.transcript import (
-    buildTranscriptSnapshot,
-    makeTextEntry,
-    makeToolEntry,
-    mergeTranscriptEntry,
-    normalizeTranscriptBody,
+    build_transcript_snapshot,
+    make_text_entry,
+    make_tool_entry,
+    merge_transcript_entry,
+    normalize_transcript_body,
 )
 
 from .agents import (
@@ -34,7 +34,7 @@ from .diagnostics import (
     buildReviewPrompt,
     formatDebugBundleReport,
     formatDiagnosticsReport,
-    formatSessionCandidate,
+    format_session_candidate,
     formatTranscriptEntries,
 )
 from .dispatcher import handleSlashCommand
@@ -112,7 +112,7 @@ __all__ = [
     "formatMonitorRecord",
     "formatPreflightTokenSummary",
     "formatRemoteSessionRecord",
-    "formatSessionCandidate",
+    "format_session_candidate",
     "formatTaskInspectReport",
     "formatTaskListReport",
     "formatTaskResultReport",

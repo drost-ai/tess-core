@@ -36,7 +36,7 @@ class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
                 ]
                 result = await tool.handler(
                     {"todos": todos},
-                    {"session": session, "persistSession": persist},
+                    {"session": session, "persist_session": persist},
                 )
                 payload = json.loads(result["content"])
                 self.assertEqual(persist_count, 1)
@@ -52,7 +52,7 @@ class Package31TodoCardinalityScenarioTests(AgentCoreTestCase):
                 with self.assertRaisesRegex(ValueError, "at most 100 items"):
                     await tool.handler(
                         {"todos": [*todos, {**todos[0], "content": "overflow"}]},
-                        {"session": session, "persistSession": persist},
+                        {"session": session, "persist_session": persist},
                     )
                 self.assertEqual(persist_count, 1)
 

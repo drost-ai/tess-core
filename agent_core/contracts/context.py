@@ -32,7 +32,7 @@ class ToolContext(TypedDict, total=False):
     interactive: bool
     outputJson: Callable[..., Any]    # event emitter: (event_type, data) -> None
     askQuestion: Callable[..., Any]   # (question, options, detail?) -> answer string
-    persistSession: Callable[[], Any]
+    persist_session: Callable[[], Any]
     updateCwd: Callable[[str], Any]
     getTools: Callable[[], list[Any]]
     daemon: dict[str, Any] | None     # task supervisor daemon client surface

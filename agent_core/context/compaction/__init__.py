@@ -9,14 +9,14 @@ from .artifacts import (
     merge_compaction_usage_into_session,
 )
 from .cutoffs import (
-    assistantToolUsesAreCompleted,
+    assistant_tool_uses_are_completed,
     choose_compaction_cutoff,
     choose_tool_aware_compaction_cutoff,
     collect_substantive_tool_exchange_starts,
     collect_tool_result_ids,
     is_safe_working_set_start,
-    messageHasToolResults,
-    messageHasToolUses,
+    message_has_tool_results,
+    message_has_tool_uses,
 )
 from .documents import (
     assert_model_backed_compaction_artifacts,
@@ -72,7 +72,7 @@ from .parsing import (
     normalize_verification_verdict,
     parse_compaction_synthesis_response,
     parse_compaction_verification_response,
-    parseMaybeJson,
+    parse_maybe_json,
 )
 from .projection import (
     build_compaction_system_prompt_context,
@@ -133,7 +133,7 @@ __all__ = [
     "as_record",
     "as_string_array",
     "assert_model_backed_compaction_artifacts",
-    "assistantToolUsesAreCompleted",
+    "assistant_tool_uses_are_completed",
     "build_artifact_paths",
     "build_compaction_attempt_strategies",
     "build_compaction_evidence",
@@ -179,13 +179,13 @@ __all__ = [
     "is_safe_working_set_start",
     "load_working_context_artifact",
     "merge_compaction_usage_into_session",
-    "messageHasToolResults",
-    "messageHasToolUses",
+    "message_has_tool_results",
+    "message_has_tool_uses",
     "normalize_verification_confidence",
     "normalize_verification_verdict",
     "parse_compaction_synthesis_response",
     "parse_compaction_verification_response",
-    "parseMaybeJson",
+    "parse_maybe_json",
     "render_activity_markdown",
     "render_decisions_markdown",
     "render_summary_markdown",

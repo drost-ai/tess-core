@@ -212,7 +212,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
                 run(
                     agent.handler(
                         {"description": "allowed", "prompt": "go"},
-                        {"session": root_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
+                        {"session": root_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": supervisor},
                     )
                 )["content"]
             )
@@ -224,7 +224,7 @@ class SubagentParentReconciliationTests(AgentCoreTestCase):
             blocked = run(
                 agent.handler(
                     {"description": "blocked", "prompt": "go"},
-                    {"session": child_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: blocked_events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None, "taskSupervisor": supervisor},
+                    {"session": child_parent, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: blocked_events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None, "taskSupervisor": supervisor},
                 )
             )
             self.assertTrue(blocked["isError"])

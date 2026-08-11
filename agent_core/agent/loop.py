@@ -7,9 +7,9 @@ from .._utils import maybe_await, merge_usage
 from ..config import filterToolsByPolicy
 from ..context.token_accounting import record_actual_token_usage
 from ..session.persistence import (
-    persistProviderRecovery,
-    persistSession,
-    repairSessionTranscript,
+    persist_provider_recovery,
+    persist_session,
+    repair_session_transcript,
 )
 from ..subagents.reconciliation import (
     appendPendingSubagentReconciliationsToSession,
@@ -95,9 +95,9 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     runtime = _runtime_with_sanitized_events(materialized)
     provider_override = args.get("providerOverride")
     authority = await enforceSessionAgentAuthority(session=session, config=config)
-    repair = repairSessionTranscript(session)
+    repair = repair_session_transcript(session)
     if repair["repaired"]:
-        await persistSession(session, config)
+        await persist_session(session, config)
         _safe_emit(runtime, "transcript.repaired", {"session_id": session["id"], "truncated_from": repair.get("truncatedFrom"), "removed_count": repair["removedCount"], "missing_tool_use_ids": repair["missingToolUseIds"]})
 
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
@@ -134,7 +134,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             "subagent.limit_exceeded",
             {"session_id": session["id"], "reason": exceeded.get("reason"), "limit": exceeded.get("limit")},
         )
-        await persistSession(session, config)
+        await persist_session(session, config)
         return state.result(exceeded.get("reason") or "subagent_limit")
 
     async def cancel_turn() -> dict[str, Any]:
@@ -142,7 +142,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         # The prompt may already have been committed. A first-turn rollback
         # legitimately restores an empty transcript, so bypass the normal
         # "do not create empty sessions" optimization for this write-back.
-        await persistSession(
+        await persist_session(
             session,
             config,
             {"force": True, "truncateTranscript": True},
@@ -165,7 +165,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
         parentTurnId=parent_turn_id,
     )
     if appended_reconciliations.get("records"):
-        await persistSession(session, config)
+        await persist_session(session, config)
         await consumeAppendedSubagentReconciliations(session, appended_reconciliations, runtime=runtime)
         # consumedAt is on disk; a cancel must not roll back past these records.
         state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
@@ -173,7 +173,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
     if prompt_content is not None:
         message = _user_request_message(prompt_content, lineage={"logicalTurnId": parent_turn_id})
         session.setdefault("messages", []).append(message)
-        await persistSession(session, config)
+        await persist_session(session, config)
         _safe_emit(runtime, "message.user", {"text": prompt_text, "session_id": session["id"]})
 
     usage_totals["turns"] += 1
@@ -227,7 +227,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             except _ImageBudgetError as error:
                 _restore_session_state(session, state.rollback_snapshot)
                 # cancel_turn's write-back contract: the restore may shorten.
-                await persistSession(
+                await persist_session(
                     session,
                     config,
                     {"force": True, "truncateTranscript": True},
@@ -246,7 +246,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
             if session.setdefault("metadata", {}).get("lastProviderFailure"):
                 last = copy.deepcopy(session["metadata"]["lastProviderFailure"])
                 recovered_at = _now()
-                await persistProviderRecovery(session, config, {"provider": config["provider"], "recoveredAt": recovered_at, "attempts": last.get("attempt", 1), "lastFailure": last})
+                await persist_provider_recovery(session, config, {"provider": config["provider"], "recoveredAt": recovered_at, "attempts": last.get("attempt", 1), "lastFailure": last})
                 session["metadata"].pop("lastProviderFailure", None)
 
             try:
@@ -299,13 +299,13 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                         f"[REPLY REQUIRED] {len(open_questions)} child question(s) are still unanswered (nudge {question_nudges}/{int(_question_knob("agent.max_question_nudges"))}).\n" + await _build_question_reminder(open_questions),
                         lineage={"logicalTurnId": parent_turn_id, "kind": "question_nudge"},
                     ))
-                    await persistSession(session, config)
+                    await persist_session(session, config)
                     continue
                 if open_questions:
                     backstopped = await _resolve_open_questions_with_backstop(session)
                     _safe_emit(runtime, "subagent.question.unanswered", {"session_id": session["id"], "question_ids": [q.get("questionId") for q in backstopped], "count": len(backstopped)})
                 progress_ledger.complete(provider_call_index=state.provider_call_index)
-                await persistSession(session, config)
+                await persist_session(session, config)
                 # Final drain before the turn returns: anything a child sent while
                 # the last provider call ran lands in the transcript now, so the
                 # wake controller's idle check is the single remaining race point.
@@ -332,7 +332,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
 
             async def persist_tool_session() -> None:
                 async def commit() -> None:
-                    await persistSession(session, config)
+                    await persist_session(session, config)
                 await persist_queue.run(commit)
 
             def build_context(tool_use: dict[str, Any] | None = None) -> ToolContext:
@@ -483,7 +483,7 @@ async def _runAgentPromptWithProviderSession(args: dict[str, Any]) -> dict[str, 
                 tool_results=batch["results"], transcript_blocks=tool_results,
                 provider_call_index=state.provider_call_index,
             )
-            await persistSession(session, config)
+            await persist_session(session, config)
             state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
             if paused_for_approval:
                 if paused_message:

@@ -14,7 +14,7 @@ from ..context.token_accounting import (
 )
 from ..providers.errors import isProviderRequestError
 from ..providers.token_budget import computeProviderTokenBudget, resolveCompactionPolicy
-from ..session.persistence import persistSession
+from ..session.persistence import persist_session
 from .._utils import now_iso as _now
 from ..runtime.events.emit import safeEmit as _safe_emit
 from .shared import modelSupportsImageInputs, requestHasImageInputs
@@ -198,7 +198,7 @@ async def prepareProviderRequest(args: dict[str, Any]) -> dict[str, Any]:
                 "retrieved_memory_tokens": (request_context.get("retrievedMemory") or {}).get("tokenEstimate"),
             },
         )
-        await persistSession(session, config)
+        await persist_session(session, config)
         return prepared_request
 
 

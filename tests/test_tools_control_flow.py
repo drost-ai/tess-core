@@ -25,7 +25,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 "callTool": call_tool,
             }
             mcp = next(tool for tool in core.createBuiltinTools({"mcpRuntime": runtime}) if tool.name == "Mcp")
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             payload = json.loads(run(mcp.handler({"server": "fake", "name": "echo", "arguments": {"value": "x"}}, context))["content"])
             self.assertEqual(calls, [])
@@ -55,7 +55,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
 
             web_module.fetch = fetch_should_not_run
             tools_module.searchWeb = search_should_not_run
-            context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda *_: calls.append(("question", (), {})) or "Blue", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None, "abortSignal": {"aborted": True}}
+            context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda *_: calls.append(("question", (), {})) or "Blue", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None, "abortSignal": {"aborted": True}}
 
             for tool_name, payload in (
                 ("WebFetch", {"url": "https://example.test", "prompt": "summarize"}),
@@ -105,7 +105,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
                 "listServerStatus": lambda: [],
             }
             tools = {tool.name: tool for tool in core.createBuiltinTools({"mcpRuntime": runtime})}
-            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            base_context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             with self.assertRaises(RuntimeError) as list_ctx:
                 run(tools["ListMcpResources"].handler({"server": "edge"}, {**base_context, "abortSignal": FlipSignal()}))
@@ -126,7 +126,7 @@ class ToolControlFlowTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             tools = {tool.name: tool for tool in core.createBuiltinTools()}
             events = []
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
 
             monitor = core.createMonitorRecord({"sessionId": session["id"], "taskId": "task-1", "goal": "watch parity"})
             run(core.save_monitor(monitor))

@@ -41,7 +41,7 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
             ],
         }
 
-        entries = core.buildTranscriptSnapshot(session)
+        entries = core.build_transcript_snapshot(session)
         self.assertEqual(entries[0], {"tone": "user", "title": "You", "body": "read both files", "timestamp": "saved"})
         self.assertEqual(entries[1], {"tone": "assistant", "title": "Tess", "body": "I'll read them.", "timestamp": "saved"})
         self.assertEqual(len([entry for entry in entries if entry.get("tone") == "tool"]), 1)
@@ -66,7 +66,7 @@ class TranscriptShellCompactionTests(AgentCoreTestCase):
             ],
         }
 
-        entries = core.buildTranscriptSnapshot(session)
+        entries = core.build_transcript_snapshot(session)
         self.assertEqual(entries[0]["body"], "First update.\n\nSecond update.")
 
     def test_bug_command_matches_reference(self):

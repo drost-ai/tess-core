@@ -364,7 +364,7 @@ class TaskSupervisorReconciliationTests(AgentCoreTestCase):
             bash = next(tool for tool in core.createBuiltinTools() if tool.name == "Bash")
             command = f"{shlex.quote(sys.executable)} -c {shlex.quote('import time; time.sleep(10)')}"
             events = []
-            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}))
+            result = run(bash.handler({"command": command, "run_in_background": True}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}))
             task_id = json.loads(result["content"])["task_id"]
             for _ in range(40):
                 meta = run(core.read_task_meta(task_id))

@@ -41,7 +41,7 @@ class Package30FileChangePayloadTests(AgentCoreTestCase):
             "askQuestion": lambda *_: "",
             "outputJson": lambda *_: None,
             "cwd": str(workspace),
-            "persistSession": lambda: None,
+            "persist_session": lambda: None,
         }
         return config, session, context, {tool.name: tool for tool in core.createBuiltinTools()}
 

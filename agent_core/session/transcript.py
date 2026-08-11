@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 
-def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
+def build_transcript_snapshot(session: dict[str, Any], limit: int | None = None) -> list[dict[str, Any]]:
     messages = session.get("messages", [])
     if isinstance(limit, int):
         messages = messages[-limit:]
@@ -20,7 +20,7 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
         role = message.get("role")
         if isinstance(content, str):
             entries.append(
-                makeTextEntry(
+                make_text_entry(
                     {
                         "tone": "assistant" if role == "assistant" else "user",
                         "title": assistant_title if role == "assistant" else "You",
@@ -38,12 +38,12 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
 
         def flush_text() -> None:
             nonlocal text_buffer
-            normalized = normalizeTranscriptBody(text_buffer)
+            normalized = normalize_transcript_body(text_buffer)
             if not normalized:
                 text_buffer = ""
                 return
             entries.append(
-                makeTextEntry(
+                make_text_entry(
                     {
                         "tone": "assistant" if role == "assistant" else "user",
                         "title": assistant_title if role == "assistant" else "You",
@@ -69,7 +69,7 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
                     ignored_tool_use_ids.add(block_id)
                     continue
                 if block_id:
-                    tool_uses[block_id] = {"toolName": name, "label": formatTranscriptToolLabel(name, block.get("input"))}
+                    tool_uses[block_id] = {"toolName": name, "label": format_transcript_tool_label(name, block.get("input"))}
                 continue
             if block.get("type") == "tool_result":
                 tool_use_id = str(block.get("tool_use_id") or "")
@@ -78,11 +78,11 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
                 tool_use = tool_uses.get(tool_use_id)
                 label = (tool_use or {}).get("label")
                 entries.append(
-                    makeToolEntry(
+                    make_tool_entry(
                         {
                             "tone": "tool",
                             "title": label or "Tool",
-                            "toolName": (tool_use or {}).get("toolName") or inferToolNameFromLabel(label) or "Tool",
+                            "toolName": (tool_use or {}).get("toolName") or infer_tool_name_from_label(label) or "Tool",
                             "output": block.get("content"),
                             "failed": block.get("is_error"),
                             "timestamp": "saved",
@@ -92,27 +92,27 @@ def buildTranscriptSnapshot(session: dict[str, Any], limit: int | None = None) -
 
         flush_text()
 
-    return compactTranscriptEntries(entries)
+    return compact_transcript_entries(entries)
 
 
-def makeTextEntry(args: dict[str, Any]) -> dict[str, Any]:
+def make_text_entry(args: dict[str, Any]) -> dict[str, Any]:
     return {
         "tone": args.get("tone", "assistant"),
         "title": args.get("title", "Assistant"),
-        "body": normalizeTranscriptBody(str(args.get("body", ""))),
+        "body": normalize_transcript_body(str(args.get("body", ""))),
         "timestamp": args.get("timestamp", "saved"),
     }
 
 
-def makeToolEntry(args: dict[str, Any]) -> dict[str, Any]:
-    normalized_output = normalizeToolOutput(args.get("output"))
+def make_tool_entry(args: dict[str, Any]) -> dict[str, Any]:
+    normalized_output = normalize_tool_output(args.get("output"))
     title = str(args.get("title") or "Tool")
-    tool_name = str(args.get("toolName") or inferToolNameFromLabel(title) or "Tool")
+    tool_name = str(args.get("toolName") or infer_tool_name_from_label(title) or "Tool")
     failed = bool(args.get("failed"))
     return {
         "tone": args.get("tone") or "tool",
         "title": title,
-        "body": renderTranscriptValue(normalized_output),
+        "body": render_transcript_value(normalized_output),
         "timestamp": args.get("timestamp", "saved"),
         "payload": {
             "type": "tool_result",
@@ -124,7 +124,7 @@ def makeToolEntry(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def mergeTranscriptEntry(entries: list[dict[str, Any]], entry: dict[str, Any]) -> list[dict[str, Any]]:
+def merge_transcript_entry(entries: list[dict[str, Any]], entry: dict[str, Any]) -> list[dict[str, Any]]:
     if not entry.get("payload") or entry.get("tone") != "tool":
         return [*entries, entry]
     previous = entries[-1] if entries else None
@@ -143,33 +143,33 @@ def mergeTranscriptEntry(entries: list[dict[str, Any]], entry: dict[str, Any]) -
         **previous,
         "timestamp": entry.get("timestamp"),
         "title": previous["payload"].get("toolName"),
-        "body": renderTranscriptValue(merged_outputs),
+        "body": render_transcript_value(merged_outputs),
         "payload": payload,
     }
     return [*entries[:-1], merged]
 
 
-def compactTranscriptEntries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def compact_transcript_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     current: list[dict[str, Any]] = []
     for entry in entries:
-        current = mergeTranscriptEntry(current, entry)
+        current = merge_transcript_entry(current, entry)
     return current
 
 
-def normalizeTranscriptBody(value: str) -> str:
+def normalize_transcript_body(value: str) -> str:
     return re.sub(r"\n+$", "", re.sub(r"^\n+", "", value.replace("\r\n", "\n")))
 
 
-def renderTranscriptValue(value: Any) -> str:
+def render_transcript_value(value: Any) -> str:
     if isinstance(value, str):
-        return normalizeTranscriptBody(value)
+        return normalize_transcript_body(value)
     try:
         return json.dumps(value, indent=2, ensure_ascii=False)
     except Exception:
-        return normalizeTranscriptBody(str(value))
+        return normalize_transcript_body(str(value))
 
 
-def renderCompactValue(value: Any) -> str:
+def render_compact_value(value: Any) -> str:
     if isinstance(value, str):
         return value
     try:
@@ -178,7 +178,7 @@ def renderCompactValue(value: Any) -> str:
         return str(value)
 
 
-def parseMaybeJson(value: Any) -> Any:
+def parse_maybe_json(value: Any) -> Any:
     if not isinstance(value, str):
         return value
     trimmed = value.strip()
@@ -190,11 +190,11 @@ def parseMaybeJson(value: Any) -> Any:
         return value
 
 
-def normalizeToolOutput(value: Any) -> Any:
-    return parseMaybeJson(value)
+def normalize_tool_output(value: Any) -> Any:
+    return parse_maybe_json(value)
 
 
-def isReadPayload(value: Any) -> bool:
+def is_read_payload(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
     file_record = value.get("file")
@@ -206,15 +206,15 @@ def isReadPayload(value: Any) -> bool:
     )
 
 
-def isGlobPayload(value: Any) -> bool:
+def is_glob_payload(value: Any) -> bool:
     return isinstance(value, dict) and value.get("type") == "glob" and isinstance(value.get("matches"), list)
 
 
-def isGrepPayload(value: Any) -> bool:
+def is_grep_payload(value: Any) -> bool:
     return isinstance(value, dict) and value.get("type") == "grep" and isinstance(value.get("matches"), list)
 
 
-def formatTranscriptToolLabel(name: str, input: Any) -> str:
+def format_transcript_tool_label(name: str, input: Any) -> str:
     if not isinstance(input, dict):
         return name
     for key in ("file_path", "path", "cwd"):
@@ -230,7 +230,7 @@ def formatTranscriptToolLabel(name: str, input: Any) -> str:
     return name
 
 
-def inferToolNameFromLabel(label: str | None) -> str | None:
+def infer_tool_name_from_label(label: str | None) -> str | None:
     if not label:
         return None
     match = re.match(r"^([A-Za-z]+)", label.strip())
@@ -248,7 +248,7 @@ def _can_group_tool_entries(left: dict[str, Any], right: dict[str, Any]) -> bool
     right_tool = _normalize_groupable_tool_name(str(right_payload.get("toolName") or ""))
     if not left_tool or left_tool != right_tool:
         return False
-    validator = {"Read": isReadPayload, "Glob": isGlobPayload, "Grep": isGrepPayload}.get(left_tool)
+    validator = {"Read": is_read_payload, "Glob": is_glob_payload, "Grep": is_grep_payload}.get(left_tool)
     return bool(
         validator
         and all(validator(output) for output in left_payload.get("outputs", []))

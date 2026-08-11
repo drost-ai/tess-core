@@ -22,7 +22,7 @@ async def _start_authorized_health_check(
             "config": config,
             "interactive": False,
             "outputJson": lambda *_args: None,
-            "persistSession": lambda: None,
+            "persist_session": lambda: None,
         },
         spec,
     )
@@ -71,7 +71,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 )
             )
             monitor = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskMonitorStart")
-            created = run(monitor.handler({"task_id": task_id, "goal": "watch server", "summary_style": "brief", "check_interval_ms": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}))
+            created = run(monitor.handler({"task_id": task_id, "goal": "watch server", "summary_style": "brief", "check_interval_ms": 1000}, {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}))
             payload = json.loads(created["content"])
             self.assertEqual(payload["task_id"], task_id)
             self.assertEqual(payload["execution"]["title"], f"Monitoring task {task_id}")

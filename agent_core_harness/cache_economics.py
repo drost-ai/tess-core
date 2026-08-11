@@ -251,15 +251,15 @@ def _runtime_lifecycle_messages() -> list[tuple[str, list[dict[str, Any]]]]:
         "messages": copy.deepcopy(steady),
         "metadata": {},
     }
-    forked = core.createForkedSession(
+    forked = core.create_forked_session(
         parent=parent,
         id="cache-fork",
         cwd="/tmp/cache-fork",
-        originalCwd="/tmp/cache-fork",
+        original_cwd="/tmp/cache-fork",
         now="2026-08-01T00:00:00+00:00",
         model="claude-sonnet-4-6",
-        systemPrompt="stable system identity",
-        permissionMode="default",
+        system_prompt="stable system identity",
+        permission_mode="default",
     )
     fork_messages = forked["messages"]
     resumed = [*copy.deepcopy(fork_messages), *_messages("resume", 2)]

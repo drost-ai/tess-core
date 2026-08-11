@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from ..contracts.records import SessionRecord
 
-def activeSessionPayload(session: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+
+def active_session_payload(session: SessionRecord, config: dict[str, Any]) -> dict[str, Any]:
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     return {
         "session_id": session.get("id"),
@@ -20,13 +22,19 @@ def activeSessionPayload(session: dict[str, Any], config: dict[str, Any]) -> dic
     }
 
 
-def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
-    args = {**(args or {}), **kwargs}
-    active_session = args.get("session") or {}
-    active_config = args.get("config") or {}
-    active_binding = args.get("binding")
+def create_session_runtime_controller(
+    *,
+    session: dict[str, Any] | None = None,
+    config: dict[str, Any] | None = None,
+    binding: Any = None,
+    emit: Callable[[str, dict[str, Any]], Any] | None = None,
+    runtime: Any = None,
+) -> dict[str, Any]:
+    active_session = session or {}
+    active_config = config or {}
+    active_binding = binding
     turn_in_flight = False
-    emit: Callable[[str, dict[str, Any]], Any] = args.get("emitRuntimeEvent") or args.get("emit") or (lambda *_: None)
+    emit = emit or (lambda *_: None)
 
     def get_active_session() -> dict[str, Any]:
         return active_session
@@ -44,7 +52,7 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
         active_session = session
         active_config = config
         active_binding = binding or active_binding
-        payload = activeSessionPayload(active_session, active_config)
+        payload = active_session_payload(active_session, active_config)
         if active_binding is not None:
             payload.update(
                 {
@@ -95,7 +103,7 @@ def createSessionRuntimeController(args: dict[str, Any] | None = None, **kwargs:
 
     controller = {
         "session": active_session,
-        "runtime": args.get("runtime"),
+        "runtime": runtime,
         "getActiveSession": get_active_session,
         "getActiveConfig": get_active_config,
         "getActiveBinding": get_active_binding,

@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from ...storage.message_origin import synthetic_user_message as _synthetic_user_message
-from ...session.tool_boundaries import adjustStartToToolBoundary as _adjust_start_to_tool_boundary
+from ...session.tool_boundaries import adjust_start_to_tool_boundary as _adjust_start_to_tool_boundary
 from ...storage import get_session_compactions_dir
 from .documents import load_working_context_artifact
 from .prompts import render_working_context_prompt_context

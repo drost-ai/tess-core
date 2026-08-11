@@ -217,7 +217,7 @@ class Package146MediaSanitizerTests(unittest.TestCase):
                     loaded["messages"].append(
                         {"role": "user", "content": "current turn"}
                     )
-                    await core.persistSession(loaded, config, touch=False)
+                    await core.persist_session(loaded, config, touch=False)
                     reloaded = await core.load_session(legacy["id"])
                     self.assertNotIn(_SENTINEL, json.dumps(reloaded))
                     self.assertNotIn(_SENTINEL, json.dumps(loaded))
@@ -312,7 +312,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
             async def execute() -> None:
                 async with core.scoped_runtime_home(str(root)):
                     await core.ensure_base_layout(str(root))
-                    await core.persistSession(session, config, touch=False)
+                    await core.persist_session(session, config, touch=False)
                     await core.runAgentPrompt(
                         session=session,
                         config=config,
@@ -369,7 +369,7 @@ class Package146TransientOverlayTests(unittest.TestCase):
             async def execute() -> None:
                 async with core.scoped_runtime_home(str(root)):
                     await core.ensure_base_layout(str(root))
-                    await core.persistSession(session, config, touch=False)
+                    await core.persist_session(session, config, touch=False)
                     await core.runAgentPrompt(
                         session=session,
                         config=config,

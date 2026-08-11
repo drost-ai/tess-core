@@ -6,9 +6,9 @@ import unittest
 import agent_core._facade as core
 from agent_core.context.compaction.projection import build_messages_for_working_context
 from agent_core.session.tool_boundaries import (
-    adjustStartToToolBoundary,
-    findIncompleteToolExchange,
-    sliceStartCrossesToolExchange,
+    adjust_start_to_tool_boundary,
+    find_incomplete_tool_exchange,
+    slice_start_crosses_tool_exchange,
 )
 
 
@@ -27,9 +27,9 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "user", "content": [_tr("a")]},
             {"role": "user", "content": [_tr("b")]},
         ]
-        self.assertIsNone(findIncompleteToolExchange(messages))
+        self.assertIsNone(find_incomplete_tool_exchange(messages))
         session = {"messages": list(messages)}
-        repair = core.repairSessionTranscript(session)
+        repair = core.repair_session_transcript(session)
         self.assertFalse(repair["repaired"])
         self.assertEqual(len(session["messages"]), 3)
 
@@ -39,9 +39,9 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "user", "content": "a note in between"},
             {"role": "user", "content": [_tr("a")]},
         ]
-        self.assertIsNone(findIncompleteToolExchange(messages))
+        self.assertIsNone(find_incomplete_tool_exchange(messages))
         session = {"messages": list(messages)}
-        self.assertFalse(core.repairSessionTranscript(session)["repaired"])
+        self.assertFalse(core.repair_session_transcript(session)["repaired"])
 
     def test_missing_result_truncates_at_the_first_incomplete_exchange(self):
         messages = [
@@ -51,11 +51,11 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "assistant", "content": [_tu("b")]},
         ]
         self.assertEqual(
-            findIncompleteToolExchange(messages),
+            find_incomplete_tool_exchange(messages),
             {"index": 3, "missingToolUseIds": ["b"]},
         )
         session = {"messages": list(messages)}
-        repair = core.repairSessionTranscript(session)
+        repair = core.repair_session_transcript(session)
         self.assertTrue(repair["repaired"])
         self.assertEqual(len(session["messages"]), 3)
 
@@ -65,7 +65,7 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "assistant", "content": "interrupting"},
             {"role": "user", "content": [_tr("a")]},
         ]
-        self.assertEqual(findIncompleteToolExchange(messages)["index"], 0)
+        self.assertEqual(find_incomplete_tool_exchange(messages)["index"], 0)
         self.assertEqual(core.collect_substantive_tool_exchange_starts(messages, -1), [])
 
     def test_slice_start_adjustment_walks_past_interposed_text(self):
@@ -75,11 +75,11 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "user", "content": [_tr("a")]},
             {"role": "user", "content": "fresh request"},
         ]
-        self.assertTrue(sliceStartCrossesToolExchange(messages, 1))
-        self.assertTrue(sliceStartCrossesToolExchange(messages, 2))
-        self.assertFalse(sliceStartCrossesToolExchange(messages, 3))
-        self.assertEqual(adjustStartToToolBoundary(messages, 2), 0)
-        self.assertEqual(adjustStartToToolBoundary(messages, 3), 3)
+        self.assertTrue(slice_start_crosses_tool_exchange(messages, 1))
+        self.assertTrue(slice_start_crosses_tool_exchange(messages, 2))
+        self.assertFalse(slice_start_crosses_tool_exchange(messages, 3))
+        self.assertEqual(adjust_start_to_tool_boundary(messages, 2), 0)
+        self.assertEqual(adjust_start_to_tool_boundary(messages, 3), 3)
 
     def test_working_context_projection_never_ships_an_orphan_tool_result(self):
         session = {
@@ -102,10 +102,10 @@ class UnifiedToolBoundaryTests(unittest.TestCase):
             {"role": "assistant", "content": [{"type": "tool_use", "name": "X", "input": {}}]},
             {"role": "user", "content": [{"type": "tool_result", "content": "ok"}]},
         ]
-        self.assertIsNone(findIncompleteToolExchange(complete))
+        self.assertIsNone(find_incomplete_tool_exchange(complete))
         dangling = [complete[0]]
         self.assertEqual(
-            findIncompleteToolExchange(dangling),
+            find_incomplete_tool_exchange(dangling),
             {"index": 0, "missingToolUseIds": [""]},
         )
 

@@ -124,7 +124,7 @@ class Package31BoundedTaskOutputTests(AgentCoreTestCase):
                 "askQuestion": lambda *_: "",
                 "outputJson": lambda *_: None,
                 "cwd": str(workspace),
-                "persistSession": lambda: None,
+                "persist_session": lambda: None,
             }
             task_output = next(tool for tool in core.createBuiltinTools() if tool.name == "TaskOutput")
             result = run(task_output.handler({"task_id": task_id, "block": False}, context))

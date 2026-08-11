@@ -16,7 +16,7 @@ from typing import Any
 from .._utils import maybe_await
 from . import collaboration_narration as _collaboration_narration
 from .collaboration_narration import appendAssistantCollaborationMessage, staleWorkPayload
-from ..session.persistence import persistSession
+from ..session.persistence import persist_session
 from ..storage import list_child_agents, list_session_monitors, load_bridge, load_remote_session
 from ..runtime.generation import createRuntimeSessionBinding, sameRuntimeBinding
 from ..runtime._ticker import run_scoped_async, start_oneshot, start_ticker
@@ -122,7 +122,7 @@ async def createCollaborationRuntime(args: dict[str, Any] | None = None, **kwarg
                             return get_snapshot()
                         if text and _is_active(captured_binding):
                             appendAssistantCollaborationMessage(captured_session, text)
-                            await persistSession(captured_session, captured_config)
+                            await persist_session(captured_session, captured_config)
                             if not _is_active(captured_binding):
                                 await _report_stale(captured_binding, "collaboration.assistant_update")
                                 return get_snapshot()

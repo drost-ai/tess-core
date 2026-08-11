@@ -34,7 +34,7 @@ class SubagentV2Tests(AgentCoreTestCase):
                 "askQuestion": lambda *_: "",
                 "outputJson": lambda *_: None,
                 "cwd": str(workspace),
-                "persistSession": lambda: None,
+                "persist_session": lambda: None,
             }
             prepared = run(prepareSubagent({
                 "context": context,
@@ -297,7 +297,7 @@ class SubagentV2Tests(AgentCoreTestCase):
             result = run(
                 question_tool.handler(
                     {"questions": [{"question": "Which path?", "options": [{"label": "A"}, {"label": "B"}]}]},
-                    {"session": session, "config": config, "interactive": False, "persistSession": lambda: None},
+                    {"session": session, "config": config, "interactive": False, "persist_session": lambda: None},
                 )
             )
             payload = json.loads(result["content"])

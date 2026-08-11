@@ -39,7 +39,7 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
             run(core.save_session(session))
             config = {"sessionPersistence": True, "cwd": str(workspace)}
 
-            run(core.persistSession(session, config, touch=False))
+            run(core.persist_session(session, config, touch=False))
             first = run(core.load_session_record_shallow(session["id"]))
             first_log = dict(first["metadata"]["fullTranscriptLog"])
             archive = Path(core.session_transcript_log_path(session["id"]))
@@ -47,13 +47,13 @@ class Package29StorageConvergenceTests(AgentCoreTestCase):
             self.assertEqual(first["updatedAt"], "2026-06-01T00:00:00Z")
             self.assertTrue(first_log["lastArchivedAt"])
 
-            run(core.persistSession(session, config, touch=False))
+            run(core.persist_session(session, config, touch=False))
             second = run(core.load_session_record_shallow(session["id"]))
             self.assertEqual(second["updatedAt"], first["updatedAt"])
             self.assertEqual(second["metadata"]["fullTranscriptLog"]["lastArchivedAt"], first_log["lastArchivedAt"])
             self.assertEqual(archive.read_bytes(), first_archive)
 
-            run(core.persistSession(session, config))
+            run(core.persist_session(session, config))
             semantic = run(core.load_session_record_shallow(session["id"]))
             self.assertGreater(semantic["updatedAt"], first["updatedAt"])
             self.assertEqual(archive.read_bytes(), first_archive)

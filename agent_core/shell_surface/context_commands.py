@@ -33,7 +33,7 @@ from .common import (
     _split_subcommand,
 )
 from .common import formatMonitorRecord
-from .diagnostics import _handle_debug, formatSessionCandidate
+from .diagnostics import _handle_debug, format_session_candidate
 from typing import Any
 
 
@@ -152,12 +152,12 @@ async def _handle_resume(arg_text: str, session: dict[str, Any], hooks: dict[str
     if not arg_text:
         if not candidates:
             return _info(hooks, "Resume", "No other saved sessions found for this workspace.")
-        return _info(hooks, "Resume", "\n".join(formatSessionCandidate(candidate) for candidate in candidates[:10]))
+        return _info(hooks, "Resume", "\n".join(format_session_candidate(candidate) for candidate in candidates[:10]))
     matches = [candidate for candidate in candidates if _session_matches(candidate, arg_text)]
     if not matches:
         return _error(hooks, f"No saved session in this workspace matched: {arg_text}")
     if len(matches) > 1:
-        return _info(hooks, "Resume", "\n".join(formatSessionCandidate(candidate) for candidate in matches[:10]))
+        return _info(hooks, "Resume", "\n".join(format_session_candidate(candidate) for candidate in matches[:10]))
     request_resume = hooks.get("requestResume") if isinstance(hooks, dict) else None
     if not callable(request_resume):
         return _error(hooks, "/resume switching is only available in the full-screen TUI.")

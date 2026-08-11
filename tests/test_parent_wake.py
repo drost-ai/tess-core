@@ -213,9 +213,9 @@ class WakeControllerTests(AgentCoreTestCase):
         self.assertEqual(resumed, [1, 1])
 
     def test_session_controller_tracks_turn_in_flight(self):
-        controller = core.createSessionRuntimeController({
-            "session": {"id": "flight-check"}, "config": {}, "emitRuntimeEvent": lambda *_: None,
-        })
+        controller = core.create_session_runtime_controller(
+            session={"id": "flight-check"}, config={}, emit=lambda *_: None,
+        )
         self.assertFalse(controller["isTurnInFlight"]())
         controller["startTurn"]({"prompt": "hi"})
         self.assertTrue(controller["isTurnInFlight"]())

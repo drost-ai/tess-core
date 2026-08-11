@@ -289,14 +289,14 @@ async def _measure_v1_v2_production(
             fast_home = root / f"v2-fast-{sample}"
             async with core.scoped_runtime_home(str(fast_home)):
                 fast_session = copy.deepcopy(base)
-                await core.persistSession(
+                await core.persist_session(
                     fast_session, {"sessionPersistence": True}, touch=False
                 )
                 fast_session["messages"].extend(
                     copy.deepcopy(session["messages"][stable_watermark:])
                 )
                 observed = await _observe_storage_io(
-                    core.persistSession(
+                    core.persist_session(
                         fast_session,
                         {"sessionPersistence": True},
                         touch=False,
@@ -373,7 +373,7 @@ async def _production_crash_boundary(
         pass
 
     async with core.scoped_runtime_home(str(home)):
-        await core.persistSession(base, {"sessionPersistence": True}, touch=False)
+        await core.persist_session(base, {"sessionPersistence": True}, touch=False)
         committed_messages = copy.deepcopy(base["messages"])
         base["messages"].extend(
             copy.deepcopy(session["messages"][watermark:])
@@ -384,7 +384,7 @@ async def _production_crash_boundary(
                 raise InjectedCrash(boundary)
 
         try:
-            await core.persistSession(
+            await core.persist_session(
                 base,
                 {"sessionPersistence": True},
                 touch=False,

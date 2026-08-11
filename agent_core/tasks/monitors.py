@@ -28,7 +28,7 @@ from .monitor_transactions import (
     commitMonitorMutation as _commit_monitor_mutation,
     monitorTransitionEventFields as _monitor_transition_event_fields,
 )
-from ..session.persistence import persistSession
+from ..session.persistence import persist_session
 from ..storage import list_session_monitors, mutate_task_meta, read_task_meta, save_monitor, task_output_path, write_task_meta
 
 
@@ -137,7 +137,7 @@ async def createMonitorRuntime(args: dict[str, Any] | None = None, **kwargs: Any
         bootstrap_baseline.narrated(monitor_id)
         _sync_session_monitor_metadata(session_ref, await list_session_monitors(session_ref["id"]))
         with _suppress():
-            await persistSession(session_ref, config_ref)
+            await persist_session(session_ref, config_ref)
         emit(
             "monitor.assistant_update",
             {

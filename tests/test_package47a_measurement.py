@@ -28,7 +28,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
             events: list[dict[str, object]] = []
             unsubscribe = register_persistence_observer(events.append)
             try:
-                run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+                run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             finally:
                 unsubscribe()
 
@@ -62,7 +62,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
         events: list[dict[str, object]] = []
         unsubscribe = register_persistence_observer(events.append)
         try:
-            self.assertIsNone(run(core.persistSession(session, {"sessionPersistence": True})))
+            self.assertIsNone(run(core.persist_session(session, {"sessionPersistence": True})))
         finally:
             unsubscribe()
         self.assertEqual([event["event"] for event in events], ["persist_call_started", "persist_call_finished"])
@@ -86,7 +86,7 @@ class Package47APersistenceInstrumentationTests(AgentCoreTestCase):
 
             unsubscribe = register_persistence_observer(broken_observer)
             try:
-                run(core.persistSession(session, {"sessionPersistence": True}, touch=False))
+                run(core.persist_session(session, {"sessionPersistence": True}, touch=False))
             finally:
                 unsubscribe()
             persisted = run(core.load_session(session["id"]))

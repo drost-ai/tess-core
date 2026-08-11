@@ -78,7 +78,7 @@ class Package46MailboxTransactionTests(AgentCoreTestCase):
                 async def fail_persist(*_args, **_kwargs):
                     raise OSError("injected session write failure")
 
-                with mock.patch.object(communication, "persistSession", fail_persist):
+                with mock.patch.object(communication, "persist_session", fail_persist):
                     with self.assertRaises(OSError):
                         await core.deliverQueuedTaskMessagesToSession(
                             session, {"sessionPersistence": True}

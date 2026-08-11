@@ -27,7 +27,7 @@ from ...storage.message_origin import (
     is_plain_user_turn_anchor as _is_plain_user_turn_anchor,
     synthetic_user_message as _synthetic_user_message,
 )
-from ...session.tool_boundaries import adjustStartToToolBoundary as _adjust_start_to_tool_boundary
+from ...session.tool_boundaries import adjust_start_to_tool_boundary as _adjust_start_to_tool_boundary
 
 
 def choose_preserved_raw_start(messages: list[dict[str, Any]]) -> int:

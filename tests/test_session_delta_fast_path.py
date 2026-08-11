@@ -29,7 +29,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
         try:
             session = self._session(workspace, "31111111-1111-4111-8111-111111111111")
             config = {"sessionPersistence": True, "cwd": str(workspace)}
-            run(core.persistSession(session, config))
+            run(core.persist_session(session, config))
 
             session["messages"].append({"role": "assistant", "content": "working on it"})
             session["messages"].append(
@@ -42,7 +42,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             with mock.patch.object(
                 persistence_module, "mutate_session_record_transaction", side_effect=forbidden_full_transaction
             ):
-                run(core.persistSession(session, config))
+                run(core.persist_session(session, config))
             persisted = run(core.load_session(session["id"]))
             # The dangling in-flight tool_use is repaired away on disk...
             self.assertEqual(len(persisted["messages"]), 2)
@@ -55,7 +55,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
             with mock.patch.object(
                 persistence_module, "mutate_session_record_transaction", side_effect=forbidden_full_transaction
             ):
-                run(core.persistSession(session, config))
+                run(core.persist_session(session, config))
             final = run(core.load_session(session["id"]))
             self.assertEqual(len(final["messages"]), 4)
             self.assertEqual(final["messages"][2]["content"][0]["id"], "t1")
@@ -95,7 +95,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
                 }
             )
             config = {"sessionPersistence": True, "cwd": str(workspace)}
-            run(core.persistSession(session, config))
+            run(core.persist_session(session, config))
             persisted = run(core.load_session(session["id"]))
             blocks = persisted["messages"][1]["content"]
             self.assertNotIn("QUJD", json.dumps(blocks))
@@ -109,7 +109,7 @@ class SessionDeltaFastPathTests(AgentCoreTestCase):
         root, _home, workspace, previous = self.temp_context()
         try:
             session = self._session(workspace, "33333333-3333-4333-8333-333333333333")
-            run(core.persistSession(session, {"sessionPersistence": True, "cwd": str(workspace)}))
+            run(core.persist_session(session, {"sessionPersistence": True, "cwd": str(workspace)}))
             live = run(core.load_session(session["id"]))
             messages = live["messages"]
             base_revision = live["revision"]

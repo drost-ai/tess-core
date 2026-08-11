@@ -13,7 +13,7 @@ from ..providers.prompt_cache_orchestration import (
 )
 from ..providers.activity import ProviderActivityEmitter, emitProviderActivity
 from ..providers.timeouts import createTurnDeadlineContext
-from ..session.persistence import persistSession
+from ..session.persistence import persist_session
 from ..context.token_accounting import record_actual_token_usage
 from ..providers.usage_costs import estimateUsageCostUsd, mergeUsageIntoSession, roundUsd
 from .cancellation import _is_turn_abort_error, _throw_if_turn_cancelled, _safe_emit
@@ -249,7 +249,7 @@ async def completeEmptyProviderResponse(args: dict[str, Any]) -> dict[str, Any] 
         attempt=int(args.get("emptyResponseAttempts") or 0) + 1,
         retrying=False,
     )
-    await persistSession(args["session"], args["config"])
+    await persist_session(args["session"], args["config"])
     return {
         "text": "\n\n".join(args.get("textParts") or []).strip(),
         "toolCount": int(args.get("toolCount") or 0),

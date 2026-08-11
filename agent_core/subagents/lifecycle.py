@@ -92,7 +92,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
                 "lastSummary": "Launch refused: subagent capacity is full.",
             }
         )
-        await maybe_await(context.get("persistSession", lambda: None)())
+        await maybe_await(context.get("persist_session", lambda: None)())
         return {
             "content": pretty_json(
                 _without_none_values(
@@ -125,7 +125,7 @@ async def startBackgroundSubagent(args: dict[str, Any] | None = None, **kwargs: 
             "taskIds": [task_id] if task_id else [],
         },
     )
-    await maybe_await(context.get("persistSession", lambda: None)())
+    await maybe_await(context.get("persist_session", lambda: None)())
     await save_child_agent(
         {
             **child_record,
@@ -305,7 +305,7 @@ async def prepareSubagent(args: dict[str, Any]) -> dict[str, Any]:
     )
     if run_in_background:
         parent_metadata["backgroundSessionIds"] = _dedupe([*(parent_metadata.get("backgroundSessionIds") or []), child_session["id"]])
-    await maybe_await(context.get("persistSession", lambda: None)())
+    await maybe_await(context.get("persist_session", lambda: None)())
     await save_session(child_session)
     now = now_iso()
     child_record = {

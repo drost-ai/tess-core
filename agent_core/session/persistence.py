@@ -12,14 +12,14 @@ from ..storage.persistence_metrics import (
     begin_persistence_call as _begin_persistence_call,
     finish_persistence_call as _finish_persistence_call,
 )
-from .fork import createForkArchiveHeader, createForkedSession
+from .fork import create_fork_archive_header, create_forked_session
 from ..storage.message_history import (
     SessionMessageList,
     create_session_message_list as _create_session_message_list,
     session_persistence_checkpoint as _session_persistence_checkpoint,
     set_session_persistence_checkpoint as _set_session_persistence_checkpoint,
 )
-from .tool_boundaries import findIncompleteToolExchange as _find_incomplete_tool_exchange
+from .tool_boundaries import find_incomplete_tool_exchange as _find_incomplete_tool_exchange
 from ..storage import (
     append_session_transcript_log_entries,
     create_empty_session,
@@ -33,7 +33,7 @@ from ..storage import (
 from ..runtime.workspace import captureWorkspaceSnapshot, hydrateSessionWorkspaceMetadata, parsePullRequestReference
 
 
-async def resolveSession(options: dict[str, Any], config: dict[str, Any], launchContext: dict[str, Any] | None = None) -> dict[str, Any]:
+async def resolve_session(options: dict[str, Any], config: dict[str, Any], launchContext: dict[str, Any] | None = None) -> SessionRecord:
     launch = launchContext or {"cwd": config["cwd"], "originalCwd": config["cwd"]}
     sessions = await list_sessions()
     existing = await _resolve_existing_session(options, sessions, launch)
@@ -60,7 +60,7 @@ async def resolveSession(options: dict[str, Any], config: dict[str, Any], launch
     return created
 
 
-async def persistSession(
+async def persist_session(
     session: SessionRecord,
     config: dict[str, Any],
     options: dict[str, Any] | None = None,
@@ -77,7 +77,7 @@ async def persistSession(
             return None
         checkpoint_before = _session_persistence_checkpoint(session)
         snapshot = _copy_session_for_persist(session)
-        repair = repairSessionTranscript(snapshot)
+        repair = repair_session_transcript(snapshot)
         await hydrateSessionWorkspaceMetadata(snapshot, {"includePullRequest": False})
         if persist_options.get("touch", True):
             snapshot["updatedAt"] = now_iso()
@@ -107,7 +107,7 @@ async def persistSession(
         raise
 
 
-async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any], failure: dict[str, Any]) -> None:
+async def persist_provider_failure(session: dict[str, Any], config: dict[str, Any], failure: dict[str, Any]) -> None:
     if not config.get("sessionPersistence", True) or not has_persistable_session_messages(session):
         return
     metadata = session.setdefault("metadata", {})
@@ -117,7 +117,7 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     if isinstance(interrupted, dict):
         metadata["lastAssistantInterruptedPreview"] = copy.deepcopy(interrupted)
     snapshot = _copy_session_for_persist(session)
-    repairSessionTranscript(snapshot)
+    repair_session_transcript(snapshot)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
     persisted_at = now_iso()
@@ -134,12 +134,12 @@ async def persistProviderFailure(session: dict[str, Any], config: dict[str, Any]
     await append_session_transcript_log_entries(session["id"], entries)
 
 
-async def persistProviderRecovery(session: dict[str, Any], config: dict[str, Any], details: dict[str, Any]) -> None:
+async def persist_provider_recovery(session: dict[str, Any], config: dict[str, Any], details: dict[str, Any]) -> None:
     if not config.get("sessionPersistence", True) or not has_persistable_session_messages(session):
         return
     session.setdefault("metadata", {})["lastProviderRecoveryAt"] = details["recoveredAt"]
     snapshot = _copy_session_for_persist(session)
-    repairSessionTranscript(snapshot)
+    repair_session_transcript(snapshot)
     committed = await _commit_prepared_session_snapshot(snapshot)
     _sync_committed_session_state(session, committed, message_source=snapshot.get("messages"))
     await append_session_transcript_log_entries(session["id"], [{"type": "provider_recovered", "session_id": session["id"], "persisted_at": details["recoveredAt"], **details}])
@@ -286,7 +286,7 @@ def _adopt_repaired_checkpoint(
     )
 
 
-def repairSessionTranscript(session: dict[str, Any]) -> dict[str, Any]:
+def repair_session_transcript(session: SessionRecord) -> dict[str, Any]:
     invalid = _find_invalid_tool_use_boundary(session.get("messages", []))
     if not invalid:
         return {"repaired": False, "removedCount": 0, "missingToolUseIds": []}
@@ -303,18 +303,18 @@ def repairSessionTranscript(session: dict[str, Any]) -> dict[str, Any]:
     return {"repaired": True, "truncatedFrom": invalid["index"], "removedCount": removed, "missingToolUseIds": invalid["missingToolUseIds"]}
 
 
-def cloneSession(session: dict[str, Any], overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+def clone_session(session: SessionRecord, overrides: dict[str, Any] | None = None) -> SessionRecord:
     next_session = copy.deepcopy(session)
     if overrides:
         next_session.update(overrides)
     return next_session
 
 
-def setSessionCwd(session: dict[str, Any], nextCwd: str) -> None:
+def set_session_cwd(session: dict[str, Any], nextCwd: str) -> None:
     session["cwd"] = os.path.abspath(nextCwd)
 
 
-def findMatchingSessions(sessions: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+def find_matching_sessions(sessions: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
     normalized = query.strip().lower()
     if not normalized:
         return sessions
@@ -323,7 +323,7 @@ def findMatchingSessions(sessions: list[dict[str, Any]], query: str) -> list[dic
     return [item[0] for item in sorted([item for item in scored if item[1] > 0], key=lambda item: (item[1], item[0].get("updatedAt", "")), reverse=True)]
 
 
-def formatSessionCandidate(session: dict[str, Any]) -> str:
+def format_session_candidate(session: dict[str, Any]) -> str:
     metadata = session.get("metadata", {})
     label = session.get("name") or metadata.get("workspaceName") or os.path.basename(session.get("cwd", ""))
     branch = metadata.get("gitBranch") or ""
@@ -331,7 +331,7 @@ def formatSessionCandidate(session: dict[str, Any]) -> str:
     return f"{session['id'][:8]}  {label:<18}  {branch:<18}  {pr:<10}  {session.get('updatedAt', '')[:19].replace('T', ' ')}".rstrip()
 
 
-async def findSessionsForWorkspace(sessions: list[dict[str, Any]], cwd: str) -> list[dict[str, Any]]:
+async def find_sessions_for_workspace(sessions: list[dict[str, Any]], cwd: str) -> list[dict[str, Any]]:
     snapshot = await captureWorkspaceSnapshot(cwd, {"includePullRequest": False})
     resolved_cwd = os.path.abspath(cwd)
     resolved_git = os.path.abspath(snapshot["gitRoot"]) if snapshot.get("gitRoot") else None
@@ -347,7 +347,7 @@ async def _persist_session_transcript_log(
     previous = previous_count if isinstance(previous_count, int) and previous_count >= 0 else 0
     archived_at = now_iso()
     entries = []
-    fork_header = createForkArchiveHeader(session, archived_at)
+    fork_header = create_fork_archive_header(session, archived_at)
     if fork_header:
         entries.append(fork_header)
     if (repair.get("repaired") or truncate) and previous > len(session.get("messages", [])):
@@ -373,12 +373,12 @@ def _find_invalid_tool_use_boundary(messages: list[dict[str, Any]]) -> dict[str,
 
 async def _resolve_existing_session(options: dict[str, Any], sessions: list[dict[str, Any]], launch: dict[str, Any]) -> dict[str, Any] | None:
     if isinstance(options.get("resume"), str):
-        matches = findMatchingSessions(sessions, options["resume"])
+        matches = find_matching_sessions(sessions, options["resume"])
         if not matches:
             raise ValueError(f"No saved session matched: {options['resume']}")
         return matches[0]
     if options.get("continue"):
-        matches = await findSessionsForWorkspace(sessions, launch["originalCwd"])
+        matches = await find_sessions_for_workspace(sessions, launch["originalCwd"])
         return matches[0] if matches else None
     return None
 
@@ -393,23 +393,23 @@ def _fork_or_reuse_session(session: dict[str, Any], options: dict[str, Any], con
             session["metadata"]["worktreePath"] = launch["worktreePath"]
         return session
     timestamp = now_iso()
-    return createForkedSession(
+    return create_forked_session(
         parent=session,
         id=options.get("sessionId") or __import__("uuid").uuid4().hex,
         now=timestamp,
         cwd=launch["cwd"],
-        originalCwd=launch["originalCwd"],
-        worktreePath=launch.get("worktreePath"),
-        tmuxSessionName=launch.get("tmuxSessionName"),
-        tmuxWindowName=launch.get("tmuxWindowName"),
-        tmuxMode=launch.get("tmuxMode"),
+        original_cwd=launch["originalCwd"],
+        worktree_path=launch.get("worktreePath"),
+        tmux_session_name=launch.get("tmuxSessionName"),
+        tmux_window_name=launch.get("tmuxWindowName"),
+        tmux_mode=launch.get("tmuxMode"),
         name=options.get("name") or session.get("name"),
         model=config["model"],
         effort=config.get("effort"),
-        systemPrompt=buildEffectiveSystemPrompt(config),
-        permissionMode=config["permissionMode"],
-        assistantName=config.get("assistantName"),
-        assistantDescription=config.get("assistantDescription"),
+        system_prompt=buildEffectiveSystemPrompt(config),
+        permission_mode=config["permissionMode"],
+        assistant_name=config.get("assistantName"),
+        assistant_description=config.get("assistantDescription"),
     )
 
 

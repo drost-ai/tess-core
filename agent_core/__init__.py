@@ -29,9 +29,9 @@ from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding,
 from .runtime.state.store import createInitialRuntimeState, createRuntimeStateStore
 from .runtime.wake import createMailboxWakeController
 from .runtime.workspace import createGitWorktree
-from .session.persistence import findSessionsForWorkspace, persistSession, resolveSession
-from .session.runtime import activeSessionPayload
-from .shell_surface.diagnostics import formatSessionCandidate
+from .session.persistence import find_sessions_for_workspace, persist_session, resolve_session
+from .session.runtime import active_session_payload
+from .shell_surface.diagnostics import format_session_candidate
 from .shell_surface.remote_select import resolveTeleportSession
 from .storage.auth_files import clear_auth, load_auth, save_auth
 from .storage.paths import (
@@ -51,7 +51,7 @@ from .tools.definitions import ToolDefinition
 from .tools.registry import createBuiltinTools
 
 __all__ = [
-    "activeSessionPayload",
+    "active_session_payload",
     "AskQuestionDetail",
     "bootstrapRuntime",
     "buildSystemPromptForAgent",
@@ -77,9 +77,9 @@ __all__ = [
     "finalizeBackgroundSubagentFailureFromEnv",
     "finalizeBackgroundSubagentSuccessFromEnv",
     "find_git_root",
-    "findSessionsForWorkspace",
+    "find_sessions_for_workspace",
     "formatBridgeTail",
-    "formatSessionCandidate",
+    "format_session_candidate",
     "get_default_auto_mode",
     "get_state_root",
     "isTaskSupervisorGateway",
@@ -94,7 +94,7 @@ __all__ = [
     "load_mcp_servers",
     "load_plugins",
     "load_session",
-    "persistSession",
+    "persist_session",
     "readOpenChildQuestions",
     "reset_configured_runtime_home",
     "resolveConfig",
@@ -102,7 +102,7 @@ __all__ = [
     "resolveModelForAgent",
     "resolveProviderProfile",
     "resolveProviderProfiles",
-    "resolveSession",
+    "resolve_session",
     "resolveTeleportSession",
     "runAgentPrompt",
     "runTaskSupervisorDaemon",

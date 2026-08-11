@@ -33,7 +33,7 @@ class ToolContractTests(AgentCoreTestCase):
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="default")
             events = []
             prompts = []
-            context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda question, options: prompts.append((question, options)) or "Blue", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": True, "askQuestion": lambda question, options: prompts.append((question, options)) or "Blue", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
             tools = {tool.name: tool for tool in core.createBuiltinTools()}
 
             blocked = run(tools["AskUserQuestion"].handler({"questions": [{"question": "Pick?", "options": [{"label": "Blue"}]}]}, {**context, "interactive": False}))
@@ -73,7 +73,7 @@ class ToolContractTests(AgentCoreTestCase):
             text_file = workspace / "lines.txt"
             text_file.write_text("one\ntwo\n", encoding="utf-8")
             read = next(tool for tool in core.createBuiltinTools() if tool.name == "Read")
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             payload = json.loads(run(read.handler({"file_path": str(text_file)}, context))["content"])
             file_payload = payload["file"]
@@ -96,7 +96,7 @@ class ToolContractTests(AgentCoreTestCase):
             config = run(core.resolveConfig({"provider": "openai", "runtimeHome": str(home), "permissionMode": "bypassPermissions"}, str(workspace)))
             session = core.create_empty_session(cwd=str(workspace), provider=config["provider"], providerProfileName=config["providerProfileName"], model=config["model"], effort=config["effort"], systemPrompt=config["systemPrompt"], permissionMode="bypassPermissions")
             tools = {tool.name: tool for tool in core.createBuiltinTools()}
-            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persistSession": lambda: None}
+            context = {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda *_: None, "cwd": str(workspace), "persist_session": lambda: None}
 
             created = json.loads(run(tools["Write"].handler({"file_path": "diff.txt", "content": "one\ntwo\nthree\nfour\nfive\n"}, context))["content"])
             self.assertNotIn("note", created)

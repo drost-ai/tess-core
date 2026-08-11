@@ -12,8 +12,8 @@ from ..agent import runAgentPrompt
 from ..runtime.agent_bindings import createAgentRuntimeBindings, isTaskSupervisorGateway
 from ..config import resolveConfig
 from ..runtime.bootstrap import bootstrapRuntime
-from ..session.persistence import resolveSession
-from ..session.runtime import activeSessionPayload
+from ..session.persistence import resolve_session
+from ..session.runtime import active_session_payload
 from ..storage import scoped_runtime_home, write_back_session_v1
 from .stream import JsonStreamSink
 
@@ -43,13 +43,13 @@ async def run_headless(options: HeadlessOptions, *, stdout: TextIO = sys.stdout)
     prompt = _decode_prompt(options.prompt, options.input_format)
     config = await resolveConfig(_config_options(options), options.cwd)
     session_options = {"resume": options.session} if options.session else {}
-    session = await resolveSession(session_options, config, {"cwd": options.cwd, "originalCwd": options.cwd})
+    session = await resolve_session(session_options, config, {"cwd": options.cwd, "originalCwd": options.cwd})
     runtime = await bootstrapRuntime({"session": session, "config": config, "cwd": options.cwd})
     stream_enabled = options.output_format == "stream-json"
     sink = JsonStreamSink(stdout if stream_enabled else None)
     runtime["subscribeEvents"](sink.handle_runtime_envelope)
     runtime["emitEvent"]("system.init", _system_init_payload(session, config, runtime, options))
-    runtime["emitEvent"]("session.activated", activeSessionPayload(session, config))
+    runtime["emitEvent"]("session.activated", active_session_payload(session, config))
 
     provider_override = _scripted_provider_override()
     daemon = runtime.get("daemon")

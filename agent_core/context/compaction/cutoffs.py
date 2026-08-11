@@ -9,11 +9,11 @@ from .utils import estimateMessageTokens
 from typing import Any
 from ...storage.message_origin import is_plain_user_turn_anchor as _is_plain_user_turn_anchor
 from ...session.tool_boundaries import (
-    assistantToolUsesAreCompleted,
-    messageHasToolResults,
-    messageHasToolUses,
-    messageToolResultIds as _message_tool_result_ids,
-    missingToolResultIds as _missing_tool_result_ids,
+    assistant_tool_uses_are_completed,
+    message_has_tool_results,
+    message_has_tool_uses,
+    message_tool_result_ids as _message_tool_result_ids,
+    missing_tool_result_ids as _missing_tool_result_ids,
 )
 
 
@@ -86,13 +86,13 @@ def is_safe_working_set_start(messages: list[dict[str, Any]], index: int) -> boo
         return False
     if _is_plain_user_turn_anchor(current):
         previous = messages[index - 1] if index > 0 else None
-        return not (previous and previous.get("role") == "assistant" and messageHasToolUses(previous))
+        return not (previous and previous.get("role") == "assistant" and message_has_tool_uses(previous))
     if current.get("role") != "assistant":
         return False
-    if not messageHasToolUses(current):
+    if not message_has_tool_uses(current):
         return True
-    return assistantToolUsesAreCompleted(messages, index)
+    return assistant_tool_uses_are_completed(messages, index)
 
 
-# assistantToolUsesAreCompleted, messageHasToolUses, and messageHasToolResults
+# assistant_tool_uses_are_completed, message_has_tool_uses, and message_has_tool_results
 # are re-exported from session.tool_boundaries — the single boundary encoding.

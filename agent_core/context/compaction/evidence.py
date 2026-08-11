@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from .parsing import as_record, parseMaybeJson
+from .parsing import as_record, parse_maybe_json
 from .shared import (
     compaction_knob,
 )
@@ -132,7 +132,7 @@ def build_tool_result_evidence_entry(messageIndex: int, block: dict[str, Any], t
 
 
 def summarize_tool_result_for_compaction(content: str, cwd: str, limit: int) -> str:
-    parsed = parseMaybeJson(content)
+    parsed = parse_maybe_json(content)
     record = as_record(parsed)
     if not record:
         return truncate(collapse_whitespace(content), limit)

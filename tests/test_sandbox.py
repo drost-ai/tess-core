@@ -196,7 +196,7 @@ class SandboxTests(AgentCoreTestCase):
         return config, session, bash, []
 
     def _context(self, session, config, workspace, events):
-        return {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persistSession": lambda: None}
+        return {"session": session, "config": config, "interactive": False, "askQuestion": lambda *_: "", "outputJson": lambda event, data: events.append((event, data)), "cwd": str(workspace), "persist_session": lambda: None}
 
     def _wait_for_output(self, path: str) -> str:
         for _ in range(50):

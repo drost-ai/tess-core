@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from ..platform_support import collectDoctorReport
-from ..session.transcript import buildTranscriptSnapshot
+from ..session.transcript import build_transcript_snapshot
 from ..storage import (
     list_child_agents,
     list_session_monitors,
@@ -36,7 +36,7 @@ async def _handle_transcript(arg_text: str, session: dict[str, Any], hooks: dict
             limit = max(1, int(arg_text))
         except ValueError:
             return _error(hooks, "Usage: /transcript [limit]")
-    return _info(hooks, "Transcript", formatTranscriptEntries(buildTranscriptSnapshot(session, limit)))
+    return _info(hooks, "Transcript", formatTranscriptEntries(build_transcript_snapshot(session, limit)))
 
 
 async def _handle_debug(
@@ -243,7 +243,7 @@ def _handle_screen(arg_text: str, hooks: dict[str, Any]) -> dict[str, Any]:
 
 
 
-def formatSessionCandidate(session: dict[str, Any]) -> str:
+def format_session_candidate(session: dict[str, Any]) -> str:
     name = session.get("name") or _first_user_text(session) or "untitled"
     return f"{_short_id(session.get('id', ''))}  {session.get('updatedAt', '')[:19]}  {session.get('model', '')}  {truncateAscii(squashWhitespace(name), 90)}"
 

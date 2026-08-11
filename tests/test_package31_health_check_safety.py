@@ -50,7 +50,7 @@ class Package31HealthCheckSafetyTests(AgentCoreTestCase):
             "askQuestion": lambda *_: "",
             "outputJson": lambda *_: None,
             "cwd": session["cwd"],
-            "persistSession": lambda: None,
+            "persist_session": lambda: None,
             **({"daemon": daemon} if daemon else {}),
         }
 

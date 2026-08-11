@@ -91,7 +91,7 @@ async def test_todo_write_enforces_runtime_limits_and_returns_bounded_summary(tm
 
     result = await tool.handler(
         {"todos": [_todo(index) for index in range(100)]},
-        {"session": session, "persistSession": persist},
+        {"session": session, "persist_session": persist},
     )
     payload = json.loads(result["content"])
     assert persisted == 1
@@ -114,7 +114,7 @@ async def test_todo_write_enforces_runtime_limits_and_returns_bounded_summary(tm
     with pytest.raises(ValueError, match=r"at most 100 items; received 101"):
         await tool.handler(
             {"todos": [_todo(index) for index in range(101)]},
-            {"session": session, "persistSession": persist},
+            {"session": session, "persist_session": persist},
         )
     assert session["todos"] == before
     assert persisted == 1
@@ -122,17 +122,17 @@ async def test_todo_write_enforces_runtime_limits_and_returns_bounded_summary(tm
     with pytest.raises(ValueError, match=r"content exceeds the 2000-byte UTF-8 limit \(2004 bytes\)"):
         await tool.handler(
             {"todos": [{**_todo(0), "content": "🙂" * 501}]},
-            {"session": session, "persistSession": persist},
+            {"session": session, "persist_session": persist},
         )
     with pytest.raises(ValueError, match=r"activeForm exceeds the 1000-byte UTF-8 limit"):
         await tool.handler(
             {"todos": [{**_todo(0), "activeForm": "a" * 1_001}]},
-            {"session": session, "persistSession": persist},
+            {"session": session, "persist_session": persist},
         )
     with pytest.raises(ValueError, match=r"Invalid todos\[0\]\.status"):
         await tool.handler(
             {"todos": [{**_todo(0), "status": "almost_done"}]},
-            {"session": session, "persistSession": persist},
+            {"session": session, "persist_session": persist},
         )
     assert persisted == 1
 
@@ -148,7 +148,7 @@ async def test_worst_case_todo_summary_bypasses_generic_reshaping(tmp_path):
                 for index in range(100)
             ]
         },
-        {"session": session, "persistSession": lambda: None},
+        {"session": session, "persist_session": lambda: None},
     )
     assert serializedContentBytes(result["content"]) <= TOOL_RESULT_FINAL_BYTES["small"]
     payload = json.loads(result["content"])

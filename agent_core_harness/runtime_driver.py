@@ -19,7 +19,7 @@ async def bootstrap_runtime(data: dict[str, Any], sandbox: ScenarioSandbox, stat
     events = state.setdefault("runtime_events", [])
     runtime = await core.bootstrapRuntime({"session": session, "config": config, "cwd": str(sandbox.workspace), "daemonEnabled": False})
     runtime["subscribeEvents"](lambda envelope: events.append(_json_safe(_validated_envelope(envelope))))
-    runtime["emitEvent"]("session.activated", core.activeSessionPayload(session, config))
+    runtime["emitEvent"]("session.activated", core.active_session_payload(session, config))
     state["runtime"] = runtime
     state.setdefault("driver_results", []).append(
         {
@@ -243,7 +243,7 @@ def _tool_context(sandbox: ScenarioSandbox, state: dict[str, Any], session: dict
         "interactive": False,
         "outputJson": lambda event, data: state.setdefault("runtime_events", []).append({"event": event, "data": _json_safe(data)}),
         "askQuestion": lambda *_args: "",
-        "persistSession": lambda: core.save_session(session),
+        "persist_session": lambda: core.save_session(session),
         "updateCwd": lambda next_cwd: session.__setitem__("cwd", next_cwd),
         "getTools": lambda: runtime.get("tools", []),
         "daemon": runtime.get("daemon"),

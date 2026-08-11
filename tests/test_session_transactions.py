@@ -200,7 +200,7 @@ class SessionTransactionTests(AgentCoreTestCase):
             ))
             stale["name"] = "foreground update"
             stale["messages"].append({"role": "assistant", "content": "new turn"})
-            run(core.persistSession(stale, {"sessionPersistence": True}, touch=False))
+            run(core.persist_session(stale, {"sessionPersistence": True}, touch=False))
 
             persisted = run(core.load_session(session["id"]))
             self.assertEqual(persisted["name"], "foreground update")

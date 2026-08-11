@@ -221,7 +221,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             self.assertEqual(config["systemPrompt"], "You are a folder-configured agent.\n\nBe terse.")
             self.assertEqual(config["appendSystemPrompt"], "Always answer in haiku.")
 
-            session = run(core.resolveSession({}, config))
+            session = run(core.resolve_session({}, config))
             self.assertEqual(
                 session["systemPrompt"],
                 "You are a folder-configured agent.\n\nBe terse.\n\nAlways answer in haiku.",
@@ -235,7 +235,7 @@ class SettingsFolderTests(AgentCoreTestCase):
             _write(home / "settings" / "system_prompt_append.md", "Cite sources.\n")
             config = run(core.resolveConfig({}, str(workspace)))
             self.assertEqual(config["systemPrompt"], core.buildDefaultSystemPrompt())
-            session = run(core.resolveSession({}, config))
+            session = run(core.resolve_session({}, config))
             self.assertEqual(session["systemPrompt"], f"{core.buildDefaultSystemPrompt()}\n\nCite sources.")
 
             _write(home / "settings" / "system_prompt.md", "file prompt\n")

@@ -57,7 +57,7 @@ class SessionForkIsolationTests(AgentCoreTestCase):
             parent_before = parent_path.read_bytes()
 
             child = run(
-                core.resolveSession(
+                core.resolve_session(
                     {"resume": PARENT_ID, "forkSession": True, "sessionId": CHILD_ID},
                     config,
                     {
@@ -79,8 +79,8 @@ class SessionForkIsolationTests(AgentCoreTestCase):
             self._assert_fresh(child)
             self.assertEqual(child["metadata"]["tmuxSessionName"], "current-tmux")
 
-            run(core.persistSession(child, config))
-            run(core.persistSession(child, config))
+            run(core.persist_session(child, config))
+            run(core.persist_session(child, config))
             archive_path = Path(core.session_transcript_log_path(CHILD_ID))
             archive = [json.loads(line) for line in archive_path.read_text().splitlines() if line]
             self.assertEqual(sum(entry.get("type") == "session_header" for entry in archive), 1)
