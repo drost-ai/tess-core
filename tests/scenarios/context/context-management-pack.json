@@ -38,7 +38,7 @@
         "alias": "accept",
         "qualityClassification": "rich",
         "nextStepContains": "Persist checkpoint artifacts",
-        "memoryContains": "Use fixed Codex Spark compaction model selection"
+        "memoryContains": "Prefer focused parity tests"
       }
     },
     {

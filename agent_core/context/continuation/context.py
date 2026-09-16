@@ -19,7 +19,15 @@ async def build_continuation_context(args: dict[str, Any] | None = None) -> dict
 
     checkpoint_projection = await _build_compaction_system_prompt_projection(session)
     compaction_context = checkpoint_projection["text"]
-    retrieved_memory = await retrieve_relevant_durable_memory({"session": session, "prompt": prompt})
+    config = args.get("config") or {}
+    durable_memory = config.get("durableMemory") or {}
+    retrieved_memory = await retrieve_relevant_durable_memory(
+        {
+            "session": session,
+            "prompt": prompt,
+            "enabled": durable_memory.get("enabled") is not False,
+        }
+    )
     continuation_overlay = render_continuation_overlay(session)
     base_messages = build_messages_for_working_context(session)
     relief = apply_context_relief_modes(

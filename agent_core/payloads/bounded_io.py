@@ -90,12 +90,21 @@ def _read_file_tail_bounded_sync(file_path: str, max_bytes: int | float) -> dict
         }
 
 
-def _read_file_prefix_bounded_sync(file_path: str, max_bytes: int | float) -> dict[str, Any]:
+def _read_file_prefix_bounded_sync(
+    file_path: str, max_bytes: int | float, reject_symlink: bool = False
+) -> dict[str, Any]:
     limit = _normalize_byte_limit(max_bytes)
-    path_stat = os.stat(file_path)
+    path_stat = os.lstat(file_path) if reject_symlink else os.stat(file_path)
+    if reject_symlink and stat.S_ISLNK(path_stat.st_mode):
+        raise ValueError("Read refuses symbolic links.")
     _require_regular_file(path_stat)
     path_snapshot = _file_snapshot(path_stat)
-    with open(file_path, "rb", buffering=0) as handle:
+    if reject_symlink:
+        descriptor = os.open(file_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        opened = os.fdopen(descriptor, "rb", buffering=0)
+    else:
+        opened = open(file_path, "rb", buffering=0)
+    with opened as handle:
         opened_stat = os.fstat(handle.fileno())
         _require_regular_file(opened_stat)
         before_snapshot = _file_snapshot(opened_stat)
@@ -122,7 +131,12 @@ async def read_file_prefix_bounded(
     if not isinstance(file_path, str) or not file_path:
         raise ValueError("filePath is required.")
     max_bytes = values.get("maxBytes", values.get("max_bytes", 0))
-    return await asyncio.to_thread(_read_file_prefix_bounded_sync, file_path, max_bytes)
+    reject_symlink = bool(
+        values.get("rejectSymlink", values.get("reject_symlink", False))
+    )
+    return await asyncio.to_thread(
+        _read_file_prefix_bounded_sync, file_path, max_bytes, reject_symlink
+    )
 
 
 async def read_file_tail_bounded(

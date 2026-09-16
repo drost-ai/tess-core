@@ -27,6 +27,7 @@ gracefully when mypy is not installed.
 from .config import (
     AgentDefinition,
     AutoModePolicy,
+    DurableMemorySettings,
     OpenAiApiMode,
     PermissionMode,
     ProviderKind,
@@ -110,6 +111,7 @@ __all__ = [
     "ChildAgentStatus",
     "CompactionState",
     "ContextReliefMode",
+    "DurableMemorySettings",
     "ExecutionDescriptor",
     "OwnedProcessIdentity",
     "ForegroundMode",

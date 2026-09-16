@@ -52,7 +52,7 @@
     {
       "assert_compaction_artifact": {
         "alias": "accept",
-        "memoryContains": "Use fixed Codex Spark compaction model selection",
+        "memoryContains": "Prefer focused parity tests",
         "nextStepContains": "Persist checkpoint artifacts",
         "qualityClassification": "rich"
       }

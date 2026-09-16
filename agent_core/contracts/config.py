@@ -114,6 +114,10 @@ class ProviderProfile(TypedDict, total=False):
     limits: dict[str, Any]
 
 
+class DurableMemorySettings(TypedDict, total=False):
+    enabled: bool
+
+
 class SettingsRecord(TypedDict, total=False):
     """Persisted settings.json shape (storage/settings.py). Sparse file."""
 
@@ -123,6 +127,7 @@ class SettingsRecord(TypedDict, total=False):
     permissionMode: PermissionMode
     assistantName: str
     assistantDescription: str
+    durableMemory: DurableMemorySettings
     systemPromptFile: str
     systemPromptAppendFile: str
     tools: list[str]
@@ -195,6 +200,7 @@ class ResolvedConfig(_resolved_config_required, total=False):
     effort: str
     assistantName: str
     assistantDescription: str
+    durableMemory: DurableMemorySettings
     appendSystemPrompt: str | None
     sandbox: dict[str, Any]
     subagents: dict[str, Any]

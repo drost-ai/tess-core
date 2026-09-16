@@ -13,7 +13,6 @@ from ...storage import (
     save_compaction_manifest,
 )
 from ..compaction_transport import create_default_compaction_model_client
-from ..durable_memory import update_durable_memory_from_working_context
 from .artifacts import _write_json, _write_text, build_artifact_paths
 from .cutoffs import choose_compaction_cutoff
 from .documents import (
@@ -289,8 +288,6 @@ async def run_compaction(args: dict[str, Any] | None = None) -> dict[str, Any]:
     _write_json(artifacts["todos"], todos)
     _write_json(artifacts["state"], state_snapshot)
     _write_json(artifacts["workingContext"], working_context)
-
-    await update_durable_memory_from_working_context({"session": session, "workingContext": working_context})
 
     verification_record = _verification_record(verification)
     manifest = {

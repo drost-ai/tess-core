@@ -68,6 +68,11 @@ from .shared import (
     DEFAULT_TUI_SCREEN_MODE,
 )
 
+def _normalize_durable_memory_settings(value: Any) -> dict[str, bool]:
+    settings = value if isinstance(value, dict) else {}
+    return {"enabled": settings.get("enabled") is not False}
+
+
 def _opt(options: dict[str, Any] | None, key: str, default: Any = None) -> Any:
     if options is None:
         return default
@@ -410,6 +415,9 @@ async def resolve_config(options: dict[str, Any] | None, cwd: str) -> ResolvedCo
         "assistantName": assistant_name,
         "assistantDescription": assistant_description,
         "systemPrompt": system_prompt,
+        "durableMemory": _normalize_durable_memory_settings(
+            merged_settings.get("durableMemory")
+        ),
         "appendSystemPrompt": options.get("appendSystemPrompt") or merged_settings.get("systemPromptAppendFile"),
         "sandbox": sandbox_config,
         "subagents": subagents_config,

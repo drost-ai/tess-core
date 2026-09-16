@@ -211,7 +211,11 @@ class ShellCommandTests(AgentCoreTestCase):
             run(core.handle_slash_command({"command": "/memory append Keep handlers deterministic", "session": session, "config": config, "hooks": hooks}))
             memory_show = run(core.handle_slash_command({"command": "/memory", "session": session, "config": config, "hooks": hooks}))
             self.assertIn("Prefer shell parity tests", memory_show["message"])
-            self.assertTrue(any(record["id"] == "manual-project-memory" for record in run(core.load_project_memory_records(str(workspace)))))
+            self.assertIn(
+                "Prefer shell parity tests",
+                Path(core.get_project_memory_path(str(workspace))).read_text(),
+            )
+            self.assertEqual(run(core.load_project_memory_records(str(workspace))), [])
 
             monitor = core.create_monitor_record({"sessionId": session["id"], "taskId": "task-shell-monitor", "goal": "Watch shell parity"})
             run(core.save_monitor(monitor))

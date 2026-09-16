@@ -136,7 +136,7 @@ class ContextCompactionTests(AgentCoreTestCase):
             self.assertIn("Archived working context", prompt_context)
             self.assertIn("active_goals:", prompt_context)
             memory = run(core.load_project_memory_records(str(workspace)))
-            self.assertTrue(any(record["source"] == "compaction" and "Use fixed Codex Spark compaction" in record["text"] for record in memory))
+            self.assertEqual(memory, [])
 
             bridged = dict(session)
             bridged["metadata"] = {"compactionState": {"compactedThroughMessageIndex": 13}}
@@ -295,37 +295,6 @@ class ContextCompactionTests(AgentCoreTestCase):
         result = run(core.run_model_backed_compaction_synthesis_with_fallback({"session": session, "config": {}, "modelClient": context_limit, "previousWorkingContext": None, "sourceMessages": source_messages, "sourceStart": 0}))
         self.assertEqual(result["qualityClassification"], "usable")
         self.assertEqual(context_limit.calls, 2)
-
-    def test_durable_memory_matches_compaction_record_policy(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            memory_file = workspace / ".tess" / "project" / "memory.md"
-            memory_file.parent.mkdir(parents=True)
-            memory_file.write_text("Prefer focused parity tests")
-            session = core.create_empty_session(cwd=str(workspace), provider="openai", model="gpt-5.4", effort="high", systemPrompt="s", permissionMode="default")
-            working = {
-                "project": {"description": "Python port of agent-core", "facts": {"evidence": ["agent_core/compaction.py"]}, "keyFiles": [{"path": "agent_core/compaction.py"}]},
-                "goals": {"active": ["Complete Slice 4"], "constraints": ["Match TypeScript behavior"], "preferences": ["Detailed commits"]},
-                "decisions": ["Use fixed Codex Spark compaction model selection"],
-                "discoveries": ["Checkpoint-v2 needs verifier repair"],
-                "criticalContext": ["Compaction artifacts drive future prompt context"],
-            }
-
-            first = run(core.update_durable_memory_from_working_context(session, working))
-            second = run(core.update_durable_memory_from_working_context(session, working))
-
-            self.assertEqual(first[0]["id"], "manual-project-memory")
-            self.assertEqual(first[0]["kind"], "user_preference")
-            workflow = next(record for record in second if record.get("kind") == "workflow")
-            expected_id = core.durable_memory_id("workflow", "Use fixed Codex Spark compaction model selection")
-            self.assertEqual(workflow["id"], expected_id)
-            self.assertEqual(sum(1 for record in second if record["id"] == expected_id), 1)
-            retrieved = run(core.retrieve_relevant_durable_memory({"session": session, "prompt": "fixed Codex Spark compaction"}))
-            prompt = core.render_retrieved_memory_prompt(retrieved)
-            self.assertIn("<retrieved_memory>", prompt)
-            self.assertIn("[workflow | compaction | agent_core/compaction.py]", prompt)
-        finally:
-            self.restore_home(root, previous)
 
     def test_agent_prompt_auto_compacts_and_rebuilds_request_before_provider_send(self):
         import agent_core.agent as agent_module

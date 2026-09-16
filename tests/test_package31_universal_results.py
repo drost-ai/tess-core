@@ -22,7 +22,7 @@ _SMALL_CONFIG = {
 
 
 class Package31UniversalResultTests(AgentCoreTestCase):
-    def test_durable_memory_projects_the_first_oversized_record_inside_total_prompt_budget(self):
+    def test_durable_memory_projects_oversized_manual_memory_inside_total_prompt_budget(self):
         root, home, workspace, previous = self.temp_context()
         try:
             session = core.create_empty_session(
@@ -33,25 +33,10 @@ class Package31UniversalResultTests(AgentCoreTestCase):
                 systemPrompt="test",
                 permissionMode="bypassPermissions",
             )
-            now = "2026-07-17T00:00:00Z"
-            run(
-                core.save_project_memory_records(
-                    str(workspace),
-                    [
-                        {
-                            "id": "oversized-memory",
-                            "workspaceRoot": str(workspace),
-                            "createdAt": now,
-                            "updatedAt": now,
-                            "kind": "repo_fact",
-                            "source": "compaction",
-                            "sourceDetail": "adversarial source",
-                            "confidence": "medium",
-                            "text": "needle " + ("漢🙂\\\"" * 180_000),
-                        }
-                    ],
-                )
-            )
+            memory_path = Path(core.get_project_memory_path(str(workspace)))
+            memory_path.parent.mkdir(parents=True)
+            memory_path.write_text("needle " + ("漢🙂\\\"" * 180_000))
+
             selected = run(
                 core.retrieve_relevant_durable_memory(
                     session=session,
@@ -65,8 +50,8 @@ class Package31UniversalResultTests(AgentCoreTestCase):
             self.assertLessEqual(utf8_byte_length(prompt), 1_600)
             self.assertLessEqual(selected["tokenEstimate"], 1_600)
             self.assertLessEqual(selected["byteEstimate"], 1_600)
-            self.assertEqual(selected["truncatedRecordIds"], ["oversized-memory"])
-            self.assertIn("truncated; source=adversarial source", prompt)
+            self.assertEqual(selected["truncatedRecordIds"], ["manual-project-memory"])
+            self.assertIn("project memory truncated from", prompt)
             self.assertFalse(has_lone_utf16_surrogate(prompt))
 
             too_small = run(
