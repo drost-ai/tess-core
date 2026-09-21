@@ -48,6 +48,7 @@ async def _project_session_task_records(
     session: dict[str, Any] | None = None,
     live_work_cache: dict[str, Any] | None = None,
     on_issue: Callable[[dict[str, Any]], Any] | None = None,
+    persist_session_state: bool = True,
 ) -> list[dict[str, Any]]:
     session = session or await load_session(session_id) or {"id": session_id, "metadata": {}}
     # Projection is also the existing restoration/attachment boundary. Verify
@@ -134,7 +135,8 @@ async def _project_session_task_records(
                 on_issue({"reason": str(exc)})
 
     records = sorted(records_by_id.values(), key=lambda item: str(item.get("updatedAt") or ""), reverse=True)
-    await _sync_projected_task_metadata(session, records)
+    if persist_session_state:
+        await _sync_projected_task_metadata(session, records)
     return records
 
 

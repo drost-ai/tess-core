@@ -42,6 +42,7 @@ async def create_task_runtime(args: dict[str, Any] | None = None) -> dict[str, A
                 session_ref["id"],
                 session_ref,
                 on_issue=projection_issues.append,
+                persist_session_state=config_ref.get("sessionPersistence", True),
             )
             reported: set[tuple[Any, Any]] = set()
             for issue in projection_issues:
