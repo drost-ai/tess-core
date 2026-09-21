@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 
 
 def stop_monitor_record(monitor: dict[str, Any], now: str) -> dict[str, Any]:
     status = monitor.get("status")
+    if (monitor.get("delivery") and not monitor.get("deliveryStoppedAt")
+            and (status not in {"completed", "failed", "stopped"} or monitor["delivery"].get("queue"))):
+        record = deepcopy(monitor)
+        record["deliveryStoppedAt"] = now
+        record["delivery"]["queue"] = []
+        record["delivery"]["lastError"] = "monitor.cancelled"
+        record.update(updatedAt=now, stoppedAt=now)
+        if status not in {"completed", "failed"}:
+            record["status"] = "stopped"
+        return {"record": record, "changed": True, "previousStatus": status, "reason": "stopped"}
     if status in {"completed", "failed"}:
         return {"record": monitor, "changed": False, "previousStatus": status, "reason": "already_terminal"}
     if status == "stopped":
@@ -33,6 +44,10 @@ def resume_monitor_record(monitor: dict[str, Any], now: str) -> dict[str, Any]:
         return {"record": monitor, "changed": False, "previousStatus": status, "reason": "already_active"}
     record = {**monitor, "status": "active", "updatedAt": now}
     record.pop("stoppedAt", None)
+    record.pop("deliveryStoppedAt", None)
+    if record.get("delivery"):
+        record["delivery"] = {**record["delivery"], "queue": []}
+        record["delivery"].pop("lastQueuedKey", None)
     return {"record": record, "changed": True, "previousStatus": status, "reason": "resumed"}
 
 

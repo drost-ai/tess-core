@@ -25,6 +25,7 @@ class AskQuestionDetail(TypedDict, total=False):
 
 
 class ToolContext(TypedDict, total=False):
+    monitorContinuationSupported: bool
     cwd: str
     allowedRoots: list[str]
     config: dict[str, Any]            # resolved config (contracts.config.ResolvedConfig)

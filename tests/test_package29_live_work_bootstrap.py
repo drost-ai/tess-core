@@ -179,7 +179,7 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
                 run(runtime["close"]())
             self.restore_home(root, previous)
 
-    def test_monitor_bootstrap_is_silent_and_later_output_narrates(self):
+    def test_monitor_bootstrap_and_later_output_wait_for_durable_consumer(self):
         root, _home, workspace, previous = self.temp_context()
         runtime = None
         original_send = monitors_module.send_openai_request
@@ -213,15 +213,16 @@ class Package29BootstrapNarrationTests(AgentCoreTestCase):
                 self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"])), before)
                 with output.open("a", encoding="utf-8") as handle:
                     handle.write("x" * 256 + "\n")
-                deadline = time.time() + 2
-                while not calls and time.time() < deadline:
-                    await asyncio.sleep(0.02)
+                await asyncio.sleep(0.04)
                 await created["close"]()
 
             run(exercise_runtime())
-            self.assertEqual(len(calls), 1)
-            self.assertTrue(any(event == "monitor.assistant_update" for event, _ in events))
-            self.assertEqual(session["messages"][-1]["content"], "There is new output.")
+            self.assertEqual(calls, [])
+            self.assertFalse(any(event == "monitor.assistant_update" for event, _ in events))
+            self.assertEqual((target.read_bytes(), target.stat().st_mtime_ns, len(session["messages"])), before)
+            saved = run(core.load_monitor(monitor["id"]))
+            self.assertEqual(len(saved["delivery"]["queue"]), 1)
+            self.assertEqual(saved["delivery"]["queue"][0]["toByte"], output.stat().st_size)
         finally:
             monitors_module.send_openai_request = original_send
             if runtime:

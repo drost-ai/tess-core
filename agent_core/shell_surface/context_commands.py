@@ -138,7 +138,7 @@ def _slash_monitor_mutation(latest: dict[str, Any], operation: str) -> dict[str,
     return {
         "record": transition["record"],
         "changed": transition["changed"],
-        "transition": transition["changed"],
+        "transition": transition["previousStatus"] != transition["record"]["status"],
         "transitionLabel": (
             f"{operation}:{transition['previousStatus']}"
             f"->{transition['record']['status']}"

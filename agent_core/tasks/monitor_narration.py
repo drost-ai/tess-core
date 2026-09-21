@@ -70,8 +70,10 @@ async def _author_monitor_update_with_provider(config: dict[str, Any], session: 
         if not token:
             raise RuntimeError("No OpenAI token available for monitor updates.")
         response = await send_openai_request({"token": token, "baseUrl": resolved_config.get("openaiBaseUrl"), "headers": resolved_config.get("customHeaders"), "mode": resolved_config.get("openaiApiMode"), "request": request, "runtime": {}, "maxAttempts": 1})
-    else:
+    elif provider == "anthropic":
         response = await send_anthropic_messages_request({"request": request, "config": resolved_config, "runtime": {}, "maxAttempts": 1})
+    else:
+        raise RuntimeError("Monitor notification provider unsupported; use deterministic notification")
     text = "".join(str(block.get("text") or "") for block in response.get("content", []) if block.get("type") == "text").strip()
     if not text:
         raise RuntimeError("Provider returned an empty monitor update.")
@@ -82,7 +84,7 @@ async def _author_monitor_update_with_provider(config: dict[str, Any], session: 
 def _build_deterministic_monitor_update(monitor: dict[str, Any], task: dict[str, Any] | None, reason: str, output_excerpt: str, omitted_bytes: int) -> str:
     label = monitor.get("goal") or f"task {str(monitor.get('taskId') or '')[:8]}"
     if reason == "start":
-        return f"I started monitoring {label}. I will keep watching the background task and update you when something meaningful changes."
+        return f"Monitoring {label}. The background task is {(task or {}).get('status') or 'in progress'}."
     if reason == "completed":
         suffix = f" with exit code {task.get('exitCode')}" if task and isinstance(task.get("exitCode"), int) else ""
         return f"The background task for {label} completed{suffix}."
@@ -93,11 +95,11 @@ def _build_deterministic_monitor_update(monitor: dict[str, Any], task: dict[str,
     if reason == "stopped":
         return f"The background task for {label} stopped before completion."
     if reason == "heartbeat":
-        return f"I am still monitoring {label}. There has not been a major new change since my last update."
+        return f"Still monitoring {label}. The background task is {(task or {}).get('status') or 'in progress'}."
     excerpt = f" Latest output:\n{_render_excerpt(output_excerpt, omitted_bytes)}" if output_excerpt else ""
     return f"There is new background activity for {label}.{excerpt}"
 
 
 def _render_excerpt(text: str, omitted_bytes: int) -> str:
-    prefix = f"[omitted {omitted_bytes} earlier chars]\n" if omitted_bytes > 0 else ""
+    prefix = f"[omitted {omitted_bytes} earlier bytes]\n" if omitted_bytes > 0 else ""
     return f"{prefix}{text}".strip()

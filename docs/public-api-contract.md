@@ -57,6 +57,8 @@ free to change without coordination.
 
 | Concept (TS name) | Kind | Python today | Python target (Epic M) | Python home | Status | Consumers |
 |---|---|---|---|---|---|---|
+| `MonitorDeliveryController` (Python extension) | type | `MonitorDeliveryController` | `MonitorDeliveryController` | `agent_core.tasks.monitor_delivery` | active | tess-agent |
+| `MonitorDeliveryError` (Python extension) | type | `MonitorDeliveryError` | `MonitorDeliveryError` | `agent_core.tasks.monitor_delivery` | active | tess-agent |
 | `activeSessionPayload` | function | `activeSessionPayload` | `active_session_payload` | `agent_core.session.runtime` | active | samplehost |
 | `bootstrapRuntime` | function | `bootstrapRuntime` | `bootstrap_runtime` | `agent_core.runtime.bootstrap` | active | samplehost, tess-code |
 | `buildSystemPromptForAgent` | function | `buildSystemPromptForAgent` | `build_system_prompt_for_agent` | `agent_core.config.prompts` | active | tess-code |
@@ -242,3 +244,67 @@ Headless hosts may pass `detectWorkspaceIntegrations: false` to
 `bootstrap_runtime`. This skips optional desktop/tmux availability probes while
 retaining workspace metadata and the engine's normal permissions/tools. Omission
 preserves existing detection behavior.
+
+## Durable monitor delivery (2026-09-20 PT)
+
+`TaskMonitorStart` accepts `delivery_mode: notification | continuation`, default
+`notification`. Continuation is selected explicitly from the user's requested
+follow-up at registration. Hosts advertise `monitorContinuationSupported: true`
+in `create_agent_runtime_bindings`; omission/false rejects continuation creation
+with `monitor.continuation_unsupported`. Task output never changes the mode.
+Automatic continuation does not expose `TaskMonitorStart`, preventing recursive
+monitor creation. Existing permissions and tool policies still apply.
+
+`MonitorDeliveryController(runtime_home, clock=None)` pins storage scope. Native
+engine session identity is required for mutations; a host must separately verify
+its native-to-public mapping. Public async methods:
+
+- `observe(session_id=None)` performs the same atomic observation/outbox pass as
+  the daemon. It is safe to race with the daemon; check eligibility is rechecked
+  under the monitor record lock.
+- `list_pending(session_id=None, limit=100, after=None)` returns bounded descriptors including
+  held/pending/claimed/authored/failed state, age timestamps, lease and diagnostics.
+  Pass the last descriptor's `cursor` as `after` to page; reset after the last
+  page to discover newly created work.
+- `claim(monitor_id, session_id, owner, lease_ms=60000, continuation_supported=False)`
+  returns a fenced claim or None. `renew(claim, lease_ms=60000)` renews authority.
+- `begin_continuation(claim)` durably records the execution boundary before tools
+  may run. Expired execution without a checkpoint is marked uncertain and is
+  not automatically repeated. Terminal work can supersede failed progress.
+- `checkpoint(claim, text, rationale="")` stores authored content. `text=None`
+  requires rationale and acknowledges only processed nonterminal progress.
+- `publish(claim, publisher)` validates current authority, invokes the idempotent
+  durable publisher under the same lock as Stop/Mute, then records its receipt.
+  The callback receives bounded payload, must finish within five seconds, and
+  must return a JSON receipt with the same `deliveryId`. It must find an existing
+  append on replay. It must never run a model or arbitrary network work.
+- `publish_to_session(claim, session, config, publisher)` additionally persists
+  notification prose in the canonical session, deduplicated by delivery ID. The
+  host must serialize this with all other turns using that session.
+- `retry(claim, error)` releases the lease with bounded backoff (three attempts).
+  Exhausted/uncertain work remains inspectable as failed.
+- `retry_failed(monitor_id, session_id)` explicitly requeues safe exhausted work.
+  It refuses uncertain tool execution; a new user request is needed for that.
+- `set_muted(monitor_id, session_id, muted)` holds delivery independently of task
+  status and revokes in-flight publication. Unmute consolidates to the latest
+  observation. Interrupted tool execution yields an honest interruption notice,
+  not automatic repetition of uncertain actions.
+- `stop(monitor_id, session_id)` cancels unpublished work without stopping the
+  task or retracting durable messages.
+- `notification_text(envelope)` produces explicit deterministic, tool-free prose
+  for every provider configuration without making a provider call.
+
+Claim tokens stay in host code. Pass only `claim['envelope']` as `monitorEnvelope`
+to `run_agent_prompt` with an empty prompt. The engine inserts bounded synthetic
+task evidence with no user intent authority, alongside normal context. Budgets
+are capped at four provider calls, eight tool calls and 60 seconds, and tighten
+any inherited limits. The host must provide an outer service deadline, serialize
+the turn, renew/revoke claims, suppress provisional channel output, checkpoint
+the final result and publish through the fenced callback.
+
+The local monitor runtime now only observes, matching daemon mode. Without an
+explicit consumer, durable work waits; it does not independently mutate a live
+session or guess provider credentials. Legacy active monitors are adopted when
+next observed; historical terminal records are not replayed. Disk changes are
+additive under `MonitorRecord.delivery` and do not change event cardinality into
+assistant messages: only the host's receipt path publishes those messages.

@@ -139,7 +139,7 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                 run(runtime["close"]())
             self.restore_home(root, previous)
 
-    def test_monitor_runtime_uses_provider_authored_update_and_usage(self):
+    def test_explicit_monitor_consumer_can_author_and_persist_notification(self):
         root, home, workspace, previous = self.temp_context()
         runtime = None
         original_send = monitors_module.send_openai_request
@@ -173,10 +173,20 @@ class TaskMonitorHealthTests(AgentCoreTestCase):
                     self.assertNotIn("args", calls)
                     with Path(output_file).open("a", encoding="utf-8") as handle:
                         handle.write("x" * 256 + "\n")
-                    for _ in range(100):
-                        if any(event == "monitor.assistant_update" for event, _ in events):
-                            break
-                        await asyncio.sleep(0.02)
+                    await asyncio.sleep(0.04)
+                    self.assertNotIn("args", calls)
+                    self.assertFalse(any(event == "monitor.assistant_update" for event, _ in events))
+                    from agent_core import MonitorDeliveryController
+                    consumer = MonitorDeliveryController(str(home))
+                    claim = await consumer.claim(monitor["id"], session["id"], "test-consumer")
+                    envelope = claim["envelope"]
+                    text = await monitors_module._author_monitor_update(config, session, monitor,
+                        {"status": "running"}, envelope["reason"], envelope["outputExcerpt"], envelope["omittedBytes"])
+                    await consumer.checkpoint(claim, text)
+                    def publish(payload):
+                        events.append(("monitor.assistant_update", payload))
+                        return {"deliveryId": payload["deliveryId"], "receipt": "durable-test-sink"}
+                    await consumer.publish_to_session(claim, session, config, publish)
                     return created
                 finally:
                     await created["close"]()

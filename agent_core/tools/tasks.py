@@ -235,6 +235,11 @@ def _task_monitor_start_tool() -> ToolDefinition:
     async def handler(input: dict[str, Any], context: ToolContext) -> ToolResult:
         task_id = _require_string(input.get("task_id"), "task_id")
         goal = _require_string(input.get("goal"), "goal")
+        delivery_mode = input.get("delivery_mode", "notification")
+        if delivery_mode not in {"notification", "continuation"}:
+            raise ValueError("delivery_mode must be notification or continuation")
+        if delivery_mode == "continuation" and context.get("monitorContinuationSupported") is not True:
+            raise RuntimeError("monitor.continuation_unsupported: this host cannot run monitor continuation; no monitor was created")
         owned = await require_model_owned_task(context, task_id, "monitor")
         task = owned["meta"]
         summary_style = input.get("summary_style") if isinstance(input.get("summary_style"), str) and input.get("summary_style").strip() else None
@@ -246,6 +251,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
                     "sessionId": context["session"]["id"],
                     "taskId": task_id,
                     "goal": goal,
+                    "deliveryMode": delivery_mode,
                     "summaryStyle": summary_style.strip() if isinstance(summary_style, str) else None,
                     "checkIntervalMs": default_monitor_check_interval_ms(input.get("check_interval_ms")),
                     "heartbeatIntervalMs": default_monitor_heartbeat_interval_ms(input.get("heartbeat_interval_ms")),
@@ -253,6 +259,8 @@ def _task_monitor_start_tool() -> ToolDefinition:
             ),
         )
         record = started["monitor"]
+        if (record.get("delivery") or {}).get("mode", "notification") != delivery_mode:
+            raise RuntimeError("monitor.mode_conflict: stop the existing monitor before registering a different delivery mode")
         if summary_style:
             record["summaryStyle"] = summary_style.strip()
         monitor_ids = context["session"].setdefault("metadata", {}).get("monitorIds") or []
@@ -270,6 +278,7 @@ def _task_monitor_start_tool() -> ToolDefinition:
                         "changed": False,
                         "revision": started["revision"],
                         "note": "Monitor already active for this task.",
+                        "delivery_mode": delivery_mode,
                     }
                 )
             }
@@ -297,6 +306,8 @@ def _task_monitor_start_tool() -> ToolDefinition:
                     "transition_id": started.get("transitionId"),
                     "check_interval_ms": record["checkIntervalMs"],
                     "heartbeat_interval_ms": record["heartbeatIntervalMs"],
+                    "delivery_mode": delivery_mode,
+                    "delivery_status": "waiting_for_consumer",
                     "execution": execution,
                 }
             )
@@ -359,7 +370,7 @@ def _monitor_stop_mutation(latest: dict[str, Any]) -> dict[str, Any]:
     return {
         "record": transition["record"],
         "changed": transition["changed"],
-        "transition": transition["changed"],
+        "transition": transition["previousStatus"] != transition["record"]["status"],
         "transitionLabel": (
             f"stop:{transition['previousStatus']}->{transition['record']['status']}"
         ),

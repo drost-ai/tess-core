@@ -3,6 +3,40 @@
     "checkIntervalMs": 2000,
     "completedAt": "<timestamp>",
     "createdAt": "<timestamp>",
+    "delivery": {
+      "generation": 0,
+      "lastQueuedKey": [
+        0,
+        19,
+        "completed",
+        "completed"
+      ],
+      "mode": "notification",
+      "outputIdentity": "<output-file-identity>",
+      "processedBytes": 0,
+      "processedGeneration": 0,
+      "publishedBytes": 0,
+      "publishedGeneration": 0,
+      "queue": [
+        {
+          "attempts": 0,
+          "availableAt": "<timestamp-ms>",
+          "exitCode": 0,
+          "fromByte": 0,
+          "generation": 0,
+          "id": "monitor:<uuid:2>:delivery:1",
+          "observedAt": "<timestamp>",
+          "outputIdentity": "<output-file-identity>",
+          "reason": "completed",
+          "state": "pending",
+          "taskStatus": "completed",
+          "toByte": 19
+        }
+      ],
+      "runtimeHome": "<runtime-home>",
+      "sequence": 1,
+      "version": 1
+    },
     "goal": "watch background completion",
     "heartbeatIntervalMs": 60000,
     "id": "<uuid:2>",

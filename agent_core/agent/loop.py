@@ -73,20 +73,20 @@ from ..payloads.attachments import (
 )
 async def run_agent_prompt(args: dict[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
     values = {**(args or {}), **kwargs}
-
     async def run_in_scope(scoped_args: dict[str, Any]) -> dict[str, Any]:
         return await _run_in_provider_turn_session(
             _resolve_effective_provider_turn_binding(scoped_args),
             _run_agent_prompt_with_provider_session,
             is_cancelled=_is_turn_cancelled,
         )
-
     return await _run_with_transient_execution_session(values, run_in_scope)
 async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[str, Any]:
     session = args["session"]
     config = args["config"]
     paths = get_active_runtime_paths()
     prompt_content, prompt_text = _normalize_agent_prompt(args["prompt"])
+    from ..tasks.monitor_turn import prepare_monitor_turn
+    args, monitor_message = prepare_monitor_turn(args, session["id"], prompt_content)
     runtime_bindings = args.get("runtime")
     materialized = args.get("materializedRuntime")
     if materialized is None:
@@ -99,7 +99,6 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
     if repair["repaired"]:
         await persist_session(session, config)
         _safe_emit(runtime, "transcript.repaired", {"session_id": session["id"], "truncated_from": repair.get("truncatedFrom"), "removed_count": repair["removedCount"], "missing_tool_use_ids": repair["missingToolUseIds"]})
-
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     runtime_contract = metadata.get("subagentRuntimeContract") if isinstance(metadata, dict) else None
     apply_pending_mcp = runtime.get("applyPendingMcpCatalogChanges")
@@ -115,7 +114,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
         filter_tools_for_subagent(runtime.get("tools", []), runtime_contract),
         authority,
     )
-    tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
+    tool_registry = [tool for tool in runtime_tools if tool.name in tool_names and not (monitor_message is not None and tool.name == "TaskMonitorStart")]
     base_system_prompt = _host_system_prompt(session["systemPrompt"], args.get("ephemeralSystemContext"))
     usage_totals = _ensure_usage_totals(session)
     tool_result_budget = _ToolResultBatchBudget(config.get("providerProfile") or {})
@@ -170,12 +169,12 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
         # consumedAt is on disk; a cancel must not roll back past these records.
         state.rollback_snapshot = _capture_session_rollback(session, state.rollback_snapshot)
 
-    if prompt_content is not None:
-        message = _user_request_message(prompt_content, lineage={"logicalTurnId": parent_turn_id})
+    if prompt_content is not None or monitor_message is not None:
+        message = monitor_message or _user_request_message(prompt_content, lineage={"logicalTurnId": parent_turn_id})
         session.setdefault("messages", []).append(message)
         await persist_session(session, config)
-        _safe_emit(runtime, "message.user", {"text": prompt_text, "session_id": session["id"]})
-
+        if monitor_message is None:
+            _safe_emit(runtime, "message.user", {"text": prompt_text, "session_id": session["id"]})
     usage_totals["turns"] += 1
     question_nudges = 0
     reminded_question_ids: set[str] = set()

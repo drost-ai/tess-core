@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 
 MonitorStatus = Literal["active", "muted", "completed", "failed", "stopped"]
@@ -35,6 +35,8 @@ class MonitorRecord(_monitor_record_required, total=False):
     lastAssistantUpdateSummary: str | None
     lastHeartbeatAt: str | None
     stoppedAt: str | None
+    deliveryStoppedAt: str
+    delivery: dict[str, Any]
 
 
 __all__ = ["MonitorRecord", "MonitorStatus"]

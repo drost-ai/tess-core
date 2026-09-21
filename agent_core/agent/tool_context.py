@@ -28,6 +28,7 @@ def build_tool_context(
         "updateCwd": lambda next_cwd: session.__setitem__("cwd", next_cwd),
         "getTools": lambda: runtime.get("tools", []),
         "daemon": runtime.get("daemon"),
+        "monitorContinuationSupported": runtime.get("monitorContinuationSupported") is True,
         "abortSignal": runtime.get("abortSignal"),
         "reserveImageAttachment": lambda image: imageBudget.reserve(image, priority),
         "currentToolUseId": toolUse.get("id") if isinstance(toolUse, dict) else None,

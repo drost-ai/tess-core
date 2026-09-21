@@ -12,186 +12,71 @@ from .._utils import parse_iso_ms
 
 import asyncio
 import math
-import os
 import uuid
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .._utils import now_iso
 from ..contracts.monitor_records import MonitorRecord
-from .monitor_bootstrap import _monitor_bootstrap_baseline
-from .monitor_narration import _author_monitor_update
-from .monitor_observation import (
-    build_monitor_narration_mutation as _build_monitor_narration_mutation,
-    build_monitor_observation_mutation as _build_monitor_observation_mutation,
-)
-from .monitor_transactions import (
-    commit_monitor_mutation as _commit_monitor_mutation,
-    monitor_transition_event_fields as _monitor_transition_event_fields,
-)
-from ..session.persistence import persist_session
-from ..storage import list_session_monitors, mutate_task_meta, read_task_meta, save_monitor, task_output_path, write_task_meta
+from .monitor_delivery_state import initial_delivery_state
+from ..storage import list_session_monitors, mutate_task_meta, read_task_meta, task_output_path
 
 
 
 async def create_monitor_runtime(args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Local observer. Durable delivery is consumed by an explicit host.
+
+    Daemon-on and daemon-off share the same transaction path. Never author into
+    a mutable foreground session from an independent ticker.
+    """
+    from .supervisor_parts.monitor_watch import tick_daemon_monitors
+    from ..runtime.paths import get_active_runtime_paths, RuntimePathsScope
+    import logging
+
     args = dict(args or {})
     session_ref = args.get("session") or {}
-    config_ref = args.get("config") or {}
-    emit: Callable[[str, dict[str, Any]], Any] = args.get("emit") or (lambda *_: None)
-    tick_interval = int(args.get("tickIntervalMs") or int(_knob("tasks.monitor_tick_ms"))) / 1000
-    closed = False
-    foreground_busy = False
-    tick_in_flight = False
-    snapshot = _empty_snapshot()
-    bootstrap_baseline = _monitor_bootstrap_baseline()
+    paths = args.get("runtimePaths") or get_active_runtime_paths()
+    emit = args.get("emit") or (lambda *_: None)
     stop_event = asyncio.Event()
+    snapshot = _empty_snapshot()
+    interval = max(10, int(args.get("tickIntervalMs") or _knob("tasks.monitor_tick_ms"))) / 1000
 
-    async def tick() -> None:
-        nonlocal snapshot, tick_in_flight
-        if closed or tick_in_flight or not session_ref.get("id"):
-            return
-        tick_in_flight = True
-        try:
-            monitors = await list_session_monitors(session_ref["id"])
-            is_bootstrap_tick = bootstrap_baseline.begin(monitors)
-            now_ms = _now_ms()
-            next_snapshot = _compute_snapshot(monitors, now_ms)
-            if next_snapshot != snapshot:
-                snapshot = next_snapshot
-                emit("monitor.snapshot", _monitor_snapshot_payload(session_ref, snapshot))
-            for monitor in monitors:
-                if closed:
-                    return
-                if _should_check_monitor(monitor, now_ms):
-                    await process_monitor(monitor, now_ms, is_bootstrap_tick and bootstrap_baseline.includes(monitor.get("id")))
-        finally:
-            tick_in_flight = False
-
-    async def process_monitor(monitor: dict[str, Any], now_ms: int, bootstrap_observation: bool = False) -> None:
+    async def tick():
         nonlocal snapshot
-        task = await _load_task_record(monitor.get("taskId"))
-        output_size = _get_output_size(monitor.get("taskId"))
-        monitor_id = monitor.get("id") if isinstance(monitor.get("id"), str) else ""
-        observed = await _commit_monitor_mutation(
-            monitorId=monitor_id,
-            expectedSessionId=session_ref["id"],
-            mutate=lambda latest: _build_monitor_observation_mutation(
-                latest, task, output_size, now_ms
-            ),
-        )
-        next_monitor = observed["current"]
-        reason = observed["value"].get("reason")
-        observation = (
-            next_monitor.get("status"),
-            output_size,
-            next_monitor.get("lastObservedTaskStatus"),
-        )
-        reason = bootstrap_baseline.resolve_reason(
-            monitor, observation, reason, bootstrap_observation
-        )
-        _sync_session_monitor_metadata(session_ref, await list_session_monitors(session_ref["id"]))
-
-        if observed.get("transitionId"):
-            emit(
-                "monitor.status_changed",
-                {
-                    "session_id": session_ref.get("id"),
-                    "monitor_id": next_monitor.get("id"),
-                    "task_id": next_monitor.get("taskId"),
-                    "status": next_monitor.get("status"),
-                    "previous_status": observed["previous"].get("status"),
-                    "changed": observed.get("statusChanged", False),
-                    "task_status": next_monitor.get("lastObservedTaskStatus"),
-                    "exit_code": (task or {}).get("exitCode"),
-                    **_monitor_transition_event_fields(observed),
-                },
-            )
-
-        if not reason or next_monitor.get("muted") or foreground_busy:
+        if not session_ref.get("id"):
             return
-        if reason in {"progress", "heartbeat"}:
-            elapsed = now_ms - int(parse_iso_ms(next_monitor.get("lastAssistantUpdateAt") or next_monitor.get("createdAt")) or 0)
-            if elapsed < int(_knob("tasks.monitor_narration_spacing_ms")):
-                return
-        excerpt = _read_output_excerpt(monitor.get("taskId"), int(next_monitor.get("lastNarratedOutputSize") or 0), output_size, int(_knob("tasks.monitor_output_excerpt_chars")))
-        text = await _author_monitor_update(config_ref, session_ref, next_monitor, task, reason, excerpt["text"], excerpt["omittedBytes"])
-        if not text:
-            return
-        update_time = now_iso()
-        narration = await _commit_monitor_mutation(
-            monitorId=monitor_id,
-            expectedSessionId=session_ref["id"],
-            mutate=lambda latest: _build_monitor_narration_mutation(
-                latest,
-                observed["revision"],
-                update_time,
-                text,
-                output_size,
-                reason,
-            ),
-        )
-        if not narration["value"].get("accepted"):
-            return
-        next_monitor = narration["current"]
-        _append_assistant_monitor_message(session_ref, text)
-        bootstrap_baseline.narrated(monitor_id)
-        _sync_session_monitor_metadata(session_ref, await list_session_monitors(session_ref["id"]))
-        with _suppress():
-            await persist_session(session_ref, config_ref)
-        emit(
-            "monitor.assistant_update",
-            {
-                "session_id": session_ref.get("id"),
-                "monitor_id": next_monitor.get("id"),
-                "task_id": next_monitor.get("taskId"),
-                "status": next_monitor.get("status"),
-                "reason": reason,
-                "text": text,
-            },
-        )
-        snapshot = _compute_snapshot(await list_session_monitors(session_ref["id"]), _now_ms())
-        emit("monitor.snapshot", _monitor_snapshot_payload(session_ref, snapshot))
+        with RuntimePathsScope(paths):
+            await tick_daemon_monitors(lambda event, data, _session=None: emit(event, data), session_id=session_ref["id"])
+            monitors = await list_session_monitors(session_ref["id"])
+            if monitors or "monitorIds" in session_ref.get("metadata", {}):
+                _sync_session_monitor_metadata(session_ref, monitors)
+            snapshot = _compute_snapshot(monitors, _now_ms())
+            emit("monitor.snapshot", _monitor_snapshot_payload(session_ref, snapshot))
 
-    async def run_loop() -> None:
-        while not closed:
-            await tick()
-            if not closed:
-                with _suppress():
-                    await asyncio.wait_for(stop_event.wait(), timeout=tick_interval)
+    async def run_loop():
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(stop_event.wait(), interval)
+            except TimeoutError:
+                try:
+                    await tick()
+                except Exception:
+                    logging.getLogger(__name__).exception("Monitor observation failed")
 
-    loop_task = asyncio.create_task(run_loop())
     await tick()
+    loop_task = asyncio.create_task(run_loop())
 
-    async def close() -> None:
-        nonlocal closed
-        closed = True
+    async def close():
         stop_event.set()
-        with _suppress():
-            if not loop_task.get_loop().is_closed():
-                await asyncio.gather(loop_task, return_exceptions=True)
+        loop_task.cancel()
+        await asyncio.gather(loop_task, return_exceptions=True)
 
-    def set_foreground_busy(busy: bool) -> None:
-        nonlocal foreground_busy
-        foreground_busy = busy
-        if not busy:
-            _schedule_tick()
-
-    def set_session(session: dict[str, Any], config: dict[str, Any] | None = None) -> None:
-        nonlocal session_ref, config_ref, snapshot
+    def set_session(session, config=None):
+        nonlocal session_ref
         session_ref = session
-        config_ref = config or config_ref
-        snapshot = _empty_snapshot()
-        bootstrap_baseline.reset()
-        _schedule_tick()
 
-    def _schedule_tick() -> None:
-        with _suppress():
-            loop = loop_task.get_loop()
-            if loop.is_running() and not loop.is_closed():
-                loop.call_soon_threadsafe(lambda: asyncio.create_task(tick()))
-
-    return {"close": close, "setForegroundBusy": set_foreground_busy, "getSnapshot": lambda: snapshot, "setSession": set_session}
+    return {"close": close, "setForegroundBusy": lambda _busy: None,
+            "getSnapshot": lambda: snapshot, "setSession": set_session}
 
 
 def default_monitor_check_interval_ms(value: Any) -> int:
@@ -224,6 +109,7 @@ def create_monitor_record(fields: dict[str, Any]) -> MonitorRecord:
         "heartbeatIntervalMs": default_monitor_heartbeat_interval_ms(args.get("heartbeatIntervalMs")),
         "lastNarratedOutputSize": 0,
         "lastObservedOutputSize": 0,
+        "delivery": initial_delivery_state(args.get("deliveryMode", "notification")),
     }
 
 

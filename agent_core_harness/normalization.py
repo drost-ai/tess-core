@@ -152,6 +152,8 @@ class NormalizationContext:
 
     def _normalize_int(self, value: int, key_path: tuple[str, ...]) -> Any:
         key = key_path[-1].lower() if key_path else ""
+        if "delivery" in key_path and key in {"availableat", "leaseuntil"}:
+            return "<timestamp-ms>"
         if _is_token_estimate_key(key):
             return "<token-estimate>"
         if key in {"pid", "ppid", "processid", "process_id"} or key.endswith("pid"):
@@ -163,6 +165,8 @@ class NormalizationContext:
         return value
 
     def _normalize_string(self, value: str, key_path: tuple[str, ...]) -> str:
+        if "delivery" in key_path and key_path[-1] == "outputIdentity":
+            return "<output-file-identity>"
         normalized = self._replace_paths(value)
         normalized = normalized.replace(self.sandbox.run_id, "<run-id>")
         if _TIMESTAMP_PATTERN.fullmatch(normalized):

@@ -61,6 +61,7 @@ _CONTRACT_FIELDS = frozenset({
 # Anything else in the bindings is a caller error: the versioned contract is
 # only meaningful if unknown keys fail loudly instead of passing through.
 _EXTENSION_FIELDS = frozenset({
+    "monitorContinuationSupported",
     "openaiClientFactory",
     "partial_output_recovery_policy",
     "repositoryIdentity",
@@ -138,6 +139,7 @@ def assert_agent_runtime_bindings(
         or not _valid_optional_callable(value.get("shouldStopAfterStableBoundary"))
         or not _valid_optional_bool(value.get("streamProviderMessages"))
         or not _valid_optional_bool(value.get("includePartialMessages"))
+        or not _valid_optional_bool(value.get("monitorContinuationSupported"))
         or not _valid_abort_signal(value.get("abortSignal"))
         or not _is_daemon_binding(value.get("daemon"))
     ):
@@ -290,5 +292,3 @@ def _bounded_string(value: Any, maximum: int) -> bool:
 
 def _error(code: str, message: str) -> RuntimeBindingsCompatibilityError:
     return RuntimeBindingsCompatibilityError(code, message)
-
-

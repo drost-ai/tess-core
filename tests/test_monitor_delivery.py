@@ -1,0 +1,329 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import time
+import json
+import sys
+from unittest.mock import patch
+from pathlib import Path
+
+from tests.support.agent_core_case import AgentCoreTestCase, core, run
+from agent_core.tasks.supervisor_parts.monitor_watch import tick_daemon_monitors
+from agent_core import MonitorDeliveryController, MonitorDeliveryError
+
+
+class MonitorDeliveryTests(AgentCoreTestCase):
+    def setUp(self):
+        super().setUp()
+        self.root, self.home, self.workspace, self.previous = self.temp_context()
+        self.addCleanup(self.restore_home, self.root, self.previous)
+        self.session_id = "70000000-0000-4000-8000-000000000001"
+        self.now = int(time.time() * 1000)
+        self.controller = MonitorDeliveryController(str(self.home), clock=lambda: self.now)
+
+    async def fixture(self, status="running", muted=False):
+        monitor = core.create_monitor_record({"sessionId": self.session_id, "taskId": "watched", "goal": "inspect build"})
+        monitor["muted"] = muted
+        monitor["checkIntervalMs"] = 1
+        await core.save_monitor(monitor)
+        await self.task(status)
+        return monitor
+
+    async def task(self, status):
+        await core.write_task_meta("watched", {"taskId": "watched", "sessionId": self.session_id, "status": status, "exitCode": 0 if status == "completed" else None, "pid": os.getpid()})
+
+    async def tick(self):
+        self.now += 10
+        with patch("agent_core.tasks.supervisor_parts.monitor_watch.time.time", return_value=self.now / 1000):
+            await tick_daemon_monitors(lambda *_: None)
+
+    async def claim(self, monitor, owner="host"):
+        return await self.controller.claim(monitor["id"], self.session_id, owner)
+
+    def receipt(self, payload):
+        return {"deliveryId": payload["deliveryId"], "seq": 1}
+
+    def test_daemon_retains_terminal_intent_without_subscriber(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            await tick_daemon_monitors(lambda *_: None)
+            saved = await core.load_monitor(monitor["id"])
+            self.assertEqual(saved["status"], "completed")
+            self.assertEqual(saved["delivery"]["queue"][0]["reason"], "completed")
+            self.assertNotIn("lastAssistantUpdateAt", saved)
+        run(scenario())
+
+    def test_unmute_delivers_latest_terminal_once_and_stop_preserves_task(self):
+        async def scenario():
+            monitor = await self.fixture(muted=True)
+            path = Path(core.task_output_path("watched"))
+            path.write_text("initial")
+            await self.tick()
+            self.assertIsNone(await self.claim(monitor))
+            path.write_text("initial progress")
+            await self.tick()
+            await self.task("completed")
+            await self.tick()
+            await self.controller.set_muted(monitor["id"], self.session_id, False)
+            claim = await self.claim(monitor)
+            self.assertEqual(claim["envelope"]["reason"], "completed")
+            self.assertIn("progress", claim["envelope"]["outputExcerpt"])
+            await self.controller.checkpoint(claim, "Completed.")
+            await self.controller.publish(claim, self.receipt)
+            self.assertEqual(await self.controller.list_pending(), [])
+            await self.controller.stop(monitor["id"], self.session_id)
+            self.assertEqual((await core.read_task_meta("watched"))["status"], "completed")
+            self.assertEqual((await core.load_monitor(monitor["id"]))["delivery"]["lastReceipt"]["seq"], 1)
+        run(scenario())
+
+    def test_stop_and_mute_revoke_claims_without_publishing(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            await self.tick()
+            claim = await self.claim(monitor)
+            await self.controller.checkpoint(claim, "Done")
+            await self.controller.set_muted(monitor["id"], self.session_id, True)
+            with self.assertRaises(MonitorDeliveryError):
+                await self.controller.publish(claim, lambda _: self.fail("muted publisher"))
+            await self.controller.set_muted(monitor["id"], self.session_id, False)
+            replacement = await self.claim(monitor)
+            self.assertEqual(replacement["result"]["text"], "Done")
+            await self.controller.stop(monitor["id"], self.session_id)
+            with self.assertRaises(MonitorDeliveryError):
+                await self.controller.publish(replacement, lambda _: self.fail("stopped publisher"))
+            await self.tick()
+            self.assertEqual(await self.controller.list_pending(), [])
+            self.assertEqual((await core.load_monitor(monitor["id"]))["status"], "completed")
+        run(scenario())
+
+    def test_claim_race_expiry_fences_old_worker_and_observation_does_not(self):
+        async def scenario():
+            monitor = await self.fixture()
+            await self.tick()
+            ready = asyncio.Event()
+            async def compete(owner):
+                await ready.wait()
+                return await self.claim(monitor, owner)
+            tasks = [asyncio.create_task(compete(str(i))) for i in range(2)]
+            ready.set()
+            claims = await asyncio.gather(*tasks)
+            claim = next(claim for claim in claims if claim)
+            self.assertEqual(sum(claim is not None for claim in claims), 1)
+            for _ in range(4):
+                await self.tick()
+            await self.controller.checkpoint(claim, "Watching")
+            self.now += 60_001
+            replacement = await self.claim(monitor, "replacement")
+            self.assertEqual(replacement["result"]["text"], "Watching")
+            with self.assertRaises(MonitorDeliveryError):
+                await self.controller.publish(claim, self.receipt)
+            await self.controller.publish(replacement, self.receipt)
+        run(scenario())
+
+    def test_crash_after_journal_append_replays_checkpoint_and_receipt(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            await self.tick()
+            claim = await self.claim(monitor)
+            await self.controller.checkpoint(claim, "Done")
+            journal = {}
+            def publish(payload):
+                return journal.setdefault(payload["deliveryId"], self.receipt(payload))
+            with patch("agent_core.tasks.monitor_transactions.save_monitor", side_effect=OSError("crash before ack")):
+                with self.assertRaises(OSError):
+                    await self.controller.publish(claim, publish)
+            saved = await core.load_monitor(monitor["id"])
+            self.assertNotIn("lastAssistantUpdateAt", saved)
+            self.now += 60_001
+            recovered = await self.claim(monitor, "restarted")
+            self.assertEqual(recovered["result"]["text"], "Done")
+            await self.controller.publish(recovered, publish)
+            self.assertEqual(len(journal), 1)
+            self.assertEqual(await self.controller.list_pending(), [])
+        run(scenario())
+
+    def test_publication_and_stop_are_ordered_at_durable_callback(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            await self.tick()
+            claim = await self.claim(monitor)
+            await self.controller.checkpoint(claim, "Done")
+            entered, release = asyncio.Event(), asyncio.Event()
+            async def publisher(payload):
+                entered.set()
+                await release.wait()
+                return self.receipt(payload)
+            publish = asyncio.create_task(self.controller.publish(claim, publisher))
+            await entered.wait()
+            stop = asyncio.create_task(self.controller.stop(monitor["id"], self.session_id))
+            await asyncio.sleep(0)
+            self.assertFalse(stop.done())
+            release.set()
+            await asyncio.gather(publish, stop)
+            self.assertEqual((await core.load_monitor(monitor["id"]))["delivery"]["lastReceipt"]["seq"], 1)
+        run(scenario())
+
+    def test_continuation_crash_is_uncertain_and_never_reruns_tools(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            monitor["delivery"]["mode"] = "continuation"
+            await core.save_monitor(monitor)
+            await self.tick()
+            self.assertIsNone(await self.claim(monitor))
+            claim = await self.controller.claim(monitor["id"], self.session_id, "host", continuation_supported=True)
+            self.assertNotIn("token", claim["envelope"])
+            await self.controller.begin_continuation(claim)
+            self.now += 60_001
+            self.assertIsNone(await self.controller.claim(monitor["id"], self.session_id, "new", continuation_supported=True))
+            self.assertEqual((await self.controller.list_pending())[0]["error"], "monitor.execution_uncertain")
+            with self.assertRaisesRegex(RuntimeError, "execution_uncertain"):
+                await self.controller.retry_failed(monitor["id"], self.session_id)
+        run(scenario())
+
+    def test_no_visible_progress_advances_processed_only_and_retries_are_bounded(self):
+        async def scenario():
+            monitor = await self.fixture()
+            path = Path(core.task_output_path("watched"))
+            path.write_bytes(b"x" * 10000)
+            await self.tick()
+            claim = await self.claim(monitor)
+            self.assertEqual(len(claim["envelope"]["outputExcerpt"]), 8192)
+            await self.controller.checkpoint(claim, None, rationale="heartbeat noise")
+            await self.controller.publish(claim, lambda _: self.fail("no message expected"))
+            state = (await core.load_monitor(monitor["id"]))["delivery"]
+            self.assertEqual(state["processedBytes"], 10000)
+            self.assertEqual(state["publishedBytes"], 0)
+            await self.task("completed")
+            await self.tick()
+            for i in range(3):
+                claim = await self.claim(monitor)
+                self.assertIsNotNone(claim)
+                await self.controller.retry(claim, "provider_timeout")
+                self.now += 60001
+            self.assertIsNone(await self.claim(monitor))
+            self.assertEqual((await self.controller.list_pending())[0]["state"], "failed")
+            await self.controller.retry_failed(monitor["id"], self.session_id)
+            claim = await self.claim(monitor)
+            self.assertIsNotNone(claim)
+            await self.controller.checkpoint(claim, "Completed after storage recovered")
+            await self.controller.publish(claim, self.receipt)
+            self.assertEqual(await self.controller.list_pending(), [])
+        run(scenario())
+
+    def test_rotation_and_native_session_runtime_isolation(self):
+        async def scenario():
+            monitor = await self.fixture()
+            path = Path(core.task_output_path("watched"))
+            path.write_bytes(b"old" * 1000)
+            await self.tick()
+            claim = await self.claim(monitor)
+            await self.controller.checkpoint(claim, "Initial")
+            await self.controller.publish(claim, self.receipt)
+            path.write_bytes(b"new")
+            self.now += 20001
+            await self.tick()
+            claim = await self.claim(monitor)
+            self.assertEqual(claim["envelope"]["outputGeneration"], 1)
+            self.assertEqual(claim["envelope"]["outputExcerpt"], "new")
+            other = MonitorDeliveryController(str(self.workspace))
+            self.assertEqual(await other.list_pending(), [])
+            with self.assertRaises(Exception):
+                await self.controller.claim(monitor["id"], "other-session", "foreign")
+        run(scenario())
+
+    def test_explicit_mode_rejects_unsupported_host_without_registration(self):
+        async def scenario():
+            await self.task("running")
+            tools = {tool.name: tool for tool in core.create_builtin_tools()}
+            context = {"session": {"id": self.session_id, "metadata": {"taskIds": ["watched"]}}, "config": {}}
+            with self.assertRaisesRegex(RuntimeError, "continuation_unsupported"):
+                await tools["TaskMonitorStart"].handler({"task_id": "watched", "goal": "inspect", "delivery_mode": "continuation"}, context)
+            self.assertEqual(await core.list_monitors(), [])
+        run(scenario())
+
+    def test_failed_progress_cannot_strand_terminal(self):
+        async def scenario():
+            monitor = await self.fixture()
+            await self.tick()
+            claim = await self.claim(monitor)
+            await self.controller.checkpoint(claim, "Started")
+            for attempt in range(3):
+                await self.controller.retry(claim, "journal_unavailable")
+                self.now += 60001
+                if attempt < 2:
+                    claim = await self.claim(monitor)
+            self.assertIsNone(await self.claim(monitor))
+            await self.task("completed")
+            await self.tick()
+            terminal = await self.claim(monitor)
+            self.assertEqual(terminal["envelope"]["reason"], "completed")
+            await self.controller.checkpoint(terminal, "Done")
+            await self.controller.publish(terminal, self.receipt)
+            self.assertEqual(await self.controller.list_pending(), [])
+        run(scenario())
+
+    def test_pagination_and_old_terminal_adoption_policy(self):
+        async def scenario():
+            first = await self.fixture("completed")
+            second = {**first, "id": "second-monitor"}
+            await core.save_monitor(second)
+            old = {**first, "id": "old-terminal", "status": "completed"}
+            old.pop("delivery")
+            await core.save_monitor(old)
+            await self.tick()
+            page1 = await self.controller.list_pending(limit=1)
+            page2 = await self.controller.list_pending(limit=1, after=page1[-1]["cursor"])
+            self.assertEqual(len(page2), 1)
+            self.assertNotEqual(page1[0]["deliveryId"], page2[0]["deliveryId"])
+            self.assertEqual(await self.controller.list_pending(after=page2[-1]["cursor"]), [])
+            self.assertNotIn("delivery", await core.load_monitor(old["id"]))
+        run(scenario())
+
+    def test_two_processes_compete_for_one_claim_at_a_barrier(self):
+        async def scenario():
+            monitor = await self.fixture("completed")
+            await self.tick()
+            barrier = self.workspace / "go"
+            code = '''import asyncio, json, sys
+from pathlib import Path
+from agent_core import MonitorDeliveryController
+async def main():
+    home, monitor, session, ready, barrier = sys.argv[1:]
+    Path(ready).write_text('ready')
+    async with asyncio.timeout(5):
+        while not Path(barrier).exists():
+            await asyncio.sleep(.01)
+    claim = await MonitorDeliveryController(home).claim(monitor, session, ready)
+    print(json.dumps({'claimed': claim is not None}))
+asyncio.run(main())
+'''
+            processes = []
+            for index in range(2):
+                processes.append(await asyncio.create_subprocess_exec(sys.executable, "-c", code,
+                    str(self.home), monitor["id"], self.session_id, str(self.workspace / str(index)), str(barrier),
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE))
+            try:
+                async with asyncio.timeout(5):
+                    while not all((self.workspace / str(index)).exists() for index in range(2)):
+                        await asyncio.sleep(.01)
+                barrier.write_text("go")
+                results = await asyncio.gather(*(process.communicate() for process in processes))
+                self.assertTrue(all(process.returncode == 0 for process in processes), results)
+                self.assertEqual(sum(json.loads(stdout)["claimed"] for stdout, _ in results), 1)
+            finally:
+                for process in processes:
+                    if process.returncode is None:
+                        process.kill()
+                        await process.wait()
+        run(scenario())
+
+    def test_muted_terminal_intent_survives(self):
+        async def scenario():
+            monitor = await self.fixture("completed", muted=True)
+            await tick_daemon_monitors(lambda *_: None)
+            saved = await core.load_monitor(monitor["id"])
+            self.assertTrue(saved["muted"])
+            self.assertEqual(saved["status"], "completed")
+            self.assertEqual(saved["delivery"]["queue"][0]["reason"], "completed")
+        run(scenario())

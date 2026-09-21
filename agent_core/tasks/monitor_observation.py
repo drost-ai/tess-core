@@ -10,6 +10,7 @@ from .._utils import parse_iso_ms
 
 from datetime import datetime, timezone
 from typing import Any
+from .monitor_delivery_state import queue_observation
 
 
 
@@ -60,10 +61,14 @@ def build_monitor_observation_mutation(
     task: dict[str, Any] | None,
     outputSize: int,
     now: int,
+    outputIdentity: str | None = None,
 ) -> dict[str, Any]:
     transition = apply_monitor_observation(
         latest, task=task, outputSize=outputSize, now=now
     )
+    record = queue_observation(latest, transition["record"], task,
+                               transition["reason"], now, outputIdentity)
+    transition = {**transition, "record": record, "changed": record != latest}
     return {**transition, "value": transition}
 
 
@@ -106,7 +111,7 @@ def is_terminal_monitor_status(status: Any) -> bool:
 def _derive_monitor_status(
     task: dict[str, Any] | None, monitor: dict[str, Any]
 ) -> str:
-    if is_terminal_monitor_status(monitor.get("status")) or monitor.get("status") == "muted":
+    if is_terminal_monitor_status(monitor.get("status")):
         return str(monitor.get("status"))
     task_status = (task or {}).get("status") or monitor.get("lastObservedTaskStatus") or "unknown"
     if task_status == "completed":
@@ -127,14 +132,15 @@ def _narration_reason(
 ) -> str | None:
     if is_terminal_monitor_status(monitor.get("status")):
         return None
-    if not monitor.get("lastAssistantUpdateAt"):
-        return "start"
     if status_changed and final_status not in {"active", "muted"}:
         return final_status
-    progress = max(0, output_size - int(monitor.get("lastNarratedOutputSize") or 0))
+    delivery = monitor.get("delivery") or {}
+    if not monitor.get("lastAssistantUpdateAt") and not delivery.get("lastQueuedKey") and not delivery.get("lastProcessedAt"):
+        return "start"
+    progress = max(0, output_size - int(delivery.get("processedBytes", monitor.get("lastNarratedOutputSize")) or 0))
     if output_size != int(monitor.get("lastObservedOutputSize") or 0) and progress >= int(_knob("tasks.monitor_min_progress_bytes")):
         return "progress"
-    if now - int(parse_iso_ms(monitor.get("lastAssistantUpdateAt") or monitor.get("createdAt")) or 0) >= int(monitor.get("heartbeatIntervalMs") or 0):
+    if now - int(parse_iso_ms(delivery.get("lastProcessedAt") or monitor.get("lastAssistantUpdateAt") or monitor.get("createdAt")) or 0) >= int(monitor.get("heartbeatIntervalMs") or 0):
         return "heartbeat"
     return None
 
@@ -150,5 +156,3 @@ def _observation_changed(previous: dict[str, Any], current: dict[str, Any]) -> b
         "lastObservedOutputSize",
     )
     return any(previous.get(key) != current.get(key) for key in keys)
-
-

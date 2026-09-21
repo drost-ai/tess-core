@@ -51,10 +51,13 @@ from .storage.settings import (
 from .subagents.finalizers import finalize_background_subagent_failure_from_env, finalize_background_subagent_success_from_env
 from .tasks.collaboration import create_collaboration_runtime
 from .tasks.monitors import create_monitor_record
+from .tasks.monitor_delivery import MonitorDeliveryController, MonitorDeliveryError
 from .tools.definitions import ToolDefinition
 from .tools.registry import create_builtin_tools
 
 __all__ = [
+    "MonitorDeliveryController",
+    "MonitorDeliveryError",
     "RuntimeSecretValue",
     "RuntimeSecretPurpose",
     "RuntimeEventEnvelope",

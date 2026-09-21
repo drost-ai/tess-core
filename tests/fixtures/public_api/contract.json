@@ -3,6 +3,8 @@
 "generated": "2026-08-10 from tess-code + samplehost import scans",
 "entrypoints": {"root": "agent_core", "shell": "agent_core.shell_surface", "platform": "agent_core.platform_support", "testing": "agent_core.testing"},
 "names": [
+{"concept": "MonitorDeliveryController", "ts": null, "py": "MonitorDeliveryController", "py_target": "MonitorDeliveryController", "py_module": "agent_core.tasks.monitor_delivery", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "MonitorDeliveryError", "ts": null, "py": "MonitorDeliveryError", "py_target": "MonitorDeliveryError", "py_module": "agent_core.tasks.monitor_delivery", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
 {"concept": "applyDaemonDoctorFixes", "ts": "applyDaemonDoctorFixes", "py": null, "py_target": "apply_daemon_doctor_fixes", "py_module": null, "entrypoint": "platform", "kind": "function", "status": "pending", "consumers": ["tess-code"]},
 {"concept": "approveMcpSource", "ts": "approveMcpSource", "py": "approve_mcp_source", "py_target": "approve_mcp_source", "py_module": "agent_core.authority.executable_source_policy", "entrypoint": "platform", "kind": "function", "status": "active", "consumers": ["tess-code"]},
 {"concept": "approvePluginSource", "ts": "approvePluginSource", "py": "approve_plugin_source", "py_target": "approve_plugin_source", "py_module": "agent_core.authority.executable_source_policy", "entrypoint": "platform", "kind": "function", "status": "active", "consumers": ["tess-code"]},
