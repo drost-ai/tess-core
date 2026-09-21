@@ -277,6 +277,8 @@ knobs:
     max_depth: 2
     # Maximum live subagent processes per runtime instance; at capacity the Agent tool returns the live-children roster instead of spawning. [1..64]
     max_live: 8
+    # Milliseconds a resident subagent may stay idle (no turn, no queued message, no open question, no work of its own) before it stops for good. Working time never counts. [100..86400000]
+    resident_idle_ttl_ms: 900000
     # Milliseconds between a resident subagent's mailbox polls while idle between turns. [100..60000]
     resident_poll_ms: 1000
   tasks:

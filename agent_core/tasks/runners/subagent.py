@@ -13,6 +13,7 @@ from ...runtime.agent_bindings import create_agent_runtime_bindings
 from ...config import resolve_config
 from ...storage import configure_runtime_home, load_child_agent, load_session, load_task_record, mutate_child_agent, mutate_task_meta, save_session, save_task_record, with_record_transaction
 from ..communication import append_task_event, read_undelivered_task_messages, send_task_message
+from .resident_idle import ResidentIdleClock, expire_if_idle
 from ...subagents import finalize_background_subagent_failure_from_env, finalize_background_subagent_success_from_env
 from ...subagents.finalizers import _background_structured_result_fields
 from ...tools import create_builtin_tools
@@ -94,9 +95,11 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     Each turn's result is delivered to the parent as a result-kind
     to_parent message (the daemon mailbox watch turns it into a parent
     wake), while the task record stays non-terminal: awaiting_input while
-    idle, running during turns. The process exits only when stopped or
-    killed — the supervisor's stop machinery and the containment ladder
-    own termination, so no terminal finalizer runs here.
+    idle, running during turns. The process exits when it is stopped or
+    killed (the supervisor's stop machinery and the containment ladder own
+    that), or by itself once it has been idle for
+    ``subagents.resident_idle_ttl_ms`` (see ``resident_idle``): it then stops
+    for good, and is never reactivated.
     """
     # Call-time import: the config package imports tasks at module load.
     from ...config._knobs import knob_value
@@ -109,6 +112,7 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
     await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=[])
     turn_index = 1
     print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "session_id": session["id"], "agent_id": agent_id, "task_id": task_id, "result": {"text": result.get("text"), "stopReason": result.get("stopReason")}}), flush=True)
+    idle = ResidentIdleClock(int(knob_value("subagents.resident_idle_ttl_ms")))
     while True:
         await asyncio.sleep(int(knob_value("subagents.resident_poll_ms")) / 1000)
         queued = [
@@ -117,6 +121,9 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
             if message.get("direction") in (None, "to_child")
         ]
         if not queued:
+            if idle.due() and await expire_if_idle(task_id, agent_id, session["id"], idle):
+                print(json.dumps({"ok": True, "resident": True, "stopped": "idle_expired", "turns": turn_index}), flush=True)
+                return
             continue
         trigger_ids = [str(message.get("messageId")) for message in queued if message.get("messageId")]
         await _mark_resident_status(task_id, agent_id, "running", None)
@@ -127,9 +134,11 @@ async def _run_resident_subagent(args: dict[str, Any]) -> None:
         except Exception as exc:  # stay resident: the parent decides what happens next
             await send_task_message(task_id, {"direction": "to_parent", "sender": "child", "kind": "result", "content": f"[turn failed] {exc}", "metadata": _reply_metadata(trigger_ids)})
             await _mark_resident_status(task_id, agent_id, "awaiting_input", "resident_idle")
+            idle.restart()
             continue
         await save_session(session)
         await _publish_resident_turn_result(task_id, agent_id, session, result, trigger_ids=trigger_ids)
+        idle.restart()  # working time never counts: idleness starts once the result is out
         turn_index += 1
         print(json.dumps({"ok": True, "resident": True, "turn": turn_index, "result": {"text": (result.get("text") or "")[:400], "stopReason": result.get("stopReason")}}), flush=True)
 

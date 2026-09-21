@@ -16,6 +16,7 @@ from ..storage import (
     write_json_file,
 )
 from ..storage.json_io import mutate_json_lines, read_json_lines
+from .mailbox_closure import append_message_unless_closed, is_mailbox_closure
 from ..session.persistence import persist_session
 from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 
@@ -80,7 +81,12 @@ async def send_task_message(task_id: str, message: Mapping[str, Any]) -> dict[st
         "deliveredAt": None,
         "metadata": dict(message.get("metadata") or {}),
     }
-    await append_json_line(task_mailbox_path(task_id), record)
+    if direction == "to_child":
+        # A child that stopped for good closed its mailbox; a message to it
+        # must fail here rather than wait for a reader that will never come.
+        await append_message_unless_closed(task_mailbox_path(task_id), task_id, record)
+    else:
+        await append_json_line(task_mailbox_path(task_id), record)
     await append_task_event(
         task_id,
         {
@@ -99,7 +105,7 @@ async def read_task_mailbox_messages(task_id: str) -> list[dict[str, Any]]:
     messages: dict[str, dict[str, Any]] = {}
     for record in await _read_json_lines(task_mailbox_path(task_id)):
         message_id = record.get("messageId")
-        if isinstance(message_id, str):
+        if isinstance(message_id, str) and not is_mailbox_closure(record):
             messages[message_id] = record
     return sorted(messages.values(), key=lambda item: str(item.get("createdAt") or ""))
 

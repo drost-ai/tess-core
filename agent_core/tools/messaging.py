@@ -28,6 +28,7 @@ from ..tasks.communication import (
     send_task_message,
     skip_task_question,
 )
+from ..tasks.mailbox_closure import TaskMailboxClosedError
 from .definitions import ToolDefinition
 from .schemas import builtin_tool
 
@@ -88,6 +89,8 @@ def _send_message_tool() -> ToolDefinition:
         task_id = (child or {}).get("taskId")
         if not isinstance(task_id, str) or not task_id:
             return _error(f"Unknown agent id: {to}. Use the agent_id returned by the Agent tool.")
+        if (child or {}).get("status") in _FINISHED_CHILD_STATUSES:
+            return _error(_finished_child_detail(to, (child or {}).get("stopReason") or (child or {}).get("completionReason") or (child or {}).get("status")))
         if reply_to:
             # Answering resolves the open-question record (which queues the
             # to_child answer itself) so the runtime backstop never
@@ -106,10 +109,18 @@ def _send_message_tool() -> ToolDefinition:
             "metadata": {"replyTo": reply_to} if reply_to else {},
         }
         daemon = context.get("daemon")
-        if daemon and callable(daemon.get("sendTaskMessage")):
-            record = await maybe_await(daemon["sendTaskMessage"](payload))
-        else:
-            record = await send_task_message(task_id, payload)
+        try:
+            if daemon and callable(daemon.get("sendTaskMessage")):
+                record = await maybe_await(daemon["sendTaskMessage"](payload))
+            else:
+                record = await send_task_message(task_id, payload)
+        except Exception as exc:
+            # The child closed its mailbox between the status check above and
+            # this send (it reached its idle limit). Through the daemon the
+            # error arrives as text, not as its type.
+            if isinstance(exc, TaskMailboxClosedError) or "no longer accepts messages" in str(exc):
+                return _error(_finished_child_detail(to, getattr(exc, "reason", None) or "idle_expired"))
+            raise
         if expects_reply:
             # expects_reply is direction-gated to child->parent. A parent
             # blocking up to the full reply timeout on a possibly-dead child
@@ -212,6 +223,17 @@ def _reply_result(record: dict[str, Any], reply: dict[str, Any] | None, timeout_
             }
         )
     }
+
+
+_FINISHED_CHILD_STATUSES = {"completed", "failed", "cancelled", "stopped", "truncated"}
+
+
+def _finished_child_detail(agent_id: str, reason: Any) -> str:
+    return (
+        f"Sub-agent {agent_id} has finished ({reason}) and can no longer receive messages. "
+        "Everything it produced was already delivered to you. "
+        "If you need more work, start a new sub-agent with the Agent tool."
+    )
 
 
 def _error(message: str) -> ToolResult:

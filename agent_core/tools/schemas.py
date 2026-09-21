@@ -177,7 +177,7 @@ BUILTIN_TOOL_SPECS: dict[str, dict[str, Any]] = {
          'additionalProperties': False},
     },
     "Agent": {
-        "description": 'Spawn a delegated resident subagent to work on a focused task. Always returns at spawn — the child works in the background and its result arrives later as a child message that wakes you. Keep working (or end the turn) in the meantime; never idle-poll for the child.',
+        "description": 'Spawn a delegated resident subagent to work on a focused task. Always returns at spawn — the child works in the background and its result arrives later as a child message that wakes you. Keep working (or end the turn) in the meantime; never idle-poll for the child. A child that has had nothing to do for 15 minutes (the default idle limit) stops for good and can no longer be messaged: start a new one if you need more work.',
         "concurrency": 'exclusive',
         "schema": {'type': 'object',
          'properties': {'description': {'type': 'string'},
