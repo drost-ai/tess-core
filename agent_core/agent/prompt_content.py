@@ -29,3 +29,12 @@ def extract_assistant_text(message: dict[str, Any]) -> str:
         for block in content or []
         if block.get("type") == "text"
     )
+
+
+def host_system_prompt(base: str, ephemeral_context: str | None = None) -> str:
+    """Compose per-call host context without mutating persisted or inherited prompts."""
+    if ephemeral_context is None:
+        return base
+    if not isinstance(ephemeral_context, str):
+        raise ValueError("ephemeralSystemContext must be a string")
+    return base + "\n\n" + ephemeral_context if ephemeral_context else base

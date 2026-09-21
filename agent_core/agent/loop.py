@@ -34,7 +34,7 @@ from ..providers.usage_costs import (
 from typing import Any
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit
 from .provider_turn import complete_empty_provider_response as _complete_empty_provider_response, request_provider_response as _request_provider_response
-from .prompt_content import extract_assistant_text as extract_assistant_text, normalize_agent_prompt as _normalize_agent_prompt
+from .prompt_content import extract_assistant_text as extract_assistant_text, normalize_agent_prompt as _normalize_agent_prompt, host_system_prompt as _host_system_prompt
 from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, append_tool_result_batch as _append_tool_result_batch, no_progress_event_data as _no_progress_event_data, no_progress_turn_result as _no_progress_turn_result
 from .stable_boundary import finish_stable_boundary as _finish_stable_boundary
 from ..storage.message_history import replace_session_messages_with_persisted_canonical as _replace_session_messages_with_persisted_canonical
@@ -116,7 +116,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
         authority,
     )
     tool_registry = [tool for tool in runtime_tools if tool.name in tool_names]
-    base_system_prompt = session["systemPrompt"]
+    base_system_prompt = _host_system_prompt(session["systemPrompt"], args.get("ephemeralSystemContext"))
     usage_totals = _ensure_usage_totals(session)
     tool_result_budget = _ToolResultBatchBudget(config.get("providerProfile") or {})
     parent_turn_id = args["logicalTurnId"]

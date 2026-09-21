@@ -223,3 +223,11 @@ free to change without coordination.
 | `CompactionModelClient` | type | `CompactionModelClient` | `CompactionModelClient` | `agent_core.context.compaction_transport` | active | tess-code |
 | `CompactionModelSelection` | type | — | `CompactionModelSelection` | — | pending | tess-code |
 | `CompactionRunOutcome` | type | — | `CompactionRunOutcome` | — | pending | tess-code |
+
+## Optional per-call host context (2026-09-20)
+
+Python `run_agent_prompt` accepts `ephemeralSystemContext: str` in its argument
+object. It appends trusted host-supplied context to this invocation's provider
+system prompt, without modifying the session's persisted base prompt or child
+launch configuration. It grants no tools or permissions. Omission preserves
+existing behavior. The host owns audience selection, budgets and provenance.
