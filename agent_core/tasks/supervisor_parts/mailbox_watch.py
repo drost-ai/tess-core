@@ -9,12 +9,29 @@ the parent idled on a finished child's result until the user typed.
 Terminal tasks are swept too: a child's dying message ([turn failed]) is
 written moments before its record goes terminal, and excluding terminal
 statuses made that message unannounceable.
+
+IDENTIFIABLE: a trace event carries ``event_index``, the position of its row
+in the task's event log, and a message announcement carries its ``message_id``
+plus whether this watch has announced it before. A consumer that keeps what
+it receives (a host journal) can therefore tell a repeat from new activity.
+An index is an aid for dropping duplicates, not proof of delivery.
+
+A watch forwards a task's trace rows once, from a cursor it keeps in memory.
+The cursor is deliberately not shared on disk: while several daemons can
+sweep one runtime home, a shared cursor would let one daemon consume the
+traces another daemon's subscriber is waiting for. So that a new watch does
+not replay history instead, it never forwards the trace of a task that was
+created before the watch started and is already terminal when the watch first
+sees it: every row of such a task was written before this watch existed, and
+whoever was watching then has forwarded it. A task this watch saw alive, or
+one created during its lifetime, is forwarded to its last row.
 """
 from __future__ import annotations
 
 import asyncio
 import os
 import time
+from datetime import datetime
 from typing import Any, Callable
 
 from ..._utils import maybe_await
@@ -28,12 +45,30 @@ _TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped", "terminated", "canc
 _REANNOUNCE_SWEEPS = 4
 
 
+def _predates(record: dict[str, Any], moment: float) -> bool:
+    """True when the task record was created before ``moment``. A record whose
+    creation time cannot be read is treated as current, which only costs a
+    replay that consumers can drop by index."""
+    created = record.get("createdAt")
+    if not isinstance(created, str) or not created:
+        return False
+    try:
+        return datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() < moment
+    except ValueError:
+        return False
+
+
 def create_mailbox_watch_loop(
     emit: Callable[[str, dict[str, Any], str | None], Any],
 ) -> Callable[[], Any]:
     last_announced_sweep: dict[str, int] = {}
     sweep_counter = 0
     trace_cursors: dict[str, int] = {}
+    watch_started_at = time.time()
+    seen_live: set[str] = set()
+    # Tasks that predate this watch and were already terminal when it first saw them.
+    trace_history_only: set[str] = set()
+    announced_message_keys: set[str] = set()
     parent_ids: dict[str, str | None] = {}
     # A terminal task's child is dead: once its mailbox shows no queued
     # to_parent messages it can never gain one, so skip it forever.
@@ -57,7 +92,7 @@ def create_mailbox_watch_loop(
             return 0
         parent_session_id = await _parent_session_id(task_id)
         forwarded = 0
-        for event in events[start:]:
+        for event_index, event in enumerate(events[start:], start=start):
             if event.get("type") != "trace":
                 continue
             await maybe_await(
@@ -65,6 +100,7 @@ def create_mailbox_watch_loop(
                     "subagent.trace",
                     {
                         "task_id": task_id,
+                        "event_index": event_index,
                         "trace_event": event.get("event"),
                         "tool": event.get("tool"),
                         "input_preview": event.get("input_preview"),
@@ -96,6 +132,8 @@ def create_mailbox_watch_loop(
             if last is not None and sweep_counter - last < _REANNOUNCE_SWEEPS:
                 continue
             last_announced_sweep[key] = sweep_counter
+            announcement = "repeat" if key in announced_message_keys else "first"
+            announced_message_keys.add(key)
             parent_session_id = message.get("parentSessionId")
             await maybe_await(
                 emit(
@@ -103,6 +141,7 @@ def create_mailbox_watch_loop(
                     {
                         "task_id": task_id,
                         "message_id": message.get("messageId"),
+                        "announcement": announcement,
                         "kind": message.get("kind"),
                         "sender": message.get("sender"),
                         "parent_session_id": parent_session_id,
@@ -118,6 +157,7 @@ def create_mailbox_watch_loop(
             prefix = f"{task_id}:"
             for key in [key for key in last_announced_sweep if key.startswith(prefix)]:
                 last_announced_sweep.pop(key, None)
+                announced_message_keys.discard(key)
         return emitted
 
     async def sweep_once() -> int:
@@ -132,10 +172,15 @@ def create_mailbox_watch_loop(
                 continue
             status = record.get("status")
             if status in _WATCHED_TASK_STATUSES:
+                seen_live.add(task_id)
                 emitted += await forward_trace_events(task_id)
                 emitted += await announce_queued_messages(task_id, terminal=False)
             elif status in _TERMINAL_TASK_STATUSES and task_id not in drained_terminal_tasks:
-                emitted += await forward_trace_events(task_id)
+                if task_id not in seen_live and _predates(record, watch_started_at):
+                    trace_history_only.add(task_id)
+                if task_id not in trace_history_only:
+                    # Ours: forward the tail it wrote while dying.
+                    emitted += await forward_trace_events(task_id)
                 emitted += await announce_queued_messages(task_id, terminal=True)
         return emitted
 

@@ -150,6 +150,9 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
                 self.assertEqual(names, ["subagent.trace", "subagent.trace"])
                 first = events[0][1]
                 self.assertEqual(first["task_id"], "trace-wake")
+                # The index is the row's position in the task's event log
+                # (row 0 was the non-trace status event).
+                self.assertEqual([data["event_index"] for _event, data, _sid in events], [1, 2])
                 self.assertEqual(first["trace_event"], "tool.started")
                 self.assertEqual(first["tool"], "Read")
                 self.assertEqual(first["parent_session_id"], "trace-parent")
@@ -157,6 +160,153 @@ class MailboxWatchSweepTests(AgentCoreTestCase):
 
                 await append_task_event("trace-wake", {"type": "trace", "event": "tool.completed", "tool": "Read", "output_chars": 120, "error": False})
                 self.assertEqual(await sweep(), 1)
+                self.assertEqual(events[-1][1]["event_index"], 3)
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    async def _subagent_task(self, workspace, task_id, status, *, created_at="2026-01-01T00:00:00Z"):
+        await core.write_task_meta(task_id, {
+            "type": "subagent", "taskId": task_id, "id": task_id,
+            "sessionId": f"{task_id}-child", "session_id": f"{task_id}-child",
+            "parent_session_id": f"{task_id}-parent", "status": status,
+            "cwd": str(workspace), "startedAt": created_at, "updatedAt": created_at,
+        })
+        await self._set_status(task_id, status, created_at=created_at)
+
+    async def _set_status(self, task_id, status, *, created_at="2026-01-01T00:00:00Z"):
+        await core.save_task_record({
+            "id": task_id, "sessionId": f"{task_id}-child", "sourceId": task_id,
+            "kind": "subagent", "status": status, "title": task_id,
+            "summary": status, "createdAt": created_at, "updatedAt": created_at, "owner": "daemon",
+        })
+
+    def test_new_watch_does_not_replay_the_trace_of_a_finished_child(self):
+        """Bug regression: the trace cursor lives in memory, so every new watch
+        (one per reopened parent runtime) re-forwarded the whole trace history
+        of every child, finished ones included. A host that journals what it
+        receives showed a child with 59 real steps as 1,062."""
+        from agent_core.tasks.communication import append_task_event
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await self._subagent_task(workspace, "old-child", "running")
+                for name in ("tool.started", "tool.completed", "message.assistant"):
+                    await append_task_event("old-child", {"type": "trace", "event": name})
+                await core.sendTaskMessage("old-child", {"direction": "to_parent", "content": "result, still queued"})
+                await self._set_status("old-child", "stopped")
+
+                for _restart in range(3):
+                    events = []
+
+                    async def emit(event, data, session_id=None, events=events):
+                        events.append((event, data))
+
+                    sweep = create_mailbox_watch_loop(emit).sweep_once
+                    await sweep()
+                    await sweep()
+                    names = [event for event, _data in events]
+                    self.assertNotIn("subagent.trace", names)
+                    # Its queued message is still announced: that is a wake signal, not history.
+                    self.assertEqual(names, ["subagent.message"])
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_child_seen_alive_has_its_dying_trace_forwarded(self):
+        from agent_core.tasks.communication import append_task_event
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await self._subagent_task(workspace, "dying-trace", "running")
+                events = []
+
+                async def emit(event, data, session_id=None):
+                    events.append(data)
+
+                sweep = create_mailbox_watch_loop(emit).sweep_once
+                await append_task_event("dying-trace", {"type": "trace", "event": "tool.started"})
+                self.assertEqual(await sweep(), 1)
+                await append_task_event("dying-trace", {"type": "trace", "event": "tool.completed", "error": True})
+                await self._set_status("dying-trace", "failed")
+                self.assertEqual(await sweep(), 1)
+                self.assertEqual([data["event_index"] for data in events], [0, 1])
+                self.assertEqual(await sweep(), 0)
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_child_that_lived_and_died_between_two_sweeps_is_still_forwarded(self):
+        from datetime import datetime, timezone
+
+        from agent_core.tasks.communication import append_task_event
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                events = []
+
+                async def emit(event, data, session_id=None):
+                    events.append(data)
+
+                sweep = create_mailbox_watch_loop(emit).sweep_once
+                self.assertEqual(await sweep(), 0)
+                # Created after the watch started, finished before the next sweep.
+                created = datetime.now(timezone.utc).isoformat()
+                await self._subagent_task(workspace, "brief-child", "failed", created_at=created)
+                await append_task_event("brief-child", {"type": "trace", "event": "tool.started"})
+                self.assertEqual(await sweep(), 1)
+                self.assertEqual(events[0]["event_index"], 0)
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_live_child_replayed_by_a_new_watch_keeps_the_same_indices(self):
+        """A child that is still alive when a new watch starts is forwarded
+        again from the beginning; the indices let a consumer drop the repeats."""
+        from agent_core.tasks.communication import append_task_event
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await self._subagent_task(workspace, "live-child", "awaiting_input")
+                await append_task_event("live-child", {"type": "status", "detail": "not a trace"})
+                await append_task_event("live-child", {"type": "trace", "event": "tool.started"})
+                await append_task_event("live-child", {"type": "trace", "event": "tool.completed"})
+                seen = []
+                for _restart in range(2):
+                    events = []
+
+                    async def emit(event, data, session_id=None, events=events):
+                        events.append((data["event_index"], data["trace_event"]))
+
+                    await create_mailbox_watch_loop(emit).sweep_once()
+                    seen.append(events)
+                self.assertEqual(seen[0], [(1, "tool.started"), (2, "tool.completed")])
+                self.assertEqual(seen[1], seen[0])
+            run(exercise())
+        finally:
+            self.restore_home(root, previous)
+
+    def test_repeated_announcements_are_marked(self):
+        from agent_core.tasks.supervisor_parts import mailbox_watch as watch_module
+
+        root, _home, workspace, previous = self.temp_context()
+        try:
+            async def exercise():
+                await self._subagent_task(workspace, "marked", "running")
+                record = await core.sendTaskMessage("marked", {"direction": "to_parent", "content": "done"})
+                events = []
+
+                async def emit(event, data, session_id=None):
+                    events.append((data["message_id"], data["announcement"]))
+
+                sweep = create_mailbox_watch_loop(emit).sweep_once
+                for _ in range(watch_module._REANNOUNCE_SWEEPS + 1):
+                    await sweep()
+                self.assertEqual(events, [(record["messageId"], "first"), (record["messageId"], "repeat")])
             run(exercise())
         finally:
             self.restore_home(root, previous)
