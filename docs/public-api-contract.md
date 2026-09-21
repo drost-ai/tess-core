@@ -289,6 +289,13 @@ its native-to-public mapping. Public async methods:
   status and revokes in-flight publication. Unmute consolidates to the latest
   observation. Interrupted tool execution yields an honest interruption notice,
   not automatic repetition of uncertain actions.
+  Coalescing retains superseded execution/checkpoint identity in durable
+  `delivery.interruption`, independently of the latest observation. With such
+  history, continuation stays paused and claims return a deterministic latest
+  status plus the interruption/earlier-checkpoint context. `list_pending()` marks
+  `continuationBlocked`; `begin_continuation()` rejects this state. A new explicit
+  user follow-up is needed; unmute/retry/restart cannot erase the evidence.
+  An unchanged sole authored checkpoint retains its original delivery identity.
 - `stop(monitor_id, session_id)` cancels unpublished work without stopping the
   task or retracting durable messages.
 - `notification_text(envelope)` produces explicit deterministic, tool-free prose

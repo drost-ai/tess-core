@@ -17,6 +17,7 @@ from .._utils import maybe_await, now_iso, parse_iso_ms
 from ..storage import list_monitors, read_task_meta, task_output_path
 from ..storage.paths import scoped_runtime_home, resolve_runtime_home
 from .monitor_delivery_state import MAX_ATTEMPTS, mute_monitor_record
+from .monitor_reconciliation import interruption_result, preserve_interruption
 from .monitor_transactions import commit_monitor_mutation
 
 
@@ -61,6 +62,7 @@ class MonitorDeliveryController:
                                    "availableAt": item.get("availableAt", 0),
                                    "leaseUntil": item.get("leaseUntil", 0),
                                    "consumer": item.get("owner"),
+                                   "continuationBlocked": state["mode"] == "continuation" and bool(state.get("interruption")),
                                    "deliveryStatus": "held" if monitor.get("muted") else "waiting_for_consumer" if item["state"] == "pending" else item["state"],
                                    "lastAuthoredAt": item.get("authoredAt"), "lastPublishedAt": state.get("lastPublishedAt"),
                                    "error": item.get("error") or state.get("lastError"), "attempts": item["attempts"]})
@@ -96,6 +98,8 @@ class MonitorDeliveryController:
                 return None
             if len(queue) > 1 and queue[0]["state"] == "failed" and queue[-1]["reason"] in {"completed", "failed", "stopped"}:
                 failed = queue.pop(0)
+                if failed.get("executionStarted") and not failed.get("result"):
+                    preserve_interruption(record, [failed], "execution_uncertain")
                 state["lastFailure"] = {"deliveryId": failed["id"], "error": failed.get("error"), "reason": failed["reason"]}
             item = queue[0]
             now = self.clock()
@@ -122,6 +126,9 @@ class MonitorDeliveryController:
             # Freeze bounded, untrusted context under the delivery identity.
             if "envelope" not in item:
                 item["envelope"] = self._envelope(record, item)
+            if state.get("interruption") and not item.get("result"):
+                item.update(state="authored", result=interruption_result(record, item),
+                            recoveryResult=True, authoredAt=now_iso())
             return {"monitorId": monitor_id, "sessionId": session_id, "runtimeHome": self.runtime_home,
                     "deliveryId": item["id"], "token": item["token"], "owner": owner,
                     "envelope": deepcopy(item["envelope"]), "result": deepcopy(item.get("result"))}
@@ -171,6 +178,8 @@ class MonitorDeliveryController:
     async def begin_continuation(self, claim: dict[str, Any]) -> None:
         def mutate(record):
             item = self._owned(record, claim)
+            if record["delivery"].get("interruption"):
+                raise MonitorDeliveryError("monitor.continuation_interrupted")
             if record["delivery"]["mode"] != "continuation" or item.get("executionStarted"):
                 raise MonitorDeliveryError("monitor.execution_already_started")
             item["executionStarted"] = True

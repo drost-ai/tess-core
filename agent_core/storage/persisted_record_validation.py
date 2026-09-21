@@ -42,6 +42,19 @@ def _valid_monitor_delivery(state: Any) -> bool:
     queue = state.get("queue")
     if not isinstance(queue, list) or len(queue) > 2:
         return False
+    interruption = state.get("interruption")
+    if interruption is not None:
+        if not isinstance(interruption, dict) or not _has_strings(interruption, ("reason", "at")) or type(interruption.get("uncertain")) is not bool:
+            return False
+        history = interruption.get("deliveries")
+        if not isinstance(history, list) or not 1 <= len(history) <= 2:
+            return False
+        for entry in history:
+            if not isinstance(entry, dict) or not _has_strings(entry, ("id", "reason", "taskStatus")):
+                return False
+            result = entry.get("result")
+            if result is not None and (not isinstance(result, dict) or not (result.get("text") is None or isinstance(result.get("text"), str))):
+                return False
     for key in ("sequence", "generation", "processedBytes", "processedGeneration", "publishedBytes", "publishedGeneration"):
         if type(state.get(key)) is not int or state[key] < 0:
             return False

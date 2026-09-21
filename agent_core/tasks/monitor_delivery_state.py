@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from ..storage.paths import get_state_root
+from .monitor_reconciliation import consolidate_held
 
 TERMINAL = {"completed", "failed", "stopped"}
 MAX_ATTEMPTS = 3
@@ -81,6 +82,8 @@ def queue_observation(previous: dict[str, Any], record: dict[str, Any],
         pending["state"] = "failed"
     if len(queue) > 2:
         state["queue"] = [queue[0], queue[-1]]
+    if record.get("muted"):
+        consolidate_held(record)
     return record
 
 
@@ -96,18 +99,5 @@ def mute_monitor_record(monitor: dict[str, Any], muted: bool, now: str) -> dict[
         record["updatedAt"] = now
         state = record.get("delivery")
         if state and state["queue"]:
-            latest = state["queue"][-1]
-            # Revoke claims while holding the same lock used for publication.
-            for key in ("token", "owner", "leaseUntil"):
-                latest.pop(key, None)
-            if latest.get("executionStarted") and not latest.get("result"):
-                # Do not rerun potentially executed tools after mute revoked a
-                # live continuation. Unmute can still deliver truthful status.
-                latest.update(state="authored", error="monitor.execution_uncertain",
-                    result={"text": f"The task for {record.get('goal') or record['taskId']} is {latest['taskStatus']}. "
-                                    "The follow-up inspection was interrupted by mute; verification may be incomplete.",
-                            "rationale": "mute revoked continuation"})
-            else:
-                latest["state"] = "authored" if latest.get("result") else "pending"
-            state["queue"] = [latest]
+            consolidate_held(record)
     return {"record": record, "changed": changed, "transition": changed}

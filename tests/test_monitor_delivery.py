@@ -327,3 +327,94 @@ asyncio.run(main())
             self.assertEqual(saved["status"], "completed")
             self.assertEqual(saved["delivery"]["queue"][0]["reason"], "completed")
         run(scenario())
+
+    def test_mute_preserves_superseded_execution_and_checkpoint_history(self):
+        async def scenario(phase, completion_before_mute):
+            monitor = await self.fixture()
+            Path(core.task_output_path("watched")).write_text("")
+            monitor["delivery"]["mode"] = "continuation"
+            await core.save_monitor(monitor)
+            await self.tick()
+            initial = await self.controller.claim(monitor["id"], self.session_id, "initial", continuation_supported=True)
+            await self.controller.checkpoint(initial, "Watching for progress")
+            await self.controller.publish(initial, self.receipt)
+            Path(core.task_output_path("watched")).write_text("progress\n" * 1024)
+            self.now += 20001
+            await self.tick()
+            first = await self.controller.claim(monitor["id"], self.session_id, "first", continuation_supported=True)
+            self.assertEqual(first["envelope"]["reason"], "progress")
+            await self.controller.begin_continuation(first)
+            if phase == "authored":
+                await self.controller.checkpoint(first, "Earlier inspection checkpoint")
+            elif phase == "uncertain":
+                await self.controller.retry(first, "interrupted")
+            if completion_before_mute:
+                await self.task("completed")
+                await self.tick()
+                self.assertEqual(len((await core.load_monitor(monitor["id"]))["delivery"]["queue"]), 2)
+            await self.controller.set_muted(monitor["id"], self.session_id, True)
+            if not completion_before_mute:
+                await self.task("completed")
+                await self.tick()
+            held = await core.load_monitor(monitor["id"])
+            self.assertEqual(len(held["delivery"]["queue"]), 1)
+            self.assertNotIn("result", held["delivery"]["queue"][0])  # no new prose while muted
+            history = held["delivery"]["interruption"]["deliveries"]
+            self.assertEqual(history[0]["id"], first["deliveryId"])
+            self.assertTrue(history[0]["executionStarted"])
+            self.assertNotIn("token", history[0])
+            if phase == "authored":
+                self.assertEqual(history[0]["result"]["text"], "Earlier inspection checkpoint")
+            else:
+                self.assertTrue(held["delivery"]["interruption"]["uncertain"])
+            recovered = MonitorDeliveryController(str(self.home), clock=lambda: self.now)
+            self.assertIsNone(await recovered.claim(monitor["id"], self.session_id, "muted", continuation_supported=True))
+            await recovered.set_muted(monitor["id"], self.session_id, False)
+            claim = await recovered.claim(monitor["id"], self.session_id, "recovered", continuation_supported=True)
+            self.assertEqual(claim["envelope"]["reason"], "completed")
+            self.assertIn("completed", claim["result"]["text"])
+            self.assertIn("paused", claim["result"]["text"])
+            if phase != "authored":
+                self.assertIn("interrupted", claim["result"]["text"])
+            with self.assertRaisesRegex(MonitorDeliveryError, "continuation_interrupted"):
+                await recovered.begin_continuation(claim)
+            with self.assertRaises(MonitorDeliveryError):
+                await recovered.checkpoint(first, "Late stale author")
+            journal = []
+            def publish(payload):
+                journal.append(payload)
+                return self.receipt(payload)
+            await recovered.publish(claim, publish)
+            self.assertEqual(len(journal), 1)
+            self.assertIsNone(await recovered.claim(monitor["id"], self.session_id, "again", continuation_supported=True))
+            self.assertEqual((await core.load_monitor(monitor["id"]))["delivery"]["interruption"]["deliveries"], history)
+        for phase in ("executing", "authored", "uncertain"):
+            for completion_before_mute in (True, False):
+                with self.subTest(phase=phase, completion_before_mute=completion_before_mute):
+                    run(scenario(phase, completion_before_mute))
+
+    def test_interruption_survives_publication_and_blocks_later_terminal_actions(self):
+        async def scenario():
+            monitor = await self.fixture()
+            monitor["delivery"]["mode"] = "continuation"
+            await core.save_monitor(monitor)
+            await self.tick()
+            first = await self.controller.claim(monitor["id"], self.session_id, "host", continuation_supported=True)
+            await self.controller.begin_continuation(first)
+            await self.controller.set_muted(monitor["id"], self.session_id, True)
+            await self.controller.set_muted(monitor["id"], self.session_id, False)
+            recovery = await self.controller.claim(monitor["id"], self.session_id, "host", continuation_supported=True)
+            await self.controller.publish(recovery, self.receipt)
+            await self.task("completed")
+            await self.tick()
+            terminal = await self.controller.claim(monitor["id"], self.session_id, "host", continuation_supported=True)
+            self.assertIn("completed", terminal["result"]["text"])
+            self.assertIn("interrupted", terminal["result"]["text"])
+            self.assertTrue((await self.controller.list_pending())[0]["continuationBlocked"])
+            with self.assertRaisesRegex(MonitorDeliveryError, "continuation_interrupted"):
+                await self.controller.begin_continuation(terminal)
+            await self.controller.publish(terminal, self.receipt)
+            saved = await core.load_monitor(monitor["id"])
+            self.assertEqual(len(saved["delivery"]["interruption"]["deliveries"]), 1)
+            self.assertEqual(saved["delivery"]["interruption"]["deliveries"][0]["id"], first["deliveryId"])
+        run(scenario())
