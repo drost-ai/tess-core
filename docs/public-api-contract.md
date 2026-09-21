@@ -231,3 +231,14 @@ object. It appends trusted host-supplied context to this invocation's provider
 system prompt, without modifying the session's persisted base prompt or child
 launch configuration. It grants no tools or permissions. Omission preserves
 existing behavior. The host owns audience selection, budgets and provenance.
+
+`run_agent_prompt` also accepts optional `turnLimits` with positive integer
+`maxProviderCalls`, `maxToolCalls` and `timeoutMs`. These limits only tighten
+existing inherited execution limits. Omission retains unlimited caller defaults.
+Provider-call counts are logical requests; transport retries remain separately
+observed. This uses the existing execution-limit checks, not a second turn loop.
+
+Headless hosts may pass `detectWorkspaceIntegrations: false` to
+`bootstrap_runtime`. This skips optional desktop/tmux availability probes while
+retaining workspace metadata and the engine's normal permissions/tools. Omission
+preserves existing detection behavior.

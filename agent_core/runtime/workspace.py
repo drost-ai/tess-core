@@ -116,7 +116,7 @@ class _workspace_controller:
 
     async def refresh(self) -> dict[str, Any]:
         metadata = self.activeSession.setdefault("metadata", {})
-        integrations = await _detect_workspace_integrations(self.activeSession)
+        integrations = await _detect_workspace_integrations(self.activeSession) if self.config.get("detectWorkspaceIntegrations", True) else {}
         self.snapshot = await capture_workspace_snapshot(
             self.activeSession["cwd"],
             {

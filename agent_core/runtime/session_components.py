@@ -28,7 +28,8 @@ async def prepare_runtime_session_components(args: Mapping[str, Any]) -> dict[st
         )
         workspace = bootstrap_args.get("workspaceController")
         if workspace is None and has_session:
-            workspace = factories["createWorkspace"](session=session, config=config)
+            workspace_config = {**config, "detectWorkspaceIntegrations": bootstrap_args["detectWorkspaceIntegrations"]} if "detectWorkspaceIntegrations" in bootstrap_args else config
+            workspace = factories["createWorkspace"](session=session, config=workspace_config)
             refresh = getattr(workspace, "refresh", None)
             if callable(refresh):
                 await maybe_await(refresh())

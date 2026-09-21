@@ -34,7 +34,7 @@ from ..providers.usage_costs import (
 from typing import Any
 from .providers import _emit_provider_response_completed, _persist_partial_output_commit
 from .provider_turn import complete_empty_provider_response as _complete_empty_provider_response, request_provider_response as _request_provider_response
-from .prompt_content import extract_assistant_text as extract_assistant_text, normalize_agent_prompt as _normalize_agent_prompt, host_system_prompt as _host_system_prompt
+from .prompt_content import extract_assistant_text as extract_assistant_text, normalize_agent_prompt as _normalize_agent_prompt, host_system_prompt as _host_system_prompt, host_turn_limits as _host_turn_limits
 from .progress import LogicalTurnProgressLedger as _LogicalTurnProgressLedger, append_tool_result_batch as _append_tool_result_batch, no_progress_event_data as _no_progress_event_data, no_progress_turn_result as _no_progress_turn_result
 from .stable_boundary import finish_stable_boundary as _finish_stable_boundary
 from ..storage.message_history import replace_session_messages_with_persisted_canonical as _replace_session_messages_with_persisted_canonical
@@ -122,7 +122,7 @@ async def _run_agent_prompt_with_provider_session(args: dict[str, Any]) -> dict[
     parent_turn_id = args["logicalTurnId"]
     progress_ledger = _LogicalTurnProgressLedger(session, parent_turn_id)
     runtime["turnAuthorityId"] = parent_turn_id
-    subagent_limits = resolve_subagent_runtime_limits(session, config)
+    subagent_limits = _host_turn_limits(resolve_subagent_runtime_limits(session, config), args.get("turnLimits"))
     state = TurnState(
         active_model=args.get("modelOverride") or session["model"],
         rollback_snapshot=_capture_session_rollback(session),

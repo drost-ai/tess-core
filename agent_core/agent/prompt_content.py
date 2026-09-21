@@ -38,3 +38,19 @@ def host_system_prompt(base: str, ephemeral_context: str | None = None) -> str:
     if not isinstance(ephemeral_context, str):
         raise ValueError("ephemeralSystemContext must be a string")
     return base + "\n\n" + ephemeral_context if ephemeral_context else base
+
+
+def host_turn_limits(existing, requested=None):
+    """Explicit per-call host budgets only tighten inherited execution limits."""
+    if requested is None:
+        return existing
+    mapping = {"maxProviderCalls": "maxTurns", "maxToolCalls": "maxToolCalls", "timeoutMs": "timeoutMs"}
+    if not isinstance(requested, dict) or set(requested) - set(mapping):
+        raise ValueError("turnLimits contains unsupported fields")
+    result = dict(existing or {})
+    for key, value in requested.items():
+        if type(value) is not int or value <= 0:
+            raise ValueError("turnLimits values must be positive integers")
+        target = mapping[key]
+        result[target] = min(result[target], value) if target in result else value
+    return result or None
