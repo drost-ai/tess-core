@@ -53,12 +53,15 @@ free to change without coordination.
 
 ## The contract
 
-### `agent_core` (root) — 96 names, 70 active
+### `agent_core` (root) — 101 names, 82 active
 
 | Concept (TS name) | Kind | Python today | Python target (Epic M) | Python home | Status | Consumers |
 |---|---|---|---|---|---|---|
 | `MonitorDeliveryController` (Python extension) | type | `MonitorDeliveryController` | `MonitorDeliveryController` | `agent_core.tasks.monitor_delivery` | active | tess-agent |
 | `MonitorDeliveryError` (Python extension) | type | `MonitorDeliveryError` | `MonitorDeliveryError` | `agent_core.tasks.monitor_delivery` | active | tess-agent |
+| `Runtime` (Python extension) | type | `Runtime` | `Runtime` | `agent_core.runtime.host` | active | tess-agent |
+| `RuntimeOwnershipError` (Python extension) | type | `RuntimeOwnershipError` | `RuntimeOwnershipError` | `agent_core.runtime.owner_lease` | active | tess-agent |
+| `start_runtime` (Python extension) | function | `start_runtime` | `start_runtime` | `agent_core.runtime.host` | active | tess-agent |
 | `activeSessionPayload` | function | `activeSessionPayload` | `active_session_payload` | `agent_core.session.runtime` | active | samplehost |
 | `bootstrapRuntime` | function | `bootstrapRuntime` | `bootstrap_runtime` | `agent_core.runtime.bootstrap` | active | samplehost, tess-code |
 | `buildSystemPromptForAgent` | function | `buildSystemPromptForAgent` | `build_system_prompt_for_agent` | `agent_core.config.prompts` | active | tess-code |

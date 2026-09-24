@@ -1,0 +1,275 @@
+"""The runtime a host process starts: one per process and runtime home.
+
+``bootstrap_runtime`` builds everything for one session, including a
+task-supervisor daemon found or spawned under a fresh id, so every open
+session used to bring its own daemon. ``start_runtime`` separates the two
+scopes: the runtime owns the home's one daemon and its watchdog for as long as
+the host process runs, and sessions (opened through it, in later work) attach
+to that daemon rather than starting their own.
+
+A runtime is *started* and *stopped*; it is created new in the process and
+nothing of it exists beforehand. The home itself is guarded by an owner lease
+(``owner_lease``) so a second host process is refused instead of silently
+competing for supervision. Without a daemon (``daemon_enabled=False``) the
+runtime takes no lease and can run no sub-agents, as before.
+"""
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import os
+import threading
+import uuid
+from typing import Any
+
+from .._utils import is_process_alive, maybe_await, now_iso
+from ..daemon.lifecycle import ensure_task_supervisor_daemon, stop_task_supervisor_daemon
+from ..storage import configure_runtime_home, get_state_root, load_daemon_state
+from ._daemon_watch import check_daemon_once
+from ._ticker import run_scoped_async, start_ticker
+from .owner_lease import RuntimeOwnershipError, acquire_owner_lease, release_owner_lease
+from .paths import get_active_runtime_paths, run_with_runtime_paths
+
+DEFAULT_STOP_BOUND_SECONDS = 10.0
+
+_ACTIVE: Runtime | None = None
+_ACTIVE_LOCK = threading.Lock()
+
+
+class Runtime:
+    """A started runtime. Build it with :func:`start_runtime`."""
+
+    def __init__(
+        self,
+        *,
+        home: str,
+        cwd: str,
+        instance_id: str,
+        daemon_enabled: bool,
+        session_options: Any,
+        listener: Any,
+    ) -> None:
+        self.home = home
+        self.cwd = cwd
+        self.instance_id = instance_id
+        self.daemon_enabled = daemon_enabled
+        self.session_options = session_options
+        self.listener = listener
+        self.started_at = now_iso()
+        self.pid = os.getpid()
+        self.paths = None
+        self.daemon: dict[str, Any] | None = None
+        self.lease: dict[str, Any] | None = None
+        self._daemon_lock = threading.Lock()
+        self._daemon_state: dict[str, Any] | None = None
+        self._recoveries: list[dict[str, Any]] = []
+        self._watchdog_stop: Any = None
+        self._stopped = False
+        self._stop_lock = asyncio.Lock()
+
+    # -- lifecycle -----------------------------------------------------
+
+    async def _start(self, startup_timeout_seconds: float | None) -> None:
+        if not self.daemon_enabled:
+            return
+        self.lease = await acquire_owner_lease(self.home, self.instance_id)
+        try:
+            request: dict[str, Any] = {"instanceId": self.instance_id, "cwd": self.cwd, "ownerPid": self.pid}
+            if startup_timeout_seconds is not None:
+                request["startupTimeoutSeconds"] = startup_timeout_seconds
+            self.daemon = await ensure_task_supervisor_daemon(request)
+            self._daemon_state = await load_daemon_state(self.instance_id)
+            stop = threading.Event()
+            start_ticker(
+                name=f"runtime-watchdog-{self.instance_id[:12]}",
+                stop=stop,
+                interval=self._heartbeat_seconds(),
+                run_once=self._watchdog_tick,
+                halted=stop.is_set,
+            )
+            self._watchdog_stop = stop.set
+        except BaseException:
+            with contextlib.suppress(Exception):
+                await release_owner_lease(self.home, self.instance_id)
+            self.lease = None
+            raise
+
+    async def stop(self, grace: float = 0.0) -> None:
+        """Stop the runtime: its watchdog, its daemon (exit verified within a
+        bound), and its lease. Idempotent. ``grace`` is for running turns and
+        has nothing to wait for until sessions exist."""
+        async with self._stop_lock:
+            if self._stopped:
+                return
+            self._stopped = True
+            try:
+                if self._watchdog_stop is not None:
+                    self._watchdog_stop()
+                if self.daemon_enabled:
+                    await self._stop_daemon()
+            finally:
+                if self.lease is not None:
+                    with contextlib.suppress(Exception):
+                        await release_owner_lease(self.home, self.instance_id)
+                    self.lease = None
+                _clear_active(self)
+
+    async def _stop_daemon(self) -> None:
+        with self._daemon_lock:
+            client, self.daemon = self.daemon, None
+        pid = (self._daemon_state or {}).get("pid")
+        if client is not None:
+            with contextlib.suppress(Exception):
+                await client["close"]()
+        await stop_task_supervisor_daemon({"instanceId": self.instance_id})
+        if isinstance(pid, int) and pid != self.pid:
+            deadline = asyncio.get_running_loop().time() + DEFAULT_STOP_BOUND_SECONDS
+            while is_process_alive(pid) and asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.05)
+            if is_process_alive(pid):
+                raise RuntimeError(f"Daemon process {pid} of runtime {self.instance_id} did not exit within {DEFAULT_STOP_BOUND_SECONDS:.0f}s.")
+        self._daemon_state = None
+
+    # -- the daemon watchdog -------------------------------------------
+
+    def _heartbeat_seconds(self) -> float:
+        from ..config._knobs import knob_value
+
+        return int(knob_value("daemon.heartbeat_ms")) / 1000
+
+    def _watchdog_tick(self) -> None:
+        """One heartbeat, on the ticker thread. Exactly one watchdog exists per
+        runtime, so a lost daemon is replaced once, not once per session."""
+        if self._stopped:
+            return
+
+        async def tick() -> None:
+            outcome = await check_daemon_once(
+                {
+                    "instanceId": self.instance_id,
+                    "cwd": self.cwd,
+                    "runtimePaths": self.paths,
+                    "emit": self._record_daemon_event,
+                    "setDaemon": self._swap_daemon,
+                }
+            )
+            if outcome != "restart_failed":
+                self._daemon_state = await load_daemon_state(self.instance_id)
+
+        try:
+            run_scoped_async(self.paths, tick)
+        except Exception as error:  # the ticker never reports; the next tick tries again
+            self._record_daemon_event("daemon.watchdog_error", {"reason": str(error)[:512]})
+
+    async def _swap_daemon(self, client: dict[str, Any]) -> None:
+        with self._daemon_lock:
+            previous, self.daemon = self.daemon, client
+        if previous is not None:
+            with contextlib.suppress(Exception):
+                await previous["close"]()
+
+    def _record_daemon_event(self, event: str, data: dict[str, Any]) -> None:
+        if event in {"daemon.restarted", "daemon.restart_failed"}:
+            self._recoveries.append({"event": event, "at": now_iso(), **{k: v for k, v in data.items() if k != "instance_id"}})
+            del self._recoveries[:-20]
+        sink = getattr(self.listener, "on_runtime_event", None)
+        if callable(sink):
+            with contextlib.suppress(Exception):
+                sink(event, data)
+
+    # -- what the host can ask -----------------------------------------
+
+    @property
+    def stopped(self) -> bool:
+        return self._stopped
+
+    def status(self) -> dict[str, Any]:
+        """What this runtime owns and how it is doing, from what it last
+        observed (the watchdog refreshes the daemon's state every heartbeat)."""
+        state = self._daemon_state or {}
+        daemon: dict[str, Any] | None = None
+        if self.daemon_enabled:
+            daemon = {
+                "instanceId": self.instance_id,
+                "pid": state.get("pid"),
+                "epoch": state.get("epoch"),
+                "phase": state.get("phase"),
+                "socketPath": state.get("socketPath"),
+                "ownerPid": self.pid,
+                "connected": self.daemon is not None,
+                "recoveries": len([r for r in self._recoveries if r["event"] == "daemon.restarted"]),
+                "lastRecovery": self._recoveries[-1] if self._recoveries else None,
+            }
+        return {
+            "home": self.home,
+            "cwd": self.cwd,
+            "instanceId": self.instance_id,
+            "pid": self.pid,
+            "startedAt": self.started_at,
+            "stopped": self._stopped,
+            "daemon": daemon,
+            "sessions": {"open": []},
+        }
+
+
+async def start_runtime(
+    runtime_home: str | None = None,
+    *,
+    cwd: str | None = None,
+    daemon_enabled: bool = True,
+    session_options: Any = None,
+    listener: Any = None,
+    startup_timeout_seconds: float | None = None,
+) -> Runtime:
+    """Start the runtime for ``runtime_home`` (default: ``$AGENT_CORE_HOME`` or
+    the engine's default home) in this process.
+
+    One runtime per process: a second call while one is running is refused,
+    whichever home it names. One host per runtime home: a call from another
+    live process is refused with that process's pid. ``session_options`` and
+    ``listener`` are kept for the session manager.
+    """
+    if runtime_home:
+        configure_runtime_home(runtime_home)
+    home = get_state_root()
+    workspace = os.path.abspath(cwd) if cwd else os.getcwd()
+    runtime = Runtime(
+        home=home,
+        cwd=workspace,
+        instance_id=str(uuid.uuid4()),
+        daemon_enabled=daemon_enabled,
+        session_options=session_options,
+        listener=listener,
+    )
+    _reserve_active(runtime)
+    try:
+        runtime.paths = get_active_runtime_paths()
+        await maybe_await(run_with_runtime_paths(runtime.paths, lambda: runtime._start(startup_timeout_seconds)))
+    except BaseException:
+        _clear_active(runtime)
+        raise
+    return runtime
+
+
+def active_runtime() -> Runtime | None:
+    """The runtime running in this process, if any."""
+    return _ACTIVE
+
+
+def _reserve_active(runtime: Runtime) -> None:
+    global _ACTIVE
+    with _ACTIVE_LOCK:
+        if _ACTIVE is not None and not _ACTIVE.stopped:
+            raise RuntimeOwnershipError(
+                runtime.home,
+                {"pid": os.getpid(), "instanceId": _ACTIVE.instance_id, "home": _ACTIVE.home},
+                f"A runtime is already running in this process for {_ACTIVE.home}; one runtime per host process.",
+            )
+        _ACTIVE = runtime
+
+
+def _clear_active(runtime: Runtime) -> None:
+    global _ACTIVE
+    with _ACTIVE_LOCK:
+        if _ACTIVE is runtime:
+            _ACTIVE = None

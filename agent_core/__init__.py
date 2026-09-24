@@ -30,6 +30,8 @@ from .runtime.agent_bindings import create_agent_runtime_bindings, is_task_super
 from .runtime.bootstrap import bootstrap_runtime
 from .runtime.events.factory import create_runtime_event
 from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding, create_runtime_session_binding
+from .runtime.host import Runtime, start_runtime
+from .runtime.owner_lease import RuntimeOwnershipError
 from .runtime.state.store import create_initial_runtime_state, create_runtime_state_store
 from .runtime.wake import create_mailbox_wake_controller
 from .runtime.workspace import create_git_worktree
@@ -121,6 +123,9 @@ __all__ = [
     "run_agent_prompt",
     "run_task_supervisor_daemon",
     "RuntimeActivationContext",
+    "Runtime",
+    "RuntimeOwnershipError",
+    "start_runtime",
     "RuntimeSecretRef",
     "RuntimeSessionBinding",
     "save_auth",

@@ -155,6 +155,9 @@
 {"concept": "sendOpenAiResponsesRequest", "ts": "sendOpenAiResponsesRequest", "py": "send_openai_responses_request", "py_target": "send_openai_responses_request", "py_module": "agent_core.providers.openai.responses", "entrypoint": "testing", "kind": "function", "status": "active", "consumers": ["tess-code"]},
 {"concept": "CompactionModelClient", "ts": "CompactionModelClient", "py": "CompactionModelClient", "py_target": "CompactionModelClient", "py_module": "agent_core.context.compaction_transport", "entrypoint": "testing", "kind": "type", "status": "active", "consumers": ["tess-code"]},
 {"concept": "CompactionModelSelection", "ts": "CompactionModelSelection", "py": null, "py_target": "CompactionModelSelection", "py_module": null, "entrypoint": "testing", "kind": "type", "status": "pending", "consumers": ["tess-code"]},
-{"concept": "CompactionRunOutcome", "ts": "CompactionRunOutcome", "py": null, "py_target": "CompactionRunOutcome", "py_module": null, "entrypoint": "testing", "kind": "type", "status": "pending", "consumers": ["tess-code"]}
+{"concept": "CompactionRunOutcome", "ts": "CompactionRunOutcome", "py": null, "py_target": "CompactionRunOutcome", "py_module": null, "entrypoint": "testing", "kind": "type", "status": "pending", "consumers": ["tess-code"]},
+{"concept": "start_runtime", "ts": null, "py": "start_runtime", "py_target": "start_runtime", "py_module": "agent_core.runtime.host", "entrypoint": "root", "kind": "function", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "Runtime", "ts": null, "py": "Runtime", "py_target": "Runtime", "py_module": "agent_core.runtime.host", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "RuntimeOwnershipError", "ts": null, "py": "RuntimeOwnershipError", "py_target": "RuntimeOwnershipError", "py_module": "agent_core.runtime.owner_lease", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]}
 ]
 }
