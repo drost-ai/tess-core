@@ -192,8 +192,12 @@ async def capture_agent_authority(
 ) -> dict[str, Any]:
     args = {**(args or {}), **kwargs}
     config, session, tools = args["config"], args["session"], args.get("tools") or []
-    existing = (session.get("metadata") or {}).get("effectiveAgentAuthority")
-    if existing:
+    metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
+    existing = metadata.get("effectiveAgentAuthority")
+    if existing and metadata.get("parentSessionId"):
+        # A child's pin IS its authority. A root's pin is only the derivation
+        # bookkeeping its last spawn left behind: the root answers to its
+        # current configuration, so its authority is captured afresh.
         assert_valid_agent_authority(existing)
         return existing
     mode = session.get("permissionMode") or config.get("permissionMode") or "default"
@@ -382,14 +386,19 @@ async def enforce_session_agent_authority(
     session, config = args["session"], args["config"]
     metadata = session.get("metadata") if isinstance(session.get("metadata"), dict) else {}
     authority = metadata.get("effectiveAgentAuthority")
-    if not authority:
-        if metadata.get("parentSessionId"):
-            raise AgentAuthorityError(
-                "child_authority_missing",
-                "record",
-                "Legacy child session has no persisted effective authority; resume is blocked until a parent-authority intersection is recorded.",
-            )
+    if not metadata.get("parentSessionId"):
+        # Authority pins child sessions only. Spawning stamps the same record
+        # on the root as derivation bookkeeping, but the root keeps its
+        # freedom: whoever opens it decides its mode and roots, every time.
+        # Enforcing the stale stamp here is what kept a root on the mode of
+        # its first spawn whatever its owner configured afterwards.
         return None
+    if not authority:
+        raise AgentAuthorityError(
+            "child_authority_missing",
+            "record",
+            "Legacy child session has no persisted effective authority; resume is blocked until a parent-authority intersection is recorded.",
+        )
     assert_valid_agent_authority(authority)
     cwd = await canonicalize_authority_path(session["cwd"], "Child working directory")
     if not is_path_within_authority(authority, cwd):

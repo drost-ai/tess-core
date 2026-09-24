@@ -27,10 +27,17 @@ from ..daemon.lifecycle import ensure_task_supervisor_daemon, stop_task_supervis
 from ..storage import configure_runtime_home, get_state_root, load_daemon_state
 from ._daemon_watch import check_daemon_once
 from ._ticker import run_scoped_async, start_ticker
+from .agent_bindings import is_task_supervisor_gateway
 from .owner_lease import RuntimeOwnershipError, acquire_owner_lease, release_owner_lease
 from .paths import get_active_runtime_paths, run_with_runtime_paths
+from .session_manager import SessionManager
 
 DEFAULT_STOP_BOUND_SECONDS = 10.0
+_GATEWAY_METHODS = (
+    "startBackgroundCommand", "startMainSessionTask", "startSubagentTask", "startHealthCheck", "stopTask",
+    "retryTask", "read_task_output", "sendTaskMessage", "readTaskEvents", "readTaskQuestions",
+    "answerTaskQuestion", "skipTaskQuestion",
+)
 
 _ACTIVE: Runtime | None = None
 _ACTIVE_LOCK = threading.Lock()
@@ -66,10 +73,15 @@ class Runtime:
         self._watchdog_stop: Any = None
         self._stopped = False
         self._stop_lock = asyncio.Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._unsubscribe: Any = None
+        self._last_cursor: int | None = None
+        self.sessions = SessionManager(self)
 
     # -- lifecycle -----------------------------------------------------
 
     async def _start(self, startup_timeout_seconds: float | None) -> None:
+        self._loop = asyncio.get_running_loop()
         if not self.daemon_enabled:
             return
         self.lease = await acquire_owner_lease(self.home, self.instance_id)
@@ -79,6 +91,7 @@ class Runtime:
                 request["startupTimeoutSeconds"] = startup_timeout_seconds
             self.daemon = await ensure_task_supervisor_daemon(request)
             self._daemon_state = await load_daemon_state(self.instance_id)
+            self._subscribe(self.daemon)
             stop = threading.Event()
             start_ticker(
                 name=f"runtime-watchdog-{self.instance_id[:12]}",
@@ -105,6 +118,7 @@ class Runtime:
             try:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
+                await self.sessions.close_all(reason="runtime_stopped")
                 if self.daemon_enabled:
                     await self._stop_daemon()
             finally:
@@ -115,6 +129,7 @@ class Runtime:
                 _clear_active(self)
 
     async def _stop_daemon(self) -> None:
+        self._drop_subscription()
         with self._daemon_lock:
             client, self.daemon = self.daemon, None
         pid = (self._daemon_state or {}).get("pid")
@@ -162,11 +177,71 @@ class Runtime:
             self._record_daemon_event("daemon.watchdog_error", {"reason": str(error)[:512]})
 
     async def _swap_daemon(self, client: dict[str, Any]) -> None:
+        self._drop_subscription()
         with self._daemon_lock:
             previous, self.daemon = self.daemon, client
         if previous is not None:
             with contextlib.suppress(Exception):
                 await previous["close"]()
+        # A fresh daemon has a fresh event log: sessions follow it from its start.
+        self._last_cursor = None
+        self._subscribe(client)
+
+    # -- the runtime's one daemon subscription ---------------------------
+
+    def _subscribe(self, client: dict[str, Any]) -> None:
+        """One subscription for every session, routed in-process by session
+        id. The daemon announces on its own thread; routing happens on the
+        runtime's loop, where sessions live."""
+        subscribe = client.get("subscribe")
+        if not callable(subscribe):
+            return
+        kwargs: dict[str, Any] = {}
+        if self._last_cursor is not None:
+            kwargs["afterCursor"] = self._last_cursor
+        self._unsubscribe = subscribe(self._on_daemon_record, None, **kwargs)
+
+    def _drop_subscription(self) -> None:
+        unsubscribe, self._unsubscribe = self._unsubscribe, None
+        if callable(unsubscribe):
+            with contextlib.suppress(Exception):
+                unsubscribe()
+
+    def _on_daemon_record(self, record: dict[str, Any]) -> None:
+        cursor = record.get("cursor")
+        if isinstance(cursor, int):
+            self._last_cursor = cursor
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        loop.call_soon_threadsafe(self.sessions.route_daemon_event, dict(record))
+
+    def daemon_proxy(self) -> dict[str, Any] | None:
+        """The daemon as a session may hold it: every gateway call goes to the
+        runtime's current client (so a recovered daemon is picked up), and
+        ``close`` does nothing, because the daemon is not the session's."""
+        if not self.daemon_enabled:
+            return None
+
+        def delegate(name: str) -> Any:
+            def call(*args: Any, **kwargs: Any) -> Any:
+                with self._daemon_lock:
+                    client = self.daemon
+                if client is None or not callable(client.get(name)):
+                    raise RuntimeError(f"The task supervisor daemon is not connected ({name}).")
+                return client[name](*args, **kwargs)
+
+            return call
+
+        template = self.daemon or {}
+        proxy = {name: delegate(name) for name, value in template.items() if callable(value) and name not in {"close", "subscribe"}}
+        for name in _GATEWAY_METHODS:
+            proxy.setdefault(name, delegate(name))
+        proxy["close"] = lambda: None
+        proxy["subscribe"] = lambda *_args, **_kwargs: (lambda: None)
+        proxy["_daemonProxy"] = True
+        assert is_task_supervisor_gateway(proxy)
+        return proxy
 
     def _record_daemon_event(self, event: str, data: dict[str, Any]) -> None:
         if event in {"daemon.restarted", "daemon.restart_failed"}:
@@ -208,7 +283,7 @@ class Runtime:
             "startedAt": self.started_at,
             "stopped": self._stopped,
             "daemon": daemon,
-            "sessions": {"open": []},
+            "sessions": self.sessions.status(),
         }
 
 

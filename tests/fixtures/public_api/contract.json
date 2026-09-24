@@ -158,6 +158,13 @@
 {"concept": "CompactionRunOutcome", "ts": "CompactionRunOutcome", "py": null, "py_target": "CompactionRunOutcome", "py_module": null, "entrypoint": "testing", "kind": "type", "status": "pending", "consumers": ["tess-code"]},
 {"concept": "start_runtime", "ts": null, "py": "start_runtime", "py_target": "start_runtime", "py_module": "agent_core.runtime.host", "entrypoint": "root", "kind": "function", "status": "active", "consumers": ["tess-agent"]},
 {"concept": "Runtime", "ts": null, "py": "Runtime", "py_target": "Runtime", "py_module": "agent_core.runtime.host", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
-{"concept": "RuntimeOwnershipError", "ts": null, "py": "RuntimeOwnershipError", "py_target": "RuntimeOwnershipError", "py_module": "agent_core.runtime.owner_lease", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]}
+{"concept": "RuntimeOwnershipError", "ts": null, "py": "RuntimeOwnershipError", "py_target": "RuntimeOwnershipError", "py_module": "agent_core.runtime.owner_lease", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "Session", "ts": null, "py": "Session", "py_target": "Session", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "SessionBusy", "ts": null, "py": "SessionBusy", "py_target": "SessionBusy", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "SessionManager", "ts": null, "py": "SessionManager", "py_target": "SessionManager", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "SessionOptions", "ts": null, "py": "SessionOptions", "py_target": "SessionOptions", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "SessionUnavailableError", "ts": null, "py": "SessionUnavailableError", "py_target": "SessionUnavailableError", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "Unavailable", "ts": null, "py": "Unavailable", "py_target": "Unavailable", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]},
+{"concept": "UnknownSessionError", "ts": null, "py": "UnknownSessionError", "py_target": "UnknownSessionError", "py_module": "agent_core.runtime.session_manager", "entrypoint": "root", "kind": "type", "status": "active", "consumers": ["tess-agent"]}
 ]
 }

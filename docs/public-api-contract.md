@@ -53,7 +53,7 @@ free to change without coordination.
 
 ## The contract
 
-### `agent_core` (root) — 101 names, 82 active
+### `agent_core` (root) — 108 names, 89 active
 
 | Concept (TS name) | Kind | Python today | Python target (Epic M) | Python home | Status | Consumers |
 |---|---|---|---|---|---|---|
@@ -62,6 +62,13 @@ free to change without coordination.
 | `Runtime` (Python extension) | type | `Runtime` | `Runtime` | `agent_core.runtime.host` | active | tess-agent |
 | `RuntimeOwnershipError` (Python extension) | type | `RuntimeOwnershipError` | `RuntimeOwnershipError` | `agent_core.runtime.owner_lease` | active | tess-agent |
 | `start_runtime` (Python extension) | function | `start_runtime` | `start_runtime` | `agent_core.runtime.host` | active | tess-agent |
+| `Session` (Python extension) | type | `Session` | `Session` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `SessionBusy` (Python extension) | type | `SessionBusy` | `SessionBusy` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `SessionManager` (Python extension) | type | `SessionManager` | `SessionManager` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `SessionOptions` (Python extension) | type | `SessionOptions` | `SessionOptions` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `SessionUnavailableError` (Python extension) | type | `SessionUnavailableError` | `SessionUnavailableError` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `Unavailable` (Python extension) | type | `Unavailable` | `Unavailable` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `UnknownSessionError` (Python extension) | type | `UnknownSessionError` | `UnknownSessionError` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `activeSessionPayload` | function | `activeSessionPayload` | `active_session_payload` | `agent_core.session.runtime` | active | samplehost |
 | `bootstrapRuntime` | function | `bootstrapRuntime` | `bootstrap_runtime` | `agent_core.runtime.bootstrap` | active | samplehost, tess-code |
 | `buildSystemPromptForAgent` | function | `buildSystemPromptForAgent` | `build_system_prompt_for_agent` | `agent_core.config.prompts` | active | tess-code |

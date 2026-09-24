@@ -32,6 +32,9 @@ from .runtime.events.factory import create_runtime_event
 from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding, create_runtime_session_binding
 from .runtime.host import Runtime, start_runtime
 from .runtime.owner_lease import RuntimeOwnershipError
+from .runtime.session_manager import (
+    Session, SessionBusy, SessionManager, SessionOptions, SessionUnavailableError, Unavailable, UnknownSessionError,
+)
 from .runtime.state.store import create_initial_runtime_state, create_runtime_state_store
 from .runtime.wake import create_mailbox_wake_controller
 from .runtime.workspace import create_git_worktree
@@ -126,6 +129,13 @@ __all__ = [
     "Runtime",
     "RuntimeOwnershipError",
     "start_runtime",
+    "Session",
+    "SessionBusy",
+    "SessionManager",
+    "SessionOptions",
+    "SessionUnavailableError",
+    "Unavailable",
+    "UnknownSessionError",
     "RuntimeSecretRef",
     "RuntimeSessionBinding",
     "save_auth",
