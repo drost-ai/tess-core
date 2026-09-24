@@ -31,6 +31,7 @@ from .agent_bindings import create_agent_runtime_bindings, unavailable_daemon_bi
 from .events.factory import create_runtime_event
 from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
+from .session_turns import SessionTurns
 from .state.store import create_initial_runtime_state, create_runtime_state_store
 from .support import StagedRuntimeSource, default_runtime_component_factories, runtime_path_graph_id
 
@@ -101,7 +102,7 @@ class UnknownSessionError(LookupError):
 
 
 class SessionBusy(RuntimeError):
-    """The session has a turn running; close never cancels."""
+    """The session has a turn running or queued; close never cancels."""
 
 
 class _LiveSession:
@@ -122,6 +123,7 @@ class _LiveSession:
         self.components: dict[str, Any] | None = None
         self.controller: dict[str, Any] | None = None
         self.bindings: Any = None
+        self.turns = SessionTurns(self)
         self.closed = False
 
     def publish(self, event: str, data: dict[str, Any] | None = None) -> None:
@@ -178,12 +180,18 @@ class _LiveSession:
     def turn_in_flight(self) -> bool:
         return bool(self.controller and self.controller["isTurnInFlight"]())
 
-    async def close(self) -> None:
+    def busy(self) -> bool:
+        return self.turns.busy() or self.turn_in_flight()
+
+    async def close(self, grace: float = 0.0) -> None:
         if self.closed:
             return
         self.closed = True
-        if self.components is not None:
-            await maybe_await(self.components["close"]())
+        try:
+            await self.turns.shutdown(grace)
+        finally:
+            if self.components is not None:
+                await maybe_await(self.components["close"]())
 
 
 class Session:
@@ -227,6 +235,44 @@ class Session:
         live = self._live_session()
         live.subscribers.append(listener)
         return lambda: live.subscribers.remove(listener) if listener in live.subscribers else None
+
+    # -- turns -----------------------------------------------------------
+
+    async def run_turn(
+        self,
+        prompt: Any,
+        *,
+        limits: dict[str, int] | None = None,
+        turn_id: str | None = None,
+        provider_override: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run one user turn after whatever is already queued for this
+        session, and return the engine's result. A handle whose session was
+        unloaded reopens it first. ``turn_id`` lets the caller name the turn
+        before its ``turn.started`` is announced."""
+        if not self.is_open:
+            await self._manager.open(self.id)
+        return await self._live_session().turns.run(
+            prompt, origin="user", limits=limits, provider_override=provider_override, turn_id=turn_id
+        )
+
+    async def cancel_turn(self, turn_id: str) -> bool:
+        """Cancel exactly that turn. True if it was running or queued here."""
+        live = self._manager._live.get(self.id)
+        return bool(live is not None and live.turns.cancel(turn_id))
+
+    @property
+    def busy(self) -> bool:
+        live = self._manager._live.get(self.id)
+        return bool(live is not None and live.busy())
+
+    def turns(self) -> dict[str, Any]:
+        """The running turn and the queue, for a host's status."""
+        live = self._manager._live.get(self.id)
+        if live is None:
+            return {"running": None, "queued": []}
+        running = live.turns.running()
+        return {"running": running.describe() if running else None, "queued": [turn.describe() for turn in live.turns.queued()]}
 
     async def close(self) -> None:
         await self._manager.close(self.id)
@@ -319,19 +365,21 @@ class SessionManager:
         live = self._live.get(session_id)
         if live is None:
             return
-        if live.turn_in_flight():
-            raise SessionBusy(f"Session {session_id} has a turn running; cancel it first.")
+        if live.busy():
+            raise SessionBusy(f"Session {session_id} has a turn running or queued; cancel it first.")
         del self._live[session_id]
         try:
             await live.close()
         finally:
             self._notify("on_session_closed", session_id, reason)
 
-    async def close_all(self, *, reason: str = "runtime_stopped") -> None:
+    async def close_all(self, *, reason: str = "runtime_stopped", grace: float = 0.0) -> None:
+        """Runtime stop: every session closes, busy or not. Running turns get
+        the grace to finish, then are aborted; queued turns never start."""
         for session_id in list(self._live):
             live = self._live.pop(session_id)
             try:
-                await live.close()
+                await live.close(grace)
             finally:
                 self._notify("on_session_closed", session_id, reason)
 
@@ -347,17 +395,19 @@ class SessionManager:
         return self._live.get(session_id)
 
     def status(self) -> dict[str, Any]:
+        return {"open": [self._session_status(session_id, live) for session_id, live in self._live.items()]}
+
+    @staticmethod
+    def _session_status(session_id: str, live: _LiveSession) -> dict[str, Any]:
+        running = live.turns.running()
         return {
-            "open": [
-                {
-                    "id": session_id,
-                    "cwd": live.config.get("cwd"),
-                    "model": live.record.get("model"),
-                    "permissionMode": live.record.get("permissionMode"),
-                    "turnInFlight": live.turn_in_flight(),
-                }
-                for session_id, live in self._live.items()
-            ]
+            "id": session_id,
+            "cwd": live.config.get("cwd"),
+            "model": live.record.get("model"),
+            "permissionMode": live.record.get("permissionMode"),
+            "turnInFlight": live.turn_in_flight(),
+            "turn": running.describe() if running else None,
+            "queued": len(live.turns.queued()),
         }
 
     # -- plumbing ------------------------------------------------------

@@ -108,9 +108,9 @@ class Runtime:
             raise
 
     async def stop(self, grace: float = 0.0) -> None:
-        """Stop the runtime: its watchdog, its daemon (exit verified within a
-        bound), and its lease. Idempotent. ``grace`` is for running turns and
-        has nothing to wait for until sessions exist."""
+        """Stop the runtime: its sessions (a running turn may finish within
+        ``grace`` seconds, then it is aborted), its watchdog, its daemon (exit
+        verified within a bound), and its lease. Idempotent."""
         async with self._stop_lock:
             if self._stopped:
                 return
@@ -118,7 +118,7 @@ class Runtime:
             try:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
-                await self.sessions.close_all(reason="runtime_stopped")
+                await self.sessions.close_all(reason="runtime_stopped", grace=grace)
                 if self.daemon_enabled:
                     await self._stop_daemon()
             finally:

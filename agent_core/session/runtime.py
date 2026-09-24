@@ -68,15 +68,20 @@ def create_session_runtime_controller(
         nonlocal turn_in_flight
         turn = dict(turn or {})
         turn_in_flight = True
-        emit(
-            "turn.started",
-            {
-                "session_id": active_session.get("id"),
-                "prompt": turn.get("prompt"),
-                "model": turn.get("model") or active_session.get("model"),
-                "agent_name": turn.get("agentName") or turn.get("agent_name"),
-            },
-        )
+        data = {
+            "session_id": active_session.get("id"),
+            "prompt": turn.get("prompt"),
+            "model": turn.get("model") or active_session.get("model"),
+            "agent_name": turn.get("agentName") or turn.get("agent_name"),
+        }
+        # A turn the session manager runs is named and has an origin; a
+        # client's own startTurn keeps the payload it always had.
+        turn_id = turn.get("turnId") or turn.get("turn_id")
+        if turn_id is not None:
+            data["turn_id"] = turn_id
+        if turn.get("origin") is not None:
+            data["origin"] = turn["origin"]
+        emit("turn.started", data)
 
     def set_turn_cancelling() -> None:
         emit("turn.cancelling", {"session_id": active_session.get("id")})
@@ -86,6 +91,10 @@ def create_session_runtime_controller(
         turn = dict(turn or {})
         turn_in_flight = False
         kind = turn.get("kind") or "completed"
+        if turn.get("announced"):
+            # The engine already emitted this outcome (a cancelled turn
+            # announces itself with its partial text); only the flag is left.
+            return
         emit(
             "turn.cancelled" if kind == "cancelled" else "turn.completed",
             {

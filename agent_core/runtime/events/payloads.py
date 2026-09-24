@@ -52,11 +52,20 @@ def _typed_payload(event: str, data: dict[str, Any]) -> tuple[str, dict[str, Any
             "missingToolUseIds": _string_array(_field(data, "missing_tool_use_ids", "missingToolUseIds")),
         }
     if event == "turn.started":
-        return "turn.started", {
+        started = {
             "prompt": _string_field(_field(data, "prompt")),
             "model": _optional_string(_field(data, "model")),
             "agentName": _optional_string(_field(data, "agent_name", "agentName")),
         }
+        # Present only for turns a session manager named; absent (not None)
+        # otherwise, so a client's own turns keep their exact payload.
+        turn_id = _optional_string(_field(data, "turn_id", "turnId"))
+        if turn_id is not None:
+            started["turnId"] = turn_id
+        origin = _optional_string(_field(data, "origin"))
+        if origin is not None:
+            started["origin"] = origin
+        return "turn.started", started
     if event == "turn.cancelling":
         return "turn.cancelling", {}
     if event == "turn.completed":
