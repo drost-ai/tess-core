@@ -18,11 +18,12 @@ by id from the start.
 from __future__ import annotations
 
 import os
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from .._utils import maybe_await
+from .._utils import maybe_await, now_iso
 from ..config.resolution import resolve_config
 from ..session.persistence import persist_session, resolve_session
 from ..storage.session_archive import load_session
@@ -31,6 +32,7 @@ from .agent_bindings import create_agent_runtime_bindings, unavailable_daemon_bi
 from .events.factory import create_runtime_event
 from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
+from .session_idle import IdleSweeper
 from .session_turns import SessionTurns
 from .state.store import create_initial_runtime_state, create_runtime_state_store
 from .support import StagedRuntimeSource, default_runtime_component_factories, runtime_path_graph_id
@@ -125,6 +127,8 @@ class _LiveSession:
         self.bindings: Any = None
         self.turns = SessionTurns(self)
         self.closed = False
+        self.opened_at = now_iso()
+        self._last_activity = time.monotonic()
 
     def publish(self, event: str, data: dict[str, Any] | None = None) -> None:
         payload = {**(data or {})}
@@ -182,6 +186,21 @@ class _LiveSession:
 
     def busy(self) -> bool:
         return self.turns.busy() or self.turn_in_flight()
+
+    def touch(self) -> None:
+        """Something happened for this session: the idle clock restarts."""
+        self._last_activity = time.monotonic()
+
+    def idle_seconds(self) -> float | None:
+        """How long the session has had nothing to do; None while busy."""
+        if self.busy():
+            return None
+        return max(0.0, time.monotonic() - self._last_activity)
+
+    def state(self) -> str:
+        if self.turns.running() is not None or self.turn_in_flight():
+            return "running"
+        return "queued" if self.turns.queued() else "idle"
 
     async def close(self, grace: float = 0.0) -> None:
         if self.closed:
@@ -284,6 +303,7 @@ class SessionManager:
         self._live: dict[str, _LiveSession] = {}
         self._handles: dict[str, Session] = {}
         self._opening: dict[str, Any] = {}
+        self.idle = IdleSweeper(self)
 
     # -- open / close --------------------------------------------------
 
@@ -368,8 +388,27 @@ class SessionManager:
         if live.busy():
             raise SessionBusy(f"Session {session_id} has a turn running or queued; cancel it first.")
         del self._live[session_id]
+        await self.release(session_id, live, reason)
+
+    def detach_if_idle(self, session_id: str, limit_ms: int) -> _LiveSession | None:
+        """Unload the session now if it has been idle at least ``limit_ms``,
+        and hand it back for release. Synchronous on purpose: nothing can
+        run between the busy check and the unload, so a turn arriving now
+        finds the session gone and reopens it instead of running under a
+        close."""
+        live = self._live.get(session_id)
+        if live is None:
+            return None
+        idle = live.idle_seconds()
+        if idle is None or idle * 1000 < limit_ms:
+            return None
+        del self._live[session_id]
+        return live
+
+    async def release(self, session_id: str, live: _LiveSession, reason: str, grace: float = 0.0) -> None:
+        """Close an unloaded session's components and tell the host."""
         try:
-            await live.close()
+            await live.close(grace)
         finally:
             self._notify("on_session_closed", session_id, reason)
 
@@ -377,11 +416,7 @@ class SessionManager:
         """Runtime stop: every session closes, busy or not. Running turns get
         the grace to finish, then are aborted; queued turns never start."""
         for session_id in list(self._live):
-            live = self._live.pop(session_id)
-            try:
-                await live.close(grace)
-            finally:
-                self._notify("on_session_closed", session_id, reason)
+            await self.release(session_id, self._live.pop(session_id), reason, grace)
 
     # -- what the runtime and the host can ask ---------------------------
 
@@ -399,12 +434,18 @@ class SessionManager:
 
     @staticmethod
     def _session_status(session_id: str, live: _LiveSession) -> dict[str, Any]:
+        """One open session and why it is open: a running turn, queued
+        work, or idle for this long (and then not for much longer)."""
         running = live.turns.running()
+        idle = live.idle_seconds()
         return {
             "id": session_id,
             "cwd": live.config.get("cwd"),
             "model": live.record.get("model"),
             "permissionMode": live.record.get("permissionMode"),
+            "openedAt": live.opened_at,
+            "state": live.state(),
+            "idleSeconds": None if idle is None else round(idle, 3),
             "turnInFlight": live.turn_in_flight(),
             "turn": running.describe() if running else None,
             "queued": len(live.turns.queued()),

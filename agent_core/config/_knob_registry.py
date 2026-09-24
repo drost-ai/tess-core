@@ -30,6 +30,7 @@ _DECLARATIONS: tuple[tuple[str, Any, str, str, float | None, float | None], ...]
     ("subagents.max_live", 8, "int", "Maximum live subagent processes per runtime instance; at capacity the Agent tool returns the live-children roster instead of spawning.", 1, 64),
     ("subagents.resident_poll_ms", 1000, "int", "Milliseconds between a resident subagent's mailbox polls while idle between turns.", 100, 60000),
     ("subagents.resident_idle_ttl_ms", 900000, "int", "Milliseconds a resident subagent may stay idle (no turn, no queued message, no open question, no work of its own) before it stops for good. Working time never counts.", 100, 86400000),
+    ("sessions.idle_close_ms", 900000, "int", "Milliseconds an open session may stay idle (no turn running, nothing queued) before the runtime unloads it. It stays resumable and any turn reopens it; having children is not a reason to stay open.", 50, 86400000),
     ("provider.max_output_tokens", 16384, "int", "Fallback max output tokens per provider request when neither the request nor the provider profile specifies one.", 256, 1000000),
     ("provider.request_start_timeout_ms", 120000, "int", "Milliseconds to wait for a provider request to start streaming before the attempt is failed as timed out.", 1000, 3600000),
     ("provider.stream_idle_timeout_ms", 60000, "int", "Milliseconds of stream silence tolerated before a provider attempt is failed as idle.", 1000, 3600000),

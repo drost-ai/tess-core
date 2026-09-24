@@ -114,6 +114,7 @@ class SessionTurns:
             future=loop.create_future(),
         )
         self._queue.append(turn)
+        self._live.touch()
         if self._worker is None or self._worker.done():
             self._worker = loop.create_task(self._drain())
         return await turn.future
@@ -159,6 +160,7 @@ class SessionTurns:
                 await self._run_one(turn)
             finally:
                 self._running = None
+                self._live.touch()  # the idle clock starts when the turn ends
 
     async def _run_one(self, turn: Turn) -> None:
         live = self._live

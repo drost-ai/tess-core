@@ -82,6 +82,7 @@ class Runtime:
 
     async def _start(self, startup_timeout_seconds: float | None) -> None:
         self._loop = asyncio.get_running_loop()
+        self.sessions.idle.start()  # one idle timer for every session, daemon or not
         if not self.daemon_enabled:
             return
         self.lease = await acquire_owner_lease(self.home, self.instance_id)
@@ -102,6 +103,7 @@ class Runtime:
             )
             self._watchdog_stop = stop.set
         except BaseException:
+            await self.sessions.idle.stop()
             with contextlib.suppress(Exception):
                 await release_owner_lease(self.home, self.instance_id)
             self.lease = None
@@ -118,6 +120,7 @@ class Runtime:
             try:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
+                await self.sessions.idle.stop()
                 await self.sessions.close_all(reason="runtime_stopped", grace=grace)
                 if self.daemon_enabled:
                     await self._stop_daemon()
