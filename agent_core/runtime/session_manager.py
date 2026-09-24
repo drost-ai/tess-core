@@ -20,8 +20,7 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 from .._utils import maybe_await, now_iso
 from ..config.resolution import resolve_config
@@ -33,78 +32,20 @@ from .events.factory import create_runtime_event
 from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
 from .session_idle import IdleSweeper
+from .session_options import (  # noqa: F401  (re-exported: the package imports them from here)
+    SessionBusy,
+    SessionOptions,
+    SessionUnavailableError,
+    Unavailable,
+    UnknownSessionError,
+)
 from .session_turns import SessionTurns
+from .session_wake import PendingWork
 from .state.store import create_initial_runtime_state, create_runtime_state_store
 from .support import StagedRuntimeSource, default_runtime_component_factories, runtime_path_graph_id
 
 OPEN_REASONS = ("client", "child_message", "monitor")
 CLOSE_REASONS = ("client", "idle", "runtime_stopped")
-
-
-@dataclass(frozen=True)
-class SessionOptions:
-    """How one session is set up. Everything is optional; the runtime home
-    is the runtime's and the workspace defaults to the runtime's cwd."""
-
-    cwd: str | None = None
-    provider: str | None = None
-    model: str | None = None
-    effort: str | None = None
-    permission_mode: str | None = None
-    add_dirs: tuple[str, ...] = ()
-    mcp_servers: tuple[dict[str, Any], ...] = ()
-    settings: str | None = None
-    strict_mcp_config: bool = False
-    system_prompt: str | None = None
-    context_provider: Callable[[str], Awaitable[str | None] | str | None] | None = None
-    extra: dict[str, Any] = field(default_factory=dict)
-
-    def config_overrides(self, runtime_home: str) -> dict[str, Any]:
-        import json
-
-        overrides: dict[str, Any] = {"runtimeHome": runtime_home}
-        for key, value in (
-            ("provider", self.provider),
-            ("model", self.model),
-            ("effort", self.effort),
-            ("permissionMode", self.permission_mode),
-            ("settings", self.settings),
-            ("systemPrompt", self.system_prompt),
-        ):
-            if value is not None:
-                overrides[key] = value
-        if self.add_dirs:
-            overrides["addDir"] = [os.path.abspath(os.path.expanduser(item)) for item in self.add_dirs]
-        if self.mcp_servers:
-            overrides["mcpConfig"] = [json.dumps(server) for server in self.mcp_servers]
-        if self.strict_mcp_config:
-            overrides["strictMcpConfig"] = True
-        overrides.update(self.extra)
-        return overrides
-
-
-@dataclass(frozen=True)
-class Unavailable:
-    """The host refuses or defers opening this session."""
-
-    reason: str
-    retry: bool = False
-
-
-class SessionUnavailableError(RuntimeError):
-    def __init__(self, session_id: str, unavailable: Unavailable) -> None:
-        self.session_id = session_id
-        self.reason = unavailable.reason
-        self.retry = unavailable.retry
-        super().__init__(f"Session {session_id} is unavailable: {unavailable.reason}" + (" (retry later)" if unavailable.retry else ""))
-
-
-class UnknownSessionError(LookupError):
-    """No session with that id exists in the runtime home."""
-
-
-class SessionBusy(RuntimeError):
-    """The session has a turn running or queued; close never cancels."""
 
 
 class _LiveSession:
@@ -304,6 +245,7 @@ class SessionManager:
         self._handles: dict[str, Session] = {}
         self._opening: dict[str, Any] = {}
         self.idle = IdleSweeper(self)
+        self.pending = PendingWork(self)
 
     # -- open / close --------------------------------------------------
 
@@ -429,8 +371,15 @@ class SessionManager:
     def live(self, session_id: str) -> _LiveSession | None:
         return self._live.get(session_id)
 
+    def is_ended(self, session_id: str) -> bool:
+        """Ended sessions never reopen; nothing is ended until `end` exists."""
+        return False
+
     def status(self) -> dict[str, Any]:
-        return {"open": [self._session_status(session_id, live) for session_id, live in self._live.items()]}
+        return {
+            "open": [self._session_status(session_id, live) for session_id, live in self._live.items()],
+            "pending": self.pending.status(),
+        }
 
     @staticmethod
     def _session_status(session_id: str, live: _LiveSession) -> dict[str, Any]:
@@ -477,13 +426,16 @@ class SessionManager:
 
     def route_daemon_event(self, payload: dict[str, Any]) -> None:
         """A daemon event arrived on the runtime's subscription: hand it to
-        the open session it belongs to. Events for closed sessions are
-        ignored here; discovering pending work for them is the runtime's job."""
+        the open session it belongs to, and let pending work see it whether
+        or not that session is open (a child's message wakes a closed
+        parent)."""
+        event = str(payload.get("event"))
         data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
         target = payload.get("sessionId") or data.get("session_id") or data.get("sessionId")
         live = self._live.get(target) if isinstance(target, str) else None
         if live is not None:
-            live.publish(str(payload.get("event")), dict(data))
+            live.publish(event, dict(data))
+        self.pending.on_event(event, dict(data))
 
     def _deliver(self, session_id: str, envelope: dict[str, Any]) -> None:
         sink = getattr(self.runtime.listener, "on_event", None)

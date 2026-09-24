@@ -16,6 +16,11 @@ plus whether this watch has announced it before. A consumer that keeps what
 it receives (a host journal) can therefore tell a repeat from new activity.
 An index is an aid for dropping duplicates, not proof of delivery.
 
+QUESTIONS TOO: a child blocked on a question to its parent is announced the
+same way (``subagent.question``, level-triggered while the question is
+pending) for live tasks, so a parent that is not loaded can be woken to
+answer it, exactly as for a message. A question of a finished task is moot.
+
 A watch forwards a task's trace rows once, from a cursor it keeps in memory.
 The cursor is deliberately not shared on disk: while several daemons can
 sweep one runtime home, a shared cursor would let one daemon consume the
@@ -36,7 +41,14 @@ from typing import Any, Callable
 
 from ..._utils import maybe_await
 from ...storage import list_task_records, read_task_meta
-from ..communication import read_task_events, read_task_mailbox_messages, task_events_path, task_mailbox_path
+from ..communication import (
+    read_task_events,
+    read_task_mailbox_messages,
+    read_task_questions,
+    task_events_path,
+    task_mailbox_path,
+    task_questions_path,
+)
 
 _WATCHED_TASK_STATUSES = {"backgrounded", "running", "awaiting_input", "reconciling", "degraded"}
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped", "terminated", "cancelled", "truncated"}
@@ -160,6 +172,46 @@ def create_mailbox_watch_loop(
                 announced_message_keys.discard(key)
         return emitted
 
+    async def announce_pending_questions(task_id: str) -> int:
+        if not os.path.exists(task_questions_path(task_id)):
+            return 0
+        emitted = 0
+        pending_seen = False
+        for question in await read_task_questions(task_id):
+            if question.get("status") != "pending":
+                continue
+            pending_seen = True
+            key = f"q:{task_id}:{question.get('questionId')}"
+            last = last_announced_sweep.get(key)
+            if last is not None and sweep_counter - last < _REANNOUNCE_SWEEPS:
+                continue
+            last_announced_sweep[key] = sweep_counter
+            announcement = "repeat" if key in announced_message_keys else "first"
+            announced_message_keys.add(key)
+            parent_session_id = await _parent_session_id(task_id)
+            await maybe_await(
+                emit(
+                    "subagent.question",
+                    {
+                        "task_id": task_id,
+                        "question_id": question.get("questionId"),
+                        "announcement": announcement,
+                        "child_session_id": question.get("childSessionId"),
+                        "parent_session_id": parent_session_id,
+                        "created_at": question.get("createdAt"),
+                        "preview": str(question.get("question") or "")[:200],
+                    },
+                    parent_session_id,
+                )
+            )
+            emitted += 1
+        if not pending_seen:
+            prefix = f"q:{task_id}:"
+            for key in [key for key in last_announced_sweep if key.startswith(prefix)]:
+                last_announced_sweep.pop(key, None)
+                announced_message_keys.discard(key)
+        return emitted
+
     async def sweep_once() -> int:
         nonlocal sweep_counter
         sweep_counter += 1
@@ -175,6 +227,7 @@ def create_mailbox_watch_loop(
                 seen_live.add(task_id)
                 emitted += await forward_trace_events(task_id)
                 emitted += await announce_queued_messages(task_id, terminal=False)
+                emitted += await announce_pending_questions(task_id)
             elif status in _TERMINAL_TASK_STATUSES and task_id not in drained_terminal_tasks:
                 if task_id not in seen_live and _predates(record, watch_started_at):
                     trace_history_only.add(task_id)

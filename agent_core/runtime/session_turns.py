@@ -4,10 +4,17 @@ and armed with its own abort signal.
 A session runs exactly one turn at a time; a second ``run_turn`` waits behind
 the first, and different sessions never wait for each other. Every turn is
 announced in its ``turn.started`` event with its id and its origin (``user``
-for a client's prompt; ``child_message`` and ``monitor`` turns arrive with the
-background lanes), so a cancel can only hit the turn it names: a running one
-is aborted through the engine's abort signal, a queued one is dropped before
-it starts, a finished or unknown one is a no-op.
+for a client's prompt; ``child_message`` and ``monitor`` for the turns the
+runtime starts itself), so a cancel can only hit the turn it names: a running
+one is aborted through the engine's abort signal, a queued one is dropped
+before it starts, a finished or unknown one is a no-op.
+
+ORDER: the user's turns go first, without interrupting whatever is running.
+Fairness: when the oldest waiting background turn has waited longer than
+``sessions.background_max_wait_ms`` it takes the next slot; that age is never
+reset by newer arrivals. A background turn may carry a guard (``only_if``)
+that is asked when its slot comes: if the work it was queued for is gone (a
+user turn's drain claimed it), the turn is skipped, never started.
 
 The queue does the bookkeeping a client used to hand-roll around
 ``run_agent_prompt``: ``startTurn``, the session's per-turn context (sent as
@@ -18,10 +25,11 @@ The queue does the bookkeeping a client used to hand-roll around
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .._utils import maybe_await, now_iso
 from ..agent.loop import run_agent_prompt
@@ -45,9 +53,11 @@ class Turn:
     limits: dict[str, int] | None
     provider_override: dict[str, Any] | None
     future: asyncio.Future
+    only_if: Callable[[], Awaitable[bool] | bool] | None = None
     signal: AbortSignal = field(default_factory=AbortSignal)
     state: str = "queued"  # queued | running | finished
     queued_at: str = field(default_factory=now_iso)
+    queued_mono: float = field(default_factory=time.monotonic)
     started_at: str | None = None
 
     def describe(self) -> dict[str, Any]:
@@ -57,6 +67,7 @@ class Turn:
             "state": self.state,
             "queuedAt": self.queued_at,
             "startedAt": self.started_at,
+            "waitedSeconds": round(time.monotonic() - self.queued_mono, 3) if self.state == "queued" else None,
             "cancelling": self.signal.aborted and self.state == "running",
         }
 
@@ -94,6 +105,7 @@ class SessionTurns:
         limits: dict[str, int] | None = None,
         provider_override: dict[str, Any] | None = None,
         turn_id: str | None = None,
+        only_if: Callable[[], Awaitable[bool] | bool] | None = None,
     ) -> dict[str, Any]:
         """Queue one turn and wait for its result. The id is the caller's or
         a fresh one; either way it is the turn's ``logicalTurnId`` too."""
@@ -112,6 +124,7 @@ class SessionTurns:
             limits=dict(limits) if limits else None,
             provider_override=dict(provider_override) if provider_override else None,
             future=loop.create_future(),
+            only_if=only_if,
         )
         self._queue.append(turn)
         self._live.touch()
@@ -129,7 +142,7 @@ class SessionTurns:
         for turn in self._queue:
             if turn.id == turn_id:
                 self._queue.remove(turn)
-                self._finish_unstarted(turn)
+                self._finish_unstarted(turn, "cancelled")
                 return True
         return False
 
@@ -138,7 +151,7 @@ class SessionTurns:
         start; a running one may finish within the grace, then it is aborted
         and given a short bound to unwind."""
         while self._queue:
-            self._finish_unstarted(self._queue.popleft())
+            self._finish_unstarted(self._queue.popleft(), "cancelled")
         worker = self._worker
         if worker is None or worker.done():
             return
@@ -152,9 +165,29 @@ class SessionTurns:
 
     # -- running ---------------------------------------------------------
 
+    def _pick(self) -> Turn:
+        """User first; a background turn that has waited past the fairness
+        limit takes the slot instead."""
+        oldest_background = next((turn for turn in self._queue if turn.origin != "user"), None)
+        if oldest_background is not None and time.monotonic() - oldest_background.queued_mono >= _background_max_wait_seconds():
+            chosen = oldest_background
+        else:
+            chosen = next((turn for turn in self._queue if turn.origin == "user"), None) or self._queue[0]
+        self._queue.remove(chosen)
+        return chosen
+
     async def _drain(self) -> None:
         while self._queue:
-            turn = self._queue.popleft()
+            turn = self._pick()
+            if turn.only_if is not None:
+                try:
+                    wanted = await maybe_await(turn.only_if())
+                except Exception:
+                    wanted = True  # a broken guard never loses work
+                if not wanted:
+                    self._finish_unstarted(turn, "skipped")
+                    self._live.touch()
+                    continue
             self._running = turn
             try:
                 await self._run_one(turn)
@@ -191,8 +224,9 @@ class SessionTurns:
                 request["ephemeralSystemContext"] = context
             if turn.limits is not None:
                 request["turnLimits"] = turn.limits
-            if turn.provider_override is not None:
-                request["providerOverride"] = turn.provider_override
+            override = turn.provider_override if turn.provider_override is not None else live.options.provider_override
+            if override is not None:
+                request["providerOverride"] = dict(override)
             result = await run_agent_prompt(request)
         except BaseException as error:
             controller["failTurn"](error)
@@ -235,9 +269,9 @@ class SessionTurns:
         turn.signal.abort()
         self._live.controller["setTurnCancelling"]()
 
-    def _finish_unstarted(self, turn: Turn) -> None:
-        """A turn that never started reports itself cancelled in the same
-        shape as the engine's own cancel, without a turn.started."""
+    def _finish_unstarted(self, turn: Turn, stop_reason: str) -> None:
+        """A turn that never started reports itself in the same shape as the
+        engine's own results, without a turn.started."""
         turn.state = "finished"
         if not turn.future.done():
             live = self._live
@@ -248,6 +282,12 @@ class SessionTurns:
                     "usage": {},
                     "model": live.record.get("model") or live.config.get("model"),
                     "estimatedCostUsd": 0.0,
-                    "stopReason": "cancelled",
+                    "stopReason": stop_reason,
                 }
             )
+
+
+def _background_max_wait_seconds() -> float:
+    from ..config._knobs import knob_value
+
+    return int(knob_value("sessions.background_max_wait_ms")) / 1000

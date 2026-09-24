@@ -121,6 +121,7 @@ class Runtime:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
                 await self.sessions.idle.stop()
+                await self.sessions.pending.stop()
                 await self.sessions.close_all(reason="runtime_stopped", grace=grace)
                 if self.daemon_enabled:
                     await self._stop_daemon()
