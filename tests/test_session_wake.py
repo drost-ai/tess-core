@@ -425,3 +425,44 @@ class SessionWakeTests(AgentCoreTestCase):
             run(scenario())
         finally:
             self.restore_home(root, previous)
+
+    def test_a_failed_child_wakes_its_closed_parent_through_its_reconciliation(self):
+        """A one-shot child that fails leaves a reconciliation entry, not a
+        mailbox message (seen in the real-provider canary: a Codex 400 in the
+        child left the parent closed forever). It is announced like one."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            os.environ[IDLE], os.environ[WATCH] = "300", "200"
+            provider = Provider("noted the failure")
+
+            async def scenario():
+                from agent_core.subagents.reconciliation import list_unconsumed_subagent_reconciliations, upsert_subagent_reconciliation
+
+                listener = Listener()
+                runtime, = (await _start(home, workspace, listener, session_options=lambda sid, reason: SessionOptions(provider_override=provider.override)),)
+                try:
+                    parent = await runtime.sessions.open()
+                    await parent.run_turn("start a child, please")
+                    await runtime.sessions.close(parent.id)
+                    await _seed_task(workspace, parent.id, "task-failed-child", status="failed")
+                    await _adopt_on_disk(parent.id, "task-failed-child")
+                    await upsert_subagent_reconciliation({
+                        "parentSessionId": parent.id, "taskId": "task-failed-child", "childAgentId": "child-x", "label": "child-x",
+                        "terminalStatus": "failed", "terminalReason": "provider rejected the request (400)",
+                        "summary": "the child failed before reporting anything",
+                    })
+                    await _wait(lambda: (parent.id, "child_message") in listener.opened, label="reopen for the child's failure")
+                    await _wait(lambda: not runtime.status()["sessions"]["pending"], label="the continuity turn")
+                    self.assertEqual(len(provider.requests), 2)
+                    self.assertIn("the child failed before reporting anything", provider.transcripts()[1])
+                    self.assertIn("Background subagent updates", provider.transcripts()[1])
+                    self.assertEqual(await list_unconsumed_subagent_reconciliations(parent.id), [])   # consumed by the turn
+                    await asyncio.sleep(1.0)   # no re-announcement once consumed
+                    self.assertEqual(len(provider.requests), 2)
+                    self.assertEqual(listener.opened.count((parent.id, "child_message")), 1)
+                finally:
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)

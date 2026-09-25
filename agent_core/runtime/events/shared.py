@@ -109,6 +109,7 @@ KNOWN_RUNTIME_EVENTS = {
     "subagent.mailbox.delivered",
     "subagent.message",
     "subagent.question",
+    "subagent.reconciliation",
     "subagent.trace",
     "subagent.capacity",
     "subagent.question.unanswered",

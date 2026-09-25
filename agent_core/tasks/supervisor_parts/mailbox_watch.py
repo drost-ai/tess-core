@@ -21,6 +21,12 @@ same way (``subagent.question``, level-triggered while the question is
 pending) for live tasks, so a parent that is not loaded can be woken to
 answer it, exactly as for a message. A question of a finished task is moot.
 
+AND A CHILD'S END: a one-shot child that finished, failed or was stopped
+leaves its parent a reconciliation entry instead of a mailbox message. While
+that entry is unconsumed it is announced the same way
+(``subagent.reconciliation``), so a closed parent is woken for its child's
+failure as it is for its child's result; the parent's next turn consumes it.
+
 A watch forwards a task's trace rows once, from a cursor it keeps in memory.
 The cursor is deliberately not shared on disk: while several daemons can
 sweep one runtime home, a shared cursor would let one daemon consume the
@@ -212,6 +218,40 @@ def create_mailbox_watch_loop(
                 announced_message_keys.discard(key)
         return emitted
 
+    async def announce_unconsumed_reconciliation(task_id: str) -> bool:
+        """True while the parent still has this task's reconciliation to consume."""
+        from ...subagents.reconciliation import list_unconsumed_subagent_reconciliations
+
+        parent_session_id = await _parent_session_id(task_id)
+        key = f"r:{task_id}"
+        pending = []
+        if parent_session_id:
+            pending = [record for record in await list_unconsumed_subagent_reconciliations(parent_session_id) if record.get("taskId") == task_id]
+        if not pending:
+            last_announced_sweep.pop(key, None)
+            announced_message_keys.discard(key)
+            return False
+        last = last_announced_sweep.get(key)
+        if last is None or sweep_counter - last >= _REANNOUNCE_SWEEPS:
+            last_announced_sweep[key] = sweep_counter
+            announcement = "repeat" if key in announced_message_keys else "first"
+            announced_message_keys.add(key)
+            record = pending[0]
+            await maybe_await(
+                emit(
+                    "subagent.reconciliation",
+                    {
+                        "task_id": task_id,
+                        "record_id": record.get("id"),
+                        "announcement": announcement,
+                        "outcome": record.get("status") or record.get("outcome"),
+                        "parent_session_id": parent_session_id,
+                    },
+                    parent_session_id,
+                )
+            )
+        return True
+
     async def sweep_once() -> int:
         nonlocal sweep_counter
         sweep_counter += 1
@@ -235,6 +275,8 @@ def create_mailbox_watch_loop(
                     # Ours: forward the tail it wrote while dying.
                     emitted += await forward_trace_events(task_id)
                 emitted += await announce_queued_messages(task_id, terminal=True)
+                if await announce_unconsumed_reconciliation(task_id):
+                    drained_terminal_tasks.discard(task_id)  # still something to tell the parent
         return emitted
 
     async def watch_loop() -> None:

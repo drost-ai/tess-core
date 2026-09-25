@@ -51,7 +51,7 @@ from ..tasks.communication import (
 )
 from .session_options import SessionEnded, SessionUnavailableError, UnknownSessionError
 
-WAKE_EVENTS = {"subagent.message": "child_message", "subagent.question": "child_message"}
+WAKE_EVENTS = {"subagent.message": "child_message", "subagent.question": "child_message", "subagent.reconciliation": "child_message"}
 MAX_RETRY_SECONDS = 900.0
 UNAVAILABLE_ANSWER = "unanswered:parent_unavailable"
 
@@ -80,7 +80,13 @@ def background_limits() -> dict[str, int] | None:
 
 async def pending_child_work(record: dict[str, Any]) -> bool:
     """Is anything still waiting for this parent: a queued to_parent message
-    or a pending question of one of its tasks?"""
+    or a pending question of one of its tasks, or a child's unconsumed
+    reconciliation (a one-shot child's end)?"""
+    from ..subagents.reconciliation import list_unconsumed_subagent_reconciliations
+
+    session_id = record.get("id")
+    if isinstance(session_id, str) and session_id and await list_unconsumed_subagent_reconciliations(session_id):
+        return True
     metadata = record.get("metadata") if isinstance(record.get("metadata"), dict) else {}
     for task_id in metadata.get("taskIds") or []:
         if not isinstance(task_id, str) or not task_id:
