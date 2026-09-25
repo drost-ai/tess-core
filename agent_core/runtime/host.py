@@ -291,6 +291,13 @@ class Runtime:
     def stopped(self) -> bool:
         return self._stopped
 
+    async def inspect(self) -> dict[str, Any]:
+        """``status()`` plus what lives on disk: every session's children and
+        every monitor delivery, with ids and lifecycle reasons only."""
+        from .session_inspect import inspect_runtime
+
+        return await inspect_runtime(self)
+
     def status(self) -> dict[str, Any]:
         """What this runtime owns and how it is doing, from what it last
         observed (the watchdog refreshes the daemon's state every heartbeat)."""

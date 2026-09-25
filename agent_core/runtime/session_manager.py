@@ -187,6 +187,9 @@ class SessionManager:
         self._opening: dict[str, Any] = {}
         self._ended: set[str] = set()
         self.stopping = False  # runtime.stop() began: no new session or turn
+        # What caused the most recent open, close, spawn and stop.
+        self.recent: dict[str, dict[str, Any] | None] = {"opened": None, "closed": None, "spawned": None, "stopped": None}
+        self._seen_tasks: set[str] = set()
         self.idle = IdleSweeper(self)
         self.pending = PendingWork(self)
         self.monitors = MonitorIntake(self)
@@ -351,6 +354,7 @@ class SessionManager:
             "open": [self._session_status(session_id, live) for session_id, live in self._live.items()],
             "pending": self.pending.status(),
             "monitors": self.monitors.status(),
+            "recent": dict(self.recent),
         }
 
     @staticmethod
@@ -409,6 +413,14 @@ class SessionManager:
         if live is not None:
             live.publish(event, dict(data))
         self.pending.on_event(event, dict(data))
+        task_id = data.get("task_id") or data.get("taskId")
+        if event == "task.updated" and isinstance(task_id, str) and task_id not in self._seen_tasks:
+            # The daemon's first word about a task is its spawn.
+            self._seen_tasks.add(task_id)
+            self._note("spawned", event=event, sessionId=target, taskId=task_id, status=data.get("status"))
+        elif event in ("task.stopped", "task.failed", "task.completed"):
+            self._note("stopped", event=event, sessionId=target, taskId=task_id,
+                       reason=data.get("detail_status") or data.get("detailStatus") or data.get("reason") or data.get("stop_reason"))
 
     def _deliver(self, session_id: str, envelope: dict[str, Any]) -> None:
         sink = getattr(self.runtime.listener, "on_event", None)
@@ -416,6 +428,10 @@ class SessionManager:
             sink(session_id, envelope)
 
     def _notify(self, method: str, session_id: str, reason: str) -> None:
+        self._note("opened" if method == "on_session_opened" else "closed", sessionId=session_id, reason=reason)
         sink = getattr(self.runtime.listener, method, None)
         if callable(sink):
             sink(session_id, reason)
+
+    def _note(self, kind: str, **data: Any) -> None:
+        self.recent[kind] = {"at": now_iso(), **data}
