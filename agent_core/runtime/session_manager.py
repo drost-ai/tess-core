@@ -17,6 +17,7 @@ by id from the start.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 import uuid
@@ -32,6 +33,7 @@ from .events.factory import create_runtime_event
 from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
 from .session_idle import IdleSweeper
+from .session_monitors import MonitorIntake
 from .session_options import (  # noqa: F401  (re-exported: the package imports them from here)
     SessionBusy,
     SessionOptions,
@@ -70,16 +72,32 @@ class _LiveSession:
         self.closed = False
         self.opened_at = now_iso()
         self._last_activity = time.monotonic()
+        # While > 0 (a monitor turn), provisional events stay inside the runtime.
+        self.suppress_events = 0
+        # Monitor cleanup that did not finish in its reserve: the session is
+        # quarantined until it settles.
+        self.monitor_cleanup: set[Any] = set()
 
     def publish(self, event: str, data: dict[str, Any] | None = None) -> None:
         payload = {**(data or {})}
         payload.setdefault("session_id", self.id)
         typed = create_runtime_event({"event": event, "data": payload, "defaultSessionId": self.id})
         self.state_store["dispatch"](typed)
+        if self.suppress_events and not event.startswith("turn."):
+            return  # nothing of a monitor turn streams before its durable publication
         envelope = {"event": event, "data": payload, "typedEvent": typed}
         for listener in list(self.subscribers):
             listener(envelope)
         self.manager._deliver(self.id, envelope)
+
+    @property
+    def monitor_cleanup_pending(self) -> bool:
+        self.monitor_cleanup = {task for task in self.monitor_cleanup if not task.done()}
+        return bool(self.monitor_cleanup)
+
+    async def settle_quarantine(self) -> None:
+        while self.monitor_cleanup_pending:
+            await asyncio.wait(set(self.monitor_cleanup))
 
     async def build(self) -> None:
         runtime = self.manager.runtime
@@ -113,6 +131,7 @@ class _LiveSession:
                     "sessionBinding": self.binding,
                     "questionPolicy": self.manager.question_policy(self.id),
                     "includePartialMessages": True,
+                    "monitorContinuationSupported": bool(runtime.monitor_continuation_enabled),
                 }
             )
             self.controller = create_session_runtime_controller(
@@ -126,7 +145,7 @@ class _LiveSession:
         return bool(self.controller and self.controller["isTurnInFlight"]())
 
     def busy(self) -> bool:
-        return self.turns.busy() or self.turn_in_flight()
+        return self.turns.busy() or self.turn_in_flight() or self.monitor_cleanup_pending
 
     def touch(self) -> None:
         """Something happened for this session: the idle clock restarts."""
@@ -150,6 +169,8 @@ class _LiveSession:
         try:
             await self.turns.shutdown(grace)
         finally:
+            for task in self.monitor_cleanup:
+                task.cancel()  # quarantined work is not waited for at close
             if self.components is not None:
                 await maybe_await(self.components["close"]())
 
@@ -246,6 +267,7 @@ class SessionManager:
         self._opening: dict[str, Any] = {}
         self.idle = IdleSweeper(self)
         self.pending = PendingWork(self)
+        self.monitors = MonitorIntake(self)
 
     # -- open / close --------------------------------------------------
 
@@ -260,8 +282,6 @@ class SessionManager:
             await self._opening[session_id]
             return self._handles[session_id]
         target = session_id or uuid.uuid4().hex
-        import asyncio
-
         waiter = asyncio.get_running_loop().create_future()
         self._opening[target] = waiter
         try:
@@ -379,6 +399,7 @@ class SessionManager:
         return {
             "open": [self._session_status(session_id, live) for session_id, live in self._live.items()],
             "pending": self.pending.status(),
+            "monitors": self.monitors.status(),
         }
 
     @staticmethod
@@ -398,6 +419,7 @@ class SessionManager:
             "turnInFlight": live.turn_in_flight(),
             "turn": running.describe() if running else None,
             "queued": len(live.turns.queued()),
+            "monitorCleanupPending": live.monitor_cleanup_pending,
         }
 
     # -- plumbing ------------------------------------------------------

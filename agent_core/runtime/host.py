@@ -55,6 +55,7 @@ class Runtime:
         daemon_enabled: bool,
         session_options: Any,
         listener: Any,
+        monitor_continuation: bool = True,
     ) -> None:
         self.home = home
         self.cwd = cwd
@@ -62,6 +63,9 @@ class Runtime:
         self.daemon_enabled = daemon_enabled
         self.session_options = session_options
         self.listener = listener
+        # Off: no new continuation work is claimed, and existing continuation
+        # deliveries wait, visibly; they are never turned into notifications.
+        self.monitor_continuation_enabled = bool(monitor_continuation)
         self.started_at = now_iso()
         self.pid = os.getpid()
         self.paths = None
@@ -83,6 +87,7 @@ class Runtime:
     async def _start(self, startup_timeout_seconds: float | None) -> None:
         self._loop = asyncio.get_running_loop()
         self.sessions.idle.start()  # one idle timer for every session, daemon or not
+        self.sessions.monitors.start()  # one monitor intake for every session, daemon or not
         if not self.daemon_enabled:
             return
         self.lease = await acquire_owner_lease(self.home, self.instance_id)
@@ -103,6 +108,7 @@ class Runtime:
             )
             self._watchdog_stop = stop.set
         except BaseException:
+            await self.sessions.monitors.stop()
             await self.sessions.idle.stop()
             with contextlib.suppress(Exception):
                 await release_owner_lease(self.home, self.instance_id)
@@ -120,6 +126,7 @@ class Runtime:
             try:
                 if self._watchdog_stop is not None:
                     self._watchdog_stop()
+                await self.sessions.monitors.stop()
                 await self.sessions.idle.stop()
                 await self.sessions.pending.stop()
                 await self.sessions.close_all(reason="runtime_stopped", grace=grace)
@@ -299,6 +306,7 @@ async def start_runtime(
     session_options: Any = None,
     listener: Any = None,
     startup_timeout_seconds: float | None = None,
+    monitor_continuation: bool = True,
 ) -> Runtime:
     """Start the runtime for ``runtime_home`` (default: ``$AGENT_CORE_HOME`` or
     the engine's default home) in this process.
@@ -319,6 +327,7 @@ async def start_runtime(
         daemon_enabled=daemon_enabled,
         session_options=session_options,
         listener=listener,
+        monitor_continuation=monitor_continuation,
     )
     _reserve_active(runtime)
     try:

@@ -82,7 +82,8 @@ class RuntimeHostTests(AgentCoreTestCase):
                 self.assertEqual(status["daemon"]["ownerPid"], os.getpid())
                 self.assertEqual(status["daemon"]["recoveries"], 0)
                 self.assertTrue(status["daemon"]["connected"])
-                self.assertEqual(status["sessions"], {"open": [], "pending": []})
+                self.assertEqual((status["sessions"]["open"], status["sessions"]["pending"]), ([], []))
+                self.assertEqual(status["sessions"]["monitors"]["pending"], 0)
                 lease = run(read_owner_lease(str(home)))
                 self.assertEqual((lease["pid"], lease["instanceId"]), (os.getpid(), runtime.instance_id))
             finally:

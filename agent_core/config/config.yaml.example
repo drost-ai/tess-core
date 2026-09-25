@@ -278,6 +278,16 @@ knobs:
     background_timeout_ms: null
     # Milliseconds an open session may stay idle (no turn running, nothing queued) before the runtime unloads it. It stays resumable and any turn reopens it; having children is not a reason to stay open. [50..86400000]
     idle_close_ms: 900000
+    # Lease taken on a monitor delivery while the runtime works on it, renewed while the work runs; a crashed runtime's claim expires after it. Unset: deliveries are not claimed (visible in status). [1000..300000]
+    monitor_claim_lease_ms: null
+    # Milliseconds reserved at the end of the delivery deadline for failure bookkeeping and cancellation cleanup (at most a third of it). Unset: no reserve; cleanup is cancel-and-quarantine. [1..]
+    monitor_cleanup_ms: null
+    # Milliseconds between the runtime's monitor intake polls: observe every monitor, then offer pending deliveries to their sessions. [100..3600000]
+    monitor_poll_ms: 1000
+    # Milliseconds between lease renewals while a monitor delivery is worked on; a renewal is also where a stop or mute is noticed and the work abandoned. [50..60000]
+    monitor_renew_ms: 500
+    # Milliseconds one monitor delivery (claim, authoring, checkpoint, publication) may take in total. Unset: no ceiling. [1..]
+    monitor_total_deadline_ms: null
     # Base delay before pending work for a session the host answered Unavailable(retry=True) is offered again; it doubles per refusal up to 15 minutes. Unset: offered again at the daemon's next announcement. [1..]
     pending_retry_ms: null
   storage:

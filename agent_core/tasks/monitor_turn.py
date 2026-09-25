@@ -39,9 +39,12 @@ def prepare_monitor_turn(args, session_id, prompt_content):
         raise ValueError("monitor continuation cannot include a new user prompt")
     message = monitor_evidence(args["monitorEnvelope"], session_id)
     args = {**args, "ephemeralSystemContext": (args.get("ephemeralSystemContext") or "") + "\n" + MONITOR_INSTRUCTIONS}
-    defaults = {"maxProviderCalls": 4, "maxToolCalls": 8, "timeoutMs": 60000}
-    requested = args.get("turnLimits") or {}
-    if not isinstance(requested, dict) or set(requested) - set(defaults) or any(type(value) is not int or value <= 0 for value in requested.values()):
-        raise ValueError("invalid monitor turn limits")
-    args["turnLimits"] = {key: min(value, requested.get(key, value)) for key, value in defaults.items()}
+    # The caller's limits, or none: a ceiling comes from the configuration or
+    # there is none (D7); no number is chosen here.
+    requested = args.get("turnLimits")
+    if requested is not None:
+        allowed = {"maxProviderCalls", "maxToolCalls", "timeoutMs"}
+        if not isinstance(requested, dict) or set(requested) - allowed or any(type(value) is not int or value <= 0 for value in requested.values()):
+            raise ValueError("invalid monitor turn limits")
+        args["turnLimits"] = dict(requested)
     return args, message

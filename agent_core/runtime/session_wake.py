@@ -39,7 +39,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .._utils import now_iso
 from ..tasks.communication import (
@@ -99,10 +99,13 @@ async def pending_child_work(record: dict[str, Any]) -> bool:
 @dataclass
 class Pending:
     """Work waiting for one session, from the first announcement until its
-    continuity turn is done or the host refused for good."""
+    continuity turn (or the job it was submitted with) is done or the host
+    refused for good."""
 
     session_id: str
     origin: str
+    key: str = ""
+    run: Callable[[Any], Awaitable[None]] | None = None  # None: a continuity turn
     since: str = field(default_factory=now_iso)
     state: str = "reopening"  # reopening | queued | running | waiting | refused
     turn_id: str | None = None
@@ -121,6 +124,7 @@ class Pending:
             if turn is not None:
                 state = turn.state
         return {
+            "key": self.key,
             "sessionId": self.session_id,
             "origin": self.origin,
             "state": state,
@@ -166,9 +170,7 @@ class PendingWork:
                 return  # one pending continuity per session, however often the daemon repeats
             if event == "subagent.question":
                 self._backstop_if_overdue(session_id, data, item.reason or "unavailable")
-            if item.state == "refused":
-                return  # the host said no, without retry: never offered again
-            if item.next_retry_mono is not None and time.monotonic() < item.next_retry_mono:
+            if not self._due(item):
                 return
         live = manager.live(session_id)
         if live is not None:
@@ -178,10 +180,36 @@ class PendingWork:
         else:
             self._reopen(session_id, origin, item)
 
+    def submit(self, key: str, session_id: str, origin: str, run: Callable[[Any], Awaitable[None]]) -> bool:
+        """Work the runtime's own intake found for a session (a monitor
+        delivery): run it in the session's slot once the session is open,
+        reopening it through the host if needed. One item per key; a
+        refusal's delay is honoured. True if it was taken up now."""
+        if self._stopped or self._manager.is_ended(session_id):
+            return False
+        item = self._items.get(key)
+        if item is not None and (item.state in ("reopening", "queued", "running") or not self._due(item)):
+            return False
+        item = item or Pending(session_id, origin, key=key, run=run)
+        self._items[key] = item
+        live = self._manager.live(session_id)
+        if live is not None:
+            self._start(item, live)
+        else:
+            item.state = "reopening"
+            item.task = asyncio.get_running_loop().create_task(self._reopen_task(item))
+        return True
+
+    @staticmethod
+    def _due(item: Pending) -> bool:
+        if item.state == "refused":
+            return False  # the host said no, without retry: never offered again
+        return item.next_retry_mono is None or time.monotonic() >= item.next_retry_mono
+
     # -- reopening -------------------------------------------------------
 
     def _reopen(self, session_id: str, origin: str, item: Pending | None) -> None:
-        item = item or Pending(session_id, origin)
+        item = item or Pending(session_id, origin, key=session_id)
         self._items[session_id] = item
         item.state = "reopening"
         item.task = asyncio.get_running_loop().create_task(self._reopen_task(item))
@@ -203,9 +231,29 @@ class PendingWork:
             return
         live = manager.live(item.session_id)
         if live is None:
-            self._items.pop(item.session_id, None)
+            self._items.pop(item.key or item.session_id, None)
             return
-        self._queue(item.session_id, live, item.origin, item)
+        if item.run is not None:
+            self._start(item, live)
+        else:
+            self._queue(item.session_id, live, item.origin, item)
+
+    def _start(self, item: Pending, live: Any) -> None:
+        item.state = "queued"
+        item.reason, item.retry, item.next_retry_mono, item.next_retry_at = None, False, None, None
+        item.task = asyncio.get_running_loop().create_task(self._run_submitted(item, live))
+
+    async def _run_submitted(self, item: Pending, live: Any) -> None:
+        try:
+            item.state = "running"
+            await item.run(live)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            self._report("session.background_failed", {"session_id": item.session_id, "origin": item.origin, "key": item.key, "error": str(error)[:512]})
+        finally:
+            if self._items.get(item.key) is item:
+                del self._items[item.key]
 
     def _refuse(self, item: Pending, reason: str, retry: bool) -> None:
         item.attempts += 1
@@ -233,7 +281,7 @@ class PendingWork:
     # -- the continuity turn ---------------------------------------------
 
     def _queue(self, session_id: str, live: Any, origin: str, item: Pending | None) -> None:
-        item = item or Pending(session_id, origin)
+        item = item or Pending(session_id, origin, key=session_id)
         self._items[session_id] = item
         item.state = "queued"
         item.turn_id = uuid.uuid4().hex
@@ -289,7 +337,7 @@ class PendingWork:
     # -- what the host can ask -------------------------------------------
 
     def status(self) -> list[dict[str, Any]]:
-        return [item.describe(self._manager.live(session_id)) for session_id, item in self._items.items()]
+        return [item.describe(self._manager.live(item.session_id)) for item in self._items.values()]
 
     async def stop(self) -> None:
         self._stopped = True

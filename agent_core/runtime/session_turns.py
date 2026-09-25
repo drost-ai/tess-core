@@ -16,6 +16,12 @@ reset by newer arrivals. A background turn may carry a guard (``only_if``)
 that is asked when its slot comes: if the work it was queued for is gone (a
 user turn's drain claimed it), the turn is skipped, never started.
 
+JOBS: a monitor delivery is more than a turn (claim, author, checkpoint,
+publish), so the runtime may queue a *job* instead of a prompt: it holds the
+session's slot like a turn and may run an engine turn inside it through its
+:class:`TurnSlot`. A session with unfinished monitor cleanup is quarantined:
+nothing runs in it until that work settles.
+
 The queue does the bookkeeping a client used to hand-roll around
 ``run_agent_prompt``: ``startTurn``, the session's per-turn context (sent as
 ``ephemeralSystemContext``, never persisted), the turn limits, and
@@ -45,7 +51,7 @@ ABORT_BOUND_SECONDS = 5.0
 
 @dataclass
 class Turn:
-    """One requested turn, from queued to finished."""
+    """One requested turn or job, from queued to finished."""
 
     id: str
     prompt: Any
@@ -54,6 +60,7 @@ class Turn:
     provider_override: dict[str, Any] | None
     future: asyncio.Future
     only_if: Callable[[], Awaitable[bool] | bool] | None = None
+    job: Callable[["TurnSlot"], Awaitable[Any]] | None = None
     signal: AbortSignal = field(default_factory=AbortSignal)
     state: str = "queued"  # queued | running | finished
     queued_at: str = field(default_factory=now_iso)
@@ -64,12 +71,41 @@ class Turn:
         return {
             "id": self.id,
             "origin": self.origin,
+            "kind": "job" if self.job is not None else "turn",
             "state": self.state,
             "queuedAt": self.queued_at,
             "startedAt": self.started_at,
             "waitedSeconds": round(time.monotonic() - self.queued_mono, 3) if self.state == "queued" else None,
             "cancelling": self.signal.aborted and self.state == "running",
         }
+
+
+class TurnSlot:
+    """What a job may do while it holds the session's slot."""
+
+    def __init__(self, turns: "SessionTurns", turn: Turn) -> None:
+        self._turns = turns
+        self.turn = turn
+
+    @property
+    def live(self) -> Any:
+        return self._turns._live
+
+    async def run_turn(self, prompt: Any = "", *, monitor_envelope: dict[str, Any] | None = None, suppress_events: bool = False) -> dict[str, Any]:
+        """One engine turn inside this job's slot, with the job's origin, id
+        and limits. Suppressed, its provisional events reach nobody outside
+        the runtime; only the turn lifecycle is announced."""
+        extras: dict[str, Any] = {}
+        if monitor_envelope is not None:
+            extras["monitorEnvelope"] = monitor_envelope
+        live = self._turns._live
+        if suppress_events:
+            live.suppress_events += 1
+        try:
+            return await self._turns._execute(self.turn, prompt, extras)
+        finally:
+            if suppress_events:
+                live.suppress_events -= 1
 
 
 class SessionTurns:
@@ -106,9 +142,10 @@ class SessionTurns:
         provider_override: dict[str, Any] | None = None,
         turn_id: str | None = None,
         only_if: Callable[[], Awaitable[bool] | bool] | None = None,
-    ) -> dict[str, Any]:
-        """Queue one turn and wait for its result. The id is the caller's or
-        a fresh one; either way it is the turn's ``logicalTurnId`` too."""
+        job: Callable[[TurnSlot], Awaitable[Any]] | None = None,
+    ) -> Any:
+        """Queue one turn (or job) and wait for its result. The id is the
+        caller's or a fresh one; either way it is the turn's ``logicalTurnId``."""
         if origin not in TURN_ORIGINS:
             raise ValueError(f"unknown turn origin: {origin}")
         if self._live.closed:
@@ -125,6 +162,7 @@ class SessionTurns:
             provider_override=dict(provider_override) if provider_override else None,
             future=loop.create_future(),
             only_if=only_if,
+            job=job,
         )
         self._queue.append(turn)
         self._live.touch()
@@ -178,6 +216,9 @@ class SessionTurns:
 
     async def _drain(self) -> None:
         while self._queue:
+            await self._live.settle_quarantine()  # unfinished monitor cleanup: nothing runs until it settles
+            if not self._queue:
+                break
             turn = self._pick()
             if turn.only_if is not None:
                 try:
@@ -196,11 +237,28 @@ class SessionTurns:
                 self._live.touch()  # the idle clock starts when the turn ends
 
     async def _run_one(self, turn: Turn) -> None:
-        live = self._live
-        controller = live.controller
         turn.state = "running"
         turn.started_at = now_iso()
-        _content, prompt_text = normalize_agent_prompt(turn.prompt)
+        try:
+            result = await (turn.job(TurnSlot(self, turn)) if turn.job is not None else self._execute(turn, turn.prompt, {}))
+        except BaseException as error:
+            turn.state = "finished"
+            if not turn.future.done():
+                turn.future.set_exception(error)
+                turn.future.exception()  # retrieved here; the caller may be gone
+            if isinstance(error, asyncio.CancelledError):
+                raise
+            return
+        turn.state = "finished"
+        if not turn.future.done():
+            turn.future.set_result(result)
+
+    async def _execute(self, turn: Turn, prompt: Any, extras: dict[str, Any]) -> dict[str, Any]:
+        """One engine turn in this slot: startTurn, the request, finishTurn
+        or failTurn. Raises what the engine raises."""
+        live = self._live
+        controller = live.controller
+        _content, prompt_text = normalize_agent_prompt(prompt)
         controller["startTurn"](
             {
                 "prompt": prompt_text,
@@ -213,11 +271,12 @@ class SessionTurns:
             request: dict[str, Any] = {
                 "session": live.record,
                 "config": live.config,
-                "prompt": turn.prompt,
+                "prompt": prompt,
                 "logicalTurnId": turn.id,
                 # A fresh signal per turn: the bindings are immutable, so the
                 # turn gets its own copy armed with it.
                 "runtime": create_agent_runtime_bindings({**live.bindings, "abortSignal": turn.signal}),
+                **extras,
             }
             context = await self._context()
             if context:
@@ -230,27 +289,20 @@ class SessionTurns:
             result = await run_agent_prompt(request)
         except BaseException as error:
             controller["failTurn"](error)
-            turn.state = "finished"
-            if not turn.future.done():
-                turn.future.set_exception(error)
-                turn.future.exception()  # retrieved here; the caller may be gone
-            if isinstance(error, asyncio.CancelledError):
-                raise
-            return
-        turn.state = "finished"
+            raise
         kind = "cancelled" if result.get("stopReason") == "cancelled" else "completed"
         controller["finishTurn"](
             {
                 "kind": kind,
                 "stopReason": result.get("stopReason"),
-                "message": result.get("text"),
+                # A monitor turn's text is published durably, never streamed.
+                "message": None if turn.origin == "monitor" else result.get("text"),
                 "model": result.get("model"),
                 # The engine emits turn.cancelled itself, with the partial text.
                 "announced": kind == "cancelled",
             }
         )
-        if not turn.future.done():
-            turn.future.set_result(result)
+        return result
 
     async def _context(self) -> str | None:
         provider = self._live.options.context_provider
