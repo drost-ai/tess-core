@@ -49,6 +49,35 @@ class Session:
         live.subscribers.append(listener)
         return lambda: live.subscribers.remove(listener) if listener in live.subscribers else None
 
+    @property
+    def provider_profile(self) -> dict[str, Any]:
+        """What the session runs on, read-only: provider, API mode, model,
+        effort, the profile's public fields and the system prompt."""
+        live = self._live_session()
+        config, record = live.config, live.record
+        profile = config.get("providerProfile") or {}
+        return {
+            "provider": config.get("provider"),
+            "openaiApiMode": config.get("openaiApiMode"),
+            "model": record.get("model") or config.get("model"),
+            "effort": record.get("effort") or config.get("effort"),
+            "systemPrompt": record.get("systemPrompt") or config.get("systemPrompt") or "",
+            "profile": {k: profile.get(k) for k in ("name", "kind", "apiMode", "baseUrl", "defaultModel", "maxOutputTokens", "maxContextLength", "reasoningEffort", "requestOptions")},
+        }
+
+    def set_metadata(self, key: str, value: Any) -> None:
+        """A host-owned note on the session's record (persisted with the
+        next turn): a personal-memory manifest, an origin mark."""
+        self._live_session().record.setdefault("metadata", {})[key] = value
+
+    async def mcp_call(self, server: str, tool: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Call a tool on one of this session's own MCP servers, through the
+        engine's connection: a host needs no MCP client of its own."""
+        manager = (self._live_session().components or {}).get("mcp")
+        if not manager or not callable(manager.get("callTool")):
+            raise RuntimeError(f"Session {self.id} has no MCP connection.")
+        return await manager["callTool"](server, tool, arguments or {})
+
     # -- turns -----------------------------------------------------------
 
     async def run_turn(
@@ -58,11 +87,13 @@ class Session:
         limits: dict[str, int] | None = None,
         turn_id: str | None = None,
         provider_override: dict[str, Any] | None = None,
+        tools: list[str] | None = None,
     ) -> dict[str, Any]:
         """Run one user turn after whatever is already queued for this
         session, and return the engine's result. A handle whose session was
         unloaded reopens it first. ``turn_id`` lets the caller name the turn
-        before its ``turn.started`` is announced."""
+        before its ``turn.started`` is announced; ``tools`` narrows this one
+        turn to the named tools (``[]`` for none)."""
         if self._manager.stopping:
             raise RuntimeStopped("The runtime is stopped; it runs no turn.")
         if self._manager.is_ended(self.id):
@@ -70,7 +101,7 @@ class Session:
         if not self.is_open:
             await self._manager.open(self.id)
         return await self._live_session().turns.run(
-            prompt, origin="user", limits=limits, provider_override=provider_override, turn_id=turn_id
+            prompt, origin="user", limits=limits, provider_override=provider_override, turn_id=turn_id, tool_names=tools
         )
 
     async def cancel_turn(self, turn_id: str) -> bool:

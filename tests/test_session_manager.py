@@ -351,6 +351,41 @@ class SessionManagerTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_a_host_may_note_metadata_narrow_a_turns_tools_and_read_the_profile(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                seen = []
+
+                async def send(request):
+                    seen.append([tool.get("name") for tool in request.get("tools") or []])
+                    return {"model": "gpt-5.4", "stopReason": "end_turn", "usage": {}, "content": [{"type": "text", "text": "ok"}]}
+
+                runtime = await _start(home, workspace, options_for=lambda sid, reason: SessionOptions(provider_override={"send": send}), daemon_enabled=False)
+                try:
+                    handle = await runtime.sessions.open()
+                    handle.set_metadata("hostNote", {"origin": "test"})
+                    self.assertEqual(runtime.sessions.live(handle.id).record["metadata"]["hostNote"], {"origin": "test"})
+                    profile = handle.provider_profile
+                    self.assertEqual(profile["model"], handle.model)
+                    self.assertIn("kind", profile["profile"])
+                    await handle.run_turn("all tools")
+                    await handle.run_turn("no tools", tools=[])
+                    await handle.run_turn("one tool", tools=["Read"])
+                    await handle.run_turn("all again")
+                    self.assertGreater(len(seen[0]), 1)
+                    self.assertEqual(seen[1], [])
+                    self.assertEqual(seen[2], ["Read"])
+                    self.assertEqual(seen[3], seen[0])   # the narrowing was one turn's
+                    with self.assertRaises(RuntimeError):
+                        await handle.mcp_call("nope", "tool")  # no MCP server named so
+                finally:
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
     def test_sessions_follow_the_daemon_across_a_recovery(self):
         root, home, workspace, previous = self.temp_context()
         try:

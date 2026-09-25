@@ -61,6 +61,7 @@ class Turn:
     future: asyncio.Future
     only_if: Callable[[], Awaitable[bool] | bool] | None = None
     job: Callable[["TurnSlot"], Awaitable[Any]] | None = None
+    tool_names: list[str] | None = None  # this turn's tools, narrowed; None = the session's
     signal: AbortSignal = field(default_factory=AbortSignal)
     state: str = "queued"  # queued | running | finished
     queued_at: str = field(default_factory=now_iso)
@@ -143,6 +144,7 @@ class SessionTurns:
         turn_id: str | None = None,
         only_if: Callable[[], Awaitable[bool] | bool] | None = None,
         job: Callable[[TurnSlot], Awaitable[Any]] | None = None,
+        tool_names: list[str] | None = None,
     ) -> Any:
         """Queue one turn (or job) and wait for its result. The id is the
         caller's or a fresh one; either way it is the turn's ``logicalTurnId``."""
@@ -163,6 +165,7 @@ class SessionTurns:
             future=loop.create_future(),
             only_if=only_if,
             job=job,
+            tool_names=list(tool_names) if tool_names is not None else None,
         )
         self._queue.append(turn)
         self._live.touch()
@@ -274,8 +277,9 @@ class SessionTurns:
                 "prompt": prompt,
                 "logicalTurnId": turn.id,
                 # A fresh signal per turn: the bindings are immutable, so the
-                # turn gets its own copy armed with it.
-                "runtime": create_agent_runtime_bindings({**live.bindings, "abortSignal": turn.signal}),
+                # turn gets its own copy armed with it (narrowed to the turn's
+                # tools when the caller named them).
+                "runtime": create_agent_runtime_bindings({**live.bindings, "abortSignal": turn.signal, **_narrowed_tools(live, turn.tool_names)}),
                 **extras,
             }
             context = await self._context()
@@ -337,6 +341,21 @@ class SessionTurns:
                     "stopReason": stop_reason,
                 }
             )
+
+
+def _narrowed_tools(live: Any, names: list[str] | None) -> dict[str, Any]:
+    if names is None:
+        return {}
+    wanted = set(names)
+    refresh = live.bindings["refreshMcpToolRegistry"]
+
+    def keep(tools: Any) -> Any:
+        return [tool for tool in tools if (getattr(tool, "name", None) or tool.get("name")) in wanted] if isinstance(tools, list) else tools
+
+    async def refresh_narrowed() -> Any:
+        return keep(await maybe_await(refresh()))
+
+    return {"tools": keep(list(live.bindings["tools"])), "refreshMcpToolRegistry": refresh_narrowed}
 
 
 def _background_max_wait_seconds() -> float:
