@@ -18,6 +18,11 @@ machinery in `_knobs.py`.
   a knob (marked "default layer"), mirroring `provider.max_output_tokens`.
 - **config-key** — per-session/behavioral settings resolved by
   `resolveConfig` (e.g. `permissionMode`), not knobs.
+- **ceiling** — a knob that caps calls, tools, time or retries. Declared with
+  kind `int?` and default `None`: the configuration sets it or there is no
+  ceiling. A number is never chosen in code for a ceiling (owner's rule,
+  2026-09-24; interface page D7). Durations the owner decided (session idle,
+  child idle, fairness age) are ordinary knobs with their decided defaults.
 
 Wave column: the Epic E slice that migrates the row (`—` = already done or
 nothing to do).

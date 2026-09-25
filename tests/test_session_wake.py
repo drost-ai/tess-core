@@ -1,6 +1,7 @@
 """Pending child work reopens a closed parent: runtime-wide discovery through
-the daemon's level-triggered announcements, the host's veto, user-first order
-with age-based fairness, and the engine's claim semantics untouched.
+the daemon's level-triggered announcements, the host's veto, and the engine's
+claim semantics untouched. The queue's ordering rules and the no-ceiling
+rule live in test_session_background.py.
 
 Real daemon processes where the announcement path is the claim; a real child
 worker process for the end-to-end case (its provider profile has no key, so
@@ -229,65 +230,6 @@ class SessionWakeTests(AgentCoreTestCase):
                     self.assertEqual(len(provider.requests), 1)
                     self.assertIn("child says: done", provider.transcripts()[0])
                     self.assertEqual({m["status"] for m in await read_task_mailbox_messages("task-deferred")}, {"delivered"})
-                finally:
-                    await runtime.stop()
-
-            run(scenario())
-        finally:
-            self.restore_home(root, previous)
-
-    def test_user_turns_go_first_and_an_aged_background_turn_takes_the_next_slot(self):
-        root, home, workspace, previous = self.temp_context()
-        try:
-            os.environ[FAIR] = "400"
-
-            async def scenario():
-                listener = Listener()
-                runtime = await _start(home, workspace, listener, daemon_enabled=False)
-                try:
-                    handle = await runtime.sessions.open()
-                    live = runtime.sessions.live(handle.id)
-                    order = []
-
-                    def provider(label, gate=None):
-                        async def send(_request):
-                            if gate is not None:
-                                await gate.wait()
-                            order.append(label)
-                            return {"model": "gpt-5.4", "stopReason": "end_turn", "usage": {}, "content": [{"type": "text", "text": label}]}
-                        return {"send": send}
-
-                    gate = asyncio.Event()
-                    t0 = asyncio.ensure_future(handle.run_turn("t0", turn_id="t0", provider_override=provider("t0", gate)))
-                    await _wait(lambda: handle.turns()["running"], label="t0 running")
-                    bg1 = asyncio.ensure_future(live.turns.run("", origin="child_message", turn_id="bg1", provider_override=provider("bg1")))
-                    await asyncio.sleep(0.05)
-                    t1 = asyncio.ensure_future(handle.run_turn("t1", turn_id="t1", provider_override=provider("t1")))
-                    await _wait(lambda: len(handle.turns()["queued"]) == 2, label="two queued")
-                    gate.set()
-                    await asyncio.gather(t0, bg1, t1)
-                    self.assertEqual(order, ["t0", "t1", "bg1"])   # the user's turn first, though it arrived later
-                    self.assertEqual([s["origin"] for s in listener.turn_starts(handle.id)], ["user", "user", "child_message"])
-
-                    order.clear()
-                    gate = asyncio.Event()
-                    t2 = asyncio.ensure_future(handle.run_turn("t2", turn_id="t2", provider_override=provider("t2", gate)))
-                    await _wait(lambda: handle.turns()["running"], label="t2 running")
-                    bg2 = asyncio.ensure_future(live.turns.run("", origin="child_message", turn_id="bg2", provider_override=provider("bg2")))
-                    await asyncio.sleep(0.5)   # past the fairness limit
-                    t3 = asyncio.ensure_future(handle.run_turn("t3", turn_id="t3", provider_override=provider("t3")))
-                    await _wait(lambda: len(handle.turns()["queued"]) == 2, label="two queued again")
-                    self.assertGreaterEqual(handle.turns()["queued"][0]["waitedSeconds"], 0.4)
-                    gate.set()
-                    await asyncio.gather(t2, bg2, t3)
-                    self.assertEqual(order, ["t2", "bg2", "t3"])   # the aged background turn took the slot
-
-                    # A guarded background turn whose work is gone is skipped, never started.
-                    calls = len(listener.turn_starts(handle.id))
-                    skipped = await live.turns.run("", origin="child_message", turn_id="bg3", provider_override=provider("bg3"), only_if=lambda: False)
-                    self.assertEqual(skipped["stopReason"], "skipped")
-                    self.assertEqual(len(listener.turn_starts(handle.id)), calls)
-                    self.assertNotIn("bg3", order)
                 finally:
                     await runtime.stop()
 

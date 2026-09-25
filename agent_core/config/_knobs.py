@@ -13,6 +13,10 @@ process environment variables (``AGENT_CORE_SUBAGENTS_MAX_LIVE`` overrides
 ``knob_value`` so no tunable is a hardcoded module constant. The checked-in
 ``config.yaml.example`` is generated from this registry (lockstep test).
 
+A ceiling (a cap on calls, tools, time, retries) is never defaulted in code:
+its kind carries a ``?`` (``int?``), its default is ``None``, and the code
+treats ``None`` as "no ceiling". The configuration sets it or there is none.
+
 Declarations live in ``_knob_registry.py``; this module keeps the
 machinery. Whether a constant may become a knob at all is decided by
 ``KNOB_CLASSIFICATION.md`` — classify new constants there at review time.
@@ -126,32 +130,42 @@ def _flatten(value: Any, prefix: str = "") -> dict[str, Any]:
     return flattened
 
 
+_UNSET_TOKENS = {"", "null", "none", "~"}
+
+
 def _coerce(knob: Knob, raw: Any, *, source: str) -> Any:
     value: Any = raw
-    if knob.kind == "int_list":
+    kind = knob.kind
+    if kind.endswith("?"):
+        # A ceiling: the configuration sets it or there is none. Never a
+        # number invented here.
+        if raw is None or (isinstance(raw, str) and raw.strip().lower() in _UNSET_TOKENS):
+            return None
+        kind = kind[:-1]
+    if kind == "int_list":
         return _coerce_int_list(knob, raw, source=source)
-    if knob.kind == "bool":
+    if kind == "bool":
         if isinstance(raw, bool):
             value = raw
         elif isinstance(raw, str) and raw.strip().lower() in {"true", "false"}:
             value = raw.strip().lower() == "true"
         else:
             raise ValueError(f"Knob {knob.name} from {source} must be a boolean, got {raw!r}.")
-    elif knob.kind == "int":
+    elif kind == "int":
         if isinstance(raw, bool) or not isinstance(raw, (int, str)):
             raise ValueError(f"Knob {knob.name} from {source} must be an integer, got {raw!r}.")
         try:
             value = int(str(raw).strip())
         except ValueError:
             raise ValueError(f"Knob {knob.name} from {source} must be an integer, got {raw!r}.") from None
-    elif knob.kind == "float":
+    elif kind == "float":
         if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
             raise ValueError(f"Knob {knob.name} from {source} must be a number, got {raw!r}.")
         try:
             value = float(str(raw).strip())
         except ValueError:
             raise ValueError(f"Knob {knob.name} from {source} must be a number, got {raw!r}.") from None
-    elif knob.kind == "str":
+    elif kind == "str":
         if not isinstance(raw, str):
             raise ValueError(f"Knob {knob.name} from {source} must be a string, got {raw!r}.")
         value = raw
@@ -194,6 +208,8 @@ def _env_name(name: str) -> str:
 
 
 def _render_value(value: Any) -> str:
+    if value is None:
+        return "null"
     if value is True:
         return "true"
     if value is False:

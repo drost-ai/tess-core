@@ -268,18 +268,18 @@ knobs:
     # Milliseconds runtime close waits for component cleanup before reporting the close as failed. [500..600000]
     close_failure_ms: 10000
   sessions:
-    # Provider calls a background turn the runtime starts itself (continuity for a child's message) may make before it is ended. [1..200]
-    background_max_provider_calls: 8
-    # Tool calls a background turn the runtime starts itself may make before it is ended. [1..1000]
-    background_max_tool_calls: 24
+    # Provider calls a background turn the runtime starts itself (continuity for a child's message) may make before it is ended. Unset: no ceiling. [1..]
+    background_max_provider_calls: null
+    # Tool calls a background turn the runtime starts itself may make before it is ended. Unset: no ceiling. [1..]
+    background_max_tool_calls: null
     # Milliseconds the oldest waiting background turn of a session (a child's message, a monitor delivery) may wait behind user turns before it takes the next slot. The age is never reset by newer arrivals. [100..3600000]
     background_max_wait_ms: 120000
-    # Milliseconds a background turn the runtime starts itself may run before it is ended. [1000..3600000]
-    background_timeout_ms: 300000
+    # Milliseconds a background turn the runtime starts itself may run before it is ended. Unset: no ceiling. [1..]
+    background_timeout_ms: null
     # Milliseconds an open session may stay idle (no turn running, nothing queued) before the runtime unloads it. It stays resumable and any turn reopens it; having children is not a reason to stay open. [50..86400000]
     idle_close_ms: 900000
-    # Base delay before pending work for a session the host answered Unavailable(retry=True) is offered again; it doubles per refusal up to 15 minutes. [100..3600000]
-    pending_retry_ms: 30000
+    # Base delay before pending work for a session the host answered Unavailable(retry=True) is offered again; it doubles per refusal up to 15 minutes. Unset: offered again at the daemon's next announcement. [1..]
+    pending_retry_ms: null
   storage:
     # Default milliseconds to wait for a storage file lock before the operation fails; explicit per-call timeouts win. [500..60000]
     lock_timeout_ms: 5000

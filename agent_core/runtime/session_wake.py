@@ -21,8 +21,10 @@ and its open-question reminders surface a child's question. Claiming is not
 handling: the mailbox's durable claim, the transcript and the recovery
 semantics are the engine's, untouched here, and nothing is marked processed
 because a reopen began. The turn runs only if something is still queued when
-its slot comes (a user turn may have drained it first), and is bounded in
-provider calls, tool calls and time.
+its slot comes (a user turn may have drained it first). Its ceilings in
+provider calls, tool calls and time are the configuration's
+(``sessions.background_*``): nothing configured, no ceiling; never a number
+chosen here.
 
 A child blocked on a question to a parent the host will not open gets an
 explicit runtime-authored answer once the child's own reply bound
@@ -54,19 +56,26 @@ MAX_RETRY_SECONDS = 900.0
 UNAVAILABLE_ANSWER = "unanswered:parent_unavailable"
 
 
-def _knob(name: str) -> int:
+def _knob(name: str) -> int | None:
     from ..config._knobs import knob_value
 
-    return int(knob_value(name))
+    value = knob_value(name)
+    return None if value is None else int(value)
 
 
-def background_limits() -> dict[str, int]:
-    """Every turn the runtime starts itself is bounded."""
-    return {
-        "maxProviderCalls": _knob("sessions.background_max_provider_calls"),
-        "maxToolCalls": _knob("sessions.background_max_tool_calls"),
-        "timeoutMs": _knob("sessions.background_timeout_ms"),
+def background_limits() -> dict[str, int] | None:
+    """The configured ceilings of a turn the runtime starts itself; None
+    when the configuration sets none (then there is no ceiling)."""
+    limits = {
+        key: value
+        for key, value in (
+            ("maxProviderCalls", _knob("sessions.background_max_provider_calls")),
+            ("maxToolCalls", _knob("sessions.background_max_tool_calls")),
+            ("timeoutMs", _knob("sessions.background_timeout_ms")),
+        )
+        if value is not None
     }
+    return limits or None
 
 
 async def pending_child_work(record: dict[str, Any]) -> bool:
@@ -203,10 +212,15 @@ class PendingWork:
         item.reason = reason
         item.retry = retry
         if retry:
-            delay = min(MAX_RETRY_SECONDS, _knob("sessions.pending_retry_ms") / 1000 * (2 ** (item.attempts - 1)))
             item.state = "waiting"
-            item.next_retry_mono = time.monotonic() + delay
-            item.next_retry_at = (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat().replace("+00:00", "Z")
+            base_ms = _knob("sessions.pending_retry_ms")
+            if base_ms is None:
+                # Nothing configured: offered again at the daemon's next announcement.
+                item.next_retry_mono, item.next_retry_at = None, None
+            else:
+                delay = min(MAX_RETRY_SECONDS, base_ms / 1000 * (2 ** (item.attempts - 1)))
+                item.next_retry_mono = time.monotonic() + delay
+                item.next_retry_at = (datetime.now(timezone.utc) + timedelta(seconds=delay)).isoformat().replace("+00:00", "Z")
         else:
             item.state = "refused"
             item.next_retry_mono = None

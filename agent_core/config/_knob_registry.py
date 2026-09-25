@@ -9,7 +9,9 @@ adding a numeric constant anywhere else in the runtime.
 
 Row shape: (name, default, kind, description, minimum, maximum) where
 kind is "int" | "float" | "bool" | "str" | "int_list" and for int_list
-the bounds apply to every element.
+the bounds apply to every element. A kind suffixed "?" ("int?") is a
+ceiling: its default is None, meaning no ceiling until the configuration
+sets one. Ceilings never get a number in code.
 """
 
 from dataclasses import dataclass
@@ -32,10 +34,10 @@ _DECLARATIONS: tuple[tuple[str, Any, str, str, float | None, float | None], ...]
     ("subagents.resident_idle_ttl_ms", 900000, "int", "Milliseconds a resident subagent may stay idle (no turn, no queued message, no open question, no work of its own) before it stops for good. Working time never counts.", 100, 86400000),
     ("sessions.idle_close_ms", 900000, "int", "Milliseconds an open session may stay idle (no turn running, nothing queued) before the runtime unloads it. It stays resumable and any turn reopens it; having children is not a reason to stay open.", 50, 86400000),
     ("sessions.background_max_wait_ms", 120000, "int", "Milliseconds the oldest waiting background turn of a session (a child's message, a monitor delivery) may wait behind user turns before it takes the next slot. The age is never reset by newer arrivals.", 100, 3600000),
-    ("sessions.background_max_provider_calls", 8, "int", "Provider calls a background turn the runtime starts itself (continuity for a child's message) may make before it is ended.", 1, 200),
-    ("sessions.background_max_tool_calls", 24, "int", "Tool calls a background turn the runtime starts itself may make before it is ended.", 1, 1000),
-    ("sessions.background_timeout_ms", 300000, "int", "Milliseconds a background turn the runtime starts itself may run before it is ended.", 1000, 3600000),
-    ("sessions.pending_retry_ms", 30000, "int", "Base delay before pending work for a session the host answered Unavailable(retry=True) is offered again; it doubles per refusal up to 15 minutes.", 100, 3600000),
+    ("sessions.background_max_provider_calls", None, "int?", "Provider calls a background turn the runtime starts itself (continuity for a child's message) may make before it is ended. Unset: no ceiling.", 1, None),
+    ("sessions.background_max_tool_calls", None, "int?", "Tool calls a background turn the runtime starts itself may make before it is ended. Unset: no ceiling.", 1, None),
+    ("sessions.background_timeout_ms", None, "int?", "Milliseconds a background turn the runtime starts itself may run before it is ended. Unset: no ceiling.", 1, None),
+    ("sessions.pending_retry_ms", None, "int?", "Base delay before pending work for a session the host answered Unavailable(retry=True) is offered again; it doubles per refusal up to 15 minutes. Unset: offered again at the daemon's next announcement.", 1, None),
     ("provider.max_output_tokens", 16384, "int", "Fallback max output tokens per provider request when neither the request nor the provider profile specifies one.", 256, 1000000),
     ("provider.request_start_timeout_ms", 120000, "int", "Milliseconds to wait for a provider request to start streaming before the attempt is failed as timed out.", 1000, 3600000),
     ("provider.stream_idle_timeout_ms", 60000, "int", "Milliseconds of stream silence tolerated before a provider attempt is failed as idle.", 1000, 3600000),
