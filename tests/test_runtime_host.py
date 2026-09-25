@@ -268,6 +268,37 @@ class RuntimeHostTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_daemon_less_runtimes_coexist_in_one_process_and_never_block_a_host(self):
+        """One daemon-owning runtime per process; a daemon-less runtime (a
+        memory distiller running turns in a worker thread) owns nothing and
+        any number may run beside it and beside the host's own runtime."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                first = await start_runtime(str(home), cwd=str(workspace), daemon_enabled=False)
+                second = await start_runtime(str(home), cwd=str(workspace), daemon_enabled=False)
+                host = await start_runtime(str(home), cwd=str(workspace), startup_timeout_seconds=20)
+                try:
+                    self.assertIs(host_module.active_runtime(), host)
+                    self.assertNotEqual(first.instance_id, second.instance_id)
+                    for companion in (first, second):
+                        self.assertIsNone(companion.status()["daemon"])
+                        handle = await companion.sessions.open()
+                        self.assertTrue(handle.is_open)
+                    with self.assertRaises(RuntimeOwnershipError):
+                        await start_runtime(str(home), cwd=str(workspace))  # a second daemon owner: still refused
+                    third = await start_runtime(str(home), cwd=str(workspace), daemon_enabled=False)
+                    await third.stop()
+                finally:
+                    await first.stop()
+                    await second.stop()
+                    await host.stop()
+                self.assertIsNone(host_module.active_runtime())
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
     def test_daemon_disabled_companion_does_not_block_a_host(self):
         """A daemon-less runtime in another process (a CLI reading the home)
         holds no lease, so the real host still starts."""

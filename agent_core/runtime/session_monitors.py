@@ -70,6 +70,11 @@ class MonitorIntake:
         return self._controller
 
     def start(self) -> None:
+        # A host that cannot publish can deliver nothing: no intake runs for
+        # it, and its monitors are not even observed (a companion runtime on
+        # a shared home must not touch the owner's monitor records).
+        if not callable(getattr(self._manager.runtime.listener, "publish", None)):
+            return
         if self._task is None or self._task.done():
             self._task = asyncio.get_running_loop().create_task(self._run(), name="monitor-intake")
 

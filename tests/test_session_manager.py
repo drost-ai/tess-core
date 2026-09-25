@@ -323,6 +323,34 @@ class SessionManagerTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_the_host_has_the_last_word_on_the_config_and_may_ask_for_raw_provider_events(self):
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                seen = []
+
+                async def adjust(config):
+                    seen.append(dict(config))
+                    return {**config, "model": "adjusted-model"}
+
+                def options_for(session_id, reason):
+                    return SessionOptions(model="requested-model", adjust_config=adjust, stream_provider_messages=True)
+
+                runtime = await _start(home, workspace, options_for=options_for, daemon_enabled=False)
+                try:
+                    handle = await runtime.sessions.open()
+                    self.assertEqual(seen[0]["model"], "requested-model")   # resolved first, then the host's word
+                    self.assertEqual(handle.model, "adjusted-model")
+                    live = runtime.sessions.live(handle.id)
+                    self.assertEqual(live.config["model"], "adjusted-model")
+                    self.assertTrue(live.bindings["streamProviderMessages"])
+                finally:
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
     def test_sessions_follow_the_daemon_across_a_recovery(self):
         root, home, workspace, previous = self.temp_context()
         try:

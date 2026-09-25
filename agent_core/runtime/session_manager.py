@@ -135,6 +135,7 @@ class _LiveSession:
                     "sessionBinding": self.binding,
                     "questionPolicy": self.manager.question_policy(self.id),
                     "includePartialMessages": True,
+                    "streamProviderMessages": bool(self.options.stream_provider_messages),
                     "monitorContinuationSupported": bool(runtime.monitor_continuation_enabled),
                 }
             )
@@ -249,6 +250,10 @@ class SessionManager:
         cwd = os.path.abspath(os.path.expanduser(options.cwd)) if options.cwd else runtime.cwd
         os.makedirs(cwd, exist_ok=True)
         config = await resolve_config(options.config_overrides(runtime.home), cwd)
+        if callable(options.adjust_config):
+            adjusted = await maybe_await(options.adjust_config(config))
+            if isinstance(adjusted, dict):
+                config = adjusted
         launch = {"cwd": cwd, "originalCwd": cwd}
         if record is None:
             record = await resolve_session({"sessionId": session_id}, config, launch)

@@ -33,6 +33,11 @@ class SessionOptions:
     # background turns the runtime starts itself: the test seam, as
     # ``providerOverride`` is for ``run_agent_prompt``.
     provider_override: dict[str, Any] | None = None
+    # The host's last word on the resolved config (a pinned credential, a
+    # request option the profile cannot express); applied once at open.
+    adjust_config: Callable[[dict[str, Any]], Awaitable[dict[str, Any]] | dict[str, Any]] | None = None
+    # Raw provider stream events for the host (usage extraction); off by default.
+    stream_provider_messages: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
     def config_overrides(self, runtime_home: str) -> dict[str, Any]:

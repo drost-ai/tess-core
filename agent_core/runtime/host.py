@@ -340,9 +340,10 @@ async def start_runtime(
     """Start the runtime for ``runtime_home`` (default: ``$AGENT_CORE_HOME`` or
     the engine's default home) in this process.
 
-    One runtime per process: a second call while one is running is refused,
-    whichever home it names. One host per runtime home: a call from another
-    live process is refused with that process's pid. ``session_options`` and
+    One daemon-owning runtime per process: a second call while one is running
+    is refused, whichever home it names; daemon-less runtimes may coexist. One
+    host per runtime home: a call from another live process is refused with
+    that process's pid. ``session_options`` and
     ``listener`` are kept for the session manager.
     """
     if runtime_home:
@@ -374,7 +375,12 @@ def active_runtime() -> Runtime | None:
 
 
 def _reserve_active(runtime: Runtime) -> None:
+    """One daemon-owning runtime per process. A daemon-less runtime (a
+    companion that only runs turns, such as a memory distiller) owns nothing
+    another runtime could compete for and is never the process's one."""
     global _ACTIVE
+    if not runtime.daemon_enabled:
+        return
     with _ACTIVE_LOCK:
         if _ACTIVE is not None and not _ACTIVE.stopped:
             raise RuntimeOwnershipError(
