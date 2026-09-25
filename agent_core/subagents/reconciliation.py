@@ -12,6 +12,7 @@ from typing import Any
 from .._utils import now_iso
 from ..storage.message_origin import synthetic_user_message as _synthetic_user_message
 from ..storage import session_archive_dir, task_output_path, with_record_transaction
+from ..storage.session_archive import load_session
 from ..storage.io_executor import run_storage_io as _run_storage_io
 
 
@@ -132,7 +133,25 @@ async def create_subagent_reconciliation_for_terminal_child(
     )
     if not record:
         return None
+    # An ended parent can never take it: the entry is settled from the
+    # start, with the reason, kept for the history, never announced, never
+    # dropped. (A parent with no record here may simply not be persisted
+    # yet; the runtime refuses to reopen such a parent without asking.)
+    why = _cannot_consume(await load_session(record["parentSessionId"]))
+    if why is not None:
+        now = now_iso()
+        record = {**record, "consumedAt": now, "parentMessageAppendedAt": now, "parentTurnId": why}
     return await upsert_subagent_reconciliation(record)
+
+
+def _cannot_consume(parent: dict[str, Any] | None) -> str | None:
+    if parent is None:
+        return None
+    metadata = parent.get("metadata") if isinstance(parent.get("metadata"), dict) else {}
+    ended = metadata.get("ended")
+    if isinstance(ended, dict):
+        return "ended:" + str(ended.get("reason") or "ended")
+    return None
 
 
 def build_subagent_reconciliation_record(

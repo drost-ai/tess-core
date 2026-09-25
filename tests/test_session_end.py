@@ -224,6 +224,42 @@ class SessionEndTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
+    def test_a_terminal_childs_reconciliation_for_a_parent_that_cannot_take_it_is_settled_at_once(self):
+        """The daemon writes a reconciliation entry when a child ends. An ended
+        parent can never consume it, so the entry is settled as it is
+        written, with the reason, and never wakes anyone; a live parent takes
+        it in its next turn."""
+        root, home, workspace, previous = self.temp_context()
+        try:
+            async def scenario():
+                from agent_core.subagents.reconciliation import (
+                    create_subagent_reconciliation_for_terminal_child, list_unconsumed_subagent_reconciliations, read_subagent_reconciliations,
+                )
+
+                def meta(parent, task):
+                    return {"parent_session_id": parent, "task_id": task, "session_id": "child-" + task, "agent_id": "agent-" + task,
+                            "status": "stopped", "completionReason": "cancelled", "title": "orphan " + task, "updatedAt": "2026-01-01T00:00:00Z"}
+
+                runtime = await start_runtime(str(home), cwd=str(workspace), daemon_enabled=False,
+                                              session_options=lambda sid, reason: SessionOptions(provider_override=_reply()), startup_timeout_seconds=20)
+                try:
+                    live = await runtime.sessions.open()
+                    await live.run_turn("hi")
+                    ended = await runtime.sessions.open()
+                    await ended.run_turn("hi")
+                    await runtime.sessions.end(ended.id, reason="deleted")
+                    await create_subagent_reconciliation_for_terminal_child(taskMeta=meta(ended.id, "t2"))
+                    await create_subagent_reconciliation_for_terminal_child(taskMeta=meta(live.id, "t3"))
+                    self.assertEqual(await list_unconsumed_subagent_reconciliations(ended.id), [])
+                    self.assertEqual((await read_subagent_reconciliations(ended.id))[0]["parentTurnId"], "ended:deleted")
+                    self.assertEqual(len(await list_unconsumed_subagent_reconciliations(live.id)), 1)  # a live parent takes it in its next turn
+                finally:
+                    await runtime.stop()
+
+            run(scenario())
+        finally:
+            self.restore_home(root, previous)
+
     def test_end_during_a_running_turn_cancels_it_and_a_restart_still_refuses_the_session(self):
         root, home, workspace, previous = self.temp_context()
         try:

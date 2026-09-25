@@ -49,6 +49,7 @@ from ..tasks.communication import (
     task_mailbox_path,
     task_questions_path,
 )
+from ..storage.session_archive import load_session
 from .session_options import SessionEnded, SessionUnavailableError, UnknownSessionError
 
 WAKE_EVENTS = {"subagent.message": "child_message", "subagent.question": "child_message", "subagent.reconciliation": "child_message"}
@@ -223,6 +224,12 @@ class PendingWork:
     async def _reopen_task(self, item: Pending) -> None:
         manager = self._manager
         try:
+            # Work addressed to a parent that has no record in this home
+            # (task files copied from another runtime) can never be taken:
+            # refused here, without asking the host about a session it
+            # could not know.
+            if await load_session(item.session_id) is None:
+                raise UnknownSessionError(item.session_id)
             await manager.open(item.session_id, reason=item.origin)
         except SessionUnavailableError as refused:
             self._refuse(item, refused.reason, refused.retry)
