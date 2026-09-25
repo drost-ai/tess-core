@@ -196,9 +196,18 @@ class SessionEndTests(AgentCoreTestCase):
                     await core.persist_session(live.record, live.config)
                     monitor = core.create_monitor_record({"sessionId": handle.id, "taskId": task_id, "goal": "watch"})
                     await save_monitor(monitor)
+                    from agent_core.subagents.reconciliation import list_unconsumed_subagent_reconciliations, read_subagent_reconciliations, upsert_subagent_reconciliation
+                    await upsert_subagent_reconciliation({
+                        "parentSessionId": handle.id, "taskId": "task-finished-earlier", "childAgentId": "child-y", "label": "child-y",
+                        "terminalStatus": "failed", "terminalReason": "worker_failed", "summary": "a result the parent never took",
+                    })
 
                     outcome = await runtime.sessions.end(handle.id)
-                    self.assertEqual((outcome["failedMessages"], outcome["answeredQuestions"], outcome["stoppedMonitors"]), (1, 1, 1))
+                    self.assertEqual((outcome["failedMessages"], outcome["answeredQuestions"], outcome["stoppedMonitors"], outcome["settledReconciliations"]), (1, 1, 1, 1))
+                    # Nothing left to wake a parent that can never take it; the record says why it was settled.
+                    self.assertEqual(await list_unconsumed_subagent_reconciliations(handle.id), [])
+                    (settled,) = await read_subagent_reconciliations(handle.id)
+                    self.assertEqual((settled["parentTurnId"], settled.get("parentMessageIndex")), ("ended:deleted", None))
                     messages = await read_task_mailbox_messages(task_id)
                     self.assertEqual([(m["status"], m.get("failureReason")) for m in messages if m["direction"] == "to_parent"], [("failed", "session_ended")])
                     # The backstop answer itself is a to_child message, queued for a child that is being stopped.

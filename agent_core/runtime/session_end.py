@@ -42,7 +42,7 @@ async def end_session(manager: Any, session_id: str, reason: str) -> dict[str, A
         raise UnknownSessionError(session_id)
     outcome: dict[str, Any] = {
         "sessionId": session_id, "reason": reason, "alreadyEnded": False,
-        "stopped": None, "failedMessages": 0, "answeredQuestions": 0, "stoppedMonitors": 0,
+        "stopped": None, "failedMessages": 0, "answeredQuestions": 0, "stoppedMonitors": 0, "settledReconciliations": 0,
     }
     marker = ended_marker(record)
     if marker is not None:
@@ -93,6 +93,15 @@ async def end_session(manager: Any, session_id: str, reason: str) -> dict[str, A
                 answered = await answer_task_question(task_id, str(question.get("questionId")), f"unanswered:{SESSION_ENDED}")
                 if answered:
                     outcome["answeredQuestions"] += 1
+    # A terminal child's reconciliation the session never consumed would go
+    # on waking the runtime for a parent that can never take it: consumed
+    # now, with no transcript position (it was never told), never dropped.
+    from ..subagents.reconciliation import list_unconsumed_subagent_reconciliations, mark_subagent_reconciliations_consumed
+
+    unconsumed = await list_unconsumed_subagent_reconciliations(session_id)
+    if unconsumed:
+        settled = await mark_subagent_reconciliations_consumed(session_id, [str(item.get("id")) for item in unconsumed], parentTurnId=f"ended:{reason}")
+        outcome["settledReconciliations"] = len(settled)
     controller = MonitorDeliveryController(manager.runtime.home)
     for monitor in await list_monitors():
         if monitor.get("sessionId") == session_id and not monitor.get("deliveryStoppedAt"):
