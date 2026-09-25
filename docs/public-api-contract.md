@@ -40,6 +40,15 @@ free to change without coordination.
    yet implemented in Python — mostly types that Epic M introduces. `not-planned` =
    deliberately absent (noted inline).
 
+5. **Python extensions.** Rows marked `(Python extension)` are concepts this runtime
+   introduced first (the runtime and session manager, monitor delivery, sub-agent
+   lifetime: `start_runtime`, `Runtime`, `SessionManager`, `Session`, `SessionOptions`,
+   `Unavailable`, `SessionBusy`, `SessionEnded`, `RuntimeStopped`, …). The concepts are
+   shared; the TypeScript and Rust runtimes adopt them with idiomatic names when they
+   need them, and this Python runtime leads for them. Their shapes beyond the names
+   (the host `Listener` protocol, the publication receipt, `status()`/`inspect()`) are
+   documented in `product-planning/03-runtime-and-session-manager/`.
+
 5. **Guardrail semantics (Python).** `tests/fixtures/public_api/contract.json` is the
    machine-readable twin of this table and is enforced by `tests/test_refactor_guardrails.py`:
    the **root** entrypoint's `__all__` must equal exactly the active root names; the
