@@ -38,7 +38,12 @@ free to change without coordination.
 4. **Statuses.** `active` = exists in the Python runtime today (guardrail-enforced).
    `pending` = in the contract (a real consumer imports it from the TS runtime) but not
    yet implemented in Python — mostly types that Epic M introduces. `not-planned` =
-   deliberately absent (noted inline).
+   deliberately absent (noted inline). `retired` = was active in Python and was removed from the root on
+   2026-09-24 (`bootstrapRuntime`, `BootstrappedRuntime`, `createMailboxWakeController`:
+   replaced by `start_runtime` and the session manager, interface page D9); the
+   TypeScript runtime keeps its own `bootstrapRuntime` for tess-code. The internal
+   module `agent_core.runtime.bootstrap` remains for the scenario harness and the
+   headless runner until they move.
 
 5. **Python extensions.** Rows marked `(Python extension)` are concepts this runtime
    introduced first (the runtime and session manager, monitor delivery, sub-agent
@@ -81,7 +86,7 @@ free to change without coordination.
 | `Unavailable` (Python extension) | type | `Unavailable` | `Unavailable` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `UnknownSessionError` (Python extension) | type | `UnknownSessionError` | `UnknownSessionError` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `activeSessionPayload` | function | `activeSessionPayload` | `active_session_payload` | `agent_core.session.runtime` | active | samplehost |
-| `bootstrapRuntime` | function | `bootstrapRuntime` | `bootstrap_runtime` | `agent_core.runtime.bootstrap` | active | samplehost, tess-code |
+| `bootstrapRuntime` | function | `bootstrapRuntime` | `bootstrap_runtime` | `agent_core.runtime.bootstrap` | retired | samplehost, tess-code |
 | `buildSystemPromptForAgent` | function | `buildSystemPromptForAgent` | `build_system_prompt_for_agent` | `agent_core.config.prompts` | active | tess-code |
 | `clearAuth` | function | `clear_auth` | `clear_auth` | `agent_core.storage.auth_files` | active | tess-code |
 | `configureRuntimeHome` | function | `configure_runtime_home` | `configure_runtime_home` | `agent_core.storage.paths` | active | tess-code |
@@ -93,7 +98,7 @@ free to change without coordination.
 | `createEmptySession` | function | `create_empty_session` | `create_empty_session` | `agent_core.storage.sessions` | active | tess-code |
 | `createGitWorktree` | function | `createGitWorktree` | `create_git_worktree` | `agent_core.runtime.workspace` | active | tess-code |
 | `createInitialRuntimeState` | function | `createInitialRuntimeState` | `create_initial_runtime_state` | `agent_core.runtime.state.store` | active | tess-code |
-| `createMailboxWakeController` | function | `createMailboxWakeController` | `create_mailbox_wake_controller` | `agent_core.runtime.wake` | active | samplehost |
+| `createMailboxWakeController` | function | `createMailboxWakeController` | `create_mailbox_wake_controller` | `agent_core.runtime.wake` | retired | samplehost |
 | `createMonitorRecord` | function | `createMonitorRecord` | `create_monitor_record` | `agent_core.tasks.monitors` | active | tess-code |
 | `createRemoteSession` | function | `createRemoteSession` | `create_remote_session` | `agent_core.remote.sessions` | active | tess-code |
 | `createRuntimeEvent` | function | `createRuntimeEvent` | `create_runtime_event` | `agent_core.runtime.events.factory` | active | tess-code |
@@ -149,7 +154,7 @@ free to change without coordination.
 | `AnthropicMessage` | type | — | `AnthropicMessage` | — | pending | tess-code |
 | `AnthropicUsage` | type | — | `AnthropicUsage` | — | pending | tess-code |
 | `AskQuestionDetail` | type | `AskQuestionDetail` | `AskQuestionDetail` | `agent_core.contracts.context` | active | tess-code |
-| `BootstrappedRuntime` | type | — | `BootstrappedRuntime` | — | pending | tess-code |
+| `BootstrappedRuntime` | type | — | `BootstrappedRuntime` | — | retired | tess-code |
 | `BridgeEventRecord` | type | — | `BridgeEventRecord` | — | pending | tess-code |
 | `BridgeRecord` | type | — | `BridgeRecord` | — | pending | tess-code |
 | `ChildAgentRecord` | type | `ChildAgentRecord` | `ChildAgentRecord` | `agent_core.contracts.task_records` | active | tess-code |

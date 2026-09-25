@@ -20,6 +20,12 @@ from .monitor_delivery_state import MAX_ATTEMPTS, mute_monitor_record
 from .monitor_reconciliation import interruption_result, preserve_interruption
 from .monitor_transactions import commit_monitor_mutation
 
+# The longest a claim may be held without renewal: a crashed consumer's
+# delivery becomes claimable again after it. A consumer with no lease
+# configured takes this maximum (a lease is fencing, not a ceiling).
+MIN_LEASE_MS = 1000
+MAX_LEASE_MS = 300_000
+
 
 class MonitorDeliveryError(RuntimeError):
     def __init__(self, code: str):
@@ -84,8 +90,8 @@ class MonitorDeliveryController:
 
     async def claim(self, monitor_id: str, session_id: str, owner: str, *, lease_ms: int = 60_000,
                     continuation_supported: bool = False) -> dict[str, Any] | None:
-        if not owner or not 1000 <= lease_ms <= 300_000:
-            raise ValueError("owner and a lease between 1000 and 300000ms are required")
+        if not owner or not MIN_LEASE_MS <= lease_ms <= MAX_LEASE_MS:
+            raise ValueError(f"owner and a lease between {MIN_LEASE_MS} and {MAX_LEASE_MS}ms are required")
         async def mutate(record):
             if record.get("muted") or record.get("deliveryStoppedAt"):
                 return None
@@ -169,7 +175,7 @@ class MonitorDeliveryController:
         return item
 
     async def renew(self, claim: dict[str, Any], *, lease_ms: int = 60_000) -> None:
-        if not 1000 <= lease_ms <= 300_000:
+        if not MIN_LEASE_MS <= lease_ms <= MAX_LEASE_MS:
             raise ValueError("invalid lease")
         def mutate(record):
             self._owned(record, claim)["leaseUntil"] = self.clock() + lease_ms

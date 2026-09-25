@@ -278,7 +278,7 @@ knobs:
     background_timeout_ms: null
     # Milliseconds an open session may stay idle (no turn running, nothing queued) before the runtime unloads it. It stays resumable and any turn reopens it; having children is not a reason to stay open. [50..86400000]
     idle_close_ms: 900000
-    # Lease taken on a monitor delivery while the runtime works on it, renewed while the work runs; a crashed runtime's claim expires after it. Unset: deliveries are not claimed (visible in status). [1000..300000]
+    # Lease taken on a monitor delivery while the runtime works on it, renewed while the work runs; a crashed runtime's claim expires after it. Unset: the controller's maximum, 300000 (a lease is fencing, not a ceiling). [1000..300000]
     monitor_claim_lease_ms: null
     # Milliseconds reserved at the end of the delivery deadline for failure bookkeeping and cancellation cleanup (at most a third of it). Unset: no reserve; cleanup is cancel-and-quarantine. [1..]
     monitor_cleanup_ms: null

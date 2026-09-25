@@ -17,7 +17,6 @@ from .contracts.context import AskQuestionDetail
 from .contracts.config import PermissionMode, RuntimeSecretPurpose, RuntimeSecretValue
 from .contracts.events import RuntimeEventEnvelope
 from .contracts.providers import AnthropicMessage, AnthropicUsage
-from .contracts.runtime_surface import BootstrappedRuntime
 from .contracts.session_records import SessionRecord
 from .contracts.task_records import ChildAgentRecord
 from .daemon.lifecycle import connect_task_supervisor_daemon_client, ensure_task_supervisor_daemon
@@ -27,7 +26,6 @@ from .remote.bridge_diagnostics import format_bridge_tail, list_active_bridge_ro
 from .remote.bridge_runtime import create_bridge_runtime
 from .remote.sessions import create_remote_session, update_remote_session
 from .runtime.agent_bindings import create_agent_runtime_bindings, is_task_supervisor_gateway
-from .runtime.bootstrap import bootstrap_runtime
 from .runtime.events.factory import create_runtime_event
 from .runtime.generation import RuntimeActivationContext, RuntimeSessionBinding, create_runtime_session_binding
 from .runtime.host import Runtime, start_runtime
@@ -36,7 +34,6 @@ from .runtime.session_manager import (
     RuntimeStopped, Session, SessionBusy, SessionEnded, SessionManager, SessionOptions, SessionUnavailableError, Unavailable, UnknownSessionError,
 )
 from .runtime.state.store import create_initial_runtime_state, create_runtime_state_store
-from .runtime.wake import create_mailbox_wake_controller
 from .runtime.workspace import create_git_worktree
 from .session.persistence import find_sessions_for_workspace, persist_session, resolve_session
 from .session.runtime import active_session_payload
@@ -69,10 +66,8 @@ __all__ = [
     "PermissionMode",
     "AnthropicMessage",
     "AnthropicUsage",
-    "BootstrappedRuntime",
     "active_session_payload",
     "AskQuestionDetail",
-    "bootstrap_runtime",
     "build_system_prompt_for_agent",
     "ChildAgentRecord",
     "clear_auth",
@@ -85,7 +80,6 @@ __all__ = [
     "create_collaboration_runtime",
     "create_git_worktree",
     "create_initial_runtime_state",
-    "create_mailbox_wake_controller",
     "create_monitor_record",
     "create_remote_session",
     "create_runtime_event",

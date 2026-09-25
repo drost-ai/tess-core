@@ -5,7 +5,7 @@ processes. Every test is one coroutine.
 from __future__ import annotations
 
 from tests.support.agent_core_case import *
-from tests.support.session_monitors import LEASE, Listener as MonitorListener, ScriptedProvider, complete, registered_runtime, tool_reply
+from tests.support.session_monitors import LEASE, ScriptedProvider, SilentListener, complete, registered_runtime, tool_reply
 from tests.test_session_end import Listener, _child_pid, _reply, _settings, _spawn_child, _wait, _wait_async
 
 from agent_core import SessionOptions, start_runtime
@@ -87,16 +87,14 @@ class RuntimeStatusTests(AgentCoreTestCase):
     def test_inspect_lists_monitor_deliveries_with_their_lifecycle_phase(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            os.environ.pop(LEASE, None)   # nothing configured: the delivery waits, visibly
-
             async def scenario():
                 provider = ScriptedProvider(tool_reply("TaskMonitorStart", {"task_id": "build", "goal": "watch build"}), "Registered.")
-                listener = MonitorListener()
+                listener = SilentListener()   # a host that cannot publish: the delivery waits, visibly
                 runtime, handle = await registered_runtime(home, workspace, listener, provider)
                 try:
                     await complete(runtime)
                     view = await runtime.inspect()
-                    self.assertEqual(view["sessions"]["monitors"]["error"], "monitor.lease_not_configured")
+                    self.assertEqual(view["sessions"]["monitors"]["error"], "monitor.publisher_missing")
                     deliveries = view["monitorDeliveries"]
                     self.assertEqual(len(deliveries), 1)
                     self.assertEqual((deliveries[0]["sessionId"], deliveries[0]["mode"], deliveries[0]["state"], deliveries[0]["phase"], deliveries[0]["reason"]),

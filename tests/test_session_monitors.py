@@ -353,35 +353,39 @@ class SessionMonitorTests(AgentCoreTestCase):
         finally:
             self.restore_home(root, previous)
 
-    def test_no_lease_or_no_publisher_means_no_claim_and_a_visible_reason(self):
+    def test_no_publisher_is_a_visible_reason_and_no_lease_means_the_controllers_maximum(self):
         root, home, workspace, previous = self.temp_context()
         try:
-            os.environ.pop(LEASE, None)
+            os.environ.pop(LEASE, None)   # nothing configured for the lease
 
             async def scenario():
                 provider = _register()
-                listener = Listener()
-                runtime, handle = await registered_runtime(home, workspace, listener, provider)
+                # A host that cannot publish: the delivery waits, visibly, unclaimed.
+                silent = SilentListener()
+                runtime, handle = await registered_runtime(home, workspace, silent, provider)
                 try:
-                    await complete(runtime)
+                    monitor = await complete(runtime)
                     await settled(runtime)
                     status = runtime.status()["sessions"]["monitors"]
-                    self.assertEqual((status["pending"], status["error"]), (1, "monitor.lease_not_configured"))
-                    self.assertEqual(listener.notices(handle.id), [])
+                    self.assertEqual((status["pending"], status["error"]), (1, "monitor.publisher_missing"))
                     self.assertEqual(runtime.status()["sessions"]["pending"], [])
                 finally:
                     await runtime.stop()
 
-                os.environ[LEASE] = "120000"
-                reset_configured_knobs()
+                # A host that can: with no lease configured the claim takes the controller's maximum.
                 host_module._ACTIVE = None
-                silent = SilentListener()
-                silent_runtime, _ = await registered_runtime(home, workspace, silent, ScriptedProvider("ok"), options_for=lambda sid, reason: SessionOptions(provider_override=provider.override))
+                listener = Listener()
+                capable = await start_runtime(str(home), cwd=str(workspace), listener=listener, daemon_enabled=False,
+                                              session_options=lambda sid, reason: SessionOptions(provider_override=provider.override), startup_timeout_seconds=20)
                 try:
-                    await silent_runtime.sessions.monitors.poll()
-                    self.assertEqual(silent_runtime.status()["sessions"]["monitors"]["error"], "monitor.publisher_missing")
+                    await capable.sessions.monitors.poll()
+                    await eventually(lambda: listener.notices(handle.id), label="delivery with the maximum lease")
+                    await settled(capable)
+                    self.assertIsNone(capable.status()["sessions"]["monitors"]["error"])
+                    self.assertEqual(len(listener.notices(handle.id)), 1)
+                    self.assertEqual((await load_monitor(monitor["id"]))["delivery"]["lastReceipt"]["deliveryId"], listener.notices(handle.id)[0]["deliveryId"])
                 finally:
-                    await silent_runtime.stop()
+                    await capable.stop()
 
             run(scenario())
         finally:

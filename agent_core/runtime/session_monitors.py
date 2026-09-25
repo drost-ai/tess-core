@@ -18,8 +18,10 @@ starting work and a late callback never publishing. The host supplies only
 delivery id: delivered means the receipt came back; nothing else proves it.
 Unfinished cleanup quarantines the session until it settles.
 
-Ceilings (lease, total deadline, cleanup reserve, continuation turn limits)
-come from the configuration or there are none; nothing is chosen here.
+Ceilings (total deadline, cleanup reserve, continuation turn limits) come
+from the configuration or there are none; nothing is chosen here. The claim
+lease is not a ceiling: unset, it is the controller's maximum, so a missing
+setting never leaves deliveries unclaimed.
 """
 from __future__ import annotations
 
@@ -30,7 +32,7 @@ import uuid
 from typing import Any, Callable
 
 from .._utils import maybe_await, now_iso
-from ..tasks.monitor_delivery import MonitorDeliveryController, MonitorDeliveryError
+from ..tasks.monitor_delivery import MAX_LEASE_MS, MonitorDeliveryController, MonitorDeliveryError
 from .monitor_lifecycle import MonitorLifecycle
 from .session_wake import background_limits
 
@@ -104,7 +106,6 @@ class MonitorIntake:
             "lastPollAt": now_iso(),
         }
         runtime = self._manager.runtime
-        lease = _knob("sessions.monitor_claim_lease_ms")
         publisher = getattr(runtime.listener, "publish", None)
         offered: list[dict[str, Any]] = []
         for item in entries:
@@ -112,9 +113,6 @@ class MonitorIntake:
                 continue
             if item["mode"] == "continuation" and not runtime.monitor_continuation_enabled:
                 status["error"] = "monitor.continuation_disabled"
-                continue
-            if lease is None:
-                status["error"] = "monitor.lease_not_configured"
                 continue
             if not callable(publisher):
                 status["error"] = "monitor.publisher_missing"
@@ -154,9 +152,10 @@ async def deliver_monitor(slot: Any, controller: MonitorDeliveryController, moni
     session_id = live.id
     if live.monitor_cleanup_pending:
         raise RuntimeError("monitor.session_unavailable")
-    lease_ms = _knob("sessions.monitor_claim_lease_ms")
-    if lease_ms is None:
-        raise RuntimeError("monitor.lease_not_configured")
+    # A lease is fencing, not a ceiling: with nothing configured the claim
+    # takes the controller's maximum (owner's decision), renewed while the
+    # work runs, so a missing setting never leaves deliveries unclaimed.
+    lease_ms = _knob("sessions.monitor_claim_lease_ms") or MAX_LEASE_MS
     total_ms = _knob("sessions.monitor_total_deadline_ms")
     cleanup_ms = _knob("sessions.monitor_cleanup_ms")
     lifecycle = MonitorLifecycle(None if total_ms is None else total_ms / 1000, cleanup_seconds=0.0 if cleanup_ms is None else cleanup_ms / 1000)
