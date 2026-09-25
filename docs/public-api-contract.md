@@ -64,6 +64,7 @@ free to change without coordination.
 | `start_runtime` (Python extension) | function | `start_runtime` | `start_runtime` | `agent_core.runtime.host` | active | tess-agent |
 | `Session` (Python extension) | type | `Session` | `Session` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `SessionBusy` (Python extension) | type | `SessionBusy` | `SessionBusy` | `agent_core.runtime.session_manager` | active | tess-agent |
+| `SessionEnded` (Python extension) | type | `SessionEnded` | `SessionEnded` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `SessionManager` (Python extension) | type | `SessionManager` | `SessionManager` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `SessionOptions` (Python extension) | type | `SessionOptions` | `SessionOptions` | `agent_core.runtime.session_manager` | active | tess-agent |
 | `SessionUnavailableError` (Python extension) | type | `SessionUnavailableError` | `SessionUnavailableError` | `agent_core.runtime.session_manager` | active | tess-agent |

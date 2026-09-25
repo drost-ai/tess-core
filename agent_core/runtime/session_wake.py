@@ -49,7 +49,7 @@ from ..tasks.communication import (
     task_mailbox_path,
     task_questions_path,
 )
-from .session_options import SessionUnavailableError, UnknownSessionError
+from .session_options import SessionEnded, SessionUnavailableError, UnknownSessionError
 
 WAKE_EVENTS = {"subagent.message": "child_message", "subagent.question": "child_message"}
 MAX_RETRY_SECONDS = 900.0
@@ -221,6 +221,9 @@ class PendingWork:
         except SessionUnavailableError as refused:
             self._refuse(item, refused.reason, refused.retry)
             return
+        except SessionEnded:
+            self._refuse(item, "ended", False)  # never offered again, the host not asked
+            return
         except UnknownSessionError:
             self._refuse(item, "unknown_session", False)
             return
@@ -335,6 +338,21 @@ class PendingWork:
         asyncio.get_running_loop().create_task(answer())
 
     # -- what the host can ask -------------------------------------------
+
+    def drop(self, session_id: str, reason: str) -> int:
+        """The session was ended: whatever waited for it is cancelled and
+        forgotten here (its records on disk carry their own failure)."""
+        dropped = 0
+        for key, item in list(self._items.items()):
+            if item.session_id != session_id:
+                continue
+            if item.task is not None and not item.task.done():
+                item.task.cancel()
+            del self._items[key]
+            dropped += 1
+        if dropped:
+            self._report("session.pending_dropped", {"session_id": session_id, "reason": reason, "count": dropped})
+        return dropped
 
     def status(self) -> list[dict[str, Any]]:
         return [item.describe(self._manager.live(item.session_id)) for item in self._items.values()]

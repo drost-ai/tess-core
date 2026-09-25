@@ -111,6 +111,9 @@ def _create_daemon_client(
     async def list_tasks(session_id: str | None = None) -> list[dict[str, Any]]:
         return await request("listTasks", {"sessionId": session_id})
 
+    async def stop_session(task_args: dict[str, Any] | None = None, **task_kwargs: Any) -> dict[str, Any]:
+        return await request("stopSession", {**(task_args or {}), **task_kwargs})
+
     async def inspect_task(task_id: str) -> dict[str, Any] | None:
         return await request("inspectTask", {"taskId": task_id})
 
@@ -233,6 +236,7 @@ def _create_daemon_client(
         "inspectTask": inspect_task,
         "read_task_output": read_task_output,
         "stopTask": stop_task,
+        "stopSession": stop_session,
         "retryTask": retry_task,
         "startBackgroundCommand": start_background_command,
         "startMainSessionTask": start_main_session_task,

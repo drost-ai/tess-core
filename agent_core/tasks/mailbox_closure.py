@@ -91,3 +91,21 @@ async def close_mailbox_if_idle(mailbox_path: str, task_id: str, child_session_i
         return {"records": [*records, closed], "result": True, "changed": True}
 
     return bool(await mutate_json_lines(mailbox_path, _close))
+
+
+async def fail_queued_messages(mailbox_path: str, task_id: str, direction: str, reason: str) -> int:
+    """Fail every still-queued message in that direction, with the reason on
+    the record: never delivered, never silently dropped. The count failed."""
+
+    def _fail(records: list[dict[str, Any]]) -> dict[str, Any]:
+        now = now_iso()
+        updated: list[dict[str, Any]] = []
+        failed = 0
+        for record in records:
+            if record.get("status") == "queued" and record.get("direction") == direction and record.get("taskId") in (None, task_id):
+                record = {**record, "status": "failed", "failedAt": now, "failureReason": reason}
+                failed += 1
+            updated.append(record)
+        return {"records": updated, "result": failed, "changed": failed > 0}
+
+    return int(await mutate_json_lines(mailbox_path, _fail) or 0)

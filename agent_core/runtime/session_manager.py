@@ -32,10 +32,12 @@ from .agent_bindings import create_agent_runtime_bindings, unavailable_daemon_bi
 from .events.factory import create_runtime_event
 from .generation import create_runtime_session_binding
 from .session_components import prepare_runtime_session_components
+from .session_end import end_session, ended_marker
 from .session_idle import IdleSweeper
 from .session_monitors import MonitorIntake
 from .session_options import (  # noqa: F401  (re-exported: the package imports them from here)
     SessionBusy,
+    SessionEnded,
     SessionOptions,
     SessionUnavailableError,
     Unavailable,
@@ -47,7 +49,7 @@ from .state.store import create_initial_runtime_state, create_runtime_state_stor
 from .support import StagedRuntimeSource, default_runtime_component_factories, runtime_path_graph_id
 
 OPEN_REASONS = ("client", "child_message", "monitor")
-CLOSE_REASONS = ("client", "idle", "runtime_stopped")
+CLOSE_REASONS = ("client", "idle", "runtime_stopped", "ended")
 
 
 class _LiveSession:
@@ -231,11 +233,17 @@ class Session:
         session, and return the engine's result. A handle whose session was
         unloaded reopens it first. ``turn_id`` lets the caller name the turn
         before its ``turn.started`` is announced."""
+        if self._manager.is_ended(self.id):
+            raise SessionEnded(self.id)
         if not self.is_open:
             await self._manager.open(self.id)
         return await self._live_session().turns.run(
             prompt, origin="user", limits=limits, provider_override=provider_override, turn_id=turn_id
         )
+
+    async def end(self, reason: str = "deleted") -> dict[str, Any]:
+        """The one explicit instruction: see :meth:`SessionManager.end`."""
+        return await self._manager.end(self.id, reason=reason)
 
     async def cancel_turn(self, turn_id: str) -> bool:
         """Cancel exactly that turn. True if it was running or queued here."""
@@ -265,6 +273,7 @@ class SessionManager:
         self._live: dict[str, _LiveSession] = {}
         self._handles: dict[str, Session] = {}
         self._opening: dict[str, Any] = {}
+        self._ended: set[str] = set()
         self.idle = IdleSweeper(self)
         self.pending = PendingWork(self)
         self.monitors = MonitorIntake(self)
@@ -276,6 +285,8 @@ class SessionManager:
         is returned as is. Unknown ids are an error, never a new session."""
         if reason not in OPEN_REASONS:
             raise ValueError(f"unknown open reason: {reason}")
+        if session_id and session_id in self._ended:
+            raise SessionEnded(session_id)
         if session_id and session_id in self._live:
             return self._handles[session_id]
         if session_id and session_id in self._opening:
@@ -300,19 +311,28 @@ class SessionManager:
         return handle
 
     async def _build(self, session_id: str, *, existing: bool, reason: str) -> _LiveSession:
+        record: dict[str, Any] | None = None
+        if existing:
+            # By exact id, straight from the store: the resume search hides
+            # sessions that have no messages yet, and accepts queries. An
+            # ended session is refused before the host is even asked; an
+            # unknown one only after the host had its say.
+            record = await load_session(session_id)
+            if record is not None and record.get("id") != session_id:
+                record = None
+            marker = ended_marker(record)
+            if marker is not None:
+                self._ended.add(session_id)
+                raise SessionEnded(session_id, marker.get("reason"), marker.get("at"))
         options = await self._options_for(session_id, reason)
+        if existing and record is None:
+            raise UnknownSessionError(session_id)
         runtime = self.runtime
         cwd = os.path.abspath(os.path.expanduser(options.cwd)) if options.cwd else runtime.cwd
         os.makedirs(cwd, exist_ok=True)
         config = await resolve_config(options.config_overrides(runtime.home), cwd)
         launch = {"cwd": cwd, "originalCwd": cwd}
-        if existing:
-            # By exact id, straight from the store: the resume search hides
-            # sessions that have no messages yet, and accepts queries.
-            record = await load_session(session_id)
-            if record is None or record.get("id") != session_id:
-                raise UnknownSessionError(session_id)
-        else:
+        if record is None:
             record = await resolve_session({"sessionId": session_id}, config, launch)
             # A session a host opened exists from that moment: the daemon must
             # find it for the session's tasks, and the host may record its id.
@@ -391,9 +411,17 @@ class SessionManager:
     def live(self, session_id: str) -> _LiveSession | None:
         return self._live.get(session_id)
 
+    async def end(self, session_id: str, *, reason: str = "deleted") -> dict[str, Any]:
+        """The one explicit instruction: durable, stops this session's
+        children and descendants only, fails what was still addressed to it,
+        closes it, blocks every reopen. Idempotent."""
+        outcome = await end_session(self, session_id, reason)
+        self._ended.add(session_id)
+        return outcome
+
     def is_ended(self, session_id: str) -> bool:
-        """Ended sessions never reopen; nothing is ended until `end` exists."""
-        return False
+        """Known ended in this runtime; the durable marker is checked at open."""
+        return session_id in self._ended
 
     def status(self) -> dict[str, Any]:
         return {

@@ -79,3 +79,14 @@ class UnknownSessionError(LookupError):
 
 class SessionBusy(RuntimeError):
     """The session has a turn running or queued; close never cancels."""
+
+
+class SessionEnded(RuntimeError):
+    """The session was ended, the one explicit instruction: it never reopens
+    and takes no more work."""
+
+    def __init__(self, session_id: str, reason: str | None = None, at: str | None = None) -> None:
+        self.session_id = session_id
+        self.reason = reason
+        self.at = at
+        super().__init__(f"Session {session_id} was ended" + (f" ({reason})" if reason else "") + (f" at {at}" if at else "") + ".")

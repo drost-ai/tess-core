@@ -36,7 +36,7 @@ DEFAULT_STOP_BOUND_SECONDS = 10.0
 _GATEWAY_METHODS = (
     "startBackgroundCommand", "startMainSessionTask", "startSubagentTask", "startHealthCheck", "stopTask",
     "retryTask", "read_task_output", "sendTaskMessage", "readTaskEvents", "readTaskQuestions",
-    "answerTaskQuestion", "skipTaskQuestion",
+    "answerTaskQuestion", "skipTaskQuestion", "stopSession",
 )
 
 _ACTIVE: Runtime | None = None

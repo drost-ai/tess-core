@@ -112,6 +112,9 @@ class SessionMetadata(TypedDict, total=False):
     lastProviderFailure: dict[str, Any]
     lastProviderRecoveryAt: str
     recovery_state: str
+    # ``end``: the one explicit instruction; {"reason": str, "at": iso}. An
+    # ended session is never reopened. Additive; old readers ignore it.
+    ended: dict[str, Any]
 
 
 class SessionRecord(TypedDict):

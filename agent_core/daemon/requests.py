@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from ..storage import load_daemon_state
+from .session_stop import stop_session
 
 
 async def _handle_daemon_request(
@@ -34,6 +35,8 @@ async def _handle_daemon_request(
         )
     elif method == "stopTask":
         result = await supervisor["stopTask"](params.get("taskId"))
+    elif method == "stopSession":
+        result = await stop_session(supervisor, params)
     elif method == "retryTask":
         result = await supervisor["retryTask"](params.get("taskId"))
     elif method == "startBackgroundCommand":
@@ -82,6 +85,7 @@ def _normalise_daemon_method(method: Any) -> str | None:
         "daemon.inspectTask": "inspectTask",
         "daemon.read_task_output": "read_task_output",
         "daemon.stopTask": "stopTask",
+        "daemon.stopSession": "stopSession",
         "daemon.retryTask": "retryTask",
         "daemon.startBackgroundCommand": "startBackgroundCommand",
         "daemon.startMainSessionTask": "startMainSessionTask",
@@ -93,6 +97,7 @@ def _normalise_daemon_method(method: Any) -> str | None:
         "tasks.inspect": "inspectTask",
         "tasks.read_output": "read_task_output",
         "tasks.stop": "stopTask",
+        "tasks.stop_session": "stopSession",
         "tasks.retry": "retryTask",
         "tasks.start_background_command": "startBackgroundCommand",
         "tasks.start_main_session": "startMainSessionTask",
